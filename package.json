@@ -18,6 +18,7 @@
   "devDependencies": {
     "glob": "^10.5.0",
     "husky": "^9.1.7",
+    "jsonc-parser": "^3.3.1",
     "markdown-it": "^14.0.0",
     "markdownlint": "^0.40.0",
     "markdownlint-cli2": "^0.20.0"
