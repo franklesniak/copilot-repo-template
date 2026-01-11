@@ -1,0 +1,23 @@
+{
+  "name":  "copilot-repo-template-workflows",
+  "version": "1.0.0",
+  "description": "CI workflow dependencies for markdown linting",
+  "private": true,
+  "scripts":  {
+    "lint:md": "cd ../.. && markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.github/workflows/node_modules\" --config .github/workflows/.markdownlint.jsonc",
+    "lint:md:nested": "node lint-nested-markdown.js"
+  },
+  "keywords": [
+    "markdown",
+    "linting",
+    "template"
+  ],
+  "author": "Frank Lesniak",
+  "license": "MIT",
+  "devDependencies": {
+    "glob": "^10.3.10",
+    "markdown-it": "^14.0.0",
+    "markdownlint": "^0.40.0",
+    "markdownlint-cli2": "^0.20.0"
+  }
+}
