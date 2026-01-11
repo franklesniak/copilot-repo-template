@@ -7,7 +7,7 @@
  * markdownlint on them to ensure nested Markdown content follows the same
  * linting rules as the outer Markdown files.
  *
- * Usage: node .github/workflows/lint-nested-markdown.js
+ * Usage: node .github/scripts/lint-nested-markdown.js
  */
 
 const fs = require('fs');
