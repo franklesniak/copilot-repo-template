@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "prepare": "husky install || true",
-    "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.github/workflows/node_modules\" --config .github/workflows/.markdownlint.jsonc"
+    "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.github/workflows/node_modules\""
   },
   "keywords": [
     "template",

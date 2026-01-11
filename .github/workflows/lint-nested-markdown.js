@@ -33,12 +33,11 @@ const colors = {
  * Load markdownlint configuration from .markdownlint.jsonc or .markdownlint.json
  */
 function loadMarkdownlintConfig() {
-    // Look for config in the same directory as this script
-    const scriptDir = __dirname;
-    // Try .jsonc first (preferred), then fall back to .json
+    // Look for config at the repository root (two levels up from this script)
+    const repoRoot = path.resolve(__dirname, '../..');
     const configPaths = [
-        path.join(scriptDir, '.markdownlint.jsonc'),
-        path.join(scriptDir, '.markdownlint.json')
+        path.join(repoRoot, '.markdownlint.jsonc'),
+        path.join(repoRoot, '.markdownlint.json')
     ];
 
     for (const configPath of configPaths) {

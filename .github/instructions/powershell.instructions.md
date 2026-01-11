@@ -5,7 +5,7 @@ description: "PowerShell coding standards"
 
 # PowerShell Writing Style
 
-**Version:** 1.3.20260109.2
+**Version:** 1.3.20260109.3
 
 ## Metadata
 
@@ -13,7 +13,6 @@ description: "PowerShell coding standards"
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-01-09
 - **Scope:** Defines PowerShell coding standards for all `.ps1` files in this repository. Covers style, formatting, naming conventions, error handling, documentation requirements, and compatibility patterns for both legacy (v1.0) and modern (v5.1+/v7.x+) PowerShell codebases.
-- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [Documentation Standards](docs.instructions.md)
 
 ## Table of Contents
 
@@ -225,7 +224,7 @@ Blank lines are used sparingly but effectively: two surround function definition
 ```powershell
 {
     Invoke-SomeCmdlet
-    
+
     Invoke-AnotherCmdlet
 }
 ```
@@ -790,15 +789,15 @@ function Get-Example {
     # This demonstrates the correct placement of param() before license.
     # .NOTES
     # Version: 1.0.20260109.0
-    
+
     param(
         [string]$Parameter
     )
-    
+
     #region License ########################################################
     # MIT License or other license text
     #endregion License ########################################################
-    
+
     # Function implementation
     return 0
 }
@@ -1765,7 +1764,7 @@ function Get-UnixSystemInfo {
     # Check if running on a Unix-based system
     $boolIsLinux = Test-Linux
     $boolIsMacOS = Test-macOS
-    
+
     if (-not ($boolIsLinux -or $boolIsMacOS)) {
         Write-Warning "This function only runs on Linux or macOS."
         return -1
