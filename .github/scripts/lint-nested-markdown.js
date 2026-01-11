@@ -15,9 +15,13 @@ const path = require('path');
 const { glob } = require('glob');
 const MarkdownIt = require('markdown-it');
 const { lint } = require('markdownlint/promise');
+const jsoncParser = require('jsonc-parser');
 
 // Initialize markdown-it parser
 const md = new MarkdownIt();
+
+// Repository root is two levels up from this script's location in .github/scripts/
+const REPO_ROOT = path.resolve(__dirname, '../..');
 
 // ANSI color codes for terminal output
 const colors = {
@@ -33,21 +37,21 @@ const colors = {
  * Load markdownlint configuration from .markdownlint.jsonc or .markdownlint.json
  */
 function loadMarkdownlintConfig() {
-    // Look for config at the repository root (two levels up from this script)
-    const repoRoot = path.resolve(__dirname, '../..');
     const configPaths = [
-        path.join(repoRoot, '.markdownlint.jsonc'),
-        path.join(repoRoot, '.markdownlint.json')
+        path.join(REPO_ROOT, '.markdownlint.jsonc'),
+        path.join(REPO_ROOT, '.markdownlint.json')
     ];
 
     for (const configPath of configPaths) {
         if (fs.existsSync(configPath)) {
-            const content = fs.readFileSync(configPath, 'utf8');
-            // Strip out // comments and /* */ comments for .jsonc compatibility
-            const jsonContent = content
-                .replace(/\/\/.*$/gm, '')  // Remove single-line comments
-                .replace(/\/\*[\s\S]*?\*\//g, '');  // Remove multi-line comments
-            return JSON.parse(jsonContent);
+            try {
+                const content = fs.readFileSync(configPath, 'utf8');
+                // Use jsonc-parser for proper JSONC handling (supports comments in strings)
+                return jsoncParser.parse(content);
+            } catch (error) {
+                console.warn(`Warning: Could not read config file ${configPath}: ${error.message}`);
+                continue;
+            }
         }
     }
     return {};
@@ -111,7 +115,13 @@ function extractMarkdownFencesRecursive(content, filePath, baseLine = 0, depth =
  * @returns {Array} Array of extracted blocks with metadata
  */
 function extractMarkdownFences(filePath) {
-    const content = fs.readFileSync(filePath, 'utf8');
+    let content;
+    try {
+        content = fs.readFileSync(filePath, 'utf8');
+    } catch (error) {
+        console.error(`Error reading file ${filePath}: ${error.message}`);
+        return [];
+    }
     return extractMarkdownFencesRecursive(content, filePath, 0, 0, '');
 }
 
@@ -199,13 +209,10 @@ async function main() {
         // Load markdownlint configuration
         const config = loadMarkdownlintConfig();
 
-        // Repository root is two levels up from this script
-        const repoRoot = path.resolve(__dirname, '../..');
-
         // Find all markdown files (excluding node_modules)
         const files = await glob('**/*.md', {
             ignore: ['node_modules/**', '**/node_modules/**'],
-            cwd: repoRoot,
+            cwd: REPO_ROOT,
             absolute: true
         });
 
@@ -216,7 +223,7 @@ async function main() {
 
         // Process each file
         for (const file of files) {
-            const relativePath = path.relative(repoRoot, file);
+            const relativePath = path.relative(REPO_ROOT, file);
             const blocks = extractMarkdownFences(file);
 
             if (blocks.length > 0) {
@@ -226,6 +233,12 @@ async function main() {
                 // Lint each extracted block
                 for (let index = 0; index < blocks.length; index++) {
                     const block = blocks[index];
+
+                    // Skip empty blocks
+                    if (!block.content || block.content.trim().length === 0) {
+                        continue;
+                    }
+
                     const lintResults = await lintMarkdownContent(block.content, config);
                     const errors = lintResults.content || [];
 
