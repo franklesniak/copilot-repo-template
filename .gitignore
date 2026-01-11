@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-.github/workflows/node_modules/
 
 # Python
 __pycache__/
@@ -26,4 +25,3 @@ Thumbs.db
 
 # Lock files (optional - uncomment to exclude)
 # package-lock.json
-# .github/workflows/package-lock.json
