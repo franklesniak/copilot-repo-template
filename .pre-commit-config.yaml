@@ -3,7 +3,7 @@
 # Run:  pre-commit run --all-files
 #
 # Note: This file is optional.  Remove if your project doesn't use Python
-# or if you prefer the Husky-based approach for markdown only. 
+# or if you prefer the Husky-based approach for markdown only.
 
 repos:
   # General hooks
@@ -20,10 +20,11 @@ repos:
     rev: 24.10.0
     hooks:
       - id: black
+        args: [--line-length=100]
 
   # Python linting (remove if not using Python)
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.9.1
     hooks:
       - id: ruff
-        args: [--fix]
+        args: [--fix, --line-length=100]
