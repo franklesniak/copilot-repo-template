@@ -70,8 +70,8 @@ function extractMarkdownFencesRecursive(content, filePath, baseLine = 0, depth =
         const token = tokens[i];
 
         // Look for fence tokens with markdown language identifier
-        if (token.type === 'fence' && 
-            (token.info.trim().toLowerCase() === 'markdown' || 
+        if (token.type === 'fence' &&
+            (token.info.trim().toLowerCase() === 'markdown' ||
              token.info.trim().toLowerCase() === 'md')) {
 
             const blockLine = baseLine + (token.map ? token.map[0] + 1 : 0);
