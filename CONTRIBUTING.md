@@ -40,6 +40,29 @@ cd copilot-repo-template
 npm install
 ```
 
+This automatically sets up [Husky](https://typicode.github.io/husky/) git hooks via the `prepare` script.
+
+### Git Hooks
+
+This repository uses Husky for git hooks:
+
+- **pre-commit**: Runs markdown linting on staged `.md` files before each commit
+
+If you need to bypass hooks temporarily (not recommended):
+
+```bash
+git commit --no-verify -m "your message"
+```
+
+### Markdown Linting
+
+Run markdown linting manually:
+
+```bash
+npm run lint:md           # Lint all markdown files
+npm run lint:md:nested    # Lint nested markdown blocks in docs
+```
+
 ### 3. Install Python (if working with Python code)
 
 Ensure you have Python 3.13 or later installed:
