@@ -1,6 +1,6 @@
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.0.20260111.0
+**Version:** 1.1.20260112.0
 
 These instructions are authoritative for all changes in this repository.
 
@@ -103,6 +103,9 @@ For each PR-sized change:
 - Do not add telemetry or external logging services without explicit approval.
 - Do not weaken security constraints to "make it work."
 - Do not add new major dependencies without clear justification in the PR description.
+- Do not implement "Copilot agent fixes" or rely on non-public APIs for lint correction.
+- Do not silently invent behavior when specs or requirements are ambiguous—open an issue or add an explicit "Open Question" instead.
+- Do not create separate "fix formatting" or "fix linting" commits—include all auto-fixes in the same commit as your changes.
 
 ## Language-Specific Instructions
 
