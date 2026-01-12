@@ -1,46 +1,81 @@
-# Python CI Workflow
+# CI Workflow
 #
-# Purpose: Run type checking (mypy) and tests (pytest) for Python code
+# Purpose: Run pre-commit hooks, type checking (mypy), and tests (pytest) for
+# Python code in a single consolidated workflow.
 #
-# Workflow Dependencies:
-# This workflow runs AFTER the pre-commit workflow completes successfully.
-# This ensures that code is properly formatted and linted before running
-# type checks and tests, preventing unnecessary CI failures.
+# Design Decisions:
 #
-# Why workflow_run instead of needs:
-# The 'needs' keyword only works for jobs within the same workflow file.
-# To coordinate with a different workflow file (pre-commit.yml), we must
-# use 'workflow_run' which triggers this workflow when another completes.
+# 1. Single Workflow with Job Dependencies:
+#    This workflow combines pre-commit, type checking, and tests into a single
+#    workflow file using the `needs:` keyword for job dependencies. This design
+#    replaces the previous pattern of separate workflow files with `workflow_run`
+#    triggers.
 #
-# Template Repository Consideration:
-# This workflow does NOT use path-based filtering (on.push.paths or
-# on.pull_request.paths) because this is a template repository. Path
-# filtering would prevent the workflow from being properly tested and
-# copied by users of the template. Template repositories should run all
-# workflows on all changes to ensure accuracy when the template is used.
+#    Benefits of this approach:
+#    - All jobs appear directly in the PR checks list (not hidden in Actions tab)
+#    - Easy to configure branch protection rules that require specific jobs
+#    - Tests don't run if pre-commit fails (saves CI minutes)
+#    - Simpler maintenance with a single workflow file
+#
+# 2. Job Dependencies:
+#    The `type-check` and `test` jobs both have `needs: pre-commit`, which means:
+#    - They only run AFTER the pre-commit job completes successfully
+#    - If pre-commit fails, downstream jobs are automatically skipped
+#    - This ensures tests don't run on poorly-formatted code
+#
+# 3. Template Repository Consideration:
+#    This workflow does NOT use path-based filtering (on.push.paths or
+#    on.pull_request.paths) because this is a template repository. Path
+#    filtering would prevent the workflow from being properly tested and
+#    copied by users of the template. Template repositories should run all
+#    workflows on all changes to ensure accuracy when the template is used.
+#
+# 4. Python Version Policy:
+#    Test only actively supported bugfix versions (not security-fix-only).
+#    Python versions in "security fix only" phase are NOT publicly installable
+#    with security updates—they require building from source.
+#    As of January 2026, Python 3.13 is the only version that qualifies.
+#    Update this when upstream support changes (typically annually around October).
+#    See: https://devguide.python.org/versions/
+#
+# Note: This workflow is optional. Remove if your project doesn't use Python.
 
-name: Python CI
+name: CI
 
 on:
-  # Trigger after pre-commit workflow completes successfully
-  workflow_run:
-    workflows: ["Pre-commit"]
-    types:
-      - completed
-    branches:
-      - "**"
-
-  # Allow manual triggering
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  # Only run if pre-commit workflow succeeded (or if manually triggered)
-  type-check:
+  pre-commit:
+    name: Pre-commit
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Run pre-commit hooks
+        run: pre-commit run --all-files
+
+  type-check:
+    name: Type Check (mypy)
+    needs: pre-commit
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -81,8 +116,9 @@ jobs:
         continue-on-error: true
 
   test:
+    name: Test
+    needs: pre-commit
     runs-on: ${{ matrix.os }}
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
 
     strategy:
       matrix:
@@ -91,6 +127,8 @@ jobs:
         # Test only actively supported bugfix versions (not security-fix-only).
         # As of January 2026, Python 3.13 is the latest bugfix-supported version.
         # Python 3.12 stopped receiving bugfixes in April 2025 (security-fix-only).
+        # Python versions in "security fix only" phase are NOT publicly installable
+        # with security updates—they require building from source.
         # Update this when upstream support changes (typically annually around October).
         # See: https://devguide.python.org/versions/
         python-version: ['3.13']

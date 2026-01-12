@@ -121,11 +121,11 @@ python_version = "3.13"  # Dotted version string (no ">=" operator)
 
 - Check the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page annually (typically around October when new Python versions are released)
 - Update all version references in `pyproject.toml` when the minimum supported version changes
-- Update the CI workflow's Python version matrix in `.github/workflows/python-ci.yml`
+- Update the CI workflow's Python version matrix in `.github/workflows/ci.yml`
 
 ## mypy Path Configuration
 
-The CI workflow (`.github/workflows/python-ci.yml`) uses the `MYPY_PATHS` environment variable to specify which directories/files mypy should check.
+The CI workflow (`.github/workflows/ci.yml`) uses the `MYPY_PATHS` environment variable to specify which directories/files mypy should check.
 
 **Default:**
 
