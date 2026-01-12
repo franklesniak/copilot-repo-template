@@ -5,7 +5,7 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.1.20260112.0
+**Version:** 1.1.20260112.1
 
 ## Metadata
 
@@ -41,6 +41,14 @@ This file governs all Markdown documentation (including `README.md`, `docs/**`, 
 - **Architecture Decision Records (ADRs):** `docs/adr/` (durable decisions)
 
 If you introduce new doc categories, they MUST be added to this taxonomy section.
+
+> **Customize for your project:** The taxonomy categories shown above are recommendations, not requirements. Projects SHOULD update this taxonomy to reflect their actual documentation structure. Categories MAY be added, removed, or renamed as appropriate for the project's needs.
+
+## Canonical Source of Truth
+
+Projects SHOULD define a canonical specification document (e.g., `docs/spec/requirements.md`) that serves as the authoritative reference for system behavior and requirements. If a canonical spec is defined, all other documentation (design docs, runbooks, README, etc.) MUST align with it.
+
+> **Customize for your project:** The location and structure of your canonical specification is project-specific. Common patterns include `docs/spec/requirements.md`, `docs/SPEC.md`, or similar. Choose a location that fits your project's documentation organization and update this guidance accordingly.
 
 ## Required Header Block for Non-Trivial Docs
 
