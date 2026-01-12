@@ -27,6 +27,8 @@
             # Allow small exceptions, e.g.:  if ($true) { "blah" } else { "blah blah" }
             IgnoreOneLineBlock = $true
         }
+        # NoEmptyLineBefore = $true ensures closing braces don't have blank lines before them,
+        # keeping code compact. Set to $false if you prefer visual separation before closing braces.
         PSPlaceCloseBrace = @{
             # Turn the rule on
             Enable = $true
@@ -71,6 +73,15 @@
 
             # e.g.: enforce: @(1, 2, 3) or @{a = 1; b = 2} instead of: @(1,2,3) or @{a = 1;b = 2}
             CheckSeparator = $true
+
+            # Do not flag multiple spaces before a pipe as redundant
+            CheckPipeForRedundantWhitespace = $false
+
+            # Do not enforce whitespace around parameter names
+            CheckParameter = $false
+
+            # Enforce whitespace around assignment operators inside hashtables
+            IgnoreAssignmentOperatorInsideHashTable = $false
         }
 
         # Disable vertical alignment (per style guide)
@@ -91,6 +102,11 @@
 
         # Use singular nouns
         PSUseSingularNouns = @{
+            Enable = $true
+        }
+
+        # Enforce literal hashtable initialization (use @{} instead of New-Object)
+        PSUseLiteralInitializerForHashtable = @{
             Enable = $true
         }
 
