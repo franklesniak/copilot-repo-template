@@ -1,3 +1,18 @@
+# ============================================================================
+# CRITICAL: Pre-commit Discipline
+# ============================================================================
+# ALWAYS run `pre-commit run --all-files` before committing code.
+#
+# Pre-commit hooks are enforced in CI. Running locally prevents push failures
+# and wasted CI cycles.
+#
+# Auto-fixes: When pre-commit modifies files (formatting, trailing whitespace,
+# etc.), you MUST commit those fixes as part of the SAME commit as your code
+# changes. Do NOT create separate "fix pre-commit" commits.
+#
+# CI is a safety net, not a substitute for local checks.
+# ============================================================================
+
 # Pre-commit configuration
 # Install:  pip install pre-commit && pre-commit install
 # Run:  pre-commit run --all-files

@@ -237,6 +237,8 @@ CI workflows will also run automatically when you push to GitHub.
 
 ### Linting Tools
 
+This template organizes linting configurations in `.github/linting/` (for PSScriptAnalyzer) and the repository root (for markdownlint). Projects MAY reorganize these configurations to a different location (e.g., a project-specific `config/` directory) if preferred. If configurations are moved, update the paths referenced in CI workflows and `.github/copilot-instructions.md` accordingly.
+
 #### Markdown Linting
 
 Configuration: `.markdownlint.jsonc`
