@@ -230,6 +230,30 @@ If you prefer to manually commit pre-commit fixes, you can safely delete the
 `auto-fix-precommit.yml` workflow file. The standard `pre-commit.yml` workflow will
 still run and report any issues.
 
+### Template Maintenance
+
+When using this template, periodically perform the following maintenance tasks:
+
+#### Update Pre-commit Hooks
+
+Pre-commit hooks should be kept up-to-date for security and compatibility:
+
+```bash
+# Check for and apply updates to pre-commit hooks
+pre-commit autoupdate
+
+# Test that updated hooks work correctly
+pre-commit run --all-files
+```
+
+#### Review Python Version Requirements
+
+This template requires Python versions that are currently receiving bugfix updates. Check the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page annually (typically around October when new Python versions are released) to ensure your minimum Python version is still supported.
+
+#### Review Instruction File Versions
+
+The instruction files in `.github/instructions/` include version numbers in the format `Major.Minor.YYYYMMDD.Revision`. Periodically review these to ensure they remain current with your project's coding standards.
+
 ### License
 
 MIT License - See [LICENSE](LICENSE) for details.
