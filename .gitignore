@@ -8,6 +8,15 @@ __pycache__/
 .venv/
 venv/
 .env
+*.egg-info/
+dist/
+build/
+.eggs/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
 
 # Pre-commit
 .pre-commit-cache/

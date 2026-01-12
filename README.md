@@ -35,6 +35,19 @@ This template includes:
 ├── scripts/                         # Helper scripts for CI/tooling
 └── workflows/                       # GitHub Actions workflows
 
+src/
+└── copilot_repo_template/           # Example Python package (rename for your project)
+    ├── __init__.py
+    └── example.py
+
+tests/                               # Example test directory
+├── __init__.py
+└── test_example.py
+
+templates/                           # Reference templates for project setup
+└── python/                          # Python project templates
+
+pyproject.toml                       # Python project configuration
 .markdownlint.jsonc                  # Markdown linting configuration
 .pre-commit-config.yaml              # Pre-commit hooks (Python focused)
 ```
@@ -48,6 +61,9 @@ This template includes:
 | `.github/linting/PSScriptAnalyzerSettings.psd1` | PSScriptAnalyzer settings enforcing OTBS formatting for PowerShell |
 | `.markdownlint.jsonc` | Markdown linting rules prioritizing auto-fixable checks |
 | `.pre-commit-config.yaml` | Pre-commit hooks for Python projects (remove if not using Python) |
+| `pyproject.toml` | Python project configuration with dev dependencies |
+| `src/copilot_repo_template/` | Example Python package - rename for your project |
+| `tests/` | Example test directory with pytest tests |
 
 ### How to Use This Template
 
@@ -78,6 +94,43 @@ pre-commit install
 
 #### 4. Customize for Your Project
 
+##### Customize Python Package (if using Python)
+
+The template includes a working Python project structure. To customize it for your project:
+
+1. **Rename the package directory:**
+
+   ```bash
+   # Replace 'your_package_name' with your project's package name
+   mv src/copilot_repo_template src/your_package_name
+   ```
+
+2. **Update `pyproject.toml`:**
+   - Change `name = "copilot-repo-template"` to your project name
+   - Update `description`, `authors`, and `keywords`
+   - Add your runtime dependencies to the `dependencies` list
+   - See `templates/python/pyproject.toml` for additional tooling configuration (Black, Ruff)
+
+3. **Replace example code:**
+   - Replace `src/your_package_name/example.py` with your actual modules
+   - Replace `tests/test_example.py` with your actual tests
+   - Update imports in test files to match your package name
+
+4. **Update CI workflow paths (if needed):**
+   - The workflow expects `src/` and `tests/` directories
+   - If using a different layout, update `MYPY_PATHS` in `.github/workflows/python-ci.yml`
+
+##### Remove Python (if not using Python)
+
+If your project doesn't use Python:
+
+```bash
+rm -rf src/ tests/ pyproject.toml .pre-commit-config.yaml
+rm .github/workflows/python-ci.yml
+rm .github/instructions/python.instructions.md
+rm -rf templates/python/
+```
+
 ##### Update Copilot Instructions
 
 Edit `.github/copilot-instructions.md`:
@@ -87,12 +140,12 @@ Edit `.github/copilot-instructions.md`:
 
 ##### Remove Unused Language Instructions
 
-Remove instruction files for languages you don't use:
+Remove instruction files for languages you don't use (beyond Python, which is covered above):
 
 ```bash
-# Example: Remove Python instructions for a PowerShell-only project
-rm .github/instructions/python.instructions.md
-rm .pre-commit-config.yaml
+# Example: Remove PowerShell instructions for a Python-only project
+rm .github/instructions/powershell.instructions.md
+rm -rf .github/linting/
 ```
 
 ##### Update the Instructions Table
