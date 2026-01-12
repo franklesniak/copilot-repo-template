@@ -119,3 +119,26 @@ This repository uses modular instruction files for language-specific standards:
 - Remove instruction files for languages you don't use
 - Add new instruction files for additional languages as needed
 - Update this table to reflect your project's languages
+
+## Linting Configurations
+
+This repository includes linting tool configurations that align with the coding standards:
+
+| Tool | Configuration File | Purpose |
+| --- | --- | --- |
+| PSScriptAnalyzer | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell formatting/linting (OTBS style) |
+| markdownlint | `.markdownlint.jsonc` | Markdown linting |
+
+### Running Linters
+
+**Markdown:**
+
+```bash
+npm run lint:md
+```
+
+**PowerShell:**
+
+```powershell
+Invoke-ScriptAnalyzer -Path .\script.ps1 -Settings .\.github\linting\PSScriptAnalyzerSettings.psd1
+```
