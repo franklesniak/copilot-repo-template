@@ -29,12 +29,12 @@ class TestGreet:
 
     def test_greet_raises_on_empty_string(self) -> None:
         """Test that greet raises ValueError for empty string."""
-        with pytest.raises(ValueError, match="cannot be empty"):
+        with pytest.raises(ValueError, match="cannot be empty or whitespace"):
             greet("")
 
     def test_greet_raises_on_whitespace(self) -> None:
         """Test that greet raises ValueError for whitespace-only string."""
-        with pytest.raises(ValueError, match="cannot be empty"):
+        with pytest.raises(ValueError, match="cannot be empty or whitespace"):
             greet("   ")
 
 
