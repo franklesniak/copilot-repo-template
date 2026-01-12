@@ -161,6 +161,72 @@ Edit `.github/copilot-instructions.md`:
 
 Replace this content with your actual project documentation.
 
+### Validating Your New Repository
+
+After creating a repository from this template, validate your setup before adding custom code.
+
+#### Testing CI on First Clone
+
+Before making changes, run CI checks locally to ensure the template is working correctly:
+
+```bash
+# Run pre-commit hooks (requires pre-commit to be installed globally)
+pre-commit run --all-files
+```
+
+For Python projects:
+
+```bash
+# Run pytest
+pytest tests/ -v
+```
+
+For PowerShell projects:
+
+```powershell
+# Run Pester tests
+Invoke-Pester -Path tests/ -Output Detailed
+```
+
+CI workflows will also run automatically when you push to GitHub.
+
+#### Common CI Failures on Fresh Clone
+
+##### Python: ModuleNotFoundError or Import Errors
+
+**Cause:** The template's `pyproject.toml` references the `copilot_repo_template` package in `src/`.
+
+**Fix:** Either rename `src/copilot_repo_template/` to match your project name and update `pyproject.toml`, OR delete the example package and create your own structure.
+
+**Alternative:** If not using Python, remove the `src/` directory and Python-related CI steps (see "Remove Python" instructions above).
+
+##### Python: mypy Path Errors
+
+**Cause:** The `MYPY_PATHS` environment variable in `.github/workflows/ci.yml` defaults to `src/ tests/`.
+
+**Fix:** Update `MYPY_PATHS` to match your project structure. See `templates/python/README.md` for configuration examples.
+
+##### PowerShell: PSScriptAnalyzer Warnings on Empty Test Files
+
+**Cause:** The placeholder test file has minimal content.
+
+**Fix:** Replace `tests/PowerShell/Placeholder.Tests.ps1` with actual tests or add real functions to test.
+
+##### Pre-commit: Black/Ruff Not Installed
+
+**Cause:** The root `pyproject.toml` has minimal dev dependencies; full tooling configuration is in `templates/python/pyproject.toml`.
+
+**Fix:** Either install pre-commit globally (`pip install pre-commit`) which manages its own tool environments, OR copy the fuller dependencies from `templates/python/pyproject.toml`.
+
+#### Recommended First Steps After Clone
+
+- [ ] Update `pyproject.toml` with your project name, description, and authors
+- [ ] Rename or replace `src/copilot_repo_template/` with your package
+- [ ] Replace placeholder tests in `tests/` with your actual tests
+- [ ] Update `README.md` with your project's documentation
+- [ ] Run `pre-commit run --all-files` to verify setup
+- [ ] Commit and push to trigger CI validation
+
 ### Language Support
 
 | Language | Instruction File | File Pattern | CI Workflow | Description |
