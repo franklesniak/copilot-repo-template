@@ -254,6 +254,32 @@ When submitting a pull request:
 - [ ] Update documentation as needed
 - [ ] Ensure all CI checks pass
 
+## For Template Users
+
+This repository is a template designed for projects that use GitHub Copilot for AI-assisted development.
+
+### Understanding the Instruction Files
+
+The `.github/instructions/` directory contains coding standards that guide GitHub Copilot's code generation:
+
+- **`docs.instructions.md`** - Documentation and Markdown writing standards
+- **`powershell.instructions.md`** - PowerShell coding conventions (OTBS style, v1.0 compatibility patterns)
+- **`python.instructions.md`** - Python coding standards (PEP 8, type hints, testing patterns)
+
+These instruction files are automatically applied by GitHub Copilot based on the file patterns specified in each file's front matter.
+
+### Customizing for Your Project
+
+You can customize these instruction files for your project's specific conventions:
+
+1. Edit the instruction files to match your team's coding standards
+2. Remove instruction files for languages you don't use
+3. Add new instruction files for additional languages as needed
+
+### First-Time Setup Validation
+
+After creating a new repository from this template, see the [Validating Your New Repository](README.md#validating-your-new-repository) section in the README for guidance on verifying your setup.
+
 ## Questions or Issues?
 
 If you have questions or encounter issues:
