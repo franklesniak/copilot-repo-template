@@ -3,6 +3,12 @@
 # Purpose: Run pre-commit hooks for Python and general file checks
 # Runs on: push and pull_request events
 #
+# Workflow Dependencies:
+# Other workflows (e.g., python-ci.yml) depend on this workflow via 'workflow_run'.
+# This ensures that code is properly formatted and linted BEFORE running type checks
+# and tests, preventing unnecessary CI failures and providing faster feedback on
+# formatting/linting issues.
+#
 # Note: This workflow is optional. Remove if your project doesn't use Python.
 
 name: Pre-commit

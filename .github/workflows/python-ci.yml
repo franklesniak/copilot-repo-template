@@ -1,0 +1,137 @@
+# Python CI Workflow
+#
+# Purpose: Run type checking (mypy) and tests (pytest) for Python code
+#
+# Workflow Dependencies:
+# This workflow runs AFTER the pre-commit workflow completes successfully.
+# This ensures that code is properly formatted and linted before running
+# type checks and tests, preventing unnecessary CI failures.
+#
+# Why workflow_run instead of needs:
+# The 'needs' keyword only works for jobs within the same workflow file.
+# To coordinate with a different workflow file (pre-commit.yml), we must
+# use 'workflow_run' which triggers this workflow when another completes.
+#
+# Template Repository Consideration:
+# This workflow does NOT use path-based filtering (on.push.paths or
+# on.pull_request.paths) because this is a template repository. Path
+# filtering would prevent the workflow from being properly tested and
+# copied by users of the template. Template repositories should run all
+# workflows on all changes to ensure accuracy when the template is used.
+
+name: Python CI
+
+on:
+  # Trigger after pre-commit workflow completes successfully
+  workflow_run:
+    workflows: ["Pre-commit"]
+    types:
+      - completed
+    branches:
+      - "**"
+
+  # Allow manual triggering
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Only run if pre-commit workflow succeeded (or if manually triggered)
+  type-check:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          # Python Version Policy:
+          # Always test with a Python version currently receiving bugfixes.
+          # As of January 2026, Python 3.13 is the latest bugfix-supported version.
+          # Update this when upstream support changes (typically annually around October).
+          # See: https://devguide.python.org/versions/
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Install project with dev dependencies
+          # Adjust this if your project uses a different installation method
+          pip install -e ".[dev]"
+
+      - name: Run mypy
+        # MYPY_PATHS Configuration:
+        # Set this to the directories/files containing Python source/tests you want mypy to check.
+        #
+        # Examples:
+        # - Flat layout (modules in root):     MYPY_PATHS="."
+        # - src/ layout (recommended):         MYPY_PATHS="src/ tests/"
+        # - Custom directories:                MYPY_PATHS="foo/ bar/ baz.py"
+        #
+        # The command-line paths override any 'files' or 'exclude' settings in
+        # pyproject.toml or mypy.ini in terms of directory scope.
+        env:
+          MYPY_PATHS: "src/ tests/"
+        run: mypy $MYPY_PATHS
+        # Set continue-on-error initially; projects can make type checking strict later
+        continue-on-error: true
+
+  test:
+    runs-on: ${{ matrix.os }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        # Python Version Policy:
+        # Test only actively supported bugfix versions (not security-fix-only).
+        # As of January 2026, Python 3.13 is the latest bugfix-supported version.
+        # Python 3.12 stopped receiving bugfixes in April 2025 (security-fix-only).
+        # Update this when upstream support changes (typically annually around October).
+        # See: https://devguide.python.org/versions/
+        python-version: ['3.13']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # Install project with dev dependencies
+          # Adjust this if your project uses a different installation method
+          pip install -e ".[dev]"
+
+      - name: Run tests with coverage
+        run: pytest tests/ -v --cov --cov-report=term-missing
+
+      # Codecov Integration (Optional, Commented Out)
+      #
+      # To enable code coverage reporting with Codecov:
+      # 1. Uncomment the step below
+      # 2. For public repositories: No token required
+      # 3. For private repositories: Add CODECOV_TOKEN to repository secrets
+      #    - Go to: https://codecov.io/ and sign in with GitHub
+      #    - Find your repository and copy the token
+      #    - Add to GitHub: Settings > Secrets and variables > Actions > New repository secret
+      #    - Name: CODECOV_TOKEN, Value: (paste token)
+      #
+      # Documentation: https://docs.codecov.com/docs/github-action
+      #
+      # - name: Upload coverage to Codecov
+      #   uses: codecov/codecov-action@v4
+      #   with:
+      #     token: ${{ secrets.CODECOV_TOKEN }}  # Required for private repos only
+      #     files: ./coverage.xml
+      #     flags: unittests
+      #     name: codecov-umbrella
+      #     fail_ci_if_error: false
