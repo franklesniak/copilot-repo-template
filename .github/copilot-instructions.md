@@ -75,6 +75,24 @@ If you encounter issues:
 
 **Failure to follow this will cause CI failures and require manual intervention.**
 
+### Auto-Fix Workflow (Safety Net for Copilot Branches)
+
+This repository includes an auto-fix workflow (`.github/workflows/auto-fix-precommit.yml`) that automatically runs pre-commit hooks and commits fixes for `copilot/**` branches. This serves as a safety net when the Copilot Coding Agent pushes code that fails pre-commit checks.
+
+**How it works:**
+
+- Triggers only on `push` events to `copilot/**` branches
+- Only runs when the pusher is `copilot-swe-agent[bot]` (prevents infinite loops)
+- Automatically commits any auto-fixes with message `chore: Apply pre-commit auto-fixes [automated]`
+- Uses `github-actions[bot]` identity for commits
+
+**Important notes:**
+
+- This is a **safety net**, not a substitute for running pre-commit locally
+- Agents should still try to run pre-commit checks before pushing when possible
+- The workflow only applies to `copilot/**` branches—human branches are not affected
+- Manual intervention may still be required for issues that cannot be auto-fixed
+
 ## Determinism and Correctness Rules
 
 - Prefer deterministic tooling over manual rewriting.
