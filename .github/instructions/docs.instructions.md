@@ -5,14 +5,14 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.0.20260111.0
+**Version:** 1.1.20260112.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-01-11
-- **Scope:** Defines documentation standards for all Markdown files in this repository, including specs, design docs, runbooks, ADRs, and developer documentation. Does not cover code comments or inline documentation.
+- **Last Updated:** 2026-01-12
+- **Scope:** Defines documentation standards for all Markdown files in this repository, including specs, design docs, runbooks, ADRs, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
 ## Purpose and Scope
@@ -96,6 +96,52 @@ ADRs exist to prevent re-litigating decisions.
   - **Date:** YYYY-MM-DD
 
 ADRs MUST be short and specific. If an ADR grows into a design doc, split it.
+
+## Requirements Documentation Standards
+
+> **Customize this section** for your project. The patterns below are recommendations for projects that track formal requirements.
+
+When writing or updating requirements in specification documents:
+
+- Each requirement SHOULD have a stable identifier (example pattern):
+  - `PROJ-REQ-001`, `PROJ-REQ-002`, ...
+- Each requirement MUST be phrased as a testable statement:
+  - "The system MUST …"
+- Each requirement entry SHOULD include:
+  - **Rationale:** why it exists
+  - **Acceptance Criteria:** objective checks (bullets)
+  - **Priority:** P0/P1/P2 (or repo standard)
+  - **Verification:** how it will be tested (unit/integration/e2e/manual)
+
+Avoid "implementation leakage" in requirements unless the constraint is truly required (e.g., "MUST NOT store secrets at rest").
+
+### Traceability to Implementation
+
+For each non-trivial requirement, maintain a "Traceability" note that points to:
+
+- An ADR (if it drove a durable decision)
+- The implementation module/package path
+- The primary test file(s)
+
+This can be minimal, but it SHOULD exist for high-priority requirements.
+
+## Design Documentation Standards
+
+Design docs SHOULD be written to survive refactors. They describe architecture and invariants, not incidental code structure.
+
+A design section SHOULD include:
+
+- **Context:** problem statement and why now
+- **Goals / Non-Goals:** explicit boundaries
+- **Key Constraints:** security, privacy, performance, portability, cost, toolchain
+- **System Overview:** components and responsibilities
+- **Data Flow:** what moves where, in what format, and why
+- **Interfaces and Contracts:** inputs/outputs, error semantics, validation rules
+- **Failure Modes:** what can fail, detection, recovery, and user-visible behavior
+- **Alternatives Considered:** at least 2 credible alternatives and why rejected
+- **Open Questions:** enumerated, each with an owner or next step
+
+Design sections SHOULD reference requirement IDs they satisfy when applicable.
 
 ## Runbook Standards
 
