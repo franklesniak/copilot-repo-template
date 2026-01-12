@@ -211,6 +211,21 @@ This repository enforces code quality through:
 - **GitHub Copilot Instructions:** Guides AI-assisted development
 - **Pre-commit Hooks:** Catches issues before they reach CI
 - **PSScriptAnalyzer:** PowerShell static analysis with OTBS formatting
+- **Auto-fix Workflow:** Automatically commits pre-commit fixes on PRs (optional)
+
+#### Auto-fix Pre-commit Workflow
+
+The repository includes an optional workflow (`.github/workflows/auto-fix-precommit.yml`)
+that automatically commits pre-commit fixes when they occur on pull requests. This is
+particularly useful for:
+
+- **AI-assisted development:** When using GitHub Copilot Coding Agent or similar tools,
+  formatting fixes are automatically committed without manual intervention
+- **Streamlined PRs:** Contributors don't need to manually run pre-commit and commit fixes
+
+If you prefer to manually commit pre-commit fixes, you can safely delete the
+`auto-fix-precommit.yml` workflow file. The standard `pre-commit.yml` workflow will
+still run and report any issues.
 
 ### License
 

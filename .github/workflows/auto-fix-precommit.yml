@@ -1,0 +1,80 @@
+# Auto-fix Pre-commit Workflow
+#
+# Purpose: Automatically commit pre-commit fixes when they occur on pull requests.
+# This is particularly useful for AI-assisted development workflows (e.g., GitHub
+# Copilot Coding Agent) where automated formatting fixes can be committed directly
+# to the PR branch.
+#
+# OPTIONAL: This workflow is optional. If you prefer to manually commit pre-commit
+# fixes, you can safely delete this file. The standard pre-commit.yml workflow will
+# still run and report any issues that need to be fixed.
+#
+# How it works:
+# 1. Triggers on pull_request events
+# 2. Runs pre-commit hooks with --all-files
+# 3. If pre-commit makes changes (auto-fixes), commits them back to the PR branch
+# 4. Uses a bot identity for the commit
+#
+# Note: This workflow requires write permissions to push commits to the PR branch.
+# For PRs from forks, the workflow will still run pre-commit but cannot push fixes
+# back to the fork (this is a GitHub security limitation).
+
+name: Auto-fix Pre-commit
+
+on:
+  pull_request:
+    branches: ["**"]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-fix:
+    runs-on: ubuntu-latest
+    # Only run on PRs from the same repository (not forks)
+    # Forks don't allow pushing back to the source branch
+    if: github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Checkout the PR branch, not the merge commit
+          ref: ${{ github.head_ref }}
+          # Use a token that allows pushing commits
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Run pre-commit hooks (allow fixes)
+        id: precommit
+        run: |
+          # Run pre-commit and capture exit code
+          # Exit code 0 = no changes needed
+          # Exit code 1 = changes were made (fixes applied)
+          pre-commit run --all-files || true
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push fixes
+        if: steps.changes.outputs.has_changes == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add -A
+          git commit -m "Apply pre-commit auto-fixes"
+          git push
