@@ -68,7 +68,8 @@
   },
 
   // MD035: Horizontal rule style - use three dashes
-  // Consistent with common conventions and GitHub's rendering
+  // Enabled to enforce consistency. Some projects disable this to allow LLM-generated
+  // content with varied hr styles, but for human-authored docs we enforce "---".
   "MD035": {
     "style": "---"
   },
