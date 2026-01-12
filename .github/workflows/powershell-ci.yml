@@ -1,0 +1,103 @@
+# PowerShell CI Workflow
+#
+# Purpose: Run PSScriptAnalyzer linting for PowerShell scripts
+# Runs on: push and pull_request events
+#
+# Note: This workflow is OPTIONAL and can be removed for non-PowerShell projects.
+# To remove PowerShell support entirely, delete:
+#   - .github/workflows/powershell-ci.yml (this file)
+#   - .github/instructions/powershell.instructions.md
+#   - .github/linting/PSScriptAnalyzerSettings.psd1
+#
+# Configuration: .github/linting/PSScriptAnalyzerSettings.psd1
+#
+# Template Repository Consideration:
+# This workflow does NOT use path-based filtering (on.push.paths or
+# on.pull_request.paths) because this is a template repository. Path
+# filtering would prevent the workflow from being properly tested and
+# copied by users of the template. Template repositories should run all
+# workflows on all changes to ensure accuracy when the template is used.
+
+name: PowerShell CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find PowerShell files
+        id: find-ps1
+        run: |
+          # Find all .ps1 files in the repository
+          ps1_files=$(find . -name "*.ps1" -type f 2>/dev/null | grep -v "node_modules" || true)
+          if [ -z "$ps1_files" ]; then
+            echo "No PowerShell files found in repository"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Found PowerShell files:"
+            echo "$ps1_files"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install PSScriptAnalyzer
+        if: steps.find-ps1.outputs.found == 'true'
+        shell: pwsh
+        run: |
+          if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
+            Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+          }
+          Import-Module PSScriptAnalyzer
+
+      - name: Run PSScriptAnalyzer
+        if: steps.find-ps1.outputs.found == 'true'
+        shell: pwsh
+        run: |
+          $settingsPath = ".github/linting/PSScriptAnalyzerSettings.psd1"
+          $ps1Files = Get-ChildItem -Path . -Filter "*.ps1" -Recurse -File |
+            Where-Object { $_.FullName -notmatch "node_modules" }
+
+          $hasErrors = $false
+
+          foreach ($file in $ps1Files) {
+            Write-Host "Analyzing: $($file.FullName)"
+            $results = Invoke-ScriptAnalyzer -Path $file.FullName -Settings $settingsPath
+
+            if ($results) {
+              $hasErrors = $true
+              foreach ($result in $results) {
+                $severity = $result.Severity
+                $message = "$($file.Name):$($result.Line):$($result.Column): [$severity] $($result.RuleName) - $($result.Message)"
+
+                if ($severity -eq 'Error') {
+                  Write-Host "::error file=$($file.FullName),line=$($result.Line),col=$($result.Column)::$($result.RuleName) - $($result.Message)"
+                } else {
+                  Write-Host "::warning file=$($file.FullName),line=$($result.Line),col=$($result.Column)::$($result.RuleName) - $($result.Message)"
+                }
+              }
+            }
+          }
+
+          if ($hasErrors) {
+            Write-Host ""
+            Write-Host "::error::PSScriptAnalyzer found issues. See above for details."
+            exit 1
+          } else {
+            Write-Host ""
+            Write-Host "All PowerShell files passed linting."
+          }
+
+      - name: Skip - No PowerShell files
+        if: steps.find-ps1.outputs.found != 'true'
+        run: echo "Skipping PSScriptAnalyzer - no PowerShell files found in repository"

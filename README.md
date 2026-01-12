@@ -34,6 +34,7 @@ This template includes:
 │   └── PSScriptAnalyzerSettings.psd1  # PowerShell linting settings
 ├── scripts/                         # Helper scripts for CI/tooling
 └── workflows/                       # GitHub Actions workflows
+    └── powershell-ci.yml            # PowerShell linting CI (optional)
 
 src/
 └── copilot_repo_template/           # Example Python package (rename for your project)
@@ -59,6 +60,7 @@ pyproject.toml                       # Python project configuration
 | `.github/copilot-instructions.md` | The "constitution" for all code changes - defines safety rules, pre-commit discipline, and references language-specific instructions |
 | `.github/instructions/*.md` | Language-specific coding standards applied based on file patterns |
 | `.github/linting/PSScriptAnalyzerSettings.psd1` | PSScriptAnalyzer settings enforcing OTBS formatting for PowerShell |
+| `.github/workflows/powershell-ci.yml` | PowerShell linting CI workflow (optional - remove if not using PowerShell) |
 | `.markdownlint.jsonc` | Markdown linting rules prioritizing auto-fixable checks |
 | `.pre-commit-config.yaml` | Pre-commit hooks for Python projects (remove if not using Python) |
 | `pyproject.toml` | Python project configuration with dev dependencies |
@@ -146,6 +148,7 @@ Remove instruction files for languages you don't use (beyond Python, which is co
 # Example: Remove PowerShell instructions for a Python-only project
 rm .github/instructions/powershell.instructions.md
 rm -rf .github/linting/
+rm .github/workflows/powershell-ci.yml
 ```
 
 ##### Update the Instructions Table
@@ -158,11 +161,11 @@ Replace this content with your actual project documentation.
 
 ### Language Support
 
-| Language | Instruction File | File Pattern | Description |
-| --- | --- | --- | --- |
-| Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` | Documentation writing standards |
-| PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` | PowerShell coding standards (OTBS, v1.0-v7.x) |
-| Python | `.github/instructions/python.instructions.md` | `**/*.py` | Python coding standards (PEP 8, typing) |
+| Language | Instruction File | File Pattern | CI Workflow | Description |
+| --- | --- | --- | --- | --- |
+| Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` | `markdownlint.yml` | Documentation writing standards |
+| PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` | `powershell-ci.yml` | PowerShell coding standards (OTBS, v1.0-v7.x) |
+| Python | `.github/instructions/python.instructions.md` | `**/*.py` | `python-ci.yml` | Python coding standards (PEP 8, typing) |
 
 ### Linting Tools
 
