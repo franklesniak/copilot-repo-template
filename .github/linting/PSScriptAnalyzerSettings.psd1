@@ -24,7 +24,7 @@
             OnSameLine = $true
             NewLineAfter = $true
 
-            # Allow small exceptions, e.g.,:  if ($true) { "blah" } else { "blah blah" }
+            # Allow small exceptions, e.g.:  if ($true) { "blah" } else { "blah blah" }
             IgnoreOneLineBlock = $true
         }
         PSPlaceCloseBrace = @{
@@ -34,7 +34,7 @@
             # Minimize whitespace
             NoEmptyLineBefore = $true
 
-            # Allow small exceptions, e.g.,:  if ($true) { "blah" } else { "blah blah" }
+            # Allow small exceptions, e.g.:  if ($true) { "blah" } else { "blah blah" }
             IgnoreOneLineBlock = $true
 
             NewLineAfter = $false
