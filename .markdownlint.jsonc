@@ -3,6 +3,15 @@
   // Based on https://github.com/DavidAnson/markdownlint
   // MIT License - Copyright (c) David Anson
   //
+  // COMPATIBILITY NOTE:
+  // This file uses the standard markdownlint JSON format and is compatible with:
+  //   - markdownlint-cli (https://github.com/igorshubovych/markdownlint-cli)
+  //   - markdownlint-cli2 (https://github.com/DavidAnson/markdownlint-cli2)
+  //
+  // For markdownlint-cli2 specific features (e.g., custom parsers, globs, ignores),
+  // rename this file to `.markdownlint-cli2.jsonc` and nest rules under "config":
+  //   { "config": { ...existing rules... }, "globs": [...], "ignores": [...] }
+  //
   // This configuration prioritizes auto-fixable rules for practical enforcement.
   // Rules that cannot be auto-fixed are disabled to avoid noise in CI.
   //
