@@ -120,7 +120,7 @@ The template includes a working Python project structure. To customize it for yo
 
 4. **Update CI workflow paths (if needed):**
    - The workflow expects `src/` and `tests/` directories
-   - If using a different layout, update `MYPY_PATHS` in `.github/workflows/python-ci.yml`
+   - If using a different layout, update `MYPY_PATHS` in `.github/workflows/ci.yml`
 
 ##### Remove Python (if not using Python)
 
@@ -128,7 +128,7 @@ If your project doesn't use Python:
 
 ```bash
 rm -rf src/ tests/ pyproject.toml .pre-commit-config.yaml
-rm .github/workflows/python-ci.yml
+rm .github/workflows/ci.yml
 rm .github/instructions/python.instructions.md
 rm -rf templates/python/
 ```
@@ -165,7 +165,7 @@ Replace this content with your actual project documentation.
 | --- | --- | --- | --- | --- |
 | Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` | `markdownlint.yml` | Documentation writing standards |
 | PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` | `powershell-ci.yml` | PowerShell coding standards (OTBS, v1.0-v7.x) |
-| Python | `.github/instructions/python.instructions.md` | `**/*.py` | `python-ci.yml` | Python coding standards (PEP 8, typing) |
+| Python | `.github/instructions/python.instructions.md` | `**/*.py` | `ci.yml` | Python coding standards (PEP 8, typing) |
 
 ### Linting Tools
 
@@ -227,8 +227,8 @@ particularly useful for:
 - **Streamlined PRs:** Contributors don't need to manually run pre-commit and commit fixes
 
 If you prefer to manually commit pre-commit fixes, you can safely delete the
-`auto-fix-precommit.yml` workflow file. The standard `pre-commit.yml` workflow will
-still run and report any issues.
+`auto-fix-precommit.yml` workflow file. The standard `ci.yml` workflow will
+still run pre-commit checks and report any issues.
 
 ### Template Maintenance
 
