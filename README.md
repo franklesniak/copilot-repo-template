@@ -22,13 +22,7 @@ npm install
 cd ../..
 ```
 
-### 2. Initialize Husky
-
-```bash
-npx husky install
-```
-
-### 3. (Optional) Install Python Pre-commit Hooks
+### 2. (Optional) Install Python Pre-commit Hooks
 
 If your project uses Python:
 
@@ -37,7 +31,7 @@ pip install pre-commit
 pre-commit install
 ```
 
-### 4. Customize Copilot Instructions
+### 3. Customize Copilot Instructions
 
 Edit `.github/copilot-instructions.md` to:
 
@@ -49,7 +43,7 @@ Review and customize `.github/instructions/` files:
 - Remove instruction files for languages you don't use
 - Modify standards to match your project's requirements
 
-### 5. Update This README
+### 4. Update This README
 
 Replace this setup content with your actual project documentation.
 
