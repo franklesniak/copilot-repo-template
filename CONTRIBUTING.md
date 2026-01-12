@@ -192,20 +192,38 @@ pre-commit run --all-files
 
 Fix any issues that are reported.
 
-### 4. Run Tests (if applicable)
+### 4. Run Tests
 
-If you're working with Python code:
+Before submitting a pull request, ensure all tests pass locally.
+
+#### Python Tests
 
 ```bash
-# Install dev dependencies (if using Python template)
+# Install dev dependencies
 pip install -e ".[dev]"
 
-# Run tests
-pytest tests/ -v
+# Run tests with coverage
+pytest tests/ -v --cov --cov-report=term-missing
 
 # Run type checks
 mypy src/ tests/
 ```
+
+#### PowerShell Tests
+
+```powershell
+# Install Pester if not already installed
+Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser
+
+# Run all Pester tests
+Invoke-Pester -Path tests/ -Output Detailed
+```
+
+#### Test Requirements
+
+- **Python:** New functionality should include pytest tests in `tests/`
+- **PowerShell:** New functions should include Pester tests in `tests/PowerShell/`
+- All tests must pass on the CI matrix (Ubuntu, Windows, macOS)
 
 ### 5. Commit Your Changes
 

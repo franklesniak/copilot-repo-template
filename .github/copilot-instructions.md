@@ -108,6 +108,8 @@ For each PR-sized change:
   - Pre-commit hooks will auto-fix many issues (formatting, linting, whitespace).
   - Always review and commit these auto-fixes as part of your change.
 - Add/adjust tests for new behavior.
+  - Python: pytest tests in `tests/`
+  - PowerShell: Pester tests in `tests/PowerShell/`
 - Keep changes small and reviewable; avoid "big bang" refactors.
 - Update docs/spec only if behavior is intentionally changed (and note why).
 - Ensure:
@@ -134,6 +136,8 @@ This repository uses modular instruction files for language-specific standards:
 | Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` |
 | PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` |
 | Python | `.github/instructions/python.instructions.md` | `**/*.py` |
+
+**Note:** The PowerShell instructions include comprehensive guidance on Pester testing.
 
 **To customize for your project:**
 
@@ -162,4 +166,27 @@ npm run lint:md
 
 ```powershell
 Invoke-ScriptAnalyzer -Path .\script.ps1 -Settings .\.github\linting\PSScriptAnalyzerSettings.psd1
+```
+
+## Testing Tools
+
+This repository includes testing infrastructure for both Python and PowerShell:
+
+| Language | Framework | Configuration | Test Location |
+| --- | --- | --- | --- |
+| Python | pytest | `pyproject.toml` (`[tool.pytest.ini_options]`) | `tests/` |
+| PowerShell | Pester 5.x | Inline in `.github/workflows/powershell-ci.yml` | `tests/PowerShell/` |
+
+### Running Tests
+
+**Python:**
+
+```bash
+pytest tests/ -v --cov --cov-report=term-missing
+```
+
+**PowerShell:**
+
+```powershell
+Invoke-Pester -Path tests/ -Output Detailed
 ```

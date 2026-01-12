@@ -34,19 +34,23 @@ This template includes:
 │   └── PSScriptAnalyzerSettings.psd1  # PowerShell linting settings
 ├── scripts/                         # Helper scripts for CI/tooling
 └── workflows/                       # GitHub Actions workflows
-    └── powershell-ci.yml            # PowerShell linting CI (optional)
+    └── powershell-ci.yml            # PowerShell linting and testing CI (optional)
 
 src/
 └── copilot_repo_template/           # Example Python package (rename for your project)
     ├── __init__.py
     └── example.py
 
-tests/                               # Example test directory
+tests/                               # Test directory
 ├── __init__.py
-└── test_example.py
+├── test_example.py                  # Python pytest tests
+└── PowerShell/                      # PowerShell Pester tests
+    └── Placeholder.Tests.ps1
 
 templates/                           # Reference templates for project setup
-└── python/                          # Python project templates
+├── python/                          # Python project templates
+└── powershell/                      # PowerShell test templates
+    └── Example.Tests.ps1            # Comprehensive Pester test example
 
 pyproject.toml                       # Python project configuration
 .markdownlint.jsonc                  # Markdown linting configuration
@@ -60,12 +64,13 @@ pyproject.toml                       # Python project configuration
 | `.github/copilot-instructions.md` | The "constitution" for all code changes - defines safety rules, pre-commit discipline, and references language-specific instructions |
 | `.github/instructions/*.md` | Language-specific coding standards applied based on file patterns |
 | `.github/linting/PSScriptAnalyzerSettings.psd1` | PSScriptAnalyzer settings enforcing OTBS formatting for PowerShell |
-| `.github/workflows/powershell-ci.yml` | PowerShell linting CI workflow (optional - remove if not using PowerShell) |
+| `.github/workflows/powershell-ci.yml` | PowerShell linting and Pester testing CI workflow (optional - remove if not using PowerShell) |
 | `.markdownlint.jsonc` | Markdown linting rules prioritizing auto-fixable checks |
 | `.pre-commit-config.yaml` | Pre-commit hooks for Python projects (remove if not using Python) |
 | `pyproject.toml` | Python project configuration with dev dependencies |
 | `src/copilot_repo_template/` | Example Python package - rename for your project |
-| `tests/` | Example test directory with pytest tests |
+| `tests/` | Test directory with pytest tests (Python) and Pester tests (PowerShell) |
+| `templates/powershell/Example.Tests.ps1` | Comprehensive Pester test template with examples |
 
 ### How to Use This Template
 
@@ -133,27 +138,24 @@ rm .github/instructions/python.instructions.md
 rm -rf templates/python/
 ```
 
+##### Remove PowerShell (if not using PowerShell)
+
+If your project doesn't use PowerShell:
+
+```bash
+rm .github/workflows/powershell-ci.yml
+rm .github/instructions/powershell.instructions.md
+rm -rf .github/linting/
+rm -rf tests/PowerShell/
+rm -rf templates/powershell/
+```
+
 ##### Update Copilot Instructions
 
 Edit `.github/copilot-instructions.md`:
 
 - Add your project-specific "Source of Truth" section
-- Update the language-specific instructions table
-
-##### Remove Unused Language Instructions
-
-Remove instruction files for languages you don't use (beyond Python, which is covered above):
-
-```bash
-# Example: Remove PowerShell instructions for a Python-only project
-rm .github/instructions/powershell.instructions.md
-rm -rf .github/linting/
-rm .github/workflows/powershell-ci.yml
-```
-
-##### Update the Instructions Table
-
-Edit the table in `.github/copilot-instructions.md` to reflect your project's languages.
+- Update the language-specific instructions table to reflect your project's languages
 
 #### 5. Update This README
 
@@ -205,6 +207,39 @@ pre-commit run --all-files
 pre-commit run black --all-files
 pre-commit run ruff --all-files
 ```
+
+### Testing
+
+#### Python Tests
+
+Python tests use pytest with coverage reporting.
+
+```bash
+# Run all Python tests
+pytest tests/ -v --cov --cov-report=term-missing
+
+# Run a specific test file
+pytest tests/test_example.py -v
+```
+
+#### PowerShell Tests
+
+PowerShell tests use Pester 5.x.
+
+```powershell
+# Install Pester if needed
+Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser
+
+# Run all Pester tests
+Invoke-Pester -Path tests/ -Output Detailed
+
+# Run a specific test file
+Invoke-Pester -Path tests/PowerShell/Placeholder.Tests.ps1
+```
+
+CI runs PowerShell tests on Windows, macOS, and Linux to ensure cross-platform compatibility.
+
+See `templates/powershell/Example.Tests.ps1` for a comprehensive Pester test template.
 
 ### Code Quality
 
