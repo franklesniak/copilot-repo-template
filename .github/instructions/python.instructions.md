@@ -54,7 +54,7 @@ This baseline is not dogma.  When external constraints require modern Python (e.
 
 - **[All]** **SHOULD** use exceptions over sentinel values unless explicitly modeling "no result."
 - **[All]** **MUST** catch narrowly; **MUST NOT** use bare `except:` unless re-raising immediately.
-- **[All]** Errors **MUST** be actionable: **MUST** include context, **MUST** preserve original exceptions (`raise ...  from e`).
+- **[All]** Errors **MUST** be actionable: **MUST** include context, **MUST** preserve original exceptions (`raise ... from e`).
 
 ### Types, Testing, and Tooling
 
