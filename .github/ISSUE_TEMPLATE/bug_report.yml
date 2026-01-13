@@ -78,13 +78,19 @@ labels:
 # projects:
 #   - org/1
 body:
+  # CUSTOMIZE: Relative links in issue form markdown may not resolve correctly
+  # (e.g., ../security resolves to https://github.com/security instead of
+  # the repository's security tab). After cloning, test the links and update
+  # to absolute links. For example:
+  #   - https://github.com/franklesniak/copilot-repo-template/security
+  #   - https://github.com/franklesniak/copilot-repo-template/blob/main/SECURITY.md
   - type: markdown
     attributes:
       value: |
         ## Thank you for reporting a bug!
         Please fill out the form below to help us investigate and resolve the issue.
 
-        ⚠️ **Security Notice:** If you are reporting a security vulnerability, do NOT use this form. Please report security issues privately via the repository's [Security tab](../../security) or by following the instructions in [SECURITY.md](../../SECURITY.md).
+        ⚠️ **Security Notice:** If you are reporting a security vulnerability, do NOT use this form. Please report security issues privately via the repository's [Security tab](../security) or by following the instructions in [SECURITY.md](../SECURITY.md).
 
   - type: checkboxes
     id: pre_flight
@@ -169,7 +175,7 @@ body:
         Your detailed logs here...
 
         </details>
-      render: console
+      render: shell
     validations:
       required: false
 
@@ -221,19 +227,23 @@ body:
       label: Operating System
       description: >-
         Your operating system name and version
-      placeholder: e.g., Windows 11, Ubuntu 22.04, macOS Sonoma
+      placeholder: e.g., Windows 11, Ubuntu 24.04 LTS, macOS 15.x
     validations:
       required: true
 
   # CUSTOMIZE: Cross-platform projects should consider making this required.
   # Single-platform projects can remove this field.
-  - type: input
+  - type: dropdown
     id: architecture
     attributes:
       label: Architecture
       description: >-
         Your CPU architecture, if relevant to the issue
-      placeholder: e.g., x64, ARM64, Apple Silicon (M1/M2/M3)
+      options:
+        - x64 (AMD64 / Intel 64)
+        - ARM64 (AArch64 / Apple Silicon)
+        - x86 (32-bit)
+        - Other (specify in Additional Context)
     validations:
       required: false
 
