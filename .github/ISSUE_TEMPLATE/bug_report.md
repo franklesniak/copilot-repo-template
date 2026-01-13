@@ -55,4 +55,4 @@ Paste logs here
 
 ## Additional Context
 
-<!-- Add any other context about the problem here, such as logs or screenshots -->
+<!-- Add any other context about the problem here, such as screenshots or configuration details -->
