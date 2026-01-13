@@ -62,8 +62,13 @@ body:
           required: false
         - label: I am using a supported version of the project
           required: true
+        - label: I have tested on the latest version or main branch
+          required: false
         - label: This is NOT a security vulnerability (report those privately via SECURITY.md)
           required: true
+        # CUSTOMIZE: Remove if your project doesn't accept community contributions
+        - label: I am willing to submit a pull request to fix this issue
+          required: false
 
   - type: textarea
     id: description
@@ -132,6 +137,10 @@ body:
     validations:
       required: false
 
+  - type: markdown
+    attributes:
+      value: "### Environment Information"
+
   - type: input
     id: project_version
     attributes:
@@ -178,6 +187,10 @@ body:
     validations:
       required: false
 
+  - type: markdown
+    attributes:
+      value: "### Bug Characteristics"
+
   - type: dropdown
     id: reproducibility
     attributes:
@@ -199,9 +212,9 @@ body:
       description: >-
         Did this functionality work correctly in a previous version?
       options:
+        - Unknown - I haven't used previous versions
         - Yes - this worked before (please specify version in Additional Context)
         - No - this never worked for me
-        - Unknown - I haven't used previous versions
     validations:
       required: false
 
@@ -221,6 +234,10 @@ body:
         - Low (minor inconvenience, cosmetic issue)
     validations:
       required: true
+
+  - type: markdown
+    attributes:
+      value: "### Additional Information"
 
   - type: textarea
     id: workaround
