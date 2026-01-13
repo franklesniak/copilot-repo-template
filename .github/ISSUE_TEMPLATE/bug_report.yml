@@ -26,7 +26,9 @@
 #     the issue template chooser (enable/disable blank issues, add contact links).
 #     Example config.yml:
 #     ```yaml
-#     blank_issues_enabled: false
+#     # Set to `true` for flexibility (recommended initially), or `false` once you
+#     # have comprehensive templates and want to enforce structured issue creation
+#     blank_issues_enabled: true
 #     contact_links:
 #       - name: 💬 Discussions
 #         url: https://github.com/ORG/REPO/discussions

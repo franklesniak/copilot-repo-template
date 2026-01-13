@@ -1,5 +1,47 @@
+# =============================================================================
+# TEMPLATE CUSTOMIZATION GUIDE
+# =============================================================================
+# This file configures the issue template chooser for your repository. When
+# cloning this template repository, customize the following settings:
+#
+# 1. `blank_issues_enabled` - Controls whether users can create blank issues
+#    without using a template. Set to `true` for flexibility (allows any issue
+#    format), or `false` to enforce template usage (ensures structured data for
+#    triage). Most projects benefit from `true` initially; consider `false` once
+#    you have comprehensive templates covering all issue types.
+#
+# 2. `contact_links` - Links displayed in the issue template chooser to redirect
+#    users to external resources. Common uses:
+#    - Link to contributing guide (included by default)
+#    - Link to GitHub Discussions for Q&A (template included below, commented out)
+#    - Link to external documentation, support forums, or chat channels
+#    - Link to security reporting instructions
+#
+# 3. `contact_links[].url` - Update URLs to point to your repository's actual
+#    resources. Replace `franklesniak/copilot-repo-template` with your org/repo.
+#
+# 4. `contact_links[].name` - Use emojis for visual distinction in the chooser
+#    (e.g., 📖 for docs, 💬 for discussions, 🔒 for security)
+#
+# 5. `contact_links[].about` - Keep descriptions concise but informative; this
+#    text appears below the link name in the template chooser
+# =============================================================================
+
+# CUSTOMIZE: Set to `true` (default) to allow users flexibility in creating issues
+# without a template. Set to `false` to require template usage—useful once you have
+# comprehensive templates covering all issue types and want structured data collection.
 blank_issues_enabled: true
+
 contact_links:
+  # CUSTOMIZE: Update the URL to point to your repository's contributing guide.
+  # Replace `franklesniak/copilot-repo-template` with your org/repo name.
   - name: Contributing Guide
     url: https://github.com/franklesniak/copilot-repo-template/blob/main/CONTRIBUTING.md
     about: Read the contributing guide before opening an issue
+
+  # CUSTOMIZE: Uncomment the following block if your repository uses GitHub
+  # Discussions for Q&A. This redirects support questions away from issues.
+  # Replace `ORG/REPO` with your actual organization and repository name.
+  # - name: 💬 Questions & Discussions
+  #   url: https://github.com/ORG/REPO/discussions
+  #   about: Ask questions and discuss ideas (not for bug reports)
