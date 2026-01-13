@@ -89,7 +89,6 @@ body:
         If applicable, add screenshots to help explain the problem.
         Drag and drop images directly into this field.
       placeholder: Drag and drop screenshots here...
-      render: markdown
     validations:
       required: false
 
