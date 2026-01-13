@@ -19,6 +19,9 @@
 #    others may remove it if not applicable
 # 8. `severity` options - Adjust impact categories to match your project's
 #    triage workflow (e.g., add/remove severity levels)
+# 9. `field removal` - Any optional field can be removed entirely if not
+#    applicable to your project. Required fields should generally be kept
+#    to ensure sufficient information for bug triage.
 # =============================================================================
 
 name: 🐛 Bug Report
@@ -32,6 +35,9 @@ labels:
 # CUSTOMIZE: Uncomment and update to pre-populate the assignees field when opening bug reports
 # assignees:
 #   - maintainer-username
+# CUSTOMIZE: Uncomment and update to auto-add bug reports to a GitHub Project (uses project number)
+# projects:
+#   - org/1
 body:
   - type: markdown
     attributes:
@@ -159,6 +165,7 @@ body:
     validations:
       required: false
 
+  # CUSTOMIZE: CLI-focused projects should keep this field; others may remove it if not applicable
   - type: input
     id: shell_environment
     attributes:
@@ -182,6 +189,21 @@ body:
     validations:
       required: true
 
+  # CUSTOMIZE: Remove this field if version history is not tracked or not relevant
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Regression?
+      description: >-
+        Did this functionality work correctly in a previous version?
+      options:
+        - "Yes - this worked before (please specify version in Additional Context)"
+        - "No - this never worked for me"
+        - "Unknown - I haven't used previous versions"
+    validations:
+      required: false
+
+  # CUSTOMIZE: Adjust severity options to match your project's triage workflow
   - type: dropdown
     id: severity
     attributes:
