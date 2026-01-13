@@ -22,13 +22,31 @@
 # 9. `field removal` - Any optional field can be removed entirely if not
 #    applicable to your project. Required fields should generally be kept
 #    to ensure sufficient information for bug triage.
+# 10. `config.yml` - Create or update `.github/ISSUE_TEMPLATE/config.yml` to control
+#     the issue template chooser (enable/disable blank issues, add contact links).
+#     Example config.yml:
+#     ```yaml
+#     blank_issues_enabled: false
+#     contact_links:
+#       - name: 💬 Discussions
+#         url: https://github.com/ORG/REPO/discussions
+#         about: Ask questions and discuss ideas
+#     ```
+# 11. `required fields` - Mark fields required only when the information is essential
+#     for triage. Over-requiring fields discourages bug reports. Recommended required:
+#     description, steps to reproduce, expected/actual behavior, version, OS, severity.
 # =============================================================================
 
 name: 🐛 Bug Report
 description: Report a bug or unexpected behavior
 # CUSTOMIZE: Adjust the title prefix to match your project's conventions
 title: "[Bug] "
-# CUSTOMIZE: Update these labels to match your repository's label taxonomy
+# CUSTOMIZE: Update these labels to match your repository's label taxonomy.
+# Common patterns include:
+#   - Type labels: bug, enhancement, documentation
+#   - Status labels: triage, confirmed, in-progress
+#   - Priority labels: priority:critical, priority:high, priority:medium, priority:low
+#   - Area labels: area:api, area:cli, area:docs
 labels:
   - bug
   - triage
@@ -45,7 +63,7 @@ body:
         ## Thank you for reporting a bug!
         Please fill out the form below to help us investigate and resolve the issue.
 
-        ⚠️ **Security Notice:** If you are reporting a security vulnerability, do NOT use this form. Please report security issues privately via the repository's Security tab or by following the instructions in SECURITY.md.
+        ⚠️ **Security Notice:** If you are reporting a security vulnerability, do NOT use this form. Please report security issues privately via the repository's [Security tab](../../security) or by following the instructions in [SECURITY.md](../../SECURITY.md).
 
   - type: checkboxes
     id: pre_flight
@@ -119,9 +137,17 @@ body:
       label: Logs/Error Output
       description: >-
         Paste any error messages, stack traces, or relevant log output.
-        For longer outputs, you can drag-and-drop log files into this field or attach them below.
+        For longer outputs, use a collapsible section or drag-and-drop log files.
         ⚠️ Review logs for sensitive data (passwords, tokens, personal info) before submitting
-      placeholder: Paste logs here...
+      placeholder: |
+        Paste logs here...
+
+        For verbose logs, use a collapsible section:
+        <details><summary>Full log output</summary>
+
+        Your detailed logs here...
+
+        </details>
       render: console
     validations:
       required: false
