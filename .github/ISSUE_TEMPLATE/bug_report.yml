@@ -79,7 +79,7 @@ labels:
 #   - org/1
 body:
   # CUSTOMIZE: Relative links in issue form markdown may not resolve correctly
-  # (e.g., ../../security resolves to https://github.com/security instead of
+  # (e.g., ../security resolves to https://github.com/security instead of
   # the repository's security tab). After cloning, test the links and update
   # to absolute links. For example:
   #   - https://github.com/franklesniak/copilot-repo-template/security
@@ -90,7 +90,7 @@ body:
         ## Thank you for reporting a bug!
         Please fill out the form below to help us investigate and resolve the issue.
 
-        ⚠️ **Security Notice:** If you are reporting a security vulnerability, do NOT use this form. Please report security issues privately via the repository's <a>Security tab</a> or by following the instructions in <a>SECURITY.md</a>.
+        ⚠️ **Security Notice:** If you are reporting a security vulnerability, do NOT use this form. Please report security issues privately via the repository's [Security tab](../security) or by following the instructions in [SECURITY.md](../SECURITY.md).
 
   - type: checkboxes
     id: pre_flight
