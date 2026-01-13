@@ -78,12 +78,19 @@ labels:
 # projects:
 #   - org/1
 body:
-  # CUSTOMIZE: Relative links in issue form markdown may not resolve correctly
-  # (e.g., ../security resolves to https://github.com/franklesniak/security instead of
-  # the repository's security tab). After cloning, test the links and update
-  # to absolute links. For example:
+  # CUSTOMIZE: Relative links in issue form markdown may not resolve in the ways that you expect.
+  # (e.g., in this template repository, `../security` resolves to
+  # https://github.com/franklesniak/security instead of the repository's security tab. To resolve
+  # to the repository's security tab, you must use `security`, which, in the case of the template
+  # repository, resolves to https://github.com/franklesniak/copilot-repo-template/security). After
+  # cloning, test the links to ensure they resolve correctly and update them to absolute links. For
+  # example:
+  #
   #   - https://github.com/franklesniak/copilot-repo-template/security
   #   - https://github.com/franklesniak/copilot-repo-template/blob/main/SECURITY.md
+  #
+  # In the meantime, in this template respository, [Security tab](security) and
+  # [SECURITY.md](blob/main/SECURITY.md) are confirmed to resolve correctly.
   - type: markdown
     attributes:
       value: |
