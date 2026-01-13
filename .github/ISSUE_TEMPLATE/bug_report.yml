@@ -37,6 +37,10 @@
 # 11. `required fields` - Mark fields required only when the information is essential
 #     for triage. Over-requiring fields discourages bug reports. Recommended required:
 #     description, steps to reproduce, expected/actual behavior, version, OS, severity.
+# 12. `field IDs` - This template uses snake_case for all field IDs (e.g.,
+#     `steps_to_reproduce`, `operating_system`). Maintain this convention
+#     when adding new fields for consistency. IDs are used in issue body
+#     output and API queries.
 # =============================================================================
 
 name: 🐛 Bug Report
@@ -165,6 +169,19 @@ body:
     validations:
       required: false
 
+  # CUSTOMIZE: Library/framework projects should consider making this required.
+  # Projects that don't accept external reproductions can remove this field.
+  - type: input
+    id: minimal_reproduction
+    attributes:
+      label: Minimal Reproduction URL
+      description: >-
+        Link to a minimal reproduction (GitHub repo, CodeSandbox, StackBlitz, etc.).
+        For complex bugs, this greatly speeds up investigation.
+      placeholder: e.g., https://github.com/username/repo-name or https://codesandbox.io/s/...
+    validations:
+      required: false
+
   - type: markdown
     attributes:
       value: "### Environment Information"
@@ -190,6 +207,18 @@ body:
       placeholder: e.g., Windows 11, Ubuntu 22.04, macOS Sonoma
     validations:
       required: true
+
+  # CUSTOMIZE: Cross-platform projects should consider making this required.
+  # Single-platform projects can remove this field.
+  - type: input
+    id: architecture
+    attributes:
+      label: Architecture
+      description: >-
+        Your CPU architecture, if relevant to the issue
+      placeholder: e.g., x64, ARM64, Apple Silicon (M1/M2/M3)
+    validations:
+      required: false
 
   # CUSTOMIZE: Update placeholder examples to match your project's supported runtimes
   - type: textarea
@@ -229,6 +258,7 @@ body:
         - Consistent (every time)
         - Intermittent (sometimes)
         - Unable to reproduce reliably
+        - Only happened once (haven't retried)
     validations:
       required: true
 
