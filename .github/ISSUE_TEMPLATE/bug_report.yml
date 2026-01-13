@@ -1,6 +1,6 @@
 name: 🐛 Bug Report
 description: Report a bug or unexpected behavior
-title: "[Bug]: "
+title: "[Bug] "
 labels: ["bug", "triage"]
 assignees: []
 body:
@@ -77,6 +77,17 @@ body:
         ⚠️ Review logs for sensitive data (passwords, tokens, personal info) before submitting.
       placeholder: Paste logs here...
       render: console
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: >-
+        If applicable, add screenshots to help explain the problem.
+        Drag and drop images directly into this field.
+      placeholder: Drag and drop screenshots here...
     validations:
       required: false
 
@@ -180,8 +191,8 @@ body:
     attributes:
       label: Additional Context
       description: >-
-        Add any other context about the problem here, such as screenshots
-        or configuration details
+        Add any other context about the problem here, such as configuration
+        details or environment specifics
       placeholder: Add any other context here...
     validations:
       required: false
