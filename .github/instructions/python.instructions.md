@@ -5,13 +5,13 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.0.20260112.0
+**Version:** 1.1.20260113.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-01-12
+- **Last Updated:** 2026-01-13
 - **Scope:** Defines Python coding standards for all Python files in this repository, including modules, scripts, tests, and tooling. Covers style, structure, error handling, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -34,7 +34,7 @@ This baseline is not dogma.  When external constraints require modern Python (e.
 - **[All]** **MUST** use 4 spaces; never tabs.
 - **[All]** **MUST** follow PEP 8/PEP 257; line length target **<= 100** (**MAY** exceed for URLs/long strings when readability wins).
 - **[All]** **MUST** keep formatting tool-friendly: **MUST NOT** hand-align with extra whitespace.
-- **[All]** **SHOULD** use f-strings for interpolation; **SHOULD NOT** use `%` formatting except when required.
+- **[All]** **SHOULD** use f-strings for interpolation; **SHOULD NOT** use `%` or `.format()` formatting except when required.
 - **[All]** **MUST NOT** include trailing whitespace; files **MUST** end with a single newline.
 
 ### Naming and Structure
@@ -61,6 +61,7 @@ This baseline is not dogma.  When external constraints require modern Python (e.
 - **[Baseline]** **MAY** use type hints opportunistically for public APIs and complex structures.
 - **[Modern]** Type hints are expected broadly; **MUST** run static checking (e.g., mypy/pyright) in CI.
 - **[All]** Tests **MUST** exist for non-trivial logic; **SHOULD** use `pytest` unless repo standard differs.
+- **[All]** **SHOULD** use Black for formatting and Ruff for linting (configured via `pyproject.toml` and pre-commit hooks).
 
 ## Baseline vs Modern-Advanced Mode
 
@@ -93,7 +94,7 @@ Use when:
 
 - **MUST** use type hints pervasively (inputs/outputs, key variables in complex logic).
 - **SHOULD** use `pathlib.Path` over `os.path` for paths.
-- **MUST** use `logging` (structured if available) instead of `print`.
+- **SHOULD** use structured logging when available.
 - For async:  **SHOULD** use `async`/`await`, `anyio`/`asyncio` patterns; **MUST** keep sync/async boundaries explicit.
 - **MAY** raise domain-specific exceptions where helpful.
 
