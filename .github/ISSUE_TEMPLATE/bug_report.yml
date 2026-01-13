@@ -35,6 +35,9 @@ labels:
 # CUSTOMIZE: Uncomment and update to pre-populate the assignees field when opening bug reports
 # assignees:
 #   - maintainer-username
+# CUSTOMIZE: Uncomment and update to auto-add bug reports to a GitHub Project (uses project number)
+# projects:
+#   - org/1
 body:
   - type: markdown
     attributes:
@@ -162,6 +165,7 @@ body:
     validations:
       required: false
 
+  # CUSTOMIZE: CLI-focused projects should keep this field; others may remove it if not applicable
   - type: input
     id: shell_environment
     attributes:
@@ -199,6 +203,7 @@ body:
     validations:
       required: false
 
+  # CUSTOMIZE: Adjust severity options to match your project's triage workflow
   - type: dropdown
     id: severity
     attributes:
