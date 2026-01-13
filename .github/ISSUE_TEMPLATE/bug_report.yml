@@ -6,8 +6,16 @@
 #
 # 1. `labels` - Update to match your repository's label taxonomy
 # 2. `title` - Adjust the "[Bug] " prefix if desired
-# 3. `runtime_version.placeholder` - Update examples to match your project's
+# 3. `assignees` - (Optional) Add this field to auto-assign bug reports to
+#    specific users. Example: `assignees: [username1, username2]`
+# 4. `preflight` checkboxes - Add or modify checkboxes for project-specific
+#    requirements (e.g., "I have included a minimal reproduction")
+# 5. `runtime_version.placeholder` - Update examples to match your project's
 #    supported languages/runtimes
+# 6. `shell_environment` - CLI-focused projects should keep this field;
+#    others may remove it if not applicable
+# 7. `severity` options - Adjust impact categories to match your project's
+#    triage workflow (e.g., add/remove severity levels)
 # =============================================================================
 
 name: 🐛 Bug Report
@@ -149,7 +157,6 @@ body:
       label: Shell/Terminal
       description: >-
         The shell or terminal you're using, if applicable
-        (e.g., PowerShell 7.4, bash 5.2, Windows Terminal, iTerm2)
       placeholder: e.g., PowerShell 7.4, bash 5.2, Windows Terminal
     validations:
       required: false
