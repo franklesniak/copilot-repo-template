@@ -8,13 +8,16 @@
 # 2. `title` - Adjust the "[Bug] " prefix if desired
 # 3. `assignees` - (Optional) Add this field to auto-assign bug reports to
 #    specific users. Example: `assignees: [username1, username2]`
-# 4. `preflight` checkboxes - Add or modify checkboxes for project-specific
-#    requirements (e.g., "I have included a minimal reproduction")
-# 5. `runtime_version.placeholder` - Update examples to match your project's
+# 4. `projects` - (Optional) Add this field to auto-add bug reports to a
+#    GitHub Project. Example: `projects: [org/1]` (uses project number)
+# 5. `preflight` checkboxes - Add or modify checkboxes for project-specific
+#    requirements (e.g., "I have included a minimal reproduction repository"
+#    for library projects, or "I have tested on the latest version")
+# 6. `runtime_version.placeholder` - Update examples to match your project's
 #    supported languages/runtimes
-# 6. `shell_environment` - CLI-focused projects should keep this field;
+# 7. `shell_environment` - CLI-focused projects should keep this field;
 #    others may remove it if not applicable
-# 7. `severity` options - Adjust impact categories to match your project's
+# 8. `severity` options - Adjust impact categories to match your project's
 #    triage workflow (e.g., add/remove severity levels)
 # =============================================================================
 
