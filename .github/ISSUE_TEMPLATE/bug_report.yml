@@ -18,6 +18,10 @@ body:
       options:
         - label: I have searched existing issues and this is not a duplicate
           required: true
+        - label: I have read the project documentation
+          required: false
+        - label: I am using a supported version of the project
+          required: false
 
   - type: textarea
     id: description
@@ -93,14 +97,17 @@ body:
     validations:
       required: true
 
-  - type: input
+  - type: textarea
     id: runtime_version
     attributes:
-      label: Language/Runtime Version
+      label: Language/Runtime Version(s)
       description: >-
-        Relevant language or runtime version for your environment
-        (e.g., PowerShell 7.4, Python 3.12, Node.js 20.10)
-      placeholder: e.g., PowerShell 7.4, Python 3.12, Node.js 20.10
+        Relevant language or runtime versions for your environment.
+        List each on a separate line if multiple apply.
+      placeholder: |
+        Python 3.12
+        PowerShell 7.4
+      render: console
     validations:
       required: false
 
@@ -125,6 +132,20 @@ body:
         - Consistent (every time)
         - Intermittent (sometimes)
         - Unable to reproduce reliably
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: >-
+        How severe is the impact of this bug?
+      options:
+        - Critical (system crash, data loss, security issue)
+        - High (major feature broken, no workaround)
+        - Medium (feature impaired, workaround exists)
+        - Low (minor inconvenience, cosmetic issue)
     validations:
       required: true
 
