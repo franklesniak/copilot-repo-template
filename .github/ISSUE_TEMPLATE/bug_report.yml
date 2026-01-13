@@ -19,6 +19,9 @@
 #    others may remove it if not applicable
 # 8. `severity` options - Adjust impact categories to match your project's
 #    triage workflow (e.g., add/remove severity levels)
+# 9. `field removal` - Any optional field can be removed entirely if not
+#    applicable to your project. Required fields should generally be kept
+#    to ensure sufficient information for bug triage.
 # =============================================================================
 
 name: 🐛 Bug Report
@@ -181,6 +184,20 @@ body:
         - Unable to reproduce reliably
     validations:
       required: true
+
+  # CUSTOMIZE: Remove this field if version history is not tracked or not relevant
+  - type: dropdown
+    id: regression
+    attributes:
+      label: Regression?
+      description: >-
+        Did this functionality work correctly in a previous version?
+      options:
+        - "Yes - this worked before (please specify version in Additional Context)"
+        - "No - this never worked for me"
+        - "Unknown - I haven't used previous versions"
+    validations:
+      required: false
 
   - type: dropdown
     id: severity
