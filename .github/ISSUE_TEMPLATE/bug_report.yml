@@ -1,0 +1,125 @@
+name: Bug Report
+description: Report a bug or unexpected behavior
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Provide a clear and concise description of the bug
+      placeholder: Describe what the bug is...
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps_to_reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Provide detailed steps to reproduce the behavior
+      placeholder: |
+        1. Go to '...'
+        2. Run '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected Behavior
+      description: Describe what you expected to happen
+      placeholder: What should have happened...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual_behavior
+    attributes:
+      label: Actual Behavior
+      description: Describe what actually happened
+      placeholder: What actually happened...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs/Error Output
+      description: Paste any error messages, stack traces, or relevant log output
+      placeholder: Paste logs here...
+      render: console
+    validations:
+      required: false
+
+  - type: input
+    id: project_version
+    attributes:
+      label: Project Version
+      description: The version of the project (e.g., v1.2.3 or commit SHA)
+      placeholder: e.g., v1.2.3 or abc1234
+    validations:
+      required: true
+
+  - type: input
+    id: operating_system
+    attributes:
+      label: Operating System
+      description: Your operating system name and version
+      placeholder: e.g., Windows 11, Ubuntu 22.04, macOS Sonoma
+    validations:
+      required: true
+
+  - type: input
+    id: runtime_version
+    attributes:
+      label: Language/Runtime Version
+      description: >-
+        Relevant language or runtime version for your environment
+        (e.g., PowerShell 7.4, Python 3.12, Node.js 20.10)
+      placeholder: e.g., PowerShell 7.4, Python 3.12, Node.js 20.10
+    validations:
+      required: false
+
+  - type: dropdown
+    id: reproducibility
+    attributes:
+      label: Reproducibility
+      description: How consistently can you reproduce this bug?
+      options:
+        - Consistent (every time)
+        - Intermittent (sometimes)
+        - Unable to reproduce reliably
+    validations:
+      required: true
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Possible Solution or Workaround
+      description: >-
+        If you have ideas on how to fix this or a workaround you're using,
+        describe it here
+      placeholder: Describe any workarounds or potential fixes...
+    validations:
+      required: false
+
+  - type: input
+    id: related_issues
+    attributes:
+      label: Related Issues
+      description: Link any related issues (e.g., #123) or indicate if this might be a duplicate
+      placeholder: e.g., #123, #456
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Context
+      description: >-
+        Add any other context about the problem here, such as screenshots
+        or configuration details
+      placeholder: Add any other context here...
+    validations:
+      required: false
