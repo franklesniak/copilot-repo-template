@@ -2,6 +2,7 @@ name: Bug Report
 description: Report a bug or unexpected behavior
 title: "[Bug]: "
 labels: ["bug", "triage"]
+assignees: []
 body:
   - type: markdown
     attributes:
@@ -21,7 +22,7 @@ body:
         - label: I have read the project documentation
           required: false
         - label: I am using a supported version of the project
-          required: false
+          required: true
 
   - type: textarea
     id: description
@@ -71,7 +72,8 @@ body:
     attributes:
       label: Logs/Error Output
       description: >-
-        Paste any error messages, stack traces, or relevant log output
+        Paste any error messages, stack traces, or relevant log output.
+        For longer outputs, you can drag-and-drop log files into this field or attach them below.
       placeholder: Paste logs here...
       render: console
     validations:
@@ -160,14 +162,16 @@ body:
     validations:
       required: false
 
-  - type: input
+  - type: textarea
     id: related_issues
     attributes:
       label: Related Issues
       description: >-
         Link any related issues that may provide additional context
         (e.g., #123, #456, or full references like owner/repo#789)
-      placeholder: e.g., #123, #456
+      placeholder: |
+        franklesniak/copilot-repo-template#123
+        franklesniak/copilot-repo-template#456
     validations:
       required: false
 
