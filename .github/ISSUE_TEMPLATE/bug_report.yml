@@ -44,12 +44,17 @@ body:
       options:
         - label: I have searched existing issues and this is not a duplicate
           required: true
+        # CUSTOMIZE: Consider changing to `required: true` for projects with
+        # comprehensive documentation that users should consult before filing bugs
         - label: I have read the project documentation
           required: false
         - label: I am using a supported version of the project
           required: true
         - label: This is NOT a security vulnerability (report those privately via SECURITY.md)
           required: true
+        # CUSTOMIZE: Set required: true for projects that need reproduction cases
+        - label: I have included steps or code to reproduce the issue
+          required: false
 
   - type: textarea
     id: description
@@ -124,7 +129,7 @@ body:
       label: Project Version
       description: >-
         The version of the project (e.g., v1.2.3 or commit SHA)
-      placeholder: v1.2.3
+      placeholder: e.g., v1.2.3 or commit SHA abc1234
     validations:
       required: true
 
