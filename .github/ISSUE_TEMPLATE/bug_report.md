@@ -42,8 +42,11 @@ Paste logs here
 
 ## Reproducibility
 
-- [ ] This issue occurs consistently (every time)
-- [ ] This issue occurs intermittently
+<!-- Select one -->
+
+- [ ] Consistent (every time)
+- [ ] Intermittent (sometimes)
+- [ ] Unable to reproduce reliably
 
 ## Possible Solution or Workaround
 
