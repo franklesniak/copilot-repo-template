@@ -9,7 +9,11 @@
 # 3. `assignees` - (Optional) Add this field to auto-assign bug reports to
 #    specific users. Example: `assignees: [username1, username2]`
 # 4. `projects` - (Optional) Add this field to auto-add bug reports to a
-#    GitHub Project. Example: `projects: [org/1]` (uses project number)
+#    GitHub Project. Example (uses project number):
+#    ```yaml
+#    projects:
+#      - org/1
+#    ```
 # 5. `pre_flight` checkboxes - Add or modify checkboxes for project-specific
 #    requirements (e.g., "I have included a minimal reproduction repository"
 #    for library projects, or "I have tested on the latest version")
@@ -41,6 +45,14 @@
 #     `steps_to_reproduce`, `operating_system`). Maintain this convention
 #     when adding new fields for consistency. IDs are used in issue body
 #     output and API queries.
+# 13. `type` - (Optional) Add this top-level field for issue type categorization.
+#     Issue types are defined at the organization level in GitHub settings.
+#     If your organization has defined issue types, you can specify one here.
+#     Example: `type: Bug`
+# 14. `required` validation limitation - Note that `required: true` validation
+#     only works on public repositories. On private repositories, GitHub does
+#     not enforce required field validation. Users of this template for private
+#     repos should be aware that all fields will effectively be optional.
 # =============================================================================
 
 name: 🐛 Bug Report
@@ -56,6 +68,9 @@ title: "[Bug] "
 labels:
   - bug
   - triage
+# CUSTOMIZE: Uncomment and update to specify an issue type (defined at the organization level).
+# See: https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms#top-level-syntax
+# type: Bug
 # CUSTOMIZE: Uncomment and update to pre-populate the assignees field when opening bug reports
 # assignees:
 #   - maintainer-username
