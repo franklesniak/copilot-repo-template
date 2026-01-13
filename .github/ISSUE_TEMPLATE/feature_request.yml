@@ -1,0 +1,207 @@
+# =============================================================================
+# TEMPLATE CUSTOMIZATION GUIDE
+# =============================================================================
+# This is a GitHub issue form template for feature requests. When using this in
+# a cloned repository, customize the following sections:
+#
+# 1. `labels` - Update to match your repository's label taxonomy
+# 2. `title` - Adjust the "[Feature] " prefix if desired
+# 3. `assignees` - (Optional) Add this field to auto-assign feature requests to
+#    specific users. Example: `assignees: [username1, username2]`
+# 4. `projects` - (Optional) Add this field to auto-add feature requests to a
+#    GitHub Project. Example: `projects: [org/1]` (uses project number)
+# 5. `pre_flight` checkboxes - Add or modify checkboxes for project-specific
+#    requirements (e.g., "I have reviewed the project roadmap" for projects
+#    with public roadmaps, or "I have discussed this in Discussions first")
+# 6. `priority` options - Adjust priority levels to match your project's
+#    triage workflow (e.g., add/remove priority levels)
+# 7. `scope` options - Adjust scope categories to match your project's
+#    feature classification (e.g., "Breaking change", "New API", "UX improvement")
+# 8. `field removal` - Any optional field can be removed entirely if not
+#    applicable to your project. Required fields should generally be kept
+#    to ensure sufficient information for feature triage.
+# 9. `config.yml` - Create or update `.github/ISSUE_TEMPLATE/config.yml` to control
+#    the issue template chooser (enable/disable blank issues, add contact links).
+#    Example config.yml:
+#    ```yaml
+#    # Set to `true` for flexibility (recommended initially), or `false` once you
+#    # have comprehensive templates and want to enforce structured issue creation
+#    blank_issues_enabled: true
+#    contact_links:
+#      - name: 💬 Discussions
+#        url: https://github.com/ORG/REPO/discussions
+#        about: Ask questions and discuss ideas
+#    ```
+# =============================================================================
+
+name: 💡 Feature Request
+description: Suggest a new feature or enhancement
+# CUSTOMIZE: Adjust the title prefix to match your project's conventions
+title: "[Feature] "
+# CUSTOMIZE: Update these labels to match your repository's label taxonomy.
+# Common patterns include:
+#   - Type labels: enhancement, feature, improvement
+#   - Status labels: triage, accepted, planned
+#   - Priority labels: priority:critical, priority:high, priority:medium, priority:low
+#   - Area labels: area:api, area:cli, area:docs
+labels:
+  - enhancement
+  - triage
+# CUSTOMIZE: Uncomment and update to pre-populate the assignees field when opening feature requests
+# assignees:
+#   - maintainer-username
+# CUSTOMIZE: Uncomment and update to auto-add feature requests to a GitHub Project (uses project number)
+# projects:
+#   - org/1
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Thank you for your feature suggestion!
+        Please fill out the form below to help us understand and evaluate your request.
+
+  - type: checkboxes
+    id: pre_flight
+    attributes:
+      label: Pre-flight Checklist
+      description: >-
+        Please confirm the following before submitting
+      options:
+        - label: I have searched existing issues and this feature has not been requested
+          required: true
+        # CUSTOMIZE: Consider changing to `required: true` for projects with
+        # comprehensive documentation that users should consult before requesting features
+        - label: I have read the project documentation
+          required: false
+        # CUSTOMIZE: Consider changing to `required: true` for projects where
+        # discussion is preferred before formal feature requests
+        - label: I have checked the project roadmap or discussions for planned features
+          required: false
+        # CUSTOMIZE: Remove if your project doesn't accept community contributions
+        - label: I am willing to submit a pull request to implement this feature
+          required: false
+
+  - type: textarea
+    id: problem_statement
+    attributes:
+      label: Problem Statement / Motivation
+      description: >-
+        Describe the problem you're trying to solve or the motivation for this feature.
+        A clear problem statement helps maintainers understand the need
+      placeholder: |
+        I'm frustrated when...
+        Currently, I have to...
+        This would help by...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed Solution
+      description: >-
+        Describe the solution you'd like to see implemented.
+        Be as specific as possible about the desired behavior
+      placeholder: |
+        I would like...
+        The feature should...
+        Expected behavior:
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives_considered
+    attributes:
+      label: Alternatives Considered
+      description: >-
+        Describe any alternative solutions or workarounds you've considered.
+        This helps maintainers understand the problem space
+      placeholder: |
+        I considered...
+        Current workaround:
+        Why alternatives don't work:
+    validations:
+      required: false
+
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use Case / User Story
+      description: >-
+        Describe who benefits from this feature and how.
+        Use the format "As a [type of user], I want [goal] so that [benefit]"
+      placeholder: |
+        As a [developer/user/admin], I want [feature]
+        so that [benefit/outcome].
+
+        Example scenarios:
+        - Scenario 1: ...
+        - Scenario 2: ...
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: "### Feature Classification"
+
+  # CUSTOMIZE: Adjust priority options to match your project's triage workflow
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: >-
+        Select the priority level that best describes the urgency from your perspective.
+        Note: This is your self-assessment; maintainers may adjust during triage
+      options:
+        - Critical (blocking my adoption/usage)
+        - High (significant impact on my workflow)
+        - Medium (would improve my experience)
+        - Low (nice to have)
+    validations:
+      required: false
+
+  # CUSTOMIZE: Adjust scope options to match your project's feature categories
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: >-
+        Select the scope that best describes the size of this feature
+      options:
+        - Major feature (new capability, significant change)
+        - Minor enhancement (improvement to existing feature)
+        - Quality of life (small improvement, polish)
+    validations:
+      required: false
+
+  - type: markdown
+    attributes:
+      value: "### Additional Information"
+
+  - type: textarea
+    id: additional_context
+    attributes:
+      label: Additional Context
+      description: >-
+        Add any other context, mockups, screenshots, or examples about the feature request.
+        Drag and drop images directly into this field
+      placeholder: |
+        Additional context...
+
+        For mockups or detailed designs, you can include images:
+        (drag and drop images here)
+    validations:
+      required: false
+
+  - type: textarea
+    id: related_issues
+    attributes:
+      label: Related Issues
+      description: >-
+        Link any related issues that may provide additional context
+        (e.g., #123 for same-repo references or owner/repo-name#456 for cross-repo references)
+      placeholder: |
+        #123
+        owner/repo-name#456
+    validations:
+      required: false
