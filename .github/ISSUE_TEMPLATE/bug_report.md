@@ -23,9 +23,9 @@ labels: ["bug", "triage"]
 
 <!-- Describe what actually happened -->
 
-## Logs/Error Output
+## Logs/Error Output (if applicable)
 
-<!-- If applicable, paste any error messages, stack traces, or relevant log output here -->
+<!-- Paste any error messages, stack traces, or relevant log output here -->
 
 ```text
 Paste logs here
@@ -33,10 +33,12 @@ Paste logs here
 
 ## Environment
 
+- **Project Version:** <!-- e.g., v1.2.3 or commit SHA -->
 - **Operating System:** <!-- e.g., Windows 11, Ubuntu 22.04, macOS Sonoma -->
-- **PowerShell Version:** <!-- Run: $PSVersionTable.PSVersion -->
-- **Python Version:** <!-- Run: python --version -->
-- **Node.js Version:** <!-- Run: node --version -->
+- **Language/Runtime Version:** <!-- Include the relevant version(s) for your environment -->
+  - PowerShell: <!-- Run: $PSVersionTable.PSVersion -->
+  - Python: <!-- Run: python --version -->
+  - Node.js: <!-- Run: node --version -->
 
 ## Reproducibility
 
