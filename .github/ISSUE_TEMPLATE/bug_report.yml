@@ -170,8 +170,8 @@ body:
         Link any related issues that may provide additional context
         (e.g., #123, #456, or full references like owner/repo#789)
       placeholder: |
-        franklesniak/copilot-repo-template#123
-        franklesniak/copilot-repo-template#456
+        #123
+        other-org/other-repo#456
     validations:
       required: false
 
