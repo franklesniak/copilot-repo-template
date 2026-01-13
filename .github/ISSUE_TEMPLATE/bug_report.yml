@@ -1,4 +1,4 @@
-name: Bug Report
+name: 🐛 Bug Report
 description: Report a bug or unexpected behavior
 title: "[Bug]: "
 labels: ["bug", "triage"]
@@ -74,6 +74,7 @@ body:
       description: >-
         Paste any error messages, stack traces, or relevant log output.
         For longer outputs, you can drag-and-drop log files into this field or attach them below.
+        ⚠️ Review logs for sensitive data (passwords, tokens, personal info) before submitting.
       placeholder: Paste logs here...
       render: console
     validations:
@@ -109,7 +110,6 @@ body:
       placeholder: |
         Python 3.12
         PowerShell 7.4
-      render: console
     validations:
       required: false
 
