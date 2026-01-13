@@ -43,6 +43,14 @@ Paste logs here
 - [ ] This issue occurs consistently (every time)
 - [ ] This issue occurs intermittently
 
+## Possible Solution or Workaround
+
+<!-- Optional: If you have ideas on how to fix this or a workaround you're using, describe it here -->
+
+## Related Issues
+
+<!-- Optional: Link any related issues (e.g., #123) or indicate if this might be a duplicate -->
+
 ## Additional Context
 
-<!-- Add any other context about the problem here, such as logs, screenshots, or related issues -->
+<!-- Add any other context about the problem here, such as logs or screenshots -->
