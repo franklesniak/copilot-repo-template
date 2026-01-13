@@ -26,7 +26,7 @@ title: "[Bug] "
 labels:
   - bug
   - triage
-# CUSTOMIZE: Uncomment and update to auto-assign bug reports to specific maintainers
+# CUSTOMIZE: Uncomment and update to pre-populate the assignees field when opening bug reports
 # assignees:
 #   - maintainer-username
 body:
