@@ -26,6 +26,8 @@ body:
           required: false
         - label: I am using a supported version of the project
           required: true
+        - label: This is NOT a security vulnerability (report those privately via SECURITY.md)
+          required: true
 
   - type: textarea
     id: description
