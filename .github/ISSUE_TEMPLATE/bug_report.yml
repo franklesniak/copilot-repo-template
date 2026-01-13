@@ -11,6 +11,8 @@ body:
         ## Thank you for reporting a bug!
         Please fill out the form below to help us investigate and resolve the issue.
 
+        ⚠️ **Security Notice:** If you are reporting a security vulnerability, do NOT use this form. Please report security issues privately via the repository's Security tab or by following the instructions in SECURITY.md.
+
   - type: checkboxes
     id: preflight
     attributes:
@@ -75,7 +77,7 @@ body:
       description: >-
         Paste any error messages, stack traces, or relevant log output.
         For longer outputs, you can drag-and-drop log files into this field or attach them below.
-        ⚠️ Review logs for sensitive data (passwords, tokens, personal info) before submitting.
+        ⚠️ Review logs for sensitive data (passwords, tokens, personal info) before submitting
       placeholder: Paste logs here...
       render: console
     validations:
@@ -87,7 +89,7 @@ body:
       label: Screenshots
       description: >-
         If applicable, add screenshots to help explain the problem.
-        Drag and drop images directly into this field.
+        Drag and drop images directly into this field, or paste image URLs
       placeholder: Drag and drop screenshots here...
     validations:
       required: false
@@ -118,7 +120,7 @@ body:
       label: Language/Runtime Version(s)
       description: >-
         Relevant language or runtime versions for your environment.
-        List each on a separate line if multiple apply.
+        List each on a separate line if multiple apply
       placeholder: |
         Python 3.12
         PowerShell 7.4
@@ -155,7 +157,7 @@ body:
       label: Severity
       description: >-
         How severe is the impact of this bug?
-        ⚠️ For security vulnerabilities, do NOT use this form—report privately via the Security tab or SECURITY.md.
+        ⚠️ For security vulnerabilities, do NOT use this form—report privately via the Security tab or SECURITY.md
       options:
         - Critical (system crash, data loss)
         - High (major feature broken, no workaround)
@@ -183,8 +185,9 @@ body:
         Link any related issues that may provide additional context
         (e.g., franklesniak/copilot-repo-template#123 or full cross-repo references like other-org/other-repo#456)
       placeholder: |
-        franklesniak/copilot-repo-template#123
-        other-org/other-repo#456
+        #123
+        franklesniak/copilot-repo-template#456
+        other-org/other-repo#789
     validations:
       required: false
 
