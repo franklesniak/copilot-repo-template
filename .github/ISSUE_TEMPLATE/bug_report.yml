@@ -10,7 +10,7 @@
 #    specific users. Example: `assignees: [username1, username2]`
 # 4. `projects` - (Optional) Add this field to auto-add bug reports to a
 #    GitHub Project. Example: `projects: [org/1]` (uses project number)
-# 5. `preflight` checkboxes - Add or modify checkboxes for project-specific
+# 5. `pre_flight` checkboxes - Add or modify checkboxes for project-specific
 #    requirements (e.g., "I have included a minimal reproduction repository"
 #    for library projects, or "I have tested on the latest version")
 # 6. `runtime_version.placeholder` - Update examples to match your project's
@@ -48,7 +48,7 @@ body:
         ⚠️ **Security Notice:** If you are reporting a security vulnerability, do NOT use this form. Please report security issues privately via the repository's Security tab or by following the instructions in SECURITY.md.
 
   - type: checkboxes
-    id: preflight
+    id: pre_flight
     attributes:
       label: Pre-flight Checklist
       description: >-
@@ -109,7 +109,7 @@ body:
       required: true
 
   - type: textarea
-    id: logs
+    id: logs_output
     attributes:
       label: Logs/Error Output
       description: >-
@@ -141,6 +141,8 @@ body:
       placeholder: e.g., v1.2.3 or commit SHA abc1234
     validations:
       required: true
+      # CUSTOMIZE: Uncomment and adjust pattern for semver or SHA validation
+      # pattern: '^v?\d+\.\d+\.\d+(-[\w.]+)?$|^[a-f0-9]{7,40}$'
 
   - type: input
     id: operating_system
@@ -197,9 +199,9 @@ body:
       description: >-
         Did this functionality work correctly in a previous version?
       options:
-        - "Yes - this worked before (please specify version in Additional Context)"
-        - "No - this never worked for me"
-        - "Unknown - I haven't used previous versions"
+        - Yes - this worked before (please specify version in Additional Context)
+        - No - this never worked for me
+        - Unknown - I haven't used previous versions
     validations:
       required: false
 
