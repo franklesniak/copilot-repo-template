@@ -115,7 +115,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-import requests
+# import third_party_package  # Third-party imports go here
 
 from myproject.core.models import Requirement
 ```
