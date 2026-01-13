@@ -4,7 +4,6 @@ title: "[Bug] "
 labels:
   - bug
   - triage
-assignees: []
 body:
   - type: markdown
     attributes:
@@ -90,6 +89,7 @@ body:
         If applicable, add screenshots to help explain the problem.
         Drag and drop images directly into this field.
       placeholder: Drag and drop screenshots here...
+      render: markdown
     validations:
       required: false
 
@@ -99,7 +99,7 @@ body:
       label: Project Version
       description: >-
         The version of the project (e.g., v1.2.3 or commit SHA)
-      placeholder: e.g., v1.2.3 or abc1234
+      placeholder: v1.2.3
     validations:
       required: true
 
