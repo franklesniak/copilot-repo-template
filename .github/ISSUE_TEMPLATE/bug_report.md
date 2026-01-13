@@ -23,12 +23,25 @@ labels: ["bug", "triage"]
 
 <!-- Describe what actually happened -->
 
+## Logs/Error Output
+
+<!-- If applicable, paste any error messages, stack traces, or relevant log output here -->
+
+```text
+Paste logs here
+```
+
 ## Environment
 
 - **Operating System:** <!-- e.g., Windows 11, Ubuntu 22.04, macOS Sonoma -->
 - **PowerShell Version:** <!-- Run: $PSVersionTable.PSVersion -->
 - **Python Version:** <!-- Run: python --version -->
 - **Node.js Version:** <!-- Run: node --version -->
+
+## Reproducibility
+
+- [ ] This issue occurs consistently (every time)
+- [ ] This issue occurs intermittently
 
 ## Additional Context
 
