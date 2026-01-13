@@ -3,6 +3,23 @@ description: Report a bug or unexpected behavior
 title: "[Bug]: "
 labels: ["bug", "triage"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Thank you for reporting a bug!
+        Please fill out the form below to help us investigate and resolve the issue.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight Checklist
+      description: Please confirm the following before submitting
+      options:
+        - label: I have searched existing issues and this is not a duplicate
+          required: true
+        - label: I have read the relevant documentation
+          required: false
+
   - type: textarea
     id: description
     attributes:
