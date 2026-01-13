@@ -13,18 +13,18 @@ body:
     id: preflight
     attributes:
       label: Pre-flight Checklist
-      description: Please confirm the following before submitting
+      description: >-
+        Please confirm the following before submitting
       options:
         - label: I have searched existing issues and this is not a duplicate
           required: true
-        - label: I have read the relevant documentation
-          required: false
 
   - type: textarea
     id: description
     attributes:
       label: Description
-      description: Provide a clear and concise description of the bug
+      description: >-
+        Provide a clear and concise description of the bug
       placeholder: Describe what the bug is...
     validations:
       required: true
@@ -33,7 +33,8 @@ body:
     id: steps_to_reproduce
     attributes:
       label: Steps to Reproduce
-      description: Provide detailed steps to reproduce the behavior
+      description: >-
+        Provide detailed steps to reproduce the behavior
       placeholder: |
         1. Go to '...'
         2. Run '...'
@@ -45,7 +46,8 @@ body:
     id: expected_behavior
     attributes:
       label: Expected Behavior
-      description: Describe what you expected to happen
+      description: >-
+        Describe what you expected to happen
       placeholder: What should have happened...
     validations:
       required: true
@@ -54,7 +56,8 @@ body:
     id: actual_behavior
     attributes:
       label: Actual Behavior
-      description: Describe what actually happened
+      description: >-
+        Describe what actually happened
       placeholder: What actually happened...
     validations:
       required: true
@@ -63,7 +66,8 @@ body:
     id: logs
     attributes:
       label: Logs/Error Output
-      description: Paste any error messages, stack traces, or relevant log output
+      description: >-
+        Paste any error messages, stack traces, or relevant log output
       placeholder: Paste logs here...
       render: console
     validations:
@@ -73,7 +77,8 @@ body:
     id: project_version
     attributes:
       label: Project Version
-      description: The version of the project (e.g., v1.2.3 or commit SHA)
+      description: >-
+        The version of the project (e.g., v1.2.3 or commit SHA)
       placeholder: e.g., v1.2.3 or abc1234
     validations:
       required: true
@@ -82,7 +87,8 @@ body:
     id: operating_system
     attributes:
       label: Operating System
-      description: Your operating system name and version
+      description: >-
+        Your operating system name and version
       placeholder: e.g., Windows 11, Ubuntu 22.04, macOS Sonoma
     validations:
       required: true
@@ -98,11 +104,23 @@ body:
     validations:
       required: false
 
+  - type: input
+    id: shell_environment
+    attributes:
+      label: Shell/Terminal
+      description: >-
+        The shell or terminal you're using, if applicable
+        (e.g., PowerShell 7.4, bash 5.2, Windows Terminal, iTerm2)
+      placeholder: e.g., PowerShell 7.4, bash 5.2, Windows Terminal
+    validations:
+      required: false
+
   - type: dropdown
     id: reproducibility
     attributes:
       label: Reproducibility
-      description: How consistently can you reproduce this bug?
+      description: >-
+        How consistently can you reproduce this bug?
       options:
         - Consistent (every time)
         - Intermittent (sometimes)
@@ -125,7 +143,9 @@ body:
     id: related_issues
     attributes:
       label: Related Issues
-      description: Link any related issues (e.g., #123) or indicate if this might be a duplicate
+      description: >-
+        Link any related issues that may provide additional context
+        (e.g., #123, #456, or full references like owner/repo#789)
       placeholder: e.g., #123, #456
     validations:
       required: false
