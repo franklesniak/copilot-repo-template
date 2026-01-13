@@ -224,8 +224,31 @@ CI workflows will also run automatically when you push to GitHub.
 - [ ] Rename or replace `src/copilot_repo_template/` with your package
 - [ ] Replace placeholder tests in `tests/` with your actual tests
 - [ ] Update `README.md` with your project's documentation
+- [ ] Create the `triage` label for the bug report issue template (see [Issue Template Labels](#issue-template-labels) below)
 - [ ] Run `pre-commit run --all-files` to verify setup
 - [ ] Commit and push to trigger CI validation
+
+#### Issue Template Labels
+
+The bug report issue template (`.github/ISSUE_TEMPLATE/bug_report.yml`) references a `triage` label that must be created in your repository. This label is used to identify newly submitted bug reports that need initial review.
+
+**Create the label using GitHub CLI:**
+
+```bash
+gh label create triage --description "Needs triage" --color "d4c5f9"
+```
+
+**Or create it manually:**
+
+1. Go to your repository on GitHub
+2. Navigate to **Settings** > **Labels**
+3. Click **New label**
+4. Enter:
+   - **Label name:** `triage`
+   - **Description:** `Needs triage`
+   - **Color:** `d4c5f9` (or choose a purple/lavender color)
+
+> **Note:** The `bug` label is a GitHub default label and should already exist. If it doesn't, create it with description "Something isn't working" and color `d73a4a`.
 
 ### Language Support
 
