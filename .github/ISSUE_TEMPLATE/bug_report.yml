@@ -90,7 +90,7 @@ body:
         ## Thank you for reporting a bug!
         Please fill out the form below to help us investigate and resolve the issue.
 
-        ⚠️ **Security Notice:** If you are reporting a security vulnerability, do NOT use this form. Please report security issues privately via the repository's [Security tab](security) or by following the instructions in [SECURITY.md](SECURITY.md).
+        ⚠️ **Security Notice:** If you are reporting a security vulnerability, do NOT use this form. Please report security issues privately via the repository's [Security tab](security) or by following the instructions in [SECURITY.md](blob/main/SECURITY.md).
 
   - type: checkboxes
     id: pre_flight
