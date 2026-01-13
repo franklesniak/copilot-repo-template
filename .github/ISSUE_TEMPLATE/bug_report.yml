@@ -183,11 +183,10 @@ body:
       label: Related Issues
       description: >-
         Link any related issues that may provide additional context
-        (e.g., franklesniak/copilot-repo-template#123 or full cross-repo references like other-org/other-repo#456)
+        (e.g., #123 for same-repo references or owner/repo-name#456 for cross-repo references)
       placeholder: |
         #123
-        franklesniak/copilot-repo-template#456
-        other-org/other-repo#789
+        owner/repo-name#456
     validations:
       required: false
 
