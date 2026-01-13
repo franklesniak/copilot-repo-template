@@ -186,6 +186,10 @@ body:
     attributes:
       value: "### Environment Information"
 
+  # NOTE: GitHub issue forms do NOT support `pattern` validation on input fields.
+  # See: https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-githubs-form-schema#validations-for-input
+  # For input validation, consider using a dropdown with predefined options,
+  # or validate programmatically via GitHub Actions on issue creation.
   - type: input
     id: project_version
     attributes:
@@ -195,8 +199,6 @@ body:
       placeholder: e.g., v1.2.3 or commit SHA abc1234
     validations:
       required: true
-      # CUSTOMIZE: Uncomment and adjust pattern for semver or SHA validation
-      # pattern: '^v?\d+\.\d+\.\d+(-[\w.]+)?$|^[a-f0-9]{7,40}$'
 
   - type: input
     id: operating_system
