@@ -156,8 +156,9 @@ body:
       label: Severity
       description: >-
         How severe is the impact of this bug?
+        ⚠️ For security vulnerabilities, do NOT use this form—report privately via the Security tab or SECURITY.md.
       options:
-        - Critical (system crash, data loss, security issue)
+        - Critical (system crash, data loss)
         - High (major feature broken, no workaround)
         - Medium (feature impaired, workaround exists)
         - Low (minor inconvenience, cosmetic issue)
@@ -181,9 +182,9 @@ body:
       label: Related Issues
       description: >-
         Link any related issues that may provide additional context
-        (e.g., #123, #456, or full references like owner/repo#789)
+        (e.g., franklesniak/copilot-repo-template#123 or full cross-repo references like other-org/other-repo#456)
       placeholder: |
-        #123
+        franklesniak/copilot-repo-template#123
         other-org/other-repo#456
     validations:
       required: false
