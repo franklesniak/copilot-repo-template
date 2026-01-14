@@ -4,12 +4,20 @@
 # This is a GitHub issue form template for feature requests. When using this in
 # a cloned repository, customize the following sections:
 #
-# 1. `labels` - Update to match your repository's label taxonomy
+# 1. `labels` - Update to match your repository's label taxonomy. Ensure these
+#    labels exist in your repository or update to match your repo's labels.
 # 2. `title` - Adjust the "[Feature] " prefix if desired
 # 3. `assignees` - (Optional) Add this field to auto-assign feature requests to
 #    specific users. Example: `assignees: [username1, username2]`
 # 4. `projects` - (Optional) Add this field to auto-add feature requests to a
-#    GitHub Project. Example: `projects: [org/1]` (uses project number)
+#    GitHub Project. Configuration varies between classic and new Projects,
+#    and GitHub.com vs GitHub Enterprise Server. Refer to GitHub docs for
+#    your environment: https://docs.github.com/en/issues/planning-and-tracking-with-projects
+#    Example (uses project number):
+#    ```yaml
+#    projects:
+#      - org/1
+#    ```
 # 5. `pre_flight` checkboxes - Add or modify checkboxes for project-specific
 #    requirements (e.g., "I have reviewed the project roadmap" for projects
 #    with public roadmaps, or "I have discussed this in Discussions first")
@@ -29,7 +37,7 @@
 #    blank_issues_enabled: true
 #    contact_links:
 #      - name: 💬 Discussions
-#        url: https://github.com/ORG/REPO/discussions
+#        url: https://github.com/OWNER/REPO/discussions
 #        about: Ask questions and discuss ideas
 #    ```
 # =============================================================================
@@ -39,6 +47,7 @@ description: Suggest a new feature or enhancement
 # CUSTOMIZE: Adjust the title prefix to match your project's conventions
 title: "[Feature] "
 # CUSTOMIZE: Update these labels to match your repository's label taxonomy.
+# Ensure these labels exist in your repository or create them before using this template.
 # Common patterns include:
 #   - Type labels: enhancement, feature, improvement
 #   - Status labels: triage, accepted, planned
@@ -46,7 +55,6 @@ title: "[Feature] "
 #   - Area labels: area:api, area:cli, area:docs
 labels:
   - enhancement
-  - triage
 # CUSTOMIZE: Uncomment and update to pre-populate the assignees field when opening feature requests
 # assignees:
 #   - maintainer-username
@@ -143,6 +151,22 @@ body:
   - type: markdown
     attributes:
       value: "### Feature Classification"
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected Area
+      description: What part of the project would this feature impact?
+      options:
+        - Python
+        - PowerShell
+        - Markdown / Documentation
+        - GitHub Actions / CI
+        - Cross-language / Integration
+        - Cross-cutting / Repo-wide
+        - Other (specify in Additional Context)
+    validations:
+      required: false
 
   # CUSTOMIZE: Adjust priority options to match your project's triage workflow
   - type: dropdown

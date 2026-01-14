@@ -29,9 +29,11 @@ Check the [Python Developer's Guide - Versions](https://devguide.python.org/vers
 
 ### 1. Clone the Repository
 
+<!-- CUSTOMIZE: Replace `OWNER/REPO` with your organization and repository name -->
+
 ```bash
-git clone https://github.com/franklesniak/copilot-repo-template.git
-cd copilot-repo-template
+git clone https://github.com/OWNER/REPO.git
+cd REPO
 ```
 
 ### 2. Install Node.js Dependencies (for Markdown linting)
@@ -284,7 +286,9 @@ After creating a new repository from this template, see the [Validating Your New
 
 If you have questions or encounter issues:
 
-1. Check existing [Issues](https://github.com/franklesniak/copilot-repo-template/issues)
+<!-- CUSTOMIZE: Replace `OWNER/REPO` with your organization and repository name -->
+
+1. Check existing [Issues](https://github.com/OWNER/REPO/issues)
 2. Review the documentation in `.github/instructions/`
 3. Open a new issue with a clear description of the problem
 

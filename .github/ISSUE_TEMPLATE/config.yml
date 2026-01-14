@@ -18,7 +18,7 @@
 #    - Link to security reporting instructions
 #
 # 3. `contact_links[].url` - Update URLs to point to your repository's actual
-#    resources. Replace `franklesniak/copilot-repo-template` with your org/repo.
+#    resources. Replace `OWNER/REPO` with your org/repo name.
 #
 # 4. `contact_links[].name` - Use emojis for visual distinction in the chooser
 #    (e.g., 📖 for docs, 💬 for discussions, 🔒 for security)
@@ -33,15 +33,21 @@
 blank_issues_enabled: true
 
 contact_links:
-  # CUSTOMIZE: Update the URL to point to your repository's contributing guide.
-  # Replace `franklesniak/copilot-repo-template` with your org/repo name.
-  - name: Contributing Guide
-    url: https://github.com/franklesniak/copilot-repo-template/blob/main/CONTRIBUTING.md
+  # CUSTOMIZE: Update the URL below by replacing `OWNER/REPO` with your org/repo name.
+  - name: 📝 Contributing Guide
+    url: https://github.com/OWNER/REPO/blob/main/CONTRIBUTING.md
     about: Read the contributing guide before opening an issue
+
+  # CUSTOMIZE: Update the URL below by replacing `OWNER/REPO` with your org/repo name.
+  # For direct vulnerability submission (when advisories are enabled), you can
+  # optionally change to: https://github.com/OWNER/REPO/security/advisories/new
+  - name: 🔒 Security Vulnerabilities
+    url: https://github.com/OWNER/REPO/security
+    about: Report security issues privately (do not open a public issue)
 
   # CUSTOMIZE: Uncomment the following block if your repository uses GitHub
   # Discussions for Q&A. This redirects support questions away from issues.
-  # Replace `ORG/REPO` with your actual organization and repository name.
+  # Replace `OWNER/REPO` with your actual organization and repository name.
   # - name: 💬 Questions & Discussions
-  #   url: https://github.com/ORG/REPO/discussions
+  #   url: https://github.com/OWNER/REPO/discussions
   #   about: Ask questions and discuss ideas (not for bug reports)
