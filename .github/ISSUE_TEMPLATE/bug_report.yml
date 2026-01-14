@@ -4,12 +4,16 @@
 # This is a GitHub issue form template for bug reports. When using this in a
 # cloned repository, customize the following sections:
 #
-# 1. `labels` - Update to match your repository's label taxonomy
+# 1. `labels` - Update to match your repository's label taxonomy. Ensure these
+#    labels exist in your repository or update to match your repo's labels.
 # 2. `title` - Adjust the "[Bug] " prefix if desired
 # 3. `assignees` - (Optional) Add this field to auto-assign bug reports to
 #    specific users. Example: `assignees: [username1, username2]`
 # 4. `projects` - (Optional) Add this field to auto-add bug reports to a
-#    GitHub Project. Example (uses project number):
+#    GitHub Project. Configuration varies between classic and new Projects,
+#    and GitHub.com vs GitHub Enterprise Server. Refer to GitHub docs for
+#    your environment: https://docs.github.com/en/issues/planning-and-tracking-with-projects
+#    Example (uses project number):
 #    ```yaml
 #    projects:
 #      - org/1
@@ -35,12 +39,14 @@
 #     blank_issues_enabled: true
 #     contact_links:
 #       - name: 💬 Discussions
-#         url: https://github.com/ORG/REPO/discussions
+#         url: https://github.com/OWNER/REPO/discussions
 #         about: Ask questions and discuss ideas
 #     ```
 # 11. `required fields` - Mark fields required only when the information is essential
 #     for triage. Over-requiring fields discourages bug reports. Recommended required:
 #     description, steps to reproduce, expected/actual behavior, version, OS, severity.
+#     Note: Required field enforcement may vary in some GitHub Enterprise Server
+#     versions; verify behavior in your environment.
 # 12. `field IDs` - This template uses snake_case for all field IDs (e.g.,
 #     `steps_to_reproduce`, `operating_system`). Maintain this convention
 #     when adding new fields for consistency. IDs are used in issue body
@@ -49,13 +55,8 @@
 #     Issue types are defined at the organization level in GitHub settings.
 #     If your organization has defined issue types, you can specify one here.
 #     Example: `type: Bug`
-# 14. `required` validation limitation - Note that `required: true` validation
-#     only works on public repositories. On private repositories, GitHub does
-#     not enforce required field validation. Users of this template for private
-#     repos should be aware that all fields will effectively be optional.
-# 15. `relative links` - Relative links in issue form markdown have unexpected
-#     resolution behavior. After cloning, test all links and consider converting
-#     to absolute URLs. See the comment above the Security Notice for details.
+# 14. Security notice URLs - Update the placeholder URLs (`OWNER/REPO`) in the
+#     security notice markdown section below to point to your repository.
 # =============================================================================
 
 name: 🐛 Bug Report
@@ -63,6 +64,7 @@ description: Report a bug or unexpected behavior
 # CUSTOMIZE: Adjust the title prefix to match your project's conventions
 title: "[Bug] "
 # CUSTOMIZE: Update these labels to match your repository's label taxonomy.
+# Ensure these labels exist in your repository or create them before using this template.
 # Common patterns include:
 #   - Type labels: bug, enhancement, documentation
 #   - Status labels: triage, confirmed, in-progress
@@ -70,7 +72,6 @@ title: "[Bug] "
 #   - Area labels: area:api, area:cli, area:docs
 labels:
   - bug
-  - triage
 # CUSTOMIZE: Uncomment and update to specify an issue type (defined at the organization level).
 # See: https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms#top-level-syntax
 # type: Bug
@@ -81,29 +82,17 @@ labels:
 # projects:
 #   - org/1
 body:
-  # CUSTOMIZE: Relative links in issue form markdown may not resolve in the ways that you expect.
-  # (e.g., in this template repository, `../security` resolves to
-  # https://github.com/franklesniak/security instead of the repository's security tab. To resolve
-  # to the repository's security tab, you must use `security`, which, in the case of the template
-  # repository, resolves to https://github.com/franklesniak/copilot-repo-template/security). After
-  # cloning, test the links to ensure they resolve correctly and update them to absolute links. For
-  # example:
-  #
-  #   - https://github.com/franklesniak/copilot-repo-template/security
-  #   - https://github.com/franklesniak/copilot-repo-template/blob/main/SECURITY.md
-  #
-  # In the meantime, in this template repository, [Security tab](security) and
-  # [SECURITY.md](blob/main/SECURITY.md) are confirmed to resolve correctly. Notably, these links
-  # must be divergent in style (as stated) for this to work; if you were to have one as
-  # `[Security tab](security)` and the other as `[SECURITY.md](SECURITY.md)`, the latter would not
-  # resolve correctly.
+  # CUSTOMIZE: Update the placeholder URLs below by replacing `OWNER/REPO` with your org/repo name.
   - type: markdown
     attributes:
       value: |
         ## Thank you for reporting a bug!
         Please fill out the form below to help us investigate and resolve the issue.
 
-        ⚠️ **Security Notice:** If you are reporting a security vulnerability, do NOT use this form. Please report security issues privately via the repository's [Security tab](security) or by following the instructions in [SECURITY.md](blob/main/SECURITY.md).
+        ⚠️ **Security Notice:** If you are reporting a security vulnerability, do NOT use this form.
+        Please report security issues privately via:
+        - https://github.com/OWNER/REPO/security
+        - https://github.com/OWNER/REPO/blob/main/SECURITY.md
 
   - type: checkboxes
     id: pre_flight
@@ -135,6 +124,21 @@ body:
       description: >-
         Provide a clear and concise description of the bug
       placeholder: Describe what the bug is...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: What part of the project does this bug affect?
+      options:
+        - Python
+        - PowerShell
+        - Markdown / Documentation
+        - GitHub Actions / CI
+        - Cross-language / Integration
+        - Other (describe in Additional Context)
     validations:
       required: true
 
@@ -177,18 +181,23 @@ body:
       label: Logs/Error Output
       description: >-
         Paste any error messages, stack traces, or relevant log output.
-        For longer outputs, use a collapsible section or drag-and-drop log files.
+        For longer outputs, use a collapsible section or attach log files by dragging and dropping.
         ⚠️ Review logs for sensitive data (passwords, tokens, personal info) before submitting
       placeholder: |
+        ```text
         Paste logs here...
+        ```
 
         For verbose logs, use a collapsible section:
         <details><summary>Full log output</summary>
 
+        ```text
         Your detailed logs here...
+        ```
 
         </details>
-      render: shell
+
+        For very large logs, attach as a file by dragging and dropping below.
     validations:
       required: false
 
@@ -269,7 +278,9 @@ body:
         Relevant language or runtime versions for your environment.
         List each on a separate line if multiple apply
       placeholder: |
-        e.g., Python 3.12, Node.js 20.x, .NET 8.0
+        Python 3.12.x
+        PowerShell 7.4.x (or Windows PowerShell 5.1)
+        (If relevant) Markdown toolchain (e.g., Pandoc 3.x) / renderer name+version
     validations:
       required: false
 
@@ -280,7 +291,7 @@ body:
       label: Shell/Terminal
       description: >-
         The shell or terminal you're using, if applicable
-      placeholder: e.g., PowerShell 7.4, bash 5.2, Windows Terminal
+      placeholder: e.g., PowerShell 7.4.x / Windows PowerShell 5.1, bash 5.2 (Linux/macOS), Windows Terminal / Command Prompt
     validations:
       required: false
 
@@ -322,7 +333,7 @@ body:
     attributes:
       label: Last Working Version
       description: >-
-        If this is a regression, specify the last version where it worked correctly
+        If you selected "Yes - this worked before" for Regression, specify the last version where it worked correctly
       placeholder: e.g., v1.1.0
     validations:
       required: false

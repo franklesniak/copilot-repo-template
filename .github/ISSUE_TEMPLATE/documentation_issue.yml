@@ -1,0 +1,51 @@
+# =============================================================================
+# TEMPLATE CUSTOMIZATION GUIDE
+# =============================================================================
+# This is a GitHub issue form template for documentation issues. When using this
+# in a cloned repository, customize the following sections:
+#
+# 1. `labels` - Update to match your repository's label taxonomy. Ensure these
+#    labels exist in your repository or update to match your repo's labels.
+# 2. `title` - Adjust the "[Docs] " prefix if desired
+# 3. `location.placeholder` - Update the example URL to point to your repository
+# =============================================================================
+
+name: 📚 Documentation Issue
+description: Report a typo, unclear instructions, broken link, or suggest documentation improvements
+# CUSTOMIZE: Adjust the title prefix to match your project's conventions
+title: "[Docs] "
+# CUSTOMIZE: Update these labels to match your repository's label taxonomy.
+# Ensure these labels exist in your repository or create them before using this template.
+labels:
+  - documentation
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve the documentation!
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What's wrong or missing?
+      description: Describe the documentation issue clearly and concisely.
+    validations:
+      required: true
+
+  # CUSTOMIZE: Update the placeholder URL below by replacing `OWNER/REPO` with your org/repo name.
+  - type: input
+    id: location
+    attributes:
+      label: Where is it?
+      description: Link to the file/section/page (URL or path) where the issue exists.
+      placeholder: e.g., https://github.com/OWNER/REPO/blob/main/README.md#usage or docs/guide.md
+    validations:
+      required: false
+
+  - type: textarea
+    id: suggested_change
+    attributes:
+      label: Suggested change (optional)
+      description: If you know what should change, propose wording/structure here.
+    validations:
+      required: false
