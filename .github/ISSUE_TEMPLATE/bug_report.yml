@@ -90,7 +90,10 @@ body:
   #   - https://github.com/franklesniak/copilot-repo-template/blob/main/SECURITY.md
   #
   # In the meantime, in this template respository, [Security tab](security) and
-  # [SECURITY.md](blob/main/SECURITY.md) are confirmed to resolve correctly.
+  # [SECURITY.md](blob/main/SECURITY.md) are confirmed to resolve correctly. Notably, these links
+  # must be divergent in style (as stated) for this to work; if you were to have one as
+  # `[Security tab](security)` and the other as `[SECURITY.md](SECURITY.md)`, the latter would not
+  # resolve correctly.
   - type: markdown
     attributes:
       value: |
