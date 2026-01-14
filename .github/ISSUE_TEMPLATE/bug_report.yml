@@ -53,6 +53,9 @@
 #     only works on public repositories. On private repositories, GitHub does
 #     not enforce required field validation. Users of this template for private
 #     repos should be aware that all fields will effectively be optional.
+# 15. `relative links` - Relative links in issue form markdown have unexpected
+#     resolution behavior. After cloning, test all links and consider converting
+#     to absolute URLs. See the comment above the Security Notice for details.
 # =============================================================================
 
 name: 🐛 Bug Report
@@ -89,7 +92,7 @@ body:
   #   - https://github.com/franklesniak/copilot-repo-template/security
   #   - https://github.com/franklesniak/copilot-repo-template/blob/main/SECURITY.md
   #
-  # In the meantime, in this template respository, [Security tab](security) and
+  # In the meantime, in this template repository, [Security tab](security) and
   # [SECURITY.md](blob/main/SECURITY.md) are confirmed to resolve correctly. Notably, these links
   # must be divergent in style (as stated) for this to work; if you were to have one as
   # `[Security tab](security)` and the other as `[SECURITY.md](SECURITY.md)`, the latter would not
@@ -308,8 +311,19 @@ body:
         Did this functionality work correctly in a previous version?
       options:
         - Unknown - I haven't used previous versions
-        - Yes - this worked before (please specify version in Additional Context)
+        - Yes - this worked before
         - No - this never worked for me
+    validations:
+      required: false
+
+  # CUSTOMIZE: Remove if regression tracking is not relevant to your project
+  - type: input
+    id: last_working_version
+    attributes:
+      label: Last Working Version
+      description: >-
+        If this is a regression, specify the last version where it worked correctly
+      placeholder: e.g., v1.1.0
     validations:
       required: false
 
@@ -345,6 +359,8 @@ body:
     validations:
       required: false
 
+  # CUSTOMIZE: Update the cross-repo example in the placeholder to reference
+  # a related project in your ecosystem, or simplify to just `#123`
   - type: textarea
     id: related_issues
     attributes:
