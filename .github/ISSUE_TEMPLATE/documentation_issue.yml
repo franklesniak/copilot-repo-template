@@ -40,7 +40,7 @@ body:
       options:
         - label: I have searched existing issues for this documentation problem
           required: true
-        - label: This is a documentation issue (typo, unclear text, broken link), not a code bug
+        - label: This is about documentation content, not a functional code bug
           required: true
 
   - type: textarea

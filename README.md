@@ -250,7 +250,7 @@ After creating a repository from this template, complete the following setup ste
 
 After completing the setup checklist, perform the following quick verification:
 
-1. **Create a test repo** via "Use this template" (if verifying the template itself)
+1. **Create a test repository** using GitHub's "Use this template" button to verify template functionality
 2. **Open each issue type** once and ensure required fields behave correctly
 3. **Click key links** in the issue template chooser:
    - Contributing Guide link
