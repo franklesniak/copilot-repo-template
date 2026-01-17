@@ -220,13 +220,48 @@ CI workflows will also run automatically when you push to GitHub.
 
 #### Recommended First Steps After Clone
 
-- [ ] Update `pyproject.toml` with your project name, description, and authors
-- [ ] Rename or replace `src/copilot_repo_template/` with your package
+##### Template Setup Checklist
+
+After creating a repository from this template, complete the following setup steps:
+
+**Required Setup:**
+
+- [ ] Replace `OWNER/REPO` placeholders in `.github/ISSUE_TEMPLATE/config.yml` with your actual org/repo name
+- [ ] Confirm `SECURITY.md` exists and the security reporting path works for your repository
+- [ ] Confirm required labels exist in your repository: `bug`, `enhancement`, `documentation` (see [Issue Template Labels](#issue-template-labels) below)
+- [ ] Update `pyproject.toml` with your project name, description, and authors (if using Python)
+- [ ] Rename or replace `src/copilot_repo_template/` with your package (if using Python)
 - [ ] Replace placeholder tests in `tests/` with your actual tests
 - [ ] Update `README.md` with your project's documentation
-- [ ] Create the `triage` label for the bug report issue template (see [Issue Template Labels](#issue-template-labels) below)
-- [ ] Run `pre-commit run --all-files` to verify setup
+
+**Optional Setup:**
+
+- [ ] Decide whether to enable [GitHub Discussions](https://docs.github.com/en/discussions) and uncomment the Discussions link in `config.yml`
+- [ ] Enable [private vulnerability reporting](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configuring-private-vulnerability-reporting-for-a-repository) in repository settings
+- [ ] Decide whether to keep `blank_issues_enabled: true` in `config.yml` (set to `false` once you have comprehensive templates)
+- [ ] Create the `triage` label for additional workflow automation
+
+**Validation:**
+
+- [ ] Run `pre-commit run --all-files` to verify linting setup
 - [ ] Commit and push to trigger CI validation
+
+##### Post-clone Verification Plan
+
+After completing the setup checklist, perform the following quick verification:
+
+1. **Create a test repo** via "Use this template" (if verifying the template itself)
+2. **Open each issue type** once and ensure required fields behave correctly
+3. **Click key links** in the issue template chooser:
+   - Contributing Guide link
+   - Security Vulnerabilities link
+   - (If enabled) Discussions link
+4. **Verify issue form rendering:**
+   - Paste a Python traceback into the Logs/Error Output field
+   - Confirm it renders cleanly as plain text (not mangled by Markdown parsing)
+5. **Verify security flow:**
+   - Navigate to the Security tab
+   - Confirm SECURITY.md is accessible
 
 #### Issue Template Labels
 
