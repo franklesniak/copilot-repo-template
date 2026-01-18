@@ -55,8 +55,19 @@
 #     Issue types are defined at the organization level in GitHub settings.
 #     If your organization has defined issue types, you can specify one here.
 #     Example: `type: Bug`
-# 14. Security notice URLs - Update the placeholder URLs (`OWNER/REPO`) in the
-#     security notice markdown section below to point to your repository.
+# 14. Security notice URLs - The security notice in the markdown section uses relative
+#     links that work automatically when cloned to a new repository:
+#     - [Security tab](security) - links to the repository's Security tab
+#     - [SECURITY.md](blob/HEAD/SECURITY.md) - links to the security policy file
+#     These relative links are confirmed to work in GitHub issue forms and avoid the
+#     need to replace OWNER/REPO placeholders.
+#
+# Trade-off notes on URL approach:
+# - Relative links (used here): Work immediately after cloning without customization.
+#   Confirmed to work in issue-form markdown blocks. Prevents OWNER/REPO from leaking
+#   into user-submitted issues.
+# - Absolute URLs with OWNER/REPO placeholders: Deterministic and consistent, but
+#   require manual customization and can result in broken links if forgotten.
 # =============================================================================
 
 name: 🐛 Bug Report
@@ -82,7 +93,6 @@ labels:
 # projects:
 #   - org/1
 body:
-  # CUSTOMIZE: Update the placeholder URLs below by replacing `OWNER/REPO` with your org/repo name.
   - type: markdown
     attributes:
       value: |
@@ -90,9 +100,7 @@ body:
         Please fill out the form below to help us investigate and resolve the issue.
 
         ⚠️ **Security Notice:** If you are reporting a security vulnerability, do NOT use this form.
-        Please report security issues privately via:
-        - https://github.com/OWNER/REPO/security
-        - https://github.com/OWNER/REPO/blob/main/SECURITY.md
+        Please report security issues privately via the repository's [Security tab](security) or [SECURITY.md](blob/HEAD/SECURITY.md).
 
   - type: checkboxes
     id: pre_flight
@@ -131,23 +139,29 @@ body:
     id: area
     attributes:
       label: Area
-      description: What part of the project does this bug affect?
+      description: >-
+        What part of the project does this bug affect?
+        Tip: For documentation typos/missing info, prefer the 📚 Documentation Issue template.
       options:
         - Python
         - PowerShell
         - Markdown / Documentation
         - GitHub Actions / CI
         - Cross-language / Integration
-        - Other (describe in Additional Context)
+        - Cross-cutting / Repo-wide
+        - Other (describe/specify in Additional Context)
     validations:
       required: true
 
+  # NOTE: render: text is used here because users frequently paste commands and output
+  # in reproduction steps. This prevents Markdown parsing from mangling CLI commands.
   - type: textarea
     id: steps_to_reproduce
     attributes:
       label: Steps to Reproduce
       description: >-
         Provide detailed steps to reproduce the behavior
+      render: text
       placeholder: |
         1. Go to '...'
         2. Run '...'
@@ -175,27 +189,21 @@ body:
     validations:
       required: true
 
+  # NOTE: render: text is used here to prevent Markdown parsing from mangling stack traces,
+  # CLI output, and scripts. This ensures logs are displayed as plain text regardless of content.
+  # Prefer render: text for technical textareas as it's the safest default for mixed content
+  # (Python tracebacks, PowerShell errors, JSON, etc.).
   - type: textarea
     id: logs_output
     attributes:
       label: Logs/Error Output
       description: >-
         Paste any error messages, stack traces, or relevant log output.
-        For longer outputs, use a collapsible section or attach log files by dragging and dropping.
+        For longer outputs, attach log files by dragging and dropping.
         ⚠️ Review logs for sensitive data (passwords, tokens, personal info) before submitting
+      render: text
       placeholder: |
-        ```text
         Paste logs here...
-        ```
-
-        For verbose logs, use a collapsible section:
-        <details><summary>Full log output</summary>
-
-        ```text
-        Your detailed logs here...
-        ```
-
-        </details>
 
         For very large logs, attach as a file by dragging and dropping below.
     validations:
@@ -270,6 +278,8 @@ body:
       required: false
 
   # CUSTOMIZE: Update placeholder examples to match your project's supported runtimes
+  # NOTE: render: text is used here because users paste multi-line version output.
+  # This prevents Markdown parsing from mangling version strings with special characters.
   - type: textarea
     id: runtime_version
     attributes:
@@ -277,10 +287,11 @@ body:
       description: >-
         Relevant language or runtime versions for your environment.
         List each on a separate line if multiple apply
+      render: text
       placeholder: |
-        Python 3.12.x
-        PowerShell 7.4.x (or Windows PowerShell 5.1)
-        (If relevant) Markdown toolchain (e.g., Pandoc 3.x) / renderer name+version
+        Python 3.x (e.g., 3.10.13)
+        PowerShell 7.x or Windows PowerShell 5.1
+        Markdown tooling/renderer (if relevant): e.g., Pandoc 3.x, docs generator name+version
     validations:
       required: false
 
@@ -292,6 +303,26 @@ body:
       description: >-
         The shell or terminal you're using, if applicable
       placeholder: e.g., PowerShell 7.4.x / Windows PowerShell 5.1, bash 5.2 (Linux/macOS), Windows Terminal / Command Prompt
+    validations:
+      required: false
+
+  # NOTE: render: text is used here because users paste exact commands with flags.
+  # This is especially important for Python and PowerShell where execution context varies widely.
+  - type: textarea
+    id: how_ran
+    attributes:
+      label: How did you run it? (commands)
+      description: >-
+        Paste the exact commands you used to install and run the project (include flags).
+      render: text
+      placeholder: |
+        # Python
+        python -m venv .venv
+        pip install -r requirements.txt
+        python script.py --flag
+
+        # PowerShell
+        pwsh -File .\script.ps1 -Param Value
     validations:
       required: false
 
@@ -331,9 +362,10 @@ body:
   - type: input
     id: last_working_version
     attributes:
-      label: Last Working Version
+      label: Last Working Version (only if Regression = "Yes")
       description: >-
-        If you selected "Yes - this worked before" for Regression, specify the last version where it worked correctly
+        Only fill this out if you selected "Yes - this worked before" above.
+        Specify the last version where it worked correctly.
       placeholder: e.g., v1.1.0
     validations:
       required: false

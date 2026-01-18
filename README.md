@@ -220,13 +220,49 @@ CI workflows will also run automatically when you push to GitHub.
 
 #### Recommended First Steps After Clone
 
-- [ ] Update `pyproject.toml` with your project name, description, and authors
-- [ ] Rename or replace `src/copilot_repo_template/` with your package
+##### Template Setup Checklist
+
+After creating a repository from this template, complete the following setup steps:
+
+**Required Setup:**
+
+- [ ] Replace `OWNER/REPO` placeholders in `.github/ISSUE_TEMPLATE/config.yml` with your actual org/repo name
+- [ ] Confirm `SECURITY.md` exists and the security reporting path works for your repository
+- [ ] Confirm required labels exist in your repository: `bug`, `enhancement`, `documentation` (see [Issue Template Labels](#issue-template-labels) below)
+- [ ] Update `pyproject.toml` with your project name, description, and authors (if using Python)
+- [ ] Rename or replace `src/copilot_repo_template/` with your package (if using Python)
 - [ ] Replace placeholder tests in `tests/` with your actual tests
 - [ ] Update `README.md` with your project's documentation
-- [ ] Create the `triage` label for the bug report issue template (see [Issue Template Labels](#issue-template-labels) below)
-- [ ] Run `pre-commit run --all-files` to verify setup
+
+**Optional Setup:**
+
+- [ ] Decide whether to enable [GitHub Discussions](https://docs.github.com/en/discussions) and uncomment the Discussions link in `config.yml`
+- [ ] Enable [private vulnerability reporting](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configuring-private-vulnerability-reporting-for-a-repository) in repository settings
+- [ ] Decide whether to keep `blank_issues_enabled: true` in `config.yml` (set to `false` once you have comprehensive templates)
+- [ ] Create the `triage` label for additional workflow automation
+- [ ] Enable the placeholder check workflow by setting a repository variable `TEMPLATE_INITIALIZED` to `true` (see [Placeholder Check Workflow](#placeholder-check-workflow) below)
+
+**Validation:**
+
+- [ ] Run `pre-commit run --all-files` to verify linting setup
 - [ ] Commit and push to trigger CI validation
+
+##### Post-clone Verification Plan
+
+After completing the setup checklist, perform the following quick verification:
+
+1. **Create a test repository** using GitHub's "Use this template" button to verify template functionality
+2. **Open each issue type** once and ensure required fields behave correctly
+3. **Click key links** in the issue template chooser:
+   - Contributing Guide link
+   - Security Vulnerabilities link
+   - (If enabled) Discussions link
+4. **Verify issue form rendering:**
+   - Paste a Python traceback into the Logs/Error Output field
+   - Confirm it renders cleanly as plain text (not mangled by Markdown parsing)
+5. **Verify security flow:**
+   - Navigate to the Security tab
+   - Confirm SECURITY.md is accessible
 
 #### Issue Template Labels
 
@@ -249,6 +285,22 @@ gh label create triage --description "Needs triage" --color "d4c5f9"
    - **Color:** `d4c5f9` (or choose a purple/lavender color)
 
 > **Note:** The `bug` label is a GitHub default label and should already exist. If it doesn't, create it with description "Something isn't working" and color `d73a4a`.
+
+#### Placeholder Check Workflow
+
+The repository includes a CI workflow (`.github/workflows/check-placeholders.yml`) that verifies `OWNER/REPO` placeholders have been replaced in issue templates. This workflow is **disabled by default** to prevent it from failing in the template repository itself.
+
+**To enable this workflow in your cloned repository:**
+
+1. Go to your repository's **Settings** > **Secrets and variables** > **Actions**
+2. Click the **Variables** tab
+3. Click **New repository variable**
+4. Enter:
+   - **Name:** `TEMPLATE_INITIALIZED`
+   - **Value:** `true`
+5. Click **Add variable**
+
+Once enabled, the workflow will run on every push and pull request, checking for any remaining `OWNER/REPO` placeholders and failing if found. This helps ensure you don't accidentally ship broken links to your users.
 
 ### Language Support
 
