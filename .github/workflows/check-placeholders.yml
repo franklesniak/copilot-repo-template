@@ -46,9 +46,7 @@ name: Check Placeholders
 
 on:
   push:
-    branches: ["**"]
   pull_request:
-    branches: ["**"]
   workflow_dispatch:
 
 permissions:
@@ -72,13 +70,33 @@ jobs:
           echo "Checking for OWNER/REPO placeholders in issue templates..."
           echo ""
 
+          # =============================================================================
+          # PLACEHOLDER CHECK STRATEGY
+          # =============================================================================
+          # This check enforces different severity levels based on the impact of
+          # unreplaced placeholders:
+          #
+          # HARD FAIL (exit 1): Active contact_links URLs in config.yml
+          #   - These directly break UX—users clicking broken links is unacceptable
+          #   - Only non-commented URL lines are checked
+          #
+          # WARNING ONLY: Other placeholder patterns (README "Project Name", PR template,
+          #   your-org/your-repo patterns)
+          #   - These are less critical and may be intentionally kept temporarily
+          #   - Warnings nudge adopters to customize without blocking CI
+          #
+          # This approach balances strictness (broken links = fail) with flexibility
+          # (other placeholders = warning), avoiding false positives while still
+          # encouraging customization.
+          # =============================================================================
+
           # Files to check for placeholders in URLs (config.yml has contact_links that must be replaced)
           # Other issue template files use relative links and only have OWNER/REPO in comments/examples
           #
           # Files checked:
           # - config.yml: Contains contact_links URLs that MUST be replaced
           # - bug_report.yml: Uses relative links; OWNER/REPO only in comments (no action needed)
-          # - documentation_issue.yml: OWNER/REPO in placeholder is an example format (no action needed)
+          # - documentation_issue.yml: Uses relative paths in placeholder (no action needed)
           # - feature_request.yml: Uses relative links; OWNER/REPO only in comments (no action needed)
           #
           # The check focuses on config.yml because that's where the actual URLs live.
@@ -90,8 +108,14 @@ jobs:
           CONFIG_FILE=".github/ISSUE_TEMPLATE/config.yml"
           if [ -f "$CONFIG_FILE" ]; then
             # Check for OWNER/REPO in URL lines (lines containing 'url:')
-            if grep -n "url:.*OWNER/REPO" "$CONFIG_FILE"; then
-              echo "::error file=$CONFIG_FILE::Found OWNER/REPO placeholder in URL in $CONFIG_FILE"
+            # IMPORTANT: Exclude commented-out lines to avoid false CI failures
+            # This allows downstream repos to keep commented placeholder examples
+            # while failing only on active (uncommented) URLs that would break UX.
+            matches=$(grep -n "url:.*OWNER/REPO" "$CONFIG_FILE" | grep -v "^[0-9]*:[[:space:]]*#" || true)
+            if [ -n "$matches" ]; then
+              echo "Found in $CONFIG_FILE:"
+              echo "$matches"
+              echo "::error file=$CONFIG_FILE::Found OWNER/REPO placeholder in active URL in $CONFIG_FILE"
               FOUND_PLACEHOLDERS=true
             fi
           fi
@@ -137,6 +161,20 @@ jobs:
           echo "Checking for other common placeholder patterns..."
           echo ""
 
+          # =============================================================================
+          # WARNING-ONLY CHECKS
+          # =============================================================================
+          # These checks produce warnings, not errors. They help nudge adopters to
+          # customize templates without blocking CI. This is intentional because:
+          #
+          # 1. Some projects may intentionally keep certain placeholders temporarily
+          # 2. "Project Name" in README may be acceptable for early-stage projects
+          # 3. PR template placeholders don't break user-facing functionality
+          #
+          # The goal is visibility without friction—adopters see the warnings and can
+          # decide whether to address them.
+          # =============================================================================
+
           # Check for other patterns that might indicate uncustomized templates
           # These are warnings, not errors
 
@@ -149,12 +187,37 @@ jobs:
 
           FOUND_WARNINGS=false
 
+          echo "=== Checking issue templates for placeholder patterns ==="
           for pattern in "${PATTERNS[@]}"; do
             if grep -rn "$pattern" .github/ISSUE_TEMPLATE/ 2>/dev/null | grep -v "^[[:space:]]*#"; then
               echo "::warning::Found potential placeholder pattern '$pattern' in issue templates"
               FOUND_WARNINGS=true
             fi
           done
+
+          echo ""
+          echo "=== Checking README for 'Project Name' placeholder ==="
+          if [ -f "README.md" ]; then
+            # Check for the default "# Project Name" header that should be customized
+            if grep -n "^# Project Name$" README.md; then
+              echo "::warning file=README.md::Found 'Project Name' placeholder in README.md - consider updating with your actual project name"
+              FOUND_WARNINGS=true
+            fi
+          fi
+
+          echo ""
+          echo "=== Checking PR template for potential placeholders ==="
+          PR_TEMPLATE=".github/pull_request_template.md"
+          if [ -f "$PR_TEMPLATE" ]; then
+            for pattern in "${PATTERNS[@]}"; do
+              if grep -n "$pattern" "$PR_TEMPLATE" | grep -v "^[0-9]*:[[:space:]]*<!--"; then
+                echo "::warning file=$PR_TEMPLATE::Found potential placeholder pattern '$pattern' in PR template"
+                FOUND_WARNINGS=true
+              fi
+            done
+          fi
+
+          echo ""
 
           if [ "$FOUND_WARNINGS" = true ]; then
             echo ""

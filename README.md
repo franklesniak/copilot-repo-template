@@ -34,6 +34,7 @@ This template includes:
 │   └── PSScriptAnalyzerSettings.psd1  # PowerShell linting settings
 ├── scripts/                         # Helper scripts for CI/tooling
 └── workflows/                       # GitHub Actions workflows
+    ├── check-placeholders.yml       # Verifies OWNER/REPO placeholders are replaced
     └── powershell-ci.yml            # PowerShell linting and testing CI (optional)
 
 src/
@@ -64,6 +65,7 @@ pyproject.toml                       # Python project configuration
 | `.github/copilot-instructions.md` | The "constitution" for all code changes - defines safety rules, pre-commit discipline, and references language-specific instructions |
 | `.github/instructions/*.md` | Language-specific coding standards applied based on file patterns |
 | `.github/linting/PSScriptAnalyzerSettings.psd1` | PSScriptAnalyzer settings enforcing OTBS formatting for PowerShell |
+| `.github/workflows/check-placeholders.yml` | CI workflow to verify OWNER/REPO placeholders are replaced after cloning |
 | `.github/workflows/powershell-ci.yml` | PowerShell linting and Pester testing CI workflow (optional - remove if not using PowerShell) |
 | `.markdownlint.jsonc` | Markdown linting rules prioritizing auto-fixable checks |
 | `.pre-commit-config.yaml` | Pre-commit hooks for Python projects (remove if not using Python) |
@@ -229,6 +231,7 @@ After creating a repository from this template, complete the following setup ste
 - [ ] Replace `OWNER/REPO` placeholders in `.github/ISSUE_TEMPLATE/config.yml` with your actual org/repo name
 - [ ] Confirm `SECURITY.md` exists and the security reporting path works for your repository
 - [ ] Confirm required labels exist in your repository: `bug`, `enhancement`, `documentation` (see [Issue Template Labels](#issue-template-labels) below)
+- [ ] (Optional but recommended) Create the `triage` label and uncomment it in issue templates (see [Issue Template Labels](#issue-template-labels) below)
 - [ ] Update `pyproject.toml` with your project name, description, and authors (if using Python)
 - [ ] Rename or replace `src/copilot_repo_template/` with your package (if using Python)
 - [ ] Replace placeholder tests in `tests/` with your actual tests
@@ -237,9 +240,9 @@ After creating a repository from this template, complete the following setup ste
 **Optional Setup:**
 
 - [ ] Decide whether to enable [GitHub Discussions](https://docs.github.com/en/discussions) and uncomment the Discussions link in `config.yml`
+- [ ] If not enabling Discussions, consider adding a Support section to README and uncommenting the Support/FAQ link in `config.yml`
 - [ ] Enable [private vulnerability reporting](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configuring-private-vulnerability-reporting-for-a-repository) in repository settings
 - [ ] Decide whether to keep `blank_issues_enabled: true` in `config.yml` (set to `false` once you have comprehensive templates)
-- [ ] Create the `triage` label for additional workflow automation
 - [ ] Enable the placeholder check workflow by setting a repository variable `TEMPLATE_INITIALIZED` to `true` (see [Placeholder Check Workflow](#placeholder-check-workflow) below)
 
 **Validation:**
@@ -263,10 +266,29 @@ After completing the setup checklist, perform the following quick verification:
 5. **Verify security flow:**
    - Navigate to the Security tab
    - Confirm SECURITY.md is accessible
+6. **Open a test PR** to verify the PR workflow:
+   - Create a trivial change (e.g., add a comment to a file)
+   - Open a pull request and confirm:
+     - PR template renders correctly
+     - Contributing guidelines link works
+     - CI workflows trigger as expected
+   - Close the test PR without merging
 
 #### Issue Template Labels
 
-The bug report issue template (`.github/ISSUE_TEMPLATE/bug_report.yml`) references a `triage` label that must be created in your repository. This label is used to identify newly submitted bug reports that need initial review.
+The issue templates reference several labels. The default GitHub labels (`bug`, `enhancement`, `documentation`) should already exist in your repository. However, the `triage` label is **not a default GitHub label** and must be created manually if you want to use it.
+
+**Why the `triage` label requires manual setup:**
+
+GitHub does not support auto-creating labels when a repository is created from a template. This is a platform limitation, so the `triage` label is intentionally commented out in the issue templates by default. Once you create the label, you can uncomment it in each template where you want it applied.
+
+**To use the `triage` label:**
+
+1. Create the label in your repository (see instructions below)
+2. Uncomment the `# - triage` line in each issue template where you want it:
+   - `.github/ISSUE_TEMPLATE/bug_report.yml`
+   - `.github/ISSUE_TEMPLATE/documentation_issue.yml`
+   - `.github/ISSUE_TEMPLATE/feature_request.yml`
 
 **Create the label using GitHub CLI:**
 
@@ -284,7 +306,7 @@ gh label create triage --description "Needs triage" --color "d4c5f9"
    - **Description:** `Needs triage`
    - **Color:** `d4c5f9` (or choose a purple/lavender color)
 
-> **Note:** The `bug` label is a GitHub default label and should already exist. If it doesn't, create it with description "Something isn't working" and color `d73a4a`.
+> **Note:** The `bug`, `enhancement`, and `documentation` labels are GitHub default labels and should already exist. If any are missing, create them with their standard descriptions and colors.
 
 #### Placeholder Check Workflow
 

@@ -6,6 +6,12 @@
 #
 # 1. `labels` - Update to match your repository's label taxonomy. Ensure these
 #    labels exist in your repository or update to match your repo's labels.
+#    ACTION ITEM: If you want to use a `triage` label for new feature requests,
+#    you must first create the label in your repository (it doesn't exist by default).
+#    Once created, add `triage` to the labels list below. See the README for
+#    instructions on creating the label.
+#    NOTE: The `triage` label cannot be auto-created when cloning a template
+#    repository—GitHub does not support this. This is an intentional manual step.
 # 2. `title` - Adjust the "[Feature] " prefix if desired
 # 3. `assignees` - (Optional) Add this field to auto-assign feature requests to
 #    specific users. Example: `assignees: [username1, username2]`
@@ -55,6 +61,7 @@ title: "[Feature] "
 #   - Area labels: area:api, area:cli, area:docs
 labels:
   - enhancement
+  # - triage  # ACTION ITEM: Uncomment after creating the `triage` label in your repository
 # CUSTOMIZE: Uncomment and update to pre-populate the assignees field when opening feature requests
 # assignees:
 #   - maintainer-username
