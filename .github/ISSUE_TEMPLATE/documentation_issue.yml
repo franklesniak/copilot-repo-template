@@ -22,6 +22,49 @@
 # - Required: More actionable for maintainers; may reduce submissions.
 # Recommended: Keep optional but strongly encourage providing a link/path via
 # the description text.
+#
+# =============================================================================
+# LABEL PORTABILITY NOTE
+# =============================================================================
+# The `documentation` label used below is a GitHub DEFAULT LABEL that exists in
+# all new repositories automatically. See:
+# https://docs.github.com/en/issues/using-labels-and-milestones-to-track-work/managing-labels
+#
+# If your organization or repository has customized labels and deleted/renamed
+# the default `documentation` label, update the label below to match your
+# repository's actual label taxonomy (e.g., `docs`, `type:documentation`, etc.).
+#
+# =============================================================================
+# DESIGN DECISION: NO AREA DROPDOWN BY DEFAULT
+# =============================================================================
+# This template intentionally does NOT include an `area` dropdown field.
+# This is a deliberate design choice:
+#
+# - Most consumers of this template have simple documentation sets that don't
+#   require routing by area.
+# - Keeping the template lean encourages drive-by documentation reports (typos,
+#   broken links, unclear instructions) without excessive form friction.
+# - Documentation issues are typically easy to locate based on the `location`
+#   field provided by the reporter.
+#
+# FOR LARGE DOCUMENTATION SETS:
+# If your repository has extensive documentation requiring area-based routing,
+# you MAY add an optional `area` dropdown. Example:
+#
+#   - type: dropdown
+#     id: area
+#     attributes:
+#       label: Documentation Area (optional)
+#       description: What part of the documentation does this affect?
+#       options:
+#         - Getting Started / Installation
+#         - API Reference
+#         - Tutorials / Guides
+#         - FAQ / Troubleshooting
+#         - Other
+#     validations:
+#       required: false
+#
 # =============================================================================
 
 name: 📚 Documentation Issue

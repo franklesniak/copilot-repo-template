@@ -87,10 +87,16 @@ contact_links:
   # - If you know most downstream repos will enable Discussions, you can uncomment by default.
   # - Enabling this redirects support questions away from issues, which improves triage.
   #
+  # HOW TO ENABLE DISCUSSIONS:
+  # 1. Go to your repository Settings > General > Features
+  # 2. Check the "Discussions" checkbox to enable the feature
+  #    See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/enabling-or-disabling-github-discussions-for-a-repository
+  # 3. Uncomment the block below
+  # 4. Replace `OWNER/REPO` with your actual organization and repository name
+  # 5. Test the link in the issue template chooser to verify it works
+  #
   # CUSTOMIZE: Uncomment the following block if your repository uses GitHub
-  # Discussions for Q&A. Replace `OWNER/REPO` with your actual organization and
-  # repository name. Requires enabling Discussions in repository settings.
-  # To enable Discussions, go to repository Settings > General > Features > Discussions.
+  # Discussions for Q&A.
   # =============================================================================
   # - name: 💬 Questions & Discussions
   #   url: https://github.com/OWNER/REPO/discussions

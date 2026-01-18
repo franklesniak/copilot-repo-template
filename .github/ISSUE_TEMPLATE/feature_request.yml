@@ -62,6 +62,9 @@ title: "[Feature] "
 labels:
   - enhancement
   # - triage  # ACTION ITEM: Uncomment after creating the `triage` label in your repository
+# CUSTOMIZE: Uncomment and update to specify an issue type (defined at the organization level).
+# See: https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms#top-level-syntax
+# type: Feature
 # CUSTOMIZE: Uncomment and update to pre-populate the assignees field when opening feature requests
 # assignees:
 #   - maintainer-username
@@ -171,6 +174,7 @@ body:
     attributes:
       label: Area
       description: What part of the project would this feature impact?
+      # CUSTOMIZE: Update these options to match your project's languages/components (remove unused entries).
       options:
         - Python
         - PowerShell
