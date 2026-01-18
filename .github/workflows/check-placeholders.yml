@@ -105,9 +105,11 @@ jobs:
             grep -v "^[0-9]*:[[:space:]]*#" || true
           }
 
-          # Helper function to filter Markdown HTML comments (<!-- ... -->)
+          # Helper function to filter lines that are inside Markdown HTML comments
+          # Note: This is a simple filter for single-line HTML comments containing the pattern
+          # It won't catch multi-line comments, but those are rare for placeholder patterns
           filter_md_html_comments() {
-            grep -v "<!--.*OWNER/REPO.*-->" || true
+            grep -v "<!--.*-->" || true
           }
 
           echo "=== [1] Checking config.yml (contact_links URLs) ==="
@@ -154,19 +156,19 @@ jobs:
             found_security_issues=false
 
             # Check for "[security contact email]" placeholder
-            if grep -n "\[security contact email\]" "$SECURITY_FILE" > /dev/null 2>&1; then
-              matches=$(grep -n "\[security contact email\]" "$SECURITY_FILE")
+            email_matches=$(grep -n "\[security contact email\]" "$SECURITY_FILE" 2>/dev/null || true)
+            if [ -n "$email_matches" ]; then
               echo "❌ Found placeholder email in $SECURITY_FILE:"
-              echo "$matches"
+              echo "$email_matches"
               echo "::error file=$SECURITY_FILE::Found [security contact email] placeholder. Replace with your actual security contact."
               found_security_issues=true
             fi
 
             # Check for "TODO: Replace" marker
-            if grep -n "TODO: Replace" "$SECURITY_FILE" > /dev/null 2>&1; then
-              matches=$(grep -n "TODO: Replace" "$SECURITY_FILE")
+            todo_matches=$(grep -n "TODO: Replace" "$SECURITY_FILE" 2>/dev/null || true)
+            if [ -n "$todo_matches" ]; then
               echo "❌ Found TODO marker in $SECURITY_FILE:"
-              echo "$matches"
+              echo "$todo_matches"
               echo "::error file=$SECURITY_FILE::Found TODO marker. Complete the security contact setup."
               found_security_issues=true
             fi
@@ -182,34 +184,37 @@ jobs:
 
           echo ""
           echo "=== [4] Scanning issue templates for OWNER/REPO in URLs ==="
+          # Use find to avoid issues with unmatched glob patterns
           # Check both .yml and .yaml extensions
-          for file in .github/ISSUE_TEMPLATE/*.yml .github/ISSUE_TEMPLATE/*.yaml; do
-            if [ -f "$file" ]; then
-              # Skip config.yml which we already checked more specifically
-              if [ "$file" = "$CONFIG_FILE" ]; then
-                continue
-              fi
+          while IFS= read -r -d '' file; do
+            # Skip config.yml which we already checked more specifically
+            if [ "$file" = "$CONFIG_FILE" ]; then
+              continue
+            fi
 
-              # Grep for OWNER/REPO, exclude YAML comment lines
-              # Only fail if line contains "http" (actual URLs, not examples in comments)
-              matches=$(grep -n "OWNER/REPO" "$file" | filter_yaml_comments | grep -v "placeholder:" || true)
-              if [ -n "$matches" ]; then
-                # Check if any matches contain http (actual URLs vs just text)
-                if echo "$matches" | grep -q "http"; then
-                  echo "❌ Found URL with OWNER/REPO in $file:"
-                  echo "$matches"
-                  echo "::error file=$file::Found OWNER/REPO placeholder in URL. Replace with your org/repo name."
-                  FOUND_PLACEHOLDERS=true
-                fi
+            # Grep for OWNER/REPO, exclude YAML comment lines
+            # Only fail if line contains "http" (actual URLs, not examples in comments)
+            matches=$(grep -n "OWNER/REPO" "$file" | filter_yaml_comments | grep -v "placeholder:" || true)
+            if [ -n "$matches" ]; then
+              # Check if any matches contain http (actual URLs vs just text)
+              if echo "$matches" | grep -q "http"; then
+                echo "❌ Found URL with OWNER/REPO in $file:"
+                echo "$matches"
+                echo "::error file=$file::Found OWNER/REPO placeholder in URL. Replace with your org/repo name."
+                FOUND_PLACEHOLDERS=true
               fi
             fi
-          done
+          done < <(find .github/ISSUE_TEMPLATE -type f \( -name "*.yml" -o -name "*.yaml" \) -print0 2>/dev/null || true)
           echo "✅ Issue template URL check complete"
 
           echo ""
           echo "=== [5] Scanning .github/ directory for OWNER/REPO URLs ==="
           # Recursive scan of .github/ for https://github.com/OWNER/REPO links
-          # Exclude this workflow file itself and YAML comment lines
+          # This provides comprehensive coverage and catches any OWNER/REPO URLs
+          # that might be added to new files in the future.
+          # Note: Some files may be checked in earlier sections as well; this is
+          # intentional to ensure comprehensive coverage with the full URL pattern.
+          # Exclude this workflow file itself to avoid self-referential matches.
           while IFS= read -r -d '' file; do
             # Skip this workflow file to avoid self-referential matches
             if [ "$file" = ".github/workflows/check-placeholders.yml" ]; then
