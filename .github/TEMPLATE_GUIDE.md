@@ -813,7 +813,7 @@ once you have comprehensive templates.
 - You MUST replace `OWNER/REPO` with your actual org/repo
 - Use `blob/HEAD` instead of `blob/main` to support non-main default branches
 
-#### GHES Portability
+#### GitHub Enterprise Server (GHES) Portability
 
 **Design Decision:** GHES host replacement is documented in comments, not enforced via placeholders.
 
