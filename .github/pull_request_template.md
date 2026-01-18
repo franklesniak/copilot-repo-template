@@ -15,6 +15,7 @@ template. Delete this comment once the PR template is tailored for your needs.
 - [ ] New feature (non-breaking change which adds functionality)
 - [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
 - [ ] Documentation update
+- [ ] Dependencies update
 - [ ] Configuration/tooling change
 
 ## Checklist

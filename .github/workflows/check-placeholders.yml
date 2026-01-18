@@ -173,6 +173,15 @@ jobs:
               found_security_issues=true
             fi
 
+            # Check for OWNER/REPO in URLs (for Option C with direct links)
+            url_matches=$(grep -n "github\.com/OWNER/REPO" "$SECURITY_FILE" 2>/dev/null || true)
+            if [ -n "$url_matches" ]; then
+              echo "❌ Found OWNER/REPO placeholder in URL in $SECURITY_FILE:"
+              echo "$url_matches"
+              echo "::error file=$SECURITY_FILE::Found OWNER/REPO placeholder in URL. Replace with your actual repository details (e.g., octocat/hello-world)."
+              found_security_issues=true
+            fi
+
             if [ "$found_security_issues" = true ]; then
               FOUND_PLACEHOLDERS=true
             else

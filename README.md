@@ -228,12 +228,15 @@ CI workflows will also run automatically when you push to GitHub.
 
 ##### Template Setup Checklist
 
-After creating a repository from this template, complete the following setup steps:
+After creating a repository from this template, complete the following setup steps.
+For detailed customization guidance, see [`.github/TEMPLATE_GUIDE.md`](.github/TEMPLATE_GUIDE.md).
 
 **Required Setup:**
 
 - [ ] Replace `OWNER/REPO` placeholders in `.github/ISSUE_TEMPLATE/config.yml` with your actual org/repo name
-- [ ] Confirm `SECURITY.md` exists and the security reporting path works for your repository
+- [ ] Update `SECURITY.md`: Choose reporting method (email, advisories, or both)
+- [ ] Replace `[security contact email]` placeholder if keeping email option
+- [ ] If using direct advisories URL (Option C), replace `OWNER/REPO` with actual repository details
 - [ ] Confirm required labels exist in your repository: `bug`, `enhancement`, `documentation` (see [Issue Template Labels](#issue-template-labels) below)
 - [ ] Update `pyproject.toml` with your project name, description, and authors (if using Python)
 - [ ] Rename or replace `src/copilot_repo_template/` with your package (if using Python)
@@ -243,6 +246,8 @@ After creating a repository from this template, complete the following setup ste
 **Optional but Recommended:**
 
 - [ ] **Create the `triage` label** for consistent issue routing and automation. Once created, uncomment `# - triage` in each issue template where you want it applied. See [Issue Template Labels](#issue-template-labels) for creation instructions.
+- [ ] Test security reporting path (visit URL or send test email)
+- [ ] Enable private vulnerability reporting in repository settings if using GitHub Advisories
 
 **Optional Setup:**
 
@@ -256,6 +261,11 @@ After creating a repository from this template, complete the following setup ste
 - [ ] Run `pre-commit run --all-files` to verify linting setup
 - [ ] Commit and push to trigger CI validation
 - [ ] Verify the placeholder check workflow runs successfully (happens automatically on first push)
+
+**Final Steps:**
+
+- [ ] Review detailed customization guidance in `.github/TEMPLATE_GUIDE.md`
+- [ ] **Delete `.github/TEMPLATE_GUIDE.md`** after completing all customizations
 
 ##### Post-clone Verification Plan
 

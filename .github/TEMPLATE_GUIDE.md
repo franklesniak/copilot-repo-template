@@ -1,4 +1,4 @@
-# Template Guide: Pull Request Template Customization
+# Template Guide
 
 <!--
 FILE PLACEMENT RATIONALE:
@@ -10,7 +10,42 @@ configuration. This is preferable to docs/ (general project documentation) or th
 repo root (which should remain clean for end users).
 -->
 
-## Overview
+## About This Guide
+
+This file provides detailed customization instructions for GitHub-specific files
+included in this repository template. It is placed in `.github/` because it
+relates directly to other files in this directory (templates, workflows, etc.).
+
+**This file should be DELETED after completing template adoption.**
+
+### Documentation Strategy
+
+This template uses a dual-documentation approach:
+
+1. **`README.md`**: High-level adoption checklist (what to do)
+2. **`.github/TEMPLATE_GUIDE.md`**: Detailed customization instructions (how and why)
+
+This separation ensures:
+
+- Template adopters find detailed guidance alongside the files being customized
+- Downstream repos can cleanly remove meta-content after adoption
+- End-user documentation (README) stays focused on the project, not the template
+
+---
+
+## Final Steps
+
+After completing all customizations described in this guide:
+
+- [ ] Review detailed customization guidance in each section below
+- [ ] **Delete `.github/TEMPLATE_GUIDE.md`** after completing all customizations
+- [ ] Update `README.md` with your project-specific documentation
+
+---
+
+## Pull Request Template Customization
+
+### Overview
 
 This guide provides detailed customization instructions for the pull request template
 (`.github/pull_request_template.md`) included in this repository template.
@@ -392,3 +427,319 @@ page for current version status.
 - No dates to become stale
 - Single source of truth via external link
 - Clear guidance for template adopters on what to customize
+
+---
+
+## SECURITY.md Customization
+
+The template includes a `SECURITY.md` file that offers **two reporting methods**:
+
+1. GitHub Security Advisories (via UI navigation)
+2. Email (with placeholder: `[security contact email]`)
+
+**You must update this file before making the repository public.** The CI workflow
+will fail if the email placeholder remains.
+
+### Why Multiple Options?
+
+This template intentionally does NOT prescribe a single "correct" security reporting
+method because operational constraints vary widely:
+
+- **Enterprise projects**: Must route through organizational security teams (email required)
+- **Open source solo projects**: GitHub Advisories reduce operational burden
+- **High-profile projects**: Multiple channels increase accessibility
+
+The CI workflow enforces that adopters make a *deliberate choice*, not that they
+choose a specific option.
+
+### Current State
+
+The template's `SECURITY.md` describes how to report via:
+
+- **Option 1:** GitHub Security Advisories → Navigate to Security tab → Click "Report a vulnerability"
+- **Option 2:** Email → `[security contact email]` (placeholder)
+
+### Option A: Keep Both Methods (Email + Advisories)
+
+Replace the email placeholder with a real, monitored email address:
+
+```markdown
+- Email: security@example.com
+```
+
+Keep the GitHub Security Advisories section as-is.
+
+**Pros:**
+
+- Multiple reporting channels increase accessibility
+- Email fallback works outside GitHub
+- Familiar reporting channel for security researchers
+- Works even if GitHub features are unavailable
+
+**Cons:**
+
+- Requires operational ownership of mailbox
+- Must monitor and respond to reports from multiple channels
+- Needs documented incident response process
+
+**Best for:** Projects with established operational teams or organizational security contacts.
+
+**Requirements:**
+
+- Email must be actively monitored
+- Team must have incident response process
+- Response time expectations should be documented
+- Enable Security Advisories in repository settings
+
+---
+
+### Option B: Email Only
+
+Replace the email placeholder and remove the GitHub Security Advisories section.
+
+**Best for:** Projects that need to route security reports through organizational email systems.
+
+---
+
+### Option C: Advisories Only
+
+Remove the email section entirely.
+
+**You have two sub-options:**
+
+**C1: Keep UI navigation instructions (no URL placeholders to replace):**
+
+```markdown
+## Reporting a Vulnerability
+
+Please report security vulnerabilities using GitHub Security Advisories:
+
+1. Navigate to the **Security** tab of this repository
+2. Click **Report a vulnerability**
+3. Fill out the security advisory form with details about the vulnerability
+```
+
+This works as-is with no placeholder replacement needed.
+
+**C2: Provide direct link (requires replacing placeholder):**
+
+```markdown
+## Reporting a Vulnerability
+
+Please report security vulnerabilities using [GitHub Security Advisories](https://github.com/OWNER/REPO/security/advisories/new).
+
+**We do not accept security reports via email.** All reports must be submitted through GitHub's private reporting mechanism to ensure proper tracking and coordinated disclosure.
+```
+
+**If you choose C2**, you **must** replace `OWNER/REPO` with your actual repository details.
+
+**Example:** If your repository is `octocat/hello-world`, the URL should be:
+
+```markdown
+https://github.com/octocat/hello-world/security/advisories/new
+```
+
+**Pros:**
+
+- No email channel to manage
+- Built-in coordinated disclosure workflow
+- Automatic CVE assignment (if eligible)
+- Direct link (C2) makes reporting easier
+
+**Cons:**
+
+- Relies on GitHub feature availability
+- Requires repository security features enabled
+- Reporters must have GitHub accounts
+
+**Best for:** Small projects, solo maintainers, or projects without dedicated security response teams.
+
+**Requirements:**
+
+- Enable Security Advisories in repository settings (Settings → Security → Private vulnerability reporting)
+- If using C2 (direct link): Replace `OWNER/REPO` with your actual repository details
+- If using C2 (direct link): Verify the URL works by visiting it in a browser
+- Ensure maintainers have notifications enabled for security advisories
+
+---
+
+### Enforcement
+
+**The CI workflow will fail if:**
+
+- The placeholder `[security contact email]` remains in `SECURITY.md`
+- The placeholder `OWNER/REPO` is found in URLs in `SECURITY.md`
+
+**Note:** The workflow checks for `OWNER/REPO` in URLs to catch cases where adopters add
+direct links but forget to customize them.
+
+---
+
+## Documentation Strategy for Issue Templates
+
+**Design Decision:** Issue template design rationale is documented in this guide,
+not in extensive inline YAML comments.
+
+**Rationale:**
+
+- **Reduces duplication**: Design decisions apply across multiple templates;
+  documenting once prevents inconsistency
+- **Cleaner templates**: Makes YAML files easier to scan and edit
+- **Centralized maintenance**: Updates to rationale don't require editing multiple files
+- **Follows established pattern**: Consistent with PR template documentation approach
+
+**Alternative considered:** Keep all design rationale as inline YAML comments
+
+**Rejected because:**
+
+- Creates visual noise (30+ line comment blocks)
+- Duplicates explanations across templates
+- Makes it harder to find actionable customization markers
+- Increases maintenance burden when rationale needs updating
+
+**Implementation:**
+
+- Each `.yml` file includes a brief header comment pointing to this guide
+- `# CUSTOMIZE:` and `# ACTION ITEM:` markers remain inline for visibility
+- Extended rationale, alternatives, and examples documented here
+
+---
+
+## Issue Template Design Decisions
+
+### bug_report.yml
+
+#### runtime_version Placeholder Format
+
+**Design Decision:** The placeholder shows multiple runtime examples rather than
+a single language example.
+
+**Rationale:**
+
+- Template supports Python, PowerShell, and Markdown-focused projects
+- Multi-line examples help reporters provide complete information
+- Downstream repos should customize to match their supported runtimes
+
+#### how_ran Placeholder Format
+
+**Design Decision:** The placeholder shows detailed, multi-step installation examples
+rather than brief one-liners.
+
+**Rationale:**
+
+- Shows both Python and PowerShell workflows (template portability)
+- Demonstrates best practices (venv creation, activation)
+- Helps reporters provide complete reproduction steps
+- More useful for diverse downstream adopters
+
+#### Area Dropdown - No "I don't know" Option
+
+**Design Decision:** The Area dropdown does NOT include an "I don't know / not sure" option.
+
+**Rationale:**
+
+- "Other (describe/specify)" already handles uncertain cases
+- Field is `required: false` by default (intentional for template portability)
+- Projects needing required area should define clear, actionable categories
+- "I don't know" encourages lazy reporting
+
+**Alternative considered:** Add "I don't know / not sure" option to enable making field required.
+
+**Rejected because:**
+
+- Defeats the purpose of requiring area-based routing
+- If a project can't confidently categorize bugs, area shouldn't be required
+- "Other" option already provides escape hatch for edge cases
+
+#### Redundant Security Warnings
+
+**Design Decision:** This template intentionally includes multiple security warnings
+(top-of-form notice, required checkbox, severity dropdown warning).
+
+**Rationale:**
+
+- Defense in depth: Multiple touchpoints reduce accidental public disclosure
+- Different contexts: Some users skim forms; redundancy catches attention
+- Audit trail: Required checkbox provides explicit acknowledgment
+
+---
+
+### config.yml
+
+#### GHES Portability
+
+**Design Decision:** GHES host replacement is documented in comments, not enforced via placeholders.
+
+**Rationale:**
+
+- GHES users universally know their host (appears in every URL)
+- One-line note in "MUST READ" section is sufficient
+- Avoids placeholder proliferation (simpler adoption)
+- No CI validation needed for host placeholder
+
+#### Security Link Documentation
+
+**Design Decision:** Detailed setup instructions remain in comments, not in user-facing `about` text.
+
+**Rationale:**
+
+- `about` text appears in issue chooser UI (end-user-facing)
+- Long docs URLs would clutter the chooser display
+- Comment block is appropriate for template adoption guidance
+- Quick setup steps (1-2-3) in comments reduce adopter friction
+
+---
+
+## PR Template Design Decisions
+
+### Link Strategy in PR Template
+
+**Design Decision:** The PR template uses relative links for repository files (e.g., `../blob/HEAD/CONTRIBUTING.md`) rather than absolute URLs with `OWNER/REPO` placeholders.
+
+**Rationale:**
+
+- Template works immediately upon cloning (no placeholder replacement needed)
+- Reduces forgotten placeholder risk (common failure mode)
+- Proven to work for primary use case (GitHub.com PR body)
+- Absolute links remain available as documented opt-in for GHES/email notifications
+
+**Alternative considered:** Use absolute `OWNER/REPO` placeholders as default
+
+**Rejected because:** Requires find-and-replace for all adopters, even when relative links work for their use case. Template portability prioritizes zero-friction adoption.
+
+### Type of Change Options
+
+**Design Decision:** The PR template includes "Dependencies update" as a standard change type.
+
+**Rationale:**
+
+- Dependency management is near-universal (npm, pip, cargo, Maven, etc.)
+- Common workflow with automation tools (Dependabot, Renovate)
+- Often requires different review standards than feature work
+- Low cost, high applicability
+
+**Standard options:**
+
+- Bug fix
+- New feature
+- Breaking change
+- Documentation update
+- Dependencies update
+- Configuration/tooling change
+
+Projects can add/remove options as documented in the "Type of Change Options" section.
+
+### Checklist Item Links
+
+**Design Decision:** Checklist items that reference files/directories use inline code formatting (e.g., `.github/instructions/`) rather than hyperlinks.
+
+**Rationale:**
+
+- Checklists are reference documentation, not primary navigation
+- Adding links to every path creates visual clutter
+- Path references are unambiguous without links
+- Maintains consistency across checklist items
+
+**Alternative considered:** Make all file/directory references clickable
+
+**Rejected because:** Minimal value for added noise. Contributors can navigate to commonly-referenced directories without hyperlinks.
