@@ -72,20 +72,50 @@ jobs:
           echo "Checking for OWNER/REPO placeholders in issue templates..."
           echo ""
 
-          # Files to check for placeholders
-          FILES_TO_CHECK=(
-            ".github/ISSUE_TEMPLATE/config.yml"
-          )
+          # Files to check for placeholders in URLs (config.yml has contact_links that must be replaced)
+          # Other issue template files use relative links and only have OWNER/REPO in comments/examples
+          #
+          # Files checked:
+          # - config.yml: Contains contact_links URLs that MUST be replaced
+          # - bug_report.yml: Uses relative links; OWNER/REPO only in comments (no action needed)
+          # - documentation_issue.yml: OWNER/REPO in placeholder is an example format (no action needed)
+          # - feature_request.yml: Uses relative links; OWNER/REPO only in comments (no action needed)
+          #
+          # The check focuses on config.yml because that's where the actual URLs live.
+          # We also do a broader scan to catch any new OWNER/REPO URLs added in the future.
 
           FOUND_PLACEHOLDERS=false
 
-          for file in "${FILES_TO_CHECK[@]}"; do
+          echo "=== Checking config.yml (contact_links URLs) ==="
+          CONFIG_FILE=".github/ISSUE_TEMPLATE/config.yml"
+          if [ -f "$CONFIG_FILE" ]; then
+            # Check for OWNER/REPO in URL lines (lines containing 'url:')
+            if grep -n "url:.*OWNER/REPO" "$CONFIG_FILE"; then
+              echo "::error file=$CONFIG_FILE::Found OWNER/REPO placeholder in URL in $CONFIG_FILE"
+              FOUND_PLACEHOLDERS=true
+            fi
+          fi
+
+          echo ""
+          echo "=== Scanning all issue templates for OWNER/REPO in non-comment lines ==="
+          # Broader check: look for OWNER/REPO in any non-comment line across all templates
+          # This catches any new URLs someone might add in the future
+          for file in .github/ISSUE_TEMPLATE/*.yml; do
             if [ -f "$file" ]; then
-              # Check for OWNER/REPO pattern (but not in comments)
-              # grep -n shows line numbers, -E for extended regex
-              if grep -n "OWNER/REPO" "$file" | grep -v "^[[:space:]]*#"; then
-                echo "::error file=$file::Found OWNER/REPO placeholder in $file"
-                FOUND_PLACEHOLDERS=true
+              # grep for OWNER/REPO, exclude comment-only lines (starting with #)
+              # Also exclude 'placeholder:' lines which are example format guides
+              matches=$(grep -n "OWNER/REPO" "$file" | grep -v "^[0-9]*:[[:space:]]*#" | grep -v "placeholder:" || true)
+              if [ -n "$matches" ]; then
+                # Filter out the config.yml URL matches we already reported
+                if [ "$file" != "$CONFIG_FILE" ]; then
+                  echo "Found in $file:"
+                  echo "$matches"
+                  # Only error if it looks like an actual URL (contains http)
+                  if echo "$matches" | grep -q "http"; then
+                    echo "::error file=$file::Found OWNER/REPO placeholder URL in $file"
+                    FOUND_PLACEHOLDERS=true
+                  fi
+                fi
               fi
             fi
           done
@@ -93,13 +123,13 @@ jobs:
           echo ""
 
           if [ "$FOUND_PLACEHOLDERS" = true ]; then
-            echo "❌ OWNER/REPO placeholders found!"
+            echo "❌ OWNER/REPO placeholders found in URLs!"
             echo ""
             echo "Please replace OWNER/REPO with your actual organization/repository name."
             echo "See the Template Setup Checklist in README.md for details."
             exit 1
           else
-            echo "✅ No OWNER/REPO placeholders found in checked files."
+            echo "✅ No OWNER/REPO placeholder URLs found."
           fi
 
       - name: Additional placeholder patterns check
