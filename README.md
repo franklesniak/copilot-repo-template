@@ -240,6 +240,7 @@ After creating a repository from this template, complete the following setup ste
 - [ ] Enable [private vulnerability reporting](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configuring-private-vulnerability-reporting-for-a-repository) in repository settings
 - [ ] Decide whether to keep `blank_issues_enabled: true` in `config.yml` (set to `false` once you have comprehensive templates)
 - [ ] Create the `triage` label for additional workflow automation
+- [ ] Enable the placeholder check workflow by setting a repository variable `TEMPLATE_INITIALIZED` to `true` (see [Placeholder Check Workflow](#placeholder-check-workflow) below)
 
 **Validation:**
 
@@ -284,6 +285,22 @@ gh label create triage --description "Needs triage" --color "d4c5f9"
    - **Color:** `d4c5f9` (or choose a purple/lavender color)
 
 > **Note:** The `bug` label is a GitHub default label and should already exist. If it doesn't, create it with description "Something isn't working" and color `d73a4a`.
+
+#### Placeholder Check Workflow
+
+The repository includes a CI workflow (`.github/workflows/check-placeholders.yml`) that verifies `OWNER/REPO` placeholders have been replaced in issue templates. This workflow is **disabled by default** to prevent it from failing in the template repository itself.
+
+**To enable this workflow in your cloned repository:**
+
+1. Go to your repository's **Settings** > **Secrets and variables** > **Actions**
+2. Click the **Variables** tab
+3. Click **New repository variable**
+4. Enter:
+   - **Name:** `TEMPLATE_INITIALIZED`
+   - **Value:** `true`
+5. Click **Add variable**
+
+Once enabled, the workflow will run on every push and pull request, checking for any remaining `OWNER/REPO` placeholders and failing if found. This helps ensure you don't accidentally ship broken links to your users.
 
 ### Language Support
 

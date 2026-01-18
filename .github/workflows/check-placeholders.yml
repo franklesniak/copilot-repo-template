@@ -1,0 +1,135 @@
+# Placeholder Check Workflow
+#
+# Purpose: Verify that OWNER/REPO placeholders have been replaced in issue
+# templates after cloning from the template repository.
+#
+# =============================================================================
+# IMPORTANT - WHY THIS WORKFLOW EXISTS
+# =============================================================================
+# When you create a repository from this template, several files contain
+# `OWNER/REPO` placeholders that MUST be replaced with your actual org/repo
+# name. If forgotten, users will encounter broken links in the issue chooser.
+#
+# This workflow checks for these placeholders and fails if they are found,
+# ensuring you don't accidentally ship broken links to your users.
+#
+# =============================================================================
+# HOW TO ENABLE THIS WORKFLOW
+# =============================================================================
+# This workflow is DISABLED by default to prevent it from failing in the
+# template repository itself (which intentionally contains placeholders).
+#
+# To enable it in your cloned repository:
+#
+# 1. Go to your repository's Settings > Secrets and variables > Actions
+# 2. Click the "Variables" tab
+# 3. Click "New repository variable"
+# 4. Name: TEMPLATE_INITIALIZED
+#    Value: true
+# 5. Click "Add variable"
+#
+# After setting this variable, the workflow will run on every push and PR.
+# =============================================================================
+#
+# Alternative approaches (for reference):
+# - Run only via workflow_dispatch (manual trigger) - less automated
+# - Use on.push.paths to only run when issue templates change - still fails in template repo
+# - Delete this workflow entirely - loses the safety check
+#
+# The repository variable approach was chosen because:
+# - It's a one-time setup step that's easy to remember
+# - It's clearly documented in the Template Setup Checklist
+# - It allows the template repo to pass CI while downstream repos get the check
+# =============================================================================
+
+name: Check Placeholders
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-placeholders:
+    name: Check for OWNER/REPO Placeholders
+    runs-on: ubuntu-latest
+
+    # Only run if TEMPLATE_INITIALIZED is set to 'true'
+    # This allows the template repo to skip this check while downstream repos can enable it
+    if: vars.TEMPLATE_INITIALIZED == 'true'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for OWNER/REPO placeholders
+        run: |
+          echo "Checking for OWNER/REPO placeholders in issue templates..."
+          echo ""
+
+          # Files to check for placeholders
+          FILES_TO_CHECK=(
+            ".github/ISSUE_TEMPLATE/config.yml"
+          )
+
+          FOUND_PLACEHOLDERS=false
+
+          for file in "${FILES_TO_CHECK[@]}"; do
+            if [ -f "$file" ]; then
+              # Check for OWNER/REPO pattern (but not in comments)
+              # grep -n shows line numbers, -E for extended regex
+              if grep -n "OWNER/REPO" "$file" | grep -v "^[[:space:]]*#"; then
+                echo "::error file=$file::Found OWNER/REPO placeholder in $file"
+                FOUND_PLACEHOLDERS=true
+              fi
+            fi
+          done
+
+          echo ""
+
+          if [ "$FOUND_PLACEHOLDERS" = true ]; then
+            echo "❌ OWNER/REPO placeholders found!"
+            echo ""
+            echo "Please replace OWNER/REPO with your actual organization/repository name."
+            echo "See the Template Setup Checklist in README.md for details."
+            exit 1
+          else
+            echo "✅ No OWNER/REPO placeholders found in checked files."
+          fi
+
+      - name: Additional placeholder patterns check
+        run: |
+          echo "Checking for other common placeholder patterns..."
+          echo ""
+
+          # Check for other patterns that might indicate uncustomized templates
+          # These are warnings, not errors
+
+          PATTERNS=(
+            "your-org"
+            "your-repo"
+            "YOUR_ORG"
+            "YOUR_REPO"
+          )
+
+          FOUND_WARNINGS=false
+
+          for pattern in "${PATTERNS[@]}"; do
+            if grep -rn "$pattern" .github/ISSUE_TEMPLATE/ 2>/dev/null | grep -v "^[[:space:]]*#"; then
+              echo "::warning::Found potential placeholder pattern '$pattern' in issue templates"
+              FOUND_WARNINGS=true
+            fi
+          done
+
+          if [ "$FOUND_WARNINGS" = true ]; then
+            echo ""
+            echo "⚠️  Additional placeholder patterns found (warnings only)"
+            echo "Review the above and replace with your actual values if needed."
+          else
+            echo "✅ No additional placeholder patterns found."
+          fi
