@@ -607,7 +607,76 @@ not in extensive inline YAML comments.
 
 ## Issue Template Design Decisions
 
+### Cross-Template Customization Patterns
+
+This section documents customization points that apply across all issue templates.
+
+#### Labels
+
+Update labels to match your repository's label taxonomy. Common patterns:
+
+- **Type labels**: `bug`, `enhancement`, `documentation`
+- **Status labels**: `triage`, `confirmed`, `in-progress`
+- **Priority labels**: `priority:critical`, `priority:high`, `priority:medium`, `priority:low`
+- **Area labels**: `area:api`, `area:cli`, `area:docs`
+
+**ACTION ITEM:** If you want to use a `triage` label, you must first create it in your
+repository (it doesn't exist by default). The `triage` label cannot be auto-created when
+cloning a template repository—GitHub does not support this.
+
+#### Assignees and Projects
+
+Both can be optionally added to auto-route issues:
+
+```yaml
+# Auto-assign issues to specific users
+assignees:
+  - maintainer-username
+
+# Auto-add issues to a GitHub Project (uses project number)
+projects:
+  - org/1
+```
+
+See [GitHub docs](https://docs.github.com/en/issues/planning-and-tracking-with-projects)
+for project configuration.
+
+#### Required Fields
+
+Mark fields required only when information is essential for triage. Over-requiring fields
+discourages issue submissions. Recommended required: description, steps to reproduce (bugs),
+expected/actual behavior (bugs), version, OS, severity.
+
+#### Field IDs
+
+Templates use `snake_case` for all field IDs (e.g., `steps_to_reproduce`, `operating_system`).
+Maintain this convention when adding new fields for consistency.
+
+#### Issue Types
+
+Optionally add `type` top-level field for issue categorization (defined at org level):
+
+```yaml
+type: Bug
+```
+
+---
+
 ### bug_report.yml
+
+#### Security Notice URL Strategy
+
+The security notice uses relative links that work automatically after cloning:
+
+- `[Security tab](security)` - links to repository's Security tab
+- `[SECURITY.md](blob/HEAD/SECURITY.md)` - links to security policy file
+
+**Tested and confirmed** to work in GitHub issue forms on GitHub.com.
+
+**Trade-offs:**
+
+- Relative links work immediately without OWNER/REPO replacement
+- For GHES or external contexts, replace with absolute URLs
 
 #### runtime_version Placeholder Format
 
@@ -662,9 +731,87 @@ rather than brief one-liners.
 - Different contexts: Some users skim forms; redundancy catches attention
 - Audit trail: Required checkbox provides explicit acknowledgment
 
+**If you prefer less redundancy**, remove the warning from severity dropdown by changing:
+
+```yaml
+description: >-
+  Select the severity level that best describes the impact from your perspective.
+  Note: This is your self-assessment; maintainers may adjust during triage.
+```
+
+---
+
+### feature_request.yml
+
+#### Area Dropdown Consistency
+
+The Area dropdown options match `bug_report.yml` for consistency. Update both
+templates when modifying area categories.
+
+#### Priority vs Scope
+
+The template separates priority (urgency from reporter's perspective) and scope
+(size of the feature). Both are optional and self-assessed by reporters; maintainers
+may adjust during triage.
+
+---
+
+### documentation_issue.yml
+
+#### No Area Dropdown by Default
+
+**Design Decision:** This template intentionally does NOT include an `area` dropdown field.
+
+**Rationale:**
+
+- Most consumers have simple documentation sets that don't require area routing
+- Keeping the template lean encourages drive-by documentation reports
+- Documentation issues are typically easy to locate via the `location` field
+
+**For large documentation sets**, you may add an optional area dropdown:
+
+```yaml
+- type: dropdown
+  id: area
+  attributes:
+    label: Documentation Area (optional)
+    description: What part of the documentation does this affect?
+    options:
+      - Getting Started / Installation
+      - API Reference
+      - Tutorials / Guides
+      - FAQ / Troubleshooting
+      - Other
+  validations:
+    required: false
+```
+
+#### Location Field Optional
+
+**Trade-off:**
+
+- Optional (current): Encourages drive-by typo reports with lower friction
+- Required: More actionable for maintainers; may reduce submissions
+
+Recommendation: Keep optional but encourage providing location via description text.
+
 ---
 
 ### config.yml
+
+#### blank_issues_enabled
+
+Set to `true` for flexibility (allows any issue format), or `false` to enforce
+template usage. Most projects benefit from `true` initially; consider `false`
+once you have comprehensive templates.
+
+#### contact_links URL Requirement
+
+**Critical:** Unlike issue-form markdown blocks (where relative links work),
+`contact_links` URLs MUST be absolute URLs. There is no way to use relative links here.
+
+- You MUST replace `OWNER/REPO` with your actual org/repo
+- Use `blob/HEAD` instead of `blob/main` to support non-main default branches
 
 #### GHES Portability
 
@@ -687,6 +834,16 @@ rather than brief one-liners.
 - Long docs URLs would clutter the chooser display
 - Comment block is appropriate for template adoption guidance
 - Quick setup steps (1-2-3) in comments reduce adopter friction
+
+#### Discussions Link
+
+Kept commented out by default because many downstream repos don't enable Discussions.
+To enable:
+
+1. Go to repository Settings > General > Features
+2. Check "Discussions" checkbox
+3. Uncomment the discussions contact link block
+4. Replace `OWNER/REPO` with your actual org/repo
 
 ---
 
