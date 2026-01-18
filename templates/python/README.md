@@ -114,8 +114,9 @@ python_version = "3.13"  # Dotted version string (no ">=" operator)
 **Always use a Python version that is currently receiving bugfixes.**
 
 - Python versions in "security fix only" phase are **not publicly installable** with security updates—they require building from source with manually applied patches.
-- As of January 2026, **Python 3.13** is the latest bugfix-supported version (receiving bugfixes and security updates until approximately October 2026 per [PEP 719](https://peps.python.org/pep-0719/)).
-- Python 3.12 stopped receiving bugfixes in April 2025 per [PEP 693](https://peps.python.org/pep-0693/) and is now security-fix only.
+- Check the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page for current version status.
+
+> **Template adopters:** The template defaults to Python 3.13+. Customize the `requires-python` field in `pyproject.toml` based on your project's specific requirements.
 
 **When to update:**
 

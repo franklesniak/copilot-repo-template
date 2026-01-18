@@ -273,3 +273,122 @@ To:
 | PowerShell-Specific | Keep for PowerShell projects, else remove |
 | Additional Notes | Keep |
 | Related Issues | Keep |
+
+---
+
+## Placeholder Check Workflow
+
+### Behavior
+
+The placeholder check workflow (`.github/workflows/check-placeholders.yml`) runs automatically
+in all repositories created from this template. It does NOT run in the template repository itself.
+
+**Implementation:**
+
+```yaml
+if: github.repository != 'franklesniak/copilot-repo-template'
+```
+
+**This means:**
+
+- ✅ Zero configuration required for adopters
+- ✅ Workflow activates automatically on first push/PR
+- ✅ Template maintainers don't get spurious failures
+
+### What the Workflow Checks
+
+The workflow verifies placeholders are replaced in:
+
+1. **`.github/ISSUE_TEMPLATE/config.yml`** - Contact links URLs containing `OWNER/REPO`
+2. **`CONTRIBUTING.md`** - Clone instructions and issue links containing `OWNER/REPO`
+3. **`SECURITY.md`** - Security contact email placeholders (`[security contact email]` and `TODO: Replace`)
+4. **Issue templates** (`.yml` and `.yaml`) - URLs containing `OWNER/REPO`
+5. **`.github/` directory** - Recursive scan for `https://github.com/OWNER/REPO` links
+
+### File-Type-Aware Comment Filtering
+
+The workflow uses intelligent comment filtering:
+
+- **YAML files** (`.yml`, `.yaml`): Lines starting with `#` are treated as comments (ignored)
+- **Markdown files** (`.md`): Lines with `<!-- ... -->` are treated as HTML comments (ignored)
+- **Markdown `#`**: These are HEADINGS, not comments, so they ARE checked
+
+### Historical Context
+
+**Previous behavior:** Earlier versions of this template required setting a `TEMPLATE_INITIALIZED`
+repository variable to enable the workflow.
+
+**Why changed:** Automatic behavior reduces adoption friction and eliminates the "forgot to configure"
+failure mode. The repository-name-based skip gate (`github.repository != '...'`) provides the same
+protection without requiring user action.
+
+**Documentation impact:** All references to the `TEMPLATE_INITIALIZED` variable have been removed
+from README, TEMPLATE_GUIDE, and other adoption documentation.
+
+---
+
+## CONTRIBUTING.md Customization
+
+### Overview
+
+The `CONTRIBUTING.md` file includes template-specific content that should be reviewed
+and customized after cloning the template.
+
+### Placeholder Strategy
+
+`CONTRIBUTING.md` uses `OWNER/REPO` placeholders (not generic `<your-repo>` syntax) because:
+
+- Enables bulk find-and-replace for template adopters (single operation)
+- CI automation verifies all placeholders are replaced (`.github/workflows/check-placeholders.yml`)
+- Results in working, copy-pastable commands after replacement
+- Consistent with issue templates and other template files
+
+**Alternative considered:** Generic angle-bracket syntax like `<your-repository-clone-url>`
+
+**Rejected because:** Harder to replace in bulk, produces non-working commands, inconsistent
+with other files that require real values.
+
+### Content to Customize
+
+1. **`OWNER/REPO` placeholders:** Replace with your organization/repository name
+   - Clone instructions in "Development Setup" section
+   - Issue links in "Questions or Issues?" section
+
+2. **Python version policy:** Update when upstream support changes
+   - The template uses an evergreen policy linking to Python's official version status page
+   - Customize the minimum version based on your project's requirements
+
+3. **Language-specific sections:** Remove sections for languages you don't use
+   - PowerShell test instructions
+   - Python test instructions
+
+### Content to Review
+
+**"For Template Users" section:**
+
+This section contains meta-instructions about the template itself (understanding instruction
+files, customizing for your project, first-time setup validation). After reviewing:
+
+- **Option A:** Keep it if your project is also a template
+- **Option B:** Remove it for end-user projects (most common)
+- **Option C:** Move relevant content to your own documentation
+
+### Python Version Policy Pattern
+
+The template uses an evergreen policy pattern instead of hard-coded versions:
+
+**Pattern used:**
+
+```markdown
+Contributors and maintainers must use a Python version that is **currently receiving
+bugfixes** from the Python core team.
+
+See the [Python Developer's Guide - Versions](https://devguide.python.org/versions/)
+page for current version status.
+```
+
+**Benefits:**
+
+- No dates to become stale
+- Single source of truth via external link
+- Clear guidance for template adopters on what to customize

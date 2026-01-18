@@ -1,5 +1,22 @@
 # Contributing to This Project
 
+<!--
+TEMPLATE DESIGN DECISION: Placeholder Strategy
+
+This file uses OWNER/REPO placeholders (not generic <your-repo> syntax) because:
+- Enables bulk find-and-replace for template adopters (single operation)
+- CI automation can verify all placeholders are replaced (.github/workflows/check-placeholders.yml)
+- Results in working, copy-pastable commands after replacement
+- Consistent with issue templates and other template files
+
+Alternative considered: Generic angle-bracket syntax like <your-repository-clone-url>
+Rejected because: Harder to replace in bulk, produces non-working commands,
+inconsistent with other files that require real values (CI configs, package.json)
+
+See README.md Template Setup Checklist for adoption instructions.
+See .github/TEMPLATE_GUIDE.md for detailed customization guidance.
+-->
+
 Thank you for your interest in contributing! This document provides guidelines for contributing to this repository.
 
 ## Python Version Requirements
@@ -14,10 +31,11 @@ Thank you for your interest in contributing! This document provides guidelines f
 
 ### Current Requirements
 
-As of January 2026, **Python 3.13** is the minimum required version (the latest bugfix-supported release).
+This project requires a Python version that is currently in "bugfix" status according to the Python core team.
 
-- Python 3.13 receives bugfixes and security updates until approximately October 2026 ([PEP 719](https://peps.python.org/pep-0719/))
-- Python 3.12 stopped receiving bugfixes in April 2025 ([PEP 693](https://peps.python.org/pep-0693/)) and is now security-fix-only
+See the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page for current version status.
+
+> **Template adopters:** Customize this section based on your project's specific Python version requirements. You may specify a minimum version (e.g., "Python 3.11+") or reference your project's own support policy.
 
 ### When to Update
 
@@ -257,6 +275,16 @@ When submitting a pull request:
 - [ ] Ensure all CI checks pass
 
 ## For Template Users
+
+<!--
+TEMPLATE ADOPTERS: This entire section is meta-documentation about the template itself.
+After you've reviewed and understood this content, you should:
+- Option A: Remove this entire section (recommended for most downstream projects)
+- Option B: Keep it if your project is also a template
+- Option C: Move relevant content to .github/TEMPLATE_GUIDE.md or your own docs
+
+See .github/TEMPLATE_GUIDE.md for detailed guidance on CONTRIBUTING.md customization.
+-->
 
 This repository is a template designed for projects that use GitHub Copilot for AI-assisted development.
 

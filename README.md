@@ -250,12 +250,12 @@ After creating a repository from this template, complete the following setup ste
 - [ ] If not enabling Discussions, consider adding a Support section to README and uncommenting the Support/FAQ link in `config.yml`
 - [ ] Enable [private vulnerability reporting](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configuring-private-vulnerability-reporting-for-a-repository) in repository settings
 - [ ] Decide whether to keep `blank_issues_enabled: true` in `config.yml` (set to `false` once you have comprehensive templates)
-- [ ] Enable the placeholder check workflow by setting a repository variable `TEMPLATE_INITIALIZED` to `true` (see [Placeholder Check Workflow](#placeholder-check-workflow) below)
 
 **Validation:**
 
 - [ ] Run `pre-commit run --all-files` to verify linting setup
 - [ ] Commit and push to trigger CI validation
+- [ ] Verify the placeholder check workflow runs successfully (happens automatically on first push)
 
 ##### Post-clone Verification Plan
 
@@ -317,19 +317,26 @@ gh label create triage --description "Needs triage" --color "d4c5f9"
 
 #### Placeholder Check Workflow
 
-The repository includes a CI workflow (`.github/workflows/check-placeholders.yml`) that verifies `OWNER/REPO` placeholders have been replaced in issue templates. This workflow is **disabled by default** to prevent it from failing in the template repository itself.
+The repository includes a CI workflow (`.github/workflows/check-placeholders.yml`) that verifies `OWNER/REPO` placeholders have been replaced in issue templates and configuration files.
 
-**To enable this workflow in your cloned repository:**
+**No configuration required.** The workflow runs automatically on:
 
-1. Go to your repository's **Settings** > **Secrets and variables** > **Actions**
-2. Click the **Variables** tab
-3. Click **New repository variable**
-4. Enter:
-   - **Name:** `TEMPLATE_INITIALIZED`
-   - **Value:** `true`
-5. Click **Add variable**
+- Pull requests to any branch
+- Pushes to any branch
+- Manual workflow dispatch triggers
 
-Once enabled, the workflow will run on every push and pull request, checking for any remaining `OWNER/REPO` placeholders and failing if found. This helps ensure you don't accidentally ship broken links to your users.
+The workflow is automatically disabled in the template repository itself (`franklesniak/copilot-repo-template`) and activates when you clone/fork this template.
+
+**What the workflow checks:**
+
+- `OWNER/REPO` placeholders in `.github/ISSUE_TEMPLATE/config.yml` (contact links URLs)
+- `OWNER/REPO` placeholders in `CONTRIBUTING.md` (clone instructions, issue links)
+- Security contact email placeholders in `SECURITY.md`
+- `OWNER/REPO` URLs in any `.github/` files
+
+**If the workflow fails:**
+
+Review the error messages for specific placeholders that need replacement. Refer to the Template Setup Checklist above for customization guidance.
 
 ### Language Support
 

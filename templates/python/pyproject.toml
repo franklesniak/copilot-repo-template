@@ -13,10 +13,10 @@ name = "your-project-name"
 version = "0.1.0"
 description = "Project description"
 readme = "README.md"
-# Update requires-python to follow Python's current bugfix policy.
-# As of January 2026, Python 3.13 is the latest bugfix-supported version.
-# See: https://devguide.python.org/versions/
-# Update this when upstream Python support changes (typically annually).
+# Python Version Policy:
+# Always require a Python version that is currently receiving bugfixes.
+# Check https://devguide.python.org/versions/ for current version status.
+# Update this when upstream support changes (typically annually around October).
 requires-python = ">=3.13"
 license = { text = "MIT" }
 authors = [
