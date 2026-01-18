@@ -140,6 +140,8 @@ rm .github/instructions/python.instructions.md
 rm -rf templates/python/
 ```
 
+> **Action Item:** Update `.github/ISSUE_TEMPLATE/bug_report.yml` and `.github/ISSUE_TEMPLATE/feature_request.yml` and remove "Python" from the Area dropdown options.
+
 ##### Remove PowerShell (if not using PowerShell)
 
 If your project doesn't use PowerShell:
@@ -151,6 +153,8 @@ rm -rf .github/linting/
 rm -rf tests/PowerShell/
 rm -rf templates/powershell/
 ```
+
+> **Action Item:** Update `.github/ISSUE_TEMPLATE/bug_report.yml` and `.github/ISSUE_TEMPLATE/feature_request.yml` and remove "PowerShell" from the Area dropdown options.
 
 ##### Update Copilot Instructions
 
@@ -231,11 +235,14 @@ After creating a repository from this template, complete the following setup ste
 - [ ] Replace `OWNER/REPO` placeholders in `.github/ISSUE_TEMPLATE/config.yml` with your actual org/repo name
 - [ ] Confirm `SECURITY.md` exists and the security reporting path works for your repository
 - [ ] Confirm required labels exist in your repository: `bug`, `enhancement`, `documentation` (see [Issue Template Labels](#issue-template-labels) below)
-- [ ] (Optional but recommended) Create the `triage` label and uncomment it in issue templates (see [Issue Template Labels](#issue-template-labels) below)
 - [ ] Update `pyproject.toml` with your project name, description, and authors (if using Python)
 - [ ] Rename or replace `src/copilot_repo_template/` with your package (if using Python)
 - [ ] Replace placeholder tests in `tests/` with your actual tests
 - [ ] Update `README.md` with your project's documentation
+
+**Optional but Recommended:**
+
+- [ ] **Create the `triage` label** for consistent issue routing and automation. Once created, uncomment `# - triage` in each issue template where you want it applied. See [Issue Template Labels](#issue-template-labels) for creation instructions.
 
 **Optional Setup:**
 
