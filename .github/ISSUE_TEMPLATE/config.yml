@@ -90,7 +90,25 @@ contact_links:
   # CUSTOMIZE: Uncomment the following block if your repository uses GitHub
   # Discussions for Q&A. Replace `OWNER/REPO` with your actual organization and
   # repository name. Requires enabling Discussions in repository settings.
+  # To enable Discussions, go to repository Settings > General > Features > Discussions.
   # =============================================================================
   # - name: 💬 Questions & Discussions
   #   url: https://github.com/OWNER/REPO/discussions
   #   about: Ask questions and discuss ideas (not for bug reports)
+
+  # =============================================================================
+  # SUPPORT / FAQ LINK (OPTIONAL)
+  # =============================================================================
+  # Use this link if your repository does NOT enable GitHub Discussions but you
+  # want to redirect support questions away from issues.
+  #
+  # ACTION ITEM: If you don't enable Discussions (see above), consider:
+  # 1. Adding a "## Support" section to your README.md
+  # 2. Uncommenting and updating the URL below to point to that section
+  #
+  # The URL assumes your README has a #support anchor. Update the URL if your
+  # support section has a different anchor or is in a different location.
+  # =============================================================================
+  # - name: ❓ Support / FAQ
+  #   url: https://github.com/OWNER/REPO#support
+  #   about: Common questions, FAQs, and support guidance

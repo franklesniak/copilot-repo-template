@@ -6,6 +6,12 @@
 #
 # 1. `labels` - Update to match your repository's label taxonomy. Ensure these
 #    labels exist in your repository or update to match your repo's labels.
+#    ACTION ITEM: If you want to use a `triage` label for new bug reports, you
+#    must first create the label in your repository (it doesn't exist by default).
+#    Once created, add `triage` to the labels list below. See the README for
+#    instructions on creating the label.
+#    NOTE: The `triage` label cannot be auto-created when cloning a template
+#    repository—GitHub does not support this. This is an intentional manual step.
 # 2. `title` - Adjust the "[Bug] " prefix if desired
 # 3. `assignees` - (Optional) Add this field to auto-assign bug reports to
 #    specific users. Example: `assignees: [username1, username2]`
@@ -83,6 +89,7 @@ title: "[Bug] "
 #   - Area labels: area:api, area:cli, area:docs
 labels:
   - bug
+  # - triage  # ACTION ITEM: Uncomment after creating the `triage` label in your repository
 # CUSTOMIZE: Uncomment and update to specify an issue type (defined at the organization level).
 # See: https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms#top-level-syntax
 # type: Bug
@@ -135,6 +142,10 @@ body:
     validations:
       required: true
 
+  # DESIGN DECISION: Area is optional by default for template portability.
+  # Small or single-language downstream repos may find "Area" redundant and
+  # friction-inducing. Downstream repos that rely on area-based routing can
+  # change this to `required: true` if needed.
   - type: dropdown
     id: area
     attributes:
@@ -151,7 +162,7 @@ body:
         - Cross-cutting / Repo-wide
         - Other (describe/specify in Additional Context)
     validations:
-      required: true
+      required: false
 
   # NOTE: render: text is used here because users frequently paste commands and output
   # in reproduction steps. This prevents Markdown parsing from mangling CLI commands.

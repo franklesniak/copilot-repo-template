@@ -6,6 +6,12 @@
 #
 # 1. `labels` - Update to match your repository's label taxonomy. Ensure these
 #    labels exist in your repository or update to match your repo's labels.
+#    ACTION ITEM: If you want to use a `triage` label for new documentation issues,
+#    you must first create the label in your repository (it doesn't exist by default).
+#    Once created, add `triage` to the labels list below. See the README for
+#    instructions on creating the label.
+#    NOTE: The `triage` label cannot be auto-created when cloning a template
+#    repository—GitHub does not support this. This is an intentional manual step.
 # 2. `title` - Adjust the "[Docs] " prefix if desired
 # 3. `location.placeholder` - Uses blob/HEAD which works regardless of default branch name.
 #    OWNER/REPO in the example should be understood as a placeholder format.
@@ -26,6 +32,7 @@ title: "[Docs] "
 # Ensure these labels exist in your repository or create them before using this template.
 labels:
   - documentation
+  # - triage  # ACTION ITEM: Uncomment after creating the `triage` label in your repository
 body:
   - type: markdown
     attributes:
@@ -51,8 +58,12 @@ body:
     validations:
       required: true
 
-  # NOTE: Uses blob/HEAD which works regardless of default branch name.
-  # The OWNER/REPO in the placeholder example is a format guide, not a literal value.
+  # NOTE: Placeholder uses simple file paths rather than full URLs with OWNER/REPO
+  # to avoid reporters pasting literal placeholders. Relative paths work for most
+  # documentation issues.
+  # ACTION ITEM: After setting up your repository, you may optionally update this
+  # placeholder to include a literal URL example from your repository (e.g.,
+  # "e.g., https://github.com/your-org/your-repo/blob/HEAD/README.md#usage or docs/guide.md").
   - type: input
     id: location
     attributes:
@@ -60,7 +71,7 @@ body:
       description: >-
         Link to the file/section/page (URL or path) where the issue exists.
         Providing a location greatly speeds up investigation—please include if possible.
-      placeholder: e.g., https://github.com/OWNER/REPO/blob/HEAD/README.md#usage or docs/guide.md
+      placeholder: e.g., README.md#usage or docs/guide.md
     validations:
       required: false
 
