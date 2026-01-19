@@ -1,51 +1,11 @@
 # =============================================================================
-# TEMPLATE CUSTOMIZATION GUIDE
+# FEATURE REQUEST TEMPLATE
 # =============================================================================
-# This is a GitHub issue form template for feature requests. When using this in
-# a cloned repository, customize the following sections:
+# For detailed design decisions and customization options, see:
+# .github/TEMPLATE_GUIDE.md > Issue Template Design Decisions
 #
-# 1. `labels` - Update to match your repository's label taxonomy. Ensure these
-#    labels exist in your repository or update to match your repo's labels.
-#    ACTION ITEM: If you want to use a `triage` label for new feature requests,
-#    you must first create the label in your repository (it doesn't exist by default).
-#    Once created, add `triage` to the labels list below. See the README for
-#    instructions on creating the label.
-#    NOTE: The `triage` label cannot be auto-created when cloning a template
-#    repository—GitHub does not support this. This is an intentional manual step.
-# 2. `title` - Adjust the "[Feature] " prefix if desired
-# 3. `assignees` - (Optional) Add this field to auto-assign feature requests to
-#    specific users. Example: `assignees: [username1, username2]`
-# 4. `projects` - (Optional) Add this field to auto-add feature requests to a
-#    GitHub Project. Configuration varies between classic and new Projects,
-#    and GitHub.com vs GitHub Enterprise Server. Refer to GitHub docs for
-#    your environment: https://docs.github.com/en/issues/planning-and-tracking-with-projects
-#    Example (uses project number):
-#    ```yaml
-#    projects:
-#      - org/1
-#    ```
-# 5. `pre_flight` checkboxes - Add or modify checkboxes for project-specific
-#    requirements (e.g., "I have reviewed the project roadmap" for projects
-#    with public roadmaps, or "I have discussed this in Discussions first")
-# 6. `priority` options - Adjust priority levels to match your project's
-#    triage workflow (e.g., add/remove priority levels)
-# 7. `scope` options - Adjust scope categories to match your project's
-#    feature classification (e.g., "Breaking change", "New API", "UX improvement")
-# 8. `field removal` - Any optional field can be removed entirely if not
-#    applicable to your project. Required fields should generally be kept
-#    to ensure sufficient information for feature triage.
-# 9. `config.yml` - Create or update `.github/ISSUE_TEMPLATE/config.yml` to control
-#    the issue template chooser (enable/disable blank issues, add contact links).
-#    Example config.yml:
-#    ```yaml
-#    # Set to `true` for flexibility (recommended initially), or `false` once you
-#    # have comprehensive templates and want to enforce structured issue creation
-#    blank_issues_enabled: true
-#    contact_links:
-#      - name: 💬 Discussions
-#        url: https://github.com/OWNER/REPO/discussions
-#        about: Ask questions and discuss ideas
-#    ```
+# CUSTOMIZE: markers below indicate actionable customization points.
+# Look for `# CUSTOMIZE:` comments throughout this file.
 # =============================================================================
 
 name: 💡 Feature Request

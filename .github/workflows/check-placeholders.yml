@@ -1,45 +1,48 @@
 # Placeholder Check Workflow
 #
 # Purpose: Verify that OWNER/REPO placeholders have been replaced in issue
-# templates after cloning from the template repository.
+# templates and configuration files after cloning from the template repository.
 #
 # =============================================================================
 # IMPORTANT - WHY THIS WORKFLOW EXISTS
 # =============================================================================
 # When you create a repository from this template, several files contain
 # `OWNER/REPO` placeholders that MUST be replaced with your actual org/repo
-# name. If forgotten, users will encounter broken links in the issue chooser.
+# name. If forgotten, users will encounter broken links in the issue chooser
+# and documentation.
 #
 # This workflow checks for these placeholders and fails if they are found,
 # ensuring you don't accidentally ship broken links to your users.
 #
 # =============================================================================
-# HOW TO ENABLE THIS WORKFLOW
+# HOW THIS WORKFLOW OPERATES
 # =============================================================================
-# This workflow is DISABLED by default to prevent it from failing in the
-# template repository itself (which intentionally contains placeholders).
+# This workflow runs AUTOMATICALLY in all repositories created from this
+# template. It is automatically DISABLED in the template repository itself
+# to avoid spurious failures.
 #
-# To enable it in your cloned repository:
+# Implementation:
+#   if: github.repository != 'franklesniak/copilot-repo-template'
 #
-# 1. Go to your repository's Settings > Secrets and variables > Actions
-# 2. Click the "Variables" tab
-# 3. Click "New repository variable"
-# 4. Name: TEMPLATE_INITIALIZED
-#    Value: true
-# 5. Click "Add variable"
+# This means:
+#   - ✅ Zero configuration required for adopters
+#   - ✅ Workflow activates automatically on first push/PR
+#   - ✅ Template maintainers don't get spurious failures
 #
-# After setting this variable, the workflow will run on every push and PR.
+# NO CONFIGURATION REQUIRED - the workflow runs automatically on:
+#   - Pull requests to any branch
+#   - Pushes to any branch
+#   - Manual workflow_dispatch triggers
+#
 # =============================================================================
-#
-# Alternative approaches (for reference):
-# - Run only via workflow_dispatch (manual trigger) - less automated
-# - Use on.push.paths to only run when issue templates change - still fails in template repo
-# - Delete this workflow entirely - loses the safety check
-#
-# The repository variable approach was chosen because:
-# - It's a one-time setup step that's easy to remember
-# - It's clearly documented in the Template Setup Checklist
-# - It allows the template repo to pass CI while downstream repos get the check
+# HISTORICAL CONTEXT
+# =============================================================================
+# Previous versions of this template required setting a `TEMPLATE_INITIALIZED`
+# repository variable to enable this workflow. That approach was replaced with
+# automatic detection to:
+#   - Reduce adoption friction (no configuration step to remember)
+#   - Eliminate the "forgot to configure" failure mode
+#   - Provide better out-of-box experience for template adopters
 # =============================================================================
 
 name: Check Placeholders
@@ -57,9 +60,9 @@ jobs:
     name: Check for OWNER/REPO Placeholders
     runs-on: ubuntu-latest
 
-    # Only run if TEMPLATE_INITIALIZED is set to 'true'
-    # This allows the template repo to skip this check while downstream repos can enable it
-    if: vars.TEMPLATE_INITIALIZED == 'true'
+    # Run automatically in all repos EXCEPT the template repository itself
+    # This removes the need for adopters to set any configuration variable
+    if: github.repository != 'franklesniak/copilot-repo-template'
 
     steps:
       - name: Checkout repository
@@ -67,7 +70,7 @@ jobs:
 
       - name: Check for OWNER/REPO placeholders
         run: |
-          echo "Checking for OWNER/REPO placeholders in issue templates..."
+          echo "Checking for OWNER/REPO placeholders in repository files..."
           echo ""
 
           # =============================================================================
@@ -76,84 +79,206 @@ jobs:
           # This check enforces different severity levels based on the impact of
           # unreplaced placeholders:
           #
-          # HARD FAIL (exit 1): Active contact_links URLs in config.yml
-          #   - These directly break UX—users clicking broken links is unacceptable
-          #   - Only non-commented URL lines are checked
+          # HARD FAIL (exit 1):
+          #   1. Active contact_links URLs in config.yml containing OWNER/REPO
+          #   2. OWNER/REPO occurrences in CONTRIBUTING.md (clone instructions, issue links)
+          #   3. SECURITY.md containing "[security contact email]" or "TODO: Replace"
+          #   4. Issue templates (.yml/.yaml) with OWNER/REPO in lines containing "http"
           #
-          # WARNING ONLY: Other placeholder patterns (README "Project Name", PR template,
-          #   your-org/your-repo patterns)
-          #   - These are less critical and may be intentionally kept temporarily
-          #   - Warnings nudge adopters to customize without blocking CI
+          # OPTIONAL HARD FAIL (high value safety net):
+          #   5. Recursive scan of .github/ for https://github.com/OWNER/REPO links
+          #      (excluding this workflow file itself)
+          #
+          # FILE-TYPE-AWARE COMMENT FILTERING:
+          #   - YAML files: Lines starting with # are comments (ignored)
+          #   - Markdown files: Lines with <!-- --> are HTML comments (ignored)
+          #   - Markdown #: These are HEADINGS, not comments (checked!)
           #
           # This approach balances strictness (broken links = fail) with flexibility
-          # (other placeholders = warning), avoiding false positives while still
-          # encouraging customization.
+          # (warning-only patterns = nudge without blocking CI).
           # =============================================================================
-
-          # Files to check for placeholders in URLs (config.yml has contact_links that must be replaced)
-          # Other issue template files use relative links and only have OWNER/REPO in comments/examples
-          #
-          # Files checked:
-          # - config.yml: Contains contact_links URLs that MUST be replaced
-          # - bug_report.yml: Uses relative links; OWNER/REPO only in comments (no action needed)
-          # - documentation_issue.yml: Uses relative paths in placeholder (no action needed)
-          # - feature_request.yml: Uses relative links; OWNER/REPO only in comments (no action needed)
-          #
-          # The check focuses on config.yml because that's where the actual URLs live.
-          # We also do a broader scan to catch any new OWNER/REPO URLs added in the future.
 
           FOUND_PLACEHOLDERS=false
 
-          echo "=== Checking config.yml (contact_links URLs) ==="
+          # Helper function to filter YAML comments (lines starting with #)
+          filter_yaml_comments() {
+            grep -v "^[0-9]*:[[:space:]]*#" || true
+          }
+
+          # Helper function to filter lines that are inside Markdown HTML comments
+          # Note: This is a simple filter for single-line HTML comments containing the pattern
+          # It won't catch multi-line comments, but those are rare for placeholder patterns
+          filter_md_html_comments() {
+            grep -v "<!--.*-->" || true
+          }
+
+          echo "=== [1] Checking config.yml (contact_links URLs) ==="
           CONFIG_FILE=".github/ISSUE_TEMPLATE/config.yml"
           if [ -f "$CONFIG_FILE" ]; then
             # Check for OWNER/REPO in URL lines (lines containing 'url:')
-            # IMPORTANT: Exclude commented-out lines to avoid false CI failures
-            # This allows downstream repos to keep commented placeholder examples
-            # while failing only on active (uncommented) URLs that would break UX.
-            matches=$(grep -n "url:.*OWNER/REPO" "$CONFIG_FILE" | grep -v "^[0-9]*:[[:space:]]*#" || true)
+            # Exclude commented-out lines (YAML comments start with #)
+            matches=$(grep -n "url:.*OWNER/REPO" "$CONFIG_FILE" | filter_yaml_comments)
             if [ -n "$matches" ]; then
-              echo "Found in $CONFIG_FILE:"
+              echo "❌ Found in $CONFIG_FILE:"
               echo "$matches"
-              echo "::error file=$CONFIG_FILE::Found OWNER/REPO placeholder in active URL in $CONFIG_FILE"
+              echo "::error file=$CONFIG_FILE::Found OWNER/REPO placeholder in active URL. Replace with your org/repo name."
               FOUND_PLACEHOLDERS=true
+            else
+              echo "✅ No active OWNER/REPO URLs in config.yml"
+            fi
+          else
+            echo "⚠️  config.yml not found (optional)"
+          fi
+
+          echo ""
+          echo "=== [2] Checking CONTRIBUTING.md for OWNER/REPO placeholders ==="
+          CONTRIB_FILE="CONTRIBUTING.md"
+          if [ -f "$CONTRIB_FILE" ]; then
+            # Check for OWNER/REPO, excluding HTML comments (<!-- ... -->)
+            # Note: In Markdown, # is a heading, NOT a comment, so we don't filter it
+            matches=$(grep -n "OWNER/REPO" "$CONTRIB_FILE" | filter_md_html_comments)
+            if [ -n "$matches" ]; then
+              echo "❌ Found in $CONTRIB_FILE:"
+              echo "$matches"
+              echo "::error file=$CONTRIB_FILE::Found OWNER/REPO placeholder(s). Replace with your org/repo name."
+              FOUND_PLACEHOLDERS=true
+            else
+              echo "✅ No active OWNER/REPO placeholders in CONTRIBUTING.md"
+            fi
+          else
+            echo "⚠️  CONTRIBUTING.md not found (optional)"
+          fi
+
+          echo ""
+          echo "=== [3] Checking SECURITY.md for placeholder markers ==="
+          SECURITY_FILE="SECURITY.md"
+          if [ -f "$SECURITY_FILE" ]; then
+            found_security_issues=false
+
+            # Check for "[security contact email]" placeholder
+            email_matches=$(grep -n "\[security contact email\]" "$SECURITY_FILE" 2>/dev/null || true)
+            if [ -n "$email_matches" ]; then
+              echo "❌ Found placeholder email in $SECURITY_FILE:"
+              echo "$email_matches"
+              echo "::error file=$SECURITY_FILE::Found [security contact email] placeholder. Replace with your actual security contact."
+              found_security_issues=true
+            fi
+
+            # Check for "TODO: Replace" marker
+            todo_matches=$(grep -n "TODO: Replace" "$SECURITY_FILE" 2>/dev/null || true)
+            if [ -n "$todo_matches" ]; then
+              echo "❌ Found TODO marker in $SECURITY_FILE:"
+              echo "$todo_matches"
+              echo "::error file=$SECURITY_FILE::Found TODO marker. Complete the security contact setup."
+              found_security_issues=true
+            fi
+
+            # Check for OWNER/REPO in URLs (for Option C with direct links)
+            url_matches=$(grep -n "github\.com/OWNER/REPO" "$SECURITY_FILE" 2>/dev/null || true)
+            if [ -n "$url_matches" ]; then
+              echo "❌ Found OWNER/REPO placeholder in URL in $SECURITY_FILE:"
+              echo "$url_matches"
+              echo "::error file=$SECURITY_FILE::Found OWNER/REPO placeholder in URL. Replace with your actual repository details (e.g., octocat/hello-world)."
+              found_security_issues=true
+            fi
+
+            if [ "$found_security_issues" = true ]; then
+              FOUND_PLACEHOLDERS=true
+            else
+              echo "✅ No placeholder markers in SECURITY.md"
+            fi
+          else
+            echo "⚠️  SECURITY.md not found (optional)"
+          fi
+
+          echo ""
+          echo "=== [4] Scanning issue templates for OWNER/REPO in URLs ==="
+          # Use find to avoid issues with unmatched glob patterns
+          # Check both .yml and .yaml extensions
+          while IFS= read -r -d '' file; do
+            # Skip config.yml which we already checked more specifically
+            if [ "$file" = "$CONFIG_FILE" ]; then
+              continue
+            fi
+
+            # Grep for OWNER/REPO, exclude YAML comment lines
+            # Only fail if line contains "http" (actual URLs, not examples in comments)
+            matches=$(grep -n "OWNER/REPO" "$file" | filter_yaml_comments | grep -v "placeholder:" || true)
+            if [ -n "$matches" ]; then
+              # Check if any matches contain http (actual URLs vs just text)
+              if echo "$matches" | grep -q "http"; then
+                echo "❌ Found URL with OWNER/REPO in $file:"
+                echo "$matches"
+                echo "::error file=$file::Found OWNER/REPO placeholder in URL. Replace with your org/repo name."
+                FOUND_PLACEHOLDERS=true
+              fi
+            fi
+          done < <(find .github/ISSUE_TEMPLATE -type f \( -name "*.yml" -o -name "*.yaml" \) -print0 2>/dev/null || true)
+          echo "✅ Issue template URL check complete"
+
+          echo ""
+          echo "=== [5] Scanning .github/ directory for OWNER/REPO URLs ==="
+          # Recursive scan of .github/ for https://github.com/OWNER/REPO links
+          # This provides comprehensive coverage and catches any OWNER/REPO URLs
+          # that might be added to new files in the future.
+          # Note: Some files may be checked in earlier sections as well; this is
+          # intentional to ensure comprehensive coverage with the full URL pattern.
+          # Exclude this workflow file itself to avoid self-referential matches.
+          while IFS= read -r -d '' file; do
+            # Skip this workflow file to avoid self-referential matches
+            if [ "$file" = ".github/workflows/check-placeholders.yml" ]; then
+              continue
+            fi
+
+            # Determine file type for comment filtering
+            case "$file" in
+              *.yml|*.yaml)
+                matches=$(grep -n "https://github.com/OWNER/REPO" "$file" 2>/dev/null | filter_yaml_comments || true)
+                ;;
+              *.md)
+                matches=$(grep -n "https://github.com/OWNER/REPO" "$file" 2>/dev/null | filter_md_html_comments || true)
+                ;;
+              *)
+                matches=$(grep -n "https://github.com/OWNER/REPO" "$file" 2>/dev/null || true)
+                ;;
+            esac
+
+            if [ -n "$matches" ]; then
+              echo "❌ Found OWNER/REPO URL in $file:"
+              echo "$matches"
+              echo "::error file=$file::Found https://github.com/OWNER/REPO placeholder. Replace with your org/repo name."
+              FOUND_PLACEHOLDERS=true
+            fi
+          done < <(find .github -type f \( -name "*.yml" -o -name "*.yaml" -o -name "*.md" \) -print0 2>/dev/null)
+          echo "✅ .github/ directory scan complete"
+
+          echo ""
+          echo "=== [6] Optional: Checking README.md for OWNER/REPO in links ==="
+          README_FILE="README.md"
+          if [ -f "$README_FILE" ]; then
+            # Only fail if OWNER/REPO appears in active link contexts (contains http or markdown link syntax)
+            matches=$(grep -n "OWNER/REPO" "$README_FILE" | filter_md_html_comments | grep -E "(http|\]\()" || true)
+            if [ -n "$matches" ]; then
+              echo "⚠️  Found OWNER/REPO in link context in $README_FILE:"
+              echo "$matches"
+              echo "::warning file=$README_FILE::Found OWNER/REPO in link context. Consider replacing with your org/repo name."
+              # Note: This is a warning only, not a hard fail, as README may have legitimate examples
+            else
+              echo "✅ No OWNER/REPO in link contexts in README.md"
             fi
           fi
 
           echo ""
-          echo "=== Scanning all issue templates for OWNER/REPO in non-comment lines ==="
-          # Broader check: look for OWNER/REPO in any non-comment line across all templates
-          # This catches any new URLs someone might add in the future
-          for file in .github/ISSUE_TEMPLATE/*.yml; do
-            if [ -f "$file" ]; then
-              # grep for OWNER/REPO, exclude comment-only lines (starting with #)
-              # Also exclude 'placeholder:' lines which are example format guides
-              matches=$(grep -n "OWNER/REPO" "$file" | grep -v "^[0-9]*:[[:space:]]*#" | grep -v "placeholder:" || true)
-              if [ -n "$matches" ]; then
-                # Filter out the config.yml URL matches we already reported
-                if [ "$file" != "$CONFIG_FILE" ]; then
-                  echo "Found in $file:"
-                  echo "$matches"
-                  # Only error if it looks like an actual URL (contains http)
-                  if echo "$matches" | grep -q "http"; then
-                    echo "::error file=$file::Found OWNER/REPO placeholder URL in $file"
-                    FOUND_PLACEHOLDERS=true
-                  fi
-                fi
-              fi
-            fi
-          done
-
-          echo ""
+          echo "==========================================="
 
           if [ "$FOUND_PLACEHOLDERS" = true ]; then
-            echo "❌ OWNER/REPO placeholders found in URLs!"
+            echo "❌ OWNER/REPO placeholders found!"
             echo ""
             echo "Please replace OWNER/REPO with your actual organization/repository name."
             echo "See the Template Setup Checklist in README.md for details."
             exit 1
           else
-            echo "✅ No OWNER/REPO placeholder URLs found."
+            echo "✅ All placeholder checks passed."
           fi
 
       - name: Additional placeholder patterns check

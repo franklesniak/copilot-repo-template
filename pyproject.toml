@@ -19,9 +19,8 @@ description = "Template repository providing GitHub Copilot instructions and CI 
 readme = "README.md"
 # Python Version Policy:
 # Always require a Python version that is currently receiving bugfixes.
-# As of January 2026, Python 3.13 is the latest bugfix-supported version.
+# Check https://devguide.python.org/versions/ for current version status.
 # Update this when upstream support changes (typically annually around October).
-# See: https://devguide.python.org/versions/
 requires-python = ">=3.13"
 license = { text = "MIT" }
 authors = [

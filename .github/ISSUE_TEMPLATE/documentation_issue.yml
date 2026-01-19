@@ -1,70 +1,14 @@
 # =============================================================================
-# TEMPLATE CUSTOMIZATION GUIDE
+# DOCUMENTATION ISSUE TEMPLATE
 # =============================================================================
-# This is a GitHub issue form template for documentation issues. When using this
-# in a cloned repository, customize the following sections:
+# For detailed design decisions and customization options, see:
+# .github/TEMPLATE_GUIDE.md > Issue Template Design Decisions
 #
-# 1. `labels` - Update to match your repository's label taxonomy. Ensure these
-#    labels exist in your repository or update to match your repo's labels.
-#    ACTION ITEM: If you want to use a `triage` label for new documentation issues,
-#    you must first create the label in your repository (it doesn't exist by default).
-#    Once created, add `triage` to the labels list below. See the README for
-#    instructions on creating the label.
-#    NOTE: The `triage` label cannot be auto-created when cloning a template
-#    repository—GitHub does not support this. This is an intentional manual step.
-# 2. `title` - Adjust the "[Docs] " prefix if desired
-# 3. `location.placeholder` - Uses blob/HEAD which works regardless of default branch name.
-#    OWNER/REPO in the example should be understood as a placeholder format.
+# CUSTOMIZE: markers below indicate actionable customization points.
+# Look for `# CUSTOMIZE:` comments throughout this file.
 #
-# Trade-off notes on `location` field being optional:
-# - Optional (used here): Encourages drive-by typo reports with lower friction.
-#   Some reports may be harder to act on without a specific location.
-# - Required: More actionable for maintainers; may reduce submissions.
-# Recommended: Keep optional but strongly encourage providing a link/path via
-# the description text.
-#
-# =============================================================================
-# LABEL PORTABILITY NOTE
-# =============================================================================
-# The `documentation` label used below is a GitHub DEFAULT LABEL that exists in
-# all new repositories automatically. See:
-# https://docs.github.com/en/issues/using-labels-and-milestones-to-track-work/managing-labels
-#
-# If your organization or repository has customized labels and deleted/renamed
-# the default `documentation` label, update the label below to match your
-# repository's actual label taxonomy (e.g., `docs`, `type:documentation`, etc.).
-#
-# =============================================================================
-# DESIGN DECISION: NO AREA DROPDOWN BY DEFAULT
-# =============================================================================
-# This template intentionally does NOT include an `area` dropdown field.
-# This is a deliberate design choice:
-#
-# - Most consumers of this template have simple documentation sets that don't
-#   require routing by area.
-# - Keeping the template lean encourages drive-by documentation reports (typos,
-#   broken links, unclear instructions) without excessive form friction.
-# - Documentation issues are typically easy to locate based on the `location`
-#   field provided by the reporter.
-#
-# FOR LARGE DOCUMENTATION SETS:
-# If your repository has extensive documentation requiring area-based routing,
-# you MAY add an optional `area` dropdown. Example:
-#
-#   - type: dropdown
-#     id: area
-#     attributes:
-#       label: Documentation Area (optional)
-#       description: What part of the documentation does this affect?
-#       options:
-#         - Getting Started / Installation
-#         - API Reference
-#         - Tutorials / Guides
-#         - FAQ / Troubleshooting
-#         - Other
-#     validations:
-#       required: false
-#
+# NOTE: The `documentation` label is a GitHub DEFAULT LABEL that exists in all
+# new repositories. If your org has renamed/deleted it, update accordingly.
 # =============================================================================
 
 name: 📚 Documentation Issue

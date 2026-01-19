@@ -1,112 +1,11 @@
 # =============================================================================
-# TEMPLATE CUSTOMIZATION GUIDE
+# BUG REPORT TEMPLATE
 # =============================================================================
-# This is a GitHub issue form template for bug reports. When using this in a
-# cloned repository, customize the following sections:
+# For detailed design decisions and customization options, see:
+# .github/TEMPLATE_GUIDE.md > Issue Template Design Decisions > bug_report.yml
 #
-# 1. `labels` - Update to match your repository's label taxonomy. Ensure these
-#    labels exist in your repository or update to match your repo's labels.
-#    ACTION ITEM: If you want to use a `triage` label for new bug reports, you
-#    must first create the label in your repository (it doesn't exist by default).
-#    Once created, add `triage` to the labels list below. See the README for
-#    instructions on creating the label.
-#    NOTE: The `triage` label cannot be auto-created when cloning a template
-#    repository—GitHub does not support this. This is an intentional manual step.
-# 2. `title` - Adjust the "[Bug] " prefix if desired
-# 3. `assignees` - (Optional) Add this field to auto-assign bug reports to
-#    specific users. Example: `assignees: [username1, username2]`
-# 4. `projects` - (Optional) Add this field to auto-add bug reports to a
-#    GitHub Project. Configuration varies between classic and new Projects,
-#    and GitHub.com vs GitHub Enterprise Server. Refer to GitHub docs for
-#    your environment: https://docs.github.com/en/issues/planning-and-tracking-with-projects
-#    Example (uses project number):
-#    ```yaml
-#    projects:
-#      - org/1
-#    ```
-# 5. `pre_flight` checkboxes - Add or modify checkboxes for project-specific
-#    requirements (e.g., "I have included a minimal reproduction repository"
-#    for library projects, or "I have tested on the latest version")
-# 6. `runtime_version.placeholder` - Update examples to match your project's
-#    supported languages/runtimes
-# 7. `shell_environment` - CLI-focused projects should keep this field;
-#    others may remove it if not applicable
-# 8. `severity` options - Adjust impact categories to match your project's
-#    triage workflow (e.g., add/remove severity levels)
-# 9. `field removal` - Any optional field can be removed entirely if not
-#    applicable to your project. Required fields should generally be kept
-#    to ensure sufficient information for bug triage.
-# 10. `config.yml` - Create or update `.github/ISSUE_TEMPLATE/config.yml` to control
-#     the issue template chooser (enable/disable blank issues, add contact links).
-#     Example config.yml:
-#     ```yaml
-#     # Set to `true` for flexibility (recommended initially), or `false` once you
-#     # have comprehensive templates and want to enforce structured issue creation
-#     blank_issues_enabled: true
-#     contact_links:
-#       - name: 💬 Discussions
-#         url: https://github.com/OWNER/REPO/discussions
-#         about: Ask questions and discuss ideas
-#     ```
-# 11. `required fields` - Mark fields required only when the information is essential
-#     for triage. Over-requiring fields discourages bug reports. Recommended required:
-#     description, steps to reproduce, expected/actual behavior, version, OS, severity.
-#     Note: Required field enforcement may vary in some GitHub Enterprise Server
-#     versions; verify behavior in your environment.
-# 12. `field IDs` - This template uses snake_case for all field IDs (e.g.,
-#     `steps_to_reproduce`, `operating_system`). Maintain this convention
-#     when adding new fields for consistency. IDs are used in issue body
-#     output and API queries.
-# 13. `type` - (Optional) Add this top-level field for issue type categorization.
-#     Issue types are defined at the organization level in GitHub settings.
-#     If your organization has defined issue types, you can specify one here.
-#     Example: `type: Bug`
-#
-# =============================================================================
-# SECURITY NOTICE URL RATIONALE
-# =============================================================================
-# The security notice in the markdown section uses relative links that work
-# automatically when cloned to a new repository:
-#   - [Security tab](security) - links to the repository's Security tab
-#   - [SECURITY.md](blob/HEAD/SECURITY.md) - links to the security policy file
-#
-# These relative links have been TESTED AND CONFIRMED to work in GitHub issue
-# forms on GitHub.com. They are used intentionally to:
-#   1. Work immediately after cloning without requiring OWNER/REPO replacement
-#   2. Prevent broken links from forgotten placeholder replacement
-#   3. Reduce friction for template adoption
-#
-# TRADE-OFF NOTES:
-# - Relative links (used here): Work immediately. Confirmed functional in issue
-#   forms. Prevents OWNER/REPO from leaking into user-submitted issues.
-# - Absolute URLs with OWNER/REPO: Deterministic and consistent, but require
-#   manual customization and can result in broken links if forgotten.
-#
-# FOR GITHUB ENTERPRISE SERVER (GHES) OR EXTERNAL CONTEXTS:
-# If relative links don't work in your environment, replace them with absolute URLs:
-#   - https://github.com/OWNER/REPO/security
-#   - https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md
-# (Replace OWNER/REPO with your actual org/repo name)
-#
-# =============================================================================
-# REDUNDANT SECURITY WARNINGS - DESIGN DECISION
-# =============================================================================
-# This template intentionally includes multiple security warnings:
-#   1. A prominent top-of-form security warning in the markdown header
-#   2. A required checkbox confirming "This is NOT a security vulnerability"
-#   3. A warning in the severity dropdown options
-#
-# This redundancy is INTENTIONAL and serves several purposes:
-#   - Defense in depth: Multiple touchpoints reduce the chance of accidental
-#     public disclosure of security vulnerabilities
-#   - Different contexts: Some users skim forms; redundancy catches attention
-#   - Audit trail: The required checkbox provides explicit acknowledgment
-#
-# If you prefer less redundancy, you MAY remove the warning from the severity
-# section by changing its description to:
-#   description: >-
-#     Select the severity level that best describes the impact from your perspective.
-#     Note: This is your self-assessment; maintainers may adjust during triage.
+# CUSTOMIZE: markers below indicate actionable customization points.
+# Look for `# CUSTOMIZE:` comments throughout this file.
 # =============================================================================
 
 name: 🐛 Bug Report
@@ -133,6 +32,10 @@ labels:
 # projects:
 #   - org/1
 body:
+  # DESIGN DECISION: REDUNDANT SECURITY WARNINGS
+  # This template intentionally includes multiple security warnings (top-of-form,
+  # checkbox, severity dropdown). This defense-in-depth approach maximizes chance
+  # of catching accidental security disclosure. See TEMPLATE_GUIDE.md for rationale.
   - type: markdown
     attributes:
       value: |
@@ -323,6 +226,7 @@ body:
       required: false
 
   # CUSTOMIZE: Update placeholder examples to match your project's supported runtimes
+  # This template uses Python 3.13+ (current bugfix version) as example
   # NOTE: render: text is used here because users paste multi-line version output.
   # This prevents Markdown parsing from mangling version strings with special characters.
   - type: textarea
@@ -334,9 +238,9 @@ body:
         List each on a separate line if multiple apply
       render: text
       placeholder: |
-        Python 3.x (e.g., 3.10.13)
-        PowerShell 7.x or Windows PowerShell 5.1
-        Markdown tooling/renderer (if relevant): e.g., Pandoc 3.x, docs generator name+version
+        Python 3.13.1 (or your installed version)
+        PowerShell 7.4.6 or Windows PowerShell 5.1
+        Markdown tooling/renderer (if relevant): e.g., Pandoc 3.1.2
     validations:
       required: false
 
@@ -351,6 +255,7 @@ body:
     validations:
       required: false
 
+  # CUSTOMIZE: Update placeholder examples to match your project's dependency management approach
   # NOTE: render: text is used here because users paste exact commands with flags.
   # This is especially important for Python and PowerShell where execution context varies widely.
   - type: textarea
@@ -361,8 +266,13 @@ body:
         Paste the exact commands you used to install and run the project (include flags).
       render: text
       placeholder: |
-        # Python
+        # Python (using pyproject.toml)
         python -m venv .venv
+        source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+        pip install -e .
+        python -m your_package
+
+        # Python (using requirements.txt)
         pip install -r requirements.txt
         python script.py --flag
 
