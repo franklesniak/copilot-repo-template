@@ -31,8 +31,36 @@ BeforeAll {
     function Get-ExampleGreeting {
         # .SYNOPSIS
         # Returns a greeting message.
+        #
+        # .DESCRIPTION
+        # Constructs a greeting message for a given name and returns it via a
+        # reference parameter. This function demonstrates the v1.0 return code
+        # pattern with reference parameters for output.
+        #
+        # .PARAMETER ReferenceToResult
+        # A reference to a string variable that will receive the greeting message.
+        #
+        # .PARAMETER Name
+        # The name to include in the greeting message. Must not be null or
+        # whitespace.
+        #
+        # .EXAMPLE
+        # $strGreeting = $null
+        # $intResult = Get-ExampleGreeting -ReferenceToResult ([ref]$strGreeting) -Name "World"
+        # if ($intResult -eq 0) {
+        #     Write-Host $strGreeting  # Outputs: Hello, World!
+        # }
+        #
+        # .INPUTS
+        # None. This function does not accept pipeline input.
+        #
         # .OUTPUTS
         # [int] Status code: 0=success, -1=failure
+        #
+        # .NOTES
+        # Version: 1.0.20260119.0
+        # This is a demonstration function for the Pester testing template.
+        #
         param(
             [ref]$ReferenceToResult,
             [string]$Name
@@ -49,8 +77,32 @@ BeforeAll {
     function Test-IsValidEmail {
         # .SYNOPSIS
         # Tests if a string is a valid email format.
+        #
+        # .DESCRIPTION
+        # Validates whether the provided string matches a basic email format
+        # pattern. This function demonstrates the boolean return pattern for
+        # Test-* functions where simple true/false validation is needed.
+        #
+        # .PARAMETER Email
+        # The email address string to validate. Must contain an @ symbol with
+        # text before and after, and a domain extension.
+        #
+        # .EXAMPLE
+        # $boolIsValid = Test-IsValidEmail -Email "user@example.com"
+        # if ($boolIsValid) {
+        #     Write-Host "Email is valid"
+        # }
+        #
+        # .INPUTS
+        # None. This function does not accept pipeline input.
+        #
         # .OUTPUTS
         # [bool] $true if valid, $false otherwise
+        #
+        # .NOTES
+        # Version: 1.0.20260119.0
+        # This is a demonstration function for the Pester testing template.
+        #
         param(
             [string]$Email
         )
@@ -65,8 +117,35 @@ BeforeAll {
     function Get-ProcessedData {
         # .SYNOPSIS
         # Example function that calls external command (for mocking demo).
+        #
+        # .DESCRIPTION
+        # Reads content from a specified file path and returns it via a reference
+        # parameter. This function demonstrates how to test functions that call
+        # external commands by using Pester's Mock capability.
+        #
+        # .PARAMETER ReferenceToResult
+        # A reference to a variable that will receive the file content.
+        #
+        # .PARAMETER Source
+        # The file path to read content from.
+        #
+        # .EXAMPLE
+        # $arrContent = $null
+        # $intResult = Get-ProcessedData -ReferenceToResult ([ref]$arrContent) -Source "C:\data\input.txt"
+        # if ($intResult -eq 0) {
+        #     Write-Host "Read $($arrContent.Count) lines"
+        # }
+        #
+        # .INPUTS
+        # None. This function does not accept pipeline input.
+        #
         # .OUTPUTS
         # [int] Status code: 0=success, -1=failure
+        #
+        # .NOTES
+        # Version: 1.0.20260119.0
+        # This is a demonstration function for the Pester testing template.
+        #
         param(
             [ref]$ReferenceToResult,
             [string]$Source
