@@ -698,14 +698,34 @@ project's supported runtimes and version policies.
 #### how_ran Placeholder Format
 
 **Design Decision:** The placeholder shows detailed, multi-step installation examples
-rather than brief one-liners.
+rather than brief one-liners, including both `pyproject.toml` and `requirements.txt` workflows.
 
 **Rationale:**
 
-- Shows both Python and PowerShell workflows (template portability)
+- Shows both `pyproject.toml` and `requirements.txt` workflows (template portability)
 - Demonstrates best practices (venv creation, activation)
 - Helps reporters provide complete reproduction steps
-- More useful for diverse downstream adopters
+- Supports diverse downstream adopter workflows
+- Doesn't lock adopters into a single dependency management approach
+
+**Customization note for adopters:** Simplify this placeholder to show only your project's
+dependency management approach (e.g., remove `pyproject.toml` section if you only use
+`requirements.txt`, or vice versa).
+
+**Alternative considered:** Brief form with multiple options on same line
+
+```yaml
+placeholder: |
+  # Python
+  pip install -e .  # or: pip install -r requirements.txt
+  python -m your_package  # or: python script.py
+```
+
+**Rejected because:**
+
+- Compressed form is harder to parse visually
+- Doesn't demonstrate best practices (venv setup, activation)
+- Less helpful for users unfamiliar with Python dependency management
 
 #### Area Dropdown - No "I don't know" Option
 

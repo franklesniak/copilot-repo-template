@@ -251,6 +251,7 @@ body:
     validations:
       required: false
 
+  # CUSTOMIZE: Update placeholder examples to match your project's dependency management approach
   # NOTE: render: text is used here because users paste exact commands with flags.
   # This is especially important for Python and PowerShell where execution context varies widely.
   - type: textarea
@@ -261,8 +262,13 @@ body:
         Paste the exact commands you used to install and run the project (include flags).
       render: text
       placeholder: |
-        # Python
+        # Python (using pyproject.toml)
         python -m venv .venv
+        source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+        pip install -e .
+        python -m your_package
+
+        # Python (using requirements.txt)
         pip install -r requirements.txt
         python script.py --flag
 
