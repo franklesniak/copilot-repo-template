@@ -5,6 +5,7 @@ STAGED_MD_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.md$'
 
 if [ -n "$STAGED_MD_FILES" ]; then
   echo "Running markdownlint on staged files..."
+  # shellcheck disable=SC2086 # Word splitting is intentional here for multiple files
   npx markdownlint-cli2 $STAGED_MD_FILES
   LINT_EXIT_CODE=$?
 
@@ -16,6 +17,20 @@ if [ -n "$STAGED_MD_FILES" ]; then
   fi
 
   echo "✅ Markdownlint passed for staged files."
+
+  # Run nested markdown linting on staged files
+  echo ""
+  echo "Running nested markdown linting on staged files..."
+  # shellcheck disable=SC2086 # Word splitting is intentional here for multiple files
+  node .github/scripts/lint-nested-markdown.js $STAGED_MD_FILES
+  NESTED_LINT_EXIT_CODE=$?
+
+  if [ $NESTED_LINT_EXIT_CODE -ne 0 ]; then
+    echo ""
+    echo "❌ Nested markdown linting failed. Please fix the errors above before committing."
+    echo "To see all errors: npm run lint:md:nested"
+    exit 1
+  fi
 fi
 
 exit 0

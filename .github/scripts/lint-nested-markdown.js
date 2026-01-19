@@ -7,7 +7,13 @@
  * markdownlint on them to ensure nested Markdown content follows the same
  * linting rules as the outer Markdown files.
  *
- * Usage: node .github/scripts/lint-nested-markdown.js
+ * Usage:
+ *   Scan all files:   node .github/scripts/lint-nested-markdown.js
+ *   Lint specific files:  node .github/scripts/lint-nested-markdown.js file1.md file2.md
+ *
+ * When file arguments are provided, only those files are linted (useful for pre-commit hooks).
+ * When no arguments are provided, all .md files are scanned via glob (excluding node_modules).
+ * Both absolute and relative paths are supported; relative paths are resolved from cwd.
  */
 
 const fs = require('fs');
@@ -32,6 +38,31 @@ const colors = {
     cyan: '\x1b[36m',
     bold: '\x1b[1m'
 };
+
+/**
+ * Resolve file paths from command-line arguments to absolute paths
+ * @param {string[]} args - Command-line arguments (file paths)
+ * @returns {Object} Object with validFiles array and skippedFiles array
+ */
+function resolveFilePaths(args) {
+    const validFiles = [];
+    const skippedFiles = [];
+
+    for (const arg of args) {
+        // Resolve relative paths from current working directory
+        const absolutePath = path.isAbsolute(arg)
+            ? arg
+            : path.resolve(process.cwd(), arg);
+
+        if (fs.existsSync(absolutePath)) {
+            validFiles.push(absolutePath);
+        } else {
+            skippedFiles.push(arg);
+        }
+    }
+
+    return { validFiles, skippedFiles };
+}
 
 /**
  * Load markdownlint configuration from .markdownlint.jsonc or .markdownlint.json
@@ -209,14 +240,30 @@ async function main() {
         // Load markdownlint configuration
         const config = loadMarkdownlintConfig();
 
-        // Find all markdown files (excluding node_modules)
-        const files = await glob('**/*.md', {
-            ignore: ['node_modules/**', '**/node_modules/**'],
-            cwd: REPO_ROOT,
-            absolute: true
-        });
+        // Check for command-line file arguments
+        const cliArgs = process.argv.slice(2);
+        let files;
 
-        console.log(`Found ${files.length} Markdown file(s) to scan\n`);
+        if (cliArgs.length > 0) {
+            // Use files provided as arguments
+            const { validFiles, skippedFiles } = resolveFilePaths(cliArgs);
+
+            // Warn about skipped files
+            for (const skipped of skippedFiles) {
+                console.warn(`${colors.yellow}Warning: File not found, skipping: ${skipped}${colors.reset}`);
+            }
+
+            files = validFiles;
+            console.log(`Linting ${files.length} specified file(s)\n`);
+        } else {
+            // Find all markdown files (excluding node_modules)
+            files = await glob('**/*.md', {
+                ignore: ['node_modules/**', '**/node_modules/**'],
+                cwd: REPO_ROOT,
+                absolute: true
+            });
+            console.log(`Found ${files.length} Markdown file(s) to scan\n`);
+        }
 
         let totalBlocks = 0;
         const allResults = [];
