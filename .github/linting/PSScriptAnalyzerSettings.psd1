@@ -27,8 +27,8 @@
             # Allow small exceptions, e.g.:  if ($true) { "blah" } else { "blah blah" }
             IgnoreOneLineBlock = $true
         }
-        # NoEmptyLineBefore = $true ensures closing braces don't have blank lines before them,
-        # keeping code compact. Set to $false if you prefer visual separation before closing braces.
+        # Closing braces must not have empty lines before them per OTBS style.
+        # This keeps code compact and aligns with community best practices.
         PSPlaceCloseBrace = @{
             # Turn the rule on
             Enable = $true
@@ -117,6 +117,11 @@
             BlockComment = $false
             VSCodeSnippetCorrection = $false
             Placement = 'begin'
+        }
+
+        # Encourage named parameters in function calls for readability
+        PSAvoidUsingPositionalParameters = @{
+            Enable = $true
         }
     }
 }
