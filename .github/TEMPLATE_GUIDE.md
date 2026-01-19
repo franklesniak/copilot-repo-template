@@ -297,6 +297,39 @@ Add sections for your project's technology stack. Examples:
 
 ---
 
+## Node.js Package Configuration
+
+<!--
+DESIGN DECISION: package.json Minimal Configuration
+===================================================
+The template ships with minimal package.json configuration (no repository field,
+no engines field, generic metadata) to reduce template adoption friction.
+
+RATIONALE:
+1. **Reduces friction**: Most users only need dev tooling (markdownlint, Husky)
+   without Node.js runtime dependencies.
+
+2. **Prevents placeholder sprawl**: Unlike OWNER/REPO placeholders that break
+   functionality if not replaced, missing optional fields don't affect usage.
+
+3. **Clear separation**: Dev tooling (present) vs. application code (user adds).
+
+4. **Private by default**: The "private": true flag means omitted fields like
+   repository don't affect npm publishing.
+
+TRADE-OFFS:
+- Users creating Node.js applications must manually add metadata fields
+- No validation for Node.js version requirements (though Husky requires 18+)
+- Users must consult README for customization guidance
+
+See README.md "Customize Node.js Package" section for user-facing instructions.
+-->
+
+If your project uses Node.js/npm as a runtime (not just for dev tooling), update
+`package.json` with appropriate metadata. See the README for detailed instructions.
+
+---
+
 ## Type of Change Options
 
 Add or remove options based on your workflow:
