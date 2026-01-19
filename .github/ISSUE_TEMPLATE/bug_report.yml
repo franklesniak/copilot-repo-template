@@ -222,6 +222,7 @@ body:
       required: false
 
   # CUSTOMIZE: Update placeholder examples to match your project's supported runtimes
+  # This template uses Python 3.13+ (current bugfix version) as example
   # NOTE: render: text is used here because users paste multi-line version output.
   # This prevents Markdown parsing from mangling version strings with special characters.
   - type: textarea
@@ -233,9 +234,9 @@ body:
         List each on a separate line if multiple apply
       render: text
       placeholder: |
-        Python 3.x (e.g., 3.10.13)
-        PowerShell 7.x or Windows PowerShell 5.1
-        Markdown tooling/renderer (if relevant): e.g., Pandoc 3.x, docs generator name+version
+        Python 3.13.1 (or your installed version)
+        PowerShell 7.4.6 or Windows PowerShell 5.1
+        Markdown tooling/renderer (if relevant): e.g., Pandoc 3.1.2
     validations:
       required: false
 

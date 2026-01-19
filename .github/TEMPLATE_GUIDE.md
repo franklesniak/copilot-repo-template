@@ -681,13 +681,19 @@ The security notice uses relative links that work automatically after cloning:
 #### runtime_version Placeholder Format
 
 **Design Decision:** The placeholder shows multiple runtime examples rather than
-a single language example.
+a single language example, using currently-supported version numbers.
 
 **Rationale:**
 
 - Template supports Python, PowerShell, and Markdown-focused projects
 - Multi-line examples help reporters provide complete information
+- **Placeholder examples should use currently-supported versions** for consistency
+  with project policy (e.g., Python 3.13+ aligns with template's Python version policy)
+- Using exact version format (not vague `.x`) demonstrates correct format
 - Downstream repos should customize to match their supported runtimes
+
+**Customization note:** Adopters should update version examples to match their
+project's supported runtimes and version policies.
 
 #### how_ran Placeholder Format
 
