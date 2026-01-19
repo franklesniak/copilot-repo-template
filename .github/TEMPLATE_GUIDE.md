@@ -806,6 +806,49 @@ for additional strictness options.
 
 ---
 
+## Python Dependency Versions
+
+<!--
+DESIGN DECISION: Python Dependency Version Alignment
+=====================================================
+The root `pyproject.toml` uses the same pytest version (>=8.0.0) as the template
+file (`templates/python/pyproject.toml`). This is a deliberate choice for template
+clarity and consistency.
+
+RATIONALE:
+1. **Single source of truth**: The root `pyproject.toml` serves both as CI configuration
+   AND as a working example for template users. Using current best-practice versions
+   demonstrates the intended configuration.
+
+2. **Reduces confusion**: When template consumers compare the root `pyproject.toml`
+   to `templates/python/pyproject.toml`, consistent versions eliminate questions about
+   which version to use.
+
+3. **Current stable version**: pytest 8.0+ is the current stable version as of
+   January 2026, with significant improvements over pytest 7.x including better
+   assertion introspection, improved output formatting, and enhanced plugin support.
+
+4. **Template portability**: Template adopters can use either file as reference
+   without needing to reconcile version differences.
+
+TRADE-OFFS:
+- Slightly higher minimum version requirement than strictly necessary for CI to pass
+- May require newer Python environments (pytest 8.0 requires Python 3.8+)
+
+ALTERNATIVES CONSIDERED:
+- Using pytest>=7.0 in root for minimal CI requirements: Rejected because it creates
+  inconsistency between root and template files, leading to adopter confusion.
+-->
+
+The root `pyproject.toml` and `templates/python/pyproject.toml` use aligned dependency
+versions. This ensures template adopters have a consistent reference regardless of which
+file they examine.
+
+**Key principle:** The root `pyproject.toml` is both functional CI configuration AND
+a reference example. It should reflect current best practices, not minimal requirements.
+
+---
+
 ## Documentation Strategy for Issue Templates
 
 **Design Decision:** Issue template design rationale is documented in this guide,
