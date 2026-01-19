@@ -177,6 +177,46 @@ The template includes conditional language for pre-commit:
 
 **If your repository does NOT use pre-commit**, remove the section entirely.
 
+<!--
+DESIGN DECISION: Nested Markdown Linting in Pre-commit Hook
+============================================================
+The pre-commit hook (`.husky/pre-commit`) runs nested markdown linting on staged files
+using `lint-nested-markdown.js` after the standard markdownlint check passes.
+
+WHY THIS INTEGRATION:
+1. **Catch errors earlier**: Nested markdown issues are caught before commit, not in CI.
+   This provides faster feedback and prevents broken code from entering the repository.
+
+2. **Consistent code quality**: Both outer markdown and nested markdown code blocks
+   are validated before code is committed, ensuring the same standards apply everywhere.
+
+3. **Efficient processing**: The script was modified to accept file arguments so only
+   staged files are linted, not the entire repository. This keeps pre-commit fast.
+
+WHY THE SCRIPT ACCEPTS FILE ARGUMENTS:
+1. **Pre-commit performance**: When committing a single file, only that file is linted
+   rather than scanning all markdown files in the repository.
+
+2. **Incremental workflow**: Matches how other linters work in pre-commit hooks—they
+   operate on staged files, not the entire codebase.
+
+3. **Backward compatibility**: When invoked without arguments, the script falls back
+   to scanning all markdown files via glob, preserving the original `npm run lint:md:nested`
+   behavior for full repository scans.
+
+TRADE-OFFS:
+- **Slightly slower pre-commit**: Adds ~1-2 seconds for nested markdown linting on typical
+  commits. This is acceptable given the benefit of catching issues earlier.
+
+- **Requires Node.js**: The pre-commit hook now depends on Node.js for the nested linting
+  script (in addition to npx for markdownlint-cli2). This is already a requirement for
+  this template.
+
+USAGE PATTERNS:
+- Pre-commit hook: Runs on staged files only (fast, incremental)
+- `npm run lint:md:nested`: Runs on all files (full scan, useful before releases)
+-->
+
 ---
 
 ## Coding Standards Reference
