@@ -8,6 +8,22 @@
 
 ---
 
+## Table of Contents
+
+- [Readme for the Copilot Repository Template](#readme-for-the-copilot-repository-template)
+  - [What This Template Provides](#what-this-template-provides)
+  - [Repository Structure](#repository-structure)
+  - [How to Use This Template](#how-to-use-this-template)
+  - [Validating Your New Repository](#validating-your-new-repository)
+  - [Language Support](#language-support)
+  - [Linting Tools](#linting-tools)
+  - [Testing](#testing)
+  - [Code Quality](#code-quality)
+  - [Template Maintenance](#template-maintenance)
+  - [License](#license)
+
+---
+
 ## Readme for the Copilot Repository Template
 
 This is a template repository providing best-practice GitHub Copilot instructions and linting configurations for new projects.
@@ -301,7 +317,7 @@ For detailed customization guidance, see [`.github/TEMPLATE_GUIDE.md`](.github/T
 
 After completing the setup checklist, perform the following quick verification:
 
-1. **Create a test repository** using GitHub's "Use this template" button to verify template functionality
+1. **Verify template functionality** in your newly created repository (template maintainers can create a separate test repository to verify template changes)
 2. **Open each issue type** once and ensure required fields behave correctly
 3. **Click key links** in the issue template chooser:
    - Contributing Guide link
@@ -382,9 +398,9 @@ Review the error messages for specific placeholders that need replacement. Refer
 
 | Language | Instruction File | File Pattern | CI Workflow | Description |
 | --- | --- | --- | --- | --- |
-| Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` | `markdownlint.yml` | Documentation writing standards |
-| PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` | `powershell-ci.yml` | PowerShell coding standards (OTBS, v1.0-v7.x) |
-| Python | `.github/instructions/python.instructions.md` | `**/*.py` | `ci.yml` | Python coding standards (PEP 8, typing) |
+| Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` | `.github/workflows/markdownlint.yml` | Documentation writing standards |
+| PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` | `.github/workflows/powershell-ci.yml` | PowerShell coding standards (OTBS, v1.0-v7.x) |
+| Python | `.github/instructions/python.instructions.md` | `**/*.py` | `.github/workflows/ci.yml` | Python coding standards (PEP 8, typing) |
 
 ### Linting Tools
 
