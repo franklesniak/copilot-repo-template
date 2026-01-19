@@ -123,5 +123,15 @@
         PSAvoidUsingPositionalParameters = @{
             Enable = $true
         }
+
+        # Avoid using global variables without explicit scoping
+        PSAvoidGlobalVars = @{
+            Enable = $true
+        }
+
+        # Review unused parameters in function declarations
+        PSReviewUnusedParameter = @{
+            Enable = $true
+        }
     }
 }
