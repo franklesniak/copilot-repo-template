@@ -9,6 +9,7 @@
 #
 # IMPORTANT: contact_links URLs MUST be absolute URLs (relative paths do not work).
 # You MUST replace OWNER/REPO with your actual org/repo or links will 404.
+# - GHES users: Replace github.com with your GHES host (e.g., github.company.com)
 # =============================================================================
 
 # CUSTOMIZE: Set to `true` (default) to allow users flexibility in creating issues
@@ -41,12 +42,14 @@ contact_links:
   # reporting in your repository, you can optionally change to /security/advisories/new.
   #
   # TO ENABLE PRIVATE VULNERABILITY REPORTING:
-  # Follow the instructions at:
-  # https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configuring-private-vulnerability-reporting-for-a-repository
+  # 1. Go to Settings → Security → Private vulnerability reporting
+  # 2. Enable the feature
+  # 3. Full documentation:
+  #    https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configuring-private-vulnerability-reporting-for-a-repository
   # =============================================================================
   - name: 🔒 Security Vulnerabilities
     url: https://github.com/OWNER/REPO/security
-    about: Report security issues privately (do not open a public issue). Private vulnerability reporting may need to be enabled.
+    about: Report security issues privately (do not open a public issue). Private vulnerability reporting must be enabled in repository settings.
 
   # =============================================================================
   # DISCUSSIONS LINK (OPTIONAL)
