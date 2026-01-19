@@ -84,15 +84,15 @@ jobs:
           #   2. OWNER/REPO occurrences in CONTRIBUTING.md (clone instructions, issue links)
           #   3. SECURITY.md containing "[security contact email]" or "TODO: Replace"
           #   4. Issue templates (.yml/.yaml) with OWNER/REPO in lines containing "http"
-          #
-          # OPTIONAL HARD FAIL (high value safety net):
           #   5. Recursive scan of .github/ for https://github.com/OWNER/REPO links
           #      (excluding this workflow file itself)
+          #   6. @OWNER placeholder in .github/CODEOWNERS
           #
           # FILE-TYPE-AWARE COMMENT FILTERING:
           #   - YAML files: Lines starting with # are comments (ignored)
           #   - Markdown files: Lines with <!-- --> are HTML comments (ignored)
           #   - Markdown #: These are HEADINGS, not comments (checked!)
+          #   - CODEOWNERS: Lines starting with # are comments (ignored)
           #
           # This approach balances strictness (broken links = fail) with flexibility
           # (warning-only patterns = nudge without blocking CI).
@@ -269,12 +269,33 @@ jobs:
           fi
 
           echo ""
+          echo "=== [7] Checking CODEOWNERS for @OWNER placeholder ==="
+          CODEOWNERS_FILE=".github/CODEOWNERS"
+          if [ -f "$CODEOWNERS_FILE" ]; then
+            # Check for @OWNER placeholder (the pattern template adopters must replace)
+            # Exclude comment lines (lines starting with #)
+            matches=$(grep -n "@OWNER" "$CODEOWNERS_FILE" | grep -v "^[0-9]*:[[:space:]]*#" || true)
+            if [ -n "$matches" ]; then
+              echo "❌ Found @OWNER placeholder in $CODEOWNERS_FILE:"
+              echo "$matches"
+              echo "::error file=$CODEOWNERS_FILE::Found @OWNER placeholder. Replace with your GitHub username or team (e.g., @octocat or @my-org/my-team), or delete the file if CODEOWNERS is not needed."
+              FOUND_PLACEHOLDERS=true
+            else
+              echo "✅ No @OWNER placeholder in CODEOWNERS"
+            fi
+          else
+            echo "ℹ️  CODEOWNERS file not found (optional)"
+          fi
+
+          echo ""
           echo "==========================================="
 
           if [ "$FOUND_PLACEHOLDERS" = true ]; then
-            echo "❌ OWNER/REPO placeholders found!"
+            echo "❌ Placeholders found that require replacement!"
             echo ""
-            echo "Please replace OWNER/REPO with your actual organization/repository name."
+            echo "Please replace placeholders with your actual values:"
+            echo "  - OWNER/REPO: Replace with your organization/repository name"
+            echo "  - @OWNER: Replace with your GitHub username or team"
             echo "See the Template Setup Checklist in README.md for details."
             exit 1
           else

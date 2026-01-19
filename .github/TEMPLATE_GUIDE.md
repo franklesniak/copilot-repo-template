@@ -1213,3 +1213,303 @@ Projects can add/remove options as documented in the "Type of Change Options" se
 **Alternative considered:** Make all file/directory references clickable
 
 **Rejected because:** Minimal value for added noise. Contributors can navigate to commonly-referenced directories without hyperlinks.
+
+---
+
+## Dependabot Configuration
+
+<!--
+DESIGN DECISION: Dependabot Enabled by Default
+
+===============================================
+
+Dependabot is enabled by default in this template repository to provide automated
+dependency security monitoring and update management. This configuration represents
+security-conscious defaults that align with best practices for modern software projects.
+
+Rationale:
+- Security vulnerabilities in dependencies are automatically detected and PRs created
+- Reduces maintenance burden for keeping dependencies current with security patches
+- Template repositories should model best practices; security-conscious defaults are appropriate
+- Monitors all three dependency ecosystems used by this template: npm, pip, and GitHub Actions
+- Weekly schedule with grouped minor/patch updates balances security with reduced PR noise
+
+TRADE-OFFS:
+
+- Pro: Automated security vulnerability detection and remediation
+- Pro: Keeps dependencies current without manual monitoring
+- Pro: Reduces risk of using outdated, vulnerable packages
+- Pro: Grouped updates reduce PR noise for minor/patch versions
+- Con: Creates PR noise for minor updates that adopters may not want
+- Con: Adopters who prefer manual dependency management must disable it
+- Con: May suggest updates that require testing/validation before merging
+
+RECOMMENDATION:
+
+Keep Dependabot enabled unless you have a specific reason to manage dependencies
+manually or use an alternative tool (e.g., Renovate). If the PR volume is too high,
+consider adjusting the schedule from weekly to monthly, or customizing the grouping
+configuration. Delete `.github/dependabot.yml` to disable entirely.
+-->
+
+### What Dependabot Does
+
+Dependabot automatically monitors your repository's dependencies and creates pull
+requests when updates are available. The template configuration monitors:
+
+- **npm** dependencies (from `package.json`)
+- **pip** dependencies (from `pyproject.toml`)
+- **GitHub Actions** (from workflow files)
+
+### Customization Options
+
+**Adjust update frequency:**
+
+```yaml
+schedule:
+  interval: "monthly"  # Options: daily, weekly, monthly
+```
+
+**Disable specific ecosystems:**
+
+Remove the corresponding `package-ecosystem` block from `.github/dependabot.yml`.
+
+**Change grouping strategy:**
+
+The default configuration groups minor and patch updates. To receive individual
+PRs for all updates, remove the `groups:` section.
+
+### Disabling Dependabot
+
+To completely disable Dependabot, delete `.github/dependabot.yml`. Dependabot
+will stop monitoring your repository immediately.
+
+See [GitHub Dependabot documentation](https://docs.github.com/en/code-security/dependabot)
+for additional configuration options.
+
+---
+
+## CODEOWNERS Configuration
+
+<!--
+DESIGN DECISION: CODEOWNERS with Placeholder
+
+=============================================
+
+The template includes a CODEOWNERS file with @OWNER placeholders that template
+adopters must replace. This file enables automatic review request assignment for
+pull requests and documents code ownership.
+
+Rationale:
+- CODEOWNERS enables automatic review requests for PRs affecting specific paths
+- Works well with branch protection rules requiring code owner approval
+- Using @OWNER placeholder follows the existing OWNER/REPO pattern in this template
+- Placeholder check workflow ensures adopters don't forget to customize
+- Default rules cover repository root, workflows, and Copilot instructions
+
+TRADE-OFFS:
+
+- Pro: Automatic PR review assignment reduces manual reviewer selection
+- Pro: Documents code ownership explicitly in the repository
+- Pro: Works with branch protection "required reviews from code owners" setting
+- Pro: Placeholder check workflow ensures customization before use
+- Con: Requires placeholder replacement during template adoption
+- Con: Solo maintainers may not benefit from CODEOWNERS
+- Con: Adds another file to the template adoption checklist
+
+RECOMMENDATION:
+
+Replace @OWNER with your GitHub username or team name (e.g., @octocat or
+@my-org/maintainers). For solo projects, you may delete the file if automatic
+review assignment is not needed. For team projects, CODEOWNERS is highly
+recommended to ensure consistent review practices.
+-->
+
+### What CODEOWNERS Does
+
+The CODEOWNERS file defines who is automatically requested to review pull requests
+that modify specific files or directories. When a PR is opened, GitHub checks the
+CODEOWNERS file and requests reviews from the specified users or teams.
+
+### Template Configuration
+
+The template includes these default ownership rules:
+
+```text
+# Default owners for everything in the repo
+* @OWNER
+
+# Workflow files require maintainer review
+.github/workflows/ @OWNER
+
+# Copilot instructions require maintainer review
+.github/copilot-instructions.md @OWNER
+.github/instructions/ @OWNER
+```
+
+### Customization
+
+**Replace the placeholder:**
+
+Replace `@OWNER` with your GitHub username (e.g., `@octocat`) or team
+(e.g., `@my-org/maintainers`).
+
+**Add path-specific owners:**
+
+```text
+# Documentation team owns docs
+docs/ @my-org/docs-team
+
+# Security team must review security-related files
+SECURITY.md @my-org/security-team
+```
+
+**Multiple owners:**
+
+```text
+# Both teams are requested for API changes
+src/api/ @my-org/backend-team @my-org/api-reviewers
+```
+
+### Disabling CODEOWNERS
+
+To disable automatic review assignment, delete `.github/CODEOWNERS`.
+
+See [GitHub CODEOWNERS documentation](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners)
+for additional patterns and configuration options.
+
+---
+
+## Branch Protection Setup (Recommended)
+
+<!--
+DESIGN DECISION: Branch Protection Documentation
+
+================================================
+
+This template includes documentation for branch protection setup rather than
+attempting to configure it automatically. Branch protection is a repository
+setting that cannot be included in template repositories, so documentation
+is the appropriate way to guide adopters.
+
+Rationale:
+- Helps adopters set up proper CI gates for their default branch
+- Explains the intended use of CI workflows and how they relate to branch protection
+- Documents which CI jobs are good candidates for required status checks
+- Clarifies the relationship between `needs:` dependencies and branch protection
+
+TRADE-OFFS:
+
+- Pro: Helps adopters set up proper CI gates quickly
+- Pro: Explains intended use of CI workflows from this template
+- Pro: Clarifies complementary nature of CI dependencies vs branch protection
+- Con: GitHub UI may change over time, requiring documentation updates
+- Con: Cannot be enforced via template (requires manual setup in each repository)
+- Con: Adopters must manually configure settings in GitHub UI
+
+RECOMMENDATION:
+
+Configure branch protection for your default branch after initial repository setup.
+At minimum, require the pre-commit check to pass before merging. For additional
+protection, also require downstream checks like tests and type checking.
+-->
+
+Branch protection rules prevent direct pushes to important branches and require
+certain conditions (like passing CI checks) before pull requests can be merged.
+This section documents how to configure branch protection using the CI workflows
+provided by this template.
+
+### CI Jobs Available as Required Status Checks
+
+The template provides these CI jobs that can be configured as required status checks:
+
+| Workflow | Job Name | Recommended as Required | Notes |
+| --- | --- | --- | --- |
+| `ci.yml` | **Pre-commit** | ✅ Yes | Foundational check—catches formatting and linting issues |
+| `ci.yml` | **Type Check (mypy)** | Optional | Set to `continue-on-error: true` by default; make strict when ready |
+| `ci.yml` | **Test** | ✅ Yes | Ensures tests pass on all platforms |
+| `markdownlint.yml` | **Markdown Lint** | ✅ Yes | Ensures documentation quality |
+| `powershell-ci.yml` | **lint** | Optional | Only if using PowerShell |
+| `powershell-ci.yml` | **PowerShell Tests (Pester)** | Optional | Only if using PowerShell with tests |
+
+**Note:** Job names must match exactly as they appear in the GitHub Actions UI. The names
+listed above are the exact job names from the template workflows.
+
+### How to Configure Branch Protection
+
+1. Go to your repository on GitHub
+2. Navigate to **Settings** > **Branches**
+3. Click **Add branch protection rule** (or edit existing rule)
+4. Enter your branch name pattern (e.g., `main` or `master`)
+5. Configure the following settings:
+
+**Recommended settings:**
+
+- ✅ **Require a pull request before merging**
+  - ✅ Require approvals (set to 1 or more)
+  - ✅ Dismiss stale pull request approvals when new commits are pushed
+- ✅ **Require status checks to pass before merging**
+  - ✅ Require branches to be up to date before merging
+  - Search for and select the job names you want to require (e.g., "Pre-commit", "Test")
+- ✅ **Require conversation resolution before merging** (optional but recommended)
+- ✅ **Do not allow bypassing the above settings** (for strict enforcement)
+
+### Understanding `needs:` vs Branch Protection
+
+The template CI workflows use `needs:` to create internal job dependencies:
+
+```yaml
+test:
+  name: Test
+  needs: pre-commit  # Test job waits for pre-commit to pass
+```
+
+**How `needs:` works (internal CI dependency):**
+
+- If `pre-commit` fails, the `test` job is automatically skipped
+- This saves CI minutes by not running tests on poorly-formatted code
+- The dependency is internal to the workflow—GitHub Actions manages it
+
+**How branch protection works (external gate):**
+
+- Branch protection is configured in repository settings, not in workflows
+- It prevents PR merges until selected status checks pass
+- It's an external enforcement mechanism that operates at the PR level
+
+**These are complementary:**
+
+- `needs:` optimizes CI execution (skip downstream jobs on early failure)
+- Branch protection enforces quality gates (block merges until checks pass)
+- Using both provides defense in depth
+
+**Recommendation:** Require **both** the `Pre-commit` job AND downstream jobs like
+`Test` in branch protection. Even though `Test` won't run if `Pre-commit` fails
+(due to `needs:`), requiring both ensures that:
+
+1. Format/lint issues block the PR (Pre-commit requirement)
+2. Test failures block the PR (Test requirement)
+3. Skipped jobs (due to upstream failure) also block the PR
+
+### Example Branch Protection Configuration
+
+For a Python project using this template:
+
+**Required status checks:**
+
+- Pre-commit
+- Test
+- Markdown Lint
+
+**Optional but recommended:**
+
+- Type Check (mypy) — after making it strict by removing `continue-on-error: true`
+
+For a multi-language project (Python + PowerShell):
+
+**Required status checks:**
+
+- Pre-commit
+- Test
+- Markdown Lint
+- lint (PowerShell)
+- PowerShell Tests (Pester)

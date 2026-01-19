@@ -41,7 +41,9 @@ This template includes:
 
 ```text
 .github/
+├── CODEOWNERS                       # Code ownership for automatic PR review requests
 ├── copilot-instructions.md          # Repo-wide constitution for all changes
+├── dependabot.yml                   # Automated dependency updates configuration
 ├── instructions/                    # Language-specific coding standards
 │   ├── docs.instructions.md         # Markdown/documentation standards
 │   ├── powershell.instructions.md   # PowerShell coding standards
@@ -78,10 +80,12 @@ pyproject.toml                       # Python project configuration
 
 | File | Purpose |
 | --- | --- |
+| `.github/CODEOWNERS` | Defines code ownership for automatic PR review requests - replace `@OWNER` placeholder |
 | `.github/copilot-instructions.md` | The "constitution" for all code changes - defines safety rules, pre-commit discipline, and references language-specific instructions |
+| `.github/dependabot.yml` | Dependabot configuration for automated dependency updates - enabled by default |
 | `.github/instructions/*.md` | Language-specific coding standards applied based on file patterns |
 | `.github/linting/PSScriptAnalyzerSettings.psd1` | PSScriptAnalyzer settings enforcing OTBS formatting for PowerShell |
-| `.github/workflows/check-placeholders.yml` | CI workflow to verify OWNER/REPO placeholders are replaced after cloning |
+| `.github/workflows/check-placeholders.yml` | CI workflow to verify OWNER/REPO and @OWNER placeholders are replaced after cloning |
 | `.github/workflows/powershell-ci.yml` | PowerShell linting and Pester testing CI workflow (optional - remove if not using PowerShell) |
 | `.markdownlint.jsonc` | Markdown linting rules prioritizing auto-fixable checks |
 | `.pre-commit-config.yaml` | Pre-commit hooks for Python projects (remove if not using Python) |
@@ -293,6 +297,7 @@ For detailed customization guidance, see [`.github/TEMPLATE_GUIDE.md`](.github/T
 **Required Setup:**
 
 - [ ] Replace `OWNER/REPO` placeholders in `.github/ISSUE_TEMPLATE/config.yml` with your actual org/repo name
+- [ ] Replace `@OWNER` in `.github/CODEOWNERS` with your GitHub username or team (or delete the file if not needed)
 - [ ] Update `SECURITY.md`: Choose reporting method (email, advisories, or both)
 - [ ] Replace `[security contact email]` placeholder if keeping email option
 - [ ] If using direct advisories URL (Option C), replace `OWNER/REPO` with actual repository details
@@ -305,11 +310,13 @@ For detailed customization guidance, see [`.github/TEMPLATE_GUIDE.md`](.github/T
 **Optional but Recommended:**
 
 - [ ] **Create the `triage` label** for consistent issue routing and automation. Once created, uncomment `# - triage` in each issue template where you want it applied. See [Issue Template Labels](#issue-template-labels) for creation instructions.
+- [ ] Configure branch protection rules for your default branch (see [Branch Protection Setup](.github/TEMPLATE_GUIDE.md#branch-protection-setup-recommended) in `.github/TEMPLATE_GUIDE.md`)
 - [ ] Test security reporting path (visit URL or send test email)
 - [ ] Enable private vulnerability reporting in repository settings if using GitHub Advisories
 
 **Optional Setup:**
 
+- [ ] Review Dependabot configuration (`.github/dependabot.yml`) - disable or customize if needed (see [Disabling Dependabot](#disabling-dependabot-optional) below)
 - [ ] Decide whether to enable [GitHub Discussions](https://docs.github.com/en/discussions) and uncomment the Discussions link in `config.yml`
 - [ ] If not enabling Discussions, consider adding a Support section to README and uncommenting the Support/FAQ link in `config.yml`
 - [ ] Enable [private vulnerability reporting](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configuring-private-vulnerability-reporting-for-a-repository) in repository settings
@@ -404,6 +411,7 @@ The workflow is automatically disabled in the template repository itself (`frank
   - Issue links: `https://github.com/OWNER/REPO/issues`
 - Security contact email placeholders in `SECURITY.md`: `[security contact email]`
 - `OWNER/REPO` URLs in any `.github/` files
+- `@OWNER` placeholder in `.github/CODEOWNERS`
 
 **If the workflow fails:**
 
@@ -411,9 +419,57 @@ Review the error messages for specific placeholders that need replacement. Repla
 
 - `OWNER` with your GitHub organization or username
 - `REPO` with your repository name
+- `@OWNER` with your GitHub username or team (e.g., `@octocat` or `@my-org/maintainers`)
 - `[security contact email]` with your actual security contact email (or remove if using GitHub Advisories only)
 
 Refer to the Template Setup Checklist above for complete customization guidance.
+
+#### Disabling Dependabot (Optional)
+
+Dependabot is enabled by default for security monitoring. It automatically creates pull
+requests when dependency updates or security vulnerabilities are detected.
+
+**To disable Dependabot:**
+
+Delete `.github/dependabot.yml` from your repository. Dependabot will stop monitoring
+immediately.
+
+**To customize Dependabot:**
+
+Edit `.github/dependabot.yml` to adjust update frequency, add/remove ecosystems, or
+modify grouping rules. See [GitHub Dependabot documentation](https://docs.github.com/en/code-security/dependabot)
+for configuration options.
+
+**Why it's enabled by default:**
+
+- Automated detection of security vulnerabilities in dependencies
+- Reduces maintenance burden for keeping dependencies current
+- Template repositories should model security best practices
+- Weekly schedule with grouped updates minimizes PR noise
+
+#### Code Owners Configuration
+
+The template includes a `.github/CODEOWNERS` file that enables automatic review requests
+for pull requests. Code owners are automatically requested to review PRs that modify
+files they own.
+
+**To customize CODEOWNERS:**
+
+Replace `@OWNER` with your GitHub username (e.g., `@octocat`) or team name
+(e.g., `@my-org/maintainers`).
+
+**To disable CODEOWNERS:**
+
+Delete `.github/CODEOWNERS` if automatic review assignment is not needed.
+
+**What CODEOWNERS provides:**
+
+- Automatic review requests for PRs affecting specific paths
+- Works with branch protection "required reviews from code owners" setting
+- Documents code ownership explicitly in the repository
+
+See [GitHub CODEOWNERS documentation](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners)
+for additional configuration options.
 
 ### Language Support
 
