@@ -129,6 +129,36 @@ The template includes a working Python project structure. To customize it for yo
    - The workflow expects `src/` and `tests/` directories
    - If using a different layout, update `MYPY_PATHS` in `.github/workflows/ci.yml`
 
+##### Customize Node.js Package (if applicable)
+
+If your project uses Node.js/npm beyond the template's dev tooling:
+
+1. **Update `package.json` metadata:**
+   - Change `name` to your project name
+   - Update `description`, `author`, and `keywords`
+   - Set `version` appropriately (keep `1.0.0` or start at `0.1.0`)
+
+2. **Add repository information:**
+
+   ```json
+   "repository": {
+     "type": "git",
+     "url": "https://github.com/YOUR_ORG/YOUR_REPO.git"
+   }
+   ```
+
+3. **Specify Node.js requirements (if needed):**
+
+   ```json
+   "engines": {
+     "node": ">=18.0.0"
+   }
+   ```
+
+   Note: Husky (used for pre-commit hooks) requires Node.js 18 or later.
+
+4. **Add your runtime dependencies** to the `dependencies` section (keep dev tooling in `devDependencies`)
+
 ##### Remove Python (if not using Python)
 
 If your project doesn't use Python:
