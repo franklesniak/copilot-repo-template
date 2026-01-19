@@ -751,11 +751,24 @@ placeholder: |
 **Design Decision:** This template intentionally includes multiple security warnings
 (top-of-form notice, required checkbox, severity dropdown warning).
 
-**Rationale:**
+**Why keep all three:**
 
-- Defense in depth: Multiple touchpoints reduce accidental public disclosure
-- Different contexts: Some users skim forms; redundancy catches attention
-- Audit trail: Required checkbox provides explicit acknowledgment
+- **Different interaction patterns:** Some users skim headers (→ checkbox catches them),
+  some focus on dropdowns (→ severity warning catches them). Multiple touchpoints maximize
+  chance of catching accidental public disclosure.
+- **High stakes, low cost:** Cost of redundancy is slightly longer form. Cost of failure
+  is public disclosure of security vulnerability. Risk/reward strongly favors redundancy.
+- **Template portability:** Downstream adopters can easily remove warnings if desired.
+  Harder to add them back if not provided. Template should err on side of caution.
+- **Audit trail:** Required checkbox provides explicit acknowledgment.
+
+**Alternative considered:** Remove severity dropdown warning text, keep top warning + checkbox.
+
+**Rejected because:**
+
+- Severity dropdown is where users actively interact (making selection)
+- Warning at point of interaction provides contextual reminder
+- Consistency with documented design decision (no compelling reason to change)
 
 **If you prefer less redundancy**, remove the warning from severity dropdown by changing:
 
