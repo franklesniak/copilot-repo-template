@@ -38,6 +38,30 @@
 #    Update this when upstream support changes (typically annually around October).
 #    See: https://devguide.python.org/versions/
 #
+# 5. Dependency Caching:
+#    This workflow uses caching to improve performance on cloud-hosted runners.
+#    Caching reduces CI execution time by reusing previously downloaded
+#    dependencies instead of re-downloading them on every run.
+#
+#    What is cached:
+#    - pip dependencies: Cached via actions/setup-python's built-in cache
+#      parameter. Cache key is based on dependency specification files.
+#    - pre-commit hooks: Cached via actions/cache. Cache key is based on
+#      the hash of .pre-commit-config.yaml.
+#
+#    Expected time savings: 60-150 seconds per CI run, depending on the
+#    number of dependencies and network conditions.
+#
+#    Cache invalidation:
+#    - pip cache invalidates when dependency specification files change
+#      (e.g., pyproject.toml, requirements.txt, setup.py)
+#    - pre-commit cache invalidates when .pre-commit-config.yaml changes
+#
+#    Note: Type checking (mypy) runs only on ubuntu-latest, not in a
+#    cross-platform matrix. mypy performs platform-agnostic static analysis,
+#    so cross-platform type checking would triple CI time for negligible
+#    benefit. Runtime tests already cover cross-platform behavior.
+#
 # Note: This workflow is optional. Remove if your project doesn't use Python.
 
 name: CI
@@ -65,6 +89,13 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+          cache: 'pip'
+
+      - name: Cache pre-commit hooks
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
 
       - name: Install pre-commit
         run: pip install pre-commit
@@ -90,6 +121,7 @@ jobs:
           # Update this when upstream support changes (typically annually around October).
           # See: https://devguide.python.org/versions/
           python-version: '3.13'
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
@@ -141,6 +173,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: 'pip'
 
       - name: Install dependencies
         run: |
