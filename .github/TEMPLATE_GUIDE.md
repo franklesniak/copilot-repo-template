@@ -575,6 +575,141 @@ direct links but forget to customize them.
 
 ---
 
+## CI Workflow Customization
+
+### Overview
+
+The CI workflow (`.github/workflows/ci.yml`) includes optional configurations that
+adopters should review and adjust based on their project's maturity and requirements.
+This section documents the key customization points.
+
+### Type Checking Strictness
+
+<!--
+DESIGN DECISION: Non-Blocking Type Checking by Default
+=======================================================
+The template uses `continue-on-error: true` for the mypy type checking job. This is
+a deliberate choice for template portability.
+
+**Why this is the right default for a template:**
+- Template adopters start with varying levels of type coverage (often zero)
+- Blocking type errors on day one creates adoption friction
+- Gradual type adoption is a well-established Python best practice
+- Allows adopters to see type errors without blocking their workflow
+
+**Trade-offs:**
+
+Blocking type checking (strict):
+- Pros: Enforces type safety, prevents type debt accumulation
+- Cons: High friction for new adopters, requires upfront investment
+
+Non-blocking type checking (current):
+- Pros: Zero friction adoption, gradual improvement path, visibility without blocking
+- Cons: Type errors can accumulate if not addressed, requires discipline
+
+**Alternatives considered:**
+
+1. No type checking at all: Rejected because mypy provides value even when non-blocking
+   (developers can see errors and fix them opportunistically)
+
+2. Strict by default with documentation to make it lenient: Rejected because this
+   inverts the adoption experience—failing CI on first push is a poor template UX
+
+3. Conditional based on repository variable: Rejected as over-engineering for a
+   simple toggle that adopters can easily change
+
+**When downstream repos should make this strict:**
+- After achieving reasonable type coverage (70%+ of public APIs)
+- Before releasing stable versions (1.0+)
+- When the team has committed to maintaining type annotations
+- For libraries where type hints are part of the API contract
+-->
+
+The mypy step in `.github/workflows/ci.yml` (lines 114-116) includes:
+
+```yaml
+run: mypy $MYPY_PATHS
+continue-on-error: true
+```
+
+**What `continue-on-error: true` does:**
+
+- Mypy runs and reports all type errors in the workflow log
+- The job is marked as successful even if mypy finds errors
+- Type errors are visible but do not block PR merges or deployments
+- The overall CI workflow continues to subsequent jobs
+
+**Why the template uses this setting:**
+
+- **Gradual adoption:** New projects rarely have complete type coverage on day one
+- **Template portability:** Works for any project without requiring initial type work
+- **Visibility without friction:** Developers see type errors without being blocked
+
+#### When to Make Type Checking Strict
+
+**Make it strict when:**
+
+- You have added type hints to your public APIs (functions, classes, methods)
+- Your team has agreed to maintain type annotations going forward
+- You want to prevent type regressions in PRs
+- Before releasing stable versions (1.0.0+)
+- For libraries where type hints are part of the public API contract
+
+**Keep it non-blocking when:**
+
+- You just created the repository from this template (day 1)
+- You are in rapid prototyping phase
+- Your project has minimal or no type coverage
+- You want to incrementally add types without blocking work
+
+#### How to Make Type Checking Strict
+
+**Step 1:** Remove `continue-on-error: true` from the mypy step in `.github/workflows/ci.yml`:
+
+```yaml
+# Before (non-blocking):
+- name: Run mypy
+  env:
+    MYPY_PATHS: "src/ tests/"
+  run: mypy $MYPY_PATHS
+  continue-on-error: true
+
+# After (strict):
+- name: Run mypy
+  env:
+    MYPY_PATHS: "src/ tests/"
+  run: mypy $MYPY_PATHS
+```
+
+**Step 2:** Ensure your code has sufficient type coverage. Run mypy locally first:
+
+```bash
+mypy src/ tests/
+```
+
+**Step 3:** Fix any type errors before pushing, or add them to a tracking issue.
+
+#### Optional: Tighten mypy Configuration
+
+For stricter type enforcement, update the `[tool.mypy]` section in `pyproject.toml`:
+
+```toml
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+# Template default is false; change to true for stricter checking:
+disallow_untyped_defs = true
+```
+
+The `disallow_untyped_defs = true` setting requires type annotations on all function
+definitions. This is recommended for mature projects with comprehensive type coverage.
+
+See the [mypy configuration documentation](https://mypy.readthedocs.io/en/stable/config_file.html)
+for additional strictness options.
+
+---
+
 ## Documentation Strategy for Issue Templates
 
 **Design Decision:** Issue template design rationale is documented in this guide,
