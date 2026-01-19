@@ -45,7 +45,7 @@
 #
 #    What is cached:
 #    - pip dependencies: Cached via actions/setup-python's built-in cache
-#      parameter. Cache key is based on the lock file (pyproject.toml).
+#      parameter. Cache key is based on dependency specification files.
 #    - pre-commit hooks: Cached via actions/cache. Cache key is based on
 #      the hash of .pre-commit-config.yaml.
 #
@@ -53,7 +53,8 @@
 #    number of dependencies and network conditions.
 #
 #    Cache invalidation:
-#    - pip cache invalidates when pyproject.toml changes
+#    - pip cache invalidates when dependency specification files change
+#      (e.g., pyproject.toml, requirements.txt, setup.py)
 #    - pre-commit cache invalidates when .pre-commit-config.yaml changes
 #
 #    Note: Type checking (mypy) runs only on ubuntu-latest, not in a
