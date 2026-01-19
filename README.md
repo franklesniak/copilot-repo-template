@@ -250,9 +250,9 @@ CI workflows will also run automatically when you push to GitHub.
 
 ##### Pre-commit: Black/Ruff Not Installed
 
-**Cause:** The root `pyproject.toml` has minimal dev dependencies; full tooling configuration is in `templates/python/pyproject.toml`.
+**Cause:** The root `pyproject.toml` includes dev dependencies for CI but not all tools configured for pre-commit hooks (like Black).
 
-**Fix:** Either install pre-commit globally (`pip install pre-commit`) which manages its own tool environments, OR copy the fuller dependencies from `templates/python/pyproject.toml`.
+**Fix:** Install pre-commit globally (`pip install pre-commit`) which manages its own tool environments. Pre-commit downloads and manages its own isolated tool versions, so your `pyproject.toml` dev dependencies don't need to include every linting tool.
 
 #### Recommended First Steps After Clone
 
