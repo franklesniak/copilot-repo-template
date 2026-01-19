@@ -85,10 +85,10 @@ npm run lint:md:nested    # Lint nested markdown blocks in docs
 
 ### 3. Install Python (if working with Python code)
 
-Ensure you have Python 3.13 or later installed:
+Ensure you have a Python version that is currently receiving bugfixes (see [Python Version Requirements](#python-version-requirements) above):
 
 ```bash
-python --version  # Should be 3.13 or later
+python --version  # Should be a version currently receiving bugfixes
 ```
 
 ### 4. Install pre-commit (Globally)
@@ -152,6 +152,8 @@ Pre-commit hooks are NOT optional. They enforce:
 - Trailing whitespace removal
 - End-of-file fixes
 - YAML validation
+
+See `.pre-commit-config.yaml` for the complete list of configured hooks.
 
 **Workflow:**
 

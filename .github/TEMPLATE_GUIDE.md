@@ -178,6 +178,29 @@ The template includes conditional language for pre-commit:
 **If your repository does NOT use pre-commit**, remove the section entirely.
 
 <!--
+DESIGN DECISION: Python Version Policy Reference Pattern
+========================================================
+CONTRIBUTING.md uses policy-based language ("Python version currently receiving bugfixes")
+rather than hardcoded version numbers throughout the document for consistency and
+maintainability.
+
+RATIONALE:
+1. **Reduces maintenance burden**: Version numbers don't need updates when Python
+   releases new versions—the policy link is the single source of truth.
+
+2. **Consistency**: Aligning line 91 with the established Python Version Requirements
+   section (lines 22-46) prevents contradictory guidance.
+
+3. **Clear reference**: The anchor link (#python-version-requirements) helps contributors
+   find the authoritative policy statement.
+
+TRADE-OFFS:
+- Slightly more verbose than "Python 3.13+", but eliminates drift risk between sections.
+- Template adopters who want specific version requirements can still customize the
+  Python Version Requirements section as instructed.
+-->
+
+<!--
 DESIGN DECISION: Nested Markdown Linting in Pre-commit Hook
 ============================================================
 The pre-commit hook (`.husky/pre-commit`) runs nested markdown linting on staged files
