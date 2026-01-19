@@ -16,7 +16,7 @@
   "author": "Frank Lesniak",
   "license": "MIT",
   "devDependencies": {
-    "glob": "^10.5.0",
+    "glob": "^13.0.0",
     "husky": "^9.1.7",
     "jsonc-parser": "^3.3.1",
     "markdown-it": "^14.0.0",
