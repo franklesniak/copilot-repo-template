@@ -211,7 +211,20 @@ Edit `.github/copilot-instructions.md`:
 
 #### 5. Update This README
 
-Replace this content with your actual project documentation.
+**After completing steps 1-4 above:**
+
+1. Delete everything from "Readme for the Copilot Repository Template" section down (including all subsections)
+2. Delete `.github/TEMPLATE_GUIDE.md`
+3. Write your project's actual documentation above this section
+4. Keep the initial note about template origin for reference
+
+**Your final README should contain:**
+
+- Project name and description
+- Installation/usage instructions
+- Contributing guidelines (or link to CONTRIBUTING.md)
+- License information
+- Any project-specific documentation
 
 ### Validating Your New Repository
 
@@ -386,13 +399,21 @@ The workflow is automatically disabled in the template repository itself (`frank
 **What the workflow checks:**
 
 - `OWNER/REPO` placeholders in `.github/ISSUE_TEMPLATE/config.yml` (contact links URLs)
-- `OWNER/REPO` placeholders in `CONTRIBUTING.md` (clone instructions, issue links)
-- Security contact email placeholders in `SECURITY.md`
+- `OWNER/REPO` placeholders in `CONTRIBUTING.md`:
+  - Repository clone URL: `https://github.com/OWNER/REPO.git`
+  - Issue links: `https://github.com/OWNER/REPO/issues`
+- Security contact email placeholders in `SECURITY.md`: `[security contact email]`
 - `OWNER/REPO` URLs in any `.github/` files
 
 **If the workflow fails:**
 
-Review the error messages for specific placeholders that need replacement. Refer to the Template Setup Checklist above for customization guidance.
+Review the error messages for specific placeholders that need replacement. Replace:
+
+- `OWNER` with your GitHub organization or username
+- `REPO` with your repository name
+- `[security contact email]` with your actual security contact email (or remove if using GitHub Advisories only)
+
+Refer to the Template Setup Checklist above for complete customization guidance.
 
 ### Language Support
 
