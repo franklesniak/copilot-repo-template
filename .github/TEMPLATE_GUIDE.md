@@ -726,11 +726,11 @@ When changing your project's license, you MUST update all of the following files
 | File | What to Update |
 | --- | --- |
 | `LICENSE` | Replace entire file with your license text |
-| `CONTRIBUTING.md` | Update the "License" section text (line ~293) |
-| `README.md` | Update the "License" section (currently line ~606) |
-| `pyproject.toml` | Update `license = { text = "MIT" }` (line ~25) |
-| `package.json` | Update `"license": "MIT"` (line ~16) |
-| `templates/python/pyproject.toml` | Update `license = { text = "MIT" }` (line ~21) |
+| `CONTRIBUTING.md` | Update the "License" section |
+| `README.md` | Update the "License" section (near bottom of file) |
+| `pyproject.toml` | Update `license = { text = "MIT" }` in `[project]` section |
+| `package.json` | Update `"license": "MIT"` field |
+| `templates/python/pyproject.toml` | Update `license = { text = "MIT" }` in `[project]` section |
 
 **Note:** The `package-lock.json` file also contains `"license": "MIT"` entries, but these
 refer to the licenses of npm dependencies (not your project). These do not need to be
