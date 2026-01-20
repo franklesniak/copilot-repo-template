@@ -60,13 +60,15 @@ cd REPO
 npm install
 ```
 
-This automatically sets up [Husky](https://typicode.github.io/husky/) git hooks via the `prepare` script.
+This installs Node.js dependencies for markdown linting scripts. Git hooks are managed by pre-commit (see step 4 below).
 
 ### Git Hooks
 
-This repository uses Husky for git hooks:
+This repository uses pre-commit for git hooks. Configured hooks include:
 
-- **pre-commit**: Runs markdown linting on staged `.md` files before each commit
+- **Formatting**: Black (Python), trailing whitespace, end-of-file fixer
+- **Linting**: Ruff (Python), markdownlint (Markdown), YAML validation
+- **Safety**: Large file detection
 
 If you need to bypass hooks temporarily (not recommended):
 

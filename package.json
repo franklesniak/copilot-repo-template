@@ -4,7 +4,6 @@
   "description": "Template repository with Copilot instructions and code quality tooling",
   "private": true,
   "scripts": {
-    "prepare": "husky || true",
     "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\"",
     "lint:md:nested": "node .github/scripts/lint-nested-markdown.js"
   },
@@ -20,7 +19,6 @@
   },
   "devDependencies": {
     "glob": "^13.0.0",
-    "husky": "^9.1.7",
     "jsonc-parser": "^3.3.1",
     "markdown-it": "^14.0.0",
     "markdownlint": "^0.40.0",

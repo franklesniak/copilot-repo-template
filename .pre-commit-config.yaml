@@ -17,8 +17,9 @@
 # Install:  pip install pre-commit && pre-commit install
 # Run:  pre-commit run --all-files
 #
-# Note: This file is optional.  Remove if your project doesn't use Python
-# or if you prefer the Husky-based approach for markdown only.
+# Note: This file configures pre-commit hooks for all projects. It handles
+# Python formatting/linting and Markdown validation. Remove only if your
+# project does not use pre-commit at all.
 
 repos:
   # General hooks
@@ -43,3 +44,9 @@ repos:
     hooks:
       - id: ruff
         args: [--fix, --line-length=100]
+
+  # Markdown linting
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.17.2
+    hooks:
+      - id: markdownlint-cli2
