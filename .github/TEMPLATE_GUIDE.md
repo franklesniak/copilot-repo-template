@@ -681,6 +681,256 @@ direct links but forget to customize them.
 
 ---
 
+## License Customization
+
+<!--
+DESIGN DECISION: MIT License as Template Default
+=================================================
+This template uses the MIT License as its default because:
+
+1. **Minimal friction**: MIT is one of the most permissive and widely-understood licenses
+2. **Template portability**: Works for both open source and commercial projects (with modification)
+3. **Simplicity**: Short, clear terms that don't require legal expertise to understand
+4. **Compatibility**: Compatible with most other open source licenses
+
+TRADE-OFFS:
+
+- Pro: Maximum adoption potential due to permissive terms
+- Pro: Simple contributor agreement (no CLA needed for most cases)
+- Pro: Widely recognized in enterprise and open source communities
+- Con: Provides no patent protection (unlike Apache 2.0)
+- Con: No copyleft protection (unlike GPL)
+- Con: Proprietary projects must replace with appropriate license
+
+ALTERNATIVES CONSIDERED:
+
+1. Apache 2.0 as default: Rejected because patent grant clause can be unfamiliar to
+   some adopters and adds complexity for simple projects
+2. No default license: Rejected because unlicensed code is legally unusable;
+   providing a permissive default is better than no default
+3. Dual licensing (MIT + Apache 2.0): Rejected as over-engineering for a template
+
+RECOMMENDATION:
+
+Most open source projects can keep MIT. Consider Apache 2.0 for projects involving
+patents. Proprietary projects MUST replace the license entirely.
+-->
+
+This template uses the MIT License by default. **You MUST review and update the license
+if your project requires different terms.**
+
+### Files That Reference the License
+
+When changing your project's license, you MUST update all of the following files:
+
+| File | What to Update |
+| --- | --- |
+| `LICENSE` | Replace entire file with your license text |
+| `CONTRIBUTING.md` | Update the "License" section |
+| `README.md` | Update the "License" section (near bottom of file) |
+| `pyproject.toml` | Update `license = { text = "MIT" }` in `[project]` section |
+| `package.json` | Update `"license": "MIT"` field |
+| `templates/python/pyproject.toml` | Update `license = { text = "MIT" }` in `[project]` section |
+
+**Note:** The `package-lock.json` file also contains `"license": "MIT"` entries, but these
+refer to the licenses of npm dependencies (not your project). These do not need to be
+changed when updating your project's license.
+
+### Option A: Keep MIT License (Default)
+
+No changes required. The MIT License is suitable for most open source projects where you
+want to allow maximum reuse with minimal restrictions.
+
+**Best for:**
+
+- Open source projects prioritizing adoption
+- Libraries intended for broad reuse
+- Projects without patent concerns
+- Simple utilities and tools
+
+---
+
+### Option B: Apache License 2.0
+
+Replace MIT with Apache 2.0 if you need explicit patent protection.
+
+**Step 1:** Replace the `LICENSE` file content with the Apache 2.0 license text from
+[https://www.apache.org/licenses/LICENSE-2.0.txt](https://www.apache.org/licenses/LICENSE-2.0.txt).
+
+**Step 2:** Update all references:
+
+```markdown
+<!-- In CONTRIBUTING.md -->
+By contributing to this project, you agree that your contributions will be licensed
+under the same license as the project (Apache License 2.0).
+```
+
+```markdown
+<!-- In README.md -->
+Apache License 2.0 - See [LICENSE](LICENSE) for details.
+```
+
+```toml
+# In pyproject.toml and templates/python/pyproject.toml
+license = { text = "Apache-2.0" }
+```
+
+```json
+// In package.json
+"license": "Apache-2.0"
+```
+
+**Pros:**
+
+- Explicit patent grant protects users and contributors
+- Well-understood in enterprise environments
+- Compatible with GPL v3 (unlike MIT alone in some interpretations)
+
+**Cons:**
+
+- Longer, more complex license text
+- Requires including NOTICE file for attributions
+- Some developers unfamiliar with patent clauses
+
+**Best for:**
+
+- Projects with potential patent implications
+- Enterprise-backed open source projects
+- Projects that may be incorporated into GPL v3 works
+
+---
+
+### Option C: Proprietary License
+
+For closed-source or commercial projects, you MUST replace the MIT License with
+appropriate proprietary terms.
+
+**Step 1:** Replace the `LICENSE` file with your proprietary license text.
+
+Example proprietary license header:
+
+```text
+PROPRIETARY AND CONFIDENTIAL
+
+This software and associated documentation files are proprietary and confidential.
+
+Copyright [YEAR] [YOUR COMPANY NAME]. All rights reserved.
+
+This software is protected under the copyright laws of the United States and other
+countries as an unpublished work. This software contains information that is
+proprietary and confidential to [YOUR COMPANY NAME], which shall not be disclosed
+outside the company or duplicated, used, or disclosed in whole or in part for any
+purpose other than authorized internal use.
+
+Any use or disclosure in whole or in part of this information without the express
+written permission of [YOUR COMPANY NAME] is prohibited.
+
+Unauthorized copying of this software, via any medium, is strictly prohibited.
+
+Some dependencies may be subject to their own license terms. See the respective
+dependency documentation for details.
+```
+
+**Step 2:** Update `CONTRIBUTING.md` to reflect contribution terms:
+
+```markdown
+## License
+
+This project is proprietary software. By contributing to this project, you agree that:
+
+1. Your contributions become the property of [YOUR COMPANY NAME]
+2. You have the right to make the contribution
+3. You grant [YOUR COMPANY NAME] all rights to use your contribution
+
+Contributors may be required to sign a Contributor License Agreement (CLA) before
+contributions can be accepted. Contact [EMAIL] for CLA details.
+```
+
+**Step 3:** Update `README.md`:
+
+```markdown
+## License
+
+Proprietary - Copyright [YEAR] [YOUR COMPANY NAME]. All rights reserved.
+See [LICENSE](LICENSE) for details.
+```
+
+**Step 4:** Update package manifests:
+
+```toml
+# In pyproject.toml
+license = { text = "Proprietary" }
+# Or remove the license field entirely and add:
+# classifiers = ["License :: Other/Proprietary License"]
+```
+
+```json
+// In package.json
+"license": "UNLICENSED"
+// Or for explicit proprietary:
+"license": "SEE LICENSE IN LICENSE"
+```
+
+**Additional Considerations for Proprietary Projects:**
+
+- [ ] **Contributor License Agreement (CLA):** Consider requiring CLAs for any external
+      contributions. Tools like [CLA Assistant](https://cla-assistant.io/) can automate this.
+- [ ] **IP Assignment:** Ensure employment contracts or contributor agreements assign
+      intellectual property rights appropriately.
+- [ ] **Dependency Audit:** Review all open source dependencies to ensure their licenses
+      are compatible with proprietary use (avoid GPL dependencies if you cannot comply
+      with copyleft terms).
+- [ ] **NOTICE file:** If using Apache-licensed dependencies, you MUST include required
+      attribution notices.
+- [ ] **Legal Review:** Have legal counsel review your license terms before public or
+      customer distribution.
+
+**Best for:**
+
+- Commercial software products
+- Internal enterprise tools
+- Proprietary SaaS backends
+- Projects with trade secrets
+
+---
+
+### Option D: Other Open Source Licenses
+
+For licenses not covered above (BSD, GPL, LGPL, MPL, etc.), follow the same pattern:
+
+1. Replace `LICENSE` file with the full license text
+2. Update `CONTRIBUTING.md` contributor agreement
+3. Update `README.md` license section
+4. Update `pyproject.toml` with the appropriate [SPDX identifier](https://spdx.org/licenses/)
+5. Update `package.json` with the appropriate SPDX identifier
+
+**Common SPDX identifiers:**
+
+| License | SPDX Identifier |
+| --- | --- |
+| MIT | `MIT` |
+| Apache 2.0 | `Apache-2.0` |
+| BSD 2-Clause | `BSD-2-Clause` |
+| BSD 3-Clause | `BSD-3-Clause` |
+| GPL 3.0 | `GPL-3.0-only` |
+| LGPL 3.0 | `LGPL-3.0-only` |
+| MPL 2.0 | `MPL-2.0` |
+| ISC | `ISC` |
+
+---
+
+### Dual Licensing
+
+Some projects offer multiple license options (e.g., GPL for open source use, commercial
+license for proprietary use). If dual licensing:
+
+1. Include both license texts in `LICENSE` (or separate files like `LICENSE-MIT` and
+   `LICENSE-APACHE`)
+2. Clearly explain the licensing options in README.md
+3. Document which license applies under which conditions
+
+---
+
 ## CI Workflow Customization
 
 ### Overview

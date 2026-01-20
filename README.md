@@ -309,6 +309,7 @@ For detailed customization guidance, see [`.github/TEMPLATE_GUIDE.md`](.github/T
 
 **Optional but Recommended:**
 
+- [ ] **Review and update license** if your project requires something other than MIT License. See [License Customization](.github/TEMPLATE_GUIDE.md#license-customization) in `.github/TEMPLATE_GUIDE.md` for guidance on open source alternatives and proprietary licenses.
 - [ ] **Create the `triage` label** for consistent issue routing and automation. Once created, uncomment `# - triage` in each issue template where you want it applied. See [Issue Template Labels](#issue-template-labels) for creation instructions.
 - [ ] Configure branch protection rules for your default branch (see [Branch Protection Setup](.github/TEMPLATE_GUIDE.md#branch-protection-setup-recommended) in `.github/TEMPLATE_GUIDE.md`)
 - [ ] Test security reporting path (visit URL or send test email)
