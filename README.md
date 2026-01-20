@@ -298,7 +298,9 @@ For detailed customization guidance, see [`.github/TEMPLATE_GUIDE.md`](.github/T
 
 - [ ] Replace `OWNER/REPO` placeholders in `.github/ISSUE_TEMPLATE/config.yml` with your actual org/repo name
 - [ ] Replace `@OWNER` in `.github/CODEOWNERS` with your GitHub username or team (or delete the file if not needed)
-- [ ] Update `SECURITY.md`: Choose reporting method (email, advisories, or both)
+- [ ] Update `SECURITY.md`: Choose reporting method based on repository visibility (see [Private vs. Public Repository Considerations](.github/TEMPLATE_GUIDE.md#private-vs-public-repository-considerations) in `.github/TEMPLATE_GUIDE.md`):
+  - **Public repo:** Choose email, advisories, or both
+  - **Private repo:** Use email-only; remove GitHub Advisories section
 - [ ] Replace `[security contact email]` placeholder if keeping email option
 - [ ] If using direct advisories URL (Option C), replace `OWNER/REPO` with actual repository details
 - [ ] Confirm required labels exist in your repository: `bug`, `enhancement`, `documentation` (see [Issue Template Labels](#issue-template-labels) below)
@@ -313,14 +315,14 @@ For detailed customization guidance, see [`.github/TEMPLATE_GUIDE.md`](.github/T
 - [ ] **Create the `triage` label** for consistent issue routing and automation. Once created, uncomment `# - triage` in each issue template where you want it applied. See [Issue Template Labels](#issue-template-labels) for creation instructions.
 - [ ] Configure branch protection rules for your default branch (see [Branch Protection Setup](.github/TEMPLATE_GUIDE.md#branch-protection-setup-recommended) in `.github/TEMPLATE_GUIDE.md`)
 - [ ] Test security reporting path (visit URL or send test email)
-- [ ] Enable private vulnerability reporting in repository settings if using GitHub Advisories
+- [ ] Enable private vulnerability reporting in repository settings if using GitHub Advisories (**public repositories only**)
 
 **Optional Setup:**
 
 - [ ] Review Dependabot configuration (`.github/dependabot.yml`) - disable or customize if needed (see [Disabling Dependabot](#disabling-dependabot-optional) below)
 - [ ] Decide whether to enable [GitHub Discussions](https://docs.github.com/en/discussions) and uncomment the Discussions link in `config.yml`
 - [ ] If not enabling Discussions, consider adding a Support section to README and uncommenting the Support/FAQ link in `config.yml`
-- [ ] Enable [private vulnerability reporting](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configuring-private-vulnerability-reporting-for-a-repository) in repository settings
+- [ ] Enable [private vulnerability reporting](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configuring-private-vulnerability-reporting-for-a-repository) in repository settings (**public repositories only** - this feature is not available for private repositories)
 - [ ] Decide whether to keep `blank_issues_enabled: true` in `config.yml` (set to `false` once you have comprehensive templates)
 
 **Validation:**
