@@ -276,6 +276,20 @@ When submitting a pull request:
 - [ ] Update documentation as needed
 - [ ] Ensure all CI checks pass
 
+## Questions or Issues?
+
+If you have questions or encounter issues:
+
+<!-- CUSTOMIZE: Replace `OWNER/REPO` with your organization and repository name -->
+
+1. Check existing [Issues](https://github.com/OWNER/REPO/issues)
+2. Review the documentation in `.github/instructions/`
+3. Open a new issue with a clear description of the problem
+
+## License
+
+By contributing to this project, you agree that your contributions will be licensed under the same license as the project (MIT License).
+
 ## For Template Users
 
 <!--
@@ -311,17 +325,3 @@ You can customize these instruction files for your project's specific convention
 ### First-Time Setup Validation
 
 After creating a new repository from this template, see the [Validating Your New Repository](README.md#validating-your-new-repository) section in the README for guidance on verifying your setup.
-
-## Questions or Issues?
-
-If you have questions or encounter issues:
-
-<!-- CUSTOMIZE: Replace `OWNER/REPO` with your organization and repository name -->
-
-1. Check existing [Issues](https://github.com/OWNER/REPO/issues)
-2. Review the documentation in `.github/instructions/`
-3. Open a new issue with a clear description of the problem
-
-## License
-
-By contributing to this project, you agree that your contributions will be licensed under the same license as the project (MIT License).
