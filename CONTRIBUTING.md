@@ -290,6 +290,21 @@ If you have questions or encounter issues:
 
 ## License
 
+<!--
+TEMPLATE ADOPTERS: Update this section if your project uses a license other than MIT.
+
+If using a different open source license (Apache 2.0, GPL, BSD, etc.):
+- Replace "MIT License" with your license name
+- Ensure consistency with the LICENSE file in the repository root
+
+If using a proprietary license:
+- Replace the entire contribution agreement text below
+- Consider adding Contributor License Agreement (CLA) requirements
+- Consult with legal counsel for appropriate contribution terms
+
+See .github/TEMPLATE_GUIDE.md "License Customization" section for detailed guidance.
+-->
+
 By contributing to this project, you agree that your contributions will be licensed under the same license as the project (MIT License).
 
 ## For Template Users
