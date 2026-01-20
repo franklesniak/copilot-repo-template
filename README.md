@@ -88,7 +88,7 @@ pyproject.toml                       # Python project configuration
 | `.github/workflows/check-placeholders.yml` | CI workflow to verify OWNER/REPO and @OWNER placeholders are replaced after cloning |
 | `.github/workflows/powershell-ci.yml` | PowerShell linting and Pester testing CI workflow (optional - remove if not using PowerShell) |
 | `.markdownlint.jsonc` | Markdown linting rules prioritizing auto-fixable checks |
-| `.pre-commit-config.yaml` | Pre-commit hooks for Python projects (remove if not using Python) |
+| `.pre-commit-config.yaml` | Pre-commit hooks for all projects (Python formatting, linting, Markdown) |
 | `pyproject.toml` | Python project configuration with dev dependencies |
 | `src/copilot_repo_template/` | Example Python package - rename for your project |
 | `tests/` | Test directory with pytest tests (Python) and Pester tests (PowerShell) |
@@ -103,7 +103,7 @@ Click **"Use this template"** on GitHub to create a new repository based on this
 #### 2. Install Dependencies
 
 ```bash
-# Install root dependencies (enables pre-commit hooks via Husky)
+# Install Node.js dependencies (for markdown linting scripts and CI)
 npm install
 
 # Install CI workflow dependencies
@@ -112,14 +112,16 @@ npm install
 cd ../..
 ```
 
-#### 3. (Optional) Install Python Pre-commit Hooks
+#### 3. Install Pre-commit Hooks
 
-If your project uses Python:
+Pre-commit is the primary git hook manager for this template:
 
 ```bash
 pip install pre-commit
 pre-commit install
 ```
+
+This configures git hooks for code formatting, linting, and markdown validation.
 
 #### 4. Customize for Your Project
 
@@ -174,8 +176,6 @@ If your project uses Node.js/npm beyond the template's dev tooling:
      "node": ">=18.0.0"
    }
    ```
-
-   Note: Husky (used for pre-commit hooks) requires Node.js 18 or later.
 
 4. **Add your runtime dependencies** to the `dependencies` section (keep dev tooling in `devDependencies`)
 

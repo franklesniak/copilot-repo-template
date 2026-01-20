@@ -200,46 +200,6 @@ TRADE-OFFS:
   Python Version Requirements section as instructed.
 -->
 
-<!--
-DESIGN DECISION: Nested Markdown Linting in Pre-commit Hook
-============================================================
-The pre-commit hook (`.husky/pre-commit`) runs nested markdown linting on staged files
-using `lint-nested-markdown.js` after the standard markdownlint check passes.
-
-WHY THIS INTEGRATION:
-1. **Catch errors earlier**: Nested markdown issues are caught before commit, not in CI.
-   This provides faster feedback and prevents broken code from entering the repository.
-
-2. **Consistent code quality**: Both outer markdown and nested markdown code blocks
-   are validated before code is committed, ensuring the same standards apply everywhere.
-
-3. **Efficient processing**: The script was modified to accept file arguments so only
-   staged files are linted, not the entire repository. This keeps pre-commit fast.
-
-WHY THE SCRIPT ACCEPTS FILE ARGUMENTS:
-1. **Pre-commit performance**: When committing a single file, only that file is linted
-   rather than scanning all markdown files in the repository.
-
-2. **Incremental workflow**: Matches how other linters work in pre-commit hooks—they
-   operate on staged files, not the entire codebase.
-
-3. **Backward compatibility**: When invoked without arguments, the script falls back
-   to scanning all markdown files via glob, preserving the original `npm run lint:md:nested`
-   behavior for full repository scans.
-
-TRADE-OFFS:
-- **Slightly slower pre-commit**: Adds ~1-2 seconds for nested markdown linting on typical
-  commits. This is acceptable given the benefit of catching issues earlier.
-
-- **Requires Node.js**: The pre-commit hook now depends on Node.js for the nested linting
-  script (in addition to npx for markdownlint-cli2). This is already a requirement for
-  this template.
-
-USAGE PATTERNS:
-- Pre-commit hook: Runs on staged files only (fast, incremental)
-- `npm run lint:md:nested`: Runs on all files (full scan, useful before releases)
--->
-
 ---
 
 ## Coding Standards Reference
@@ -306,7 +266,7 @@ The template ships with minimal package.json configuration (no repository field,
 no engines field, generic metadata) to reduce template adoption friction.
 
 RATIONALE:
-1. **Reduces friction**: Most users only need dev tooling (markdownlint, Husky)
+1. **Reduces friction**: Most users only need dev tooling (markdownlint scripts)
    without Node.js runtime dependencies.
 
 2. **Prevents placeholder sprawl**: Unlike OWNER/REPO placeholders that break
@@ -319,7 +279,7 @@ RATIONALE:
 
 TRADE-OFFS:
 - Users creating Node.js applications must manually add metadata fields
-- No validation for Node.js version requirements (though Husky requires 18+)
+- No validation for Node.js version requirements
 - Users must consult README for customization guidance
 
 See README.md "Customize Node.js Package" section for user-facing instructions.
@@ -327,6 +287,56 @@ See README.md "Customize Node.js Package" section for user-facing instructions.
 
 If your project uses Node.js/npm as a runtime (not just for dev tooling), update
 `package.json` with appropriate metadata. See the README for detailed instructions.
+
+---
+
+## Git Hook Management
+
+<!--
+DESIGN DECISION: Pre-commit as Sole Git Hook Manager
+=====================================================
+This template uses pre-commit as the sole git hook manager. All hooks are configured
+in `.pre-commit-config.yaml`.
+
+**Why pre-commit only:**
+
+- **Single tool**:  Unified configuration in one file
+- **No conflicts**: Uses standard `.git/hooks/` location, no `core.hooksPath` issues
+- **Python standard**: Pre-commit is the de facto standard in Python projects
+- **Multi-language**: Also supports Markdown, YAML, JSON, and other file types
+- **Isolated environments**: Manages its own tool installations per hook
+
+**For projects preferring Husky:**
+
+If you prefer Husky for git hooks:
+
+1. Remove `.pre-commit-config.yaml`
+2. Run `npm install husky --save-dev`
+3. Add `"prepare": "husky"` to `package.json` scripts
+4. Create `.husky/pre-commit` with your hook commands
+5. Do NOT run `pre-commit install` (the two tools conflict)
+-->
+
+This template uses pre-commit as the sole git hook manager. All hooks are configured
+in `.pre-commit-config.yaml`.
+
+**Why pre-commit only:**
+
+- **Single tool**: Unified configuration in one file
+- **No conflicts**: Uses standard `.git/hooks/` location, no `core.hooksPath` issues
+- **Python standard**: Pre-commit is the de facto standard in Python projects
+- **Multi-language**: Also supports Markdown, YAML, JSON, and other file types
+- **Isolated environments**: Manages its own tool installations per hook
+
+**For projects preferring Husky:**
+
+If you prefer Husky for git hooks:
+
+1. Remove `.pre-commit-config.yaml`
+2. Run `npm install husky --save-dev`
+3. Add `"prepare": "husky"` to `package.json` scripts
+4. Create `.husky/pre-commit` with your hook commands
+5. Do NOT run `pre-commit install` (the two tools conflict)
 
 ---
 
