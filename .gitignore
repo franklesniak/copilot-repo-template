@@ -13,6 +13,7 @@ dist/
 build/
 .eggs/
 .pytest_cache/
+.cache/
 .coverage
 coverage.xml
 htmlcov/
