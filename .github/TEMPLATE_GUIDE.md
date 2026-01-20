@@ -558,6 +558,72 @@ method because operational constraints vary widely:
 The CI workflow enforces that adopters make a *deliberate choice*, not that they
 choose a specific option.
 
+### Private vs. Public Repository Considerations
+
+<!--
+DESIGN DECISION: Private Vulnerability Reporting Availability
+==============================================================
+Private vulnerability reporting via GitHub Security Advisories is ONLY available
+for PUBLIC repositories on GitHub.com. This is a GitHub platform limitation, not
+a template configuration choice.
+
+RATIONALE:
+- GitHub's private vulnerability reporting feature requires the repository to be
+  publicly accessible so that external security researchers can submit reports
+- Private repositories cannot receive external vulnerability reports because
+  external users cannot access the Security tab
+- This affects all GitHub.com repositories; GitHub Enterprise Server (GHES) may
+  have different availability depending on version and licensing
+
+IMPLICATIONS FOR TEMPLATE ADOPTERS:
+1. If repository will remain private permanently: Remove GitHub Advisories option,
+   use email-only approach
+2. If repository is private now but will become public later: Keep both options,
+   document that Advisories will work once public
+3. If repository is already public: All options work as documented
+
+TRADE-OFFS:
+- Pro: Template provides guidance for all repository visibility scenarios
+- Pro: Prevents confusion when "Report a vulnerability" link doesn't work
+- Con: Additional complexity in adoption documentation
+- Con: Adopters must make visibility-dependent decisions during setup
+
+REFERENCE:
+GitHub documentation: https://docs.github.com/en/code-security/security-advisories/guidance-on-reporting-and-writing-information-about-vulnerabilities/privately-reporting-a-security-vulnerability
+-->
+
+**⚠️ Important:** Private vulnerability reporting via GitHub Security Advisories is
+**only available for public repositories**. This is a GitHub platform limitation.
+
+**Choose your configuration based on repository visibility:**
+
+| Repository Status | Recommended Action |
+| --- | --- |
+| **Public repository** | Both options (email + Advisories) work. Choose based on operational needs. |
+| **Permanently private** | Use email-only (Option B). Remove Advisories section from SECURITY.md. |
+| **Private now, public later** | Keep both options documented. Note that Advisories will work once public. |
+
+**If your repository is private:**
+
+1. The "Report a vulnerability" link in the Security tab will not be available to
+   external reporters
+2. You **must** provide an email contact for security reports
+3. Remove or comment out references to GitHub Security Advisories to avoid confusion
+4. When/if the repository becomes public, re-enable Advisories and enable private
+   vulnerability reporting in repository settings
+
+**If your repository will become public later:**
+
+Consider adding a note to your SECURITY.md indicating that the Advisories option
+will become available once the repository is public:
+
+```markdown
+### Option 1: GitHub Security Advisories (Available for Public Repositories)
+
+> **Note:** This reporting method will be available once this repository is made public.
+> Until then, please use the email option below.
+```
+
 ### Current State
 
 The template's `SECURITY.md` describes how to report via:

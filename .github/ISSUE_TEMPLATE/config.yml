@@ -30,6 +30,13 @@ contact_links:
   # =============================================================================
   # CUSTOMIZE: Update the URL below by replacing `OWNER/REPO` with your org/repo name.
   #
+  # IMPORTANT: Private vulnerability reporting is ONLY available for PUBLIC repositories.
+  # If your repository is private:
+  # - This link will NOT provide a "Report a vulnerability" option to external users
+  # - You MUST provide an email contact in SECURITY.md for security reports
+  # - Consider removing or commenting out this link if it would confuse reporters
+  # See .github/TEMPLATE_GUIDE.md for detailed guidance on private vs. public repos.
+  #
   # Trade-off notes on Security link target options:
   # - Option A: /security (used here) - Broad compatibility; general entry point that
   #   usually exists. May not lead directly to submission flow if not configured.
@@ -39,9 +46,10 @@ contact_links:
   #   but is not a submission endpoint.
   #
   # Recommended: Keep /security as the default. After enabling private vulnerability
-  # reporting in your repository, you can optionally change to /security/advisories/new.
+  # reporting in your repository (public repos only), you can optionally change to
+  # /security/advisories/new.
   #
-  # TO ENABLE PRIVATE VULNERABILITY REPORTING:
+  # TO ENABLE PRIVATE VULNERABILITY REPORTING (PUBLIC REPOSITORIES ONLY):
   # 1. Go to Settings → Security → Private vulnerability reporting
   # 2. Enable the feature
   # 3. Full documentation:
@@ -49,7 +57,7 @@ contact_links:
   # =============================================================================
   - name: 🔒 Security Vulnerabilities
     url: https://github.com/OWNER/REPO/security
-    about: Report security issues privately (do not open a public issue). Private vulnerability reporting must be enabled in repository settings.
+    about: Report security issues privately (do not open a public issue). Private vulnerability reporting is only available for public repositories.
 
   # =============================================================================
   # DISCUSSIONS LINK (OPTIONAL)
