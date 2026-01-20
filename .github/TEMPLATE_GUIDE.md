@@ -755,7 +755,7 @@ want to allow maximum reuse with minimal restrictions.
 Replace MIT with Apache 2.0 if you need explicit patent protection.
 
 **Step 1:** Replace the `LICENSE` file content with the Apache 2.0 license text from
-[apache.org/licenses/LICENSE-2.0.txt](https://www.apache.org/licenses/LICENSE-2.0.txt).
+[https://www.apache.org/licenses/LICENSE-2.0.txt](https://www.apache.org/licenses/LICENSE-2.0.txt).
 
 **Step 2:** Update all references:
 
