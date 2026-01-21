@@ -367,6 +367,15 @@ The same customizations apply as for the bug report template:
 - **Issue Type:** Use `type: Feature` for organization-level issue types
 - **Assignees and Projects:** Same configuration as bug reports
 
+#### Shared Customizations with Bug Report
+
+The feature request template shares several customization points with the bug report template. See the [Bug Report Template Customization](#bug-report-template-customization) section for detailed instructions on:
+
+- **Making Documentation Check Required:** Change `required: false` to `required: true` for the "I have read the project documentation" checkbox
+- **Area Dropdown Options:** Update the options to match your project's languages/components (e.g., Backend / API, Frontend / UI, CLI, etc.)
+
+> **Tip:** Keep the Area dropdown options consistent between bug report and feature request templates to maintain a unified user experience.
+
 #### Pre-flight Checklist
 
 ##### Removing PR Contribution Checkbox
