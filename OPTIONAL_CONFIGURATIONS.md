@@ -18,6 +18,7 @@ This guide covers optional customizations you can make after completing the init
 - [Pre-commit Configuration](#pre-commit-configuration)
 - [Markdown Linting Configuration](#markdown-linting-configuration)
 - [Copilot Documentation Instructions Configuration](#copilot-documentation-instructions-configuration)
+- [Copilot PowerShell Instructions Configuration](#copilot-powershell-instructions-configuration)
 - [CI Workflow Configuration](#ci-workflow-configuration)
 - [PSScriptAnalyzer Configuration](#psscriptanalyzer-configuration)
 - [CODEOWNERS Configuration](#codeowners-configuration)
@@ -534,6 +535,158 @@ The file provides a pattern for tracking formal requirements with identifiers:
    ```
 
 3. **If your project does not track formal requirements**, you can simplify or remove this section entirely. Consider replacing it with guidance appropriate for your documentation needs.
+
+---
+
+## Copilot PowerShell Instructions Configuration
+
+**File:** `.github/instructions/powershell.instructions.md`
+
+The `powershell.instructions.md` file provides comprehensive PowerShell coding standards that GitHub Copilot applies when generating or editing `.ps1` files in your repository. These standards define naming conventions, documentation requirements, error handling patterns, and compatibility guidelines for both legacy (v1.0) and modern (v5.1+/v7.x+) PowerShell environments.
+
+Teams may want to customize these standards to match their project's specific requirements and preferences.
+
+### Customizing Variable Naming Conventions
+
+The file defaults to Hungarian-style type-prefixed variable naming for local variables, particularly in v1.0-targeted code:
+
+```powershell
+$strMessage    # String
+$intCount      # Integer
+$boolResult    # Boolean
+$arrElements   # Array
+$objInstance   # Object
+```
+
+Teams with modern codebases that have strong IDE support (IntelliSense, type inference) may prefer plain camelCase:
+
+```powershell
+$message
+$count
+$result
+$elements
+$instance
+```
+
+**To change this preference, update the following sections:**
+
+1. **"Local Variable Naming: Type-Prefixed camelCase"** section - Modify the naming rules and examples
+2. **"Options for Local Variable Prefixes: Analysis"** table - Update the recommendation based on your choice
+3. **Quick Reference Checklist** - Update the item referencing variable naming conventions (the `[v1.0]` scoped item about local variables)
+
+> **Note:** If your project exclusively targets modern PowerShell (5.1+, 7.x), plain camelCase is generally preferred as IDEs provide type information. Type prefixes are most valuable in v1.0 environments or when editing without IDE support.
+
+### Choosing Between v1.0 and Modern Patterns
+
+The file distinguishes between two function architecture styles:
+
+**v1.0-targeted:**
+
+- Uses `trap` for error handling
+- No `[CmdletBinding()]` attribute
+- Explicit integer return codes (0=success, -1=failure)
+- Reference parameters (`[ref]`) for outputs
+- No pipeline input support
+
+**Modern (v2.0+):**
+
+- Uses `try/catch` for error handling
+- Requires `[CmdletBinding()]` attribute
+- Streaming output to pipeline
+- `Write-Verbose` and `Write-Debug` for diagnostics
+- Full pipeline support
+
+**To customize for your environment:**
+
+- **Modern-only projects (PowerShell 5.1+, 7.x):** Remove or de-emphasize the v1.0 sections. Update the Quick Reference Checklist to remove items tagged `[v1.0]` and make `[Modern]` items the default.
+
+- **Legacy compatibility projects:** Keep the v1.0 sections as primary guidance. Update the "Executive Summary: Author Profile" to emphasize v1.0 compatibility as the default.
+
+- **Mixed environments:** Keep both patterns but clarify when each applies based on your specific criteria (e.g., "Use v1.0 patterns for standalone utilities, Modern patterns for module functions").
+
+### Adjusting Documentation Requirements
+
+The file requires comprehensive comment-based help for all functions, including:
+
+- `.SYNOPSIS`, `.DESCRIPTION`, `.PARAMETER`, `.EXAMPLE`, `.INPUTS`, `.OUTPUTS`, `.NOTES`
+- Version number in `.NOTES` (format: `Major.Minor.YYYYMMDD.Revision`)
+- Multiple examples with input, output, and explanation
+
+**Teams may want to customize these requirements:**
+
+1. **For internal/private helper functions:** Relax requirements in the "Comment-Based Help: Structure and Format" section to allow minimal documentation (e.g., `.SYNOPSIS` only) for private helper functions.
+
+2. **For versioning format:** Update the "Function and Script Versioning" section if your project uses a different versioning scheme (e.g., SemVer without date component):
+
+   ```powershell
+   # Alternative format
+   # .NOTES
+   # Version: 1.2.3
+   ```
+
+3. **For example requirements:** Reduce the requirement for multiple examples in the "Help Content Quality: High Standards" section if this is too burdensome for your team.
+
+> **Note:** Even with relaxed requirements, maintaining at least `.SYNOPSIS` for all functions is strongly recommended for discoverability with `Get-Help`.
+
+### Customizing Brace Style Preference
+
+The file enforces OTBS (One True Brace Style) where opening braces are placed on the same line as the statement:
+
+```powershell
+# OTBS (default)
+if ($condition) {
+    # code
+} else {
+    # code
+}
+```
+
+Some teams prefer Allman style (braces on new lines):
+
+```powershell
+# Allman style
+if ($condition)
+{
+    # code
+}
+else
+{
+    # code
+}
+```
+
+**To change brace style:**
+
+1. Update the "Brace Placement (OTBS)" section in this file to reflect your preferred style
+2. Update `.github/linting/PSScriptAnalyzerSettings.psd1` to match (see [PSScriptAnalyzer Configuration](#psscriptanalyzer-configuration) for details)
+
+> **Note:** Brace style must be consistent between the instruction file and PSScriptAnalyzer settings. Inconsistent settings will cause conflicts between Copilot-generated code and linting rules.
+
+### Adjusting Error Handling Patterns
+
+The file documents specific return code conventions for v1.0-targeted functions:
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Full success |
+| `1-5` | Partial success with additional data |
+| `-1` | Complete failure |
+
+**To customize for your project:**
+
+1. **Different return codes:** Update the "Return Semantics: Explicit Status Codes" section with your project's conventions. For example, some projects use positive integers for all error codes:
+
+   ```powershell
+   # Alternative convention
+   # 0 = Success
+   # 1 = General error
+   # 2 = File not found
+   # 3 = Permission denied
+   ```
+
+2. **Exception-based patterns:** For modern-only projects, you may prefer to rely entirely on exceptions rather than return codes. Update the "Modern catch Block Requirements" section to document your exception handling patterns.
+
+3. **Custom exception types:** If your project defines custom exception types, document them and update the error handling sections accordingly.
 
 ---
 
