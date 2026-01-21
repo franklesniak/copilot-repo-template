@@ -706,6 +706,8 @@ If your project already has a `package.json`:
 
 3. **Optional:** Copy `.github/scripts/lint-nested-markdown.js` if you have markdown embedded in code blocks (common in documentation-heavy projects)
 
+   > **Tip:** See [Nested Markdown Linting Configuration](OPTIONAL_CONFIGURATIONS.md#nested-markdown-linting-configuration) for details on using this script.
+
 ### Testing Markdown Linting
 
 Run the linter to verify configuration:
