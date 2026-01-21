@@ -8,6 +8,8 @@ This guide walks you through creating a brand-new repository using `franklesniak
 
 ## Table of Contents
 
+**Part 1: Initial Setup**
+
 - [What This Template Provides](#what-this-template-provides)
 - [Prerequisites](#prerequisites)
   - [Windows Setup](#windows-setup)
@@ -17,7 +19,18 @@ This guide walks you through creating a brand-new repository using `franklesniak
 - [Cloning Your New Repository](#cloning-your-new-repository)
 - [Installing Dependencies](#installing-dependencies)
 - [Initial Placeholder Replacement](#initial-placeholder-replacement)
-- [Next Steps](#next-steps)
+
+**Part 2: Configuration and Customization**
+
+- [Installing and Configuring Pre-commit](#installing-and-configuring-pre-commit)
+- [Language-Specific Customization](#language-specific-customization)
+- [Updating README.md](#updating-readmemd)
+- [Updating Copilot Instructions](#updating-copilot-instructions)
+- [Additional Configuration (Optional)](#additional-configuration-optional)
+- [Validation and Testing](#validation-and-testing)
+- [Cleanup](#cleanup)
+- [Troubleshooting](#troubleshooting)
+- [Development Workflow](#development-workflow)
 
 ---
 
@@ -583,26 +596,881 @@ If you prefer not to use email, you can:
 
 ---
 
-## Next Steps
+## Part 2: Configuration and Customization
 
-Congratulations! You've completed Part 1 of the setup process. Your repository now has:
-
-- All prerequisites installed on your computer
-- A new repository created from the template
-- The repository cloned to your local machine
-- Node.js dependencies installed
-- Placeholder values replaced with your actual information
-
-**Part 2 of this guide** (continuing below in this same document) will cover:
-
-- Installing and configuring pre-commit hooks
-- Customizing the template for your project (removing unused languages, updating configurations)
-- Validating your setup by running linting and tests
-- Making your first commit and pushing changes
-- Understanding the CI workflows and what happens when you push
-
-For detailed customization options beyond the basics, see [`.github/TEMPLATE_GUIDE.md`](.github/TEMPLATE_GUIDE.md).
+Congratulations on completing Part 1! Your repository now has all prerequisites installed, is cloned locally, has Node.js dependencies installed, and placeholders are replaced. Now let's configure pre-commit hooks and customize the template for your project.
 
 ---
 
-*Continue to Part 2 below for pre-commit setup and project customization...*
+## Installing and Configuring Pre-commit
+
+### Understanding Pre-commit
+
+[Pre-commit](https://pre-commit.com/) is a framework for managing git hooks. It automatically runs code quality checks (formatting, linting, validation) before each commit, catching issues early and ensuring consistent code quality across your team.
+
+**Why pre-commit is not a project dependency:**
+
+- Pre-commit is a **development tool**, not a runtime or test dependency
+- It manages its own isolated environments for each hook (e.g., Black, Ruff)
+- Installing it globally or via `pipx` keeps your project dependencies clean
+- This is standard practice in the Python community
+- CI workflows install pre-commit separately
+
+### Installation - Windows
+
+#### Option 1: Using pip (recommended for most users)
+
+Open PowerShell and run:
+
+```powershell
+pip install pre-commit
+```
+
+#### Option 2: Using pipx (recommended for tool isolation)
+
+[pipx](https://pipx.pypa.io/) installs Python applications in isolated environments. First install pipx if you don't have it:
+
+```powershell
+pip install pipx
+pipx ensurepath
+```
+
+Then install pre-commit:
+
+```powershell
+pipx install pre-commit
+```
+
+#### Verifying installation
+
+```powershell
+pre-commit --version
+```
+
+You should see output like `pre-commit 4.0.1`.
+
+### Installation - macOS/Linux/FreeBSD
+
+#### Option 1: Using pip
+
+```bash
+pip install pre-commit
+# or if pip3 is required:
+pip3 install pre-commit
+```
+
+#### Option 2: Using pipx (recommended for tool isolation)
+
+First install pipx if you don't have it:
+
+```bash
+pip install pipx
+pipx ensurepath
+```
+
+Then install pre-commit:
+
+```bash
+pipx install pre-commit
+```
+
+#### Option 3: Using Homebrew (macOS)
+
+```bash
+brew install pre-commit
+```
+
+#### Verifying installation
+
+```bash
+pre-commit --version
+```
+
+You should see output like `pre-commit 4.0.1`.
+
+### Activating Hooks in Your Repository
+
+Navigate to your repository directory and run:
+
+**Windows (PowerShell):**
+
+```powershell
+cd C:\path\to\your-repo-name
+pre-commit install
+```
+
+**macOS/Linux/FreeBSD:**
+
+```bash
+cd ~/projects/your-repo-name
+pre-commit install
+```
+
+This command modifies `.git/hooks/pre-commit` to run pre-commit automatically before each commit. You only need to run this once per repository clone.
+
+**What happens:** Git will now automatically run all configured hooks every time you run `git commit`. If any hook fails, the commit is blocked until you fix the issues.
+
+### Running Pre-commit Manually
+
+Run pre-commit on all files:
+
+```bash
+pre-commit run --all-files
+```
+
+**First run behavior:** The first time you run pre-commit, it downloads and installs the hook environments (e.g., Black, Ruff). This may take a minute or two. Subsequent runs are much faster.
+
+**Interpreting output:**
+
+```text
+Trim Trailing Whitespace......................................Passed
+Fix End of Files..............................................Passed
+Check Yaml....................................................Passed
+Check for added large files...................................Passed
+black.........................................................Passed
+ruff..........................................................Passed
+markdownlint-cli2.............................................Passed
+```
+
+- **Passed:** The check found no issues
+- **Failed:** The check found issues (some hooks auto-fix, others require manual fixes)
+- **Skipped:** The hook didn't apply to any files in this commit
+
+> **Tip:** If hooks auto-fix files (like trailing whitespace or formatting), review the changes and include them in your commit. Pre-commit will run again and should pass.
+
+---
+
+## Language-Specific Customization
+
+This template includes support for Python, PowerShell, and Markdown/documentation. You should remove support for languages you don't need and configure the ones you do use.
+
+### Decision Point: Which Languages Do You Need?
+
+Review your project requirements and decide which languages you'll be using:
+
+- **Python:** Server-side code, scripts, data processing, APIs
+- **PowerShell:** Windows automation, cross-platform scripting, DevOps tasks
+- **Markdown:** Documentation (always needed)
+
+### If Using Python
+
+#### 1. Rename the Package Directory
+
+The template includes an example Python package at `src/copilot_repo_template/`. Rename it to match your project name:
+
+**Windows (PowerShell):**
+
+```powershell
+# Replace 'your_package_name' with your actual package name
+# Use underscores, not hyphens (Python package naming convention)
+Move-Item -Path "src\copilot_repo_template" -Destination "src\your_package_name"
+```
+
+**macOS/Linux/FreeBSD:**
+
+```bash
+# Replace 'your_package_name' with your actual package name
+mv src/copilot_repo_template src/your_package_name
+```
+
+#### 2. Update pyproject.toml
+
+Open `pyproject.toml` and update the following fields:
+
+```toml
+[project]
+name = "your-project-name"  # Your project name (can use hyphens)
+version = "0.1.0"
+description = "Your project description"
+authors = [
+    { name = "Your Name" }
+]
+keywords = ["your", "keywords", "here"]
+
+# Add your runtime dependencies
+dependencies = [
+    # "requests>=2.28.0",
+    # "pydantic>=2.0.0",
+]
+```
+
+#### 3. Update Test Imports
+
+Open `tests/test_example.py` and update the import statements to match your package name:
+
+```python
+# Change from:
+from copilot_repo_template.example import hello
+
+# To:
+from your_package_name.example import hello
+```
+
+#### 4. Verify Python Setup
+
+Install the package in development mode and run tests:
+
+**Windows (PowerShell):**
+
+```powershell
+pip install -e ".[dev]"
+pytest tests/ -v
+```
+
+**macOS/Linux/FreeBSD:**
+
+```bash
+pip install -e ".[dev]"
+pytest tests/ -v
+```
+
+You should see output indicating tests passed. If you renamed the package, update the example test file or replace it with your own tests.
+
+### If NOT Using Python
+
+Remove Python-related files and configurations:
+
+**Windows (PowerShell):**
+
+```powershell
+# Remove Python package and test files
+Remove-Item -Recurse -Force "src"
+Remove-Item -Force "tests\test_example.py"
+Remove-Item -Force "tests\__init__.py"
+Remove-Item -Force "pyproject.toml"
+
+# Remove Python CI workflow
+Remove-Item -Force ".github\workflows\ci.yml"
+
+# Remove Python instructions
+Remove-Item -Force ".github\instructions\python.instructions.md"
+
+# Remove Python templates
+Remove-Item -Recurse -Force "templates\python"
+```
+
+**macOS/Linux/FreeBSD:**
+
+```bash
+# Remove Python package and test files
+rm -rf src/
+rm -f tests/test_example.py tests/__init__.py
+rm -f pyproject.toml
+
+# Remove Python CI workflow
+rm -f .github/workflows/ci.yml
+
+# Remove Python instructions
+rm -f .github/instructions/python.instructions.md
+
+# Remove Python templates
+rm -rf templates/python/
+```
+
+#### Update Pre-commit Configuration
+
+Edit `.pre-commit-config.yaml` to remove Python-specific hooks. Delete or comment out the Black and Ruff sections:
+
+```yaml
+# Remove or comment out these sections:
+#  - repo: https://github.com/psf/black
+#    rev: 25.12.0
+#    hooks:
+#      - id: black
+#        args: [--line-length=100]
+#
+#  - repo: https://github.com/astral-sh/ruff-pre-commit
+#    rev: v0.14.11
+#    hooks:
+#      - id: ruff
+#        args: [--fix, --line-length=100]
+```
+
+#### Update Issue Templates
+
+Edit `.github/ISSUE_TEMPLATE/bug_report.yml` and `.github/ISSUE_TEMPLATE/feature_request.yml` to remove "Python" from the Area dropdown options.
+
+### If Using PowerShell
+
+#### 1. Review PSScriptAnalyzer Settings
+
+The template includes PSScriptAnalyzer configuration at `.github/linting/PSScriptAnalyzerSettings.psd1`. This enforces the OTBS (One True Brace Style) formatting style.
+
+Review the settings file to understand the rules being enforced. You can customize these settings based on your team's preferences.
+
+#### 2. Add PowerShell Scripts
+
+Add your PowerShell scripts to appropriate locations in your repository. The CI workflow will automatically lint any `.ps1` files.
+
+#### 3. Run PSScriptAnalyzer Locally
+
+**Install PSScriptAnalyzer (if not already installed):**
+
+```powershell
+Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+```
+
+**Run linting on a script:**
+
+```powershell
+# Lint a single file
+Invoke-ScriptAnalyzer -Path .\your-script.ps1 -Settings .\.github\linting\PSScriptAnalyzerSettings.psd1
+
+# Auto-fix formatting issues
+Invoke-ScriptAnalyzer -Path .\your-script.ps1 -Settings .\.github\linting\PSScriptAnalyzerSettings.psd1 -Fix
+```
+
+#### 4. Run Pester Tests
+
+**Install Pester 5.x (if not already installed):**
+
+```powershell
+Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser
+```
+
+**Run tests:**
+
+```powershell
+Invoke-Pester -Path tests/ -Output Detailed
+```
+
+### If NOT Using PowerShell
+
+Remove PowerShell-related files and configurations:
+
+**Windows (PowerShell):**
+
+```powershell
+# Remove PowerShell CI workflow
+Remove-Item -Force ".github\workflows\powershell-ci.yml"
+
+# Remove PowerShell instructions
+Remove-Item -Force ".github\instructions\powershell.instructions.md"
+
+# Remove linting configuration
+Remove-Item -Recurse -Force ".github\linting"
+
+# Remove PowerShell tests
+Remove-Item -Recurse -Force "tests\PowerShell"
+
+# Remove PowerShell templates
+Remove-Item -Recurse -Force "templates\powershell"
+```
+
+**macOS/Linux/FreeBSD:**
+
+```bash
+# Remove PowerShell CI workflow
+rm -f .github/workflows/powershell-ci.yml
+
+# Remove PowerShell instructions
+rm -f .github/instructions/powershell.instructions.md
+
+# Remove linting configuration
+rm -rf .github/linting/
+
+# Remove PowerShell tests
+rm -rf tests/PowerShell/
+
+# Remove PowerShell templates
+rm -rf templates/powershell/
+```
+
+#### Update Issue Templates
+
+Edit `.github/ISSUE_TEMPLATE/bug_report.yml` and `.github/ISSUE_TEMPLATE/feature_request.yml` to remove "PowerShell" from the Area dropdown options.
+
+---
+
+## Updating README.md
+
+The template README includes both a project section (for your use) and a template documentation section (for template users). You should customize the project section and remove the template documentation.
+
+### Understanding the Current README Structure
+
+The README has two main parts:
+
+1. **Project section (lines 1-10):** Keep this—add your project name and description
+2. **Template section (starting with "Readme for the Copilot Repository Template"):** Delete this
+
+### What to Keep
+
+Keep the top section and customize it:
+
+```markdown
+# Your Project Name
+
+> **Note:** This repository was created from [`franklesniak/copilot-repo-template`](https://github.com/franklesniak/copilot-repo-template).
+
+## Description
+
+Your actual project description goes here. Explain what your project does,
+why it exists, and who it's for.
+```
+
+### What to Delete
+
+Delete everything from the heading `## Readme for the Copilot Repository Template` down to the end of the file, including:
+
+- What This Template Provides
+- Repository Structure
+- How to Use This Template
+- Validating Your New Repository
+- Language Support
+- Linting Tools
+- Testing
+- Code Quality
+- Template Maintenance
+- License (keep this, but update if needed)
+
+### Minimal README Template
+
+Here's a minimal template for your project README:
+
+```markdown
+# Your Project Name
+
+> **Note:** This repository was created from [`franklesniak/copilot-repo-template`](https://github.com/franklesniak/copilot-repo-template).
+
+## Description
+
+Brief description of what your project does.
+
+## Installation
+
+Instructions for installing your project.
+
+## Usage
+
+Examples of how to use your project.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
+
+## License
+
+MIT License - See [LICENSE](LICENSE) for details.
+```
+
+---
+
+## Updating Copilot Instructions
+
+The `.github/copilot-instructions.md` file contains repository-wide coding standards that guide GitHub Copilot's code generation. You should customize this for your project.
+
+### Customizing the Source of Truth Section
+
+Edit `.github/copilot-instructions.md` and update the "Source of Truth" section to point to your project's specification or design documents:
+
+```markdown
+## Source of Truth
+
+> **Important:** Read **`docs/spec/requirements.md`** before making changes.
+> If any instruction here conflicts with the spec, **the spec wins**.
+```
+
+If you don't have a specification document yet, you can simplify this section or leave the placeholder guidance.
+
+### Updating the Language Table
+
+If you removed Python or PowerShell support, update the language table to reflect your project's languages:
+
+```markdown
+## Language-Specific Instructions
+
+This repository uses modular instruction files for language-specific standards:
+
+| Language | Instruction File | Applies To |
+| --- | --- | --- |
+| Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` |
+```
+
+Remove rows for languages you're not using.
+
+### Reviewing Instruction Files
+
+Review the files in `.github/instructions/` and remove or modify any that don't apply to your project:
+
+- `docs.instructions.md` - Documentation standards (keep for all projects)
+- `powershell.instructions.md` - PowerShell standards (remove if not using PowerShell)
+- `python.instructions.md` - Python standards (remove if not using Python)
+
+---
+
+## Additional Configuration (Optional)
+
+### Installing the GitHub CLI
+
+Several optional configuration steps use the GitHub CLI (`gh`). If you haven't installed it yet:
+
+**Windows:**
+
+Download from [cli.github.com](https://cli.github.com/) or use winget:
+
+```powershell
+winget install --id GitHub.cli
+```
+
+**macOS:**
+
+```bash
+brew install gh
+```
+
+**Linux (Debian/Ubuntu):**
+
+```bash
+curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+sudo apt update
+sudo apt install gh
+```
+
+After installation, authenticate with GitHub:
+
+```bash
+gh auth login
+```
+
+### Creating the `triage` Label
+
+The issue templates reference a `triage` label that doesn't exist by default. Creating this label enables better issue organization.
+
+**Why it's not created automatically:** GitHub doesn't support auto-creating labels when a repository is created from a template. This is a platform limitation.
+
+**Using GitHub CLI:**
+
+```bash
+gh label create triage --description "Needs triage" --color "d4c5f9"
+```
+
+**Using the GitHub web interface:**
+
+1. Go to your repository on GitHub
+2. Navigate to **Issues** > **Labels** (or go to Settings > Labels)
+3. Click **New label**
+4. Enter:
+   - **Label name:** `triage`
+   - **Description:** `Needs triage`
+   - **Color:** `d4c5f9` (lavender)
+5. Click **Create label**
+
+**After creating the label:** Uncomment the `# - triage` line in each issue template where you want it applied:
+
+- `.github/ISSUE_TEMPLATE/bug_report.yml`
+- `.github/ISSUE_TEMPLATE/documentation_issue.yml`
+- `.github/ISSUE_TEMPLATE/feature_request.yml`
+
+### Configuring Dependabot
+
+The template includes Dependabot configuration at `.github/dependabot.yml` for automated dependency updates.
+
+**To customize update frequency:**
+
+Edit `.github/dependabot.yml` and modify the `schedule` section:
+
+```yaml
+schedule:
+  interval: "weekly"  # Options: daily, weekly, monthly
+```
+
+**To disable Dependabot:**
+
+Delete `.github/dependabot.yml` from your repository.
+
+### Branch Protection (Recommended)
+
+Branch protection rules help prevent accidental force pushes and ensure code review. See [GitHub's branch protection documentation](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches) for setup instructions.
+
+For detailed guidance on branch protection setup, see the "Branch Protection Setup" section in [`.github/TEMPLATE_GUIDE.md`](.github/TEMPLATE_GUIDE.md).
+
+---
+
+## Validation and Testing
+
+Before committing your changes, validate that everything is configured correctly.
+
+### Run Pre-commit on All Files
+
+```bash
+pre-commit run --all-files
+```
+
+**Expected output for a clean run:**
+
+```text
+Trim Trailing Whitespace......................................Passed
+Fix End of Files..............................................Passed
+Check Yaml....................................................Passed
+Check for added large files...................................Passed
+black.........................................................Passed
+ruff..........................................................Passed
+markdownlint-cli2.............................................Passed
+```
+
+**Troubleshooting common failures:**
+
+- **Trailing whitespace / End of file:** These are auto-fixed. Re-run pre-commit and it should pass.
+- **YAML errors:** Check for syntax errors in `.yml` files.
+- **Markdown errors:** Run `npm run lint:md` to see specific issues.
+- **Black/Ruff errors:** These may auto-fix. Re-run pre-commit. For persistent issues, check the specific error messages.
+
+### Run Tests (If Applicable)
+
+**Python:**
+
+```bash
+pytest tests/ -v
+```
+
+**PowerShell:**
+
+```powershell
+Invoke-Pester -Path tests/ -Output Detailed
+```
+
+### Commit and Push
+
+**Stage all changes:**
+
+```bash
+git add .
+```
+
+**Review what will be committed:**
+
+```bash
+git status
+```
+
+**Create your initial commit:**
+
+```bash
+git commit -m "Initial project setup from template"
+```
+
+> **Note:** Pre-commit hooks will run automatically. If they modify files, review the changes, stage them (`git add .`), and commit again.
+
+**Push to GitHub:**
+
+```bash
+git push origin main
+```
+
+### Verify CI Workflows Pass
+
+After pushing, go to your repository on GitHub and:
+
+1. Click the **Actions** tab
+2. Verify that all workflows complete successfully (green checkmarks)
+
+### Verify Placeholder Check Workflow
+
+The `check-placeholders.yml` workflow verifies that you've replaced all `OWNER/REPO` placeholders. If this workflow fails:
+
+1. Read the error messages to identify which files still have placeholders
+2. Replace the placeholders with your actual organization and repository name
+3. Commit and push the fixes
+
+**What the workflow checks:**
+
+- `OWNER/REPO` in `.github/ISSUE_TEMPLATE/config.yml`
+- `OWNER/REPO` in `CONTRIBUTING.md`
+- `@OWNER` in `.github/CODEOWNERS`
+- `[security contact email]` in `SECURITY.md`
+
+### Post-setup Verification
+
+Perform these quick checks to ensure everything is working:
+
+1. **Open a test issue** using each issue template type (bug report, feature request, documentation issue)
+   - Verify that required fields work correctly
+   - Verify that labels are applied (if you created the `triage` label)
+
+2. **Click links in the issue template chooser:**
+   - Contributing Guide link
+   - Security Vulnerabilities link
+
+3. **Open a test pull request:**
+   - Create a trivial change (e.g., add a comment to a file)
+   - Open a PR and verify the template renders correctly
+   - Verify CI workflows trigger
+   - Close the test PR without merging
+
+---
+
+## Cleanup
+
+After completing setup and verification, clean up template-specific files.
+
+### Delete TEMPLATE_GUIDE.md
+
+The template guide is only needed during initial setup. Delete it:
+
+**Windows (PowerShell):**
+
+```powershell
+Remove-Item -Force ".github\TEMPLATE_GUIDE.md"
+```
+
+**macOS/Linux/FreeBSD:**
+
+```bash
+rm -f .github/TEMPLATE_GUIDE.md
+```
+
+### Consider This Getting Started Guide
+
+You have three options for `GETTING_STARTED_NEW_REPO.md`:
+
+1. **Delete it** if your project won't be used as a template for others
+2. **Keep it** if your project is also a template that others will clone
+3. **Modify it** to be specific to your project's setup process
+
+**To delete:**
+
+**Windows (PowerShell):**
+
+```powershell
+Remove-Item -Force "GETTING_STARTED_NEW_REPO.md"
+```
+
+**macOS/Linux/FreeBSD:**
+
+```bash
+rm -f GETTING_STARTED_NEW_REPO.md
+```
+
+### Final Cleanup Commit
+
+```bash
+git add .
+git commit -m "Remove template documentation after initial setup"
+git push origin main
+```
+
+---
+
+## Troubleshooting
+
+### Pre-commit Hook Failures
+
+**Problem:** Pre-commit hooks fail with "command not found" errors.
+
+**Solution:** Ensure pre-commit is installed globally and in your PATH:
+
+```bash
+pip install pre-commit
+pre-commit --version
+```
+
+**Problem:** Hooks download every time you commit.
+
+**Solution:** This is normal on first run. The environments are cached in `~/.cache/pre-commit/`. If they keep downloading, check disk space and permissions.
+
+### Python ModuleNotFoundError
+
+**Problem:** `ModuleNotFoundError: No module named 'copilot_repo_template'`
+
+**Solution:** You need to either:
+
+1. Rename `src/copilot_repo_template/` to your package name and update imports
+2. Install the package in development mode: `pip install -e ".[dev]"`
+3. If not using Python, delete the `src/` directory
+
+### Node.js/npm Errors
+
+**Problem:** `npm install` fails with permission errors.
+
+**Solution:**
+
+- **Windows:** Run PowerShell as Administrator
+- **macOS/Linux:** Don't use `sudo npm install`. Instead, fix npm permissions or use a version manager like nvm.
+
+**Problem:** `npm run lint:md` fails with "command not found".
+
+**Solution:** Run `npm install` first to install dependencies.
+
+### Placeholder Check CI Failures
+
+**Problem:** The `check-placeholders.yml` workflow fails.
+
+**Solution:** Read the error messages carefully. They tell you exactly which files and lines contain placeholders. Replace:
+
+- `OWNER/REPO` with `your-username/your-repo-name`
+- `@OWNER` with `@your-username`
+- `[security contact email]` with your actual email or remove the email option
+
+### Permission Errors
+
+**Windows:**
+
+- Run PowerShell as Administrator for system-wide installations
+- Check that Python and Node.js are in your PATH
+- Restart PowerShell after installing new tools
+
+**macOS/Linux/FreeBSD:**
+
+- Don't use `sudo` for pip or npm installations in your home directory
+- Check file ownership: `ls -la`
+- Fix ownership: `sudo chown -R $(whoami) ~/.npm ~/.cache`
+
+### Pre-commit Not Running on Commit
+
+**Problem:** Git commits succeed without running pre-commit hooks.
+
+**Solution:** Re-install the hooks:
+
+```bash
+pre-commit install
+```
+
+Verify the hook exists:
+
+**Windows:**
+
+```powershell
+Get-Content .git\hooks\pre-commit
+```
+
+**macOS/Linux/FreeBSD:**
+
+```bash
+cat .git/hooks/pre-commit
+```
+
+---
+
+## Development Workflow
+
+Now that your repository is set up, you're ready to start development! For the standard development workflow, including:
+
+- Creating branches
+- Making changes
+- Running tests
+- Submitting pull requests
+- Code review process
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed instructions.
+
+**Quick reference for daily development:**
+
+```bash
+# Create a feature branch
+git checkout -b feature/your-feature-name
+
+# Make changes and run pre-commit
+pre-commit run --all-files
+
+# Stage and commit
+git add .
+git commit -m "Add your feature"
+
+# Push and open a PR
+git push origin feature/your-feature-name
+```
+
+---
+
+**Congratulations!** 🎉 Your repository is now fully configured and ready for development. Happy coding!
