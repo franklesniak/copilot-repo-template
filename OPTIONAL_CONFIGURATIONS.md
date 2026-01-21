@@ -18,6 +18,7 @@ This guide covers optional customizations you can make after completing the init
 - [Pre-commit Configuration](#pre-commit-configuration)
 - [Markdown Linting Configuration](#markdown-linting-configuration)
 - [Copilot Documentation Instructions Configuration](#copilot-documentation-instructions-configuration)
+- [Copilot Python Instructions Configuration](#copilot-python-instructions-configuration)
 - [Copilot PowerShell Instructions Configuration](#copilot-powershell-instructions-configuration)
 - [CI Workflow Configuration](#ci-workflow-configuration)
 - [PSScriptAnalyzer Configuration](#psscriptanalyzer-configuration)
@@ -535,6 +536,201 @@ The file provides a pattern for tracking formal requirements with identifiers:
    ```
 
 3. **If your project does not track formal requirements**, you can simplify or remove this section entirely. Consider replacing it with guidance appropriate for your documentation needs.
+
+---
+
+## Copilot Python Instructions Configuration
+
+**File:** `.github/instructions/python.instructions.md`
+
+The `python.instructions.md` file provides Python coding standards that GitHub Copilot applies when generating or editing `.py` files in your repository. These standards define style, structure, error handling, testing, and documentation requirements for Python code. The file supports two modes: **Baseline** (stdlib-first, portability-first) and **Modern-Advanced** (for projects using FastAPI, Pydantic, async frameworks, etc.).
+
+Teams may want to customize these standards to match their project's specific requirements and preferences.
+
+### Choosing Between Baseline and Modern-Advanced Mode
+
+The file defines two distinct coding modes:
+
+**Baseline Mode (Default):**
+
+- Minimal dependencies (stdlib-first)
+- Type hints are optional/opportunistic
+- Explicit control flow; avoids metaprogramming
+- Uses plain datatypes (`dict`, `list`, `tuple`) for simple tasks
+- Prioritizes portability and clarity
+
+**Modern-Advanced Mode:**
+
+- Type hints required pervasively
+- Uses `pathlib.Path` over `os.path`
+- Supports async/await patterns
+- Uses structured logging
+- Suited for FastAPI, Pydantic, and type-heavy APIs
+
+**To customize for your project:**
+
+1. **For modern-only projects (FastAPI, Pydantic, async stacks):** Update the "Executive Summary: Author Profile" section to indicate that Modern-Advanced mode is the default. You may also simplify or remove Baseline-specific guidance from sections like "Baseline vs Modern-Advanced Mode" and the Quick Reference Checklist items tagged `[Baseline]`.
+
+2. **For stdlib-first projects:** Keep Baseline mode as the default. Consider removing or de-emphasizing Modern-Advanced sections if your project never uses async frameworks or type-heavy APIs.
+
+3. **For mixed projects:** Keep both modes documented but add project-specific guidance on when each applies (e.g., "Use Baseline mode for CLI utilities, Modern-Advanced mode for API services").
+
+> **Note:** The mode primarily affects type hint requirements and framework usage patterns. Core style rules (naming, formatting, error handling) apply to both modes.
+
+### Adjusting Line Length
+
+The Python instructions reference a line length target of **<= 100** characters:
+
+```markdown
+- **[All]** **MUST** follow PEP 8/PEP 257; line length target **<= 100**
+```
+
+This setting should be consistent with your formatting tools in `.pre-commit-config.yaml`:
+
+```yaml
+# .pre-commit-config.yaml
+- repo: https://github.com/psf/black
+  hooks:
+    - id: black
+      args: [--line-length=100]
+
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  hooks:
+    - id: ruff
+      args: [--fix, --line-length=100]
+```
+
+**To use Black's default of 88 characters:**
+
+1. Update `.pre-commit-config.yaml` to use `--line-length=88` for both Black and Ruff
+2. Update the line length reference in `python.instructions.md`:
+
+   ```markdown
+   - **[All]** **MUST** follow PEP 8/PEP 257; line length target **<= 88**
+   ```
+
+> **Note:** Ensure Black, Ruff, and the instruction file all use the same line length to avoid conflicts between Copilot-generated code and formatting tools.
+
+### Customizing Type Hint Requirements
+
+The file has different type hint expectations based on mode:
+
+**Baseline Mode:**
+
+```markdown
+- **[Baseline]** **MAY** use type hints opportunistically for public APIs and complex structures.
+```
+
+**Modern-Advanced Mode:**
+
+```markdown
+- **[Modern]** Type hints are expected broadly; **MUST** run static checking (e.g., mypy/pyright) in CI.
+```
+
+**To customize for your project:**
+
+1. **To require type hints everywhere:** Update the Baseline guidance to match Modern-Advanced requirements. Change `MAY` to `MUST` and add static checking requirements:
+
+   ```markdown
+   - **[All]** **MUST** use type hints for all function signatures and complex variables.
+   - **[All]** **MUST** run static checking (mypy/pyright) in CI.
+   ```
+
+2. **To relax type hint requirements:** For projects where type hints are not a priority, update both mode sections to use `MAY` or `SHOULD`:
+
+   ```markdown
+   - **[All]** **SHOULD** use type hints for public APIs.
+   - **[All]** **MAY** omit type hints for internal/private functions.
+   ```
+
+3. **For gradual adoption:** Document a migration path based on project maturity:
+
+   ```markdown
+   - New modules **MUST** include type hints for all public APIs.
+   - Legacy modules **SHOULD** add type hints when modified.
+   ```
+
+> **Note:** If requiring strict type checking, ensure your CI workflow (`.github/workflows/ci.yml`) runs mypy without `continue-on-error: true`. See [CI Workflow Configuration](#ci-workflow-configuration) for details.
+
+### Adjusting Documentation Standards
+
+The file requires docstrings for all public modules, classes, and functions:
+
+```markdown
+- **[All]** Every public module/class/function **MUST** have a docstring.
+- **[All]** Docstrings **MUST** emphasize contract: inputs, outputs, errors, edge cases, examples.
+```
+
+The default docstring format includes:
+
+- Short summary line
+- Longer description if needed
+- Args, Returns, Raises sections
+- Examples for tricky behavior
+
+**To customize for your project:**
+
+1. **To relax requirements for internal/private functions:** Add guidance that distinguishes between public and private documentation needs:
+
+   ```markdown
+   - **[All]** Every public module/class/function **MUST** have a docstring.
+   - **[All]** Private functions (prefixed with `_`) **SHOULD** have a docstring but **MAY** use a brief one-line summary.
+   - **[All]** Internal helper functions **MAY** omit docstrings if their purpose is obvious from context.
+   ```
+
+2. **To enforce a specific docstring style:** Add explicit style guidance such as Google style, NumPy style, or reStructuredText:
+
+   ```markdown
+   - **[All]** Docstrings **MUST** use Google style format.
+   ```
+
+3. **To require examples for all public functions:** Strengthen the example requirement:
+
+   ```markdown
+   - **[All]** Public functions **MUST** include at least one example in the docstring.
+   ```
+
+> **Note:** The instruction file uses a Google-style format (Args, Returns, Raises). If your project uses a different convention, update the example in the "Docstrings" section accordingly.
+
+### Customizing Testing Requirements
+
+The file specifies testing requirements for Python code:
+
+```markdown
+- **[All]** Tests **MUST** exist for non-trivial logic; **SHOULD** use `pytest` unless repo standard differs.
+```
+
+**To customize for your project:**
+
+1. **To specify a different test framework:** If your project uses `unittest` or another framework, update the guidance:
+
+   ```markdown
+   - **[All]** Tests **MUST** exist for non-trivial logic; **SHOULD** use `unittest`.
+   ```
+
+2. **To add coverage requirements:** Specify minimum coverage thresholds:
+
+   ```markdown
+   - **[All]** Tests **MUST** exist for non-trivial logic; **SHOULD** use `pytest`.
+   - **[All]** Test coverage **SHOULD** be >= 80% for new code.
+   ```
+
+3. **To require specific test patterns:** Add guidance for test organization:
+
+   ```markdown
+   - **[All]** Tests **SHOULD** be placed in `tests/` directory mirroring the `src/` structure.
+   - **[All]** Test files **MUST** use `test_*.py` naming convention.
+   - **[All]** **SHOULD** use table-driven tests for parsing/validation logic.
+   ```
+
+4. **To relax testing requirements for prototypes:** Add context-dependent guidance:
+
+   ```markdown
+   - **[All]** Production code **MUST** have tests for non-trivial logic.
+   - **[All]** Prototype/experimental code **SHOULD** have tests but **MAY** defer coverage.
+   ```
+
+> **Note:** Testing configuration (pytest settings, coverage thresholds) is typically managed in `pyproject.toml`. See the "Testing" section in that file for related settings.
 
 ---
 
