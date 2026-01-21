@@ -1008,6 +1008,38 @@ rm -rf templates/powershell/
 
 Edit `.github/ISSUE_TEMPLATE/bug_report.yml` and `.github/ISSUE_TEMPLATE/feature_request.yml` to remove "PowerShell" from the Area dropdown options.
 
+### If NOT Using GitHub Copilot Coding Agent
+
+The template includes an optional workflow (`.github/workflows/auto-fix-precommit.yml`) that automatically runs pre-commit hooks and commits any auto-fixes for branches created by the GitHub Copilot Coding Agent.
+
+**When to keep this workflow:**
+
+- You plan to use GitHub Copilot Coding Agent for automated PRs
+- You want a safety net that auto-fixes pre-commit issues on `copilot/**` branches
+
+**When to remove this workflow:**
+
+- You don't use the Copilot Coding Agent
+- You prefer to manually commit pre-commit fixes
+
+**To remove the workflow:**
+
+**Windows (PowerShell):**
+
+```powershell
+# Remove auto-fix workflow for Copilot branches
+Remove-Item -Force ".github\workflows\auto-fix-precommit.yml"
+```
+
+**macOS/Linux/FreeBSD:**
+
+```bash
+# Remove auto-fix workflow for Copilot branches
+rm -f .github/workflows/auto-fix-precommit.yml
+```
+
+> **Note:** Removing this workflow is safe—the standard `ci.yml` workflow will still run pre-commit checks and report any issues that need to be fixed.
+
 ---
 
 ## Updating README.md
