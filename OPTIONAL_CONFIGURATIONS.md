@@ -26,6 +26,7 @@ This guide covers optional customizations you can make after completing the init
 - [Copilot PowerShell Instructions Configuration](#copilot-powershell-instructions-configuration)
 - [CI Workflow Configuration](#ci-workflow-configuration)
 - [Auto-fix Pre-commit Workflow Configuration](#auto-fix-pre-commit-workflow-configuration)
+- [Placeholder Check Workflow Configuration](#placeholder-check-workflow-configuration)
 - [PSScriptAnalyzer Configuration](#psscriptanalyzer-configuration)
 - [CODEOWNERS Configuration](#codeowners-configuration)
 - [Node.js Package Configuration](#nodejs-package-configuration)
@@ -1543,6 +1544,86 @@ Remove-Item -Path ".github/workflows/auto-fix-precommit.yml" -Force
 
 ```bash
 rm -f .github/workflows/auto-fix-precommit.yml
+```
+
+---
+
+## Placeholder Check Workflow Configuration
+
+**File:** `.github/workflows/check-placeholders.yml`
+
+The placeholder check workflow verifies that template placeholders (`OWNER/REPO`, `@OWNER`, `[security contact email]`) have been replaced. It runs automatically in all repositories created from the template.
+
+### Understanding the Workflow
+
+The workflow uses automatic detection to determine whether to run:
+
+```yaml
+if: github.repository != 'franklesniak/copilot-repo-template'
+```
+
+This means the workflow:
+
+- **Runs automatically** in your repository (no configuration needed)
+- **Is disabled** only in the original template repository
+
+### When to Keep This Workflow
+
+Keep this workflow if you:
+
+- Plan to make future updates from the template that might introduce new placeholder files
+- Want a safety net to catch accidental placeholder remnants
+- Have contributors who might add files with placeholder patterns
+
+### Removing This Workflow
+
+If you have replaced all placeholders and don't anticipate needing this check:
+
+**Windows (PowerShell):**
+
+```powershell
+Remove-Item -Force ".github\workflows\check-placeholders.yml"
+```
+
+**macOS/Linux/FreeBSD:**
+
+```bash
+rm -f .github/workflows/check-placeholders.yml
+```
+
+### Adding Custom Placeholder Patterns
+
+If your project uses additional placeholder patterns that should be checked, edit `.github/workflows/check-placeholders.yml` and locate the "Additional placeholder patterns check" step. Find the `PATTERNS` array and add your custom patterns:
+
+```yaml
+- name: Additional placeholder patterns check
+  run: |
+    # ... existing code ...
+    PATTERNS=(
+      "your-org"
+      "your-repo"
+      "YOUR_ORG"
+      "YOUR_REPO"
+      "YOUR_CUSTOM_PLACEHOLDER"  # Add your custom patterns here
+    )
+```
+
+### Converting Warnings to Hard Failures
+
+By default, some checks in the "Additional placeholder patterns check" step produce warnings rather than failures (e.g., `Project Name` in README.md, patterns in PR templates). To make these hard failures, edit `.github/workflows/check-placeholders.yml` and change the warning-only sections to set `FOUND_PLACEHOLDERS=true`:
+
+```yaml
+# Before (warning only):
+if grep -n "^# Project Name$" README.md; then
+  echo "::warning file=README.md::Found 'Project Name' placeholder..."
+  FOUND_WARNINGS=true
+fi
+
+# After (hard failure):
+if grep -n "^# Project Name$" README.md; then
+  echo "::error file=README.md::Found 'Project Name' placeholder..."
+  FOUND_PLACEHOLDERS=true  # Changed from FOUND_WARNINGS
+fi
 ```
 
 ---

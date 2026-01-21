@@ -908,18 +908,27 @@ Before adopting workflows, understand their requirements:
 
 **Purpose:** Verifies that `OWNER/REPO` placeholders have been replaced after copying from the template.
 
+**No configuration required.** The workflow:
+
+- Runs automatically on push, pull request, and manual dispatch
+- Is already configured to exclude only the original template repository (`franklesniak/copilot-repo-template`)
+- Will check your repository for unreplaced placeholders
+
 **Adoption considerations:**
 
-1. **If you copied templates with placeholders:** Adopt this workflow to ensure placeholders are replaced
+1. **If you copied templates with placeholders:** The workflow will catch any unreplaced placeholders and fail CI until you fix them
 
-2. **Modify the repository check:** Update the condition to exclude your repository:
+2. **After all placeholders are replaced:** You have two options:
+   - **Keep the workflow** — It serves as a safety net for any future template updates or additions
+   - **Remove the workflow** — Delete `.github/workflows/check-placeholders.yml` if you no longer need placeholder checking
 
-   ```yaml
-   # Change this line to your repository
-   if: github.repository != 'your-username/your-repo'
-   ```
+**What the workflow checks:**
 
-3. **If you've replaced all placeholders:** You may skip this workflow entirely
+- `OWNER/REPO` in `.github/ISSUE_TEMPLATE/config.yml` (contact links URLs)
+- `OWNER/REPO` in `CONTRIBUTING.md` (clone URL and issues link)
+- `@OWNER` in `.github/CODEOWNERS`
+- `[security contact email]` and `TODO: Replace` in `SECURITY.md`
+- `https://github.com/OWNER/REPO` URLs in any file under `.github/`
 
 ### Python CI Workflow
 
