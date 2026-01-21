@@ -65,6 +65,7 @@ This guide walks you through adopting features from `franklesniak/copilot-repo-t
 - [Cleanup and Documentation](#cleanup-and-documentation)
   - [Files to Review After Adoption](#files-to-review-after-adoption)
   - [Updating Your Project Documentation](#updating-your-project-documentation)
+- [Next Steps](#next-steps)
 - [Summary Checklist](#summary-checklist)
 
 ---
@@ -1209,6 +1210,14 @@ Consider informing collaborators about:
 - New pre-commit requirements
 - CI workflow changes
 - New issue/PR templates
+
+---
+
+## Next Steps
+
+After adopting template features, you may want to explore additional customization options:
+
+- **[Optional Configurations](OPTIONAL_CONFIGURATIONS.md)**: Fine-tune your repository with optional settings like enabling GitHub Discussions, adjusting Dependabot frequency, customizing linting rules, and more.
 
 ---
 
