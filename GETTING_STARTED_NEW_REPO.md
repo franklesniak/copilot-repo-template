@@ -1010,7 +1010,7 @@ Edit `.github/ISSUE_TEMPLATE/bug_report.yml` and `.github/ISSUE_TEMPLATE/feature
 
 ### If NOT Using GitHub Copilot Coding Agent
 
-The template includes an optional workflow (`.github/workflows/auto-fix-precommit.yml`) that automatically runs pre-commit hooks and commits any auto-fixes for branches created by the GitHub Copilot Coding Agent.
+The template includes an optional workflow (`.github/workflows/auto-fix-precommit.yml`) that automatically runs pre-commit hooks and commits any auto-fixes (such as formatting corrections and trailing whitespace removal) for branches created by the GitHub Copilot Coding Agent.
 
 **When to keep this workflow:**
 
