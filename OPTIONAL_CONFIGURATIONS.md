@@ -25,6 +25,7 @@ This guide covers optional customizations you can make after completing the init
 - [Copilot Documentation Instructions Configuration](#copilot-documentation-instructions-configuration)
 - [Copilot Python Instructions Configuration](#copilot-python-instructions-configuration)
 - [Copilot PowerShell Instructions Configuration](#copilot-powershell-instructions-configuration)
+- [Copilot Main Instructions Configuration](#copilot-main-instructions-configuration)
 - [CI Workflow Configuration](#ci-workflow-configuration)
 - [Auto-fix Pre-commit Workflow Configuration](#auto-fix-pre-commit-workflow-configuration)
 - [Placeholder Check Workflow Configuration](#placeholder-check-workflow-configuration)
@@ -1574,6 +1575,168 @@ The file documents specific return code conventions for v1.0-targeted functions:
 2. **Exception-based patterns:** For modern-only projects, you may prefer to rely entirely on exceptions rather than return codes. Update the "Modern catch Block Requirements" section to document your exception handling patterns.
 
 3. **Custom exception types:** If your project defines custom exception types, document them and update the error handling sections accordingly.
+
+---
+
+## Copilot Main Instructions Configuration
+
+**File:** `.github/copilot-instructions.md`
+
+The main `copilot-instructions.md` file provides repository-wide instructions that GitHub Copilot applies when generating or editing code. It includes sections on pre-commit discipline, testing tools, and other project-wide standards. These sections should be customized to match your project's actual tools and workflows.
+
+### Customizing the Pre-commit Discipline Section
+
+The Pre-commit Discipline section (near the top of `copilot-instructions.md`) tells Copilot how to run pre-commit checks, what commands to use, and how to handle CI failures. This ensures Copilot generates code that follows your project's code quality workflow.
+
+The default configuration assumes:
+
+- The [pre-commit](https://pre-commit.com/) framework with `pre-commit run --all-files`
+- npm-based markdown linting with `npm run lint:md`
+- A `copilot/**` branch pattern for automated fixes
+
+**To customize for your project:**
+
+1. **Different pre-commit tools:** If you use a different tool (e.g., Husky, lefthook, or custom scripts), update the workflow section:
+
+   ```markdown
+   **Workflow:**
+
+   1. Make your code changes
+   2. Run pre-commit checks locally (e.g., `npx husky run` or `make lint`)
+   3. Review and commit ALL auto-fixes as part of your change
+   4. Push to GitHub
+   ```
+
+2. **Different linting commands:** Update command examples to match your project:
+
+   ```markdown
+   **Workflow:**
+
+   1. Make your code changes
+   2. Run pre-commit checks locally (e.g., `make lint` or `./scripts/lint.sh`)
+   3. Review and commit ALL auto-fixes as part of your change
+   4. Push to GitHub
+   ```
+
+3. **No pre-commit framework:** If your project uses only CI-based checks without local pre-commit hooks, simplify the section:
+
+   ```markdown
+   ## Pre-commit Discipline (CRITICAL)
+
+   **⚠️ ALWAYS run linting checks before committing code.**
+
+   **Workflow:**
+
+   1. Make your code changes
+   2. Run linting locally: `npm run lint` (or your project's lint command)
+   3. Review and fix all issues before committing
+   4. Push to GitHub
+
+   **If CI fails:**
+
+   1. Pull the latest branch
+   2. Run linting locally and fix issues
+   3. Commit fixes
+   4. Push again
+   ```
+
+4. **Different branch patterns for automated fixes:** If you use a different branch naming convention for AI-generated PRs, update the Auto-Fix Workflow section to match (and update the corresponding workflow file).
+
+> **Note:** The pre-commit section should accurately reflect your project's tooling. Incorrect instructions will cause Copilot to suggest wrong commands or skip necessary checks.
+
+### Customizing the Testing Tools Section
+
+The Testing Tools section (near the bottom of `copilot-instructions.md`) tells Copilot what test frameworks your project uses, where tests are located, and how to run them. This ensures Copilot generates tests that match your project's conventions.
+
+The default configuration includes:
+
+| Language | Framework | Configuration | Test Location |
+| --- | --- | --- | --- |
+| Python | pytest | `pyproject.toml` (`[tool.pytest.ini_options]`) | `tests/` |
+| PowerShell | Pester 5.x | Inline in `.github/workflows/powershell-ci.yml` | `tests/PowerShell/` |
+
+**To customize for your project:**
+
+1. **Different test frameworks:** Update the table to reflect your actual frameworks:
+
+   ```markdown
+   ## Testing Tools
+
+   This repository includes testing infrastructure for the following languages:
+
+   | Language | Framework | Configuration | Test Location |
+   | --- | --- | --- | --- |
+   | Python | unittest | `setup.cfg` | `tests/` |
+   | JavaScript | Jest | `jest.config.js` | `__tests__/` |
+   | TypeScript | Vitest | `vitest.config.ts` | `src/**/*.test.ts` |
+   ```
+
+2. **Different test locations:** Update the table and running instructions to match your directory structure:
+
+   ```markdown
+   | Language | Framework | Configuration | Test Location |
+   | --- | --- | --- | --- |
+   | Python | pytest | `pytest.ini` | `spec/` |
+   | Ruby | RSpec | `.rspec` | `spec/` |
+   ```
+
+3. **Update the "Running Tests" section:** Ensure the commands match your setup (this example shows commands for Jest and unittest, matching the frameworks in example 1):
+
+   ````markdown
+   ### Running Tests
+
+   **JavaScript:**
+
+   ```bash
+   npm test
+   ```
+
+   **Python:**
+
+   ```bash
+   python -m unittest discover -s tests
+   ```
+   ````
+
+4. **Single-language projects:** Remove rows for languages you don't use:
+
+   ````markdown
+   ## Testing Tools
+
+   This repository uses pytest for testing:
+
+   | Language | Framework | Configuration | Test Location |
+   | --- | --- | --- | --- |
+   | Python | pytest | `pyproject.toml` | `tests/` |
+
+   ### Running Tests
+
+   ```bash
+   pytest tests/ -v
+   ```
+   ````
+
+5. **Additional test types:** If your project includes integration tests, end-to-end tests, or other test types, document them:
+
+   ```markdown
+   ## Testing Tools
+
+   | Test Type | Framework | Configuration | Location |
+   | --- | --- | --- | --- |
+   | Unit tests | pytest | `pyproject.toml` | `tests/unit/` |
+   | Integration tests | pytest | `pyproject.toml` | `tests/integration/` |
+   | E2E tests | Playwright | `playwright.config.ts` | `tests/e2e/` |
+   ```
+
+> **Note:** Keep the Testing Tools section synchronized with your actual test configuration. Incorrect information will cause Copilot to generate tests in wrong locations or using wrong frameworks.
+
+### Updating Related Sections
+
+When customizing the Pre-commit or Testing sections, you may also need to update these related sections in `copilot-instructions.md`:
+
+- **How to Work (Definition of Done):** Update test location references (e.g., `tests/` to `spec/`)
+- **Language-Specific Instructions table:** Ensure it matches your language instruction files
+- **Linting Configurations:** Update linting tool references if you use different linters
 
 ---
 
