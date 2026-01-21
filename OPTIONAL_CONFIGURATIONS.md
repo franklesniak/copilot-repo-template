@@ -12,6 +12,9 @@ This guide covers optional customizations you can make after completing the init
 ## Table of Contents
 
 - [Issue Template Configuration](#issue-template-configuration)
+  - [Bug Report Template Customization](#bug-report-template-customization)
+  - [Feature Request Template Customization](#feature-request-template-customization)
+  - [Documentation Issue Template Customization](#documentation-issue-template-customization)
 - [Security Configuration](#security-configuration)
 - [Pull Request Template Customization](#pull-request-template-customization)
 - [Dependabot Configuration](#dependabot-configuration)
@@ -79,6 +82,370 @@ If you prefer not to enable Discussions but want to redirect support questions a
 
 3. Replace `OWNER/REPO` with your actual values
 4. Update the URL anchor (`#support`) if your section has a different heading
+
+### Bug Report Template Customization
+
+**File:** `.github/ISSUE_TEMPLATE/bug_report.yml`
+
+The bug report template includes numerous `# CUSTOMIZE:` comments indicating optional configuration points. This section documents each customization option.
+
+#### Top-Level Metadata
+
+##### Title Prefix
+
+Adjust the issue title prefix to match your project's conventions:
+
+```yaml
+# Default:
+title: "[Bug] "
+
+# Example alternatives:
+title: "bug: "
+title: "[BUG] "
+title: ""  # No prefix
+```
+
+##### Labels
+
+Update the labels to match your repository's label taxonomy. Ensure labels exist before using them:
+
+```yaml
+labels:
+  - bug
+  # Add your project-specific labels:
+  # - priority:high
+  # - area:api
+```
+
+> **Note:** Labels must exist in your repository before they can be applied. Create them via **Settings** > **Labels** or use the GitHub CLI.
+
+##### Triage Label
+
+Uncomment the `triage` label after creating it in your repository:
+
+```yaml
+labels:
+  - bug
+  - triage  # Uncomment after creating the label
+```
+
+> **Cross-reference:** The [Getting Started Guides](GETTING_STARTED_NEW_REPO.md) provide instructions for creating labels in your repository.
+
+##### Issue Type (Organization-Level)
+
+For organizations using [GitHub issue types](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms#top-level-syntax), uncomment and configure the `type` field:
+
+```yaml
+# Uncomment to enable:
+type: Bug
+```
+
+##### Assignees
+
+Pre-populate the assignees field for bug reports:
+
+```yaml
+# Uncomment and update:
+assignees:
+  - maintainer-username
+  - your-github-handle
+```
+
+##### Projects
+
+Auto-add bug reports to a GitHub Project (uses project number):
+
+```yaml
+# Uncomment and update with your org and project number:
+projects:
+  - org/1
+```
+
+#### Pre-flight Checklist Customization
+
+##### Making Documentation Check Required
+
+For projects with comprehensive documentation that users should consult before filing bugs:
+
+```yaml
+# Change from:
+- label: I have read the project documentation
+  required: false
+
+# To:
+- label: I have read the project documentation
+  required: true
+```
+
+##### Removing PR Contribution Checkbox
+
+For projects that don't accept community contributions, remove this checkbox:
+
+```yaml
+# Remove this block entirely:
+- label: I am willing to submit a pull request to fix this issue
+  required: false
+```
+
+#### Environment Fields Customization
+
+##### Area Dropdown
+
+The Area dropdown is optional by default for template portability. Update the options to match your project's components:
+
+```yaml
+options:
+  - Backend / API
+  - Frontend / UI
+  - CLI
+  - Documentation
+  - Other (describe/specify in Additional Context)
+```
+
+**Making it required:** For repos that rely on area-based routing, change `required: false` to `required: true`.
+
+##### Minimal Reproduction URL
+
+For library or framework projects, consider making this field required:
+
+```yaml
+# Change from:
+validations:
+  required: false
+
+# To:
+validations:
+  required: true
+```
+
+Projects that don't accept external reproductions can remove this field entirely.
+
+##### Architecture Dropdown
+
+For cross-platform projects, consider making this required:
+
+```yaml
+# Change from:
+validations:
+  required: false
+
+# To:
+validations:
+  required: true
+```
+
+Single-platform projects can remove this field entirely.
+
+##### Runtime Version Placeholders
+
+Update the placeholder examples to match your project's supported runtimes:
+
+```yaml
+# Default (Python-focused):
+placeholder: |
+  Python 3.13.1 (or your installed version)
+  PowerShell 7.4.6 or Windows PowerShell 5.1
+  Markdown tooling/renderer (if relevant): e.g., Pandoc 3.1.2
+
+# Node.js project example:
+placeholder: |
+  Node.js 20.10.0
+  npm 10.2.3
+
+# .NET project example:
+placeholder: |
+  .NET 8.0.1
+  C# 12
+```
+
+##### Shell/Terminal Field
+
+For non-CLI projects where shell environment isn't relevant, remove this field entirely.
+
+##### How Did You Run It? Placeholders
+
+Update the placeholder examples to match your project's dependency management approach:
+
+```yaml
+# Default (Python-focused):
+placeholder: |
+  # Python (using pyproject.toml)
+  python -m venv .venv
+  source .venv/bin/activate
+  pip install -e .
+  python -m your_package
+
+# Node.js example:
+placeholder: |
+  npm install
+  npm run build
+  npm start
+
+# Docker example:
+placeholder: |
+  docker build -t myapp .
+  docker run myapp
+```
+
+#### Bug Characteristics Customization
+
+##### Regression Fields
+
+For projects where version history or regression tracking is not relevant, remove these fields:
+
+- Remove the "Regression?" dropdown (`id: regression`)
+- Remove the "Last Working Version" input (`id: last_working_version`)
+
+##### Severity Options
+
+Adjust the severity levels to match your project's triage workflow:
+
+```yaml
+# Default:
+options:
+  - Critical (system crash, data loss)
+  - High (major feature broken, no workaround)
+  - Medium (feature impaired, workaround exists)
+  - Low (minor inconvenience, cosmetic issue)
+
+# Alternative with P-levels:
+options:
+  - P0 (production down)
+  - P1 (critical impact)
+  - P2 (moderate impact)
+  - P3 (low impact)
+```
+
+#### Additional Information Customization
+
+##### Related Issues Placeholder
+
+Update the cross-repo example to reference related projects in your ecosystem:
+
+```yaml
+# Default:
+placeholder: |
+  #123
+  owner/repo-name#456
+
+# Example for a monorepo or related projects:
+placeholder: |
+  #123
+  my-org/frontend#456
+  my-org/backend#789
+```
+
+### Feature Request Template Customization
+
+**File:** `.github/ISSUE_TEMPLATE/feature_request.yml`
+
+The feature request template shares many customization points with the bug report template. This section documents the unique or different options.
+
+#### Top-Level Metadata
+
+The same customizations apply as for the bug report template:
+
+- **Title Prefix:** Default is `"[Feature] "`
+- **Labels:** Default is `enhancement`
+- **Triage Label:** Uncomment after creating the label
+- **Issue Type:** Use `type: Feature` for organization-level issue types
+- **Assignees and Projects:** Same configuration as bug reports
+
+#### Pre-flight Checklist
+
+##### Removing PR Contribution Checkbox
+
+Same as the bug report template—remove if your project doesn't accept community contributions:
+
+```yaml
+# Remove this block:
+- label: I am willing to submit a pull request to implement this feature
+  required: false
+```
+
+#### Feature Classification
+
+##### Priority Options
+
+Adjust priority levels to match your project's triage workflow:
+
+```yaml
+# Default:
+options:
+  - Critical (blocking my adoption/usage)
+  - High (significant impact on my workflow)
+  - Medium (would improve my experience)
+  - Low (nice to have)
+```
+
+##### Scope Options
+
+Adjust feature scope categories as needed:
+
+```yaml
+# Default:
+options:
+  - Major feature (new capability, significant change)
+  - Minor enhancement (improvement to existing feature)
+  - Quality of life (small improvement, polish)
+```
+
+### Documentation Issue Template Customization
+
+**File:** `.github/ISSUE_TEMPLATE/documentation_issue.yml`
+
+The documentation issue template is simpler than the other templates but still has customization points.
+
+#### Top-Level Metadata
+
+- **Title Prefix:** Default is `"[Docs] "`
+- **Labels:** Default is `documentation` (a GitHub default label)
+- **Triage Label:** Uncomment after creating the label
+
+> **Note:** The `documentation` label is a GitHub default label that exists in all new repositories. If your organization has renamed or deleted it, update accordingly.
+
+#### Documentation Version Field
+
+For projects that don't maintain versioned documentation, remove this field:
+
+```yaml
+# Remove this entire block:
+- type: input
+  id: doc_version
+  attributes:
+    label: Documentation Version (optional)
+    description: >-
+      If the documentation is versioned, which version are you viewing?
+    placeholder: e.g., v1.2.3, latest, main branch
+  validations:
+    required: false
+```
+
+#### Issue Type Dropdown
+
+Adjust the documentation issue type options to match your documentation structure:
+
+```yaml
+# Default:
+options:
+  - Typo / Grammar
+  - Unclear / Confusing
+  - Missing Information
+  - Broken Link
+  - Outdated Information
+  - Code Example Issue
+  - Formatting / Rendering
+  - Other
+
+# Simplified example:
+options:
+  - Typo / Grammar
+  - Missing or Outdated Content
+  - Broken Link
+  - Other
+```
+
+To make this field required for structured documentation triage, change `required: false` to `required: true`.
 
 ---
 
