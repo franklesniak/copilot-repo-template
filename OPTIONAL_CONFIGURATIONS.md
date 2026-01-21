@@ -1533,7 +1533,7 @@ If your project uses `requirements.txt` files instead of `pyproject.toml` option
     pip install -r requirements-dev.txt  # If you have separate dev requirements
 ```
 
-> **Note:** Update both the `type-check` job (line ~127) and the `test` job (line ~179) to keep them consistent.
+> **Note:** Update both the `type-check` job (line ~131) and the `test` job (line ~183) to keep them consistent.
 
 ---
 
