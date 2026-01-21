@@ -900,7 +900,7 @@ Before adopting workflows, understand their requirements:
 1. Copy `.github/workflows/auto-fix-precommit.yml` to your `.github/workflows/` directory
 2. The workflow triggers only on `copilot/**` branches when pushed by `copilot-swe-agent[bot]`
 
-> **Note:** This workflow is optional. If you don't use the Copilot Coding Agent, you can skip this workflow.
+> **Note:** This workflow is optional but recommended if you use GitHub Copilot Coding Agent. If you don't use the Copilot Coding Agent, you can skip adopting this workflow. If you've already adopted it but later decide to remove it, see [Auto-fix Pre-commit Workflow Configuration](OPTIONAL_CONFIGURATIONS.md#auto-fix-pre-commit-workflow-configuration) for removal instructions.
 
 ### Placeholder Check Workflow
 
