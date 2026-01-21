@@ -1038,7 +1038,7 @@ Remove-Item -Force ".github\workflows\auto-fix-precommit.yml"
 rm -f .github/workflows/auto-fix-precommit.yml
 ```
 
-> **Note:** Removing this workflow is safe—the standard `ci.yml` workflow will still run pre-commit checks and report any issues that need to be fixed.
+> **Note:** Removing this workflow is safe—the standard `ci.yml` workflow will still run pre-commit checks and report any issues that need fixing. However, if you are using GitHub Copilot Coding Agent and don't have a pre-commit workflow in place, it's more likely that GitHub Copilot Coding Agent will make mistakes that will then need to be fixed by the human code reviewer, reducing efficiency.
 
 ---
 
