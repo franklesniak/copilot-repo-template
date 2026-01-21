@@ -21,6 +21,7 @@ This guide covers optional customizations you can make after completing the init
 - [Pre-commit Configuration](#pre-commit-configuration)
 - [Markdown Linting Configuration](#markdown-linting-configuration)
 - [Nested Markdown Linting Configuration](#nested-markdown-linting-configuration)
+- [Markdown Lint Workflow Configuration](#markdown-lint-workflow-configuration)
 - [Copilot Documentation Instructions Configuration](#copilot-documentation-instructions-configuration)
 - [Copilot Python Instructions Configuration](#copilot-python-instructions-configuration)
 - [Copilot PowerShell Instructions Configuration](#copilot-powershell-instructions-configuration)
@@ -997,6 +998,150 @@ If you decide you don't need nested markdown linting, you can remove this option
          files: \.md$
          pass_filenames: true
    ```
+
+---
+
+## Markdown Lint Workflow Configuration
+
+**File:** `.github/workflows/markdownlint.yml`
+
+The Markdown Lint workflow enforces consistent Markdown formatting across your repository by running markdownlint on every push and pull request. While it works out-of-the-box, you can customize it to match your project's needs.
+
+### Restricting Branch Triggers
+
+The default configuration runs on all branches:
+
+```yaml
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+```
+
+**To run only on the default branch:**
+
+```yaml
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+```
+
+**To run on multiple specific branches:**
+
+```yaml
+on:
+  push:
+    branches: ["main", "develop"]
+  pull_request:
+    branches: ["main", "develop"]
+```
+
+### Adding Path Filters
+
+By default, the workflow runs on every push and pull request regardless of which files changed. To only run the workflow when Markdown files or linting configuration changes:
+
+```yaml
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - '**/*.md'
+      - '.markdownlint.jsonc'
+      - 'package.json'
+      - 'package-lock.json'
+  pull_request:
+    branches: ["main"]
+    paths:
+      - '**/*.md'
+      - '.markdownlint.jsonc'
+      - 'package.json'
+      - 'package-lock.json'
+```
+
+> **Note:** Include configuration files in the path filter to ensure the workflow runs when linting rules change.
+
+### Changing Node.js Version
+
+The workflow uses Node.js 20 by default:
+
+```yaml
+- name: Setup Node.js
+  uses: actions/setup-node@v6
+  with:
+    node-version: '20'
+```
+
+**To use a different Node.js version:**
+
+```yaml
+- name: Setup Node.js
+  uses: actions/setup-node@v6
+  with:
+    node-version: '22'
+```
+
+> **Note:** Ensure the Node.js version you choose is compatible with your project's dependencies. Check the markdownlint-cli2 documentation for supported Node.js versions.
+
+### Disabling Nested Markdown Linting in CI
+
+The workflow runs two linting steps: one for outer Markdown files and one for nested Markdown code fences. If you want to keep the outer linting but disable the nested linting step in CI:
+
+**Option 1: Remove the step entirely**
+
+Delete or comment out the nested linting step:
+
+```yaml
+# Remove or comment out this step:
+# - name: Run markdownlint on nested Markdown code fences
+#   id: lint-nested
+#   continue-on-error: true
+#   run: npm run lint:md:nested
+```
+
+And update the final check step to only check the outer linting result:
+
+```yaml
+- name: Check linting results
+  if: steps.lint-outer.outcome == 'failure'
+  run: |
+    echo "::error::Markdown linting failed. Check the logs above for details."
+    exit 1
+```
+
+**Option 2: Skip the step conditionally**
+
+Add a condition to skip the nested linting step:
+
+```yaml
+- name: Run markdownlint on nested Markdown code fences
+  id: lint-nested
+  if: false  # Disabled - remove this line to re-enable
+  continue-on-error: true
+  run: npm run lint:md:nested
+```
+
+> **Note:** If you disable nested linting in CI, you may still want to run it locally using `npm run lint:md:nested` to catch issues before pushing.
+
+### Removing the Workflow
+
+If your project doesn't need Markdown linting in CI (for example, if you only use pre-commit hooks locally), you can remove the workflow file entirely.
+
+**Windows (PowerShell):**
+
+```powershell
+Remove-Item -Path ".github/workflows/markdownlint.yml" -Force
+```
+
+**macOS/Linux/FreeBSD:**
+
+```bash
+rm -f .github/workflows/markdownlint.yml
+```
+
+> **Note:** Removing the CI workflow does not affect local linting. You can still run `npm run lint:md` locally or use pre-commit hooks to lint Markdown files before committing.
 
 ---
 
