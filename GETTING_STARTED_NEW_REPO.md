@@ -1308,6 +1308,15 @@ The `check-placeholders.yml` workflow verifies that you've replaced all `OWNER/R
 - `@OWNER` in `.github/CODEOWNERS`
 - `[security contact email]` in `SECURITY.md`
 
+**After all placeholders are replaced:**
+
+Once you've replaced all placeholders and the workflow passes, you have two options:
+
+- **Keep the workflow** — It serves as a safety net for any future template updates or additions
+- **Remove the workflow** — Delete `.github/workflows/check-placeholders.yml` if you no longer need placeholder checking
+
+See [Placeholder Check Workflow Configuration](OPTIONAL_CONFIGURATIONS.md#placeholder-check-workflow-configuration) for more details on customizing this workflow.
+
 ### Post-setup Verification
 
 Perform these quick checks to ensure everything is working:
