@@ -1499,6 +1499,42 @@ env:
 - src layout: `MYPY_PATHS: "src/ tests/"`
 - Custom: `MYPY_PATHS: "mymodule/ tests/ scripts/"`
 
+### Customizing Dependency Installation
+
+The CI workflow installs the project with development dependencies using:
+
+```yaml
+pip install -e ".[dev]"
+```
+
+This command appears in both the `type-check` and `test` jobs.
+
+**To use different dependency groups:**
+
+If your `pyproject.toml` uses a different optional dependency group name:
+
+```yaml
+# For a [project.optional-dependencies] section named "test"
+pip install -e ".[test]"
+
+# For multiple groups
+pip install -e ".[dev,test]"
+```
+
+**To use requirements.txt instead:**
+
+If your project uses `requirements.txt` files instead of `pyproject.toml` optional dependencies:
+
+```yaml
+- name: Install dependencies
+  run: |
+    python -m pip install --upgrade pip
+    pip install -r requirements.txt
+    pip install -r requirements-dev.txt  # If you have separate dev requirements
+```
+
+> **Note:** Update both the `type-check` job (line ~127) and the `test` job (line ~179) to keep them consistent.
+
 ---
 
 ## Auto-fix Pre-commit Workflow Configuration
