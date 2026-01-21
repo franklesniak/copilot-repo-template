@@ -28,6 +28,7 @@ This guide covers optional customizations you can make after completing the init
 - [CI Workflow Configuration](#ci-workflow-configuration)
 - [Auto-fix Pre-commit Workflow Configuration](#auto-fix-pre-commit-workflow-configuration)
 - [Placeholder Check Workflow Configuration](#placeholder-check-workflow-configuration)
+- [PowerShell CI Workflow Configuration](#powershell-ci-workflow-configuration)
 - [PSScriptAnalyzer Configuration](#psscriptanalyzer-configuration)
 - [CODEOWNERS Configuration](#codeowners-configuration)
 - [Node.js Package Configuration](#nodejs-package-configuration)
@@ -1806,6 +1807,107 @@ if grep -n "^# Project Name$" README.md; then
   FOUND_PLACEHOLDERS=true  # Changed from FOUND_WARNINGS
 fi
 ```
+
+---
+
+## PowerShell CI Workflow Configuration
+
+**File:** `.github/workflows/powershell-ci.yml`
+
+The PowerShell CI workflow runs PSScriptAnalyzer linting and Pester tests for PowerShell scripts. It runs automatically on every push and pull request and automatically skips if no PowerShell files are found in the repository.
+
+### Understanding the Workflow
+
+The workflow consists of two jobs:
+
+1. **lint**: Runs PSScriptAnalyzer on all `.ps1` files (skips if no files found)
+2. **test**: Runs Pester tests on Windows, macOS, and Linux (skips if no `*.Tests.ps1` files found)
+
+The workflow uses automatic detection, so you don't need to configure anything if you have PowerShell files—it just works.
+
+### Customizing Pester Test Paths
+
+By default, Pester tests are run from the `tests/` directory. To use a different directory, modify the `$config.Run.Path` setting in the "Run Pester tests" step:
+
+```powershell
+$config.Run.Path = "your_tests_directory/"  # Change from default "tests/"
+```
+
+### Customizing Test Output Format
+
+The default test output format is `NUnitXml`. To use a different format:
+
+```powershell
+$config.TestResult.OutputFormat = "JUnitXml"  # Default is "NUnitXml"
+```
+
+Available formats include `NUnitXml`, `JUnitXml`, and `NUnit2.5`.
+
+### Customizing the OS Matrix
+
+By default, Pester tests run on Ubuntu, Windows, and macOS:
+
+```yaml
+strategy:
+  matrix:
+    os: [ubuntu-latest, windows-latest, macos-latest]
+```
+
+**To run on fewer operating systems:**
+
+```yaml
+strategy:
+  matrix:
+    os: [windows-latest]  # Windows only
+```
+
+**To run on Windows and Linux only:**
+
+```yaml
+strategy:
+  matrix:
+    os: [ubuntu-latest, windows-latest]
+```
+
+### Adding Path-Based Filtering
+
+The template deliberately does not use path-based filtering because this is a template repository where all workflows should run on all changes for testing purposes. However, consumers of the template can add path filtering for efficiency:
+
+```yaml
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "**/*.ps1"
+      - ".github/workflows/powershell-ci.yml"
+      - ".github/linting/PSScriptAnalyzerSettings.psd1"
+  pull_request:
+    branches: ["**"]
+    paths:
+      - "**/*.ps1"
+      - ".github/workflows/powershell-ci.yml"
+      - ".github/linting/PSScriptAnalyzerSettings.psd1"
+```
+
+> **Note:** Include configuration files in the path filter to ensure the workflow runs when linting rules or the workflow itself changes.
+
+### Removing the Workflow
+
+If your project doesn't use PowerShell, you can remove the workflow:
+
+**Windows (PowerShell):**
+
+```powershell
+Remove-Item -Path ".github/workflows/powershell-ci.yml" -Force
+```
+
+**macOS/Linux/FreeBSD:**
+
+```bash
+rm -f .github/workflows/powershell-ci.yml
+```
+
+> **Note:** If you want to remove all PowerShell-related files from the repository (not just the workflow), see the "If NOT Using PowerShell" section in [GETTING_STARTED_NEW_REPO.md](GETTING_STARTED_NEW_REPO.md) for comprehensive removal instructions.
 
 ---
 
