@@ -387,7 +387,7 @@ If you already have issue templates:
 
 The issue templates include an "Area" dropdown with default options. Customize for your project:
 
-**In `bug_report.yml`, `feature_request.yml`, and `documentation_issue.yml`:**
+**In `bug_report.yml` and `feature_request.yml`:**
 
 ```yaml
 # Default options - modify for your project
@@ -413,7 +413,7 @@ options:
   - Other (describe in Additional Context)
 ```
 
-> **Tip:** Update the Area dropdown in all three template files to keep them consistent.
+> **Tip:** Update the Area dropdown in both template files to keep them consistent.
 
 ### Creating Required Labels
 
