@@ -1116,6 +1116,44 @@ This repository uses modular instruction files for language-specific standards:
 
 Remove rows for languages you're not using.
 
+### Updating Linting and Testing Tables
+
+If you removed Python or PowerShell support, also update the **Linting Configurations** and **Testing Tools** tables in `.github/copilot-instructions.md`.
+
+**Linting Configurations table** — Remove the PSScriptAnalyzer row if you removed PowerShell:
+
+```markdown
+## Linting Configurations
+
+| Tool | Configuration File | Purpose |
+| --- | --- | --- |
+| markdownlint | `.markdownlint.jsonc` | Markdown linting |
+```
+
+**Testing Tools table** — Remove rows for languages you're not using:
+
+If you removed Python:
+
+```markdown
+## Testing Tools
+
+| Language | Framework | Configuration | Test Location |
+| --- | --- | --- | --- |
+| PowerShell | Pester 5.x | Inline in `.github/workflows/powershell-ci.yml` | `tests/PowerShell/` |
+```
+
+If you removed PowerShell:
+
+```markdown
+## Testing Tools
+
+| Language | Framework | Configuration | Test Location |
+| --- | --- | --- | --- |
+| Python | pytest | `pyproject.toml` (`[tool.pytest.ini_options]`) | `tests/` |
+```
+
+If you removed both Python and PowerShell, remove the entire Testing Tools section or update it for your project's languages.
+
 ### Reviewing Instruction Files
 
 Review the files in `.github/instructions/` and remove or modify any that don't apply to your project:
