@@ -557,6 +557,10 @@ This file serves as the "constitution" for all Copilot suggestions in your repos
    - **Pre-commit section** — Update if using different tools or workflows
    - **Testing section** — Update for your test frameworks and locations
 
+5. **Update linting and testing tables** — Modify to reflect your project's languages:
+   - **Linting Configurations table** — Remove the PSScriptAnalyzer row if not using PowerShell
+   - **Testing Tools table** — Remove rows for languages you're not using (Python row if not using Python, PowerShell row if not using PowerShell)
+
 ### Language-Specific Instructions
 
 **Location:** `.github/instructions/`
