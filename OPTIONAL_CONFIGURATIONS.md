@@ -420,6 +420,24 @@ The documentation issue template is simpler than the other templates but still h
 
 > **Note:** The `documentation` label is a GitHub default label that exists in all new repositories. If your organization has renamed or deleted it, update accordingly.
 
+#### Location Placeholder URL
+
+The "Where is it?" field includes a generic placeholder that uses relative file paths:
+
+```yaml
+placeholder: e.g., README.md#usage or docs/guide.md
+```
+
+For a more helpful user experience, you can update this placeholder to include a full URL example specific to your repository:
+
+```yaml
+placeholder: e.g., https://github.com/your-org/your-repo/blob/HEAD/README.md#usage or docs/guide.md
+```
+
+Replace `your-org/your-repo` with your actual organization and repository name.
+
+> **Note:** The default uses simple file paths rather than full URLs to avoid reporters pasting literal placeholders. Updating this is optional and depends on your preference for guiding reporters.
+
 #### Documentation Version Field
 
 For projects that don't maintain versioned documentation, remove this field:
