@@ -100,6 +100,7 @@ The tools you need depend on which features you plan to adopt:
 git --version
 
 # Check Python version (if adopting Python features or pre-commit)
+# Python 3.9+ is required for pre-commit hooks and CI workflows
 python --version
 
 # Check Node.js version (if adopting markdown linting)
@@ -113,6 +114,7 @@ node --version
 git --version
 
 # Check Python version (if adopting Python features or pre-commit)
+# Python 3.9+ is required for pre-commit hooks and CI workflows
 python3 --version
 
 # Check Node.js version (if adopting markdown linting)
@@ -314,7 +316,7 @@ The security policy tells users how to report security vulnerabilities.
    - Review the template's structure for ideas
    - Consider adding sections you may be missing (response timeline, disclosure policy)
 
-> **Note:** Private vulnerability reporting via GitHub Security Advisories is only available for **public repositories**. If your repository is private, ensure you provide an email contact.
+> **Note:** Private vulnerability reporting via GitHub Security Advisories is only available for **public repositories**. If your repository is private, you must provide an email contact in SECURITY.md. Use a dedicated security email (e.g., `security@your-domain.com`) rather than a personal email when possible.
 
 ---
 
@@ -493,8 +495,8 @@ Congratulations! You've completed Part 1 of adopting template features. You shou
 - Adopting CI Workflows (Python and PowerShell)
 - Final validation and cleanup
 
-<!-- TODO: Add link to Part 2 when available -->
-<!-- Continue to [Part 2: Copilot Instructions, Linting, and CI Workflows](GETTING_STARTED_EXISTING_REPO_PART2.md) -->
+<!-- Part 2 of this guide will be published separately. -->
+<!-- When Part 2 is available, the link will be added here. -->
 
 ---
 
