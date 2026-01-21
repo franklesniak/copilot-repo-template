@@ -920,6 +920,82 @@ This feature is most useful for:
 - **Template repositories** that include example Markdown snippets
 - **Projects with contributing guides** that show Markdown formatting examples
 
+### Removing This Feature
+
+If you decide you don't need nested markdown linting, you can remove this optional feature to reduce your dependency footprint. The script and its dependencies are not required for the core functionality of this template.
+
+> **Note:** Removing this feature is optional. The script doesn't cause any problems if left in place—it simply won't be used if you don't invoke it.
+
+**Steps to remove:**
+
+1. **Delete the script file:**
+
+   **Windows (PowerShell):**
+
+   ```powershell
+   Remove-Item -Path ".github/scripts/lint-nested-markdown.js" -Force
+   ```
+
+   **macOS/Linux/FreeBSD:**
+
+   ```bash
+   rm .github/scripts/lint-nested-markdown.js
+   ```
+
+2. **Remove the npm script from `package.json`:**
+
+   Open `package.json` and delete the `lint:md:nested` line from the `scripts` section. For example:
+
+   ```json
+   {
+     "scripts": {
+       "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\"",
+       "lint:md:nested": "node .github/scripts/lint-nested-markdown.js",  ← Delete this line
+       ...
+     }
+   }
+   ```
+
+   > **Note:** Keep all other scripts in the section; only remove the `lint:md:nested` line.
+
+3. **Remove the npm dependencies only used by this script:**
+
+   **Windows (PowerShell):**
+
+   ```powershell
+   npm uninstall glob jsonc-parser markdown-it
+   ```
+
+   **macOS/Linux/FreeBSD:**
+
+   ```bash
+   npm uninstall glob jsonc-parser markdown-it
+   ```
+
+4. **Update the lock file:**
+
+   Run npm install to update `package-lock.json` to reflect the removed dependencies:
+
+   ```bash
+   npm install
+   ```
+
+5. **If you added pre-commit integration, remove the hook:**
+
+   Open `.pre-commit-config.yaml` and remove the `lint-nested-markdown` hook section:
+
+   ```yaml
+   # Remove this entire block if present:
+   - repo: local
+     hooks:
+       - id: lint-nested-markdown
+         name: Lint nested Markdown
+         entry: node .github/scripts/lint-nested-markdown.js
+         language: node
+         files: \.md$
+         pass_filenames: true
+   ```
+
 ---
 
 ## Copilot Documentation Instructions Configuration
