@@ -975,7 +975,7 @@ Before adopting workflows, understand their requirements:
 
    If your Pester tests aren't in `tests/`, update the configuration:
 
-   ```yaml
+   ```powershell
    $config.Run.Path = "your_tests_directory/"
    ```
 
