@@ -17,6 +17,7 @@ This guide walks you through creating a brand-new repository using `franklesniak
 - [Cloning Your New Repository](#cloning-your-new-repository)
 - [Installing Dependencies](#installing-dependencies)
 - [Initial Placeholder Replacement](#initial-placeholder-replacement)
+- [Creating Optional Labels](#creating-optional-labels)
 - [Installing and Configuring Pre-commit](#installing-and-configuring-pre-commit)
 - [Language-Specific Customization](#language-specific-customization)
 - [Updating README.md](#updating-readmemd)
@@ -589,6 +590,38 @@ If you prefer not to use email, you can:
 
 1. Remove the email section entirely from `SECURITY.md`
 2. Keep only the GitHub Security Advisories option (see [`.github/TEMPLATE_GUIDE.md`](.github/TEMPLATE_GUIDE.md) for details)
+
+---
+
+## Creating Optional Labels
+
+The issue templates include labels that should exist in your repository.
+
+**Default GitHub labels (already exist in new repositories):**
+
+- `bug` — Used by bug_report.yml
+- `enhancement` — Used by feature_request.yml
+- `documentation` — Used by documentation_issue.yml
+
+**Optional label to create:**
+
+The templates include a commented-out `triage` label. To use it:
+
+**Using GitHub CLI (Windows PowerShell / macOS / Linux):**
+
+```bash
+gh label create triage --description "Needs triage" --color "d4c5f9"
+```
+
+**Or via GitHub web UI:**
+
+1. Go to your repository → **Settings** → **Labels**
+2. Click **New label**
+3. Name: `triage`
+4. Description: `Needs triage`
+5. Color: `d4c5f9` (light purple)
+
+After creating the label, uncomment the `- triage` line in each issue template (`bug_report.yml`, `feature_request.yml`, and `documentation_issue.yml`).
 
 ---
 
