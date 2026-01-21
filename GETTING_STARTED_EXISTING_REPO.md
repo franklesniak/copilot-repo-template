@@ -1163,28 +1163,28 @@ git push origin feature/adopt-template-features
 
 If you adopted pre-commit, add setup instructions:
 
-```markdown
+````markdown
 ## Development Setup
 
 Before making changes, install pre-commit hooks:
 
-\`\`\`bash
+```bash
 pip install pre-commit
 pre-commit install
-\`\`\`
+```
 
 Pre-commit hooks will automatically run on each commit. You can also run them manually:
 
-\`\`\`bash
+```bash
 pre-commit run --all-files
-\`\`\`
 ```
+````
 
 **Update README.md:**
 
 Add any new development setup steps:
 
-```markdown
+````markdown
 ## Development
 
 ### Prerequisites
@@ -1195,12 +1195,12 @@ Add any new development setup steps:
 
 ### Setup
 
-\`\`\`bash
+```bash
 npm install          # Install markdown linting tools
 pip install pre-commit
 pre-commit install   # Set up git hooks
-\`\`\`
 ```
+````
 
 **Notify your team:**
 
