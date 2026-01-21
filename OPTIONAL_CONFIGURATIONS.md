@@ -17,6 +17,7 @@ This guide covers optional customizations you can make after completing the init
 - [Dependabot Configuration](#dependabot-configuration)
 - [Pre-commit Configuration](#pre-commit-configuration)
 - [Markdown Linting Configuration](#markdown-linting-configuration)
+- [Copilot Documentation Instructions Configuration](#copilot-documentation-instructions-configuration)
 - [CI Workflow Configuration](#ci-workflow-configuration)
 - [PSScriptAnalyzer Configuration](#psscriptanalyzer-configuration)
 - [CODEOWNERS Configuration](#codeowners-configuration)
@@ -449,6 +450,90 @@ Several rules are disabled by default because they are not auto-fixable:
   "MD041": true
 }
 ```
+
+---
+
+## Copilot Documentation Instructions Configuration
+
+**File:** `.github/instructions/docs.instructions.md`
+
+GitHub Copilot instruction files (`.github/instructions/*.md`) provide coding and documentation standards that Copilot applies when generating or editing code in your repository. The `docs.instructions.md` file specifically provides documentation standards that Copilot applies to all Markdown files, defining contract-first, traceable, and drift-resistant documentation practices.
+
+The file contains several customization points that should be updated to match your project's specific needs.
+
+### Customizing Documentation Taxonomy
+
+The default taxonomy suggests a folder structure for documentation:
+
+```markdown
+- **Product spec:** `docs/spec/` (requirements + design; the source of truth)
+- **Developer docs:** `docs/` (how to build, test, extend)
+- **Operational docs / runbooks:** `docs/runbooks/` (diagnosis, remediation, safe operations)
+- **Architecture Decision Records (ADRs):** `docs/adr/` (durable decisions)
+```
+
+**To customize for your project's structure:**
+
+Update the taxonomy section to reflect your actual documentation organization. For example, if your project uses a different structure:
+
+```markdown
+- **API documentation:** `docs/api/` (API reference and usage guides)
+- **User guides:** `docs/guides/` (end-user documentation)
+- **Developer docs:** `docs/dev/` (how to build, test, extend)
+- **Release notes:** `docs/releases/` (version history and changelogs)
+```
+
+> **Note:** If your project does not have a formal documentation structure, you can simplify this section to match your needs or remove categories that don't apply.
+
+### Customizing Canonical Source of Truth
+
+The file recommends defining a canonical specification document that serves as the authoritative reference for system behavior:
+
+```markdown
+Projects SHOULD define a canonical specification document (e.g., `docs/spec/requirements.md`)
+that serves as the authoritative reference for system behavior and requirements.
+```
+
+**To customize for your project:**
+
+- If you have a canonical spec, update the example path to match your actual location:
+
+  ```markdown
+  Projects SHOULD define a canonical specification document (e.g., `docs/SPEC.md`)
+  that serves as the authoritative reference for system behavior and requirements.
+  ```
+
+- If your project does not use a formal specification document, you can note this explicitly or remove the section entirely.
+
+### Customizing Requirements Documentation Standards
+
+The file provides a pattern for tracking formal requirements with identifiers:
+
+```markdown
+- Each requirement SHOULD have a stable identifier (example pattern):
+  - `PROJ-REQ-001`, `PROJ-REQ-002`, ...
+```
+
+**To customize for your project:**
+
+1. **Update the requirement ID pattern** to match your project's naming convention:
+
+   ```markdown
+   - Each requirement SHOULD have a stable identifier (example pattern):
+     - `MYPROJ-REQ-001`, `MYPROJ-REQ-002`, ...
+   ```
+
+2. **Adjust the requirement entry format** if your project uses different metadata fields. The default includes Rationale, Acceptance Criteria, Priority, and Verification. You might customize this to:
+
+   ```markdown
+   - Each requirement entry SHOULD include:
+     - **Rationale:** why it exists
+     - **Acceptance Criteria:** objective checks (bullets)
+     - **Owner:** responsible team or individual
+     - **Target Release:** version when this should be implemented
+   ```
+
+3. **If your project does not track formal requirements**, you can simplify or remove this section entirely. Consider replacing it with guidance appropriate for your documentation needs.
 
 ---
 
