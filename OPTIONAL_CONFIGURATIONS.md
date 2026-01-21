@@ -20,6 +20,7 @@ This guide covers optional customizations you can make after completing the init
 - [Dependabot Configuration](#dependabot-configuration)
 - [Pre-commit Configuration](#pre-commit-configuration)
 - [Markdown Linting Configuration](#markdown-linting-configuration)
+- [Nested Markdown Linting Configuration](#nested-markdown-linting-configuration)
 - [Copilot Documentation Instructions Configuration](#copilot-documentation-instructions-configuration)
 - [Copilot Python Instructions Configuration](#copilot-python-instructions-configuration)
 - [Copilot PowerShell Instructions Configuration](#copilot-powershell-instructions-configuration)
@@ -862,6 +863,62 @@ Several rules are disabled by default because they are not auto-fixable:
   "MD041": true
 }
 ```
+
+---
+
+## Nested Markdown Linting Configuration
+
+**File:** `.github/scripts/lint-nested-markdown.js`
+
+This optional script lints Markdown content embedded within code fences (` ```markdown ` or ` ```md `) in Markdown files. This is useful for documentation-heavy projects that include Markdown examples, ensuring that nested Markdown content follows the same linting rules as the outer Markdown files.
+
+### How to Run
+
+**Scan all Markdown files in the repository:**
+
+```bash
+npm run lint:md:nested
+```
+
+**Lint specific files:**
+
+```bash
+node .github/scripts/lint-nested-markdown.js file1.md file2.md
+```
+
+When file arguments are provided, only those files are linted (useful for pre-commit hooks). When no arguments are provided, all `.md` files are scanned via glob (excluding `node_modules`).
+
+### Automatic Rule Adjustments
+
+The script automatically disables two rules for nested Markdown content:
+
+| Rule | Description | Why Disabled |
+| --- | --- | --- |
+| MD041 | First line in a file should be a top-level heading | Nested Markdown snippets may not start with a top-level heading |
+| MD051 | Link fragments should be valid | Nested Markdown often contains example/placeholder links that reference anchors in other documents |
+
+### Pre-commit Integration (Optional)
+
+If you want to run this script as a pre-commit hook, you can add the following to your `.pre-commit-config.yaml`:
+
+```yaml
+- repo: local
+  hooks:
+    - id: lint-nested-markdown
+      name: Lint nested Markdown
+      entry: node .github/scripts/lint-nested-markdown.js
+      language: node
+      files: \.md$
+      pass_filenames: true
+```
+
+### When to Use This Feature
+
+This feature is most useful for:
+
+- **Documentation-heavy projects** with Markdown examples in code blocks
+- **Template repositories** that include example Markdown snippets
+- **Projects with contributing guides** that show Markdown formatting examples
 
 ---
 

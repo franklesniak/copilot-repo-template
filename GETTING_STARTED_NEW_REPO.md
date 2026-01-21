@@ -475,6 +475,8 @@ This command:
 **What gets installed:** The Node.js dependencies are primarily for **markdown linting** (markdownlint-cli2). This ensures your documentation follows consistent formatting rules.
 
 > **Note:** The `node_modules` folder is automatically excluded from Git (via `.gitignore`), so these files won't be committed to your repository.
+>
+> **Tip:** The repository also includes an optional nested markdown linting script that checks Markdown code blocks within your documentation. See [Nested Markdown Linting Configuration](OPTIONAL_CONFIGURATIONS.md#nested-markdown-linting-configuration) in the optional configurations guide for details.
 
 ---
 
