@@ -25,6 +25,7 @@ This guide covers optional customizations you can make after completing the init
 - [Copilot Python Instructions Configuration](#copilot-python-instructions-configuration)
 - [Copilot PowerShell Instructions Configuration](#copilot-powershell-instructions-configuration)
 - [CI Workflow Configuration](#ci-workflow-configuration)
+- [Auto-fix Pre-commit Workflow Configuration](#auto-fix-pre-commit-workflow-configuration)
 - [PSScriptAnalyzer Configuration](#psscriptanalyzer-configuration)
 - [CODEOWNERS Configuration](#codeowners-configuration)
 - [Node.js Package Configuration](#nodejs-package-configuration)
@@ -1496,6 +1497,53 @@ env:
 - Flat layout: `MYPY_PATHS: "."`
 - src layout: `MYPY_PATHS: "src/ tests/"`
 - Custom: `MYPY_PATHS: "mymodule/ tests/ scripts/"`
+
+---
+
+## Auto-fix Pre-commit Workflow Configuration
+
+**File:** `.github/workflows/auto-fix-precommit.yml`
+
+The template includes an optional workflow that automatically runs pre-commit hooks and commits any auto-fixes (such as formatting corrections and trailing whitespace removal) for branches created by the GitHub Copilot Coding Agent.
+
+### Understanding the Workflow
+
+This workflow:
+
+- Triggers only on `copilot/**` branches when pushed by `copilot-swe-agent[bot]`
+- Runs pre-commit hooks with auto-fix enabled
+- Commits any changes back to the branch automatically
+- Helps AI-assisted development pass pre-commit checks without manual intervention
+
+> **Recommendation:** Keep this workflow enabled if you use GitHub Copilot Coding Agent. The safety net significantly reduces the need for manual pre-commit fix commits.
+
+### When to Keep This Workflow
+
+Keep this workflow if:
+
+- You plan to use GitHub Copilot Coding Agent for automated PRs
+- You want a safety net that auto-fixes pre-commit issues on `copilot/**` branches
+- You prefer automated fixes over manual intervention
+
+### Removing This Workflow
+
+If you don't use GitHub Copilot Coding Agent or prefer to manually commit pre-commit fixes, you can safely remove this workflow.
+
+> **Note:** Removing this workflow is safe—the standard `ci.yml` workflow will still run pre-commit checks and report any issues that need to be fixed.
+
+**Steps to remove:**
+
+**Windows (PowerShell):**
+
+```powershell
+Remove-Item -Path ".github\workflows\auto-fix-precommit.yml" -Force
+```
+
+**macOS/Linux/FreeBSD:**
+
+```bash
+rm -f .github/workflows/auto-fix-precommit.yml
+```
 
 ---
 
