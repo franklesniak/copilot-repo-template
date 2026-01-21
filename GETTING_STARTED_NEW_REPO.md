@@ -26,6 +26,7 @@ This guide walks you through creating a brand-new repository using `franklesniak
 - [Cleanup](#cleanup)
 - [Troubleshooting](#troubleshooting)
 - [Development Workflow](#development-workflow)
+- [Next Steps](#next-steps)
 
 ---
 
@@ -1459,6 +1460,14 @@ git commit -m "Add your feature"
 # Push and open a PR
 git push origin feature/your-feature-name
 ```
+
+---
+
+## Next Steps
+
+After completing the initial setup, you may want to explore additional customization options:
+
+- **[Optional Configurations](OPTIONAL_CONFIGURATIONS.md)**: Fine-tune your repository with optional settings like enabling GitHub Discussions, adjusting Dependabot frequency, customizing linting rules, and more.
 
 ---
 
