@@ -1536,7 +1536,7 @@ If you don't use GitHub Copilot Coding Agent or prefer to manually commit pre-co
 **Windows (PowerShell):**
 
 ```powershell
-Remove-Item -Path ".github\workflows\auto-fix-precommit.yml" -Force
+Remove-Item -Path ".github/workflows/auto-fix-precommit.yml" -Force
 ```
 
 **macOS/Linux/FreeBSD:**
