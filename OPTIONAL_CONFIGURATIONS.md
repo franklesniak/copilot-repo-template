@@ -944,15 +944,19 @@ If you decide you don't need nested markdown linting, you can remove this option
 
 2. **Remove the npm script from `package.json`:**
 
-   Open `package.json` and delete the `lint:md:nested` line from the `scripts` section. After removal, your scripts section should look like:
+   Open `package.json` and delete the `lint:md:nested` line from the `scripts` section. For example:
 
    ```json
    {
      "scripts": {
-       "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\""
+       "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\"",
+       "lint:md:nested": "node .github/scripts/lint-nested-markdown.js",  ← Delete this line
+       ...
      }
    }
    ```
+
+   > **Note:** Keep all other scripts in the section; only remove the `lint:md:nested` line.
 
 3. **Remove the npm dependencies only used by this script:**
 
@@ -969,6 +973,8 @@ If you decide you don't need nested markdown linting, you can remove this option
    ```
 
 4. **Update the lock file:**
+
+   Run npm install to update `package-lock.json` to reflect the removed dependencies:
 
    ```bash
    npm install
