@@ -8,8 +8,6 @@ This guide walks you through creating a brand-new repository using `franklesniak
 
 ## Table of Contents
 
-**Part 1: Initial Setup**
-
 - [What This Template Provides](#what-this-template-provides)
 - [Prerequisites](#prerequisites)
   - [Windows Setup](#windows-setup)
@@ -19,9 +17,6 @@ This guide walks you through creating a brand-new repository using `franklesniak
 - [Cloning Your New Repository](#cloning-your-new-repository)
 - [Installing Dependencies](#installing-dependencies)
 - [Initial Placeholder Replacement](#initial-placeholder-replacement)
-
-**Part 2: Configuration and Customization**
-
 - [Installing and Configuring Pre-commit](#installing-and-configuring-pre-commit)
 - [Language-Specific Customization](#language-specific-customization)
 - [Updating README.md](#updating-readmemd)
@@ -593,12 +588,6 @@ If you prefer not to use email, you can:
 
 1. Remove the email section entirely from `SECURITY.md`
 2. Keep only the GitHub Security Advisories option (see [`.github/TEMPLATE_GUIDE.md`](.github/TEMPLATE_GUIDE.md) for details)
-
----
-
-## Part 2: Configuration and Customization
-
-Congratulations on completing Part 1! Your repository now has all prerequisites installed, is cloned locally, has Node.js dependencies installed, and placeholders are replaced. Now let's configure pre-commit hooks and customize the template for your project.
 
 ---
 
