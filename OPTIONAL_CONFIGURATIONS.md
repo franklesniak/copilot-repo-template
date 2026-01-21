@@ -83,6 +83,22 @@ If you prefer not to enable Discussions but want to redirect support questions a
 3. Replace `OWNER/REPO` with your actual values
 4. Update the URL anchor (`#support`) if your section has a different heading
 
+### Security Link URL Customization
+
+The `config.yml` file includes a security contact link that points to `/security` by default:
+
+```yaml
+- name: 🔒 Security Vulnerabilities
+  url: https://github.com/OWNER/REPO/security
+  about: Report security issues privately (do not open a public issue). Private vulnerability reporting is only available for public repositories.
+```
+
+After enabling private vulnerability reporting in your repository, you can optionally update this URL to provide a more direct path to the vulnerability reporting form.
+
+> **Important:** Private vulnerability reporting is only available for **public repositories**. If your repository is private, security reporters must use email contact as specified in your `SECURITY.md` file.
+>
+> **See:** [Security Configuration](#security-configuration) for instructions on enabling private vulnerability reporting and updating this URL.
+
 ### Bug Report Template Customization
 
 **File:** `.github/ISSUE_TEMPLATE/bug_report.yml`
