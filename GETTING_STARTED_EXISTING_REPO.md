@@ -438,11 +438,14 @@ gh label create triage --description "Needs triage" --color "d4c5f9"
 
 **Or via GitHub web UI:**
 
-1. Go to your repository → **Issues** → **Labels**
-2. Click **New label**
-3. Name: `triage`
-4. Description: `Needs triage`
-5. Color: `d4c5f9` (light purple)
+1. Go to your repository
+2. Click **Issues** or **Pull requests**
+3. Above the list, click **Labels**
+4. Click **New label**
+5. Under "Label name", type `triage`
+6. Under "Description", type `Needs triage`
+7. Edit the color hexadecimal number to `d4c5f9` (light purple)
+8. Click **Create label**
 
 After creating the label, uncomment the `- triage` line in each issue template.
 
