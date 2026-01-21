@@ -1,3 +1,8 @@
+---
+applyTo:  "**/*.ps1"
+description: "PowerShell coding standards"
+---
+
 # PowerShell Writing Style
 
 **Version:** 1.5.20260119.0
