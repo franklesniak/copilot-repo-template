@@ -1297,7 +1297,6 @@ git push origin feature/adopt-template-features
 **Files you may want to delete after adoption:**
 
 - If you cloned the template separately, delete the clone directory
-- `.github/DESIGN_DECISIONS.md` — Template design rationale (useful for maintainers understanding why decisions were made)
 - `templates/` directory — Only useful if your project is also a template
 
 **Files you should keep:**
@@ -1305,6 +1304,7 @@ git push origin feature/adopt-template-features
 - All configuration files you adopted (`.markdownlint.jsonc`, `.pre-commit-config.yaml`, etc.)
 - All workflow files in `.github/workflows/`
 - Copilot instructions (`.github/copilot-instructions.md` and `.github/instructions/`)
+- `.github/DESIGN_DECISIONS.md` — Template design rationale (useful for maintainers understanding why decisions were made)
 
 ### Updating Your Project Documentation
 
@@ -1394,7 +1394,7 @@ Before considering adoption complete, verify:
 - [ ] All copied files have placeholders replaced (OWNER/REPO, @OWNER, `window.title` in `.vscode/settings.json`, etc.)
 - [ ] Conflicting configurations have been merged, not overwritten
 - [ ] Unused language files have been removed (e.g., PowerShell instructions if not using PowerShell)
-- [ ] `.github/DESIGN_DECISIONS.md` deleted (if not needed for internal reference)
+- [ ] `.github/DESIGN_DECISIONS.md` kept for design rationale reference
 
 ### Functionality
 

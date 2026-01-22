@@ -763,4 +763,3 @@ When adding new design decisions, follow the established format:
 2. Explain the rationale and trade-offs
 3. Document alternatives considered and why they were rejected
 4. Include recommendations where appropriate
-
