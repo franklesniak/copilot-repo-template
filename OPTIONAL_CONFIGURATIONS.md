@@ -31,6 +31,7 @@ This guide covers optional customizations you can make after completing the init
 - [Auto-fix Pre-commit Workflow Configuration](#auto-fix-pre-commit-workflow-configuration)
 - [Placeholder Check Workflow Configuration](#placeholder-check-workflow-configuration)
 - [PowerShell CI Workflow Configuration](#powershell-ci-workflow-configuration)
+- [Using the Python Template Files](#using-the-python-template-files)
 - [Using the Pester Test Template](#using-the-pester-test-template)
 - [PSScriptAnalyzer Configuration](#psscriptanalyzer-configuration)
 - [CODEOWNERS Configuration](#codeowners-configuration)
