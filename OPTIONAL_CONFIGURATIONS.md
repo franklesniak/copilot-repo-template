@@ -864,6 +864,8 @@ The following rules can be configured to match your project's documentation styl
 | --- | --- | --- | --- |
 | MD003 | Heading style | `atx` | `atx`, `setext`, `consistent` |
 | MD004 | Unordered list marker | `dash` | `dash`, `asterisk`, `plus`, `consistent` |
+| MD012 | Maximum consecutive blank lines | `2` | Any positive integer |
+| MD024 | Multiple headings with same content | `siblings_only: true` | `true`, `false`, or object with `siblings_only` |
 | MD029 | Ordered list prefix | `ordered` | `ordered`, `one`, `one_or_ordered` |
 | MD035 | Horizontal rule style | `---` | `---`, `***`, `___`, `consistent` |
 | MD048 | Code fence style | `backtick` | `backtick`, `tilde`, `consistent` |
@@ -876,6 +878,26 @@ The following rules can be configured to match your project's documentation styl
 {
   "MD004": {
     "style": "asterisk"
+  }
+}
+```
+
+**Example: Allowing up to 3 consecutive blank lines:**
+
+```jsonc
+{
+  "MD012": {
+    "maximum": 3
+  }
+}
+```
+
+**Example: Disallowing duplicate headings entirely:**
+
+```jsonc
+{
+  "MD024": {
+    "siblings_only": false
   }
 }
 ```
