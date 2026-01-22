@@ -1565,7 +1565,20 @@ After completing setup and verification, clean up template-specific files.
 
 ### Delete DESIGN_DECISIONS.md (Optional)
 
-The design decisions document contains rationale for template design choices. It's useful for maintainers to understand why the template was designed a certain way, but is not needed for downstream repositories. Delete it if you don't need it for reference:
+The design decisions document contains rationale for template design choices. It may be useful for ongoing repository maintenance if you want to understand why certain configurations were chosen. However, for most downstream repositories, this document is not essential once you've completed template adoption.
+
+**Keep it if:**
+
+- You anticipate needing to understand why certain configurations were made
+- Multiple maintainers will work on the repository and may benefit from design context
+- You want to document your own design decisions alongside the template's
+
+**Delete it if:**
+
+- You prefer a cleaner `.github/` directory
+- You've already reviewed the relevant design decisions and don't need ongoing reference
+
+To delete:
 
 **Windows (PowerShell):**
 

@@ -746,3 +746,21 @@ For a multi-language project (Python + PowerShell):
 - Markdown Lint
 - lint (PowerShell)
 - PowerShell Tests (Pester)
+
+---
+
+## Document Maintenance
+
+This document should be updated when:
+
+- New design decisions are made that affect template structure or behavior
+- Existing design decisions are revised based on new information or feedback
+- Design decisions are superseded by new approaches
+
+When adding new design decisions, follow the established format:
+
+1. Add a heading with the pattern `### Design Decision: [Topic]`
+2. Explain the rationale and trade-offs
+3. Document alternatives considered and why they were rejected
+4. Include recommendations where appropriate
+
