@@ -36,6 +36,7 @@ This guide covers optional customizations you can make after completing the init
 - [PSScriptAnalyzer Configuration](#psscriptanalyzer-configuration)
 - [CODEOWNERS Configuration](#codeowners-configuration)
 - [Node.js Package Configuration](#nodejs-package-configuration)
+- [Gitignore Configuration](#gitignore-configuration)
 - [License Customization](#license-customization)
 
 ---
@@ -2595,6 +2596,51 @@ The template includes an `engines` field:
 ```
 
 Update this to match your project's Node.js version requirements.
+
+---
+
+## Gitignore Configuration
+
+**File:** `.gitignore`
+
+The default `.gitignore` file includes standard exclusion patterns for Node.js, Python, pre-commit, OS-generated files, and IDE configurations. Most projects can use it without modification.
+
+### Excluding Lock Files
+
+The `.gitignore` includes a commented-out option to exclude `package-lock.json`:
+
+```text
+# Lock files (optional - uncomment to exclude)
+# package-lock.json
+```
+
+**To exclude lock files from version control:**
+
+Uncomment the `package-lock.json` line:
+
+```text
+# Lock files (optional - uncomment to exclude)
+package-lock.json
+```
+
+> **Note:** Most projects should keep `package-lock.json` committed to ensure reproducible builds. Only exclude it if you have a specific reason, such as always wanting fresh dependency resolution during installs.
+
+### Adding Project-Specific Exclusions
+
+To add custom exclusion patterns for your project:
+
+1. Open `.gitignore` in your editor
+2. Add your patterns at the end of the file
+3. Use comments to explain non-obvious exclusions
+
+**Example:**
+
+```text
+# Project-specific exclusions
+data/
+*.log
+secrets/
+```
 
 ---
 
