@@ -298,6 +298,7 @@ For detailed customization guidance, see [`.github/TEMPLATE_GUIDE.md`](.github/T
 
 - [ ] Replace `OWNER/REPO` placeholders in `.github/ISSUE_TEMPLATE/config.yml` with your actual org/repo name
 - [ ] Replace `@OWNER` in `.github/CODEOWNERS` with your GitHub username or team (or delete the file if not needed)
+- [ ] Update `window.title` in `.vscode/settings.json` with your repository name
 - [ ] Update `SECURITY.md`: Choose reporting method based on repository visibility (see [Private vs. Public Repository Considerations](.github/TEMPLATE_GUIDE.md#private-vs-public-repository-considerations) in `.github/TEMPLATE_GUIDE.md`):
   - **Public repo:** Choose email, advisories, or both
   - **Private repo:** Use email-only; remove GitHub Advisories section
