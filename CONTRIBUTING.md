@@ -14,7 +14,7 @@ Rejected because: Harder to replace in bulk, produces non-working commands,
 inconsistent with other files that require real values (CI configs, package.json)
 
 See README.md Template Setup Checklist for adoption instructions.
-See .github/TEMPLATE_GUIDE.md for detailed customization guidance.
+See OPTIONAL_CONFIGURATIONS.md for detailed customization guidance.
 -->
 
 Thank you for your interest in contributing! This document provides guidelines for contributing to this repository.
@@ -302,7 +302,7 @@ If using a proprietary license:
 - Consider adding Contributor License Agreement (CLA) requirements
 - Consult with legal counsel for appropriate contribution terms
 
-See .github/TEMPLATE_GUIDE.md "License Customization" section for detailed guidance.
+See OPTIONAL_CONFIGURATIONS.md "License Customization" section for detailed guidance.
 -->
 
 By contributing to this project, you agree that your contributions will be licensed under the same license as the project (MIT License).
@@ -314,9 +314,9 @@ TEMPLATE ADOPTERS: This entire section is meta-documentation about the template 
 After you've reviewed and understood this content, you should:
 - Option A: Remove this entire section (recommended for most downstream projects)
 - Option B: Keep it if your project is also a template
-- Option C: Move relevant content to .github/TEMPLATE_GUIDE.md or your own docs
+- Option C: Move relevant content to your own project documentation
 
-See .github/TEMPLATE_GUIDE.md for detailed guidance on CONTRIBUTING.md customization.
+See OPTIONAL_CONFIGURATIONS.md for detailed guidance on CONTRIBUTING.md customization.
 -->
 
 This repository is a template designed for projects that use GitHub Copilot for AI-assisted development.

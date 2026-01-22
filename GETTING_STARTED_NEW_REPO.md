@@ -615,7 +615,7 @@ The `[security contact email]` placeholder in `SECURITY.md` should be replaced w
 If you prefer not to use email, you can:
 
 1. Remove the email section entirely from `SECURITY.md`
-2. Keep only the GitHub Security Advisories option (see [`.github/TEMPLATE_GUIDE.md`](.github/TEMPLATE_GUIDE.md) for details)
+2. Keep only the GitHub Security Advisories option (see [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md) for details)
 
 ---
 
@@ -1123,7 +1123,7 @@ Delete the HTML comment at the top of the file (lines 1-4):
 
 ```markdown
 <!--
-Template users: see .github/TEMPLATE_GUIDE.md for guidance on tailoring this PR
+Template users: see OPTIONAL_CONFIGURATIONS.md for guidance on tailoring this PR
 template. Delete this comment once the PR template is tailored for your needs.
 -->
 ```
@@ -1252,7 +1252,7 @@ Delete from the HTML comment through the end of the file.
 
 ### Other Customizations
 
-See `.github/TEMPLATE_GUIDE.md` for additional `CONTRIBUTING.md` customization guidance, including:
+See [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md) for additional `CONTRIBUTING.md` customization guidance, including:
 
 - Replacing `OWNER/REPO` placeholders with your organization and repository name
 - Updating Python version requirements
@@ -1426,7 +1426,7 @@ Delete `.github/dependabot.yml` from your repository.
 
 Branch protection rules help prevent accidental force pushes and ensure code review. See [GitHub's branch protection documentation](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches) for setup instructions.
 
-For detailed guidance on branch protection setup, see the "Branch Protection Setup" section in [`.github/TEMPLATE_GUIDE.md`](.github/TEMPLATE_GUIDE.md).
+For detailed guidance on branch protection setup, see the "Branch Protection Setup" section in [`.github/DESIGN_DECISIONS.md`](.github/DESIGN_DECISIONS.md).
 
 ---
 
@@ -1563,20 +1563,20 @@ After completing the setup checklist, perform the following quick verification:
 
 After completing setup and verification, clean up template-specific files.
 
-### Delete TEMPLATE_GUIDE.md
+### Delete DESIGN_DECISIONS.md (Optional)
 
-The template guide is only needed during initial setup. Delete it:
+The design decisions document contains rationale for template design choices. It's useful for maintainers to understand why the template was designed a certain way, but is not needed for downstream repositories. Delete it if you don't need it for reference:
 
 **Windows (PowerShell):**
 
 ```powershell
-Remove-Item -Force ".github\TEMPLATE_GUIDE.md"
+Remove-Item -Force ".github\DESIGN_DECISIONS.md"
 ```
 
 **macOS/Linux/FreeBSD:**
 
 ```bash
-rm -f .github/TEMPLATE_GUIDE.md
+rm -f .github/DESIGN_DECISIONS.md
 ```
 
 ### Consider This Getting Started Guide

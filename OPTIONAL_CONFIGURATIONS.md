@@ -2872,6 +2872,6 @@ If your project uses Python, periodically review your minimum Python version req
 
 - **[Creating a New Repository](GETTING_STARTED_NEW_REPO.md)**: Complete setup guide for new repositories
 - **[Adding Template Features to an Existing Repository](GETTING_STARTED_EXISTING_REPO.md)**: Adoption guide for existing repositories
-- **[Template Guide](.github/TEMPLATE_GUIDE.md)**: Detailed customization guidance for GitHub-specific files
+- **[Design Decisions](.github/DESIGN_DECISIONS.md)**: Rationale behind template design choices (for maintainers and code reviewers)
 
-> **Note:** The Template Guide (`.github/TEMPLATE_GUIDE.md`) should be deleted after completing template adoption, as it contains meta-content specific to the template setup process.
+> **Note:** The Design Decisions document (`.github/DESIGN_DECISIONS.md`) is internal documentation for understanding WHY the template was designed a certain way. It is NOT an instruction guide—use the getting started guides above for setup instructions.
