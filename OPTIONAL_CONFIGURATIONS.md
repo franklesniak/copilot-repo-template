@@ -2177,7 +2177,7 @@ This template repository includes reference Python configuration files and scaff
    - Add your runtime dependencies to the `dependencies = []` list
    - Adjust development dependencies as needed
 
-3. **Create your source code** in either a flat layout or `src/` layout. See [`templates/python/README.md`](templates/python/README.md) for detailed layout options.
+3. **Create your source code** in either a flat layout (modules in project root) or `src/` layout (modules in `src/your_package/`). See [`templates/python/README.md`](templates/python/README.md) for detailed layout options and directory structure examples.
 
 4. **Replace or delete `tests/test_placeholder.py`** once you have actual tests in place.
 
@@ -2201,7 +2201,7 @@ When you add real tests for your project:
 
 Use the Python template files when:
 
-- **Starting a new Python project from scratch**: Use as an alternative to the main `src/` and `tests/` directories if you prefer to start fresh with template-based configuration
+- **Starting a new Python project from scratch**: These templates provide clean configuration files that you can customize for your project
 - **Adding Python to an existing repository**: If your repository doesn't have Python tooling configured, these templates provide a complete starting point
 
 For detailed information on project layout options (flat vs. `src/` layout), Python version configuration, and mypy path configuration, see [`templates/python/README.md`](templates/python/README.md).
