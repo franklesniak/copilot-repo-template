@@ -848,7 +848,25 @@ from copilot_repo_template.example import hello
 from your_package_name.example import hello
 ```
 
-#### 4. Verify Python Setup
+#### 4. Replace Example Code with Your Project Code
+
+The template includes example files demonstrating Python coding standards. Replace these with your actual project code:
+
+1. **Replace the example module:**
+   - Delete or replace `src/your_package_name/example.py` with your actual Python modules
+   - The example file contains `greet()` and `add_numbers()` functions for demonstration only
+
+2. **Update `__init__.py`:**
+   - Update `src/your_package_name/__init__.py` with your package's docstring and any exports you need
+   - Update the `__version__` variable if using versioning
+
+3. **Replace example tests:**
+   - Delete or replace `tests/test_example.py` with tests for your actual modules
+   - Follow the pytest conventions demonstrated in the example test file
+
+> **Tip:** The example files demonstrate the coding standards defined in `.github/instructions/python.instructions.md`. Review this file when writing your own code to ensure consistency.
+
+#### 5. Verify Python Setup
 
 Install the package in development mode and run tests:
 
@@ -866,7 +884,7 @@ pip install -e ".[dev]"
 pytest tests/ -v
 ```
 
-You should see output indicating tests passed. If you renamed the package, update the example test file or replace it with your own tests.
+You should see output indicating tests passed. If you haven't yet replaced the example tests with your own, you'll see the template's example tests running.
 
 ### If NOT Using Python
 
