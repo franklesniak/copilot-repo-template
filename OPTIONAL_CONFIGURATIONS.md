@@ -31,6 +31,7 @@ This guide covers optional customizations you can make after completing the init
 - [Auto-fix Pre-commit Workflow Configuration](#auto-fix-pre-commit-workflow-configuration)
 - [Placeholder Check Workflow Configuration](#placeholder-check-workflow-configuration)
 - [PowerShell CI Workflow Configuration](#powershell-ci-workflow-configuration)
+- [Using the Pester Test Template](#using-the-pester-test-template)
 - [PSScriptAnalyzer Configuration](#psscriptanalyzer-configuration)
 - [CODEOWNERS Configuration](#codeowners-configuration)
 - [Node.js Package Configuration](#nodejs-package-configuration)
@@ -2136,6 +2137,73 @@ rm -f .github/workflows/powershell-ci.yml
 ```
 
 > **Note:** If you want to remove all PowerShell-related files from the repository (not just the workflow), see the "If NOT Using PowerShell" section in [GETTING_STARTED_NEW_REPO.md](GETTING_STARTED_NEW_REPO.md) for comprehensive removal instructions.
+
+---
+
+## Using the Pester Test Template
+
+**File:** `templates/powershell/Example.Tests.ps1`
+
+This template repository includes a comprehensive Pester 5.x test template that demonstrates common testing patterns. Use this template as a starting point when creating tests for your PowerShell functions.
+
+### What the Template Demonstrates
+
+The template file includes working examples of:
+
+- **BeforeAll/BeforeEach** for test setup and dot-sourcing functions
+- **Describe/Context/It** block structure for organizing tests
+- **Arrange-Act-Assert (AAA)** pattern for clear test organization
+- **Testing integer return codes** (0=success, -1=failure) for v1.0-style functions
+- **Testing reference parameters** (`[ref]`) for functions that return data via references
+- **Testing boolean returns** for `Test-*` functions
+- **Basic mocking** with the `Mock` command to isolate tests from external dependencies
+
+### How to Use the Template
+
+1. **Copy the template file** to your tests directory:
+
+   **Windows (PowerShell):**
+
+   ```powershell
+   Copy-Item "templates/powershell/Example.Tests.ps1" "tests/PowerShell/MyFunction.Tests.ps1"
+   ```
+
+   **macOS/Linux/FreeBSD:**
+
+   ```bash
+   cp templates/powershell/Example.Tests.ps1 tests/PowerShell/MyFunction.Tests.ps1
+   ```
+
+2. **Remove the inline example functions** from the `BeforeAll` block. These are demonstration functions (`Get-ExampleGreeting`, `Test-IsValidEmail`, `Get-ProcessedData`) that exist only to make the template runnable as-is.
+
+3. **Uncomment and update the dot-source line** to import your actual function file:
+
+   ```powershell
+   BeforeAll {
+       # Update this path to your actual function file
+       . $PSScriptRoot/../../src/MyFunction.ps1
+   }
+   ```
+
+4. **Replace the example `Describe` blocks** with tests for your actual functions, following the patterns demonstrated for your specific return types.
+
+### Running the Template Tests
+
+You can run the template file directly to see the test patterns in action:
+
+```powershell
+Invoke-Pester -Path templates/powershell/Example.Tests.ps1 -Output Detailed
+```
+
+### About the Placeholder File
+
+The file `tests/PowerShell/Placeholder.Tests.ps1` is a minimal placeholder that exists to ensure the PowerShell CI workflow passes with a valid test file. When you add real tests for your project:
+
+1. Copy the template file as described above
+2. Customize it for your functions
+3. Delete `Placeholder.Tests.ps1` once you have real tests in place
+
+The template file provides much more comprehensive examples than the placeholder and should be your primary reference when writing Pester tests.
 
 ---
 
