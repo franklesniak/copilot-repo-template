@@ -1563,34 +1563,16 @@ After completing the setup checklist, perform the following quick verification:
 
 After completing setup and verification, clean up template-specific files.
 
-### Delete DESIGN_DECISIONS.md (Optional)
+### Keep DESIGN_DECISIONS.md
 
-The design decisions document contains rationale for template design choices. It may be useful for ongoing repository maintenance if you want to understand why certain configurations were chosen. However, for most downstream repositories, this document is not essential once you've completed template adoption.
+The design decisions document (`.github/DESIGN_DECISIONS.md`) contains rationale for template design choices. **We recommend keeping this file** as it provides valuable context for:
 
-**Keep it if:**
+- Understanding why certain configurations were made
+- Onboarding new maintainers who benefit from design context
+- Recording your own design decisions alongside the template's rationale
+- Future code reviews and maintenance decisions
 
-- You anticipate needing to understand why certain configurations were made
-- Multiple maintainers will work on the repository and may benefit from design context
-- You want to document your own design decisions alongside the template's
-
-**Delete it if:**
-
-- You prefer a cleaner `.github/` directory
-- You've already reviewed the relevant design decisions and don't need ongoing reference
-
-To delete:
-
-**Windows (PowerShell):**
-
-```powershell
-Remove-Item -Force ".github\DESIGN_DECISIONS.md"
-```
-
-**macOS/Linux/FreeBSD:**
-
-```bash
-rm -f .github/DESIGN_DECISIONS.md
-```
+The file is internal documentation that does not affect end users or repository functionality.
 
 ### Consider This Getting Started Guide
 
