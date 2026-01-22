@@ -38,6 +38,9 @@ This guide covers optional customizations you can make after completing the init
 - [Node.js Package Configuration](#nodejs-package-configuration)
 - [Gitignore Configuration](#gitignore-configuration)
 - [License Customization](#license-customization)
+- [Ongoing Maintenance](#ongoing-maintenance)
+  - [Updating Pre-commit Hooks](#updating-pre-commit-hooks)
+  - [Reviewing Python Version Requirements](#reviewing-python-version-requirements)
 
 ---
 
@@ -2804,6 +2807,39 @@ Some projects offer multiple license options (e.g., GPL for open source use, com
 1. Include both license texts in `LICENSE` (or separate files like `LICENSE-MIT` and `LICENSE-APACHE`)
 2. Clearly explain the licensing options in `README.md`
 3. Document which license applies under which conditions
+
+---
+
+## Ongoing Maintenance
+
+These are periodic maintenance tasks for repositories created from the template.
+
+### Updating Pre-commit Hooks
+
+Pre-commit hooks should be kept up-to-date for security and compatibility:
+
+```bash
+# Check for and apply updates to pre-commit hooks
+pre-commit autoupdate
+
+# Test that updated hooks work correctly
+pre-commit run --all-files
+
+# Commit the updated configuration
+git add .pre-commit-config.yaml
+git commit -m "chore: update pre-commit hooks"
+```
+
+**Frequency:** Monthly or when security advisories are published for hook dependencies (Black, Ruff, etc.).
+
+### Reviewing Python Version Requirements
+
+If your project uses Python, periodically review your minimum Python version requirement:
+
+1. Visit the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page
+2. Check which versions are in "bugfix" status
+3. Update `pyproject.toml` `requires-python` field if needed
+4. Update CI workflow Python version matrix if needed
 
 ---
 
