@@ -33,6 +33,7 @@ This guide covers optional customizations you can make after completing the init
 - [PSScriptAnalyzer Configuration](#psscriptanalyzer-configuration)
 - [CODEOWNERS Configuration](#codeowners-configuration)
 - [Node.js Package Configuration](#nodejs-package-configuration)
+- [License Customization](#license-customization)
 
 ---
 
@@ -2228,6 +2229,147 @@ The template includes an `engines` field:
 ```
 
 Update this to match your project's Node.js version requirements.
+
+---
+
+## License Customization
+
+**File:** `LICENSE` (and related files)
+
+This template uses the MIT License by default. If your project requires different license terms, you will need to update multiple files to ensure consistency.
+
+### Files That Reference the License
+
+When changing your project's license, update all of the following files:
+
+| File | What to Update |
+| --- | --- |
+| `LICENSE` | Replace entire file with your license text |
+| `CONTRIBUTING.md` | Update the "License" section |
+| `README.md` | Update the "License" section (near bottom of file) |
+| `pyproject.toml` | Update `license = { text = "MIT" }` in `[project]` section |
+| `package.json` | Update `"license": "MIT"` field |
+| `templates/python/pyproject.toml` | Update `license = { text = "MIT" }` (only if keeping the templates directory) |
+
+> **Note:** The `package-lock.json` file contains `"license": "MIT"` entries, but these refer to the licenses of npm dependencies (not your project). These do NOT need to be changed when updating your project's license.
+
+### Keeping MIT License (Default)
+
+No changes required. The MIT License is suitable for most open source projects where you want to allow maximum reuse with minimal restrictions.
+
+### Changing to Apache 2.0
+
+Replace MIT with Apache 2.0 if you need explicit patent protection.
+
+**Step 1:** Replace the `LICENSE` file content with the Apache 2.0 license text from [apache.org](https://www.apache.org/licenses/LICENSE-2.0.txt).
+
+**Step 2:** Update all references:
+
+```markdown
+<!-- In CONTRIBUTING.md -->
+By contributing to this project, you agree that your contributions will be licensed
+under the same license as the project (Apache License 2.0).
+```
+
+```markdown
+<!-- In README.md -->
+Apache License 2.0 - See [LICENSE](LICENSE) for details.
+```
+
+```toml
+# In pyproject.toml and templates/python/pyproject.toml
+license = { text = "Apache-2.0" }
+```
+
+```json
+// In package.json
+"license": "Apache-2.0"
+```
+
+### Changing to a Proprietary License
+
+For closed-source or commercial projects, replace the MIT License with appropriate proprietary terms.
+
+**Step 1:** Replace the `LICENSE` file with your proprietary license text.
+
+**Step 2:** Update `CONTRIBUTING.md` to reflect contribution terms (replace `{{COMPANY}}` with your company name):
+
+```markdown
+## License
+
+This project is proprietary software. By contributing to this project, you agree that:
+
+1. Your contributions become the property of {{COMPANY}}
+2. You have the right to make the contribution
+3. You grant {{COMPANY}} all rights to use your contribution
+
+Contributors may be required to sign a Contributor License Agreement (CLA) before
+contributions can be accepted.
+```
+
+**Step 3:** Update `README.md` (replace `{{YEAR}}` with the copyright year or range, e.g., `2024` or `2020-2024`):
+
+```markdown
+## License
+
+Proprietary - Copyright {{YEAR}} {{COMPANY}}. All rights reserved.
+See [LICENSE](LICENSE) for details.
+```
+
+**Step 4:** Update package manifests:
+
+```toml
+# In pyproject.toml
+license = { text = "Proprietary" }
+```
+
+```json
+// In package.json - choose based on your situation:
+// Use "UNLICENSED" for internal/private projects with no license granted:
+"license": "UNLICENSED"
+// Use "SEE LICENSE IN LICENSE" when you have a custom license file:
+"license": "SEE LICENSE IN LICENSE"
+```
+
+**Additional considerations:**
+
+- Consider requiring Contributor License Agreements (CLAs) for external contributions
+- Ensure employment contracts or contributor agreements assign intellectual property rights appropriately
+- Review all open source dependencies to ensure their licenses are compatible with proprietary use
+- Have legal counsel review your license terms before public or customer distribution
+
+### Other Open Source Licenses
+
+For licenses not covered above (BSD, GPL, LGPL, MPL, etc.), follow the same pattern:
+
+1. Replace `LICENSE` file with the full license text
+2. Update `CONTRIBUTING.md` contributor agreement
+3. Update `README.md` license section
+4. Update `pyproject.toml` with the appropriate SPDX identifier
+5. Update `package.json` with the appropriate SPDX identifier
+
+**Common SPDX identifiers:**
+
+| License | SPDX Identifier |
+| --- | --- |
+| MIT | `MIT` |
+| Apache 2.0 | `Apache-2.0` |
+| BSD 2-Clause | `BSD-2-Clause` |
+| BSD 3-Clause | `BSD-3-Clause` |
+| GPL 3.0 | `GPL-3.0-only` |
+| LGPL 3.0 | `LGPL-3.0-only` |
+| MPL 2.0 | `MPL-2.0` |
+| ISC | `ISC` |
+
+For the complete list of SPDX identifiers, see [spdx.org/licenses](https://spdx.org/licenses/).
+
+### Dual Licensing
+
+Some projects offer multiple license options (e.g., GPL for open source use, commercial license for proprietary use). If dual licensing:
+
+1. Include both license texts in `LICENSE` (or separate files like `LICENSE-MIT` and `LICENSE-APACHE`)
+2. Clearly explain the licensing options in `README.md`
+3. Document which license applies under which conditions
 
 ---
 
