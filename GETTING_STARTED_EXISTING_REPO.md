@@ -56,6 +56,7 @@ This guide walks you through adopting features from `franklesniak/copilot-repo-t
   - [Auto-fix Pre-commit Workflow](#auto-fix-pre-commit-workflow)
   - [Placeholder Check Workflow](#placeholder-check-workflow)
   - [Python CI Workflow](#python-ci-workflow)
+    - [If You Already Have pyproject.toml](#if-you-already-have-pyprojecttoml)
   - [PowerShell CI Workflow](#powershell-ci-workflow)
   - [Merging with Existing CI](#merging-with-existing-ci)
 - [Adopting PSScriptAnalyzer Configuration](#adopting-psscriptanalyzer-configuration)
@@ -1039,6 +1040,66 @@ Before adopting workflows, understand their requirements:
 - Compare your workflow with the template
 - Consider adding specific checks from the template as additional jobs
 - The template's job dependency pattern (`needs: pre-commit`) ensures tests don't run on poorly-formatted code
+
+#### If You Already Have pyproject.toml
+
+If your Python project already has a `pyproject.toml` file, you'll need to ensure it includes the required configuration for the CI workflow to pass successfully.
+
+**Required Development Dependencies:**
+
+The CI workflow expects certain development dependencies to be installed. Add these to your `pyproject.toml` if not already present:
+
+| Dependency | Minimum Version | Purpose |
+| --- | --- | --- |
+| `pytest` | `>=8.0.0` | Running tests in the CI workflow |
+| `pytest-cov` | `>=4.0` | Generating test coverage reports |
+| `mypy` | `>=1.0` | Type checking Python code |
+| `ruff` | `>=0.9.0` | Code linting and formatting (installed automatically by pre-commit, but useful for local development) |
+
+**Adding Development Dependencies:**
+
+Add or merge the `[project.optional-dependencies]` section in your existing `pyproject.toml`:
+
+```toml
+[project.optional-dependencies]
+dev = [
+    # Required for CI workflow:
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0",
+    "mypy>=1.0",
+    # Include your existing dev dependencies as well
+    # "your-existing-dependency>=1.0.0",
+]
+```
+
+> **Note:** If you already have a `dev` extras section, merge these dependencies with your existing ones.
+
+**Adding mypy Configuration:**
+
+The CI workflow runs mypy for type checking. Add the `[tool.mypy]` section if not present:
+
+```toml
+[tool.mypy]
+python_version = "3.13"  # Match your project's requires-python version
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false  # Start permissive, tighten later as you add type hints
+```
+
+> **Tip:** Start with `disallow_untyped_defs = false` to avoid errors on untyped functions. You can tighten this requirement as your project matures and you add more type annotations.
+
+**Adding pytest Configuration:**
+
+Add the `[tool.pytest.ini_options]` section to configure test discovery:
+
+```toml
+[tool.pytest.ini_options]
+testpaths = ["tests"]  # Adjust to match your test directory location
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+```
+
+> **Note:** See [Using the Python Template Files](OPTIONAL_CONFIGURATIONS.md#using-the-python-template-files) for more comprehensive Python configuration options, including Black and Ruff tool settings.
 
 ### PowerShell CI Workflow
 
