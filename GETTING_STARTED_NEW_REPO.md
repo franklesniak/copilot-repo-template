@@ -20,6 +20,7 @@ This guide walks you through creating a brand-new repository using `franklesniak
 - [Creating Optional Labels](#creating-optional-labels)
 - [Installing and Configuring Pre-commit](#installing-and-configuring-pre-commit)
 - [Language-Specific Customization](#language-specific-customization)
+- [Updating package.json Metadata](#updating-packagejson-metadata)
 - [Customizing the Pull Request Template](#customizing-the-pull-request-template)
 - [Updating README.md](#updating-readmemd)
 - [Customizing CONTRIBUTING.md](#customizing-contributingmd)
@@ -1057,6 +1058,56 @@ Edit `.github/ISSUE_TEMPLATE/bug_report.yml` and `.github/ISSUE_TEMPLATE/feature
 #### Update Pull Request Template
 
 Edit `.github/pull_request_template.md` to remove the "PowerShell-Specific (if applicable)" section.
+
+---
+
+## Updating package.json Metadata
+
+**File:** `package.json`
+
+The `package.json` file contains template-specific values that should be updated to reflect your project. This applies to **all projects** using this template, not just Node.js projects, because `package.json` is used for the markdown linting tooling.
+
+### Fields to Update
+
+Open `package.json` and update the following fields:
+
+| Field | Template Value | Update To |
+| --- | --- | --- |
+| `name` | `"copilot-repo-template"` | Your project name (lowercase, no spaces) |
+| `description` | `"Template repository with Copilot instructions and code quality tooling"` | Your project description |
+| `author` | `"Frank Lesniak"` | Your name or organization |
+| `keywords` | `["template", "copilot", "linting"]` | Keywords relevant to your project |
+
+### Example
+
+After updating, your `package.json` metadata might look like:
+
+```json
+{
+  "name": "my-awesome-project",
+  "version": "1.0.0",
+  "description": "A tool for automating cloud infrastructure deployments",
+  "private": true,
+  "keywords": [
+    "automation",
+    "cloud",
+    "infrastructure"
+  ],
+  "author": "Jane Developer"
+}
+```
+
+### Fields to Keep As-Is
+
+The following fields can typically remain unchanged:
+
+- `version` — Start at `1.0.0` unless you have a specific versioning scheme
+- `private` — Keep as `true` unless you plan to publish to npm
+- `scripts` — These are configured for markdown linting and should be kept
+- `engines` — Specifies the minimum Node.js version required
+- `devDependencies` — Required packages for markdown linting
+
+> **See Also:** [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md#nodejs-package-configuration) for additional optional configurations like adding `repository`, `homepage`, and `bugs` fields.
 
 ---
 
