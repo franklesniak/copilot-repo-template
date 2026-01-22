@@ -862,6 +862,7 @@ The template includes example files demonstrating Python coding standards. Repla
 
 3. **Replace example tests:**
    - Delete or replace `tests/test_example.py` with tests for your actual modules
+   - Update the docstring in `tests/__init__.py` to reflect your project name (replace "copilot-repo-template" with your project's name)
    - Follow the pytest conventions demonstrated in the example test file
 
 > **Tip:** The example files demonstrate the coding standards defined in `.github/instructions/python.instructions.md`. Review this file when writing your own code to ensure consistency.
