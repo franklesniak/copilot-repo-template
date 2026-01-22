@@ -688,6 +688,31 @@ Replace `OWNER/REPO` in the URL above with your actual organization and reposito
 [contributing guidelines](../blob/HEAD/docs/CONTRIBUTING.md)
 ```
 
+### Customizing Additional Notes Section
+
+The "Additional Notes" section provides PR authors a place to add context for reviewers that doesn't fit elsewhere. Consider adding prompts for common needs:
+
+```markdown
+## Additional Notes
+
+<!-- Add any additional context, such as: -->
+<!-- - Migration steps (for breaking changes) -->
+<!-- - Deployment considerations -->
+<!-- - Rollback instructions -->
+```
+
+### Customizing Related Issues Section
+
+The template uses `Closes #` for linking to issues. Update the syntax if your project uses different keywords:
+
+| Keyword | Effect |
+| --- | --- |
+| `Closes OWNER/REPO#123` | Closes the issue when PR is merged (default) |
+| `Fixes OWNER/REPO#123` | Alternative keyword, same effect |
+| `Resolves OWNER/REPO#123` | Alternative keyword, same effect |
+
+Choose one keyword and use it consistently across your project.
+
 ---
 
 ## Dependabot Configuration
