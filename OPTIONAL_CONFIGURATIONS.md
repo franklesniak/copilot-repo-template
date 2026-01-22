@@ -653,6 +653,34 @@ To:
 - [ ] I have updated tests for all modified functionality
 ```
 
+### Contributing Guidelines Link for GHES or External Contexts
+
+The default PR template uses a relative link for the contributing guidelines:
+
+```markdown
+[contributing guidelines](../blob/HEAD/CONTRIBUTING.md)
+```
+
+This relative link works correctly in GitHub.com PR views but may not resolve correctly in:
+
+- PR preview/draft mode before the branch is pushed
+- GitHub Enterprise Server (GHES) — compatibility varies by version
+- External contexts (local Markdown preview, email notifications, etc.)
+
+**If you need the link to work in GHES or external contexts**, replace it with an absolute URL:
+
+```markdown
+[contributing guidelines](https://github.com/OWNER/REPO/blob/HEAD/CONTRIBUTING.md)
+```
+
+Replace `OWNER/REPO` in the URL above with your actual organization and repository name.
+
+**If your CONTRIBUTING.md is in a different location** (e.g., `docs/CONTRIBUTING.md`), update the path accordingly:
+
+```markdown
+[contributing guidelines](../blob/HEAD/docs/CONTRIBUTING.md)
+```
+
 ---
 
 ## Dependabot Configuration

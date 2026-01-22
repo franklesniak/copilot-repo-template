@@ -22,6 +22,7 @@ This guide walks you through creating a brand-new repository using `franklesniak
 - [Language-Specific Customization](#language-specific-customization)
 - [Customizing the Pull Request Template](#customizing-the-pull-request-template)
 - [Updating README.md](#updating-readmemd)
+- [Customizing CONTRIBUTING.md](#customizing-contributingmd)
 - [Updating Copilot Instructions](#updating-copilot-instructions)
 - [Additional Configuration (Optional)](#additional-configuration-optional)
 - [Validation and Testing](#validation-and-testing)
@@ -1122,6 +1123,49 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
 
 MIT License - See [LICENSE](LICENSE) for details.
 ```
+
+---
+
+## Customizing CONTRIBUTING.md
+
+**File:** `CONTRIBUTING.md`
+
+The `CONTRIBUTING.md` file includes a "For Template Users" section near the end that contains meta-instructions about the template itself. This section should be removed for most downstream projects.
+
+### Remove "For Template Users" Section
+
+This section (starting with `## For Template Users`) includes:
+
+- Information about understanding instruction files
+- Guidance on customizing for your project
+- First-time setup validation steps
+
+**For non-template projects (most common):** Delete the entire "For Template Users" section, including the HTML comment above it.
+
+**To delete:**
+
+Locate the section starting with:
+
+````markdown
+<!--
+TEMPLATE ADOPTERS: This entire section is meta-documentation about the template itself.
+...
+-->
+
+## For Template Users
+````
+
+Delete from the HTML comment through the end of the file.
+
+**To keep (if your project is also a template):** Leave the section as-is and customize it for your template's specific guidance.
+
+### Other Customizations
+
+See `.github/TEMPLATE_GUIDE.md` for additional `CONTRIBUTING.md` customization guidance, including:
+
+- Replacing `OWNER/REPO` placeholders with your organization and repository name
+- Updating Python version requirements
+- Removing language-specific sections you don't use
 
 ---
 
