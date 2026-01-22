@@ -2176,6 +2176,7 @@ This template repository includes reference Python configuration files and scaff
    - Update the `[project]` section with your project's name, version, description, and authors
    - Add your runtime dependencies to the `dependencies = []` list
    - Adjust development dependencies as needed
+   - Update the `classifiers` list to reflect your project's maturity and supported Python versions (see below)
 
 3. **Create your source code** in either a flat layout (modules in project root) or `src/` layout (modules in `src/your_package/`). See [`templates/python/README.md`](templates/python/README.md) for detailed layout options and directory structure examples.
 
@@ -2205,6 +2206,36 @@ When you add real tests for your project:
 1. Create test files following the `test_*.py` naming convention
 2. Delete `test_placeholder.py` once you have real tests in place
 3. Reference [`templates/python/README.md`](templates/python/README.md) for additional configuration details including Python version configuration and mypy path configuration
+
+### Customizing Classifiers
+
+The `classifiers` field in `pyproject.toml` provides metadata for PyPI and other tools. Update these values to match your project:
+
+**Development Status:** Change based on project maturity:
+
+```toml
+# Alpha - early development, unstable API
+"Development Status :: 3 - Alpha"
+
+# Beta - feature complete, may have bugs
+"Development Status :: 4 - Beta"
+
+# Production/Stable - ready for production use
+"Development Status :: 5 - Production/Stable"
+```
+
+**Python Version Classifiers:** Update when your minimum Python version changes:
+
+```toml
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+```
+
+> **Note:** The Python version classifiers should match the versions specified in `requires-python` and your CI test matrix. See [PyPI Classifiers](https://pypi.org/classifiers/) for the full list of available classifiers.
 
 ### When to Use These Templates
 

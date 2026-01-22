@@ -17,6 +17,7 @@ These template files demonstrate how to configure Python tooling to align with t
 1. **Copy files to your project root** (or appropriate location based on your layout)
 2. **Customize `pyproject.toml`**:
    - Update `[project]` section with your project's name, version, description, authors
+   - Update `classifiers` to match your project's maturity and Python versions
    - Add your runtime dependencies to `dependencies = []`
    - Adjust dev dependencies as needed
 3. **Create your source code** in either a flat layout or `src/` layout (see below)
