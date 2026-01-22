@@ -2145,7 +2145,7 @@ rm -f .github/workflows/powershell-ci.yml
 
 **Directory:** `templates/python/`
 
-This template repository includes reference Python configuration files and scaffolding for projects adopting Python tooling. These files demonstrate how to configure Python tooling to align with the coding standards defined in `.github/instructions/python.instructions.md`.
+This template repository includes reference Python configuration files and scaffolding for projects adopting Python tooling. These files demonstrate how to configure Python tooling to align with the coding standards defined in [`.github/instructions/python.instructions.md`](.github/instructions/python.instructions.md).
 
 ### Files Included
 
@@ -2177,7 +2177,7 @@ This template repository includes reference Python configuration files and scaff
    - Add your runtime dependencies to the `dependencies = []` list
    - Adjust development dependencies as needed
 
-3. **Create your source code** in either a flat layout or `src/` layout. See `templates/python/README.md` for detailed layout options.
+3. **Create your source code** in either a flat layout or `src/` layout. See [`templates/python/README.md`](templates/python/README.md) for detailed layout options.
 
 4. **Replace or delete `tests/test_placeholder.py`** once you have actual tests in place.
 
@@ -2195,7 +2195,7 @@ When you add real tests for your project:
 
 1. Create test files following the `test_*.py` naming convention
 2. Delete `test_placeholder.py` once you have real tests in place
-3. Reference `templates/python/README.md` for additional configuration details including Python version configuration and mypy path configuration
+3. Reference [`templates/python/README.md`](templates/python/README.md) for additional configuration details including Python version configuration and mypy path configuration
 
 ### When to Use These Templates
 
@@ -2204,7 +2204,7 @@ Use the Python template files when:
 - **Starting a new Python project from scratch**: Use as an alternative to the main `src/` and `tests/` directories if you prefer to start fresh with template-based configuration
 - **Adding Python to an existing repository**: If your repository doesn't have Python tooling configured, these templates provide a complete starting point
 
-For detailed information on project layout options (flat vs. `src/` layout), Python version configuration, and mypy path configuration, see `templates/python/README.md`.
+For detailed information on project layout options (flat vs. `src/` layout), Python version configuration, and mypy path configuration, see [`templates/python/README.md`](templates/python/README.md).
 
 ---
 
