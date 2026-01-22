@@ -2140,6 +2140,73 @@ rm -f .github/workflows/powershell-ci.yml
 
 ---
 
+## Using the Python Template Files
+
+**Directory:** `templates/python/`
+
+This template repository includes reference Python configuration files and scaffolding for projects adopting Python tooling. These files demonstrate how to configure Python tooling to align with the coding standards defined in `.github/instructions/python.instructions.md`.
+
+### Files Included
+
+- **`pyproject.toml`**: Sample configuration for Python project metadata, dependencies, and tooling (Black, Ruff, mypy, pytest)
+- **`tests/__init__.py`**: Package marker for the test directory
+- **`tests/test_placeholder.py`**: Placeholder test file that demonstrates pytest test structure
+- **`README.md`**: Detailed documentation for the template files, including project layout options and version configuration
+
+### How to Use the Template
+
+1. **Copy files to your project root** (or appropriate location based on your layout):
+
+   **Windows (PowerShell):**
+
+   ```powershell
+   Copy-Item -Path "templates/python/pyproject.toml" -Destination "pyproject.toml"
+   Copy-Item -Path "templates/python/tests" -Destination "tests" -Recurse
+   ```
+
+   **macOS/Linux/FreeBSD:**
+
+   ```bash
+   cp templates/python/pyproject.toml pyproject.toml
+   cp -r templates/python/tests tests
+   ```
+
+2. **Customize `pyproject.toml`**:
+   - Update the `[project]` section with your project's name, version, description, and authors
+   - Add your runtime dependencies to the `dependencies = []` list
+   - Adjust development dependencies as needed
+
+3. **Create your source code** in either a flat layout or `src/` layout. See `templates/python/README.md` for detailed layout options.
+
+4. **Replace or delete `tests/test_placeholder.py`** once you have actual tests in place.
+
+### About the Placeholder File
+
+The file `templates/python/tests/test_placeholder.py` is a minimal placeholder that demonstrates pytest test structure. It contains a single test that always passes:
+
+```python
+def test_placeholder():
+    """Simple placeholder test that always passes."""
+    assert True
+```
+
+When you add real tests for your project:
+
+1. Create test files following the `test_*.py` naming convention
+2. Delete `test_placeholder.py` once you have real tests in place
+3. Reference `templates/python/README.md` for additional configuration details including Python version configuration and mypy path configuration
+
+### When to Use These Templates
+
+Use the Python template files when:
+
+- **Starting a new Python project from scratch**: Use as an alternative to the main `src/` and `tests/` directories if you prefer to start fresh with template-based configuration
+- **Adding Python to an existing repository**: If your repository doesn't have Python tooling configured, these templates provide a complete starting point
+
+For detailed information on project layout options (flat vs. `src/` layout), Python version configuration, and mypy path configuration, see `templates/python/README.md`.
+
+---
+
 ## Using the Pester Test Template
 
 **File:** `templates/powershell/Example.Tests.ps1`
