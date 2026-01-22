@@ -1532,22 +1532,29 @@ Once you've replaced all placeholders and the workflow passes, you have two opti
 
 See [Placeholder Check Workflow Configuration](OPTIONAL_CONFIGURATIONS.md#placeholder-check-workflow-configuration) for more details on customizing this workflow.
 
-### Post-setup Verification
+### Post-clone Verification Plan
 
-Perform these quick checks to ensure everything is working:
+After completing the setup checklist, perform the following quick verification:
 
-1. **Open a test issue** using each issue template type (bug report, feature request, documentation issue)
-   - Verify that required fields work correctly
-   - Verify that labels are applied (if you created the `triage` label)
-
-2. **Click links in the issue template chooser:**
+1. **Verify template functionality** in your newly created repository (template maintainers can create a separate test repository to verify template changes)
+2. **Open each issue type** once and ensure required fields behave correctly
+3. **Click key links** in the issue template chooser:
    - Contributing Guide link
    - Security Vulnerabilities link
-
-3. **Open a test pull request:**
+   - (If enabled) Discussions link
+4. **Verify issue form rendering:**
+   - Open a bug report issue template
+   - Paste a Python traceback into the Logs/Error Output field
+   - Confirm it renders cleanly as plain text (not mangled by Markdown parsing)
+5. **Verify security flow:**
+   - From your repository's main page, click the **Security** tab
+   - Confirm SECURITY.md is accessible
+6. **Open a test PR** to verify the PR workflow:
    - Create a trivial change (e.g., add a comment to a file)
-   - Open a PR and verify the template renders correctly
-   - Verify CI workflows trigger
+   - Open a pull request and confirm:
+     - PR template renders correctly
+     - Contributing guidelines link works
+     - CI workflows trigger as expected
    - Close the test PR without merging
 
 ---
