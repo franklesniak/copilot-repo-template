@@ -1180,7 +1180,13 @@ git push origin feature/adopt-template-features
 
 **Update CONTRIBUTING.md:**
 
-If you adopted pre-commit, add setup instructions:
+If you adopted the template's `CONTRIBUTING.md`, you should:
+
+1. **Remove the "For Template Users" section** — This section (starting with `## For Template Users`) contains meta-instructions about the template itself. Delete it along with the HTML comment above it for non-template projects.
+
+2. **Replace `OWNER/REPO` placeholders** — Update with your actual organization and repository name in clone instructions and issue links.
+
+3. **Add pre-commit setup instructions** (if you adopted pre-commit):
 
 ````markdown
 ## Development Setup
@@ -1198,6 +1204,8 @@ Pre-commit hooks will automatically run on each commit. You can also run them ma
 pre-commit run --all-files
 ```
 ````
+
+See `.github/TEMPLATE_GUIDE.md` for additional `CONTRIBUTING.md` customization guidance.
 
 **Update README.md:**
 
