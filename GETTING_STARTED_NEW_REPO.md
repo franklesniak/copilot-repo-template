@@ -493,6 +493,7 @@ This template uses placeholder values that you **must** replace with your actual
 | `.github/ISSUE_TEMPLATE/config.yml` | `OWNER/REPO` (appears in URLs twice) |
 | `.github/CODEOWNERS` | `@OWNER` (appears four times) |
 | `CONTRIBUTING.md` | `OWNER/REPO` (appears in clone URL and issues URL) |
+| `LICENSE` | `Frank Lesniak` (copyright holder name — replace with your name or organization) |
 | `SECURITY.md` | `[security contact email]` |
 | `.vscode/settings.json` | `window.title` value (replace with your repository name) |
 
@@ -502,6 +503,7 @@ This template uses placeholder values that you **must** replace with your actual
 - **`REPO`:** Your repository name (e.g., `my-new-project`)
 - **`OWNER/REPO`:** Combined format used in GitHub URLs (e.g., `franklesniak/my-new-project`)
 - **`@OWNER`:** GitHub username with @ prefix for CODEOWNERS file (e.g., `@franklesniak`)
+- **`Frank Lesniak`:** The template author's name in the LICENSE file. Replace with your name or organization name (the copyright holder for your project).
 - **`[security contact email]`:** An email address for receiving security vulnerability reports
 - **`window.title` in `.vscode/settings.json`:** The VS Code window title that appears in the title bar when working in this repository. Replace the instruction text with your repository name for easy identification.
 
@@ -560,6 +562,8 @@ sed -i.bak 's|Go to \.vscode/settings\.json and make this the name of the repo|'
 ```
 
 > **Note for macOS users:** The `sed -i.bak` syntax creates a backup file before modifying. The `&& rm *.bak` part removes the backup. If you're using GNU sed (Linux), you can use `sed -i` without the `.bak` extension.
+>
+> **Note:** The `LICENSE` file contains the template author's name (`Frank Lesniak`) in the copyright notice. This is not a pattern-based placeholder, so you'll need to manually update it with your own name or organization. Optionally update the copyright year to the current year or your project's start year.
 
 ### Option B: Manual Replacement
 
@@ -584,6 +588,11 @@ If you prefer, you can open each file in a text editor and manually find and rep
 5. **`.vscode/settings.json`:**
    - Find: `Go to .vscode/settings.json and make this the name of the repo`
    - Replace with: your repository name (e.g., `my-awesome-project`)
+
+6. **`LICENSE`:**
+   - Find: `Frank Lesniak`
+   - Replace with: your name or organization name (the copyright holder)
+   - Optionally update the copyright year to the current year or your project's start year
 
 ### Understanding the CODEOWNERS File
 
