@@ -2165,7 +2165,7 @@ The template file includes working examples of:
    **Windows (PowerShell):**
 
    ```powershell
-   Copy-Item "templates\powershell\Example.Tests.ps1" "tests\PowerShell\MyFunction.Tests.ps1"
+   Copy-Item "templates/powershell/Example.Tests.ps1" "tests/PowerShell/MyFunction.Tests.ps1"
    ```
 
    **macOS/Linux/FreeBSD:**
