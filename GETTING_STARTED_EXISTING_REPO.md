@@ -1297,7 +1297,7 @@ git push origin feature/adopt-template-features
 **Files you may want to delete after adoption:**
 
 - If you cloned the template separately, delete the clone directory
-- `.github/TEMPLATE_GUIDE.md` — Template adoption guidance (only useful during adoption)
+- `.github/DESIGN_DECISIONS.md` — Template design rationale (useful for maintainers understanding why decisions were made)
 - `templates/` directory — Only useful if your project is also a template
 
 **Files you should keep:**
@@ -1335,7 +1335,7 @@ pre-commit run --all-files
 ```
 ````
 
-See `.github/TEMPLATE_GUIDE.md` for additional `CONTRIBUTING.md` customization guidance.
+See [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md) for additional `CONTRIBUTING.md` customization guidance.
 
 **Update README.md:**
 
@@ -1394,7 +1394,7 @@ Before considering adoption complete, verify:
 - [ ] All copied files have placeholders replaced (OWNER/REPO, @OWNER, `window.title` in `.vscode/settings.json`, etc.)
 - [ ] Conflicting configurations have been merged, not overwritten
 - [ ] Unused language files have been removed (e.g., PowerShell instructions if not using PowerShell)
-- [ ] `.github/TEMPLATE_GUIDE.md` deleted (if not needed)
+- [ ] `.github/DESIGN_DECISIONS.md` deleted (if not needed for internal reference)
 
 ### Functionality
 

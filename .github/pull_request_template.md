@@ -1,5 +1,5 @@
 <!--
-Template users: see .github/TEMPLATE_GUIDE.md for guidance on tailoring this PR
+Template users: see OPTIONAL_CONFIGURATIONS.md for guidance on tailoring this PR
 template. Delete this comment once the PR template is tailored for your needs.
 -->
 
