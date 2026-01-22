@@ -1155,7 +1155,7 @@ TEMPLATE ADOPTERS: This entire section is meta-documentation about the template 
 ## For Template Users
 ````
 
-Delete from the HTML comment through the end of the section (approximately lines 310-345).
+Delete from the HTML comment through the end of the file.
 
 **To keep (if your project is also a template):** Leave the section as-is and customize it for your template's specific guidance.
 

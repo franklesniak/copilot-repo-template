@@ -673,7 +673,7 @@ This relative link works correctly in GitHub.com PR views but may not resolve co
 [contributing guidelines](https://github.com/OWNER/REPO/blob/HEAD/CONTRIBUTING.md)
 ```
 
-Replace `OWNER/REPO` with your actual organization and repository name.
+Replace `OWNER/REPO` in the URL above with your actual organization and repository name.
 
 **If your CONTRIBUTING.md is in a different location** (e.g., `docs/CONTRIBUTING.md`), update the path accordingly:
 
