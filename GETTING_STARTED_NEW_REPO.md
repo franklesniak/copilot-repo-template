@@ -494,6 +494,7 @@ This template uses placeholder values that you **must** replace with your actual
 | `.github/CODEOWNERS` | `@OWNER` (appears four times) |
 | `CONTRIBUTING.md` | `OWNER/REPO` (appears in clone URL and issues URL) |
 | `SECURITY.md` | `[security contact email]` |
+| `.vscode/settings.json` | `window.title` value (replace with your repository name) |
 
 ### What the Placeholders Mean
 
@@ -502,6 +503,7 @@ This template uses placeholder values that you **must** replace with your actual
 - **`OWNER/REPO`:** Combined format used in GitHub URLs (e.g., `franklesniak/my-new-project`)
 - **`@OWNER`:** GitHub username with @ prefix for CODEOWNERS file (e.g., `@franklesniak`)
 - **`[security contact email]`:** An email address for receiving security vulnerability reports
+- **`window.title` in `.vscode/settings.json`:** The VS Code window title that appears in the title bar when working in this repository. Replace the instruction text with your repository name for easy identification.
 
 ### Option A: Find and Replace Commands
 
@@ -526,6 +528,9 @@ $SecurityEmail = "security@example.com"
 
 # Replace security email placeholder in SECURITY.md
 (Get-Content "SECURITY.md") -replace '\[security contact email\]', $SecurityEmail | Set-Content "SECURITY.md"
+
+# Replace window.title placeholder in VS Code settings
+(Get-Content ".vscode\settings.json") -replace 'Go to \.vscode/settings\.json and make this the name of the repo', $Repo | Set-Content ".vscode\settings.json"
 ```
 
 #### macOS/Linux/FreeBSD (Bash)
@@ -549,6 +554,9 @@ sed -i.bak "s|@OWNER|@$OWNER|g" .github/CODEOWNERS && rm .github/CODEOWNERS.bak
 
 # Replace security email placeholder in SECURITY.md
 sed -i.bak 's|\[security contact email\]|'"$SECURITY_EMAIL"'|g' SECURITY.md && rm SECURITY.md.bak
+
+# Replace window.title placeholder in VS Code settings
+sed -i.bak 's|Go to \.vscode/settings\.json and make this the name of the repo|'"$REPO"'|g' .vscode/settings.json && rm .vscode/settings.json.bak
 ```
 
 > **Note for macOS users:** The `sed -i.bak` syntax creates a backup file before modifying. The `&& rm *.bak` part removes the backup. If you're using GNU sed (Linux), you can use `sed -i` without the `.bak` extension.
@@ -572,6 +580,10 @@ If you prefer, you can open each file in a text editor and manually find and rep
 4. **`SECURITY.md`:**
    - Find: `[security contact email]`
    - Replace with: your actual security contact email address
+
+5. **`.vscode/settings.json`:**
+   - Find: `Go to .vscode/settings.json and make this the name of the repo`
+   - Replace with: your repository name (e.g., `my-awesome-project`)
 
 ### Understanding the CODEOWNERS File
 

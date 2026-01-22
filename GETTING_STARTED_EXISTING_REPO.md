@@ -172,6 +172,7 @@ Use this matrix to decide which features to adopt based on complexity and depend
 | CODEOWNERS | `.github/CODEOWNERS` | None | Low |
 | Dependabot | `.github/dependabot.yml` | None | Low |
 | Security Policy | `SECURITY.md` | None | Low |
+| VS Code Settings | `.vscode/settings.json` | None | Low |
 | Markdown Linting | `.markdownlint.jsonc`, `package.json`, npm scripts | Node.js | Medium |
 | Pre-commit Hooks | `.pre-commit-config.yaml` | Python, pre-commit | Medium |
 | PowerShell CI Workflow | `.github/workflows/powershell-ci.yml` | PowerShell, Pester | Medium |
@@ -350,6 +351,30 @@ The security policy tells users how to report security vulnerabilities.
    - Consider adding sections you may be missing (response timeline, disclosure policy)
 
 > **Note:** Private vulnerability reporting via GitHub Security Advisories is only available for **public repositories**. If your repository is private, you must provide an email contact in SECURITY.md. Use a dedicated security email (e.g., `security@your-domain.com`) rather than a personal email when possible.
+
+### VS Code Settings
+
+The `.vscode/settings.json` file customizes VS Code behavior for your repository. The template includes a placeholder window title.
+
+**Location:** `.vscode/settings.json`
+
+**Steps:**
+
+1. **If you don't have a `.vscode/settings.json` file:**
+   - Copy `.vscode/settings.json` from the template to your `.vscode/` directory
+   - Replace the `window.title` value with your repository name
+
+2. **If you already have a `.vscode/settings.json` file:**
+   - Review the template's file for settings you may want to add
+   - Consider adding the `window.title` setting for easier workspace identification
+
+**Example customization:**
+
+```json
+{
+    "window.title": "my-awesome-project"
+}
+```
 
 ---
 
@@ -1253,7 +1278,7 @@ Before considering adoption complete, verify:
 
 ### Files
 
-- [ ] All copied files have placeholders replaced (OWNER/REPO, @OWNER, etc.)
+- [ ] All copied files have placeholders replaced (OWNER/REPO, @OWNER, `window.title` in `.vscode/settings.json`, etc.)
 - [ ] Conflicting configurations have been merged, not overwritten
 - [ ] Unused language files have been removed (e.g., PowerShell instructions if not using PowerShell)
 - [ ] `.github/TEMPLATE_GUIDE.md` deleted (if not needed)
