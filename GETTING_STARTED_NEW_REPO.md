@@ -20,6 +20,7 @@ This guide walks you through creating a brand-new repository using `franklesniak
 - [Creating Optional Labels](#creating-optional-labels)
 - [Installing and Configuring Pre-commit](#installing-and-configuring-pre-commit)
 - [Language-Specific Customization](#language-specific-customization)
+- [Customizing the Pull Request Template](#customizing-the-pull-request-template)
 - [Updating README.md](#updating-readmemd)
 - [Updating Copilot Instructions](#updating-copilot-instructions)
 - [Additional Configuration (Optional)](#additional-configuration-optional)
@@ -918,6 +919,10 @@ Edit `.pre-commit-config.yaml` to remove Python-specific hooks. Delete or commen
 
 Edit `.github/ISSUE_TEMPLATE/bug_report.yml` and `.github/ISSUE_TEMPLATE/feature_request.yml` to remove "Python" from the Area dropdown options.
 
+#### Update Pull Request Template
+
+Edit `.github/pull_request_template.md` to remove the "Python-Specific (if applicable)" section.
+
 ### If Using PowerShell
 
 #### 1. Review PSScriptAnalyzer Settings
@@ -1007,6 +1012,43 @@ rm -rf templates/powershell/
 #### Update Issue Templates
 
 Edit `.github/ISSUE_TEMPLATE/bug_report.yml` and `.github/ISSUE_TEMPLATE/feature_request.yml` to remove "PowerShell" from the Area dropdown options.
+
+#### Update Pull Request Template
+
+Edit `.github/pull_request_template.md` to remove the "PowerShell-Specific (if applicable)" section.
+
+---
+
+## Customizing the Pull Request Template
+
+**File:** `.github/pull_request_template.md`
+
+The pull request template provides a contributor checklist for consistent PR reviews.
+
+### Delete Template Comment
+
+Delete the HTML comment at the top of the file (lines 1-4):
+
+```markdown
+<!--
+Template users: see .github/TEMPLATE_GUIDE.md for guidance on tailoring this PR
+template. Delete this comment once the PR template is tailored for your needs.
+-->
+```
+
+### Language-Specific Sections
+
+Remove sections for languages you're not using:
+
+- **If NOT using Python:** Delete the entire "Python-Specific (if applicable)" section
+- **If NOT using PowerShell:** Delete the entire "PowerShell-Specific (if applicable)" section
+
+### Pre-commit Verification Section
+
+- **If using pre-commit:** Keep the section. Optionally strengthen the conditional language to direct language (see [Pull Request Template Customization](OPTIONAL_CONFIGURATIONS.md#pull-request-template-customization) for details).
+- **If NOT using pre-commit:** Delete the entire "Pre-commit Verification (if configured)" section.
+
+> **See Also:** [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md#pull-request-template-customization) for additional customizations like adding language-specific sections for other languages (Node.js, .NET, Go, Rust, Java), customizing Type of Change options, or strengthening test requirements.
 
 ---
 
