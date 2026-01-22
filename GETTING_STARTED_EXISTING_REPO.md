@@ -20,6 +20,7 @@ This guide walks you through adopting features from `franklesniak/copilot-repo-t
   - [Feature Decision Matrix](#feature-decision-matrix)
   - [Recommended Adoption Order](#recommended-adoption-order)
 - [Getting the Template Files](#getting-the-template-files)
+  - [Files to Skip (Example/Demonstration Code)](#files-to-skip-exampledemonstration-code)
 - [Adopting Simple Standalone Files](#adopting-simple-standalone-files)
   - [CODEOWNERS](#codeowners)
   - [Dependabot](#dependabot)
@@ -238,6 +239,28 @@ Best for adopting just one or two files:
 2. Click the file to view its contents
 3. Click the **Raw** button to see the raw content
 4. Copy the content and paste into a new file in your repository
+
+### Files to Skip (Example/Demonstration Code)
+
+The template repository includes example Python source code and tests that demonstrate coding standards. These files are intended for new repositories created from the template and should **NOT** be copied to existing repositories:
+
+| File/Directory | Purpose | Action |
+| --- | --- | --- |
+| `src/copilot_repo_template/` | Example Python package demonstrating coding standards | Do not copy |
+| `tests/test_example.py` | Example pytest tests for the demo package | Do not copy |
+| `tests/__init__.py` | Package marker with template-specific docstring | Do not copy |
+| `pyproject.toml` | Configured for the template's example package | Copy only if you need a starting point, then heavily customize |
+
+If you already have Python tests in your existing repository, these template example files would conflict with your existing setup.
+
+**What you SHOULD copy:**
+
+- `.github/` directory contents (workflows, instructions, templates)
+- Configuration files (`.markdownlint.jsonc`, `.pre-commit-config.yaml`)
+- Community health files (`CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`)
+- `templates/` directory (reference templates for starting new test files)
+
+If your existing repository lacks Python project structure and you want to adopt the template's Python CI workflow, see the [Python CI Workflow](#python-ci-workflow) section below for guidance on setting up your own `pyproject.toml` and test structure.
 
 ---
 
