@@ -25,6 +25,8 @@ This guide walks you through adopting features from `franklesniak/copilot-repo-t
   - [CODEOWNERS](#codeowners)
   - [Dependabot](#dependabot)
   - [Security Policy](#security-policy)
+  - [LICENSE File](#license-file)
+  - [VS Code Settings](#vs-code-settings)
 - [Adopting Issue Templates](#adopting-issue-templates)
   - [Full Adoption](#full-adoption-recommended-if-you-have-none)
   - [Partial Adoption](#partial-adoption-if-you-have-existing-templates)
@@ -374,6 +376,25 @@ The security policy tells users how to report security vulnerabilities.
    - Consider adding sections you may be missing (response timeline, disclosure policy)
 
 > **Note:** Private vulnerability reporting via GitHub Security Advisories is only available for **public repositories**. If your repository is private, you must provide an email contact in SECURITY.md. Use a dedicated security email (e.g., `security@your-domain.com`) rather than a personal email when possible.
+
+### LICENSE File
+
+The template includes an MIT License file with the template author's name as the copyright holder.
+
+**Location:** `LICENSE`
+
+**Steps:**
+
+1. **If you want to use the MIT License:**
+   - Copy `LICENSE` from the template to your repository root
+   - Replace `Frank Lesniak` with your name or organization name (the copyright holder)
+   - Optionally update the copyright year to the current year or your project's start year
+
+2. **If you already have a LICENSE file:**
+   - Keep your existing license—no action needed
+
+3. **If you want a different license type:**
+   - See the [License Customization](OPTIONAL_CONFIGURATIONS.md#license-customization) section in `OPTIONAL_CONFIGURATIONS.md` for guidance on Apache 2.0, proprietary licenses, and updating all license references across your project
 
 ### VS Code Settings
 
