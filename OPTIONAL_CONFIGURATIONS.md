@@ -20,6 +20,7 @@ This guide covers optional customizations you can make after completing the init
 - [Dependabot Configuration](#dependabot-configuration)
 - [Pre-commit Configuration](#pre-commit-configuration)
 - [Markdown Linting Configuration](#markdown-linting-configuration)
+  - [Using the cli2-Specific Configuration Format](#using-the-cli2-specific-configuration-format)
 - [Nested Markdown Linting Configuration](#nested-markdown-linting-configuration)
 - [Markdown Lint Workflow Configuration](#markdown-lint-workflow-configuration)
 - [Copilot Documentation Instructions Configuration](#copilot-documentation-instructions-configuration)
@@ -897,6 +898,41 @@ Several rules are disabled by default because they are not auto-fixable:
   "MD041": true
 }
 ```
+
+### Using the cli2-Specific Configuration Format
+
+The repository includes an alternative configuration template at `templates/markdown/.markdownlint-cli2.jsonc` that uses the `markdownlint-cli2` specific format where rules are nested under a `"config"` key.
+
+#### When to Use Each Format
+
+| File | Format | Use Case |
+| --- | --- | --- |
+| `.markdownlint.jsonc` | Standard (rules at root) | Default choice; works with both `markdownlint-cli` and `markdownlint-cli2` |
+| `.markdownlint-cli2.jsonc` | cli2-specific (rules under `"config"`) | When you need cli2-specific features like `globs`, `ignores`, `customRules`, or `frontMatter` parser options |
+
+Both files contain **identical linting rules**; only the structure differs.
+
+#### Switching to the cli2-Specific Format
+
+If you want to use the cli2-specific format, copy the template to your repository root and remove the original configuration file.
+
+**Windows (PowerShell):**
+
+```powershell
+Copy-Item -Path "templates/markdown/.markdownlint-cli2.jsonc" -Destination ".markdownlint-cli2.jsonc"
+Remove-Item -Path ".markdownlint.jsonc" -Force
+```
+
+**macOS/Linux/FreeBSD:**
+
+```bash
+cp templates/markdown/.markdownlint-cli2.jsonc .markdownlint-cli2.jsonc
+rm .markdownlint.jsonc
+```
+
+> **Note:** When using `.markdownlint-cli2.jsonc`, any rule customizations must be made inside the `"config"` block, not at the root level of the JSON.
+
+**See also:** [markdownlint-cli2 documentation](https://github.com/DavidAnson/markdownlint-cli2) for additional cli2-specific configuration options.
 
 ---
 
