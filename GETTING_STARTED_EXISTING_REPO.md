@@ -1339,7 +1339,7 @@ See `.github/TEMPLATE_GUIDE.md` for additional `CONTRIBUTING.md` customization g
 
 **Update README.md:**
 
-> **Note:** Do NOT copy the template's `README.md` to your existing repository. The template's README is designed for new repositories created from the template and contains template-specific documentation that should be deleted. Your existing README should remain intact.
+> **Note:** Do NOT copy the template's `README.md` to your existing repository. The template's README is designed for new repositories created from the template and contains template-specific documentation that would not apply to your repository. Your existing README should remain intact.
 
 Instead, update your existing README to document any new development requirements you've adopted:
 
