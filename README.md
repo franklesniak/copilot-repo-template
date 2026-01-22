@@ -273,7 +273,7 @@ CI workflows will also run automatically when you push to GitHub.
 
 **Cause:** The `MYPY_PATHS` environment variable in `.github/workflows/ci.yml` defaults to `src/ tests/`.
 
-**Fix:** Update `MYPY_PATHS` to match your project structure. See `templates/python/README.md` for configuration examples.
+**Fix:** Update `MYPY_PATHS` to match your project structure. See the [mypy Path Configuration](OPTIONAL_CONFIGURATIONS.md#mypy-path-configuration) section in `OPTIONAL_CONFIGURATIONS.md` for configuration examples.
 
 ##### PowerShell: PSScriptAnalyzer Warnings on Empty Test Files
 
