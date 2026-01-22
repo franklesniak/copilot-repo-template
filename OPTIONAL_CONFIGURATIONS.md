@@ -2152,7 +2152,7 @@ This template repository includes reference Python configuration files and scaff
 - **`pyproject.toml`**: Sample configuration for Python project metadata, dependencies, and tooling (Black, Ruff, mypy, pytest)
 - **`tests/__init__.py`**: Package marker for the test directory
 - **`tests/test_placeholder.py`**: Placeholder test file that demonstrates pytest test structure
-- **`README.md`**: Detailed documentation for the template files, including project layout options and version configuration
+- **`README.md`**: Brief overview of the template files with links to external resources
 
 ### How to Use the Template
 
@@ -2178,7 +2178,7 @@ This template repository includes reference Python configuration files and scaff
    - Adjust development dependencies as needed
    - Update the `classifiers` list to reflect your project's maturity and supported Python versions (see below)
 
-3. **Create your source code** in either a flat layout (modules in project root) or `src/` layout (modules in `src/your_package/`). See [`templates/python/README.md`](templates/python/README.md) for detailed layout options and directory structure examples.
+3. **Create your source code** in either a flat layout (modules in project root) or `src/` layout (modules in `src/your_package/`). See the [Project Layout Options](#project-layout-options) section below for detailed layout options and directory structure examples.
 
 4. **Replace or delete `tests/test_placeholder.py`** once you have actual tests in place.
 
@@ -2205,7 +2205,7 @@ When you add real tests for your project:
 
 1. Create test files following the `test_*.py` naming convention
 2. Delete `test_placeholder.py` once you have real tests in place
-3. Reference [`templates/python/README.md`](templates/python/README.md) for additional configuration details including Python version configuration and mypy path configuration
+3. See the [Python Version Configuration](#python-version-configuration) and [mypy Path Configuration](#mypy-path-configuration) sections below for additional configuration details
 
 ### Customizing Classifiers
 
@@ -2244,7 +2244,133 @@ Use the Python template files when:
 - **Starting a new Python project from scratch**: These templates provide clean configuration files that you can customize for your project
 - **Adding Python to an existing repository**: If your repository doesn't have Python tooling configured, these templates provide a complete starting point
 
-For detailed information on project layout options (flat vs. `src/` layout), Python version configuration, and mypy path configuration, see [`templates/python/README.md`](templates/python/README.md).
+### Project Layout Options
+
+#### Option 1: Flat Layout
+
+Place your Python modules directly in the project root:
+
+```text
+your-project/
+├── pyproject.toml
+├── your_module.py
+├── another_module.py
+└── tests/
+    └── test_your_module.py
+```
+
+For mypy in CI, use:
+
+```yaml
+env:
+  MYPY_PATHS: "."
+```
+
+#### Option 2: src/ Layout (Recommended)
+
+Place your Python package(s) in a `src/` directory:
+
+```text
+your-project/
+├── pyproject.toml
+├── src/
+│   └── your_package/
+│       ├── __init__.py
+│       └── module.py
+└── tests/
+    └── test_module.py
+```
+
+For mypy in CI, use:
+
+```yaml
+env:
+  MYPY_PATHS: "src/ tests/"
+```
+
+The `src/` layout is recommended because it:
+
+- Prevents accidental imports of uninstalled code during development
+- Makes it clear what code is part of the package vs. project tooling
+- Aligns with modern Python packaging best practices
+
+### Python Version Configuration
+
+Different Python tools require different version format specifications. When updating the minimum Python version, you must update **all three** of these settings:
+
+#### 1. Project Metadata: `requires-python`
+
+```toml
+[project]
+requires-python = ">=3.13"  # PEP 621 standard: ">=" operator with dotted version
+```
+
+#### 2. Black Configuration: `target-version`
+
+```toml
+[tool.black]
+target-version = ["py313"]  # List of strings in "pyXYZ" format
+```
+
+#### 3. mypy Configuration: `python_version`
+
+```toml
+[tool.mypy]
+python_version = "3.13"  # Dotted version string (no ">=" operator)
+```
+
+#### 4. Ruff Configuration: `target-version` (Optional)
+
+```toml
+[tool.ruff]
+# Ruff automatically infers target-version from [project].requires-python
+# Only set this if you need to override:
+# target-version = "py313"  # Single string in "pyXYZ" format (not a list)
+```
+
+**Important:** If you set `[project].requires-python`, Ruff will automatically use that value. Setting `[tool.ruff].target-version` explicitly will override the inferred value.
+
+### Python Version Support Policy
+
+**Always use a Python version that is currently receiving bugfixes.**
+
+- Python versions in "security fix only" phase are **not publicly installable** with security updates—they require building from source with manually applied patches.
+- Check the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page for current version status.
+
+> **Template adopters:** The template defaults to Python 3.13+. Customize the `requires-python` field in `pyproject.toml` based on your project's specific requirements.
+
+**When to update:**
+
+- Check the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page annually (typically around October when new Python versions are released)
+- Update all version references in `pyproject.toml` when the minimum supported version changes
+- Update the CI workflow's Python version matrix in `.github/workflows/ci.yml`
+
+### mypy Path Configuration
+
+The CI workflow (`.github/workflows/ci.yml`) uses the `MYPY_PATHS` environment variable to specify which directories/files mypy should check.
+
+**Default (for src/ layout):**
+
+```yaml
+env:
+  MYPY_PATHS: "src/ tests/"
+```
+
+**For flat layout:**
+
+```yaml
+env:
+  MYPY_PATHS: "."
+```
+
+**For custom directories:**
+
+```yaml
+env:
+  MYPY_PATHS: "foo/ bar/ baz.py"
+```
+
+The command-line paths override any `files` or `exclude` settings in `pyproject.toml` or `mypy.ini` in terms of directory scope. However, per-file configuration options in those files still apply to the files that mypy discovers.
 
 ---
 
