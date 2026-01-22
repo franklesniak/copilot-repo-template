@@ -31,6 +31,7 @@ This guide covers optional customizations you can make after completing the init
 - [Auto-fix Pre-commit Workflow Configuration](#auto-fix-pre-commit-workflow-configuration)
 - [Placeholder Check Workflow Configuration](#placeholder-check-workflow-configuration)
 - [PowerShell CI Workflow Configuration](#powershell-ci-workflow-configuration)
+- [Using the Python Template Files](#using-the-python-template-files)
 - [Using the Pester Test Template](#using-the-pester-test-template)
 - [PSScriptAnalyzer Configuration](#psscriptanalyzer-configuration)
 - [CODEOWNERS Configuration](#codeowners-configuration)
@@ -2137,6 +2138,82 @@ rm -f .github/workflows/powershell-ci.yml
 ```
 
 > **Note:** If you want to remove all PowerShell-related files from the repository (not just the workflow), see the "If NOT Using PowerShell" section in [GETTING_STARTED_NEW_REPO.md](GETTING_STARTED_NEW_REPO.md) for comprehensive removal instructions.
+
+---
+
+## Using the Python Template Files
+
+**Directory:** `templates/python/`
+
+This template repository includes reference Python configuration files and scaffolding for projects adopting Python tooling. These files demonstrate how to configure Python tooling to align with the coding standards defined in [`.github/instructions/python.instructions.md`](.github/instructions/python.instructions.md).
+
+### Files Included
+
+- **`pyproject.toml`**: Sample configuration for Python project metadata, dependencies, and tooling (Black, Ruff, mypy, pytest)
+- **`tests/__init__.py`**: Package marker for the test directory
+- **`tests/test_placeholder.py`**: Placeholder test file that demonstrates pytest test structure
+- **`README.md`**: Detailed documentation for the template files, including project layout options and version configuration
+
+### How to Use the Template
+
+1. **Copy files to your project root** (or appropriate location based on your layout):
+
+   **Windows (PowerShell):**
+
+   ```powershell
+   Copy-Item -Path "templates/python/pyproject.toml" -Destination "pyproject.toml"
+   Copy-Item -Path "templates/python/tests" -Destination "tests" -Recurse
+   ```
+
+   **macOS/Linux/FreeBSD:**
+
+   ```bash
+   cp templates/python/pyproject.toml pyproject.toml
+   cp -r templates/python/tests tests
+   ```
+
+2. **Customize `pyproject.toml`**:
+   - Update the `[project]` section with your project's name, version, description, and authors
+   - Add your runtime dependencies to the `dependencies = []` list
+   - Adjust development dependencies as needed
+
+3. **Create your source code** in either a flat layout (modules in project root) or `src/` layout (modules in `src/your_package/`). See [`templates/python/README.md`](templates/python/README.md) for detailed layout options and directory structure examples.
+
+4. **Replace or delete `tests/test_placeholder.py`** once you have actual tests in place.
+
+### About the Placeholder File
+
+The file `templates/python/tests/test_placeholder.py` is a minimal placeholder that demonstrates pytest test structure. It contains a single test that always passes:
+
+```python
+"""Placeholder test file for template demonstration.
+
+This is a template file. Delete or overwrite this with your actual tests.
+"""
+
+
+def test_placeholder():
+    """Simple placeholder test that always passes.
+
+    Replace this with your actual test cases.
+    """
+    assert True
+```
+
+When you add real tests for your project:
+
+1. Create test files following the `test_*.py` naming convention
+2. Delete `test_placeholder.py` once you have real tests in place
+3. Reference [`templates/python/README.md`](templates/python/README.md) for additional configuration details including Python version configuration and mypy path configuration
+
+### When to Use These Templates
+
+Use the Python template files when:
+
+- **Starting a new Python project from scratch**: These templates provide clean configuration files that you can customize for your project
+- **Adding Python to an existing repository**: If your repository doesn't have Python tooling configured, these templates provide a complete starting point
+
+For detailed information on project layout options (flat vs. `src/` layout), Python version configuration, and mypy path configuration, see [`templates/python/README.md`](templates/python/README.md).
 
 ---
 
