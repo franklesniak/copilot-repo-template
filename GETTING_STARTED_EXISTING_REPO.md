@@ -1339,7 +1339,9 @@ See `.github/TEMPLATE_GUIDE.md` for additional `CONTRIBUTING.md` customization g
 
 **Update README.md:**
 
-Add any new development setup steps:
+> **Note:** Do NOT copy the template's `README.md` to your existing repository. The template's README is designed for new repositories created from the template and contains template-specific documentation that should be deleted. Your existing README should remain intact.
+
+Instead, update your existing README to document any new development requirements you've adopted:
 
 ````markdown
 ## Development
@@ -1358,6 +1360,12 @@ pip install pre-commit
 pre-commit install   # Set up git hooks
 ```
 ````
+
+Consider adding sections for:
+
+- Pre-commit hook requirements (if adopted)
+- Linting commands (e.g., `npm run lint:md`)
+- CI workflow expectations
 
 **Notify your team:**
 
