@@ -563,7 +563,7 @@ sed -i.bak 's|Go to \.vscode/settings\.json and make this the name of the repo|'
 
 > **Note for macOS users:** The `sed -i.bak` syntax creates a backup file before modifying. The `&& rm *.bak` part removes the backup. If you're using GNU sed (Linux), you can use `sed -i` without the `.bak` extension.
 >
-> **Note:** The `LICENSE` file contains the template author's name (`Frank Lesniak`) in the copyright notice. This is not a pattern-based placeholder, so you'll need to manually update it with your own name or organization. Optionally update the copyright year if needed.
+> **Note:** The `LICENSE` file contains the template author's name (`Frank Lesniak`) in the copyright notice. This is not a pattern-based placeholder, so you'll need to manually update it with your own name or organization. Optionally update the copyright year to the current year or your project's start year.
 
 ### Option B: Manual Replacement
 
@@ -592,7 +592,7 @@ If you prefer, you can open each file in a text editor and manually find and rep
 6. **`LICENSE`:**
    - Find: `Frank Lesniak`
    - Replace with: your name or organization name (the copyright holder)
-   - Optionally update the copyright year if needed
+   - Optionally update the copyright year to the current year or your project's start year
 
 ### Understanding the CODEOWNERS File
 
