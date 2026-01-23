@@ -1,4 +1,4 @@
-# CI Workflow
+# Python CI Workflow
 #
 # Purpose: Run pre-commit hooks, type checking (mypy), and tests (pytest) for
 # Python code in a single consolidated workflow.
@@ -64,7 +64,7 @@
 #
 # Note: This workflow is optional. Remove if your project doesn't use Python.
 
-name: CI
+name: Python CI
 
 on:
   push:

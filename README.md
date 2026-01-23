@@ -62,6 +62,7 @@ For template maintainers, see [TEMPLATE_MAINTENANCE.md](TEMPLATE_MAINTENANCE.md)
 └── workflows/                       # GitHub Actions workflows
     ├── check-placeholders.yml       # Verifies OWNER/REPO placeholders are replaced
     └── powershell-ci.yml            # PowerShell linting and testing CI (optional)
+    └── python-ci.yml                 # Python linting and testing CI (optional)
 
 src/
 └── copilot_repo_template/           # Example Python package (rename for your project)
@@ -95,6 +96,7 @@ pyproject.toml                       # Python project configuration
 | `.github/linting/PSScriptAnalyzerSettings.psd1` | PSScriptAnalyzer settings enforcing OTBS formatting for PowerShell |
 | `.github/workflows/check-placeholders.yml` | CI workflow to verify OWNER/REPO and @OWNER placeholders are replaced after cloning |
 | `.github/workflows/powershell-ci.yml` | PowerShell linting and Pester testing CI workflow (optional - remove if not using PowerShell) |
+| `.github/workflows/python-ci.yml` | Python linting and testing CI workflow (optional - remove if not using Python) |
 | `.markdownlint.jsonc` | Markdown linting rules prioritizing auto-fixable checks |
 | `.pre-commit-config.yaml` | Pre-commit hooks for all projects (Python formatting, linting, Markdown) |
 | `pyproject.toml` | Python project configuration with dev dependencies |
@@ -108,7 +110,7 @@ pyproject.toml                       # Python project configuration
 | --- | --- | --- | --- | --- |
 | Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` | `.github/workflows/markdownlint.yml` | Documentation writing standards |
 | PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` | `.github/workflows/powershell-ci.yml` | PowerShell coding standards (OTBS, v1.0-v7.x) |
-| Python | `.github/instructions/python.instructions.md` | `**/*.py` | `.github/workflows/ci.yml` | Python coding standards (PEP 8, typing) |
+| Python | `.github/instructions/python.instructions.md` | `**/*.py` | `.github/workflows/python-ci.yml` | Python coding standards (PEP 8, typing) |
 
 ### Linting Tools
 

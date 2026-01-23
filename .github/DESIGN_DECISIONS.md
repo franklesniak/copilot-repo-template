@@ -661,9 +661,9 @@ The template provides these CI jobs that can be configured as required status ch
 
 | Workflow | Job Name | Recommended as Required | Notes |
 | --- | --- | --- | --- |
-| `ci.yml` | **Pre-commit** | ✅ Yes | Foundational check—catches formatting and linting issues |
-| `ci.yml` | **Type Check (mypy)** | Optional | Set to `continue-on-error: true` by default; make strict when ready |
-| `ci.yml` | **Test** | ✅ Yes | Ensures tests pass on all platforms |
+| `python-ci.yml` | **Pre-commit** | ✅ Yes | Foundational check—catches formatting and linting issues |
+| `python-ci.yml` | **Type Check (mypy)** | Optional | Set to `continue-on-error: true` by default; make strict when ready |
+| `python-ci.yml` | **Test** | ✅ Yes | Ensures tests pass on all platforms |
 | `markdownlint.yml` | **Markdown Lint** | ✅ Yes | Ensures documentation quality |
 | `powershell-ci.yml` | **lint** | Optional | Only if using PowerShell |
 | `powershell-ci.yml` | **PowerShell Tests (Pester)** | Optional | Only if using PowerShell with tests |

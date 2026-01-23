@@ -1,7 +1,7 @@
 # pyproject.toml for the copilot-repo-template repository
 #
 # This file provides a minimal Python project configuration that allows the CI
-# workflows (.github/workflows/ci.yml) to run successfully.
+# workflows (.github/workflows/python-ci.yml) to run successfully.
 #
 # This is a TEMPLATE REPOSITORY. When you create a new repository from this
 # template, you should customize this file for your project. See

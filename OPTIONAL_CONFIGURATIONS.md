@@ -1460,7 +1460,7 @@ The file has different type hint expectations based on mode:
    - Legacy modules **SHOULD** add type hints when modified.
    ```
 
-> **Note:** If requiring strict type checking, ensure your CI workflow (`.github/workflows/ci.yml`) runs mypy without `continue-on-error: true`. See [CI Workflow Configuration](#ci-workflow-configuration) for details.
+> **Note:** If requiring strict type checking, ensure your CI workflow (`.github/workflows/python-ci.yml`) runs mypy without `continue-on-error: true`. See [CI Workflow Configuration](#ci-workflow-configuration) for details.
 
 ### Adjusting Documentation Standards
 
@@ -1860,7 +1860,7 @@ When customizing the Pre-commit or Testing sections, you may also need to update
 
 ## CI Workflow Configuration
 
-**File:** `.github/workflows/ci.yml`
+**File:** `.github/workflows/python-ci.yml`
 
 ### Enabling Codecov Integration
 
@@ -1993,7 +1993,7 @@ Keep this workflow if:
 
 If you don't use GitHub Copilot Coding Agent or prefer to manually commit pre-commit fixes, you can safely remove this workflow.
 
-> **Note:** Removing this workflow is safe—the standard `ci.yml` workflow will still run pre-commit checks and report any issues that need to be fixed.
+> **Note:** Removing this workflow is safe—the standard `python-ci.yml` workflow will still run pre-commit checks and report any issues that need to be fixed.
 
 **Steps to remove:**
 
@@ -2394,11 +2394,11 @@ python_version = "3.13"  # Dotted version string (no ">=" operator)
 
 - Check the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page annually (typically around October when new Python versions are released)
 - Update all version references in `pyproject.toml` when the minimum supported version changes
-- Update the CI workflow's Python version matrix in `.github/workflows/ci.yml`
+- Update the CI workflow's Python version matrix in `.github/workflows/python-ci.yml`
 
 ### mypy Path Configuration
 
-The CI workflow (`.github/workflows/ci.yml`) uses the `MYPY_PATHS` environment variable to specify which directories/files mypy should check.
+The CI workflow (`.github/workflows/python-ci.yml`) uses the `MYPY_PATHS` environment variable to specify which directories/files mypy should check.
 
 **Default (for src/ layout):**
 

@@ -189,7 +189,7 @@ This repository includes several GitHub Actions workflows that run automatically
 
 | Workflow | File | Purpose |
 | --- | --- | --- |
-| CI | `.github/workflows/ci.yml` | Runs pre-commit, mypy (type checking), and pytest on Python files |
+| Python CI | `.github/workflows/python-ci.yml` | Runs pre-commit, mypy (type checking), and pytest on Python files |
 | Auto-fix Pre-commit | `.github/workflows/auto-fix-precommit.yml` | Automatically commits pre-commit fixes on PRs (optional) |
 | Markdown Lint | `.github/workflows/markdownlint.yml` | Validates markdown formatting |
 | PowerShell CI | `.github/workflows/powershell-ci.yml` | Runs PSScriptAnalyzer on PowerShell files |
