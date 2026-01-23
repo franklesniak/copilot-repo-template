@@ -22,7 +22,7 @@ readme = "README.md"
 # Check https://devguide.python.org/versions/ for current version status.
 # Update this when upstream support changes (typically annually around October).
 requires-python = ">=3.13"
-license = { text = "MIT" }
+license = "MIT"
 authors = [
     { name = "Frank Lesniak" }
 ]

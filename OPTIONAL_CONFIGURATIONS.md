@@ -2709,9 +2709,9 @@ When changing your project's license, update all of the following files:
 | `LICENSE` | Replace entire file with your license text |
 | `CONTRIBUTING.md` | Update the "License" section |
 | `README.md` | Update the "License" section (near bottom of file) |
-| `pyproject.toml` | Update `license = { text = "MIT" }` in `[project]` section |
+| `pyproject.toml` | Update `license = "MIT"` in `[project]` section |
 | `package.json` | Update `"license": "MIT"` field |
-| `templates/python/pyproject.toml` | Update `license = { text = "MIT" }` (only if keeping the templates directory) |
+| `templates/python/pyproject.toml` | Update `license = "MIT"` (only if keeping the templates directory) |
 
 > **Note:** The `package-lock.json` file contains `"license": "MIT"` entries, but these refer to the licenses of npm dependencies (not your project). These do NOT need to be changed when updating your project's license.
 
@@ -2740,7 +2740,7 @@ Apache License 2.0 - See [LICENSE](LICENSE) for details.
 
 ```toml
 # In pyproject.toml and templates/python/pyproject.toml
-license = { text = "Apache-2.0" }
+license = "Apache-2.0"
 ```
 
 ```json
@@ -2782,7 +2782,7 @@ See [LICENSE](LICENSE) for details.
 
 ```toml
 # In pyproject.toml
-license = { text = "Proprietary" }
+license = "Proprietary"
 ```
 
 ```json
