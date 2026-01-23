@@ -799,7 +799,7 @@ The default line length is 100 characters for both Black and Ruff:
 - repo: https://github.com/astral-sh/ruff-pre-commit
   rev: v0.14.11
   hooks:
-    - id: ruff
+    - id: ruff-check
       args: [--fix, --line-length=100]
 ```
 
@@ -1406,7 +1406,7 @@ This setting should be consistent with your formatting tools in `.pre-commit-con
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
   hooks:
-    - id: ruff
+    - id: ruff-check
       args: [--fix, --line-length=100]
 ```
 
