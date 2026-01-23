@@ -849,7 +849,7 @@ If your project doesn't have a `.pre-commit-config.yaml`:
    - repo: https://github.com/astral-sh/ruff-pre-commit
      rev: v0.14.11
      hooks:
-       - id: ruff
+       - id: ruff-check
          args: [--fix, --line-length=100]
    ```
 

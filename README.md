@@ -150,7 +150,7 @@ pre-commit run --all-files
 
 # Run specific hooks
 pre-commit run black --all-files
-pre-commit run ruff --all-files
+pre-commit run ruff-check --all-files
 ```
 
 ### Testing
