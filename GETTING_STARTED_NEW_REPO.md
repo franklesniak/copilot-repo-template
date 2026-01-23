@@ -911,7 +911,7 @@ Remove-Item -Force "tests\__init__.py"
 Remove-Item -Force "pyproject.toml"
 
 # Remove Python CI workflow
-Remove-Item -Force ".github\workflows\ci.yml"
+Remove-Item -Force ".github\workflows\python-ci.yml"
 
 # Remove Python instructions
 Remove-Item -Force ".github\instructions\python.instructions.md"
@@ -929,7 +929,7 @@ rm -f tests/test_example.py tests/__init__.py
 rm -f pyproject.toml
 
 # Remove Python CI workflow
-rm -f .github/workflows/ci.yml
+rm -f .github/workflows/python-ci.yml
 
 # Remove Python instructions
 rm -f .github/instructions/python.instructions.md

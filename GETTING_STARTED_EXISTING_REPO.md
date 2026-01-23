@@ -181,7 +181,7 @@ Use this matrix to decide which features to adopt based on complexity and depend
 | Pre-commit Hooks | `.pre-commit-config.yaml` | Python, pre-commit | Medium |
 | PowerShell CI Workflow | `.github/workflows/powershell-ci.yml` | PowerShell, Pester | Medium |
 | PSScriptAnalyzer Config | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell | Low |
-| Python CI Workflow | `.github/workflows/ci.yml` | Python project structure | High |
+| Python CI Workflow | `.github/workflows/python-ci.yml` | Python project structure | High |
 
 ### Recommended Adoption Order
 
@@ -940,7 +940,7 @@ Before adopting workflows, understand their requirements:
 | `markdownlint.yml` | `package.json` with markdownlint-cli2 | Node.js |
 | `auto-fix-precommit.yml` | `.pre-commit-config.yaml` | Python |
 | `check-placeholders.yml` | None | Template placeholders in files |
-| `ci.yml` | Python project structure, `pyproject.toml` | Python |
+| `python-ci.yml` | Python project structure, `pyproject.toml` | Python |
 | `powershell-ci.yml` | PowerShell scripts, Pester tests | PowerShell |
 
 ### Markdown Lint Workflow
@@ -1006,7 +1006,7 @@ Before adopting workflows, understand their requirements:
 
 ### Python CI Workflow
 
-**Location:** `.github/workflows/ci.yml`
+**Location:** `.github/workflows/python-ci.yml`
 
 **Purpose:** Runs pre-commit hooks, type checking (mypy), and tests (pytest) for Python code.
 
@@ -1018,7 +1018,7 @@ Before adopting workflows, understand their requirements:
 
 **Steps:**
 
-1. Copy `.github/workflows/ci.yml` to your `.github/workflows/` directory
+1. Copy `.github/workflows/python-ci.yml` to your `.github/workflows/` directory
 
 2. **Update paths if needed:**
 

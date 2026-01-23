@@ -42,7 +42,7 @@ This template requires Python versions that are currently receiving bugfix updat
 1. Visit the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page
 2. Identify which versions are in "bugfix" status (not "security" or "end-of-life")
 3. Update the following files if the minimum supported version changes:
-   - `.github/workflows/ci.yml` (Python version matrix)
+   - `.github/workflows/python-ci.yml` (Python version matrix)
    - `pyproject.toml` (requires-python field)
    - `templates/python/pyproject.toml` (requires-python field)
    - `.github/instructions/python.instructions.md` (version references)
