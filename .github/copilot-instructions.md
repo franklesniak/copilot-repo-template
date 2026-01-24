@@ -136,8 +136,9 @@ This repository uses modular instruction files for language-specific standards:
 | Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` |
 | PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` |
 | Python | `.github/instructions/python.instructions.md` | `**/*.py` |
+| Terraform | `.github/instructions/terraform.instructions.md` | `**/*.tf`, `**/*.tfvars`, `**/*.tftest.hcl` |
 
-**Note:** The PowerShell instructions include comprehensive guidance on Pester testing.
+**Note:** The PowerShell instructions include comprehensive guidance on Pester testing. The Terraform instructions include comprehensive guidance on Terraform Test framework.
 
 **To customize for your project:**
 
@@ -153,6 +154,7 @@ This repository includes linting tool configurations that align with the coding 
 | --- | --- | --- |
 | PSScriptAnalyzer | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell formatting/linting (OTBS style) |
 | markdownlint | `.markdownlint.jsonc` | Markdown linting |
+| TFLint | `.tflint.hcl` | Terraform linting |
 
 ### Running Linters
 
@@ -168,14 +170,22 @@ npm run lint:md
 Invoke-ScriptAnalyzer -Path .\script.ps1 -Settings .\.github\linting\PSScriptAnalyzerSettings.psd1
 ```
 
+**Terraform:**
+
+```bash
+terraform fmt -check -recursive
+tflint --recursive
+```
+
 ## Testing Tools
 
-This repository includes testing infrastructure for both Python and PowerShell:
+This repository includes testing infrastructure for Python, PowerShell, and Terraform:
 
 | Language | Framework | Configuration | Test Location |
 | --- | --- | --- | --- |
 | Python | pytest | `pyproject.toml` (`[tool.pytest.ini_options]`) | `tests/` |
 | PowerShell | Pester 5.x | Inline in `.github/workflows/powershell-ci.yml` | `tests/PowerShell/` |
+| Terraform | Terraform Test | Built-in (Terraform 1.6+) | `modules/*/tests/` |
 
 ### Running Tests
 
@@ -189,4 +199,10 @@ pytest tests/ -v --cov --cov-report=term-missing
 
 ```powershell
 Invoke-Pester -Path tests/ -Output Detailed
+```
+
+**Terraform:**
+
+```bash
+terraform test -verbose
 ```

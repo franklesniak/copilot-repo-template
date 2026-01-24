@@ -1,0 +1,136 @@
+# Terraform CI Workflow
+# This workflow runs on pushes and pull requests that modify Terraform files.
+# It performs format checking, validation, linting, and testing.
+
+name: Terraform CI
+
+on:
+  push:
+    paths:
+      - '**/*.tf'
+      - '**/*.tfvars'
+      - '**/*.tftest.hcl'
+      - '.tflint.hcl'
+      - '.github/workflows/terraform-ci.yml'
+  pull_request:
+    paths:
+      - '**/*.tf'
+      - '**/*.tfvars'
+      - '**/*.tftest.hcl'
+      - '.tflint.hcl'
+      - '.github/workflows/terraform-ci.yml'
+
+# Limit the permissions of the GITHUB_TOKEN
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.6.0"
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive -diff
+
+      - name: Find Terraform directories
+        id: find-tf-dirs
+        run: |
+          # Find all directories containing .tf files
+          TF_DIRS=$(find . -name '*.tf' -exec dirname {} \; | sort -u | tr '\n' ' ')
+          echo "dirs=${TF_DIRS}" >> $GITHUB_OUTPUT
+
+      - name: Terraform Init and Validate
+        run: |
+          # Validate each Terraform directory
+          for dir in ${{ steps.find-tf-dirs.outputs.dirs }}; do
+            echo "=== Validating $dir ==="
+            cd "$dir"
+            terraform init -backend=false
+            terraform validate
+            cd - > /dev/null
+          done
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: Init TFLint
+        run: tflint --init
+
+      - name: Run TFLint
+        run: tflint --recursive --config "$(pwd)/.tflint.hcl"
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    # Only run tests if there are test files
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.6.0"
+
+      - name: Check for test files
+        id: check-tests
+        run: |
+          if find . -name '*.tftest.hcl' | grep -q .; then
+            echo "has_tests=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_tests=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Find Terraform directories with tests
+        if: steps.check-tests.outputs.has_tests == 'true'
+        id: find-test-dirs
+        run: |
+          # Find directories containing .tftest.hcl files
+          TEST_DIRS=$(find . -name '*.tftest.hcl' -exec dirname {} \; | sort -u | tr '\n' ' ')
+          echo "dirs=${TEST_DIRS}" >> $GITHUB_OUTPUT
+
+      - name: Run Terraform Tests
+        if: steps.check-tests.outputs.has_tests == 'true'
+        run: |
+          for dir in ${{ steps.find-test-dirs.outputs.dirs }}; do
+            echo "=== Testing $dir ==="
+            cd "$dir"
+            terraform init
+            terraform test -verbose
+            cd - > /dev/null
+          done
+
+      - name: Skip tests (no test files found)
+        if: steps.check-tests.outputs.has_tests == 'false'
+        run: echo "No Terraform test files (.tftest.hcl) found. Skipping tests."
+
+  # Optional: Security scanning with tfsec
+  # Uncomment to enable security scanning
+  # security:
+  #   name: Security Scan
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4
+  #
+  #     - name: Run tfsec
+  #       uses: aquasecurity/tfsec-action@v1.0.3
+  #       with:
+  #         soft_fail: true  # Set to false to fail on findings
