@@ -223,7 +223,7 @@ terraform test -verbose
 # Test files use the .tftest.hcl extension
 ```
 
-See `.github/instructions/terraform.instructions.md` for comprehensive Terraform testing guidance.
+See `templates/terraform/Example.tftest.hcl` for a comprehensive Terraform test template.
 
 ### Code Quality
 
