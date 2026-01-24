@@ -11,7 +11,7 @@
 #   - Unit tests (command = plan) vs integration tests (command = apply)
 #
 # Prerequisites:
-#   - Terraform 1.6.0 or later
+#   - Terraform 1.7.0 or later (mock_provider requires 1.7.0+)
 #
 # Usage (from module directory):
 #   terraform test
