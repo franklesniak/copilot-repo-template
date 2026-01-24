@@ -1,0 +1,1804 @@
+---
+applyTo: "**/*.tf,**/*.tfvars,**/*.tftest.hcl,**/*.tf.json,**/*.tftpl,**/*.tfbackend"
+description: "Terraform coding standards: secure, modular, and well-documented infrastructure as code."
+---
+
+# Terraform Writing Style
+
+**Version:** 1.0.20260124.0
+
+## Metadata
+
+- **Status:** Active
+- **Owner:** Repository Maintainers
+- **Last Updated:** 2026-01-24
+- **Scope:** Defines Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in this repository. Covers style, formatting, naming conventions, file organization, variable and output design, resource configuration, module design, state management, security best practices, provider management, testing, and documentation requirements.
+- **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
+
+## Table of Contents
+
+- [Keywords](#keywords)
+- [Quick Reference Checklist](#quick-reference-checklist)
+- [Executive Summary: Terraform Philosophy](#executive-summary-terraform-philosophy)
+- [Formatting and Style](#formatting-and-style)
+- [Naming Conventions](#naming-conventions)
+- [File Organization](#file-organization)
+- [Variable and Output Design](#variable-and-output-design)
+- [Resource Configuration](#resource-configuration)
+- [Module Design](#module-design)
+- [State Management](#state-management)
+- [Provider Management](#provider-management)
+- [Security Best Practices](#security-best-practices)
+- [Testing with Terraform Test](#testing-with-terraform-test)
+- [Documentation Standards](#documentation-standards)
+- [Pre-commit Discipline for Terraform](#pre-commit-discipline-for-terraform)
+- ["Done" Definition for Terraform Changes](#done-definition-for-terraform-changes)
+
+## Keywords
+
+The key words "**MUST**", "**MUST NOT**", "**REQUIRED**", "**SHALL**", "**SHALL NOT**", "**SHOULD**", "**SHOULD NOT**", "**RECOMMENDED**", "**MAY**", and "**OPTIONAL**" in this document are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
+
+- **MUST** / **REQUIRED** / **SHALL** — Absolute requirement. Non-negotiable.
+- **MUST NOT** / **SHALL NOT** — Absolute prohibition.
+- **SHOULD** / **RECOMMENDED** — Strong recommendation. Valid reasons may exist to deviate, but implications must be understood.
+- **SHOULD NOT** / **NOT RECOMMENDED** — Strong discouragement. Valid reasons may exist to do otherwise, but implications must be understood.
+- **MAY** / **OPTIONAL** — Truly optional. Implementations can choose to include or omit.
+
+## Quick Reference Checklist
+
+This checklist provides a quick reference for both human developers and LLMs (like GitHub Copilot) to follow the Terraform style guidelines. Each item includes a scope tag indicating applicability:
+
+- **[All]** — Applies to all Terraform files
+- **[Module]** — Applies when developing reusable modules
+- **[Root]** — Applies to root configurations (deployments)
+- **[Test]** — Applies to test files (`.tftest.hcl`)
+
+### Formatting and Style
+
+- **[All]** Code **MUST** pass `terraform fmt` without modifications → [terraform fmt Compliance](#terraform-fmt-compliance)
+- **[All]** Code **MUST** use 2 spaces for indentation, never tabs → [Indentation Rules](#indentation-rules)
+- **[All]** Files **MUST** use UTF-8 encoding → [File Encoding](#file-encoding)
+- **[All]** Files **MUST** end with a single newline → [File Endings](#file-endings)
+- **[All]** Lines **SHOULD NOT** exceed 120 characters except for long strings or URLs → [Line Length](#line-length)
+- **[All]** Blank lines **MUST** be completely empty (no whitespace) → [Blank Lines](#blank-lines)
+- **[All]** Comments **MUST** use `#` for single-line; `/* */` **MAY** be used for multi-line → [Comment Style](#comment-style)
+
+### Naming Conventions
+
+- **[All]** Resources **MUST** use `snake_case` names → [Resource Naming](#resource-naming)
+- **[All]** Variables **MUST** use `snake_case` with descriptive names → [Variable Naming](#variable-naming)
+- **[All]** Outputs **MUST** use `snake_case` matching resource attribute patterns → [Output Naming](#output-naming)
+- **[Module]** Module directory names **MUST** use hyphen-separated lowercase words → [Module Naming](#module-naming)
+- **[All]** Data sources **MUST** be prefixed with purpose when multiple exist → [Data Source Naming](#data-source-naming)
+- **[All]** Locals **MUST** use `snake_case` with descriptive names → [Local Value Naming](#local-value-naming)
+- **[All]** Boolean variables **SHOULD** use `enable_*`, `is_*`, or `has_*` prefixes → [Boolean Naming Patterns](#boolean-naming-patterns)
+
+### File Organization
+
+- **[All]** Every Terraform directory **MUST** have a `versions.tf` file → [Version Constraints File](#version-constraints-file)
+- **[All]** Input variables **MUST** be in `variables.tf` → [Standard File Organization](#standard-file-organization)
+- **[All]** Outputs **MUST** be in `outputs.tf` → [Standard File Organization](#standard-file-organization)
+- **[Root]** Root modules **MUST** have a `providers.tf` file → [Provider Configuration File](#provider-configuration-file)
+- **[Root]** Root modules **MUST** have a `backend.tf` or backend configuration → [Backend Configuration](#backend-configuration)
+- **[Module]** Modules **MUST** include a `README.md` → [Module README Requirements](#module-readme-requirements)
+- **[Module]** Modules **SHOULD** include `examples/` directory → [Module Examples](#module-examples)
+- **[Module]** Modules **SHOULD** include `tests/` directory → [Module Tests](#module-tests)
+
+### Variable and Output Design
+
+- **[All]** Variables **MUST** include a `description` → [Variable Documentation Requirements](#variable-documentation-requirements)
+- **[All]** Variables **MUST** include explicit `type` constraint → [Variable Type Constraints](#variable-type-constraints)
+- **[All]** Optional variables **MUST** have a `default` value → [Variable Defaults](#variable-defaults)
+- **[All]** Sensitive variables **MUST** be marked with `sensitive = true` → [Sensitive Variable Marking](#sensitive-variable-marking)
+- **[All]** Variables with constrained values **SHOULD** use `validation` blocks → [Variable Validation](#variable-validation)
+- **[All]** Outputs **MUST** include a `description` → [Output Documentation Requirements](#output-documentation-requirements)
+- **[All]** Sensitive outputs **MUST** be marked with `sensitive = true` → [Sensitive Output Marking](#sensitive-output-marking)
+
+### Resource Configuration
+
+- **[All]** Meta-arguments **MUST** appear first in resource blocks → [Meta-Argument Ordering](#meta-argument-ordering)
+- **[All]** Required arguments **MUST** appear before optional arguments → [Argument Ordering](#argument-ordering)
+- **[All]** Nested blocks **MUST** appear last in resource blocks → [Nested Block Placement](#nested-block-placement)
+- **[All]** Resources **MUST** include required tags → [Required Tags](#required-tags)
+- **[Root]** Provider-level default tags **SHOULD** be configured → [Default Tags Configuration](#default-tags-configuration)
+- **[All]** Local values **SHOULD** be used for computed or merged tags → [Local Tags Pattern](#local-tags-pattern)
+
+### Module Design
+
+- **[Module]** Modules **MUST** have a single, well-defined responsibility → [Single Responsibility](#single-responsibility)
+- **[Module]** Modules **MUST** specify required Terraform and provider versions → [Module Version Constraints](#module-version-constraints)
+- **[Module]** Module inputs **MUST** use consistent naming across modules → [Module Interface Design](#module-interface-design)
+- **[Module]** Required module variables **SHOULD** be minimized → [Minimal Required Inputs](#minimal-required-inputs)
+- **[Module]** Complex inputs **SHOULD** use object types with documented structure → [Complex Input Types](#complex-input-types)
+- **[Module]** Modules **SHOULD** expose only necessary outputs → [Module Output Design](#module-output-design)
+- **[Module]** Published modules **MUST** use semantic versioning → [Module Versioning](#module-versioning)
+
+### State Management
+
+- **[Root]** Root modules **MUST** configure a remote backend → [Remote Backend Configuration](#remote-backend-configuration)
+- **[Root]** State files **MUST** be encrypted at rest → [State Encryption](#state-encryption)
+- **[Root]** State locking **MUST** be enabled → [State Locking](#state-locking)
+- **[All]** Local state files **MUST NOT** be used in production → [No Local State in Production](#no-local-state-in-production)
+- **[All]** State files **MUST NOT** be committed to version control → [State File Exclusion](#state-file-exclusion)
+
+### Provider Management
+
+- **[All]** Provider versions **MUST** be constrained → [Provider Version Constraints](#provider-version-constraints)
+- **[All]** `.terraform.lock.hcl` **MUST** be committed to version control → [Lock File Management](#lock-file-management)
+- **[All]** Pessimistic constraint operator (`~>`) **SHOULD** be used for providers → [Pessimistic Constraints](#pessimistic-constraints)
+
+### Security
+
+- **[All]** Secrets **MUST NOT** appear in `.tf` files → [Secret Management](#secret-management)
+- **[All]** Secrets **MUST NOT** have default values → [No Secret Defaults](#no-secret-defaults)
+- **[All]** Secrets **MUST** be provided via environment variables or secret managers → [Approved Secret Patterns](#approved-secret-patterns)
+- **[Root]** State backends **MUST** enable encryption → [State Security](#state-security)
+- **[All]** IAM policies **MUST** follow least-privilege principles → [Least-Privilege Principles](#least-privilege-principles)
+- **[All]** Wildcard actions **SHOULD NOT** be used in IAM policies → [IAM Policy Guidelines](#iam-policy-guidelines)
+
+### Testing
+
+- **[Test]** Test files **MUST** use `.tftest.hcl` extension → [Test File Naming](#test-file-naming)
+- **[Test]** Test files **SHOULD** be in a `tests/` directory → [Test File Location](#test-file-location)
+- **[Test]** Tests **MUST** include at least one `run` block → [Test Structure](#test-structure)
+- **[Test]** Each `run` block **MUST** include at least one `assert` → [Test Assertions](#test-assertions)
+- **[Test]** Variable validation **SHOULD** be tested → [Testing Variable Validation](#testing-variable-validation)
+- **[Test]** Unit tests **SHOULD** use `command = plan` → [Unit Tests](#unit-tests)
+- **[Test]** Integration tests **MAY** use `command = apply` → [Integration Tests](#integration-tests)
+
+### Documentation
+
+- **[Module]** Modules **MUST** have a `README.md` with usage examples → [Module README Requirements](#module-readme-requirements)
+- **[All]** Inline comments **SHOULD** explain "why," not "what" → [Inline Comment Conventions](#inline-comment-conventions)
+- **[All]** TODO comments **SHOULD** include username and context → [TODO Comment Format](#todo-comment-format)
+
+## Executive Summary: Terraform Philosophy
+
+This repository approaches Terraform as **infrastructure as code** with the same rigor applied to application code. The following principles guide all Terraform development:
+
+- **Deterministic and reproducible:** Infrastructure changes **MUST** produce predictable, repeatable results. The same configuration **MUST** produce the same infrastructure across environments.
+
+- **Security-first:** Secrets **MUST NEVER** appear in code or state unencrypted. Least-privilege **MUST** be the default for all IAM policies and resource access controls.
+
+- **Modular and reusable:** Common infrastructure patterns **SHOULD** be extracted into versioned modules with well-defined interfaces. Modules **MUST** be designed for reuse across projects.
+
+- **Well-documented:** Every variable, output, and module **MUST** be documented. Documentation is not optional—it is a first-class deliverable.
+
+- **Testable:** Infrastructure **SHOULD** be validated with automated tests before deployment. Terraform's native test framework enables validation of configuration logic.
+
+- **Version-controlled:** All Terraform code, including lock files, **MUST** be version-controlled. State files **MUST** be stored remotely with encryption and locking.
+
+The coding standards in this document enforce these principles through specific, actionable requirements.
+
+---
+
+## Formatting and Style
+
+### terraform fmt Compliance
+
+All Terraform code **MUST** pass `terraform fmt` without modifications. This is non-negotiable.
+
+**Verification command:**
+
+```bash
+terraform fmt -check -recursive
+```
+
+**Auto-format command:**
+
+```bash
+terraform fmt -recursive
+```
+
+**Pre-commit integration:**
+
+```yaml
+- repo: https://github.com/antonbabenko/pre-commit-terraform
+  rev: v1.96.0
+  hooks:
+    - id: terraform_fmt
+```
+
+### Indentation Rules
+
+- Code **MUST** use 2 spaces for indentation
+- Tabs **MUST NOT** be used
+- Nested blocks **MUST** maintain consistent indentation
+- Alignment of `=` signs is handled automatically by `terraform fmt`
+
+**Compliant:**
+
+```hcl
+resource "aws_instance" "example" {
+  ami           = var.ami_id
+  instance_type = var.instance_type
+
+  tags = {
+    Name        = var.instance_name
+    Environment = var.environment
+  }
+}
+```
+
+### File Encoding
+
+All Terraform files **MUST** use UTF-8 encoding without BOM (Byte Order Mark).
+
+### File Endings
+
+All files **MUST** end with a single newline character. Trailing blank lines **MUST NOT** be present.
+
+### Line Length
+
+Lines **SHOULD NOT** exceed 120 characters. Exceptions are permitted for:
+
+- Long strings that cannot be reasonably split
+- URLs in comments or string values
+- Complex expressions where splitting reduces readability
+
+### Blank Lines
+
+Blank lines **MUST** be completely empty—they **MUST NOT** contain any whitespace characters (spaces or tabs).
+
+Use blank lines to:
+
+- Separate logical sections within a file
+- Separate resource blocks
+- Separate groups of related arguments within a block
+
+### Comment Style
+
+**Single-line comments:**
+
+Use `#` for single-line comments. Comments **SHOULD** be placed on their own line above the code they describe.
+
+```hcl
+# Enable encryption to meet compliance requirements
+resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
+  bucket = aws_s3_bucket.main.id
+  # ...
+}
+```
+
+**Multi-line comments:**
+
+Use `/* */` sparingly for multi-line explanations when a single `#` comment is insufficient.
+
+```hcl
+/*
+ * This security group allows inbound traffic from the corporate VPN.
+ * CIDR ranges are managed by the network team and should not be
+ * modified without their approval.
+ */
+resource "aws_security_group" "vpn_access" {
+  # ...
+}
+```
+
+---
+
+## Naming Conventions
+
+### Resource Naming
+
+Resources **MUST** use `snake_case` for names. Names **SHOULD** be descriptive and indicate purpose.
+
+| Resource Type | Naming Pattern | Example |
+| --- | --- | --- |
+| Primary/main resource | `main` or descriptive name | `aws_instance.main` |
+| Multiple of same type | Purpose-based suffix | `aws_instance.web_server` |
+| Associated resources | Parent reference | `aws_security_group.web_server` |
+
+**Anti-patterns to avoid:**
+
+| Bad | Good | Reason |
+| --- | --- | --- |
+| `aws_instance.this` | `aws_instance.main` | "this" is not descriptive |
+| `aws_instance.instance1` | `aws_instance.primary` | Numeric suffixes are meaningless |
+| `aws_instance.MyInstance` | `aws_instance.my_instance` | Must be snake_case |
+| `aws_instance.i` | `aws_instance.web_server` | Single-letter names lack meaning |
+
+### Variable Naming
+
+Variables **MUST** use `snake_case` and **MUST** be descriptive.
+
+| Category | Pattern | Example |
+| --- | --- | --- |
+| Simple values | `<noun>` or `<adjective>_<noun>` | `instance_type`, `environment` |
+| Lists/Sets | Plural nouns | `subnet_ids`, `security_group_ids` |
+| Maps | `<noun>_map` or descriptive | `tags`, `instance_settings` |
+| Booleans | `enable_*`, `is_*`, `has_*` | `enable_monitoring`, `is_public` |
+| Resource references | `<resource>_id` or `<resource>_arn` | `vpc_id`, `role_arn` |
+
+**Compliant variable names:**
+
+```hcl
+variable "environment" {
+  description = "Deployment environment (dev, staging, prod)"
+  type        = string
+}
+
+variable "enable_monitoring" {
+  description = "Enable CloudWatch detailed monitoring"
+  type        = bool
+  default     = false
+}
+
+variable "subnet_ids" {
+  description = "List of subnet IDs for deployment"
+  type        = list(string)
+}
+```
+
+### Output Naming
+
+Outputs **MUST** use `snake_case` and **SHOULD** follow the pattern of the attribute being exposed.
+
+| Output Type | Pattern | Example |
+| --- | --- | --- |
+| Resource ID | `<resource>_id` | `instance_id`, `vpc_id` |
+| Resource ARN | `<resource>_arn` | `role_arn`, `bucket_arn` |
+| Resource name | `<resource>_name` | `bucket_name`, `cluster_name` |
+| Endpoints/URLs | `<resource>_endpoint` | `rds_endpoint`, `api_endpoint` |
+| Collections | Plural form | `instance_ids`, `subnet_ids` |
+
+### Module Naming
+
+Module directory names **MUST** use hyphen-separated lowercase words.
+
+**Compliant:**
+
+```text
+modules/
+├── vpc-network/
+├── ec2-instance/
+├── rds-database/
+└── s3-bucket/
+```
+
+**Non-compliant:**
+
+```text
+modules/
+├── VpcNetwork/        # PascalCase
+├── ec2_instance/      # snake_case
+└── rdsdatabase/       # No separation
+```
+
+### Data Source Naming
+
+When multiple data sources of the same type exist, they **MUST** be prefixed with their purpose.
+
+**Single data source:**
+
+```hcl
+data "aws_ami" "amazon_linux" {
+  # ...
+}
+```
+
+**Multiple data sources:**
+
+```hcl
+data "aws_ami" "web_server" {
+  # ...
+}
+
+data "aws_ami" "database_server" {
+  # ...
+}
+```
+
+### Local Value Naming
+
+Local values **MUST** use `snake_case` with descriptive names.
+
+```hcl
+locals {
+  common_tags = {
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "terraform"
+  }
+
+  instance_name = "${var.project_name}-${var.environment}"
+}
+```
+
+### Boolean Naming Patterns
+
+Boolean variables and locals **SHOULD** use these prefixes:
+
+| Prefix | Use Case | Example |
+| --- | --- | --- |
+| `enable_*` | Feature flags | `enable_monitoring`, `enable_encryption` |
+| `is_*` | State checks | `is_public`, `is_production` |
+| `has_*` | Presence checks | `has_custom_domain`, `has_ssl_certificate` |
+
+---
+
+## File Organization
+
+### Standard File Organization
+
+Standard file organization for Terraform projects:
+
+| File | Purpose | Required |
+| --- | --- | --- |
+| `main.tf` | Primary resource definitions | Yes |
+| `variables.tf` | Input variable declarations | Yes |
+| `outputs.tf` | Output value declarations | Yes |
+| `providers.tf` | Provider configuration | Yes (root modules) |
+| `versions.tf` | Version constraints | Yes |
+| `locals.tf` | Local value definitions | When needed |
+| `data.tf` | Data source definitions | When needed |
+| `backend.tf` | Backend configuration | Root modules only |
+
+### Version Constraints File
+
+Every Terraform directory **MUST** have a `versions.tf` file with Terraform and provider version constraints:
+
+```hcl
+# versions.tf
+
+terraform {
+  required_version = ">= 1.6.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+```
+
+### Provider Configuration File
+
+Root modules **MUST** have a `providers.tf` file with provider configuration:
+
+```hcl
+# providers.tf
+
+provider "aws" {
+  region = var.aws_region
+
+  default_tags {
+    tags = {
+      Environment = var.environment
+      Project     = var.project_name
+      ManagedBy   = "terraform"
+    }
+  }
+}
+```
+
+### Backend Configuration
+
+Root modules **MUST** configure a remote backend, either in `backend.tf` or within the `terraform` block:
+
+```hcl
+# backend.tf
+
+terraform {
+  backend "s3" {
+    bucket         = "my-terraform-state"
+    key            = "environments/prod/terraform.tfstate"
+    region         = "us-east-1"
+    encrypt        = true
+    dynamodb_table = "terraform-state-lock"
+  }
+}
+```
+
+### Module Directory Structure
+
+Standard module directory structure:
+
+```text
+modules/
+└── <module-name>/
+    ├── main.tf           # Primary resources
+    ├── variables.tf      # Input variables (REQUIRED)
+    ├── outputs.tf        # Output values (REQUIRED)
+    ├── versions.tf       # Version constraints (REQUIRED)
+    ├── README.md         # Module documentation (REQUIRED)
+    ├── locals.tf         # Local values (when needed)
+    ├── data.tf           # Data sources (when needed)
+    ├── examples/         # Usage examples (RECOMMENDED)
+    │   └── basic/
+    │       ├── main.tf
+    │       ├── variables.tf
+    │       └── outputs.tf
+    └── tests/            # Test files (RECOMMENDED)
+        └── basic.tftest.hcl
+```
+
+### Module Examples
+
+Modules **SHOULD** include an `examples/` directory with working examples:
+
+- Each example **MUST** be a complete, runnable configuration
+- Examples **SHOULD** demonstrate common use cases
+- Examples **SHOULD** include a `README.md` explaining the example
+
+### Module Tests
+
+Modules **SHOULD** include a `tests/` directory with Terraform test files:
+
+- Tests **MUST** use the `.tftest.hcl` extension
+- Tests **SHOULD** cover both valid and invalid inputs
+- Tests **SHOULD** validate critical outputs
+
+---
+
+## Variable and Output Design
+
+### Variable Documentation Requirements
+
+Every variable **MUST** include a `description`. The description **SHOULD** explain:
+
+- What the variable is for
+- Valid values or constraints
+- Any special considerations
+
+```hcl
+variable "environment" {
+  description = "Deployment environment. Valid values: dev, staging, prod."
+  type        = string
+
+  validation {
+    condition     = contains(["dev", "staging", "prod"], var.environment)
+    error_message = "Environment must be dev, staging, or prod."
+  }
+}
+```
+
+### Variable Type Constraints
+
+Variables **MUST** include explicit `type` constraints:
+
+```hcl
+# String variable
+variable "instance_type" {
+  description = "EC2 instance type for the application server."
+  type        = string
+  default     = "t3.micro"
+}
+
+# List variable
+variable "subnet_ids" {
+  description = "List of subnet IDs for deployment."
+  type        = list(string)
+}
+
+# Map variable
+variable "tags" {
+  description = "Additional tags to apply to resources."
+  type        = map(string)
+  default     = {}
+}
+
+# Object variable
+variable "instance_config" {
+  description = "Configuration for the EC2 instance."
+  type = object({
+    instance_type = string
+    ami_id        = string
+    volume_size   = optional(number, 20)
+  })
+}
+```
+
+### Variable Defaults
+
+Optional variables **MUST** have a `default` value. Required variables **MUST NOT** have a `default`.
+
+```hcl
+# Required variable (no default)
+variable "vpc_id" {
+  description = "VPC ID where resources will be created."
+  type        = string
+}
+
+# Optional variable (has default)
+variable "enable_monitoring" {
+  description = "Enable CloudWatch detailed monitoring."
+  type        = bool
+  default     = false
+}
+```
+
+### Variable Validation
+
+Variables with constrained values **SHOULD** use `validation` blocks:
+
+```hcl
+variable "environment" {
+  description = "Deployment environment. Valid values: dev, staging, prod."
+  type        = string
+
+  validation {
+    condition     = contains(["dev", "staging", "prod"], var.environment)
+    error_message = "Environment must be one of: dev, staging, prod."
+  }
+}
+
+variable "instance_count" {
+  description = "Number of instances to create. Must be between 1 and 10."
+  type        = number
+
+  validation {
+    condition     = var.instance_count >= 1 && var.instance_count <= 10
+    error_message = "Instance count must be between 1 and 10."
+  }
+}
+
+variable "cidr_block" {
+  description = "CIDR block for the VPC."
+  type        = string
+
+  validation {
+    condition     = can(cidrhost(var.cidr_block, 0))
+    error_message = "Must be a valid CIDR block."
+  }
+}
+```
+
+### Sensitive Variable Marking
+
+Variables containing sensitive data **MUST** be marked:
+
+```hcl
+variable "database_password" {
+  description = "Password for the RDS database. Must be provided via environment variable or tfvars."
+  type        = string
+  sensitive   = true
+}
+
+variable "api_key" {
+  description = "API key for external service"
+  type        = string
+  sensitive   = true
+}
+```
+
+### Output Documentation Requirements
+
+Every output **MUST** include a `description`:
+
+```hcl
+output "instance_id" {
+  description = "The ID of the created EC2 instance."
+  value       = aws_instance.main.id
+}
+
+output "instance_public_ip" {
+  description = "The public IP address of the EC2 instance."
+  value       = aws_instance.main.public_ip
+}
+```
+
+### Sensitive Output Marking
+
+Outputs containing sensitive data **MUST** be marked:
+
+```hcl
+output "database_connection_string" {
+  description = "Database connection string (contains credentials)."
+  value       = local.connection_string
+  sensitive   = true
+}
+
+output "instance_private_ip" {
+  description = "The private IP address of the EC2 instance."
+  value       = aws_instance.main.private_ip
+  sensitive   = true
+}
+```
+
+---
+
+## Resource Configuration
+
+### Meta-Argument Ordering
+
+Within resource blocks, arguments **MUST** follow this order:
+
+1. **Meta-arguments first:** `count`, `for_each`, `provider`, `depends_on`, `lifecycle`
+2. **Required arguments:** Arguments without defaults
+3. **Optional arguments:** Arguments with defaults
+4. **Nested blocks last:** Dynamic blocks, inline blocks
+
+**Compliant example:**
+
+```hcl
+resource "aws_instance" "web_server" {
+  # Meta-arguments first
+  count    = var.instance_count
+  provider = aws.primary
+
+  # Required arguments
+  ami           = data.aws_ami.amazon_linux.id
+  instance_type = var.instance_type
+  subnet_id     = var.subnet_id
+
+  # Optional arguments
+  associate_public_ip_address = var.is_public
+  monitoring                  = var.enable_monitoring
+
+  # Nested blocks last
+  root_block_device {
+    volume_size = var.root_volume_size
+    encrypted   = true
+  }
+
+  tags = local.common_tags
+
+  # Lifecycle block at the end
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+```
+
+### Argument Ordering
+
+Within the arguments section:
+
+1. Required arguments appear before optional arguments
+2. Related arguments are grouped together
+3. `tags` typically appears last before nested blocks
+
+### Nested Block Placement
+
+Nested blocks **MUST** appear after all simple arguments:
+
+```hcl
+resource "aws_security_group" "web" {
+  # Simple arguments first
+  name        = "${var.project_name}-web-sg"
+  description = "Security group for web servers"
+  vpc_id      = var.vpc_id
+
+  # Nested blocks last
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = local.common_tags
+}
+```
+
+### Required Tags
+
+All taggable resources **MUST** include these tags:
+
+| Tag | Description | Example |
+| --- | --- | --- |
+| `Name` | Human-readable resource name | `prod-web-server-1` |
+| `Environment` | Deployment environment | `prod`, `staging`, `dev` |
+| `Project` | Project or application name | `my-application` |
+| `ManagedBy` | Management method | `terraform` |
+| `Owner` | Team or individual owner | `platform-team` |
+
+### Default Tags Configuration
+
+Root modules **SHOULD** use provider-level default tags to ensure consistent tagging:
+
+```hcl
+provider "aws" {
+  region = var.aws_region
+
+  default_tags {
+    tags = {
+      Environment = var.environment
+      Project     = var.project_name
+      ManagedBy   = "terraform"
+      Owner       = var.owner_team
+    }
+  }
+}
+```
+
+### Local Tags Pattern
+
+Use locals for computed or merged tags:
+
+```hcl
+locals {
+  common_tags = {
+    Name        = "${var.project_name}-${var.environment}"
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "terraform"
+  }
+
+  # Merge common tags with resource-specific tags
+  instance_tags = merge(local.common_tags, {
+    Role = "web-server"
+  })
+}
+```
+
+---
+
+## Module Design
+
+### Single Responsibility
+
+Modules **MUST** have a single, well-defined responsibility:
+
+- Each module **SHOULD** manage one logical component
+- Modules **SHOULD NOT** try to do too much
+- Complex infrastructure **SHOULD** be composed of multiple modules
+
+**Good:** A VPC module that creates VPC, subnets, route tables, and internet gateway.
+
+**Bad:** A "full-stack" module that creates VPC, EC2, RDS, and S3 all together.
+
+### Module Version Constraints
+
+Modules **MUST** specify required Terraform and provider versions:
+
+```hcl
+# versions.tf in module directory
+
+terraform {
+  required_version = ">= 1.6.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0.0"
+    }
+  }
+}
+```
+
+### Module Interface Design
+
+**Inputs:**
+
+- Variable names **MUST** be consistent across modules (e.g., always `environment`, not sometimes `env`)
+- Required variables **SHOULD** be minimized to essential values
+- Complex inputs **SHOULD** use object types with documented structure
+
+**Outputs:**
+
+- Expose only values needed by calling modules
+- Use consistent naming patterns across modules
+- Document output types and formats
+
+### Minimal Required Inputs
+
+Required variables **SHOULD** be minimized. Provide sensible defaults where possible:
+
+```hcl
+# Good: Only truly required inputs are mandatory
+variable "vpc_id" {
+  description = "VPC ID where resources will be created."
+  type        = string
+  # No default - this is genuinely required
+}
+
+variable "instance_type" {
+  description = "EC2 instance type."
+  type        = string
+  default     = "t3.micro"  # Sensible default
+}
+```
+
+### Complex Input Types
+
+For complex inputs, use object types with clear documentation:
+
+```hcl
+variable "instance_config" {
+  description = <<-EOT
+    Configuration for the EC2 instance.
+
+    Attributes:
+      - instance_type: EC2 instance type (e.g., "t3.micro")
+      - ami_id: AMI ID to use for the instance
+      - volume_size: Root volume size in GB (default: 20)
+      - enable_monitoring: Enable detailed monitoring (default: false)
+  EOT
+  type = object({
+    instance_type     = string
+    ami_id            = string
+    volume_size       = optional(number, 20)
+    enable_monitoring = optional(bool, false)
+  })
+}
+```
+
+### Module Output Design
+
+Outputs **SHOULD** expose only values needed by calling modules:
+
+```hcl
+# Good: Specific, useful outputs
+output "instance_id" {
+  description = "The ID of the created EC2 instance."
+  value       = aws_instance.main.id
+}
+
+output "instance_private_ip" {
+  description = "The private IP address of the EC2 instance."
+  value       = aws_instance.main.private_ip
+}
+
+# Avoid: Exposing entire resource
+output "instance" {
+  description = "The entire instance resource."
+  value       = aws_instance.main  # Too broad
+}
+```
+
+### Module Versioning
+
+For published modules, use semantic versioning:
+
+- **MAJOR:** Breaking changes (removed inputs, changed behavior)
+- **MINOR:** New features, backward-compatible changes
+- **PATCH:** Bug fixes, documentation updates
+
+Pin module versions in root configurations:
+
+```hcl
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "~> 5.0"
+
+  # ...
+}
+
+module "internal_module" {
+  source = "./modules/my-module"
+  # Local modules don't use version constraint
+}
+```
+
+---
+
+## State Management
+
+### Remote Backend Configuration
+
+Root modules **MUST** configure a remote backend for team environments:
+
+```hcl
+terraform {
+  backend "s3" {
+    bucket         = "my-terraform-state"
+    key            = "environments/prod/terraform.tfstate"
+    region         = "us-east-1"
+    encrypt        = true
+    dynamodb_table = "terraform-state-lock"
+  }
+}
+```
+
+**Backend requirements:**
+
+- State files **MUST** be encrypted at rest
+- State access **MUST** be controlled via IAM
+- State locking **MUST** be enabled to prevent concurrent modifications
+- State files **MUST NOT** be committed to version control
+
+### State Encryption
+
+State backends **MUST** enable encryption:
+
+```hcl
+# S3 backend with encryption
+terraform {
+  backend "s3" {
+    bucket  = "my-terraform-state"
+    key     = "prod/terraform.tfstate"
+    region  = "us-east-1"
+    encrypt = true  # REQUIRED
+  }
+}
+```
+
+### State Locking
+
+State backends **MUST** support and enable state locking:
+
+```hcl
+# S3 backend with DynamoDB locking
+terraform {
+  backend "s3" {
+    bucket         = "my-terraform-state"
+    key            = "prod/terraform.tfstate"
+    region         = "us-east-1"
+    encrypt        = true
+    dynamodb_table = "terraform-state-lock"  # REQUIRED for locking
+  }
+}
+```
+
+### No Local State in Production
+
+Local state files **MUST NOT** be used for production environments. Local state:
+
+- Cannot be shared across team members
+- Has no locking mechanism
+- Has no encryption at rest
+- Is easily lost or corrupted
+
+### State File Exclusion
+
+State files and related artifacts **MUST NOT** be committed to version control. Add to `.gitignore`:
+
+```gitignore
+# Terraform state files
+*.tfstate
+*.tfstate.*
+
+# Crash log files
+crash.log
+crash.*.log
+
+# .terraform directories
+**/.terraform/*
+
+# Override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# CLI configuration
+.terraformrc
+terraform.rc
+```
+
+### State File Organization
+
+Organize state files by environment and component:
+
+```text
+state-bucket/
+├── environments/
+│   ├── dev/
+│   │   └── terraform.tfstate
+│   ├── staging/
+│   │   └── terraform.tfstate
+│   └── prod/
+│       └── terraform.tfstate
+└── shared/
+    ├── networking/
+    │   └── terraform.tfstate
+    └── iam/
+        └── terraform.tfstate
+```
+
+### Workspace Usage
+
+Workspaces **MAY** be used for environment separation in simple cases:
+
+```bash
+terraform workspace select prod
+terraform apply
+```
+
+**Caution:** For complex environments, separate state files per environment are often clearer than workspaces.
+
+---
+
+## Provider Management
+
+### Provider Version Constraints
+
+Provider versions **MUST** be constrained in `versions.tf`:
+
+| Pattern | Example | Use Case |
+| --- | --- | --- |
+| Pessimistic constraint | `~> 5.0` | Allow minor version updates only |
+| Exact version | `= 5.31.0` | Strict reproducibility required |
+| Range constraint | `>= 5.0, < 6.0` | Explicit major version bounds |
+
+**Recommended approach:**
+
+```hcl
+terraform {
+  required_version = ">= 1.6.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
+  }
+}
+```
+
+### Lock File Management
+
+The `.terraform.lock.hcl` file:
+
+- **MUST** be committed to version control
+- **SHOULD** be updated explicitly using `terraform providers lock`
+- **MUST** be updated when provider versions change
+- **SHOULD** include hashes for all platforms used in CI
+
+```bash
+# Update lock file with hashes for multiple platforms
+terraform providers lock \
+  -platform=linux_amd64 \
+  -platform=darwin_amd64 \
+  -platform=darwin_arm64
+```
+
+### Pessimistic Constraints
+
+Use the pessimistic constraint operator (`~>`) for providers to allow patch updates while preventing breaking changes:
+
+```hcl
+# Good: Allows 5.x updates but not 6.0
+version = "~> 5.0"
+
+# Good: Allows 5.31.x updates but not 5.32.0
+version = "~> 5.31.0"
+```
+
+---
+
+## Security Best Practices
+
+### Secret Management
+
+Secrets **MUST NEVER** appear in Terraform code or version control.
+
+#### Prohibited Patterns
+
+The following patterns are **PROHIBITED**:
+
+```hcl
+# NEVER DO THIS
+variable "db_password" {
+  default = "SuperSecretPassword123!"  # PROHIBITED
+}
+
+resource "aws_db_instance" "main" {
+  password = "hardcoded-password"  # PROHIBITED
+}
+```
+
+### No Secret Defaults
+
+Sensitive variables **MUST NOT** have default values:
+
+```hcl
+# Correct: No default for secrets
+variable "database_password" {
+  description = "Database password. Set via TF_VAR_database_password."
+  type        = string
+  sensitive   = true
+  # No default!
+}
+```
+
+### Approved Secret Patterns
+
+**Pattern 1: Environment Variables**
+
+```hcl
+variable "db_password" {
+  description = "Database password. Set via TF_VAR_db_password environment variable."
+  type        = string
+  sensitive   = true
+}
+```
+
+```bash
+export TF_VAR_db_password="$(aws secretsmanager get-secret-value --secret-id my-secret --query SecretString --output text)"
+terraform apply
+```
+
+**Pattern 2: AWS Secrets Manager**
+
+```hcl
+data "aws_secretsmanager_secret_version" "db_password" {
+  secret_id = "prod/database/password"
+}
+
+resource "aws_db_instance" "main" {
+  password = data.aws_secretsmanager_secret_version.db_password.secret_string
+}
+```
+
+**Pattern 3: HashiCorp Vault**
+
+```hcl
+data "vault_generic_secret" "db_creds" {
+  path = "secret/data/database"
+}
+
+resource "aws_db_instance" "main" {
+  username = data.vault_generic_secret.db_creds.data["username"]
+  password = data.vault_generic_secret.db_creds.data["password"]
+}
+```
+
+### Sensitive Variable Marking
+
+Variables containing sensitive data **MUST** be marked:
+
+```hcl
+variable "api_key" {
+  description = "API key for external service"
+  type        = string
+  sensitive   = true  # REQUIRED for secrets
+}
+
+output "connection_string" {
+  description = "Database connection string (contains credentials)"
+  value       = local.connection_string
+  sensitive   = true  # REQUIRED if contains secrets
+}
+```
+
+### State Security
+
+State files contain sensitive data and **MUST** be protected.
+
+#### Requirements
+
+1. **Encryption at rest:** State backends **MUST** enable encryption
+2. **Access control:** State files **MUST** be accessible only to authorized users/roles
+3. **No local state in production:** Local state files **MUST NOT** be used for production
+4. **State locking:** Backends **MUST** support state locking
+
+#### S3 Backend Security Configuration
+
+```hcl
+terraform {
+  backend "s3" {
+    bucket         = "my-terraform-state"
+    key            = "prod/terraform.tfstate"
+    region         = "us-east-1"
+    encrypt        = true                    # REQUIRED
+    dynamodb_table = "terraform-state-lock"  # REQUIRED for locking
+    # Use IAM role or credentials from environment
+  }
+}
+```
+
+### Least-Privilege Principles
+
+IAM policies and resource permissions **MUST** follow least-privilege:
+
+#### IAM Policy Guidelines
+
+- Grant only required permissions
+- Use resource-level restrictions when possible
+- Avoid wildcard actions (`*`) except when truly needed
+- Use conditions to further restrict access
+
+```hcl
+# GOOD: Specific permissions
+resource "aws_iam_policy" "s3_reader" {
+  name = "s3-reader"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.data.arn,
+          "${aws_s3_bucket.data.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# BAD: Overly permissive
+resource "aws_iam_policy" "bad_example" {
+  policy = jsonencode({
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["s3:*"]       # TOO BROAD
+      Resource = ["*"]           # TOO BROAD
+    }]
+  })
+}
+```
+
+### Security Scanning
+
+Security scanning tools **SHOULD** be integrated into the development workflow.
+
+#### Recommended Tools
+
+| Tool | Purpose | Integration |
+| --- | --- | --- |
+| `tfsec` | Static security analysis | Pre-commit, CI |
+| `checkov` | Policy-as-code scanning | Pre-commit, CI |
+| `terrascan` | Security and compliance | CI |
+| `trivy` | Misconfiguration scanning | CI |
+
+#### Pre-commit Integration Example
+
+```yaml
+- repo: https://github.com/antonbabenko/pre-commit-terraform
+  rev: v1.96.0
+  hooks:
+    - id: terraform_tfsec
+    - id: terraform_checkov
+```
+
+---
+
+## Testing with Terraform Test
+
+Terraform's native test framework (introduced in Terraform 1.6) provides a way to validate configurations without external testing tools. This section documents testing conventions that integrate with the coding standards in this guide.
+
+> **Note:** Terraform tests require Terraform 1.6.0 or later. For older Terraform versions, consider Terratest or other external testing frameworks.
+
+### Test File Naming
+
+Test files **MUST** use the `.tftest.hcl` extension:
+
+- `basic.tftest.hcl`
+- `validation.tftest.hcl`
+- `integration.tftest.hcl`
+
+### Test File Location
+
+Test files **SHOULD** be placed in a `tests/` directory within the module:
+
+```text
+modules/
+└── vpc/
+    ├── main.tf
+    ├── variables.tf
+    ├── outputs.tf
+    ├── versions.tf
+    ├── README.md
+    └── tests/
+        ├── basic.tftest.hcl
+        ├── validation.tftest.hcl
+        └── integration.tftest.hcl
+```
+
+**Alternative:** Tests alongside configuration:
+
+```text
+modules/
+└── vpc/
+    ├── main.tf
+    ├── variables.tf
+    ├── outputs.tf
+    ├── vpc.tftest.hcl
+    └── vpc_validation.tftest.hcl
+```
+
+### Test Structure
+
+Terraform test files use HCL syntax with specific blocks.
+
+#### Basic Test Structure
+
+```hcl
+# tests/basic.tftest.hcl
+
+# Variables block (optional) - Set values for tests
+variables {
+  environment = "test"
+  vpc_cidr    = "10.0.0.0/16"
+}
+
+# Run block - Defines a test scenario
+run "creates_vpc_with_correct_cidr" {
+  command = plan  # or apply
+
+  assert {
+    condition     = aws_vpc.main.cidr_block == "10.0.0.0/16"
+    error_message = "VPC CIDR block does not match expected value"
+  }
+}
+
+run "creates_required_subnets" {
+  command = plan
+
+  assert {
+    condition     = length(aws_subnet.private) == 3
+    error_message = "Expected 3 private subnets"
+  }
+}
+```
+
+#### Test Block Reference
+
+| Block | Purpose | Required |
+| --- | --- | --- |
+| `variables {}` | Set input variable values for tests | Optional |
+| `provider {}` | Configure provider for tests (e.g., mock) | Optional |
+| `run "name" {}` | Define a test scenario | Required (at least one) |
+| `assert {}` | Define a test assertion within a run | Required (at least one per run) |
+| `expect_failures` | Expect specific resources/outputs to fail | Optional |
+
+### Test Assertions
+
+Each `run` block **MUST** include at least one `assert`:
+
+```hcl
+run "instance_has_correct_type" {
+  command = plan
+
+  assert {
+    condition     = aws_instance.main.instance_type == var.instance_type
+    error_message = "Instance type mismatch"
+  }
+
+  assert {
+    condition     = aws_instance.main.tags["Environment"] == "test"
+    error_message = "Instance must have Environment tag"
+  }
+}
+```
+
+### Testing Variable Validation
+
+Test validation rules with `expect_failures`:
+
+```hcl
+run "rejects_invalid_environment" {
+  command = plan
+
+  variables {
+    environment = "invalid"  # Should fail validation
+  }
+
+  expect_failures = [
+    var.environment
+  ]
+}
+
+run "accepts_valid_environment" {
+  command = plan
+
+  variables {
+    environment = "prod"
+  }
+
+  assert {
+    condition     = var.environment == "prod"
+    error_message = "Environment should be prod"
+  }
+}
+```
+
+### Testing Outputs
+
+```hcl
+run "outputs_vpc_id" {
+  command = apply
+
+  assert {
+    condition     = output.vpc_id != null && output.vpc_id != ""
+    error_message = "vpc_id output must not be empty"
+  }
+}
+
+run "outputs_correct_subnet_count" {
+  command = apply
+
+  assert {
+    condition     = length(output.subnet_ids) == 3
+    error_message = "Expected 3 subnet IDs in output"
+  }
+}
+```
+
+### Mock Providers
+
+For unit testing without real infrastructure, use mock providers:
+
+```hcl
+# tests/unit.tftest.hcl
+
+mock_provider "aws" {
+  mock_data "aws_availability_zones" {
+    defaults = {
+      names = ["us-east-1a", "us-east-1b", "us-east-1c"]
+    }
+  }
+}
+
+run "uses_all_availability_zones" {
+  command = plan
+
+  assert {
+    condition     = length(aws_subnet.private) == 3
+    error_message = "Should create subnet in each AZ"
+  }
+}
+```
+
+### Unit Tests
+
+Unit tests use `command = plan` (the default):
+
+- Do NOT create real resources
+- Fast execution
+- Test configuration logic, not cloud provider behavior
+
+```hcl
+run "unit_test_example" {
+  command = plan  # Explicit, though it's the default
+
+  assert {
+    condition     = aws_instance.main.instance_type == var.instance_type
+    error_message = "Instance type mismatch"
+  }
+}
+```
+
+### Integration Tests
+
+Integration tests use `command = apply`:
+
+- Create and destroy real resources
+- Slower execution
+- Test actual infrastructure behavior
+- Require valid provider credentials
+
+```hcl
+run "integration_test_example" {
+  command = apply  # Creates real resources
+
+  assert {
+    condition     = aws_instance.main.id != ""
+    error_message = "Instance should be created"
+  }
+}
+```
+
+**Best Practice:** Run unit tests (`plan`) frequently during development. Run integration tests (`apply`) in CI or before releases.
+
+### Running Tests
+
+#### Basic Test Execution
+
+```bash
+# Run all tests in current directory
+terraform test
+
+# Run tests with verbose output
+terraform test -verbose
+
+# Run specific test file
+terraform test -filter=tests/basic.tftest.hcl
+```
+
+#### CI Integration
+
+```yaml
+# .github/workflows/terraform-ci.yml (test job)
+- name: Terraform Init
+  run: terraform init
+
+- name: Terraform Test
+  run: terraform test -verbose
+```
+
+### What to Test
+
+Tests **SHOULD** cover:
+
+| Category | What to Test | Example |
+| --- | --- | --- |
+| **Variable validation** | Custom validation rules work correctly | Invalid environment rejected |
+| **Computed values** | Locals and expressions compute correctly | CIDR calculations |
+| **Resource configuration** | Resources have expected attributes | Instance type, tags |
+| **Output values** | Outputs contain expected values | VPC ID not empty |
+| **Module integration** | Modules work together | VPC + subnets + security groups |
+| **Edge cases** | Boundary conditions | Zero instances, empty lists |
+
+**Not to test:**
+
+- Cloud provider behavior (e.g., "does AWS actually create an EC2?")
+- Terraform core functionality
+- External service availability
+
+---
+
+## Documentation Standards
+
+### Module README Requirements
+
+Every module **MUST** include a `README.md` with:
+
+1. **Description** — What the module does
+2. **Usage example** — Minimal working example
+3. **Requirements** — Terraform and provider versions
+4. **Inputs** — All variables with descriptions
+5. **Outputs** — All outputs with descriptions
+
+#### README Template
+
+````markdown
+# Module Name
+
+Brief description of what this module creates.
+
+## Usage
+
+```hcl
+module "example" {
+  source = "./modules/example"
+
+  required_variable = "value"
+}
+```
+
+## Requirements
+
+| Name | Version |
+| --- | --- |
+| terraform | >= 1.6.0 |
+| aws | ~> 5.0 |
+
+## Inputs
+
+| Name | Description | Type | Default | Required |
+| --- | --- | --- | --- | --- |
+| required_variable | Description here | `string` | n/a | yes |
+| optional_variable | Description here | `string` | `"default"` | no |
+
+## Outputs
+
+| Name | Description |
+| --- | --- |
+| output_name | Description of output |
+````
+
+**Note:** Consider using `terraform-docs` to generate input/output tables automatically.
+
+### Inline Comment Conventions
+
+Comments **SHOULD** explain "why," not "what."
+
+#### Single-Line Comments
+
+Use `#` for single-line comments:
+
+```hcl
+# Enable encryption to meet compliance requirements (SOC2)
+resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
+  bucket = aws_s3_bucket.main.id
+  # ...
+}
+```
+
+#### Block Comments
+
+Use `/* */` sparingly for multi-line explanations:
+
+```hcl
+/*
+ * This security group allows inbound traffic from the corporate VPN.
+ * CIDR ranges are managed by the network team and should not be
+ * modified without their approval.
+ */
+resource "aws_security_group" "vpn_access" {
+  # ...
+}
+```
+
+### TODO Comment Format
+
+Use standardized TODO format:
+
+```hcl
+# TODO(username): Migrate to new VPC module after v2.0 release
+# TODO(team-name): Add support for IPv6 when available
+```
+
+---
+
+## Pre-commit Discipline for Terraform
+
+**⚠️ ALWAYS run pre-commit checks before committing Terraform code.**
+
+Pre-commit hooks for Terraform **SHOULD** include:
+
+1. `terraform fmt` — Format check
+2. `terraform validate` — Syntax validation
+3. `tflint` — Linting
+4. Security scanning (optional but recommended)
+
+### Workflow
+
+1. Make Terraform changes
+2. Run `terraform fmt -recursive`
+3. Run `terraform validate`
+4. Run pre-commit hooks: `pre-commit run --all-files`
+5. Review and commit ALL auto-fixes as part of your change
+6. Push to GitHub
+
+**CI is a safety net, not a substitute for local checks.**
+
+### Pre-commit Configuration
+
+```yaml
+# .pre-commit-config.yaml (Terraform section)
+repos:
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: v1.96.0
+    hooks:
+      - id: terraform_fmt
+      - id: terraform_validate
+      - id: terraform_tflint
+        args:
+          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
+```
+
+---
+
+## "Done" Definition for Terraform Changes
+
+A Terraform change is considered complete when:
+
+### Code Quality
+
+- [ ] All code passes `terraform fmt -check -recursive`
+- [ ] All code passes `terraform validate`
+- [ ] All code passes `tflint` without errors
+- [ ] Pre-commit hooks pass
+
+### Documentation
+
+- [ ] All variables have `description` attributes
+- [ ] All outputs have `description` attributes
+- [ ] Sensitive variables/outputs are marked with `sensitive = true`
+- [ ] Module `README.md` is updated (if applicable)
+
+### Security
+
+- [ ] No secrets appear in code or tfvars files
+- [ ] State backend has encryption enabled
+- [ ] IAM policies follow least-privilege
+- [ ] Security scanning passes (if configured)
+
+### Testing
+
+- [ ] Variable validation rules are tested
+- [ ] Critical outputs are tested
+- [ ] Tests pass: `terraform test`
+
+### Version Control
+
+- [ ] `.terraform.lock.hcl` is committed
+- [ ] State files are NOT committed
+- [ ] All changes are committed with descriptive messages
+
+### CI/CD
+
+- [ ] CI pipeline passes
+- [ ] Plan output reviewed (no unexpected changes)
