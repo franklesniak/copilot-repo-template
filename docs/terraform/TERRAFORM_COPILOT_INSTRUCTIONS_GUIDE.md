@@ -163,7 +163,7 @@ This section details what **MUST** be included in each major section of the inst
 
 ### 1. Title and Version
 
-```markdown
+```text
 # Terraform Writing Style
 
 **Version:** 1.0.20260124.0
@@ -180,7 +180,7 @@ This section details what **MUST** be included in each major section of the inst
 
 **MUST** include:
 
-```markdown
+```text
 ## Metadata
 
 - **Status:** Active
@@ -194,7 +194,7 @@ This section details what **MUST** be included in each major section of the inst
 
 **MUST** include a comprehensive table of contents with anchor links to all major sections. Example:
 
-```markdown
+```text
 ## Table of Contents
 
 - [Keywords](#keywords)
@@ -218,7 +218,7 @@ This section details what **MUST** be included in each major section of the inst
 
 **MUST** copy the RFC 2119 keyword definitions pattern from the PowerShell instructions:
 
-```markdown
+```text
 ## Keywords
 
 The key words "**MUST**", "**MUST NOT**", "**REQUIRED**", "**SHALL**", "**SHALL NOT**", "**SHOULD**", "**SHOULD NOT**", "**RECOMMENDED**", "**MAY**", and "**OPTIONAL**" in this document are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
@@ -241,7 +241,7 @@ The key words "**MUST**", "**MUST NOT**", "**REQUIRED**", "**SHALL**", "**SHALL 
 
 Example structure:
 
-```markdown
+```text
 ## Quick Reference Checklist
 
 This checklist provides a quick reference for both human developers and LLMs (like GitHub Copilot) to follow the Terraform style guidelines. Each item includes a scope tag indicating applicability:
@@ -274,7 +274,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 
 **MUST** describe the overall Terraform philosophy and approach for this repository:
 
-```markdown
+```text
 ## Executive Summary: Terraform Philosophy
 
 This repository approaches Terraform as **infrastructure as code** with the same rigor applied to application code:
@@ -382,7 +382,7 @@ This section provides detailed recommendations for each coding standard area.
 
 #### terraform fmt Compliance
 
-```markdown
+```text
 ### Formatting Standards
 
 #### terraform fmt Compliance
@@ -413,7 +413,7 @@ terraform fmt -recursive
 
 #### Indentation Rules
 
-```markdown
+```text
 #### Indentation Rules
 
 - Code **MUST** use 2 spaces for indentation
@@ -441,7 +441,7 @@ The instruction file **MUST** include comprehensive naming convention tables sim
 
 #### Resource Naming
 
-```markdown
+```text
 ### Resource Naming Conventions
 
 Resources **MUST** use `snake_case` for names. Names **SHOULD** be descriptive and indicate purpose.
@@ -463,7 +463,7 @@ Resources **MUST** use `snake_case` for names. Names **SHOULD** be descriptive a
 
 #### Variable Naming
 
-```markdown
+```text
 ### Variable Naming Conventions
 
 Variables **MUST** use `snake_case` and **MUST** be descriptive.
@@ -499,7 +499,7 @@ variable "subnet_ids" {
 
 #### Output Naming
 
-```markdown
+```text
 ### Output Naming Conventions
 
 Outputs **MUST** use `snake_case` and **SHOULD** follow the pattern of the attribute being exposed.
@@ -517,7 +517,7 @@ Outputs **MUST** use `snake_case` and **SHOULD** follow the pattern of the attri
 
 #### Variable Documentation Requirements
 
-```markdown
+```text
 ### Variable Documentation Requirements
 
 Every variable **MUST** include:
@@ -565,7 +565,7 @@ variable "database_password" {
 
 #### Output Documentation Requirements
 
-```markdown
+```text
 ### Output Documentation Requirements
 
 Every output **MUST** include a description. Sensitive outputs **MUST** be marked.
@@ -588,7 +588,7 @@ output "instance_private_ip" {
 
 #### Meta-Argument Ordering
 
-```markdown
+```text
 ### Meta-Argument Ordering
 
 Within resource blocks, arguments **MUST** follow this order:
@@ -633,7 +633,7 @@ resource "aws_instance" "web_server" {
 
 #### Resource Tagging Standards
 
-```markdown
+```text
 ### Resource Tagging Standards
 
 #### Required Tags
@@ -685,7 +685,7 @@ locals {
 
 ### Module Design
 
-```markdown
+```text
 ### Module Design Principles
 
 #### Reusability Guidelines
@@ -732,7 +732,7 @@ module "vpc" {
 
 ### State Management
 
-```markdown
+```text
 ### State Management
 
 #### Backend Configuration
@@ -807,7 +807,7 @@ The instruction file **SHOULD** define distinct scope tags to indicate when rule
 
 ### Tag Usage Examples
 
-```markdown
+```text
 ### Quick Reference Checklist
 
 #### File Organization
@@ -838,7 +838,7 @@ This section outlines the security content that **MUST** be included in the inst
 
 ### Secrets and Sensitive Variable Handling
 
-```markdown
+```text
 ## Security Best Practices
 
 ### Secret Management
@@ -923,7 +923,7 @@ output "connection_string" {
 
 ### State File Security
 
-```markdown
+```text
 ### State File Security
 
 State files contain sensitive data and **MUST** be protected.
@@ -977,7 +977,7 @@ terraform {
 
 ### Least-Privilege Resource Policies
 
-```markdown
+```text
 ### Least-Privilege Principles
 
 IAM policies and resource permissions **MUST** follow least-privilege:
@@ -1027,7 +1027,7 @@ resource "aws_iam_policy" "bad_example" {
 
 ### Security Scanning Integration
 
-```markdown
+```text
 ### Security Scanning
 
 Security scanning tools **SHOULD** be integrated into the development workflow.
@@ -1062,7 +1062,7 @@ Following the PowerShell pattern, testing guidance **MUST** be embedded directly
 
 ### Overview
 
-```markdown
+```text
 ## Testing with Terraform Test
 
 Terraform's native test framework (introduced in Terraform 1.6) provides a way to validate configurations without external testing tools. This section documents testing conventions that integrate with the coding standards in this guide.
@@ -1072,7 +1072,7 @@ Terraform's native test framework (introduced in Terraform 1.6) provides a way t
 
 ### Test File Naming and Location
 
-```markdown
+```text
 ### Test File Naming and Location
 
 Test files **MUST** follow consistent naming conventions:
@@ -1112,7 +1112,7 @@ modules/
 
 ### Test File Structure
 
-```markdown
+```text
 ### Test File Structure
 
 Terraform test files use HCL syntax with specific blocks.
@@ -1161,7 +1161,7 @@ run "creates_required_subnets" {
 
 ### Test Patterns
 
-```markdown
+```text
 ### Test Patterns
 
 #### Arrange-Act-Assert in Terraform Tests
@@ -1262,7 +1262,7 @@ run "outputs_correct_subnet_count" {
 
 ### Mock Providers
 
-```markdown
+```text
 ### Mock Providers
 
 For unit testing without real infrastructure, use mock providers:
@@ -1291,7 +1291,7 @@ run "uses_all_availability_zones" {
 
 ### Unit vs Integration Tests
 
-```markdown
+```text
 ### Unit vs Integration Tests
 
 #### Unit Tests (command = plan)
@@ -1336,7 +1336,7 @@ run "integration_test_example" {
 
 ### Running Tests
 
-```markdown
+```text
 ### Running Tests
 
 #### Basic Test Execution
@@ -1375,7 +1375,7 @@ jobs:
 
 ### What to Test
 
-```markdown
+```text
 ### What to Test
 
 Tests **SHOULD** cover:
@@ -1404,7 +1404,7 @@ This section defines the documentation requirements for the instruction file.
 
 ### README Requirements for Modules
 
-```markdown
+```text
 ### Module Documentation
 
 Every module **MUST** include a `README.md` with:
@@ -1458,7 +1458,7 @@ module "example" {
 
 ### Inline Comment Conventions
 
-```markdown
+```text
 ### Inline Comments
 
 Comments **SHOULD** explain "why," not "what."
@@ -1507,7 +1507,7 @@ The instruction file **MUST** integrate with the repository's `copilot-instructi
 
 ### Referencing the Constitution
 
-```markdown
+```text
 ## Related
 
 - **[Repository Copilot Instructions](../copilot-instructions.md)** — Repo-wide constitution. If any instruction in this file conflicts with the constitution, **the constitution wins**.
@@ -1517,7 +1517,7 @@ The instruction file **MUST** integrate with the repository's `copilot-instructi
 
 The instruction file **MUST** emphasize pre-commit discipline consistent with the constitution:
 
-```markdown
+```text
 ### Pre-commit Discipline for Terraform
 
 **⚠️ ALWAYS run pre-commit checks before committing Terraform code.**
@@ -1545,7 +1545,7 @@ Pre-commit hooks for Terraform **SHOULD** include:
 
 When the `terraform.instructions.md` file is created, the table in `copilot-instructions.md` **MUST** be updated:
 
-```markdown
+```text
 | Language | Instruction File | Applies To |
 | --- | --- | --- |
 | Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` |
@@ -1556,7 +1556,7 @@ When the `terraform.instructions.md` file is created, the table in `copilot-inst
 
 The Linting Configurations table **SHOULD** also be updated if Terraform-specific linting configurations are added:
 
-```markdown
+```text
 | Tool | Configuration File | Purpose |
 | --- | --- | --- |
 | PSScriptAnalyzer | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell formatting/linting (OTBS style) |
@@ -1566,7 +1566,7 @@ The Linting Configurations table **SHOULD** also be updated if Terraform-specifi
 
 The Testing Tools table **SHOULD** be updated:
 
-```markdown
+```text
 | Language | Framework | Configuration | Test Location |
 | --- | --- | --- | --- |
 | Python | pytest | `pyproject.toml` | `tests/` |
@@ -1580,7 +1580,7 @@ The Testing Tools table **SHOULD** be updated:
 
 ### Recommended Pre-commit Hooks
 
-```markdown
+```text
 ### Terraform Pre-commit Hooks
 
 The following pre-commit configuration is **RECOMMENDED** for Terraform:
@@ -1611,7 +1611,7 @@ repos:
 
 ### TFLint Configuration
 
-```markdown
+```text
 ### TFLint Configuration
 
 A `.tflint.hcl` configuration file **SHOULD** be created at the repository root:
@@ -1658,7 +1658,7 @@ rule "terraform_documented_outputs" {
 
 ### CI Workflow Example
 
-```markdown
+```text
 ### Terraform CI Workflow
 
 A GitHub Actions workflow for Terraform **SHOULD** include:
