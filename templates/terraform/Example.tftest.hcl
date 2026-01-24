@@ -93,7 +93,7 @@ run "rejects_invalid_environment" {
   command = plan
 
   variables {
-    environment = "invalid"  # Should fail validation
+    environment = "invalid" # Should fail validation
   }
 
   expect_failures = [
