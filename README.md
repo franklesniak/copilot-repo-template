@@ -219,9 +219,11 @@ Terraform tests use the native Terraform test framework (Terraform 1.6+).
 # Run all Terraform tests
 terraform test -verbose
 
-# Tests are located in modules/*/tests/ directories
-# Test files use the .tftest.hcl extension
+# Run specific test file
+terraform test -filter=tests/unit.tftest.hcl
 ```
+
+Tests are located in `modules/*/tests/` directories.
 
 See `templates/terraform/Example.tftest.hcl` for a comprehensive Terraform test template.
 
