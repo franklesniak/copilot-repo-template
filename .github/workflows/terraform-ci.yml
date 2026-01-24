@@ -1,35 +1,70 @@
 # Terraform CI Workflow
-# This workflow runs on pushes and pull requests that modify Terraform files.
-# It performs format checking, validation, linting, and testing.
+#
+# Purpose: Run format checking, validation, linting, testing, and optional security
+# scanning for Terraform code in a single consolidated workflow.
+#
+# Design Decisions:
+#
+# 1. Single Workflow with Job Dependencies:
+#    This workflow combines format, validate, lint, test, and security into a single
+#    workflow file using the `needs:` keyword for job dependencies. This design
+#    follows the pattern established in python-ci.yml.
+#
+#    Benefits of this approach:
+#    - All jobs appear directly in the PR checks list (not hidden in Actions tab)
+#    - Easy to configure branch protection rules that require specific jobs
+#    - Later jobs don't run if earlier ones fail (saves CI minutes)
+#    - Simpler maintenance with a single workflow file
+#
+# 2. Job Dependencies:
+#    - validate needs format (don't validate poorly-formatted code)
+#    - lint needs validate (don't lint invalid code)
+#    - test needs validate (don't test invalid code)
+#    - security needs validate (runs in parallel with lint)
+#    This ensures we don't waste time on later checks if earlier ones fail.
+#
+# 3. Template Repository Consideration:
+#    This workflow does NOT use path-based filtering because this is a template
+#    repository. Path filtering would prevent the workflow from being properly tested
+#    and copied by users of the template. Template repositories should run all
+#    workflows on all changes to ensure accuracy when the template is used.
+#
+# 4. Terraform Version Policy:
+#    Pin to a specific Terraform version (1.6.0) for reproducibility. This version
+#    supports the Terraform test framework (introduced in 1.6.0). Update when
+#    upstream support changes or new features are needed.
+#
+# 5. TFLint Version Policy:
+#    Pin to a specific TFLint version (v0.51.1) for reproducibility. Update when
+#    new rules or fixes are needed.
+#
+# 6. Dependency Caching:
+#    This workflow uses caching to improve performance:
+#    - Terraform providers: Cached based on .terraform.lock.hcl hash
+#    - TFLint plugins: Cached based on .tflint.hcl hash
+#    Expected time savings: 30-60 seconds per CI run for provider downloads.
+#
+# Note: This workflow is optional. Remove if your project doesn't use Terraform.
 
 name: Terraform CI
 
 on:
   push:
-    paths:
-      - '**/*.tf'
-      - '**/*.tfvars'
-      - '**/*.tftest.hcl'
-      - '.tflint.hcl'
-      - '.github/workflows/terraform-ci.yml'
+    branches: ["**"]
   pull_request:
-    paths:
-      - '**/*.tf'
-      - '**/*.tfvars'
-      - '**/*.tftest.hcl'
-      - '.tflint.hcl'
-      - '.github/workflows/terraform-ci.yml'
+    branches: ["**"]
+  workflow_dispatch:
 
-# Limit the permissions of the GITHUB_TOKEN
 permissions:
   contents: read
 
 jobs:
-  validate:
-    name: Validate
+  format:
+    name: Format Check
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Terraform
@@ -39,6 +74,33 @@ jobs:
 
       - name: Terraform Format Check
         run: terraform fmt -check -recursive -diff
+
+  validate:
+    name: Validate
+    needs: format
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.6.0"
+
+      - name: Cache Terraform Providers
+        uses: actions/cache@v4
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: terraform-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: |
+            terraform-providers-
+
+      - name: Configure Provider Cache
+        run: |
+          mkdir -p ~/.terraform.d/plugin-cache
+          echo "plugin_cache_dir = \"$HOME/.terraform.d/plugin-cache\"" > ~/.terraformrc
 
       - name: Find Terraform directories
         id: find-tf-dirs
@@ -59,16 +121,26 @@ jobs:
           done
 
   lint:
-    name: Lint
+    name: Lint (TFLint)
+    needs: validate
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Cache TFLint Plugins
+        uses: actions/cache@v4
+        with:
+          path: ~/.tflint.d/plugins
+          key: tflint-plugins-${{ hashFiles('.tflint.hcl') }}
+          restore-keys: |
+            tflint-plugins-
 
       - name: Setup TFLint
         uses: terraform-linters/setup-tflint@v4
         with:
-          tflint_version: latest
+          tflint_version: v0.51.1
 
       - name: Init TFLint
         run: tflint --init
@@ -78,16 +150,30 @@ jobs:
 
   test:
     name: Test
+    needs: validate
     runs-on: ubuntu-latest
-    # Only run tests if there are test files
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.6.0"
+
+      - name: Cache Terraform Providers
+        uses: actions/cache@v4
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: terraform-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
+          restore-keys: |
+            terraform-providers-
+
+      - name: Configure Provider Cache
+        run: |
+          mkdir -p ~/.terraform.d/plugin-cache
+          echo "plugin_cache_dir = \"$HOME/.terraform.d/plugin-cache\"" > ~/.terraformrc
 
       - name: Check for test files
         id: check-tests
@@ -122,12 +208,17 @@ jobs:
         run: echo "No Terraform test files (.tftest.hcl) found. Skipping tests."
 
   # Optional: Security scanning with tfsec
-  # Uncomment to enable security scanning
+  # This job runs in parallel with lint (both depend on validate).
+  # Set continue-on-error to true for advisory mode, false for blocking mode.
+  # Uncomment to enable security scanning.
   # security:
   #   name: Security Scan
+  #   needs: validate
   #   runs-on: ubuntu-latest
+  #   continue-on-error: true  # Advisory mode: report findings but don't fail workflow
+  #
   #   steps:
-  #     - name: Checkout
+  #     - name: Checkout repository
   #       uses: actions/checkout@v4
   #
   #     - name: Run tfsec

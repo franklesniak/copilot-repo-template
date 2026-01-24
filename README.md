@@ -111,6 +111,7 @@ pyproject.toml                       # Python project configuration
 | Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` | `.github/workflows/markdownlint.yml` | Documentation writing standards |
 | PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` | `.github/workflows/powershell-ci.yml` | PowerShell coding standards (OTBS, v1.0-v7.x) |
 | Python | `.github/instructions/python.instructions.md` | `**/*.py` | `.github/workflows/python-ci.yml` | Python coding standards (PEP 8, typing) |
+| Terraform | `.github/instructions/terraform.instructions.md` | `**/*.tf`, `**/*.tfvars`, `**/*.tftest.hcl`, etc. | `.github/workflows/terraform-ci.yml` | Terraform coding standards (HCL, modules) |
 
 ### Linting Tools
 
@@ -153,6 +154,30 @@ pre-commit run black --all-files
 pre-commit run ruff-check --all-files
 ```
 
+#### Terraform Linting
+
+This repository includes Terraform linting via:
+
+- **terraform fmt:** Format checking and auto-formatting
+- **terraform validate:** Configuration validation
+- **TFLint:** Best practice linting with cloud provider plugins
+
+Configuration: `.tflint.hcl`
+
+```bash
+# Format check
+terraform fmt -check -recursive
+
+# Format fix
+terraform fmt -recursive
+
+# Validate (requires init)
+terraform init -backend=false && terraform validate
+
+# Lint
+tflint --init && tflint --recursive
+```
+
 ### Testing
 
 #### Python Tests
@@ -186,6 +211,20 @@ CI runs PowerShell tests on Windows, macOS, and Linux to ensure cross-platform c
 
 See `templates/powershell/Example.Tests.ps1` for a comprehensive Pester test template.
 
+#### Terraform Tests
+
+Terraform tests use the native Terraform test framework (Terraform 1.6+).
+
+```bash
+# Run all Terraform tests
+terraform test -verbose
+
+# Tests are located in modules/*/tests/ directories
+# Test files use the .tftest.hcl extension
+```
+
+See `.github/instructions/terraform.instructions.md` for comprehensive Terraform testing guidance.
+
 ### Code Quality
 
 This repository enforces code quality through:
@@ -194,6 +233,7 @@ This repository enforces code quality through:
 - **GitHub Copilot Instructions:** Guides AI-assisted development
 - **Pre-commit Hooks:** Catches issues before they reach CI
 - **PSScriptAnalyzer:** PowerShell static analysis with OTBS formatting
+- **TFLint:** Terraform linting with configurable rules and cloud provider plugins
 
 ### License
 
