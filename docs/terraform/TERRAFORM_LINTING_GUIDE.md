@@ -634,7 +634,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: terraform-linters/setup-tflint@v4
         with:
-          tflint_version: latest
+          tflint_version: v0.51.1  # Pin version for reproducibility
       - name: Init TFLint
         run: tflint --init
       - name: Run TFLint
@@ -768,7 +768,7 @@ Cache the Terraform plugin directory to avoid repeated provider downloads:
 - name: Configure Provider Cache
   run: |
     mkdir -p ~/.terraform.d/plugin-cache
-    echo 'plugin_cache_dir = "$HOME/.terraform.d/plugin-cache"' > ~/.terraformrc
+    echo "plugin_cache_dir = \"$HOME/.terraform.d/plugin-cache\"" > ~/.terraformrc
 ```
 
 #### TFLint Plugin Caching
@@ -1539,7 +1539,7 @@ The current configuration uses `latest`:
 ```yaml
 - uses: terraform-linters/setup-tflint@v4
   with:
-    tflint_version: v0.50.0
+    tflint_version: v0.51.1
 ```
 
 ### Pre-commit Hook Version Pinning
