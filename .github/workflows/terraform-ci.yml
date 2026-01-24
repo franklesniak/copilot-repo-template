@@ -179,7 +179,8 @@ jobs:
       - name: Check for test files
         id: check-tests
         run: |
-          if find . -name '*.tftest.hcl' | grep -q .; then
+          # Exclude templates/ directory - those are example files, not runnable tests
+          if find . -path './templates' -prune -o -name '*.tftest.hcl' -print | grep -q .; then
             echo "has_tests=true" >> $GITHUB_OUTPUT
           else
             echo "has_tests=false" >> $GITHUB_OUTPUT
@@ -189,8 +190,8 @@ jobs:
         if: steps.check-tests.outputs.has_tests == 'true'
         id: find-test-dirs
         run: |
-          # Find directories containing .tftest.hcl files
-          TEST_DIRS=$(find . -name '*.tftest.hcl' -exec dirname {} \; | sort -u | tr '\n' ' ')
+          # Find directories containing .tftest.hcl files, excluding templates/
+          TEST_DIRS=$(find . -path './templates' -prune -o -name '*.tftest.hcl' -print -exec dirname {} \; | sort -u | tr '\n' ' ')
           echo "dirs=${TEST_DIRS}" >> $GITHUB_OUTPUT
 
       - name: Run Terraform Tests
