@@ -519,7 +519,7 @@ Terraform variable files (`.tfvars`) provide environment-specific or deployment-
 
 | Pattern | Use Case | Example |
 | --- | --- | --- |
-| `terraform.tfvars` | Automatically loaded variable values | `terraform.tfvars` |
+| `terraform.tfvars` | Default values loaded automatically | `terraform.tfvars` |
 | `<environment>.tfvars` | Environment-specific values | `prod.tfvars`, `dev.tfvars` |
 | `<environment>.auto.tfvars` | Auto-loaded environment values | `prod.auto.tfvars` |
 
@@ -542,11 +542,11 @@ Terraform variable files (`.tfvars`) provide environment-specific or deployment-
 Values in `.tfvars` files override `default` values in variable declarations. The loading order is:
 
 1. `default` value in `variables.tf`
-2. `terraform.tfvars` (if present)
-3. `*.auto.tfvars` files (in alphabetical order)
-4. Environment variables (`TF_VAR_name`)
+2. Environment variables (`TF_VAR_name`)
+3. `terraform.tfvars` and `terraform.tfvars.json` (if present)
+4. `*.auto.tfvars` and `*.auto.tfvars.json` files (in alphabetical order)
 5. `-var-file` command-line arguments (in order specified)
-6. `-var` command-line arguments
+6. `-var` command-line arguments (later flags override earlier ones)
 
 #### Version Control Guidelines
 
