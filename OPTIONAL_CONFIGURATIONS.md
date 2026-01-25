@@ -1711,7 +1711,7 @@ When adopting this template for a Terraform project, complete the following task
 2. **Review and adjust backend configuration** guidance for your project needs (S3, Azure Storage, GCS, Terraform Cloud, etc.)
 3. **Verify required provider versions** and update the version constraint examples as needed
 4. **Add organization-specific required tags** to the Required Tags section if your organization mandates specific tags
-5. **Document any justified deviations** in the [Scope Exceptions & Deviations from Standards](#scope-exceptions-section) section at the end of the file
+5. **Document any justified deviations** in the "Scope Exceptions & Deviations from Standards" section at the end of the file
 6. **Remove unused sections/examples** after adoption (e.g., if you only use Azure, you may want to modify AWS-specific examples)
 
 ### Customizing Provider Examples
