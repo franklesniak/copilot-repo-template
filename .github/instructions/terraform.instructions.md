@@ -5,79 +5,18 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-> **Template Repository Notice:** This file is part of a template repository. When cloning or forking, update the **Version**, **Owner**, and **Last Updated** fields in the Metadata section below to reflect your derived repository. See the [Template Usage & Adoption](#template-usage--adoption) section for guidance.
-
-**Version:** TEMPLATE
+**Version:** 1.1.20260125.0
 
 ## Metadata
 
 - **Status:** Active
-- **Owner:** Repo maintainers (update in derived repository)
-- **Last Updated:** YYYY-MM-DD (update on adoption)
+- **Owner:** Repository Maintainers
+- **Last Updated:** 2026-01-25
 - **Scope:** Defines Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in this repository. Covers style, formatting, naming conventions, file organization, variable and output design, resource configuration, module design, state management, security best practices, provider management, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
-## Template Adoption Checklist
-
-When adopting this template for a new repository, complete the following tasks:
-
-- [ ] Update metadata (Owner, Last Updated, Version) in this document
-- [ ] Review and adjust backend configuration for project needs
-- [ ] Verify required provider versions and add/replace as needed
-- [ ] Add organization-specific required tags, if any
-- [ ] Record any justified deviations in the [Scope Exceptions](#scope-exceptions--deviations-from-standards) section
-- [ ] Remove unused sections/examples after adoption
-- [ ] Run all pre-commit and CI tests to verify configuration
-
-## Template Usage & Adoption
-
-This document is designed to serve as part of a **template repository** for Terraform projects. It provides comprehensive coding standards, style guidelines, and best practices that ensure consistency, security, and maintainability across Terraform codebases.
-
-**When you clone or fork this repository:**
-
-1. **Update the metadata** at the top of this file to reflect your project's ownership and versioning.
-2. **Review all sections** to ensure they align with your organization's policies and infrastructure requirements.
-3. **Customize examples** to use your organization's naming conventions, cloud providers, and resource patterns.
-4. **Remove or modify sections** that do not apply to your use case (e.g., if you only use Azure, you may want to add Azure-specific guidance).
-5. **Document any deviations** from these standards in the [Scope Exceptions](#scope-exceptions--deviations-from-standards) section.
-
-This template is intentionally provider-agnostic in its core guidance. While AWS examples are used for illustration throughout this document, the style rules and best practices apply equally to Azure, Google Cloud, and other Terraform providers.
-
-## Copilot Behaviors
-
-This section provides explicit guidance for GitHub Copilot and other LLMs when generating or modifying Terraform code in this repository.
-
-### Rules for AI-Generated Code
-
-- Copilot **MUST NOT** invent providers, modules, or placeholder values without explicit user confirmation.
-- Copilot **MUST** ask for missing required information rather than inserting assumptions (e.g., for `bucket`, `region`, `project_id`, etc.).
-- Copilot **MUST NEVER** include secrets, API keys, tokens, or hardcoded sensitive information in any output.
-- Copilot **SHOULD** default to minimal, reproducible, and well-documented code, following the style defined in this document.
-- Copilot **SHOULD** add a short change summary comment at the top of generated code snippets when making significant modifications.
-- Copilot **MUST** only modify backend configuration if explicitly requested by the user.
-- Copilot **SHOULD NOT** assume AWS as the default provider; clarify or request user input if the provider is not specified.
-- Copilot **MUST** emit `.tftest.hcl` for test logic, never `.tf` files for tests.
-- Copilot **SHOULD** include `description` for all variables and outputs, and use `sensitive = true` as appropriate.
-- Copilot **MUST NOT** modify lock files (`.terraform.lock.hcl`) or commit state unless explicitly asked.
-- Copilot **MUST** use placeholder markers (e.g., `REPLACE_ME`, `YOUR_VALUE_HERE`) for values that require user customization.
-
-### Decision Prompts
-
-Before generating or finalizing Terraform code, Copilot **SHOULD** consider asking the user:
-
-- What environment is this for? (dev/staging/prod)
-- Is this for a reusable module or a root deployment configuration?
-- Which cloud provider(s) should be used?
-- Should remote state be configured, and if so, what backend type?
-- What version of Terraform is required? Which provider versions?
-- Are there organization-specific tagging requirements?
-- Should this configuration support multiple environments or workspaces?
-
 ## Table of Contents
 
-- [Template Adoption Checklist](#template-adoption-checklist)
-- [Template Usage & Adoption](#template-usage--adoption)
-- [Copilot Behaviors](#copilot-behaviors)
 - [Keywords](#keywords)
 - [Quick Reference Checklist](#quick-reference-checklist)
 - [Executive Summary: Terraform Philosophy](#executive-summary-terraform-philosophy)
@@ -216,6 +155,18 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[Module]** Modules **MUST** have a `README.md` with usage examples → [Module README Requirements](#module-readme-requirements)
 - **[All]** Inline comments **SHOULD** explain "why," not "what" → [Inline Comment Conventions](#inline-comment-conventions)
 - **[All]** TODO comments **SHOULD** include username and context → [TODO Comment Format](#todo-comment-format)
+
+### Code Authoring Guidelines
+
+- **[All]** Authors **MUST NOT** invent providers, modules, or placeholder values without explicit confirmation of requirements
+- **[All]** Authors **MUST** ask for or verify missing required information (e.g., `bucket`, `region`, `project_id`) rather than inserting assumptions
+- **[All]** Authors **MUST NEVER** include secrets, API keys, tokens, or hardcoded sensitive information in code
+- **[All]** Authors **SHOULD** default to minimal, reproducible, and well-documented code
+- **[All]** Authors **MUST** only modify backend configuration when explicitly required
+- **[All]** Authors **SHOULD NOT** assume a default cloud provider; clarify requirements if the provider is not specified
+- **[All]** Authors **SHOULD** include `description` for all variables and outputs, and use `sensitive = true` as appropriate
+- **[All]** Authors **MUST NOT** modify lock files (`.terraform.lock.hcl`) or commit state unless explicitly required
+- **[All]** Authors **MUST** use placeholder markers (e.g., `REPLACE_ME`, `YOUR_VALUE_HERE`) for values that require customization
 
 ## Executive Summary: Terraform Philosophy
 
