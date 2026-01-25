@@ -39,7 +39,7 @@ This guide walks you through creating a brand-new repository using `franklesniak
 This template repository includes:
 
 - **GitHub Copilot Instructions:** Comprehensive coding standards that guide AI-assisted development
-- **Language-Specific Guidelines:** Modular instruction files for Markdown, PowerShell, and Python
+- **Language-Specific Guidelines:** Modular instruction files for Markdown, PowerShell, Python, and Terraform
 - **Linting Configurations:** Pre-configured settings for markdownlint and PSScriptAnalyzer
 - **Pre-commit Hooks:** Automated code quality checks before commits
 - **Issue Templates:** Structured templates for bug reports, feature requests, and documentation issues
@@ -794,7 +794,7 @@ markdownlint-cli2.............................................Passed
 
 ## Language-Specific Customization
 
-This template includes support for Python, PowerShell, and Markdown/documentation. You should remove support for languages you don't need and configure the ones you do use.
+This template includes support for Python, PowerShell, Terraform, and Markdown/documentation. You should remove support for languages you don't need and configure the ones you do use.
 
 ### Decision Point: Which Languages Do You Need?
 
@@ -1338,6 +1338,7 @@ Review the files in `.github/instructions/` and remove or modify any that don't 
 - `docs.instructions.md` - Documentation standards (keep for all projects)
 - `powershell.instructions.md` - PowerShell standards (remove if not using PowerShell)
 - `python.instructions.md` - Python standards (remove if not using Python)
+- `terraform.instructions.md` - Terraform/IaC standards (remove if not using Terraform)
 
 ---
 

@@ -651,6 +651,7 @@ description: "Python coding standards for this repository"
 | `docs.instructions.md` | Markdown/documentation standards | All projects |
 | `python.instructions.md` | Python coding standards | Python projects |
 | `powershell.instructions.md` | PowerShell coding standards | PowerShell projects |
+| `terraform.instructions.md` | Terraform coding standards | Terraform/IaC projects |
 
 **Adoption options:**
 
