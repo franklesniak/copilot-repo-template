@@ -5,7 +5,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-> **Template Repository Notice:** This file is part of a template repository. When cloning or forking, update the metadata fields below (Version, Last Updated, Owner) to reflect your derived repository. See the [Template Usage & Adoption](#template-usage--adoption) section for guidance.
+> **Template Repository Notice:** This file is part of a template repository. When cloning or forking, update the **Version**, **Owner**, and **Last Updated** fields in the Metadata section below to reflect your derived repository. See the [Template Usage & Adoption](#template-usage--adoption) section for guidance.
 
 **Version:** TEMPLATE
 
@@ -50,7 +50,7 @@ This section provides explicit guidance for GitHub Copilot and other LLMs when g
 ### Rules for AI-Generated Code
 
 - Copilot **MUST NOT** invent providers, modules, or placeholder values without explicit user confirmation.
-- Copilot **MUST** prefer asking for missing required information rather than inserting assumptions (e.g., for `bucket`, `region`, `project_id`, etc.).
+- Copilot **MUST** ask for missing required information rather than inserting assumptions (e.g., for `bucket`, `region`, `project_id`, etc.).
 - Copilot **MUST NEVER** include secrets, API keys, tokens, or hardcoded sensitive information in any output.
 - Copilot **SHOULD** default to minimal, reproducible, and well-documented code, following the style defined in this document.
 - Copilot **SHOULD** add a short change summary comment at the top of generated code snippets when making significant modifications.
@@ -1062,7 +1062,7 @@ terraform {
 **Backend requirements:**
 
 - State files **MUST** be encrypted at rest
-- State access **MUST** be controlled via IAM or equivalent access controls
+- State access **MUST** be controlled via appropriate access controls (e.g., IAM for AWS, RBAC for Azure, IAM for GCP)
 - State locking **MUST** be enabled to prevent concurrent modifications
 - State files **MUST NOT** be committed to version control
 
