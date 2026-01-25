@@ -511,6 +511,73 @@ terraform {
 }
 ```
 
+### Variable Files (.tfvars)
+
+Terraform variable files (`.tfvars`) provide environment-specific or deployment-specific values. This section defines conventions for organizing and managing these files.
+
+#### Naming Conventions
+
+| Pattern | Use Case | Example |
+| --- | --- | --- |
+| `terraform.tfvars` | Default values loaded automatically | `terraform.tfvars` |
+| `<environment>.tfvars` | Environment-specific values | `prod.tfvars`, `dev.tfvars` |
+| `<environment>.auto.tfvars` | Auto-loaded environment values | `prod.auto.tfvars` |
+
+#### Content Guidelines
+
+**What belongs in `.tfvars` files:**
+
+- Environment-specific values (e.g., instance sizes, replica counts)
+- Non-sensitive configuration overrides
+- Deployment-specific settings
+
+**What does NOT belong in `.tfvars` files:**
+
+- Secrets, API keys, or passwords — see [Security Best Practices](#security-best-practices)
+- Hardcoded credentials or tokens
+- Any value that should not be committed to version control
+
+**Relationship to variable defaults:**
+
+Values in `.tfvars` files override `default` values in variable declarations. The loading order is:
+
+1. `default` value in `variables.tf`
+2. Environment variables (`TF_VAR_name`)
+3. `terraform.tfvars` and `terraform.tfvars.json` (if present)
+4. `*.auto.tfvars` and `*.auto.tfvars.json` files (in alphabetical order)
+5. `-var-file` command-line arguments (in order specified)
+6. `-var` command-line arguments (later flags override earlier ones)
+
+#### Version Control Guidelines
+
+- Non-sensitive `.tfvars` files **MAY** be committed to version control
+- Sensitive `.tfvars` files **MUST NOT** be committed; use `.tfvars.example` templates instead
+- Template files **SHOULD** use the `.tfvars.example` extension to indicate they require customization
+
+**Example `.gitignore` patterns for sensitive tfvars:**
+
+```gitignore
+# Sensitive variable files (use *.tfvars.example as templates)
+*.sensitive.tfvars
+*-secrets.tfvars
+```
+
+#### Example File Structure
+
+```text
+environments/
+├── prod/
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── terraform.tfvars        # Committed: non-sensitive defaults
+│   ├── secrets.tfvars.example  # Committed: template for secrets
+│   └── secrets.tfvars          # NOT committed: actual secrets
+└── dev/
+    ├── main.tf
+    ├── variables.tf
+    └── terraform.tfvars
+```
+
 ### Module Directory Structure
 
 Standard module directory structure:
