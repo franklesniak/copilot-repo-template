@@ -5,18 +5,79 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.0.20260124.0
+> **Template Repository Notice:** This file is part of a template repository. When cloning or forking, update the metadata fields below (Version, Last Updated, Owner) to reflect your derived repository. See the [Template Usage & Adoption](#template-usage--adoption) section for guidance.
+
+**Version:** TEMPLATE
 
 ## Metadata
 
 - **Status:** Active
-- **Owner:** Repository Maintainers
-- **Last Updated:** 2026-01-24
+- **Owner:** Repo maintainers (update in derived repository)
+- **Last Updated:** YYYY-MM-DD (update on adoption)
 - **Scope:** Defines Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in this repository. Covers style, formatting, naming conventions, file organization, variable and output design, resource configuration, module design, state management, security best practices, provider management, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
+## Template Adoption Checklist
+
+When adopting this template for a new repository, complete the following tasks:
+
+- [ ] Update metadata (Owner, Last Updated, Version) in this document
+- [ ] Review and adjust backend configuration for project needs
+- [ ] Verify required provider versions and add/replace as needed
+- [ ] Add organization-specific required tags, if any
+- [ ] Record any justified deviations in the [Scope Exceptions](#scope-exceptions--deviations-from-standards) section
+- [ ] Remove unused sections/examples after adoption
+- [ ] Run all pre-commit and CI tests to verify configuration
+
+## Template Usage & Adoption
+
+This document is designed to serve as part of a **template repository** for Terraform projects. It provides comprehensive coding standards, style guidelines, and best practices that ensure consistency, security, and maintainability across Terraform codebases.
+
+**When you clone or fork this repository:**
+
+1. **Update the metadata** at the top of this file to reflect your project's ownership and versioning.
+2. **Review all sections** to ensure they align with your organization's policies and infrastructure requirements.
+3. **Customize examples** to use your organization's naming conventions, cloud providers, and resource patterns.
+4. **Remove or modify sections** that do not apply to your use case (e.g., if you only use Azure, you may want to add Azure-specific guidance).
+5. **Document any deviations** from these standards in the [Scope Exceptions](#scope-exceptions--deviations-from-standards) section.
+
+This template is intentionally provider-agnostic in its core guidance. While AWS examples are used for illustration throughout this document, the style rules and best practices apply equally to Azure, Google Cloud, and other Terraform providers.
+
+## Copilot Behaviors
+
+This section provides explicit guidance for GitHub Copilot and other LLMs when generating or modifying Terraform code in this repository.
+
+### Rules for AI-Generated Code
+
+- Copilot **MUST NOT** invent providers, modules, or placeholder values without explicit user confirmation.
+- Copilot **MUST** prefer asking for missing required information rather than inserting assumptions (e.g., for `bucket`, `region`, `project_id`, etc.).
+- Copilot **MUST NEVER** include secrets, API keys, tokens, or hardcoded sensitive information in any output.
+- Copilot **SHOULD** default to minimal, reproducible, and well-documented code, following the style defined in this document.
+- Copilot **SHOULD** add a short change summary comment at the top of generated code snippets when making significant modifications.
+- Copilot **MUST** only modify backend configuration if explicitly requested by the user.
+- Copilot **SHOULD NOT** assume AWS as the default provider; clarify or request user input if the provider is not specified.
+- Copilot **MUST** emit `.tftest.hcl` for test logic, never `.tf` files for tests.
+- Copilot **SHOULD** include `description` for all variables and outputs, and use `sensitive = true` as appropriate.
+- Copilot **MUST NOT** modify lock files (`.terraform.lock.hcl`) or commit state unless explicitly asked.
+- Copilot **MUST** use placeholder markers (e.g., `REPLACE_ME`, `YOUR_VALUE_HERE`) for values that require user customization.
+
+### Decision Prompts
+
+Before generating or finalizing Terraform code, Copilot **SHOULD** consider asking the user:
+
+- What environment is this for? (dev/staging/prod)
+- Is this for a reusable module or a root deployment configuration?
+- Which cloud provider(s) should be used?
+- Should remote state be configured, and if so, what backend type?
+- What version of Terraform is required? Which provider versions?
+- Are there organization-specific tagging requirements?
+- Should this configuration support multiple environments or workspaces?
+
 ## Table of Contents
 
+- [Template Adoption Checklist](#template-adoption-checklist)
+- [Template Usage & Adoption](#template-usage--adoption)
+- [Copilot Behaviors](#copilot-behaviors)
 - [Keywords](#keywords)
 - [Quick Reference Checklist](#quick-reference-checklist)
 - [Executive Summary: Terraform Philosophy](#executive-summary-terraform-philosophy)
@@ -33,6 +94,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - [Documentation Standards](#documentation-standards)
 - [Pre-commit Discipline for Terraform](#pre-commit-discipline-for-terraform)
 - ["Done" Definition for Terraform Changes](#done-definition-for-terraform-changes)
+- [Scope Exceptions & Deviations from Standards](#scope-exceptions--deviations-from-standards)
 
 ## Keywords
 
@@ -172,6 +234,8 @@ This repository approaches Terraform as **infrastructure as code** with the same
 - **Version-controlled:** All Terraform code, including lock files, **MUST** be version-controlled. State files **MUST** be stored remotely with encryption and locking.
 
 The coding standards in this document enforce these principles through specific, actionable requirements.
+
+> **Provider-Agnostic Guidance:** Throughout this document, AWS is used for illustration in code examples, but all style rules and best practices are **provider-agnostic**. Users **MAY** substitute Azure (`azurerm`), Google Cloud (`google`), or any other Terraform provider to suit their use case. The principles of naming, structure, security, and documentation apply equally across all providers.
 
 ---
 
@@ -984,33 +1048,68 @@ Root modules **MUST** configure a remote backend for team environments:
 ```hcl
 terraform {
   backend "s3" {
-    bucket         = "my-terraform-state"
+    bucket         = "REPLACE_ME_STATE_BUCKET"
     key            = "environments/prod/terraform.tfstate"
-    region         = "us-east-1"
+    region         = "REPLACE_ME_REGION"
     encrypt        = true
-    dynamodb_table = "terraform-state-lock"
+    dynamodb_table = "REPLACE_ME_LOCK_TABLE"
   }
 }
 ```
 
+> **Placeholder Values:** The example above uses placeholder values (e.g., `REPLACE_ME_STATE_BUCKET`). Replace these with your organization's actual values when adopting this template.
+
 **Backend requirements:**
 
 - State files **MUST** be encrypted at rest
-- State access **MUST** be controlled via IAM
+- State access **MUST** be controlled via IAM or equivalent access controls
 - State locking **MUST** be enabled to prevent concurrent modifications
 - State files **MUST NOT** be committed to version control
+
+### Terraform Cloud, Enterprise, and Alternative Backends
+
+Organizations using **Terraform Cloud**, **Terraform Enterprise**, **Spacelift**, or similar workflow tools **MAY** use alternative state management approaches. In these cases:
+
+- The `backend.tf` file **MAY** be omitted if state is managed by the orchestration platform.
+- The `cloud` block **MAY** replace the `backend` block for Terraform Cloud/Enterprise integrations.
+- Document your backend approach in the [Scope Exceptions](#scope-exceptions--deviations-from-standards) section.
+
+**Example Terraform Cloud configuration:**
+
+```hcl
+terraform {
+  cloud {
+    organization = "REPLACE_ME_ORG"
+    workspaces {
+      name = "REPLACE_ME_WORKSPACE"
+    }
+  }
+}
+```
+
+When using alternative backends, the following sections still apply:
+
+- State encryption requirements (handled by the platform)
+- State locking requirements (typically automatic with cloud backends)
+- Version control exclusion of state files
+
+The following sections **MAY** not apply when using Terraform Cloud/Enterprise:
+
+- Manual `backend.tf` configuration
+- DynamoDB lock table configuration
+- S3/GCS/Azure Storage bucket configuration
 
 ### State Encryption
 
 State backends **MUST** enable encryption:
 
 ```hcl
-# S3 backend with encryption
+# S3 backend with encryption (example - replace values)
 terraform {
   backend "s3" {
-    bucket  = "my-terraform-state"
+    bucket  = "REPLACE_ME_STATE_BUCKET"
     key     = "prod/terraform.tfstate"
-    region  = "us-east-1"
+    region  = "REPLACE_ME_REGION"
     encrypt = true  # REQUIRED
   }
 }
@@ -1021,14 +1120,14 @@ terraform {
 State backends **MUST** support and enable state locking:
 
 ```hcl
-# S3 backend with DynamoDB locking
+# S3 backend with DynamoDB locking (example - replace values)
 terraform {
   backend "s3" {
-    bucket         = "my-terraform-state"
+    bucket         = "REPLACE_ME_STATE_BUCKET"
     key            = "prod/terraform.tfstate"
-    region         = "us-east-1"
+    region         = "REPLACE_ME_REGION"
     encrypt        = true
-    dynamodb_table = "terraform-state-lock"  # REQUIRED for locking
+    dynamodb_table = "REPLACE_ME_LOCK_TABLE"  # REQUIRED for locking
   }
 }
 ```
@@ -1805,3 +1904,40 @@ A Terraform change is considered complete when:
 
 - [ ] CI pipeline passes
 - [ ] Plan output reviewed (no unexpected changes)
+
+---
+
+## Scope Exceptions & Deviations from Standards
+
+This section documents justified deviations from the standards defined in this document. When adopting this template, use this section to record exceptions specific to your organization, project, or deployment environment.
+
+### How to Document Deviations
+
+When a deviation from these standards is necessary, document it using the following format:
+
+```markdown
+#### [Short Description of Deviation]
+
+- **Standard Affected:** [Link to or name of the standard being modified]
+- **Reason:** [Business, technical, or organizational justification]
+- **Scope:** [Which files, modules, or configurations are affected]
+- **Approved By:** [Person or team who approved the deviation]
+- **Date:** [YYYY-MM-DD]
+- **Review Date:** [Optional: When this deviation should be reconsidered]
+```
+
+### Common Deviation Scenarios
+
+The following are common scenarios where deviations may be justified:
+
+- **Alternative Backend Workflows:** Using Terraform Cloud, Terraform Enterprise, Spacelift, or other orchestration tools instead of `backend.tf`. Document which backend sections do not apply.
+- **Provider-Specific Requirements:** Organization policies that mandate specific provider configurations (e.g., required regions, mandatory tags beyond those listed).
+- **Legacy Compatibility:** Maintaining compatibility with older Terraform versions or modules that cannot be immediately updated.
+- **Organizational Naming Conventions:** Pre-existing naming conventions that conflict with this template but are required for consistency with other systems.
+- **Security Policy Overrides:** Stricter security requirements that go beyond or differ from those specified here.
+
+### Recorded Deviations
+
+> **Note:** Replace the examples below with actual deviations for your project, or remove this section if no deviations apply.
+
+*No deviations recorded yet. When deviations are necessary, document them here using the format above.*
