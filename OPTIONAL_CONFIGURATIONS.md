@@ -1775,6 +1775,8 @@ The Required Tags section lists mandatory tags for all taggable resources. To cu
 1. **Add organization-specific tags:**
 
    ```markdown
+   | Tag | Description | Example |
+   | --- | --- | --- |
    | `CostCenter` | Budget/billing code | `CC-12345` |
    | `Department` | Owning department | `Engineering` |
    | `Compliance` | Compliance framework | `SOC2`, `HIPAA` |

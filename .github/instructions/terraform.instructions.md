@@ -158,15 +158,17 @@ This checklist provides a quick reference for both human developers and LLMs (li
 
 ### Code Authoring Guidelines
 
+The following guidelines apply to all code authors, including human developers and AI assistants such as GitHub Copilot:
+
 - **[All]** Authors **MUST NOT** invent providers, modules, or placeholder values without explicit confirmation of requirements
 - **[All]** Authors **MUST** ask for or verify missing required information (e.g., `bucket`, `region`, `project_id`) rather than inserting assumptions
-- **[All]** Authors **MUST NEVER** include secrets, API keys, tokens, or hardcoded sensitive information in code
+- **[All]** Authors **MUST NOT** include secrets, API keys, tokens, or hardcoded sensitive information in code
 - **[All]** Authors **SHOULD** default to minimal, reproducible, and well-documented code
 - **[All]** Authors **MUST** only modify backend configuration when explicitly required
-- **[All]** Authors **SHOULD NOT** assume a default cloud provider; clarify requirements if the provider is not specified
+- **[All]** Authors **SHOULD NOT** assume a default cloud provider; when the provider is not specified, authors **MUST** either request clarification or use provider-agnostic examples with clear documentation that provider selection is required
 - **[All]** Authors **SHOULD** include `description` for all variables and outputs, and use `sensitive = true` as appropriate
 - **[All]** Authors **MUST NOT** modify lock files (`.terraform.lock.hcl`) or commit state unless explicitly required
-- **[All]** Authors **MUST** use placeholder markers (e.g., `REPLACE_ME`, `YOUR_VALUE_HERE`) for values that require customization
+- **[All]** Authors **MUST** use placeholder markers following the `REPLACE_ME_*` pattern (e.g., `REPLACE_ME_BUCKET`, `REPLACE_ME_REGION`) for values that require customization
 
 ## Executive Summary: Terraform Philosophy
 
