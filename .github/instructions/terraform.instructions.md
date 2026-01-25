@@ -511,6 +511,48 @@ terraform {
 }
 ```
 
+#### Partial Backend Configuration
+
+As an alternative to placeholder values, Terraform supports **partial backend configuration**. This pattern separates static configuration (committed to version control) from dynamic values (provided at runtime):
+
+**Backend file (committed):**
+
+```hcl
+# backend.tf - partial configuration
+
+terraform {
+  backend "s3" {
+    key     = "environments/prod/terraform.tfstate"
+    encrypt = true
+    # bucket, region, and dynamodb_table provided via -backend-config
+  }
+}
+```
+
+**Backend config file (environment-specific):**
+
+```hcl
+# config/prod.s3.tfbackend
+
+bucket         = "my-org-terraform-state"
+region         = "us-east-1"
+dynamodb_table = "terraform-locks"
+```
+
+**Usage:**
+
+```bash
+terraform init -backend-config=config/prod.s3.tfbackend
+```
+
+This pattern is useful when:
+
+- Backend values vary by environment but the state key structure is consistent
+- Teams prefer runtime configuration over placeholder replacement
+- CI/CD pipelines inject backend configuration dynamically
+
+Both the `REPLACE_ME_*` placeholder pattern and partial configuration pattern are valid approaches. Choose the pattern that best fits your team's workflow.
+
 ### Variable Files (.tfvars)
 
 Terraform variable files (`.tfvars`) provide environment-specific or deployment-specific values. This section defines conventions for organizing and managing these files.
@@ -1883,6 +1925,19 @@ repos:
         args:
           - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
 ```
+
+### CI Workflow Integration
+
+This repository includes a comprehensive Terraform CI workflow at `.github/workflows/terraform-ci.yml` that enforces these standards automatically:
+
+- **Format Check:** Runs `terraform fmt -check -recursive`
+- **Validate:** Runs `terraform init` and `terraform validate` for all Terraform directories
+- **Lint:** Runs TFLint with the repository's `.tflint.hcl` configuration
+- **Test:** Runs `terraform test` for directories containing `.tftest.hcl` files
+
+The CI workflow uses job dependencies to fail fast: format issues block validation, and validation issues block linting and testing.
+
+For workflow customization options (such as enabling security scanning), see the comments in `.github/workflows/terraform-ci.yml`.
 
 ---
 
