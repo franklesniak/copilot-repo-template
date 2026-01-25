@@ -30,9 +30,10 @@
 #    workflows on all changes to ensure accuracy when the template is used.
 #
 # 4. Terraform Version Policy:
-#    Pin to a specific Terraform version (1.6.0) for reproducibility. This version
-#    supports the Terraform test framework (introduced in 1.6.0). Update when
-#    upstream support changes or new features are needed.
+#    Pin to a specific Terraform version for reproducibility. Format and validate
+#    jobs use 1.6.0 (minimum for test framework). The test job uses 1.7.0 which
+#    supports mock_provider for unit testing without cloud credentials. Update
+#    when upstream support changes or new features are needed.
 #
 # 5. TFLint Version Policy:
 #    Pin to a specific TFLint version (v0.51.1) for reproducibility. Update when
@@ -160,7 +161,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.6.0"
+          terraform_version: "1.7.0"
 
       - name: Cache Terraform Providers
         uses: actions/cache@v4
@@ -178,7 +179,8 @@ jobs:
       - name: Check for test files
         id: check-tests
         run: |
-          if find . -name '*.tftest.hcl' | grep -q .; then
+          # Exclude templates/ directory - those are example files, not runnable tests
+          if find . -path './templates' -prune -o -name '*.tftest.hcl' -print | grep -q .; then
             echo "has_tests=true" >> $GITHUB_OUTPUT
           else
             echo "has_tests=false" >> $GITHUB_OUTPUT
@@ -188,8 +190,8 @@ jobs:
         if: steps.check-tests.outputs.has_tests == 'true'
         id: find-test-dirs
         run: |
-          # Find directories containing .tftest.hcl files
-          TEST_DIRS=$(find . -name '*.tftest.hcl' -exec dirname {} \; | sort -u | tr '\n' ' ')
+          # Find directories containing .tftest.hcl files, excluding templates/
+          TEST_DIRS=$(find . -path './templates' -prune -o -name '*.tftest.hcl' -print -exec dirname {} \; | sort -u | tr '\n' ' ')
           echo "dirs=${TEST_DIRS}" >> $GITHUB_OUTPUT
 
       - name: Run Terraform Tests

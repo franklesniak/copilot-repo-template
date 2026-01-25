@@ -145,6 +145,9 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[Test]** Variable validation **SHOULD** be tested → [Testing Variable Validation](#testing-variable-validation)
 - **[Test]** Unit tests **SHOULD** use `command = plan` → [Unit Tests](#unit-tests)
 - **[Test]** Integration tests **MAY** use `command = apply` → [Integration Tests](#integration-tests)
+- **[Module]** Modules **SHOULD** include corresponding Terraform tests → [Module Tests](#module-tests)
+- **[Test]** Mock providers **SHOULD** be used for unit tests → [Mock Providers](#mock-providers)
+- **[Test]** Negative test cases **SHOULD** use `expect_failures` → [Testing Variable Validation](#testing-variable-validation)
 
 ### Documentation
 
