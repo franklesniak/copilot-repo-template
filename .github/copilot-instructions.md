@@ -146,6 +146,8 @@ This repository uses modular instruction files for language-specific standards:
 - Add new instruction files for additional languages as needed
 - Update this table to reflect your project's languages
 
+> **Terraform note:** If your project does not use Terraform, remove the Terraform instruction file (`.github/instructions/terraform.instructions.md`), remove the Terraform row from the table above, and remove Terraform-related entries from the Linting Configurations and Testing Tools sections below.
+
 ## Linting Configurations
 
 This repository includes linting tool configurations that align with the coding standards:
@@ -185,7 +187,7 @@ This repository includes testing infrastructure for Python, PowerShell, and Terr
 | --- | --- | --- | --- |
 | Python | pytest | `pyproject.toml` (`[tool.pytest.ini_options]`) | `tests/` |
 | PowerShell | Pester 5.x | Inline in `.github/workflows/powershell-ci.yml` | `tests/PowerShell/` |
-| Terraform | Terraform Test | Built-in (Terraform 1.6+) | `modules/*/tests/` |
+| Terraform | Terraform Test (requires Terraform 1.6+) | Built-in | `modules/*/tests/` or `tests/` |
 
 ### Running Tests
 
