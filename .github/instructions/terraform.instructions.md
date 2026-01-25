@@ -500,11 +500,11 @@ Root modules **MUST** configure a remote backend, either in `backend.tf` or with
 
 terraform {
   backend "s3" {
-    bucket         = "my-terraform-state"
+    bucket         = "REPLACE_ME_STATE_BUCKET"
     key            = "environments/prod/terraform.tfstate"
-    region         = "us-east-1"
+    region         = "REPLACE_ME_REGION"
     encrypt        = true
-    dynamodb_table = "terraform-state-lock"
+    dynamodb_table = "REPLACE_ME_LOCK_TABLE"
   }
 }
 ```
@@ -1325,11 +1325,11 @@ State files contain sensitive data and **MUST** be protected.
 ```hcl
 terraform {
   backend "s3" {
-    bucket         = "my-terraform-state"
+    bucket         = "REPLACE_ME_STATE_BUCKET"
     key            = "prod/terraform.tfstate"
-    region         = "us-east-1"
+    region         = "REPLACE_ME_REGION"
     encrypt        = true                    # REQUIRED
-    dynamodb_table = "terraform-state-lock"  # REQUIRED for locking
+    dynamodb_table = "REPLACE_ME_LOCK_TABLE"  # REQUIRED for locking
     # Use IAM role or credentials from environment
   }
 }
