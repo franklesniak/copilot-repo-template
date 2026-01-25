@@ -5,13 +5,13 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.0.20260124.0
+**Version:** 1.1.20260125.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-01-24
+- **Last Updated:** 2026-01-25
 - **Scope:** Defines Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in this repository. Covers style, formatting, naming conventions, file organization, variable and output design, resource configuration, module design, state management, security best practices, provider management, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -33,6 +33,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - [Documentation Standards](#documentation-standards)
 - [Pre-commit Discipline for Terraform](#pre-commit-discipline-for-terraform)
 - ["Done" Definition for Terraform Changes](#done-definition-for-terraform-changes)
+- [Scope Exceptions & Deviations from Standards](#scope-exceptions--deviations-from-standards)
 
 ## Keywords
 
@@ -155,6 +156,20 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** Inline comments **SHOULD** explain "why," not "what" → [Inline Comment Conventions](#inline-comment-conventions)
 - **[All]** TODO comments **SHOULD** include username and context → [TODO Comment Format](#todo-comment-format)
 
+### Code Authoring Guidelines
+
+The following guidelines apply to all code authors, including human developers and AI assistants such as GitHub Copilot:
+
+- **[All]** Authors **MUST NOT** invent providers, modules, or placeholder values without explicit confirmation of requirements
+- **[All]** Authors **MUST** ask for or verify missing required information (e.g., `bucket`, `region`, `project_id`) rather than inserting assumptions
+- **[All]** Authors **MUST NOT** include secrets, API keys, tokens, or hardcoded sensitive information in code
+- **[All]** Authors **SHOULD** default to minimal, reproducible, and well-documented code
+- **[All]** Authors **MUST** only modify backend configuration when explicitly required
+- **[All]** Authors **SHOULD NOT** assume a default cloud provider; when the provider is not specified, authors **SHOULD** use provider-agnostic examples and document that provider selection is required
+- **[All]** Authors **SHOULD** include `description` for all variables and outputs, and use `sensitive = true` as appropriate
+- **[All]** Authors **MUST NOT** modify lock files (`.terraform.lock.hcl`) or commit state unless explicitly required
+- **[All]** Authors **MUST** use placeholder markers following the `REPLACE_ME_*` pattern (e.g., `REPLACE_ME_BUCKET`, `REPLACE_ME_REGION`) for values that require customization
+
 ## Executive Summary: Terraform Philosophy
 
 This repository approaches Terraform as **infrastructure as code** with the same rigor applied to application code. The following principles guide all Terraform development:
@@ -172,6 +187,8 @@ This repository approaches Terraform as **infrastructure as code** with the same
 - **Version-controlled:** All Terraform code, including lock files, **MUST** be version-controlled. State files **MUST** be stored remotely with encryption and locking.
 
 The coding standards in this document enforce these principles through specific, actionable requirements.
+
+> **Provider-Agnostic Guidance:** Throughout this document, AWS is used for illustration in code examples, but all style rules and best practices are **provider-agnostic**. Users **MAY** substitute Azure (`azurerm`), Google Cloud (`google`), or any other Terraform provider to suit their use case. The principles of naming, structure, security, and documentation apply equally across all providers.
 
 ---
 
@@ -485,11 +502,11 @@ Root modules **MUST** configure a remote backend, either in `backend.tf` or with
 
 terraform {
   backend "s3" {
-    bucket         = "my-terraform-state"
+    bucket         = "REPLACE_ME_STATE_BUCKET"
     key            = "environments/prod/terraform.tfstate"
-    region         = "us-east-1"
+    region         = "REPLACE_ME_REGION"
     encrypt        = true
-    dynamodb_table = "terraform-state-lock"
+    dynamodb_table = "REPLACE_ME_LOCK_TABLE"
   }
 }
 ```
@@ -984,33 +1001,68 @@ Root modules **MUST** configure a remote backend for team environments:
 ```hcl
 terraform {
   backend "s3" {
-    bucket         = "my-terraform-state"
+    bucket         = "REPLACE_ME_STATE_BUCKET"
     key            = "environments/prod/terraform.tfstate"
-    region         = "us-east-1"
+    region         = "REPLACE_ME_REGION"
     encrypt        = true
-    dynamodb_table = "terraform-state-lock"
+    dynamodb_table = "REPLACE_ME_LOCK_TABLE"
   }
 }
 ```
 
+> **Placeholder Values:** The example above uses placeholder values (e.g., `REPLACE_ME_STATE_BUCKET`). Replace these with your organization's actual values when adopting this template.
+
 **Backend requirements:**
 
 - State files **MUST** be encrypted at rest
-- State access **MUST** be controlled via IAM
+- State access **MUST** be controlled via appropriate access controls (e.g., IAM for AWS, RBAC for Azure, IAM for GCP)
 - State locking **MUST** be enabled to prevent concurrent modifications
 - State files **MUST NOT** be committed to version control
+
+### Terraform Cloud, Enterprise, and Alternative Backends
+
+Organizations using **Terraform Cloud**, **Terraform Enterprise**, **Spacelift**, or similar workflow tools **MAY** use alternative state management approaches. In these cases:
+
+- The `backend.tf` file **MAY** be omitted if state is managed by the orchestration platform.
+- The `cloud` block **MAY** replace the `backend` block for Terraform Cloud/Enterprise integrations.
+- Document your backend approach in the [Scope Exceptions](#scope-exceptions--deviations-from-standards) section.
+
+**Example Terraform Cloud configuration:**
+
+```hcl
+terraform {
+  cloud {
+    organization = "REPLACE_ME_ORG"
+    workspaces {
+      name = "REPLACE_ME_WORKSPACE"
+    }
+  }
+}
+```
+
+When using alternative backends, the following sections still apply:
+
+- State encryption requirements (handled by the platform)
+- State locking requirements (typically automatic with cloud backends)
+- Version control exclusion of state files
+
+The following sections **MAY** not apply when using Terraform Cloud/Enterprise:
+
+- Manual `backend.tf` configuration
+- DynamoDB lock table configuration
+- S3/GCS/Azure Storage bucket configuration
 
 ### State Encryption
 
 State backends **MUST** enable encryption:
 
 ```hcl
-# S3 backend with encryption
+# S3 backend with encryption (example - replace values)
 terraform {
   backend "s3" {
-    bucket  = "my-terraform-state"
+    bucket  = "REPLACE_ME_STATE_BUCKET"
     key     = "prod/terraform.tfstate"
-    region  = "us-east-1"
+    region  = "REPLACE_ME_REGION"
     encrypt = true  # REQUIRED
   }
 }
@@ -1021,14 +1073,14 @@ terraform {
 State backends **MUST** support and enable state locking:
 
 ```hcl
-# S3 backend with DynamoDB locking
+# S3 backend with DynamoDB locking (example - replace values)
 terraform {
   backend "s3" {
-    bucket         = "my-terraform-state"
+    bucket         = "REPLACE_ME_STATE_BUCKET"
     key            = "prod/terraform.tfstate"
-    region         = "us-east-1"
+    region         = "REPLACE_ME_REGION"
     encrypt        = true
-    dynamodb_table = "terraform-state-lock"  # REQUIRED for locking
+    dynamodb_table = "REPLACE_ME_LOCK_TABLE"  # REQUIRED for locking
   }
 }
 ```
@@ -1275,11 +1327,11 @@ State files contain sensitive data and **MUST** be protected.
 ```hcl
 terraform {
   backend "s3" {
-    bucket         = "my-terraform-state"
+    bucket         = "REPLACE_ME_STATE_BUCKET"
     key            = "prod/terraform.tfstate"
-    region         = "us-east-1"
+    region         = "REPLACE_ME_REGION"
     encrypt        = true                    # REQUIRED
-    dynamodb_table = "terraform-state-lock"  # REQUIRED for locking
+    dynamodb_table = "REPLACE_ME_LOCK_TABLE"  # REQUIRED for locking
     # Use IAM role or credentials from environment
   }
 }
@@ -1805,3 +1857,40 @@ A Terraform change is considered complete when:
 
 - [ ] CI pipeline passes
 - [ ] Plan output reviewed (no unexpected changes)
+
+---
+
+## Scope Exceptions & Deviations from Standards
+
+This section documents justified deviations from the standards defined in this document. When adopting this template, use this section to record exceptions specific to your organization, project, or deployment environment.
+
+### How to Document Deviations
+
+When a deviation from these standards is necessary, document it using the following format:
+
+```markdown
+#### [Short Description of Deviation]
+
+- **Standard Affected:** [Link to or name of the standard being modified]
+- **Reason:** [Business, technical, or organizational justification]
+- **Scope:** [Which files, modules, or configurations are affected]
+- **Approved By:** [Person or team who approved the deviation]
+- **Date:** [YYYY-MM-DD]
+- **Review Date:** [Optional: When this deviation should be reconsidered]
+```
+
+### Common Deviation Scenarios
+
+The following are common scenarios where deviations may be justified:
+
+- **Alternative Backend Workflows:** Using Terraform Cloud, Terraform Enterprise, Spacelift, or other orchestration tools instead of `backend.tf`. Document which backend sections do not apply.
+- **Provider-Specific Requirements:** Organization policies that mandate specific provider configurations (e.g., required regions, mandatory tags beyond those listed).
+- **Legacy Compatibility:** Maintaining compatibility with older Terraform versions or modules that cannot be immediately updated.
+- **Organizational Naming Conventions:** Pre-existing naming conventions that conflict with this template but are required for consistency with other systems.
+- **Security Policy Overrides:** Stricter security requirements that go beyond or differ from those specified here.
+
+### Recorded Deviations
+
+> **Note:** Replace the examples below with actual deviations for your project, or remove this section if no deviations apply.
+
+*No deviations recorded yet. When deviations are necessary, document them here using the format above.*

@@ -26,6 +26,7 @@ This guide covers optional customizations you can make after completing the init
 - [Copilot Documentation Instructions Configuration](#copilot-documentation-instructions-configuration)
 - [Copilot Python Instructions Configuration](#copilot-python-instructions-configuration)
 - [Copilot PowerShell Instructions Configuration](#copilot-powershell-instructions-configuration)
+- [Copilot Terraform Instructions Configuration](#copilot-terraform-instructions-configuration)
 - [Copilot Main Instructions Configuration](#copilot-main-instructions-configuration)
 - [CI Workflow Configuration](#ci-workflow-configuration)
 - [Auto-fix Pre-commit Workflow Configuration](#auto-fix-pre-commit-workflow-configuration)
@@ -1693,6 +1694,107 @@ The file documents specific return code conventions for v1.0-targeted functions:
 2. **Exception-based patterns:** For modern-only projects, you may prefer to rely entirely on exceptions rather than return codes. Update the "Modern catch Block Requirements" section to document your exception handling patterns.
 
 3. **Custom exception types:** If your project defines custom exception types, document them and update the error handling sections accordingly.
+
+---
+
+## Copilot Terraform Instructions Configuration
+
+**File:** `.github/instructions/terraform.instructions.md`
+
+The `terraform.instructions.md` file provides Terraform coding standards that GitHub Copilot applies when generating or editing `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in your repository. These standards cover style, formatting, naming conventions, file organization, variable and output design, resource configuration, module design, state management, security best practices, provider management, testing, and documentation requirements.
+
+### Adopting for Terraform Projects
+
+When adopting this template for a Terraform project, complete the following tasks:
+
+1. **Update the metadata** at the top of the file to reflect your project's ownership and versioning
+2. **Review and adjust backend configuration** guidance for your project needs (S3, Azure Storage, GCS, Terraform Cloud, etc.)
+3. **Verify required provider versions** and update the version constraint examples as needed
+4. **Add organization-specific required tags** to the Required Tags section if your organization mandates specific tags
+5. **Document any justified deviations** in the "Scope Exceptions & Deviations from Standards" section at the end of the file
+6. **Remove unused sections/examples** after adoption (e.g., if you only use Azure, you may want to modify AWS-specific examples)
+
+### Customizing Provider Examples
+
+The file uses AWS examples for illustration, but all style rules are provider-agnostic. To customize for your cloud provider:
+
+1. **For Azure-only projects:** Update backend examples to use `azurerm` backend instead of S3:
+
+   ```hcl
+   terraform {
+     backend "azurerm" {
+       resource_group_name  = "REPLACE_ME_RESOURCE_GROUP"
+       storage_account_name = "REPLACE_ME_STORAGE_ACCOUNT"
+       container_name       = "REPLACE_ME_CONTAINER"
+       key                  = "terraform.tfstate"
+     }
+   }
+   ```
+
+2. **For GCP-only projects:** Update backend examples to use `gcs` backend:
+
+   ```hcl
+   terraform {
+     backend "gcs" {
+       bucket = "REPLACE_ME_BUCKET"
+       prefix = "terraform/state"
+     }
+   }
+   ```
+
+3. **For multi-cloud projects:** Keep the generic guidance and add notes about which backend configurations apply to which environments.
+
+### Customizing for Terraform Cloud/Enterprise
+
+If your organization uses Terraform Cloud, Terraform Enterprise, Spacelift, or similar tools:
+
+1. **Update the State Management section** to reflect your workflow. The `backend.tf` file may not be applicable.
+
+2. **Add cloud block configuration** guidance as the primary example:
+
+   ```hcl
+   terraform {
+     cloud {
+       organization = "REPLACE_ME_ORG"
+       workspaces {
+         name = "REPLACE_ME_WORKSPACE"
+       }
+     }
+   }
+   ```
+
+3. **Document which sections do not apply** in the Scope Exceptions section. For example:
+   - Manual `backend.tf` configuration
+   - DynamoDB lock table configuration
+   - S3/GCS/Azure Storage bucket configuration for state
+
+### Customizing Required Tags
+
+The Required Tags section lists mandatory tags for all taggable resources. To customize for your organization:
+
+1. **Add organization-specific tags:**
+
+   ```markdown
+   | Tag | Description | Example |
+   | --- | --- | --- |
+   | `CostCenter` | Budget/billing code | `CC-12345` |
+   | `Department` | Owning department | `Engineering` |
+   | `Compliance` | Compliance framework | `SOC2`, `HIPAA` |
+   ```
+
+2. **Remove tags that don't apply** to your organization
+
+3. **Update the Default Tags Configuration** example to reflect your required tags
+
+### Scope Exceptions Section
+
+The file includes a "Scope Exceptions & Deviations from Standards" section at the end for documenting justified deviations. Use this section to record:
+
+- **Alternative backend workflows:** Using Terraform Cloud instead of `backend.tf`
+- **Provider-specific requirements:** Organization policies that mandate specific provider configurations
+- **Legacy compatibility:** Maintaining compatibility with older Terraform versions or modules
+- **Organizational naming conventions:** Pre-existing naming conventions that differ from the template
+- **Security policy overrides:** Stricter security requirements that go beyond the template defaults
 
 ---
 
