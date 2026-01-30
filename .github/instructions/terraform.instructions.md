@@ -233,6 +233,7 @@ The following standard placeholders **SHOULD** be used consistently throughout t
 | `REPLACE_ME_WORKSPACE` | Terraform Cloud/Enterprise workspace | `prod-infrastructure` |
 | `REPLACE_ME_INSTANCE_ID` | Cloud instance/resource ID for imports | `i-1234567890abcdef0` |
 | `REPLACE_ME_AMI_ID` | AWS AMI ID | `ami-0abcdef1234567890` |
+| `REPLACE_ME_INSTANCE_TYPE` | Cloud instance/VM type | `t3.micro`, `Standard_B1s`, `e2-micro` |
 | `REPLACE_ME_SUBSCRIPTION_ID` | Azure subscription ID | `00000000-0000-0000-0000-000000000000` |
 | `REPLACE_ME_TENANT_ID` | Azure tenant ID | `00000000-0000-0000-0000-000000000000` |
 | `REPLACE_ME_PRIMARY_BUCKET` | Primary storage bucket name | `my-org-primary-bucket` |
@@ -2518,6 +2519,8 @@ resource "google_sql_database_instance" "main" {
 ```
 
 **Pattern 3: HashiCorp Vault (Provider-Agnostic)**
+
+> **Note:** This example uses `vault_generic_secret` which works with both KV v1 and KV v2 secrets engines. For KV v2, include `/data/` in the path (e.g., `secret/data/database`). The data is accessed via `.data["key"]` regardless of KV version.
 
 ```hcl
 data "vault_generic_secret" "db_creds" {
