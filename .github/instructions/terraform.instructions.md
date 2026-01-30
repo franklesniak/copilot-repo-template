@@ -5,7 +5,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.2.20260130.0
+**Version:** 1.3.20260130.0
 
 ## Metadata
 
@@ -24,6 +24,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - [Naming Conventions](#naming-conventions)
 - [File Organization](#file-organization)
 - [Variable and Output Design](#variable-and-output-design)
+- [Continuous Validation with check Blocks](#continuous-validation-with-check-blocks)
 - [Resource Configuration](#resource-configuration)
 - [Module Design](#module-design)
 - [Refactoring](#refactoring)
@@ -96,6 +97,10 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** Outputs **MUST** include a `description` → [Output Documentation Requirements](#output-documentation-requirements)
 - **[All]** Sensitive outputs **MUST** be marked with `sensitive = true` → [Sensitive Output Marking](#sensitive-output-marking)
 
+### Continuous Validation
+
+- **[All]** `check` blocks **MAY** be used for continuous validation → [Continuous Validation with check Blocks](#continuous-validation-with-check-blocks)
+
 ### Resource Configuration
 
 - **[All]** Meta-arguments **MUST** appear first in resource blocks → [Meta-Argument Ordering](#meta-argument-ordering)
@@ -104,6 +109,11 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** Resources **MUST** include required tags → [Required Tags](#required-tags)
 - **[Root]** Provider-level default tags **SHOULD** be configured → [Default Tags Configuration](#default-tags-configuration)
 - **[All]** Local values **SHOULD** be used for computed or merged tags → [Local Tags Pattern](#local-tags-pattern)
+- **[All]** `precondition` blocks **SHOULD** validate assumptions before resource creation → [Resource Preconditions](#resource-preconditions)
+- **[All]** `postcondition` blocks **SHOULD** validate resource state after creation → [Resource Postconditions](#resource-postconditions)
+- **[All]** `depends_on` **SHOULD** be avoided unless dependencies are not inferable → [Explicit Dependencies](#explicit-dependencies)
+- **[All]** `for_each` **SHOULD** be preferred over `count` for collections → [for_each vs count](#for_each-vs-count)
+- **[All]** Dynamic blocks **SHOULD** be used sparingly → [Dynamic Blocks](#dynamic-blocks)
 
 ### Module Design
 
@@ -836,6 +846,50 @@ output "instance_private_ip" {
 
 ---
 
+## Continuous Validation with check Blocks
+
+The `check` block (Terraform 1.5+) provides a mechanism for continuous validation assertions that run on every `plan` and `apply` operation. Unlike `precondition` and `postcondition` blocks, `check` blocks produce **warning diagnostics** that do **not** halt execution when assertions fail.
+
+### When to Use check Blocks
+
+`check` blocks **MAY** be used for:
+
+- **Health checks:** Verify that deployed resources remain healthy
+- **External system validation:** Confirm that external dependencies meet expectations
+- **Post-deployment verification:** Validate that the infrastructure is functioning correctly
+
+### check Block Syntax
+
+```hcl
+check "api_health" {
+  data "http" "health_endpoint" {
+    url = "https://${aws_lb.main.dns_name}/health"
+  }
+
+  assert {
+    condition     = data.http.health_endpoint.status_code == 200
+    error_message = "API health check failed after deployment."
+  }
+}
+```
+
+### Comparison with precondition/postcondition
+
+| Feature | `check` blocks | `precondition`/`postcondition` |
+| --- | --- | --- |
+| **Causes failure** | No (warning only) | Yes (error) |
+| **Runs during** | Every plan/apply | Resource creation/update |
+| **Scope** | Configuration-wide | Resource-specific |
+| **Use case** | Ongoing health checks | Input/output validation |
+
+### Best Practices
+
+- **Use sparingly:** `check` blocks add overhead to every plan/apply operation
+- **Keep assertions simple:** Complex assertions can slow down operations
+- **Document purpose:** Include clear `error_message` values explaining what failed and why it matters
+
+---
+
 ## Resource Configuration
 
 ### Meta-Argument Ordering
@@ -966,6 +1020,218 @@ locals {
     Role = "web-server"
   })
 }
+```
+
+### Lifecycle Validation
+
+Terraform 1.2+ introduced `precondition` and `postcondition` blocks within the `lifecycle` block, enabling resource-level validation of assumptions and outcomes.
+
+#### Resource Preconditions
+
+`precondition` blocks **SHOULD** validate assumptions before resource creation. Use them to ensure that related resources or variables meet requirements before Terraform attempts to create or modify a resource.
+
+```hcl
+resource "aws_instance" "main" {
+  ami           = var.ami_id
+  instance_type = var.instance_type
+
+  lifecycle {
+    precondition {
+      condition     = var.environment != "prod" || var.enable_monitoring
+      error_message = "Production instances must have monitoring enabled."
+    }
+  }
+}
+```
+
+**Use cases for preconditions:**
+
+- Validating cross-resource dependencies
+- Enforcing business rules that span multiple variables
+- Ensuring prerequisites are met before expensive operations
+
+#### Resource Postconditions
+
+`postcondition` blocks **SHOULD** validate resource state after creation. Use them to ensure that computed values meet expectations after Terraform creates or modifies a resource.
+
+```hcl
+resource "aws_instance" "main" {
+  ami           = var.ami_id
+  instance_type = var.instance_type
+
+  lifecycle {
+    postcondition {
+      condition     = self.public_ip != null
+      error_message = "Instance must have a public IP assigned."
+    }
+  }
+}
+```
+
+**Use cases for postconditions:**
+
+- Validating computed attributes (IPs, ARNs, generated names)
+- Ensuring provider-side defaults meet expectations
+- Catching unexpected resource configurations
+
+### Explicit Dependencies
+
+Terraform automatically infers dependencies from resource references. The `depends_on` meta-argument **SHOULD** be avoided unless dependencies are not inferable from the configuration.
+
+#### When depends_on is Appropriate
+
+`depends_on` **SHOULD** only be used for:
+
+- **Hidden dependencies:** When a resource depends on another resource's side effects (e.g., IAM policy propagation delays)
+- **Module dependencies:** When a module depends on another module's resources without direct references
+- **Timing issues:** When the order of operations matters but isn't reflected in resource attributes
+
+#### Anti-pattern: Redundant depends_on
+
+```hcl
+# BAD: Unnecessary depends_on - dependency is already inferred from the reference
+resource "aws_instance" "main" {
+  subnet_id  = aws_subnet.main.id
+  depends_on = [aws_subnet.main]  # Redundant
+}
+
+# GOOD: Dependency is implicit from the reference
+resource "aws_instance" "main" {
+  subnet_id = aws_subnet.main.id
+}
+```
+
+#### Legitimate Use Case
+
+```hcl
+# GOOD: Hidden dependency on IAM role policy attachment
+resource "aws_instance" "main" {
+  ami           = data.aws_ami.amazon_linux.id
+  instance_type = "t3.micro"
+
+  iam_instance_profile = aws_iam_instance_profile.main.name
+
+  # The instance profile references the role, but doesn't reference the policy attachment.
+  # Without depends_on, the instance may launch before the policy is attached.
+  depends_on = [aws_iam_role_policy_attachment.main]
+}
+```
+
+### for_each vs count
+
+When creating multiple instances of a resource, `for_each` **SHOULD** be preferred over `count` for collections where resources have unique identifiers.
+
+#### Comparison Table
+
+| Use `for_each` when... | Use `count` when... |
+| --- | --- |
+| Resources have unique identifiers | Simple on/off toggle (`count = var.enabled ? 1 : 0`) |
+| Order doesn't matter | Resources are truly identical and ordered |
+| Items may be added/removed from middle of collection | Only adding/removing from the end |
+| Each resource is addressable by key | Index-based addressing is acceptable |
+
+#### Why for_each is Preferred
+
+Removing an item from a `count`-based list causes all subsequent resources to be recreated due to index shifting. `for_each` uses map keys, so only the specific resource is affected.
+
+```hcl
+# BAD: Using count with a list - removing any item shifts all subsequent indices
+resource "aws_instance" "servers" {
+  count         = length(var.server_names)
+  ami           = data.aws_ami.amazon_linux.id
+  instance_type = "t3.micro"
+  tags = {
+    Name = var.server_names[count.index]
+  }
+}
+
+# GOOD: Using for_each with a set - removing "server-b" only affects that resource
+resource "aws_instance" "servers" {
+  for_each      = toset(var.server_names)
+  ami           = data.aws_ami.amazon_linux.id
+  instance_type = "t3.micro"
+  tags = {
+    Name = each.value
+  }
+}
+```
+
+#### When count is Appropriate
+
+```hcl
+# GOOD: count for conditional resource creation
+resource "aws_cloudwatch_log_group" "main" {
+  count = var.enable_logging ? 1 : 0
+  name  = "/app/${var.environment}"
+}
+```
+
+### Dynamic Blocks
+
+Dynamic blocks allow generating multiple nested blocks from a collection. They **SHOULD** be used sparingly because they reduce readability and complicate debugging.
+
+#### When to Use Dynamic Blocks
+
+Use dynamic blocks when:
+
+- The number of nested blocks is variable and determined by configuration
+- The block structure is repetitive and follows a consistent pattern
+- Manual repetition would create maintenance burden
+
+```hcl
+# GOOD: Variable number of ingress rules from configuration
+resource "aws_security_group" "main" {
+  name        = "${var.project_name}-sg"
+  description = "Security group for ${var.project_name}"
+  vpc_id      = var.vpc_id
+
+  dynamic "ingress" {
+    for_each = var.ingress_rules
+    content {
+      from_port   = ingress.value.from_port
+      to_port     = ingress.value.to_port
+      protocol    = ingress.value.protocol
+      cidr_blocks = ingress.value.cidr_blocks
+    }
+  }
+}
+```
+
+#### When to Avoid Dynamic Blocks
+
+Avoid dynamic blocks when the number of blocks is fixed and small. Writing explicit blocks improves readability:
+
+```hcl
+# GOOD: Fixed, small number of rules - explicit is clearer
+resource "aws_security_group" "web" {
+  name        = "${var.project_name}-web-sg"
+  description = "Web security group"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# AVOID: Using dynamic for only 2-3 fixed rules adds unnecessary complexity
+# dynamic "ingress" { ... }
 ```
 
 ---
