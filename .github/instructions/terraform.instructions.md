@@ -86,6 +86,12 @@ The following standard placeholders **SHOULD** be used consistently throughout t
 | `REPLACE_ME_AMI_ID` | AWS AMI ID | `ami-0abcdef1234567890` |
 | `REPLACE_ME_SUBSCRIPTION_ID` | Azure subscription ID | `00000000-0000-0000-0000-000000000000` |
 | `REPLACE_ME_TENANT_ID` | Azure tenant ID | `00000000-0000-0000-0000-000000000000` |
+| `REPLACE_ME_PRIMARY_BUCKET` | Primary storage bucket name | `my-org-primary-bucket` |
+| `REPLACE_ME_REPLICA_BUCKET` | Replica storage bucket name | `my-org-replica-bucket` |
+| `REPLACE_ME_EUROPE_BUCKET` | Europe region bucket name | `my-org-europe-bucket` |
+| `REPLACE_ME_PRIMARY_STORAGE` | Primary Azure storage account name | `stprimarystorage` |
+| `REPLACE_ME_SECONDARY_STORAGE` | Secondary Azure storage account name | `stsecondarystorage` |
+| `REPLACE_ME_KEYVAULT_NAME` | Azure Key Vault name | `kv-my-org-secrets` |
 
 ### Usage Rules
 
