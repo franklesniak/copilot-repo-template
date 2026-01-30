@@ -884,9 +884,10 @@ check "api_health" {
 
 ### Best Practices
 
-- **Use sparingly:** `check` blocks add overhead to every plan/apply operation
-- **Keep assertions simple:** Complex assertions can slow down operations
-- **Document purpose:** Include clear `error_message` values explaining what failed and why it matters
+- **Bounded usage:** Each module **SHOULD** define at most 3 `check` blocks and **SHOULD** reserve them for critical invariants (for example, cross-resource consistency or security posture), not routine validation that can be handled with `precondition`/`postcondition`.
+- **Deterministic and cheap assertions:** `condition` expressions **MUST** be deterministic (no dependence on current time, randomness, or external services) and **MUST NOT** introduce additional network calls (for example, avoid `http` or other remote data sources inside a `check` block). They **SHOULD** only reference values already available during planning (resource attributes, variables, locals, and data sources the plan already needs).
+- **Constrained complexity:** Assertions **SHOULD** be expressed as a small number of boolean expressions combined with `&&`/`||`, and **SHOULD NOT** iterate over large collections or use deeply nested conditionals that materially increase plan/apply latency.
+- **Document purpose:** `error_message` values **MUST** clearly state which invariant failed and what the operator **SHOULD** do next (for example, "rotate API token X" or "scale service Y").
 
 ---
 
