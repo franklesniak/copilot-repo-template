@@ -5,7 +5,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.3.20260130.0
+**Version:** 1.4.20260130.0
 
 ## Metadata
 
@@ -24,13 +24,16 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - [Naming Conventions](#naming-conventions)
 - [File Organization](#file-organization)
 - [Variable and Output Design](#variable-and-output-design)
+  - [Nullable Variables](#nullable-variables)
 - [Continuous Validation with check Blocks](#continuous-validation-with-check-blocks)
 - [Resource Configuration](#resource-configuration)
 - [Module Design](#module-design)
 - [Refactoring](#refactoring)
 - [State Management](#state-management)
 - [Provider Management](#provider-management)
+  - [Provider Aliasing](#provider-aliasing)
 - [Security Best Practices](#security-best-practices)
+  - [Sensitive Values in Meta-Arguments](#sensitive-values-in-meta-arguments)
 - [Testing with Terraform Test](#testing-with-terraform-test)
 - [Documentation Standards](#documentation-standards)
 - [Pre-commit Discipline for Terraform](#pre-commit-discipline-for-terraform)
@@ -96,6 +99,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** Variables with constrained values **SHOULD** use `validation` blocks → [Variable Validation](#variable-validation)
 - **[All]** Outputs **MUST** include a `description` → [Output Documentation Requirements](#output-documentation-requirements)
 - **[All]** Sensitive outputs **MUST** be marked with `sensitive = true` → [Sensitive Output Marking](#sensitive-output-marking)
+- **[All]** Variables **SHOULD** explicitly set `nullable` to document null-handling behavior → [Nullable Variables](#nullable-variables)
 
 ### Continuous Validation
 
@@ -145,6 +149,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** Provider versions **MUST** be constrained → [Provider Version Constraints](#provider-version-constraints)
 - **[All]** `.terraform.lock.hcl` **MUST** be committed to version control → [Lock File Management](#lock-file-management)
 - **[All]** Pessimistic constraint operator (`~>`) **SHOULD** be used for providers → [Pessimistic Constraints](#pessimistic-constraints)
+- **[All]** Multi-region or multi-account deployments **MUST** use provider aliases → [Provider Aliasing](#provider-aliasing)
 
 ### Security
 
@@ -154,6 +159,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[Root]** State backends **MUST** enable encryption → [State Security](#state-security)
 - **[All]** IAM policies **MUST** follow least-privilege principles → [Least-Privilege Principles](#least-privilege-principles)
 - **[All]** Wildcard actions **SHOULD NOT** be used in IAM policies → [IAM Policy Guidelines](#iam-policy-guidelines)
+- **[All]** Sensitive values **MUST NOT** be used in `for_each` or `count` expressions → [Sensitive Values in Meta-Arguments](#sensitive-values-in-meta-arguments)
 
 ### Testing
 
@@ -841,6 +847,49 @@ output "instance_private_ip" {
   description = "The private IP address of the EC2 instance."
   value       = aws_instance.main.private_ip
   sensitive   = true
+}
+```
+
+### Nullable Variables
+
+The `nullable` attribute (Terraform 1.1+) controls whether a variable can accept `null` as a valid value. By default, all variables have `nullable = true`, meaning they can accept `null` values.
+
+**Purpose:**
+
+- Explicitly allow or disallow `null` as a valid value
+- Distinguish between "not provided" and "explicitly set to null"
+- Improve input validation for required values
+
+**When to use explicit `nullable`:**
+
+- Use `nullable = true` when `null` is a meaningful value distinct from the default
+- Use `nullable = false` when `null` values **MUST** be rejected
+
+**Example:**
+
+```hcl
+variable "optional_cidr" {
+  description = "Optional secondary CIDR block. Set to null to skip configuration."
+  type        = string
+  default     = null
+  nullable    = true  # Explicitly allow null values
+}
+
+variable "required_name" {
+  description = "Required resource name. Cannot be null."
+  type        = string
+  nullable    = false  # Null values will be rejected
+}
+```
+
+**Usage pattern:**
+
+```hcl
+resource "aws_vpc_ipv4_cidr_block_association" "secondary" {
+  count = var.optional_cidr != null ? 1 : 0
+
+  vpc_id     = aws_vpc.main.id
+  cidr_block = var.optional_cidr
 }
 ```
 
@@ -1722,6 +1771,67 @@ version = "~> 5.0"
 version = "~> 5.31.0"
 ```
 
+### Provider Aliasing
+
+Provider aliasing enables multiple instances of the same provider for multi-region or multi-account deployments. Use aliases when resources need to be created in different regions, accounts, or with different configurations.
+
+**Common use cases:**
+
+- Disaster recovery across regions
+- Cross-region replication (S3, RDS, etc.)
+- Multi-account architectures
+- Resources requiring different provider configurations
+
+**Defining aliased providers:**
+
+```hcl
+# providers.tf
+
+provider "aws" {
+  region = "us-east-1"
+  # Default provider (no alias)
+}
+
+provider "aws" {
+  alias  = "west"
+  region = "us-west-2"
+}
+
+provider "aws" {
+  alias  = "eu"
+  region = "eu-west-1"
+}
+```
+
+**Using aliased providers in resources:**
+
+```hcl
+# Use default provider
+resource "aws_s3_bucket" "primary" {
+  bucket = "my-primary-bucket"
+}
+
+# Use aliased provider
+resource "aws_s3_bucket" "replica" {
+  provider = aws.west
+  bucket   = "my-replica-bucket"
+}
+```
+
+**Passing providers to modules:**
+
+```hcl
+module "vpc_west" {
+  source = "./modules/vpc"
+
+  providers = {
+    aws = aws.west
+  }
+
+  cidr_block = "10.1.0.0/16"
+}
+```
+
 ---
 
 ## Security Best Practices
@@ -1888,6 +1998,49 @@ resource "aws_iam_policy" "bad_example" {
       Resource = ["*"]           # TOO BROAD
     }]
   })
+}
+```
+
+### Sensitive Values in Meta-Arguments
+
+Values used in `for_each` keys and `count` expressions appear in Terraform state and plan output, even if the source variable is marked `sensitive = true`. This creates a security risk where sensitive data can be exposed.
+
+**Security requirements:**
+
+- Sensitive values **MUST NOT** be used as `for_each` keys
+- Sensitive values **MUST NOT** be used in `count` conditions where the value itself is exposed
+- Use non-sensitive identifiers as keys and reference sensitive values only in resource attributes
+
+**Anti-pattern (sensitive values exposed in state):**
+
+```hcl
+# BAD: Sensitive value used as for_each key - names will appear in state
+variable "secret_names" {
+  type      = list(string)
+  sensitive = true
+}
+
+resource "aws_secretsmanager_secret" "secrets" {
+  for_each = toset(var.secret_names)  # Keys leak to state!
+  name     = each.key
+}
+```
+
+**Correct pattern (non-sensitive keys):**
+
+```hcl
+# GOOD: Use non-sensitive identifiers as keys
+variable "secrets" {
+  type = map(object({
+    name  = string
+    value = string
+  }))
+  sensitive = true
+}
+
+resource "aws_secretsmanager_secret" "secrets" {
+  for_each = { for k, v in var.secrets : k => v.name }
+  name     = each.value  # each.key is the non-sensitive identifier
 }
 ```
 
