@@ -5,7 +5,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.4.20260130.0
+**Version:** 1.5.20260130.0
 
 ## Metadata
 
@@ -25,11 +25,13 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - [File Organization](#file-organization)
 - [Variable and Output Design](#variable-and-output-design)
   - [Nullable Variables](#nullable-variables)
+  - [Terraform Cloud Variable Precedence](#terraform-cloud-variable-precedence)
 - [Continuous Validation with check Blocks](#continuous-validation-with-check-blocks)
 - [Resource Configuration](#resource-configuration)
 - [Module Design](#module-design)
 - [Refactoring](#refactoring)
 - [State Management](#state-management)
+  - [Resource Targeting](#resource-targeting)
 - [Provider Management](#provider-management)
   - [Provider Aliasing](#provider-aliasing)
 - [Security Best Practices](#security-best-practices)
@@ -38,6 +40,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - [Documentation Standards](#documentation-standards)
 - [Pre-commit Discipline for Terraform](#pre-commit-discipline-for-terraform)
 - ["Done" Definition for Terraform Changes](#done-definition-for-terraform-changes)
+- [Related Documentation](#related-documentation)
 - [Scope Exceptions & Deviations from Standards](#scope-exceptions--deviations-from-standards)
 
 ## Keywords
@@ -143,6 +146,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[Root]** State locking **MUST** be enabled → [State Locking](#state-locking)
 - **[All]** Local state files **MUST NOT** be used in production → [No Local State in Production](#no-local-state-in-production)
 - **[All]** State files **MUST NOT** be committed to version control → [State File Exclusion](#state-file-exclusion)
+- **[All]** `terraform apply -target` **SHOULD NOT** be used in normal workflows → [Resource Targeting](#resource-targeting)
 
 ### Provider Management
 
@@ -643,6 +647,22 @@ environments/
     ├── variables.tf
     └── terraform.tfvars
 ```
+
+### Terraform Cloud Variable Precedence
+
+When using Terraform Cloud or Terraform Enterprise, variables can be set at multiple levels. The precedence order (highest to lowest) is:
+
+1. `-var` and `-var-file` flags in CLI-driven runs
+2. `*.auto.tfvars` files (in alphabetical order)
+3. `terraform.tfvars` (if present)
+4. Workspace-specific variables (set in Terraform Cloud UI/API)
+5. Variable sets (shared across workspaces)
+6. Environment variables (`TF_VAR_*`)
+7. `default` values in variable declarations
+
+**Note:** In Terraform Cloud, workspace variables and variable sets take precedence over environment variables (`TF_VAR_*`). This differs from local Terraform execution where environment variables have higher precedence.
+
+Document which variable management approach your organization uses in the [Scope Exceptions](#scope-exceptions--deviations-from-standards) section to ensure consistency across team members.
 
 ### Module Directory Structure
 
@@ -1706,6 +1726,18 @@ terraform apply
 
 **Caution:** For complex environments, separate state files per environment are often clearer than workspaces.
 
+### Resource Targeting
+
+`terraform apply -target` **SHOULD NOT** be used in normal workflows. Resource targeting:
+
+- Creates state drift between targeted and non-targeted resources
+- Can leave infrastructure in inconsistent states
+- Bypasses dependency validation
+
+Resource targeting is intended **only** for exceptional recovery scenarios where a specific resource must be modified in isolation.
+
+**If targeting is needed regularly**, this indicates the configuration is too large. Split the configuration into smaller, independent modules that can be applied separately.
+
 ---
 
 ## Provider Management
@@ -2475,6 +2507,18 @@ repos:
           - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
 ```
 
+### TFLint Configuration
+
+This repository's TFLint configuration is defined in `.tflint.hcl` at the repository root. The configuration:
+
+- Enables the `terraform` plugin with the `recommended` preset
+- Enforces `snake_case` naming conventions
+- Requires documentation for variables and outputs
+- Requires type declarations for variables
+- Includes commented provider-specific plugins (AWS, Azure, GCP) that **SHOULD** be uncommented based on your cloud provider
+
+When adopting this template, review and customize `.tflint.hcl` for your project's provider requirements.
+
 ### CI Workflow Integration
 
 This repository includes a comprehensive Terraform CI workflow at `.github/workflows/terraform-ci.yml` that enforces these standards automatically:
@@ -2531,6 +2575,20 @@ A Terraform change is considered complete when:
 
 - [ ] CI pipeline passes
 - [ ] Plan output reviewed (no unexpected changes)
+
+---
+
+## Related Documentation
+
+For detailed implementation guidance beyond this instruction file, see the companion documents in `docs/terraform/`:
+
+| Document | Purpose |
+| --- | --- |
+| [Terraform Linting Guide](../../docs/terraform/TERRAFORM_LINTING_GUIDE.md) | Detailed guidance on CI linting setup, TFLint configuration, and security scanning |
+| [Terraform Testing Guide](../../docs/terraform/TERRAFORM_TESTING_GUIDE.md) | Comprehensive guide to Terraform test framework, test patterns, and CI integration |
+| [Terraform Copilot Instructions Guide](../../docs/terraform/TERRAFORM_COPILOT_INSTRUCTIONS_GUIDE.md) | Design rationale and structure guidance for this instruction file |
+
+These documents provide in-depth coverage of topics summarized in this instruction file.
 
 ---
 
