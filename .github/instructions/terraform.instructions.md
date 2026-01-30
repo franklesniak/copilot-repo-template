@@ -5,13 +5,13 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.1.20260125.0
+**Version:** 1.2.20260130.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-01-25
+- **Last Updated:** 2026-01-30
 - **Scope:** Defines Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in this repository. Covers style, formatting, naming conventions, file organization, variable and output design, resource configuration, module design, state management, security best practices, provider management, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -26,6 +26,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - [Variable and Output Design](#variable-and-output-design)
 - [Resource Configuration](#resource-configuration)
 - [Module Design](#module-design)
+- [Refactoring](#refactoring)
 - [State Management](#state-management)
 - [Provider Management](#provider-management)
 - [Security Best Practices](#security-best-practices)
@@ -113,6 +114,13 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[Module]** Complex inputs **SHOULD** use object types with documented structure → [Complex Input Types](#complex-input-types)
 - **[Module]** Modules **SHOULD** expose only necessary outputs → [Module Output Design](#module-output-design)
 - **[Module]** Published modules **MUST** use semantic versioning → [Module Versioning](#module-versioning)
+
+### Refactoring
+
+- **[All]** Resource renames **MUST** use `moved` blocks instead of manual state commands → [Refactoring with moved Blocks](#refactoring-with-moved-blocks)
+- **[All]** Existing infrastructure imports **SHOULD** use `import` blocks instead of CLI commands → [Importing Resources with import Blocks](#importing-resources-with-import-blocks)
+- **[All]** Resources removed from management **SHOULD** use `removed` blocks → [Removing Resources from State with removed Blocks](#removing-resources-from-state-with-removed-blocks)
+- **[All]** Direct state manipulation commands **SHOULD** be avoided → [State Manipulation Commands](#state-manipulation-commands)
 
 ### State Management
 
@@ -1101,7 +1109,130 @@ module "internal_module" {
 
 ---
 
+## Refactoring
+
+Terraform provides declarative blocks for safely refactoring infrastructure without manual state manipulation. These blocks enable auditable, version-controlled changes that can be reviewed and tested before applying.
+
+### Refactoring with moved Blocks
+
+The `moved` block (Terraform 1.1+) enables renaming or restructuring resources without destroying and recreating them. This is essential for:
+
+- Renaming resources to follow updated naming conventions
+- Restructuring modules
+- Moving resources between modules
+
+**Syntax and Example:**
+
+```hcl
+moved {
+  from = aws_instance.web
+  to   = aws_instance.web_server
+}
+
+resource "aws_instance" "web_server" {
+  # Previously aws_instance.web
+  ami           = var.ami_id
+  instance_type = var.instance_type
+  # ...
+}
+```
+
+**Requirements:**
+
+- Run `terraform plan` before applying to verify no unexpected changes
+- The `moved` block **SHOULD** remain in configuration until all environments have been updated
+- After all state has been migrated, `moved` blocks **MAY** be removed
+
+### Importing Resources with import Blocks
+
+The `import` block (Terraform 1.5+) brings existing infrastructure under Terraform management. This is preferred over the `terraform import` CLI command because:
+
+- Import configuration is version-controlled and reviewable
+- Multiple imports can be planned and applied together
+- Import intentions are visible in code review
+
+**Syntax and Example:**
+
+```hcl
+import {
+  to = aws_instance.example
+  id = "i-1234567890abcdef0"
+}
+
+resource "aws_instance" "example" {
+  # Configuration matching the imported resource
+  ami           = "ami-0123456789abcdef0"
+  instance_type = "t3.micro"
+  # ...
+}
+```
+
+**Requirements:**
+
+- The resource configuration **MUST** match the existing infrastructure
+- Run `terraform plan` to verify the import will not cause changes
+- After successful import and apply, `import` blocks **SHOULD** be removed from configuration
+
+### Removing Resources from State with removed Blocks
+
+The `removed` block (Terraform 1.7+) removes resources from Terraform management without destroying the underlying infrastructure. Use cases include:
+
+- Transitioning resource ownership to another team or configuration
+- Removing resources that are now managed outside Terraform
+- Cleaning up state without affecting production infrastructure
+
+**Syntax and Example:**
+
+```hcl
+removed {
+  from = aws_instance.legacy
+
+  lifecycle {
+    destroy = false  # Remove from state without destroying
+  }
+}
+```
+
+**The `lifecycle.destroy` Option:**
+
+| Value | Behavior |
+| --- | --- |
+| `true` (default) | Resource is destroyed when removed from configuration |
+| `false` | Resource is removed from state but preserved in the cloud |
+
+**Requirements:**
+
+- Use `destroy = false` when the resource **MUST** continue to exist
+- Document the reason for removal in comments or commit messages
+- After successful apply, `removed` blocks **MAY** be removed from configuration
+
+### State Manipulation Commands
+
+Direct state manipulation commands (`terraform state mv`, `terraform state rm`, `terraform import`) **SHOULD** be avoided in favor of the declarative blocks above. The declarative approach provides:
+
+- Version control and audit trail
+- Code review before changes
+- Consistent behavior across team members
+- Reduced risk of human error
+
+**When state commands are necessary, they MUST be:**
+
+- Documented in commit messages with clear rationale
+- Performed only after creating state backups
+- Reviewed by a second team member when possible
+- Followed by verification that state is consistent
+
+**Backup command before state manipulation:**
+
+```bash
+terraform state pull > terraform.tfstate.backup
+```
+
+---
+
 ## State Management
+
+> **Note:** For state modification best practices including resource renaming, importing existing infrastructure, and removing resources from management, see the [Refactoring](#refactoring) section.
 
 ### Remote Backend Configuration
 
