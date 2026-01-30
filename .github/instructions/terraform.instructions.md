@@ -5,7 +5,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.5.20260130.0
+**Version:** 1.6.20260130.0
 
 ## Metadata
 
@@ -92,6 +92,8 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[Module]** Modules **MUST** include a `README.md` → [Module README Requirements](#module-readme-requirements)
 - **[Module]** Modules **SHOULD** include `examples/` directory → [Module Examples](#module-examples)
 - **[Module]** Modules **SHOULD** include `tests/` directory → [Module Tests](#module-tests)
+- **[All]** Template files **SHOULD** use `.tftpl` extension → [Template Files (.tftpl)](#template-files-tftpl)
+- **[All]** Template files **SHOULD** be placed in a `templates/` subdirectory → [Template Files (.tftpl)](#template-files-tftpl)
 
 ### Variable and Output Design
 
@@ -121,6 +123,8 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** `depends_on` **SHOULD** be avoided unless dependencies are not inferable → [Explicit Dependencies](#explicit-dependencies)
 - **[All]** `for_each` **SHOULD** be preferred over `count` for collections → [for_each vs count](#for_each-vs-count)
 - **[All]** Dynamic blocks **SHOULD** be used sparingly → [Dynamic Blocks](#dynamic-blocks)
+- **[All]** `prevent_destroy` **SHOULD** be used for critical resources → [Lifecycle Block Options](#lifecycle-block-options)
+- **[All]** `ignore_changes` **SHOULD** be used for attributes managed outside Terraform → [Lifecycle Block Options](#lifecycle-block-options)
 
 ### Module Design
 
@@ -703,6 +707,59 @@ Modules **SHOULD** include a `tests/` directory with Terraform test files:
 - Tests **SHOULD** cover both valid and invalid inputs
 - Tests **SHOULD** validate critical outputs
 
+### Template Files (.tftpl)
+
+Template files are used with the `templatefile()` function to generate dynamic content such as configuration files, scripts, or policy documents. Template files **SHOULD** follow these conventions:
+
+- Template files **SHOULD** use the `.tftpl` extension for clear identification
+- Template files **SHOULD** be placed in a `templates/` subdirectory within the module or root configuration
+- Template file variables **SHOULD** be documented at the top of the template file using comments
+
+**Directory structure:**
+
+```text
+modules/
+└── <module-name>/
+    ├── main.tf
+    ├── variables.tf
+    ├── outputs.tf
+    └── templates/
+        ├── user_data.sh.tftpl
+        └── policy.json.tftpl
+```
+
+**Template file example with documentation:**
+
+```tftpl
+#!/bin/bash
+# Template: user_data.sh.tftpl
+# Variables:
+#   - environment: Deployment environment (string)
+#   - app_name: Application name (string)
+#   - enable_monitoring: Whether to enable monitoring (bool)
+
+echo "Deploying ${app_name} to ${environment}"
+
+%{ if enable_monitoring ~}
+echo "Monitoring enabled"
+%{ endif ~}
+```
+
+**Using templatefile() function:**
+
+```hcl
+resource "aws_instance" "main" {
+  ami           = var.ami_id
+  instance_type = var.instance_type
+
+  user_data = templatefile("${path.module}/templates/user_data.sh.tftpl", {
+    environment       = var.environment
+    app_name          = var.app_name
+    enable_monitoring = var.enable_monitoring
+  })
+}
+```
+
 ---
 
 ## Variable and Output Design
@@ -1141,6 +1198,69 @@ resource "aws_instance" "main" {
 - Validating computed attributes (IPs, ARNs, generated names)
 - Ensuring provider-side defaults meet expectations
 - Catching unexpected resource configurations
+
+### Lifecycle Block Options
+
+The `lifecycle` block supports several meta-argument options beyond `precondition` and `postcondition` for controlling resource behavior. The following table summarizes these lifecycle meta-arguments:
+
+| Option | Purpose | Use Case |
+| --- | --- | --- |
+| `create_before_destroy` | Create replacement before destroying original | Zero-downtime replacements |
+| `prevent_destroy` | Prevent accidental resource deletion | Protect critical production resources |
+| `ignore_changes` | Ignore changes to specific attributes | Attributes managed outside Terraform |
+| `replace_triggered_by` | Force replacement when dependencies change | Trigger replacement on related resource changes (Terraform 1.2+) |
+
+#### When to Use Each Option
+
+**`create_before_destroy`:** Use when replacing a resource must not cause downtime. The new resource is created first, then the old one is destroyed.
+
+**`prevent_destroy`:** Use for critical resources that **MUST NOT** be accidentally deleted, such as production databases, state storage buckets, or encryption keys.
+
+**`ignore_changes`:** Use when an attribute is intentionally managed outside Terraform (e.g., auto-scaling group desired capacity, tags managed by external tools).
+
+**`replace_triggered_by`:** Use when a resource **SHOULD** be replaced whenever a related resource changes, even if no direct attributes are affected.
+
+#### Example: Protecting a Critical Resource
+
+```hcl
+# Protect production database from accidental deletion
+resource "aws_db_instance" "production" {
+  identifier     = "prod-database"
+  engine         = "postgres"
+  instance_class = var.db_instance_class
+  # ... other configuration
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+# Protect Terraform state bucket
+resource "aws_s3_bucket" "terraform_state" {
+  bucket = "my-org-terraform-state"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+```
+
+#### Example: Ignoring External Changes
+
+```hcl
+# Ignore changes to tags managed by AWS Config or other external tools
+resource "aws_instance" "main" {
+  ami           = var.ami_id
+  instance_type = var.instance_type
+
+  lifecycle {
+    ignore_changes = [
+      tags["LastScannedBy"],
+      tags["ComplianceStatus"],
+    ]
+  }
+}
+```
 
 ### Explicit Dependencies
 
@@ -2267,6 +2387,8 @@ run "outputs_correct_subnet_count" {
 
 For unit testing without real infrastructure, use mock providers:
 
+> **Note:** The `mock_provider` block requires Terraform 1.7.0 or later. For earlier versions of the test framework (Terraform 1.6.x), tests must use real provider credentials or skip provider-dependent tests.
+
 ```hcl
 # tests/unit.tftest.hcl
 
@@ -2518,6 +2640,8 @@ This repository's TFLint configuration is defined in `.tflint.hcl` at the reposi
 - Includes commented provider-specific plugins (AWS, Azure, GCP) that **SHOULD** be uncommented based on your cloud provider
 
 When adopting this template, review and customize `.tflint.hcl` for your project's provider requirements.
+
+> **Note:** When enabling provider-specific TFLint plugins (AWS, Azure, GCP), verify that you are using the latest stable versions. The plugin versions in the template may become outdated. Check the [TFLint Ruleset Registry](https://github.com/terraform-linters) for current versions.
 
 ### CI Workflow Integration
 
