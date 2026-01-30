@@ -18,8 +18,8 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 ## Table of Contents
 
 - [Keywords](#keywords)
-- [Placeholder Convention (`REPLACE_ME_*`)](#placeholder-convention-replace_me_)
 - [Quick Reference Checklist](#quick-reference-checklist)
+- [Placeholder Convention (`REPLACE_ME_*`)](#placeholder-convention-replace_me_)
 - [Executive Summary: Terraform Philosophy](#executive-summary-terraform-philosophy)
 - [Formatting and Style](#formatting-and-style)
 - [Naming Conventions](#naming-conventions)
@@ -53,63 +53,6 @@ The key words "**MUST**", "**MUST NOT**", "**REQUIRED**", "**SHALL**", "**SHALL 
 - **SHOULD** / **RECOMMENDED** — Strong recommendation. Valid reasons may exist to deviate, but implications must be understood.
 - **SHOULD NOT** / **NOT RECOMMENDED** — Strong discouragement. Valid reasons may exist to do otherwise, but implications must be understood.
 - **MAY** / **OPTIONAL** — Truly optional. Implementations can choose to include or omit.
-
-## Placeholder Convention (`REPLACE_ME_*`)
-
-This document uses the `REPLACE_ME_*` placeholder convention for values that **MUST** be customized before use. This convention applies across all cloud providers (AWS, Azure, GCP) and ensures that examples remain portable while clearly identifying required customizations.
-
-### Purpose
-
-Placeholders serve multiple purposes:
-
-- **Safety:** Prevent accidental deployment of example values to production
-- **Clarity:** Clearly identify which values require organization-specific configuration
-- **Searchability:** Enable easy discovery of all values requiring customization via `grep -r "REPLACE_ME"`
-- **Consistency:** Provide a uniform approach across all examples regardless of provider
-
-### Standard Placeholders
-
-The following standard placeholders **SHOULD** be used consistently throughout this document and in derived configurations:
-
-| Placeholder | Description | Example Replacement |
-| --- | --- | --- |
-| `REPLACE_ME_REGION` | Cloud provider region | `us-east-1`, `eastus`, `us-central1` |
-| `REPLACE_ME_STATE_BUCKET` | State storage bucket/container name | `my-org-terraform-state` |
-| `REPLACE_ME_LOCK_TABLE` | State locking table (AWS DynamoDB) | `terraform-locks` |
-| `REPLACE_ME_RESOURCE_GROUP` | Azure resource group name | `rg-terraform-state` |
-| `REPLACE_ME_STORAGE_ACCOUNT` | Azure storage account name | `stterraformstate` |
-| `REPLACE_ME_CONTAINER` | Azure blob container name | `tfstate` |
-| `REPLACE_ME_PROJECT_ID` | GCP project ID | `my-gcp-project-123` |
-| `REPLACE_ME_ORG` | Terraform Cloud/Enterprise organization | `my-organization` |
-| `REPLACE_ME_WORKSPACE` | Terraform Cloud/Enterprise workspace | `prod-infrastructure` |
-| `REPLACE_ME_INSTANCE_ID` | Cloud instance/resource ID for imports | `i-1234567890abcdef0` |
-| `REPLACE_ME_AMI_ID` | AWS AMI ID | `ami-0abcdef1234567890` |
-| `REPLACE_ME_SUBSCRIPTION_ID` | Azure subscription ID | `00000000-0000-0000-0000-000000000000` |
-| `REPLACE_ME_TENANT_ID` | Azure tenant ID | `00000000-0000-0000-0000-000000000000` |
-| `REPLACE_ME_PRIMARY_BUCKET` | Primary storage bucket name | `my-org-primary-bucket` |
-| `REPLACE_ME_REPLICA_BUCKET` | Replica storage bucket name | `my-org-replica-bucket` |
-| `REPLACE_ME_EUROPE_BUCKET` | Europe region bucket name | `my-org-europe-bucket` |
-| `REPLACE_ME_PRIMARY_STORAGE` | Primary Azure storage account name | `stprimarystorage` |
-| `REPLACE_ME_SECONDARY_STORAGE` | Secondary Azure storage account name | `stsecondarystorage` |
-| `REPLACE_ME_KEYVAULT_NAME` | Azure Key Vault name | `kv-my-org-secrets` |
-| `REPLACE_ME_SECRET_NAME` | Secret name in secret manager | `database-password` |
-| `REPLACE_ME_PRIMARY_REGION` | Primary cloud provider region | `us-east-1`, `eastus`, `us-central1` |
-| `REPLACE_ME_WEST_REGION` | West/secondary region (AWS) | `us-west-2` |
-| `REPLACE_ME_EU_REGION` | Europe region (AWS) | `eu-west-1` |
-| `REPLACE_ME_EUROPE_REGION` | Europe region (GCP) | `europe-west1` |
-| `REPLACE_ME_SECONDARY_REGION` | Secondary region | `us-west-2`, `westus2`, `us-west1` |
-
-### Usage Rules
-
-- **[All]** Authors **MUST** use `REPLACE_ME_*` placeholders for values that require customization
-- **[All]** Placeholder names **MUST** use `UPPER_SNAKE_CASE` with the `REPLACE_ME_` prefix
-- **[All]** Placeholder names **SHOULD** be descriptive (e.g., `REPLACE_ME_STATE_BUCKET` not `REPLACE_ME_BUCKET`)
-- **[All]** When adopting configurations, search for all placeholders using `grep -r "REPLACE_ME"` and replace with actual values
-- **[All]** Production code **MUST NOT** contain any `REPLACE_ME_*` placeholders
-
-### Provider-Specific Notes
-
-This document provides examples for multiple cloud providers (AWS, Azure, GCP). When examples include provider-specific placeholders, each provider's version is labeled accordingly. For step-by-step guidance and a checklist for removing examples for providers you do not use, see the [Copilot Terraform Instructions Configuration](../../OPTIONAL_CONFIGURATIONS.md#copilot-terraform-instructions-configuration) guide. If you remove or substantially alter provider examples, record this as a documented deviation following the [Scope Exceptions & Deviations from Standards](#scope-exceptions--deviations-from-standards) section.
 
 ## Quick Reference Checklist
 
@@ -259,6 +202,63 @@ The following guidelines apply to all code authors, including human developers a
 - **[All]** Authors **SHOULD** include `description` for all variables and outputs, and use `sensitive = true` as appropriate
 - **[All]** Authors **MUST NOT** modify lock files (`.terraform.lock.hcl`) or commit state unless explicitly required
 - **[All]** Authors **MUST** use placeholder markers following the `REPLACE_ME_*` pattern for values that require customization → [Placeholder Convention](#placeholder-convention-replace_me_)
+
+## Placeholder Convention (`REPLACE_ME_*`)
+
+This document uses the `REPLACE_ME_*` placeholder convention for values that **MUST** be customized before use. This convention applies across all cloud providers (AWS, Azure, GCP) and ensures that examples remain portable while clearly identifying required customizations.
+
+### Purpose
+
+Placeholders serve multiple purposes:
+
+- **Safety:** Prevent accidental deployment of example values to production
+- **Clarity:** Clearly identify which values require organization-specific configuration
+- **Searchability:** Enable easy discovery of all values requiring customization via `grep -r "REPLACE_ME"`
+- **Consistency:** Provide a uniform approach across all examples regardless of provider
+
+### Standard Placeholders
+
+The following standard placeholders **SHOULD** be used consistently throughout this document and in derived configurations:
+
+| Placeholder | Description | Example Replacement |
+| --- | --- | --- |
+| `REPLACE_ME_REGION` | Cloud provider region | `us-east-1`, `eastus`, `us-central1` |
+| `REPLACE_ME_STATE_BUCKET` | State storage bucket/container name | `my-org-terraform-state` |
+| `REPLACE_ME_LOCK_TABLE` | State locking table (AWS DynamoDB) | `terraform-locks` |
+| `REPLACE_ME_RESOURCE_GROUP` | Azure resource group name | `rg-terraform-state` |
+| `REPLACE_ME_STORAGE_ACCOUNT` | Azure storage account name | `stterraformstate` |
+| `REPLACE_ME_CONTAINER` | Azure blob container name | `tfstate` |
+| `REPLACE_ME_PROJECT_ID` | GCP project ID | `my-gcp-project-123` |
+| `REPLACE_ME_ORG` | Terraform Cloud/Enterprise organization | `my-organization` |
+| `REPLACE_ME_WORKSPACE` | Terraform Cloud/Enterprise workspace | `prod-infrastructure` |
+| `REPLACE_ME_INSTANCE_ID` | Cloud instance/resource ID for imports | `i-1234567890abcdef0` |
+| `REPLACE_ME_AMI_ID` | AWS AMI ID | `ami-0abcdef1234567890` |
+| `REPLACE_ME_SUBSCRIPTION_ID` | Azure subscription ID | `00000000-0000-0000-0000-000000000000` |
+| `REPLACE_ME_TENANT_ID` | Azure tenant ID | `00000000-0000-0000-0000-000000000000` |
+| `REPLACE_ME_PRIMARY_BUCKET` | Primary storage bucket name | `my-org-primary-bucket` |
+| `REPLACE_ME_REPLICA_BUCKET` | Replica storage bucket name | `my-org-replica-bucket` |
+| `REPLACE_ME_EUROPE_BUCKET` | Europe region bucket name | `my-org-europe-bucket` |
+| `REPLACE_ME_PRIMARY_STORAGE` | Primary Azure storage account name | `stprimarystorage` |
+| `REPLACE_ME_SECONDARY_STORAGE` | Secondary Azure storage account name | `stsecondarystorage` |
+| `REPLACE_ME_KEYVAULT_NAME` | Azure Key Vault name | `kv-my-org-secrets` |
+| `REPLACE_ME_SECRET_NAME` | Secret name in secret manager | `database-password` |
+| `REPLACE_ME_PRIMARY_REGION` | Primary cloud provider region | `us-east-1`, `eastus`, `us-central1` |
+| `REPLACE_ME_WEST_REGION` | West/secondary region (AWS) | `us-west-2` |
+| `REPLACE_ME_EU_REGION` | Europe region (AWS) | `eu-west-1` |
+| `REPLACE_ME_EUROPE_REGION` | Europe region (GCP) | `europe-west1` |
+| `REPLACE_ME_SECONDARY_REGION` | Secondary region | `us-west-2`, `westus2`, `us-west1` |
+
+### Usage Rules
+
+- **[All]** Authors **MUST** use `REPLACE_ME_*` placeholders for values that require customization
+- **[All]** Placeholder names **MUST** use `UPPER_SNAKE_CASE` with the `REPLACE_ME_` prefix
+- **[All]** Placeholder names **SHOULD** be descriptive (e.g., `REPLACE_ME_STATE_BUCKET` not `REPLACE_ME_BUCKET`)
+- **[All]** When adopting configurations, search for all placeholders using `grep -r "REPLACE_ME"` and replace with actual values
+- **[All]** Production code **MUST NOT** contain any `REPLACE_ME_*` placeholders
+
+### Provider-Specific Notes
+
+This document provides examples for multiple cloud providers (AWS, Azure, GCP). When examples include provider-specific placeholders, each provider's version is labeled accordingly. For step-by-step guidance and a checklist for removing examples for providers you do not use, see the [Copilot Terraform Instructions Configuration](../../OPTIONAL_CONFIGURATIONS.md#copilot-terraform-instructions-configuration) guide. If you remove or substantially alter provider examples, record this as a documented deviation following the [Scope Exceptions & Deviations from Standards](#scope-exceptions--deviations-from-standards) section.
 
 ## Executive Summary: Terraform Philosophy
 
