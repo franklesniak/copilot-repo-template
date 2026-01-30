@@ -1139,7 +1139,7 @@ resource "aws_instance" "web_server" {
 
 **Requirements:**
 
-- Run `terraform plan` before applying to verify no unexpected changes
+- You **MUST** run `terraform plan` before applying the `moved` block changes and again after applying/refactoring to verify that no unexpected changes remain
 - The `moved` block **SHOULD** remain in configuration until all environments have been updated
 - After all state has been migrated, `moved` blocks **MAY** be removed
 
@@ -1161,8 +1161,8 @@ import {
 
 resource "aws_instance" "example" {
   # Configuration matching the imported resource
-  ami           = "ami-0123456789abcdef0"
-  instance_type = "t3.micro"
+  ami           = "REPLACE_ME_AMI_ID"
+  instance_type = "REPLACE_ME_INSTANCE_TYPE"
   # ...
 }
 ```
@@ -1170,8 +1170,8 @@ resource "aws_instance" "example" {
 **Requirements:**
 
 - The resource configuration **MUST** match the existing infrastructure
-- Run `terraform plan` to verify the import will not cause changes
-- After successful import and apply, `import` blocks **SHOULD** be removed from configuration
+- You **MUST** run `terraform plan` before applying imports to verify the import will not cause unintended changes
+- After successful import and apply, you **SHOULD** run `terraform plan` again to verify no further changes are pending, and `import` blocks **SHOULD** then be removed from configuration
 
 ### Removing Resources from State with removed Blocks
 
