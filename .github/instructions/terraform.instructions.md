@@ -2490,7 +2490,7 @@ data "azurerm_key_vault" "main" {
 }
 
 data "azurerm_key_vault_secret" "db_password" {
-  name         = "database-password"
+  name         = "REPLACE_ME_SECRET_NAME"
   key_vault_id = data.azurerm_key_vault.main.id
 }
 
@@ -2504,7 +2504,7 @@ resource "azurerm_mssql_server" "main" {
 
 ```hcl
 data "google_secret_manager_secret_version" "db_password" {
-  secret  = "database-password"
+  secret  = "REPLACE_ME_SECRET_NAME"
   project = var.project_id
 }
 
