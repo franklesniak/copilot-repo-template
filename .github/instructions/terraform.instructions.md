@@ -12,7 +12,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - **Status:** Active
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-01-30
-- **Scope:** Defines Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in this repository. Covers style, formatting, naming conventions, file organization, variable and output design, resource configuration, module design, state management, security best practices, provider management, testing, and documentation requirements.
+- **Scope:** Defines Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in this repository. Covers style, formatting, naming conventions, file organization, variable and output design, resource configuration, module design, refactoring, state management, security best practices, provider management, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
 ## Table of Contents
