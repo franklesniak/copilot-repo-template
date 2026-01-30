@@ -852,23 +852,21 @@ The `check` block (Terraform 1.5+) provides a mechanism for continuous validatio
 
 ### When to Use check Blocks
 
-`check` blocks **MAY** be used for:
+`check` blocks **MAY** be used for deterministic validations that rely only on Terraform configuration, state, and resource attributes, such as:
 
-- **Health checks:** Verify that deployed resources remain healthy
-- **External system validation:** Confirm that external dependencies meet expectations
-- **Post-deployment verification:** Validate that the infrastructure is functioning correctly
+- **Policy conformance:** Ensure resources comply with tagging, encryption, and sizing standards
+- **Configuration invariants:** Assert relationships between resources (for example, capacity, counts, or naming patterns)
+- **Drift and safety nets:** Highlight situations where the actual infrastructure shape no longer matches declared expectations
+
+In this repository, `check` block `assert` conditions **MUST** be deterministic and **MUST NOT** introduce network calls or depend on live external service reachability. Use dedicated observability/monitoring tooling for runtime health checks and external dependency validation.
 
 ### check Block Syntax
 
 ```hcl
-check "api_health" {
-  data "http" "health_endpoint" {
-    url = "https://${aws_lb.main.dns_name}/health"
-  }
-
+check "alb_has_listeners" {
   assert {
-    condition     = data.http.health_endpoint.status_code == 200
-    error_message = "API health check failed after deployment."
+    condition     = length(aws_lb_listener.app) > 0
+    error_message = "Application load balancer must have at least one listener configured."
   }
 }
 ```
@@ -880,7 +878,7 @@ check "api_health" {
 | **Causes failure** | No (warning only) | Yes (error) |
 | **Runs during** | Every plan/apply | Resource creation/update |
 | **Scope** | Configuration-wide | Resource-specific |
-| **Use case** | Ongoing health checks | Input/output validation |
+| **Use case** | Ongoing invariant checks | Input/output validation |
 
 ### Best Practices
 
