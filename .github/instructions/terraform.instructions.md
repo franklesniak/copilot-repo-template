@@ -18,6 +18,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 ## Table of Contents
 
 - [Keywords](#keywords)
+- [Placeholder Convention (`REPLACE_ME_*`)](#placeholder-convention-replace_me_)
 - [Quick Reference Checklist](#quick-reference-checklist)
 - [Executive Summary: Terraform Philosophy](#executive-summary-terraform-philosophy)
 - [Formatting and Style](#formatting-and-style)
@@ -52,6 +53,51 @@ The key words "**MUST**", "**MUST NOT**", "**REQUIRED**", "**SHALL**", "**SHALL 
 - **SHOULD** / **RECOMMENDED** — Strong recommendation. Valid reasons may exist to deviate, but implications must be understood.
 - **SHOULD NOT** / **NOT RECOMMENDED** — Strong discouragement. Valid reasons may exist to do otherwise, but implications must be understood.
 - **MAY** / **OPTIONAL** — Truly optional. Implementations can choose to include or omit.
+
+## Placeholder Convention (`REPLACE_ME_*`)
+
+This document uses the `REPLACE_ME_*` placeholder convention for values that **MUST** be customized before use. This convention applies across all cloud providers (AWS, Azure, GCP) and ensures that examples remain portable while clearly identifying required customizations.
+
+### Purpose
+
+Placeholders serve multiple purposes:
+
+- **Safety:** Prevent accidental deployment of example values to production
+- **Clarity:** Clearly identify which values require organization-specific configuration
+- **Searchability:** Enable easy discovery of all values requiring customization via `grep -r "REPLACE_ME"`
+- **Consistency:** Provide a uniform approach across all examples regardless of provider
+
+### Standard Placeholders
+
+The following standard placeholders **SHOULD** be used consistently throughout this document and in derived configurations:
+
+| Placeholder | Description | Example Replacement |
+| --- | --- | --- |
+| `REPLACE_ME_REGION` | Cloud provider region | `us-east-1`, `eastus`, `us-central1` |
+| `REPLACE_ME_STATE_BUCKET` | State storage bucket/container name | `my-org-terraform-state` |
+| `REPLACE_ME_LOCK_TABLE` | State locking table (AWS DynamoDB) | `terraform-locks` |
+| `REPLACE_ME_RESOURCE_GROUP` | Azure resource group name | `rg-terraform-state` |
+| `REPLACE_ME_STORAGE_ACCOUNT` | Azure storage account name | `stterraformstate` |
+| `REPLACE_ME_CONTAINER` | Azure blob container name | `tfstate` |
+| `REPLACE_ME_PROJECT_ID` | GCP project ID | `my-gcp-project-123` |
+| `REPLACE_ME_ORG` | Terraform Cloud/Enterprise organization | `my-organization` |
+| `REPLACE_ME_WORKSPACE` | Terraform Cloud/Enterprise workspace | `prod-infrastructure` |
+| `REPLACE_ME_INSTANCE_ID` | Cloud instance/resource ID for imports | `i-1234567890abcdef0` |
+| `REPLACE_ME_AMI_ID` | AWS AMI ID | `ami-0abcdef1234567890` |
+| `REPLACE_ME_SUBSCRIPTION_ID` | Azure subscription ID | `00000000-0000-0000-0000-000000000000` |
+| `REPLACE_ME_TENANT_ID` | Azure tenant ID | `00000000-0000-0000-0000-000000000000` |
+
+### Usage Rules
+
+- **[All]** Authors **MUST** use `REPLACE_ME_*` placeholders for values that require customization
+- **[All]** Placeholder names **MUST** use `UPPER_SNAKE_CASE` with the `REPLACE_ME_` prefix
+- **[All]** Placeholder names **SHOULD** be descriptive (e.g., `REPLACE_ME_STATE_BUCKET` not `REPLACE_ME_BUCKET`)
+- **[All]** When adopting configurations, search for all placeholders using `grep -r "REPLACE_ME"` and replace with actual values
+- **[All]** Production code **MUST NOT** contain any `REPLACE_ME_*` placeholders
+
+### Provider-Specific Notes
+
+This document provides examples for multiple cloud providers (AWS, Azure, GCP). When examples include provider-specific placeholders, each provider's version is labeled accordingly. For guidance on removing examples for providers you don't use, see the [Scope Exceptions & Deviations from Standards](#scope-exceptions--deviations-from-standards) section and the [Copilot Terraform Instructions Configuration](../../OPTIONAL_CONFIGURATIONS.md#copilot-terraform-instructions-configuration) guide.
 
 ## Quick Reference Checklist
 
@@ -200,7 +246,7 @@ The following guidelines apply to all code authors, including human developers a
 - **[All]** Authors **SHOULD NOT** assume a default cloud provider; when the provider is not specified, authors **SHOULD** use provider-agnostic examples and document that provider selection is required
 - **[All]** Authors **SHOULD** include `description` for all variables and outputs, and use `sensitive = true` as appropriate
 - **[All]** Authors **MUST NOT** modify lock files (`.terraform.lock.hcl`) or commit state unless explicitly required
-- **[All]** Authors **MUST** use placeholder markers following the `REPLACE_ME_*` pattern (e.g., `REPLACE_ME_BUCKET`, `REPLACE_ME_REGION`) for values that require customization
+- **[All]** Authors **MUST** use placeholder markers following the `REPLACE_ME_*` pattern for values that require customization → [Placeholder Convention](#placeholder-convention-replace_me_)
 
 ## Executive Summary: Terraform Philosophy
 
@@ -490,6 +536,8 @@ Standard file organization for Terraform projects:
 
 Every Terraform directory **MUST** have a `versions.tf` file with Terraform and provider version constraints:
 
+**AWS Example:**
+
 ```hcl
 # versions.tf
 
@@ -505,9 +553,45 @@ terraform {
 }
 ```
 
+**Azure Example:**
+
+```hcl
+# versions.tf
+
+terraform {
+  required_version = ">= 1.6.0"
+
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
+    }
+  }
+}
+```
+
+**GCP Example:**
+
+```hcl
+# versions.tf
+
+terraform {
+  required_version = ">= 1.6.0"
+
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 5.0"
+    }
+  }
+}
+```
+
 ### Provider Configuration File
 
 Root modules **MUST** have a `providers.tf` file with provider configuration:
+
+**AWS Example:**
 
 ```hcl
 # providers.tf
@@ -525,9 +609,38 @@ provider "aws" {
 }
 ```
 
+**Azure Example:**
+
+```hcl
+# providers.tf
+
+provider "azurerm" {
+  features {}
+
+  subscription_id = var.subscription_id
+}
+```
+
+> **Note:** Azure does not support provider-level default tags. Use the `azurerm_resource_group` or resource-level `tags` blocks consistently across resources.
+
+**GCP Example:**
+
+```hcl
+# providers.tf
+
+provider "google" {
+  project = var.project_id
+  region  = var.region
+}
+```
+
+> **Note:** GCP does not support provider-level default labels. Apply labels consistently at the resource level or use a `locals` block for common labels.
+
 ### Backend Configuration
 
 Root modules **MUST** configure a remote backend, either in `backend.tf` or within the `terraform` block:
+
+**AWS Example:**
 
 ```hcl
 # backend.tf
@@ -543,11 +656,39 @@ terraform {
 }
 ```
 
+**Azure Example:**
+
+```hcl
+# backend.tf
+
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "REPLACE_ME_RESOURCE_GROUP"
+    storage_account_name = "REPLACE_ME_STORAGE_ACCOUNT"
+    container_name       = "REPLACE_ME_CONTAINER"
+    key                  = "environments/prod/terraform.tfstate"
+  }
+}
+```
+
+**GCP Example:**
+
+```hcl
+# backend.tf
+
+terraform {
+  backend "gcs" {
+    bucket = "REPLACE_ME_STATE_BUCKET"
+    prefix = "environments/prod"
+  }
+}
+```
+
 #### Partial Backend Configuration
 
 As an alternative to placeholder values, Terraform supports **partial backend configuration**. This pattern separates static configuration (committed to version control) from dynamic values (provided at runtime):
 
-**Backend file (committed):**
+**AWS Backend file (committed):**
 
 ```hcl
 # backend.tf - partial configuration
@@ -561,7 +702,7 @@ terraform {
 }
 ```
 
-**Backend config file (environment-specific):**
+**AWS Backend config file (environment-specific):**
 
 ```hcl
 # config/prod.s3.tfbackend
@@ -571,10 +712,56 @@ region         = "us-east-1"
 dynamodb_table = "terraform-locks"
 ```
 
+**Azure Backend file (committed):**
+
+```hcl
+# backend.tf - partial configuration
+
+terraform {
+  backend "azurerm" {
+    key = "environments/prod/terraform.tfstate"
+    # resource_group_name, storage_account_name, container_name provided via -backend-config
+  }
+}
+```
+
+**Azure Backend config file (environment-specific):**
+
+```hcl
+# config/prod.azurerm.tfbackend
+
+resource_group_name  = "rg-terraform-state"
+storage_account_name = "stterraformstate"
+container_name       = "tfstate"
+```
+
+**GCP Backend file (committed):**
+
+```hcl
+# backend.tf - partial configuration
+
+terraform {
+  backend "gcs" {
+    prefix = "environments/prod"
+    # bucket provided via -backend-config
+  }
+}
+```
+
+**GCP Backend config file (environment-specific):**
+
+```hcl
+# config/prod.gcs.tfbackend
+
+bucket = "my-org-terraform-state"
+```
+
 **Usage:**
 
 ```bash
-terraform init -backend-config=config/prod.s3.tfbackend
+terraform init -backend-config=config/prod.s3.tfbackend      # AWS
+terraform init -backend-config=config/prod.azurerm.tfbackend  # Azure
+terraform init -backend-config=config/prod.gcs.tfbackend      # GCP
 ```
 
 This pattern is useful when:
@@ -583,7 +770,7 @@ This pattern is useful when:
 - Teams prefer runtime configuration over placeholder replacement
 - CI/CD pipelines inject backend configuration dynamically
 
-Both the `REPLACE_ME_*` placeholder pattern and partial configuration pattern are valid approaches. Choose the pattern that best fits your team's workflow.
+Both the [`REPLACE_ME_*` placeholder pattern](#placeholder-convention-replace_me_) and partial configuration pattern are valid approaches. Choose the pattern that best fits your team's workflow.
 
 ### Variable Files (.tfvars)
 
@@ -1112,6 +1299,8 @@ All taggable resources **MUST** include these tags:
 
 Root modules **SHOULD** use provider-level default tags to ensure consistent tagging:
 
+**AWS Example:**
+
 ```hcl
 provider "aws" {
   region = var.aws_region
@@ -1127,9 +1316,13 @@ provider "aws" {
 }
 ```
 
+> **Note:** Azure and GCP do not support provider-level default tags/labels. For these providers, use a `locals` block to define common tags and apply them consistently at the resource level. See the [Local Tags Pattern](#local-tags-pattern) section below.
+
 ### Local Tags Pattern
 
-Use locals for computed or merged tags:
+Use locals for computed or merged tags. This pattern is **REQUIRED** for Azure and GCP where provider-level default tags are not supported:
+
+**AWS/Azure/GCP Example (Provider-Agnostic):**
 
 ```hcl
 locals {
@@ -1144,6 +1337,28 @@ locals {
   instance_tags = merge(local.common_tags, {
     Role = "web-server"
   })
+}
+```
+
+**Azure Example - Applying local tags to resources:**
+
+```hcl
+resource "azurerm_resource_group" "main" {
+  name     = "rg-${var.project_name}-${var.environment}"
+  location = var.location
+  tags     = local.common_tags
+}
+```
+
+**GCP Example - Applying local labels to resources:**
+
+```hcl
+resource "google_compute_instance" "main" {
+  name         = "${var.project_name}-${var.environment}"
+  machine_type = var.machine_type
+  zone         = var.zone
+
+  labels = local.common_tags
 }
 ```
 
@@ -1692,6 +1907,8 @@ terraform state pull > terraform.tfstate.backup
 
 Root modules **MUST** configure a remote backend for team environments:
 
+**AWS Example:**
+
 ```hcl
 terraform {
   backend "s3" {
@@ -1704,7 +1921,31 @@ terraform {
 }
 ```
 
-> **Placeholder Values:** The example above uses placeholder values (e.g., `REPLACE_ME_STATE_BUCKET`). Replace these with your organization's actual values when adopting this template.
+**Azure Example:**
+
+```hcl
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "REPLACE_ME_RESOURCE_GROUP"
+    storage_account_name = "REPLACE_ME_STORAGE_ACCOUNT"
+    container_name       = "REPLACE_ME_CONTAINER"
+    key                  = "environments/prod/terraform.tfstate"
+  }
+}
+```
+
+**GCP Example:**
+
+```hcl
+terraform {
+  backend "gcs" {
+    bucket = "REPLACE_ME_STATE_BUCKET"
+    prefix = "environments/prod"
+  }
+}
+```
+
+> **Placeholder Values:** The examples above use placeholder values (e.g., `REPLACE_ME_STATE_BUCKET`). Replace these with your organization's actual values when adopting this template. See [Placeholder Convention](#placeholder-convention-replace_me_) for the complete list of standard placeholders.
 
 **Backend requirements:**
 
@@ -1750,8 +1991,10 @@ The following sections **MAY** not apply when using Terraform Cloud/Enterprise:
 
 State backends **MUST** enable encryption:
 
+**AWS Example:**
+
 ```hcl
-# S3 backend with encryption (example - replace values)
+# S3 backend with encryption
 terraform {
   backend "s3" {
     bucket  = "REPLACE_ME_STATE_BUCKET"
@@ -1762,12 +2005,44 @@ terraform {
 }
 ```
 
+**Azure Example:**
+
+```hcl
+# Azure Storage backend (encryption is enabled by default on Azure Storage accounts)
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "REPLACE_ME_RESOURCE_GROUP"
+    storage_account_name = "REPLACE_ME_STORAGE_ACCOUNT"
+    container_name       = "REPLACE_ME_CONTAINER"
+    key                  = "prod/terraform.tfstate"
+  }
+}
+```
+
+> **Note:** Azure Storage accounts have encryption enabled by default. Ensure your storage account is configured with appropriate encryption settings.
+
+**GCP Example:**
+
+```hcl
+# GCS backend (encryption is enabled by default on GCS buckets)
+terraform {
+  backend "gcs" {
+    bucket = "REPLACE_ME_STATE_BUCKET"
+    prefix = "prod"
+  }
+}
+```
+
+> **Note:** GCS buckets are encrypted by default using Google-managed encryption keys. For additional security, configure Customer-Managed Encryption Keys (CMEK).
+
 ### State Locking
 
 State backends **MUST** support and enable state locking:
 
+**AWS Example:**
+
 ```hcl
-# S3 backend with DynamoDB locking (example - replace values)
+# S3 backend with DynamoDB locking
 terraform {
   backend "s3" {
     bucket         = "REPLACE_ME_STATE_BUCKET"
@@ -1778,6 +2053,36 @@ terraform {
   }
 }
 ```
+
+**Azure Example:**
+
+```hcl
+# Azure Storage backend (locking is built-in via blob leases)
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "REPLACE_ME_RESOURCE_GROUP"
+    storage_account_name = "REPLACE_ME_STORAGE_ACCOUNT"
+    container_name       = "REPLACE_ME_CONTAINER"
+    key                  = "prod/terraform.tfstate"
+  }
+}
+```
+
+> **Note:** Azure Storage backend uses blob leases for state locking automatically. No additional configuration is required.
+
+**GCP Example:**
+
+```hcl
+# GCS backend (locking is built-in)
+terraform {
+  backend "gcs" {
+    bucket = "REPLACE_ME_STATE_BUCKET"
+    prefix = "prod"
+  }
+}
+```
+
+> **Note:** GCS backend supports state locking natively. No additional configuration is required.
 
 ### No Local State in Production
 
@@ -1934,7 +2239,7 @@ Provider aliasing enables multiple instances of the same provider for multi-regi
 - Multi-account architectures
 - Resources requiring different provider configurations
 
-**Defining aliased providers:**
+**AWS Example - Defining aliased providers:**
 
 ```hcl
 # providers.tf
@@ -1955,18 +2260,100 @@ provider "aws" {
 }
 ```
 
-**Using aliased providers in resources:**
+**AWS Example - Using aliased providers in resources:**
 
 ```hcl
 # Use default provider
 resource "aws_s3_bucket" "primary" {
-  bucket = "my-primary-bucket"
+  bucket = "REPLACE_ME_PRIMARY_BUCKET"
 }
 
 # Use aliased provider
 resource "aws_s3_bucket" "replica" {
   provider = aws.west
-  bucket   = "my-replica-bucket"
+  bucket   = "REPLACE_ME_REPLICA_BUCKET"
+}
+```
+
+**Azure Example - Defining aliased providers:**
+
+```hcl
+# providers.tf
+
+provider "azurerm" {
+  features {}
+  subscription_id = var.primary_subscription_id
+  # Default provider (no alias)
+}
+
+provider "azurerm" {
+  alias           = "secondary"
+  features {}
+  subscription_id = var.secondary_subscription_id
+}
+```
+
+**Azure Example - Using aliased providers in resources:**
+
+```hcl
+# Use default provider
+resource "azurerm_storage_account" "primary" {
+  name                     = "REPLACE_ME_PRIMARY_STORAGE"
+  resource_group_name      = azurerm_resource_group.primary.name
+  location                 = azurerm_resource_group.primary.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+}
+
+# Use aliased provider
+resource "azurerm_storage_account" "secondary" {
+  provider                 = azurerm.secondary
+  name                     = "REPLACE_ME_SECONDARY_STORAGE"
+  resource_group_name      = azurerm_resource_group.secondary.name
+  location                 = azurerm_resource_group.secondary.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+}
+```
+
+**GCP Example - Defining aliased providers:**
+
+```hcl
+# providers.tf
+
+provider "google" {
+  project = var.primary_project_id
+  region  = "us-central1"
+  # Default provider (no alias)
+}
+
+provider "google" {
+  alias   = "europe"
+  project = var.primary_project_id
+  region  = "europe-west1"
+}
+
+provider "google" {
+  alias   = "secondary_project"
+  project = var.secondary_project_id
+  region  = "us-central1"
+}
+```
+
+**GCP Example - Using aliased providers in resources:**
+
+```hcl
+# Use default provider
+resource "google_storage_bucket" "primary" {
+  name     = "REPLACE_ME_PRIMARY_BUCKET"
+  location = "US"
+}
+
+# Use aliased provider for different region
+resource "google_storage_bucket" "europe" {
+  provider = google.europe
+  name     = "REPLACE_ME_EUROPE_BUCKET"
+  location = "EU"
 }
 ```
 
@@ -2034,11 +2421,22 @@ variable "db_password" {
 ```
 
 ```bash
+# AWS
 export TF_VAR_db_password="$(aws secretsmanager get-secret-value --secret-id my-secret --query SecretString --output text)"
+terraform apply
+
+# Azure
+export TF_VAR_db_password="$(az keyvault secret show --vault-name my-vault --name my-secret --query value -o tsv)"
+terraform apply
+
+# GCP
+export TF_VAR_db_password="$(gcloud secrets versions access latest --secret=my-secret)"
 terraform apply
 ```
 
-**Pattern 2: AWS Secrets Manager**
+**Pattern 2: Cloud Provider Secret Managers**
+
+**AWS Example - Secrets Manager:**
 
 ```hcl
 data "aws_secretsmanager_secret_version" "db_password" {
@@ -2050,16 +2448,64 @@ resource "aws_db_instance" "main" {
 }
 ```
 
-**Pattern 3: HashiCorp Vault**
+**Azure Example - Key Vault:**
+
+```hcl
+data "azurerm_key_vault" "main" {
+  name                = "REPLACE_ME_KEYVAULT_NAME"
+  resource_group_name = "REPLACE_ME_RESOURCE_GROUP"
+}
+
+data "azurerm_key_vault_secret" "db_password" {
+  name         = "database-password"
+  key_vault_id = data.azurerm_key_vault.main.id
+}
+
+resource "azurerm_mssql_server" "main" {
+  administrator_login_password = data.azurerm_key_vault_secret.db_password.value
+  # ... other configuration
+}
+```
+
+**GCP Example - Secret Manager:**
+
+```hcl
+data "google_secret_manager_secret_version" "db_password" {
+  secret  = "database-password"
+  project = var.project_id
+}
+
+resource "google_sql_database_instance" "main" {
+  # Password accessed via: data.google_secret_manager_secret_version.db_password.secret_data
+  # ... other configuration
+}
+```
+
+**Pattern 3: HashiCorp Vault (Provider-Agnostic)**
 
 ```hcl
 data "vault_generic_secret" "db_creds" {
   path = "secret/data/database"
 }
 
+# AWS Example
 resource "aws_db_instance" "main" {
   username = data.vault_generic_secret.db_creds.data["username"]
   password = data.vault_generic_secret.db_creds.data["password"]
+}
+
+# Azure Example
+resource "azurerm_mssql_server" "main" {
+  administrator_login          = data.vault_generic_secret.db_creds.data["username"]
+  administrator_login_password = data.vault_generic_secret.db_creds.data["password"]
+  # ... other configuration
+}
+
+# GCP Example
+resource "google_sql_user" "main" {
+  name     = data.vault_generic_secret.db_creds.data["username"]
+  password = data.vault_generic_secret.db_creds.data["password"]
+  instance = google_sql_database_instance.main.name
 }
 ```
 
@@ -2092,7 +2538,9 @@ State files contain sensitive data and **MUST** be protected.
 3. **No local state in production:** Local state files **MUST NOT** be used for production
 4. **State locking:** Backends **MUST** support state locking
 
-#### S3 Backend Security Configuration
+#### Backend Security Configuration
+
+**AWS Example:**
 
 ```hcl
 terraform {
@@ -2103,6 +2551,34 @@ terraform {
     encrypt        = true                    # REQUIRED
     dynamodb_table = "REPLACE_ME_LOCK_TABLE"  # REQUIRED for locking
     # Use IAM role or credentials from environment
+  }
+}
+```
+
+**Azure Example:**
+
+```hcl
+terraform {
+  backend "azurerm" {
+    resource_group_name  = "REPLACE_ME_RESOURCE_GROUP"
+    storage_account_name = "REPLACE_ME_STORAGE_ACCOUNT"
+    container_name       = "REPLACE_ME_CONTAINER"
+    key                  = "prod/terraform.tfstate"
+    # Encryption and locking are enabled by default on Azure Storage
+    # Use managed identity or service principal for authentication
+  }
+}
+```
+
+**GCP Example:**
+
+```hcl
+terraform {
+  backend "gcs" {
+    bucket = "REPLACE_ME_STATE_BUCKET"
+    prefix = "prod"
+    # Encryption and locking are enabled by default on GCS
+    # Use service account for authentication
   }
 }
 ```
@@ -2118,8 +2594,9 @@ IAM policies and resource permissions **MUST** follow least-privilege:
 - Avoid wildcard actions (`*`) except when truly needed
 - Use conditions to further restrict access
 
+**AWS Example - Specific permissions (GOOD):**
+
 ```hcl
-# GOOD: Specific permissions
 resource "aws_iam_policy" "s3_reader" {
   name = "s3-reader"
 
@@ -2140,8 +2617,11 @@ resource "aws_iam_policy" "s3_reader" {
     ]
   })
 }
+```
 
-# BAD: Overly permissive
+**AWS Example - Overly permissive (BAD):**
+
+```hcl
 resource "aws_iam_policy" "bad_example" {
   policy = jsonencode({
     Statement = [{
@@ -2150,6 +2630,46 @@ resource "aws_iam_policy" "bad_example" {
       Resource = ["*"]           # TOO BROAD
     }]
   })
+}
+```
+
+**Azure Example - Specific permissions (GOOD):**
+
+```hcl
+resource "azurerm_role_assignment" "storage_reader" {
+  scope                = azurerm_storage_account.data.id
+  role_definition_name = "Storage Blob Data Reader"
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
+}
+```
+
+**Azure Example - Overly permissive (BAD):**
+
+```hcl
+resource "azurerm_role_assignment" "bad_example" {
+  scope                = data.azurerm_subscription.current.id
+  role_definition_name = "Contributor"  # TOO BROAD - grants write access to entire subscription
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
+}
+```
+
+**GCP Example - Specific permissions (GOOD):**
+
+```hcl
+resource "google_storage_bucket_iam_member" "viewer" {
+  bucket = google_storage_bucket.data.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.app.email}"
+}
+```
+
+**GCP Example - Overly permissive (BAD):**
+
+```hcl
+resource "google_project_iam_member" "bad_example" {
+  project = var.project_id
+  role    = "roles/editor"  # TOO BROAD - grants write access to entire project
+  member  = "serviceAccount:${google_service_account.app.email}"
 }
 ```
 
