@@ -92,6 +92,12 @@ The following standard placeholders **SHOULD** be used consistently throughout t
 | `REPLACE_ME_PRIMARY_STORAGE` | Primary Azure storage account name | `stprimarystorage` |
 | `REPLACE_ME_SECONDARY_STORAGE` | Secondary Azure storage account name | `stsecondarystorage` |
 | `REPLACE_ME_KEYVAULT_NAME` | Azure Key Vault name | `kv-my-org-secrets` |
+| `REPLACE_ME_SECRET_NAME` | Secret name in secret manager | `database-password` |
+| `REPLACE_ME_PRIMARY_REGION` | Primary cloud provider region | `us-east-1`, `eastus`, `us-central1` |
+| `REPLACE_ME_WEST_REGION` | West/secondary region (AWS) | `us-west-2` |
+| `REPLACE_ME_EU_REGION` | Europe region (AWS) | `eu-west-1` |
+| `REPLACE_ME_EUROPE_REGION` | Europe region (GCP) | `europe-west1` |
+| `REPLACE_ME_SECONDARY_REGION` | Secondary region | `us-west-2`, `westus2`, `us-west1` |
 
 ### Usage Rules
 
@@ -103,7 +109,7 @@ The following standard placeholders **SHOULD** be used consistently throughout t
 
 ### Provider-Specific Notes
 
-This document provides examples for multiple cloud providers (AWS, Azure, GCP). When examples include provider-specific placeholders, each provider's version is labeled accordingly. For guidance on removing examples for providers you don't use, see the [Scope Exceptions & Deviations from Standards](#scope-exceptions--deviations-from-standards) section and the [Copilot Terraform Instructions Configuration](../../OPTIONAL_CONFIGURATIONS.md#copilot-terraform-instructions-configuration) guide.
+This document provides examples for multiple cloud providers (AWS, Azure, GCP). When examples include provider-specific placeholders, each provider's version is labeled accordingly. For step-by-step guidance and a checklist for removing examples for providers you do not use, see the [Copilot Terraform Instructions Configuration](../../OPTIONAL_CONFIGURATIONS.md#copilot-terraform-instructions-configuration) guide. If you remove or substantially alter provider examples, record this as a documented deviation following the [Scope Exceptions & Deviations from Standards](#scope-exceptions--deviations-from-standards) section.
 
 ## Quick Reference Checklist
 
@@ -736,9 +742,9 @@ terraform {
 ```hcl
 # config/prod.azurerm.tfbackend
 
-resource_group_name  = "rg-terraform-state"
-storage_account_name = "stterraformstate"
-container_name       = "tfstate"
+resource_group_name  = "REPLACE_ME_RESOURCE_GROUP"
+storage_account_name = "REPLACE_ME_STORAGE_ACCOUNT"
+container_name       = "REPLACE_ME_CONTAINER"
 ```
 
 **GCP Backend file (committed):**
@@ -759,7 +765,7 @@ terraform {
 ```hcl
 # config/prod.gcs.tfbackend
 
-bucket = "my-org-terraform-state"
+bucket = "REPLACE_ME_STATE_BUCKET"
 ```
 
 **Usage:**
@@ -1328,7 +1334,7 @@ provider "aws" {
 
 Use locals for computed or merged tags. This pattern is **REQUIRED** for Azure and GCP where provider-level default tags are not supported:
 
-**AWS/Azure/GCP Example (Provider-Agnostic):**
+**AWS/Azure Example (Tags):**
 
 ```hcl
 locals {
@@ -1345,6 +1351,27 @@ locals {
   })
 }
 ```
+
+**GCP Example (Labels - lowercase keys required):**
+
+```hcl
+locals {
+  # GCP labels must use lowercase keys
+  common_labels = {
+    name        = "${var.project_name}-${var.environment}"
+    environment = var.environment
+    project     = var.project_name
+    managed_by  = "terraform"
+  }
+
+  # Merge common labels with resource-specific labels
+  instance_labels = merge(local.common_labels, {
+    role = "web-server"
+  })
+}
+```
+
+> **Note:** GCP label keys must be lowercase and can only contain lowercase letters, numeric characters, underscores, and dashes. AWS and Azure tags support mixed-case keys.
 
 **Azure Example - Applying local tags to resources:**
 
@@ -1364,7 +1391,7 @@ resource "google_compute_instance" "main" {
   machine_type = var.machine_type
   zone         = var.zone
 
-  labels = local.common_tags
+  labels = local.common_labels
 }
 ```
 
@@ -2251,18 +2278,18 @@ Provider aliasing enables multiple instances of the same provider for multi-regi
 # providers.tf
 
 provider "aws" {
-  region = "us-east-1"
+  region = "REPLACE_ME_PRIMARY_REGION"  # e.g., us-east-1
   # Default provider (no alias)
 }
 
 provider "aws" {
   alias  = "west"
-  region = "us-west-2"
+  region = "REPLACE_ME_WEST_REGION"  # e.g., us-west-2
 }
 
 provider "aws" {
   alias  = "eu"
-  region = "eu-west-1"
+  region = "REPLACE_ME_EU_REGION"  # e.g., eu-west-1
 }
 ```
 
@@ -2329,20 +2356,20 @@ resource "azurerm_storage_account" "secondary" {
 
 provider "google" {
   project = var.primary_project_id
-  region  = "us-central1"
+  region  = "REPLACE_ME_PRIMARY_REGION"  # e.g., us-central1
   # Default provider (no alias)
 }
 
 provider "google" {
   alias   = "europe"
   project = var.primary_project_id
-  region  = "europe-west1"
+  region  = "REPLACE_ME_EUROPE_REGION"  # e.g., europe-west1
 }
 
 provider "google" {
   alias   = "secondary_project"
   project = var.secondary_project_id
-  region  = "us-central1"
+  region  = "REPLACE_ME_SECONDARY_REGION"  # e.g., us-central1
 }
 ```
 
@@ -2428,15 +2455,15 @@ variable "db_password" {
 
 ```bash
 # AWS
-export TF_VAR_db_password="$(aws secretsmanager get-secret-value --secret-id my-secret --query SecretString --output text)"
+export TF_VAR_db_password="$(aws secretsmanager get-secret-value --secret-id REPLACE_ME_SECRET_NAME --query SecretString --output text)"
 terraform apply
 
 # Azure
-export TF_VAR_db_password="$(az keyvault secret show --vault-name my-vault --name my-secret --query value -o tsv)"
+export TF_VAR_db_password="$(az keyvault secret show --vault-name REPLACE_ME_KEYVAULT_NAME --name REPLACE_ME_SECRET_NAME --query value -o tsv)"
 terraform apply
 
 # GCP
-export TF_VAR_db_password="$(gcloud secrets versions access latest --secret=my-secret)"
+export TF_VAR_db_password="$(gcloud secrets versions access latest --secret=REPLACE_ME_SECRET_NAME)"
 terraform apply
 ```
 
