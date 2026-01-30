@@ -117,9 +117,9 @@ This checklist provides a quick reference for both human developers and LLMs (li
 
 ### Refactoring
 
-- **[All]** Resource renames **MUST** use `moved` blocks instead of manual state commands → [Refactoring with moved blocks](#refactoring-with-moved-blocks)
-- **[All]** Existing infrastructure imports **SHOULD** use `import` blocks instead of CLI commands → [Importing Resources with import blocks](#importing-resources-with-import-blocks)
-- **[All]** Resources removed from management **SHOULD** use `removed` blocks → [Removing Resources from State with removed blocks](#removing-resources-from-state-with-removed-blocks)
+- **[All]** Resource renames **MUST** use `moved` blocks instead of manual state commands → [Refactoring with Moved Blocks](#refactoring-with-moved-blocks)
+- **[All]** Existing infrastructure imports **SHOULD** use `import` blocks instead of CLI commands → [Importing Resources with Import Blocks](#importing-resources-with-import-blocks)
+- **[All]** Resources removed from management **SHOULD** use `removed` blocks → [Removing Resources from State with Removed Blocks](#removing-resources-from-state-with-removed-blocks)
 - **[All]** Direct state manipulation commands **SHOULD** be avoided → [State Manipulation Commands](#state-manipulation-commands)
 
 ### State Management
@@ -1113,7 +1113,7 @@ module "internal_module" {
 
 Terraform provides declarative blocks for safely refactoring infrastructure without manual state manipulation. These blocks enable auditable, version-controlled changes that can be reviewed and tested before applying.
 
-### Refactoring with moved blocks
+### Refactoring with Moved Blocks
 
 The `moved` block (Terraform 1.1+) enables renaming or restructuring resources without destroying and recreating them. This is essential for:
 
@@ -1143,7 +1143,7 @@ resource "aws_instance" "web_server" {
 - The `moved` block **SHOULD** remain in configuration until all environments have been updated
 - After all state has been migrated, `moved` blocks **MAY** be removed
 
-### Importing Resources with import blocks
+### Importing Resources with Import Blocks
 
 The `import` block (Terraform 1.5+) brings existing infrastructure under Terraform management. This is preferred over the `terraform import` CLI command because:
 
@@ -1173,7 +1173,7 @@ resource "aws_instance" "example" {
 - You **MUST** run `terraform plan` before applying imports to verify the import will not cause unintended changes
 - After successful import and apply, you **SHOULD** run `terraform plan` again to verify no further changes are pending, and `import` blocks **SHOULD** then be removed from configuration
 
-### Removing Resources from State with removed blocks
+### Removing Resources from State with Removed Blocks
 
 The `removed` block (Terraform 1.7+) removes resources from Terraform management without destroying the underlying infrastructure. Use cases include:
 
