@@ -242,6 +242,7 @@ The following standard placeholders **SHOULD** be used consistently throughout t
 | `REPLACE_ME_SECONDARY_STORAGE` | Secondary Azure storage account name | `stsecondarystorage` |
 | `REPLACE_ME_KEYVAULT_NAME` | Azure Key Vault name | `kv-my-org-secrets` |
 | `REPLACE_ME_SECRET_NAME` | Secret name in secret manager | `database-password` |
+| `REPLACE_ME_VAULT_SECRET_PATH` | HashiCorp Vault secret path | `secret/data/database` |
 | `REPLACE_ME_PRIMARY_REGION` | Primary cloud provider region | `us-east-1`, `eastus`, `us-central1` |
 | `REPLACE_ME_WEST_REGION` | West/secondary region (AWS) | `us-west-2` |
 | `REPLACE_ME_EU_REGION` | Europe region (AWS) | `eu-west-1` |
@@ -2454,16 +2455,18 @@ variable "db_password" {
 ```
 
 ```bash
+# Choose one of the following exports based on your cloud provider:
+
 # AWS
 export TF_VAR_db_password="$(aws secretsmanager get-secret-value --secret-id REPLACE_ME_SECRET_NAME --query SecretString --output text)"
-terraform apply
 
 # Azure
 export TF_VAR_db_password="$(az keyvault secret show --vault-name REPLACE_ME_KEYVAULT_NAME --name REPLACE_ME_SECRET_NAME --query value -o tsv)"
-terraform apply
 
 # GCP
 export TF_VAR_db_password="$(gcloud secrets versions access latest --secret=REPLACE_ME_SECRET_NAME)"
+
+# Then run terraform apply
 terraform apply
 ```
 
@@ -2473,7 +2476,7 @@ terraform apply
 
 ```hcl
 data "aws_secretsmanager_secret_version" "db_password" {
-  secret_id = "prod/database/password"
+  secret_id = "REPLACE_ME_SECRET_NAME"
 }
 
 resource "aws_db_instance" "main" {
@@ -2518,7 +2521,8 @@ resource "google_sql_database_instance" "main" {
 
 ```hcl
 data "vault_generic_secret" "db_creds" {
-  path = "secret/data/database"
+  # Path MUST be customized for your Vault secret location.
+  path = "REPLACE_ME_VAULT_SECRET_PATH"
 }
 
 # AWS Example
