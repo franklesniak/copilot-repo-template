@@ -874,9 +874,36 @@ Pre-commit hooks run automated checks before each commit, catching issues early 
 - Python installed (3.9+)
 - pre-commit installed globally
 
+> **Why pipx is recommended:**
+>
+> When you install Python packages with CLI tools using `pip`, the executables are placed in a `Scripts` folder (Windows) or `bin` folder (macOS/Linux) that may not be in your system PATH. This can cause "command not found" errors.
+>
+> `pipx` solves this by installing Python CLI tools in isolated environments while automatically managing PATH configuration. This is the [official recommendation from the pre-commit project](https://pre-commit.com/#install).
+>
+> If you prefer to use `pip`, you can invoke pre-commit as a Python module using `python -m pre_commit` (Windows) or `python3 -m pre_commit` (macOS/Linux/FreeBSD) instead of the `pre-commit` command directly.
+
 **Install pre-commit:**
 
 **Windows (PowerShell):**
+
+**Option 1: Using pipx (recommended):**
+
+```powershell
+# First, upgrade pip to the latest version (recommended)
+python -m pip install --upgrade pip
+
+# Install pipx
+python -m pip install pipx
+pipx ensurepath
+```
+
+Close and reopen PowerShell, then:
+
+```powershell
+pipx install pre-commit
+```
+
+**Option 2: Using pip:**
 
 ```powershell
 # First, upgrade pip to the latest version (recommended)
@@ -886,7 +913,34 @@ python -m pip install --upgrade pip
 python -m pip install pre-commit
 ```
 
+> **Note:** When using pip, the `pre-commit` command may not be recognized because Python's `Scripts` folder is not always added to PATH. Use `python -m pre_commit` instead of `pre-commit` for all commands.
+
 **macOS/Linux/FreeBSD:**
+
+**Option 1: Using pipx (recommended):**
+
+```bash
+# First, upgrade pip to the latest version (recommended)
+pip3 install --upgrade pip
+
+# Install pipx
+pip3 install pipx
+pipx ensurepath
+```
+
+Restart your terminal, then:
+
+```bash
+pipx install pre-commit
+```
+
+**Option 2: Using Homebrew (macOS only):**
+
+```bash
+brew install pre-commit
+```
+
+**Option 3: Using pip3:**
 
 ```bash
 # First, upgrade pip to the latest version (recommended)
@@ -894,12 +948,10 @@ pip3 install --upgrade pip
 
 # Then install pre-commit
 pip3 install pre-commit
-# Or using pipx (recommended for system Python conflicts):
-pipx install pre-commit
-# Or using Homebrew (macOS):
-brew install pre-commit
 ```
 
+> **Note:** When using pip3, the `pre-commit` command may not be recognized if Python's `bin` folder is not in your PATH. Use `python3 -m pre_commit` instead of `pre-commit` for all commands.
+>
 > **Troubleshooting:**
 >
 > - **Windows:** If you see `pip: The term 'pip' is not recognized`, use `python -m pip` instead of `pip`.
@@ -931,14 +983,42 @@ If your project doesn't have a `.pre-commit-config.yaml`:
 
 3. Install the hooks:
 
+   **If you installed with pipx or Homebrew:**
+
    ```bash
    pre-commit install
    ```
 
+   **If you installed with pip (Windows):**
+
+   ```powershell
+   python -m pre_commit install
+   ```
+
+   **If you installed with pip3 (macOS/Linux/FreeBSD):**
+
+   ```bash
+   python3 -m pre_commit install
+   ```
+
 4. Run all hooks to verify:
+
+   **If you installed with pipx or Homebrew:**
 
    ```bash
    pre-commit run --all-files
+   ```
+
+   **If you installed with pip (Windows):**
+
+   ```powershell
+   python -m pre_commit run --all-files
+   ```
+
+   **If you installed with pip3 (macOS/Linux/FreeBSD):**
+
+   ```bash
+   python3 -m pre_commit run --all-files
    ```
 
 ### If You Already Have Pre-commit Configured
@@ -966,8 +1046,22 @@ If your project already uses pre-commit:
 
 4. Run all hooks to verify:
 
+   **If you installed with pipx or Homebrew:**
+
    ```bash
    pre-commit run --all-files
+   ```
+
+   **If you installed with pip (Windows):**
+
+   ```powershell
+   python -m pre_commit run --all-files
+   ```
+
+   **If you installed with pip3 (macOS/Linux/FreeBSD):**
+
+   ```bash
+   python3 -m pre_commit run --all-files
    ```
 
 ### Customizing Hooks
@@ -997,11 +1091,13 @@ If your project already uses pre-commit:
 
 | Issue | Platform | Solution |
 | --- | --- | --- |
+| `pre-commit` not recognized | Windows | Use `python -m pre_commit` instead of `pre-commit`, or reinstall using `pipx` |
+| `pre-commit` command not found | macOS/Linux | Use `python3 -m pre_commit` instead of `pre-commit`, or reinstall using `pipx` or Homebrew |
 | `pip` not recognized | Windows | Use `python -m pip` instead of `pip` |
 | `pip` not found | macOS/Linux | Use `pip3` instead of `pip` |
 | `externally-managed-environment` error | Linux/macOS | Use `pipx install pre-commit` or `brew install pre-commit` (macOS) |
 | Python not found | Windows | Reinstall Python and check "Add Python to PATH" |
-| Hooks fail to initialize | All | Run `pre-commit clean && pre-commit install` |
+| Hooks fail to initialize | All | Run `pre-commit clean && pre-commit install` (or `python -m pre_commit clean && python -m pre_commit install` if using pip) |
 
 ---
 

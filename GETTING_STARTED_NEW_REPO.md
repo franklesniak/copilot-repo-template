@@ -727,23 +727,19 @@ After creating the label, uncomment the `- triage` line in each issue template (
 - This is standard practice in the Python community
 - CI workflows install pre-commit separately
 
+> **Why pipx is recommended:**
+>
+> When you install Python packages with CLI tools using `pip`, the executables are placed in a `Scripts` folder (Windows) or `bin` folder (macOS/Linux) that may not be in your system PATH. This can cause "command not found" errors.
+>
+> `pipx` solves this by installing Python CLI tools in isolated environments while automatically managing PATH configuration. This is the [official recommendation from the pre-commit project](https://pre-commit.com/#install).
+>
+> If you prefer to use `pip`, you can invoke pre-commit as a Python module using `python -m pre_commit` (Windows) or `python3 -m pre_commit` (macOS/Linux/FreeBSD) instead of the `pre-commit` command directly.
+
 ### Installation - Windows
 
-#### Option 1: Using pip (recommended for most users)
+#### Option 1: Using pipx (recommended)
 
-Open PowerShell and run:
-
-```powershell
-# First, upgrade pip to the latest version (recommended)
-python -m pip install --upgrade pip
-
-# Then install pre-commit
-python -m pip install pre-commit
-```
-
-#### Option 2: Using pipx (recommended for tool isolation)
-
-[pipx](https://pipx.pypa.io/) installs Python applications in isolated environments. First install pipx if you don't have it:
+[pipx](https://pipx.pypa.io/) installs Python applications in isolated environments while automatically managing PATH configuration. First install pipx if you don't have it:
 
 ```powershell
 # First, upgrade pip to the latest version (recommended)
@@ -760,31 +756,43 @@ Close and reopen PowerShell, then install pre-commit:
 pipx install pre-commit
 ```
 
+#### Option 2: Using pip
+
+Open PowerShell and run:
+
+```powershell
+# First, upgrade pip to the latest version (recommended)
+python -m pip install --upgrade pip
+
+# Then install pre-commit
+python -m pip install pre-commit
+```
+
+> **Note:** When using pip, the `pre-commit` command may not be recognized because Python's `Scripts` folder is not always added to PATH. Use `python -m pre_commit` instead of `pre-commit` for all commands. For example, use `python -m pre_commit --version` to verify installation.
+>
 > **Troubleshooting:** If you see `pip: The term 'pip' is not recognized`, ensure you checked "Add Python to PATH" during Python installation. Using `python -m pip` instead of `pip` directly is more reliable on Windows.
 
 #### Verifying installation
 
+**If you installed with pipx:**
+
 ```powershell
 pre-commit --version
+```
+
+**If you installed with pip:**
+
+```powershell
+python -m pre_commit --version
 ```
 
 You should see output like `pre-commit 4.0.1`.
 
 ### Installation - macOS/Linux/FreeBSD
 
-#### Option 1: Using pip3
+#### Option 1: Using pipx (recommended)
 
-```bash
-# First, upgrade pip to the latest version (recommended)
-pip3 install --upgrade pip
-
-# Then install pre-commit
-pip3 install pre-commit
-```
-
-#### Option 2: Using pipx (recommended for tool isolation)
-
-[pipx](https://pipx.pypa.io/) installs Python applications in isolated environments, avoiding conflicts with system Python. First install pipx if you don't have it:
+[pipx](https://pipx.pypa.io/) installs Python applications in isolated environments while automatically managing PATH configuration. First install pipx if you don't have it:
 
 ```bash
 # First, upgrade pip to the latest version (recommended)
@@ -801,18 +809,38 @@ Restart your terminal, then install pre-commit:
 pipx install pre-commit
 ```
 
-#### Option 3: Using Homebrew (macOS only)
+#### Option 2: Using Homebrew (macOS only)
 
 ```bash
 brew install pre-commit
 ```
 
-> **Troubleshooting:** On newer Linux distributions (Ubuntu 23.04+, Fedora 38+) and some macOS configurations, you may see an `externally-managed-environment` error when using pip. Use **pipx** (Option 2) or **Homebrew** (Option 3, macOS) to install pre-commit in an isolated environment.
+#### Option 3: Using pip3
+
+```bash
+# First, upgrade pip to the latest version (recommended)
+pip3 install --upgrade pip
+
+# Then install pre-commit
+pip3 install pre-commit
+```
+
+> **Note:** When using pip3, the `pre-commit` command may not be recognized if Python's `bin` folder is not in your PATH. Use `python3 -m pre_commit` instead of `pre-commit` for all commands. For example, use `python3 -m pre_commit --version` to verify installation.
+>
+> **Troubleshooting:** On newer Linux distributions (Ubuntu 23.04+, Fedora 38+) and some macOS configurations, you may see an `externally-managed-environment` error when using pip. Use **pipx** (Option 1) or **Homebrew** (Option 2, macOS) to install pre-commit in an isolated environment.
 
 #### Verifying installation
 
+**If you installed with pipx or Homebrew:**
+
 ```bash
 pre-commit --version
+```
+
+**If you installed with pip3:**
+
+```bash
+python3 -m pre_commit --version
 ```
 
 You should see output like `pre-commit 4.0.1`.
@@ -823,16 +851,34 @@ Navigate to your repository directory and run:
 
 **Windows (PowerShell):**
 
+**If you installed with pipx:**
+
 ```powershell
 cd C:\path\to\your-repo-name
 pre-commit install
 ```
 
+**If you installed with pip:**
+
+```powershell
+cd C:\path\to\your-repo-name
+python -m pre_commit install
+```
+
 **macOS/Linux/FreeBSD:**
+
+**If you installed with pipx or Homebrew:**
 
 ```bash
 cd ~/projects/your-repo-name
 pre-commit install
+```
+
+**If you installed with pip3:**
+
+```bash
+cd ~/projects/your-repo-name
+python3 -m pre_commit install
 ```
 
 This command modifies `.git/hooks/pre-commit` to run pre-commit automatically before each commit. You only need to run this once per repository clone.
@@ -843,8 +889,22 @@ This command modifies `.git/hooks/pre-commit` to run pre-commit automatically be
 
 Run pre-commit on all files:
 
+**If you installed with pipx or Homebrew:**
+
 ```bash
 pre-commit run --all-files
+```
+
+**If you installed with pip (Windows):**
+
+```powershell
+python -m pre_commit run --all-files
+```
+
+**If you installed with pip3 (macOS/Linux/FreeBSD):**
+
+```bash
+python3 -m pre_commit run --all-files
 ```
 
 **First run behavior:** The first time you run pre-commit, it downloads and installs the hook environments (e.g., Black, Ruff). This may take a minute or two. Subsequent runs are much faster.
