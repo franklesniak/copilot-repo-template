@@ -861,7 +861,7 @@ python3 -m pip install pre-commit
 
 #### Verifying installation
 
-**If you installed with pipx or Homebrew:**
+**If you installed with pipx:**
 
 ```bash
 pre-commit --version
@@ -872,6 +872,14 @@ Or, if `pre-commit` is not yet on PATH (no shell restart):
 ```bash
 python3 -m pipx run pre-commit --version
 ```
+
+**If you installed with Homebrew:**
+
+```bash
+pre-commit --version
+```
+
+> **Note:** If `pre-commit` is not found, ensure Homebrew's `bin` directory (typically `/opt/homebrew/bin` on Apple Silicon or `/usr/local/bin` on Intel Macs) is in your PATH. You can add it by running `eval "$(/opt/homebrew/bin/brew shellenv)"` (Apple Silicon) or `eval "$(/usr/local/bin/brew shellenv)"` (Intel) in your shell configuration file.
 
 **If you installed with pip:**
 
@@ -903,12 +911,28 @@ python -m pre_commit install
 
 **macOS/Linux/FreeBSD:**
 
-**If you installed with pipx or Homebrew:**
+**If you installed with pipx:**
 
 ```bash
 cd ~/projects/your-repo-name
 pre-commit install
 ```
+
+Or, if `pre-commit` is not yet on PATH:
+
+```bash
+cd ~/projects/your-repo-name
+python3 -m pipx run pre-commit install
+```
+
+**If you installed with Homebrew:**
+
+```bash
+cd ~/projects/your-repo-name
+pre-commit install
+```
+
+> **Note:** If `pre-commit` is not found, ensure Homebrew's `bin` directory is in your PATH (see verification section above).
 
 **If you installed with pip:**
 
@@ -925,7 +949,20 @@ This command modifies `.git/hooks/pre-commit` to run pre-commit automatically be
 
 Run pre-commit on all files:
 
-**If you installed with pipx or Homebrew:**
+**If you installed with pipx:**
+
+```bash
+pre-commit run --all-files
+```
+
+Or, if `pre-commit` is not yet on PATH:
+
+```bash
+python3 -m pipx run pre-commit run --all-files  # macOS/Linux
+python -m pipx run pre-commit run --all-files   # Windows
+```
+
+**If you installed with Homebrew:**
 
 ```bash
 pre-commit run --all-files
@@ -1872,7 +1909,7 @@ python -m pre_commit install
 
 **macOS/Linux/FreeBSD:**
 
-If you installed with pipx or Homebrew:
+If you installed with pipx:
 
 ```bash
 pre-commit install
@@ -1883,6 +1920,14 @@ If `pre-commit` is not on PATH (run `pipx ensurepath` and restart your terminal,
 ```bash
 python3 -m pipx run pre-commit install
 ```
+
+If you installed with Homebrew:
+
+```bash
+pre-commit install
+```
+
+> **Note:** If `pre-commit` is not found, ensure Homebrew's `bin` directory (typically `/opt/homebrew/bin` on Apple Silicon or `/usr/local/bin` on Intel Macs) is in your PATH.
 
 If you installed with pip:
 
