@@ -734,6 +734,10 @@ After creating the label, uncomment the `- triage` line in each issue template (
 Open PowerShell and run:
 
 ```powershell
+# First, upgrade pip to the latest version (recommended)
+python -m pip install --upgrade pip
+
+# Then install pre-commit
 python -m pip install pre-commit
 ```
 
@@ -742,6 +746,10 @@ python -m pip install pre-commit
 [pipx](https://pipx.pypa.io/) installs Python applications in isolated environments. First install pipx if you don't have it:
 
 ```powershell
+# First, upgrade pip to the latest version (recommended)
+python -m pip install --upgrade pip
+
+# Install pipx
 python -m pip install pipx
 pipx ensurepath
 ```
@@ -767,6 +775,10 @@ You should see output like `pre-commit 4.0.1`.
 #### Option 1: Using pip3
 
 ```bash
+# First, upgrade pip to the latest version (recommended)
+pip3 install --upgrade pip
+
+# Then install pre-commit
 pip3 install pre-commit
 ```
 
@@ -775,6 +787,10 @@ pip3 install pre-commit
 [pipx](https://pipx.pypa.io/) installs Python applications in isolated environments, avoiding conflicts with system Python. First install pipx if you don't have it:
 
 ```bash
+# First, upgrade pip to the latest version (recommended)
+pip3 install --upgrade pip
+
+# Install pipx
 pip3 install pipx
 pipx ensurepath
 ```

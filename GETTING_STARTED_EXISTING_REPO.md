@@ -879,12 +879,20 @@ Pre-commit hooks run automated checks before each commit, catching issues early 
 **Windows (PowerShell):**
 
 ```powershell
+# First, upgrade pip to the latest version (recommended)
+python -m pip install --upgrade pip
+
+# Then install pre-commit
 python -m pip install pre-commit
 ```
 
 **macOS/Linux/FreeBSD:**
 
 ```bash
+# First, upgrade pip to the latest version (recommended)
+pip3 install --upgrade pip
+
+# Then install pre-commit
 pip3 install pre-commit
 # Or using pipx (recommended for system Python conflicts):
 pipx install pre-commit
