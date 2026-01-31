@@ -249,6 +249,12 @@ The following standard placeholders **SHOULD** be used consistently throughout t
 | `REPLACE_ME_EU_REGION` | Europe region (AWS) | `eu-west-1` |
 | `REPLACE_ME_EUROPE_REGION` | Europe region (GCP) | `europe-west1` |
 | `REPLACE_ME_SECONDARY_REGION` | Secondary region | `us-west-2`, `westus2`, `us-west1` |
+| `REPLACE_ME_AWS_AZ_1` | AWS availability zone (first) | `us-east-1a` |
+| `REPLACE_ME_AWS_AZ_2` | AWS availability zone (second) | `us-east-1b` |
+| `REPLACE_ME_AWS_AZ_3` | AWS availability zone (third) | `us-east-1c` |
+| `REPLACE_ME_GCP_ZONE_1` | GCP compute zone (first) | `us-central1-a` |
+| `REPLACE_ME_GCP_ZONE_2` | GCP compute zone (second) | `us-central1-b` |
+| `REPLACE_ME_GCP_ZONE_3` | GCP compute zone (third) | `us-central1-c` |
 
 ### Usage Rules
 
@@ -2957,7 +2963,7 @@ For unit testing without real infrastructure, use mock providers:
 mock_provider "aws" {
   mock_data "aws_availability_zones" {
     defaults = {
-      names = ["us-east-1a", "us-east-1b", "us-east-1c"]
+      names = ["REPLACE_ME_AWS_AZ_1", "REPLACE_ME_AWS_AZ_2", "REPLACE_ME_AWS_AZ_3"]
     }
   }
 }
@@ -2980,8 +2986,8 @@ run "uses_all_availability_zones" {
 mock_provider "azurerm" {
   mock_data "azurerm_client_config" {
     defaults = {
-      tenant_id       = "00000000-0000-0000-0000-000000000000"
-      subscription_id = "00000000-0000-0000-0000-000000000000"
+      tenant_id       = "REPLACE_ME_TENANT_ID"
+      subscription_id = "REPLACE_ME_SUBSCRIPTION_ID"
     }
   }
 }
@@ -2990,8 +2996,8 @@ run "resource_group_has_correct_location" {
   command = plan
 
   assert {
-    condition     = azurerm_resource_group.main.location == "eastus"
-    error_message = "Resource group should be in eastus"
+    condition     = azurerm_resource_group.main.location == "REPLACE_ME_REGION"
+    error_message = "Resource group should be in REPLACE_ME_REGION"
   }
 }
 ```
@@ -3004,7 +3010,7 @@ run "resource_group_has_correct_location" {
 mock_provider "google" {
   mock_data "google_compute_zones" {
     defaults = {
-      names = ["us-central1-a", "us-central1-b", "us-central1-c"]
+      names = ["REPLACE_ME_GCP_ZONE_1", "REPLACE_ME_GCP_ZONE_2", "REPLACE_ME_GCP_ZONE_3"]
     }
   }
 }
