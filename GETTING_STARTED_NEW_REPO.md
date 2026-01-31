@@ -154,6 +154,9 @@ git --version
 # Check Python version
 python --version
 
+# Check pip version
+python -m pip --version
+
 # Check Node.js version
 node --version
 
@@ -168,6 +171,7 @@ You should see version numbers for each command. If any command shows an error, 
 ```text
 git version 2.43.0.windows.1
 Python 3.12.1
+pip 23.3.2 from C:\Users\YourName\AppData\Local\Programs\Python\Python312\Lib\site-packages\pip (python 3.12)
 v20.10.0
 10.2.3
 ```
@@ -243,6 +247,9 @@ git --version
 # Check Python version
 python3 --version
 
+# Check pip version
+pip3 --version
+
 # Check Node.js version
 node --version
 
@@ -257,6 +264,7 @@ You should see version numbers for each command.
 ```text
 git version 2.39.3 (Apple Git-145)
 Python 3.12.1
+pip 23.3.2 from /opt/homebrew/lib/python3.12/site-packages/pip (python 3.12)
 v20.10.0
 10.2.3
 ```
@@ -726,7 +734,7 @@ After creating the label, uncomment the `- triage` line in each issue template (
 Open PowerShell and run:
 
 ```powershell
-pip install pre-commit
+python -m pip install pre-commit
 ```
 
 #### Option 2: Using pipx (recommended for tool isolation)
@@ -734,15 +742,17 @@ pip install pre-commit
 [pipx](https://pipx.pypa.io/) installs Python applications in isolated environments. First install pipx if you don't have it:
 
 ```powershell
-pip install pipx
+python -m pip install pipx
 pipx ensurepath
 ```
 
-Then install pre-commit:
+Close and reopen PowerShell, then install pre-commit:
 
 ```powershell
 pipx install pre-commit
 ```
+
+> **Troubleshooting:** If you see `pip: The term 'pip' is not recognized`, ensure you checked "Add Python to PATH" during Python installation. Using `python -m pip` instead of `pip` directly is more reliable on Windows.
 
 #### Verifying installation
 
@@ -754,34 +764,34 @@ You should see output like `pre-commit 4.0.1`.
 
 ### Installation - macOS/Linux/FreeBSD
 
-#### Option 1: Using pip
+#### Option 1: Using pip3
 
 ```bash
-pip install pre-commit
-# or if pip3 is required:
 pip3 install pre-commit
 ```
 
 #### Option 2: Using pipx (recommended for tool isolation)
 
-First install pipx if you don't have it:
+[pipx](https://pipx.pypa.io/) installs Python applications in isolated environments, avoiding conflicts with system Python. First install pipx if you don't have it:
 
 ```bash
-pip install pipx
+pip3 install pipx
 pipx ensurepath
 ```
 
-Then install pre-commit:
+Restart your terminal, then install pre-commit:
 
 ```bash
 pipx install pre-commit
 ```
 
-#### Option 3: Using Homebrew (macOS)
+#### Option 3: Using Homebrew (macOS only)
 
 ```bash
 brew install pre-commit
 ```
+
+> **Troubleshooting:** On newer Linux distributions (Ubuntu 23.04+, Fedora 38+) and some macOS configurations, you may see an `externally-managed-environment` error when using pip. Use **pipx** (Option 2) or **Homebrew** (Option 3, macOS) to install pre-commit in an isolated environment.
 
 #### Verifying installation
 
@@ -935,14 +945,14 @@ Install the package in development mode and run tests:
 **Windows (PowerShell):**
 
 ```powershell
-pip install -e ".[dev]"
+python -m pip install -e ".[dev]"
 pytest tests/ -v
 ```
 
 **macOS/Linux/FreeBSD:**
 
 ```bash
-pip install -e ".[dev]"
+pip3 install -e ".[dev]"
 pytest tests/ -v
 ```
 
