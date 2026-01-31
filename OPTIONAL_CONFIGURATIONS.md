@@ -1712,12 +1712,12 @@ When adopting this template for a Terraform project, complete the following task
 3. **Verify required provider versions** and update the version constraint examples as needed
 4. **Add organization-specific required tags** to the Required Tags section if your organization mandates specific tags
 5. **Document any justified deviations** in the "Scope Exceptions & Deviations from Standards" section at the end of the file
-6. **Remove non-relevant provider examples** — The file includes parallel examples for AWS, Azure, and GCP. Delete examples for providers your project does not use to reduce noise and confusion. Search for "AWS Example", "Azure Example", and "GCP Example" labels to identify provider-specific blocks.
+6. **Remove non-relevant provider examples** — The file includes parallel examples for AWS, Azure, and GCP. Delete examples for providers your project does not use to reduce noise and confusion. Search for "AWS Example", "Azure Example", "GCP Example", and combined labels like "AWS/Azure Example" to identify provider-specific blocks.
 7. **Replace all `REPLACE_ME_*` placeholders** with your organization's actual values. Run `grep -r "REPLACE_ME"` to find all placeholders requiring customization.
 
 ### Customizing Provider Examples
 
-The file now includes parallel examples for AWS, Azure, and GCP throughout. Each example group is clearly labeled with "AWS Example", "Azure Example", and "GCP Example" headers. To customize for your cloud provider:
+The file now includes parallel examples for AWS, Azure, and GCP throughout. Each example group is clearly labeled with "AWS Example", "Azure Example", "GCP Example", or combined labels like "AWS/Azure Example" (used when providers share the same pattern). To customize for your cloud provider:
 
 1. **For single-provider projects:** Remove examples for providers you don't use. Search for the provider labels (e.g., "Azure Example", "GCP Example") and delete those code blocks and their headers.
 
