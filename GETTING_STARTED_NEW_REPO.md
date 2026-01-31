@@ -787,6 +787,12 @@ python -m pip install pre-commit
 pre-commit --version
 ```
 
+Or, if `pre-commit` is not yet on PATH (no shell restart):
+
+```powershell
+python -m pipx run pre-commit --version
+```
+
 **If you installed with pip:**
 
 ```powershell
@@ -857,6 +863,12 @@ python3 -m pip install pre-commit
 
 ```bash
 pre-commit --version
+```
+
+Or, if `pre-commit` is not yet on PATH (no shell restart):
+
+```bash
+python3 -m pipx run pre-commit --version
 ```
 
 **If you installed with pip:**
