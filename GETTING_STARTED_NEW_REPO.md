@@ -957,9 +957,16 @@ pre-commit run --all-files
 
 Or, if `pre-commit` is not yet on PATH:
 
+**macOS/Linux:**
+
 ```bash
-python3 -m pipx run pre-commit run --all-files  # macOS/Linux
-python -m pipx run pre-commit run --all-files   # Windows
+python3 -m pipx run pre-commit run --all-files
+```
+
+**Windows:**
+
+```powershell
+python -m pipx run pre-commit run --all-files
 ```
 
 **If you installed with Homebrew:**
