@@ -1958,15 +1958,14 @@ git commit -m "Add your feature"
 git push origin feature/your-feature-name
 ```
 
-If `pre-commit` is not on PATH (pipx users: run `pipx ensurepath` and restart terminal):
+If `pre-commit` is not on PATH:
 
-```powershell
-# Alternative using python -m pipx run (no PATH required)
-python -m pipx run pre-commit run --all-files
+- **pipx users:** Run `pipx ensurepath` and restart your PowerShell window, then run `pre-commit run --all-files`.
+- **pip users:** Use module invocation:
 
-# Or if you installed via pip:
-python -m pre_commit run --all-files
-```
+  ```powershell
+  python -m pre_commit run --all-files
+  ```
 
 **macOS/Linux/FreeBSD:**
 
@@ -1985,15 +1984,14 @@ git commit -m "Add your feature"
 git push origin feature/your-feature-name
 ```
 
-If `pre-commit` is not on PATH (pipx users: run `pipx ensurepath` and restart terminal):
+If `pre-commit` is not on PATH:
 
-```bash
-# Alternative using python3 -m pipx run (no PATH required)
-python3 -m pipx run pre-commit run --all-files
+- **pipx users:** Run `pipx ensurepath` and restart your terminal, then run `pre-commit run --all-files`.
+- **pip users:** Use module invocation:
 
-# Or if you installed via pip:
-python3 -m pre_commit run --all-files
-```
+  ```bash
+  python3 -m pre_commit run --all-files
+  ```
 
 ---
 
