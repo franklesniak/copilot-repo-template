@@ -1506,6 +1506,10 @@ If you need to rename resources or restructure your configuration:
   ```hcl
   removed {
     from = aws_instance.legacy_server
+
+    lifecycle {
+      destroy = false  # Remove from state without destroying
+    }
   }
   ```
 
