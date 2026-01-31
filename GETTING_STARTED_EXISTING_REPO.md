@@ -966,7 +966,9 @@ python3 -m pip install pre-commit
 > - **macOS/Linux/FreeBSD:** If you see an `externally-managed-environment` error, do **not** use `python3 -m pip install pipx`, as it can fail with the same error. Instead, install **pipx** via your OS package manager:
 >   - Debian / Ubuntu: `sudo apt install pipx && pipx ensurepath`
 >   - Fedora: `sudo dnf install pipx && pipx ensurepath`
->   - macOS (Homebrew): `brew install pipx`
+>   - macOS (Homebrew): `brew install pipx && pipx ensurepath`
+>
+>   After running `pipx ensurepath`, restart your terminal so the updated PATH is applied.
 
 ### If You Don't Have Pre-commit Configured
 
@@ -1106,7 +1108,7 @@ If your project already uses pre-commit:
 | `pre-commit` command not found | macOS/Linux | Use `python3 -m pre_commit` instead of `pre-commit`, or reinstall using `pipx` or Homebrew |
 | `pip` not recognized | Windows | Use `python -m pip` instead of `pip` |
 | `pip` not found | macOS/Linux | Use `python3 -m pip` instead of `pip` |
-| `externally-managed-environment` error | Linux/macOS | Install pipx via OS package manager (`sudo apt install pipx`, `sudo dnf install pipx`, or `brew install pipx`) then use `pipx install pre-commit` |
+| `externally-managed-environment` error | Linux/macOS | Install pipx via OS package manager (`sudo apt install pipx`, `sudo dnf install pipx`, or `brew install pipx`) then run `pipx ensurepath` and use `pipx install pre-commit` (or `python3 -m pipx install pre-commit`) |
 | Python not found | Windows | Reinstall Python and check "Add Python to PATH" |
 | Hooks fail to initialize | All | Run `pre-commit clean && pre-commit install` (or use module invocation: `python -m pre_commit clean && python -m pre_commit install` on Windows, `python3 -m pre_commit clean && python3 -m pre_commit install` on macOS/Linux) |
 
@@ -1511,12 +1513,15 @@ Before making changes, install pre-commit hooks:
 ```bash
 # Install pre-commit (choose one method):
 # Option 1: Using pipx (recommended)
-pipx install pre-commit
+python -m pipx install pre-commit  # Windows
+# Or: python3 -m pipx install pre-commit  # macOS/Linux
+# After first-time pipx install, ensure it's on your PATH:
+python -m pipx ensurepath  # Windows
+# Or: python3 -m pipx ensurepath  # macOS/Linux
 
-# Option 2: Using pip (use python3 -m pip on macOS/Linux)
-pip install pre-commit
-# Or: python -m pip install pre-commit (Windows)
-# Or: python3 -m pip install pre-commit (macOS/Linux)
+# Option 2: Using pip (if you can't use pipx)
+python -m pip install pre-commit  # Windows
+# Or: python3 -m pip install pre-commit  # macOS/Linux
 
 # Install the hooks
 pre-commit install
@@ -1557,12 +1562,15 @@ npm install          # Install markdown linting tools
 
 # Install pre-commit (choose one method):
 # Option 1: Using pipx (recommended)
-pipx install pre-commit
+python -m pipx install pre-commit  # Windows
+# Or: python3 -m pipx install pre-commit  # macOS/Linux
+# After first-time pipx install, ensure it's on your PATH:
+python -m pipx ensurepath  # Windows
+# Or: python3 -m pipx ensurepath  # macOS/Linux
 
-# Option 2: Using pip
-pip install pre-commit
-# Or: python -m pip install pre-commit (Windows)
-# Or: python3 -m pip install pre-commit (macOS/Linux)
+# Option 2: Using pip (if you can't use pipx)
+python -m pip install pre-commit  # Windows
+# Or: python3 -m pip install pre-commit  # macOS/Linux
 
 # Set up git hooks
 pre-commit install

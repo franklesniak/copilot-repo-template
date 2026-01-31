@@ -845,7 +845,9 @@ python3 -m pip install pre-commit
 >
 > - Debian / Ubuntu: `sudo apt install pipx && pipx ensurepath`
 > - Fedora: `sudo dnf install pipx && pipx ensurepath`
-> - macOS (Homebrew): `brew install pipx`
+> - macOS (Homebrew): `brew install pipx && pipx ensurepath`
+>
+> After running `pipx ensurepath`, you MAY need to restart your terminal session for PATH changes to take effect.
 
 #### Verifying installation
 
@@ -855,7 +857,7 @@ python3 -m pip install pre-commit
 pre-commit --version
 ```
 
-**If you installed with pip3:**
+**If you installed with pip:**
 
 ```bash
 python3 -m pre_commit --version
@@ -892,7 +894,7 @@ cd ~/projects/your-repo-name
 pre-commit install
 ```
 
-**If you installed with pip3:**
+**If you installed with pip:**
 
 ```bash
 cd ~/projects/your-repo-name
@@ -919,7 +921,7 @@ pre-commit run --all-files
 python -m pre_commit run --all-files
 ```
 
-**If you installed with pip3 (macOS/Linux/FreeBSD):**
+**If you installed with pip (macOS/Linux/FreeBSD):**
 
 ```bash
 python3 -m pre_commit run --all-files
