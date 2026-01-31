@@ -5,14 +5,14 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.7.20260131.0
+**Version:** 1.8.20260131.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-01-31
-- **Scope:** Defines Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in this repository. Covers style, formatting, naming conventions, file organization, variable and output design, resource configuration, module design, refactoring, state management, security best practices, provider management, testing, and documentation requirements.
+- **Scope:** Defines Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in this repository. Covers style, formatting, naming conventions, file organization, variable and output design, resource configuration, module design, refactoring, state management, cross-stack data sharing, security best practices, provider management, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
 ## Table of Contents
@@ -23,6 +23,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - [Executive Summary: Terraform Philosophy](#executive-summary-terraform-philosophy)
 - [Formatting and Style](#formatting-and-style)
 - [Naming Conventions](#naming-conventions)
+  - [Globally Unique Resource Names](#globally-unique-resource-names)
 - [File Organization](#file-organization)
 - [Variable and Output Design](#variable-and-output-design)
   - [Nullable Variables](#nullable-variables)
@@ -32,7 +33,9 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - [Module Design](#module-design)
 - [Refactoring](#refactoring)
 - [State Management](#state-management)
+  - [Bootstrapping State Infrastructure](#bootstrapping-state-infrastructure)
   - [Resource Targeting](#resource-targeting)
+- [Cross-Stack Data Sharing](#cross-stack-data-sharing)
 - [Provider Management](#provider-management)
   - [Provider Aliasing](#provider-aliasing)
 - [Security Best Practices](#security-best-practices)
@@ -87,6 +90,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** Data sources **MUST** be prefixed with purpose when multiple exist → [Data Source Naming](#data-source-naming)
 - **[All]** Locals **MUST** use `snake_case` with descriptive names → [Local Value Naming](#local-value-naming)
 - **[All]** Boolean variables **SHOULD** use `enable_*`, `is_*`, or `has_*` prefixes → [Boolean Naming Patterns](#boolean-naming-patterns)
+- **[All]** Globally unique resource names **SHOULD** include random suffixes or organization prefixes → [Globally Unique Resource Names](#globally-unique-resource-names)
 
 ### File Organization
 
@@ -157,6 +161,13 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** Local state files **MUST NOT** be used in production → [No Local State in Production](#no-local-state-in-production)
 - **[All]** State files **MUST NOT** be committed to version control → [State File Exclusion](#state-file-exclusion)
 - **[All]** `terraform apply -target` **SHOULD NOT** be used in normal workflows → [Resource Targeting](#resource-targeting)
+- **[Root]** New state storage infrastructure **SHOULD** follow the bootstrap workflow → [Bootstrapping State Infrastructure](#bootstrapping-state-infrastructure)
+
+### Cross-Stack Data Sharing
+
+- **[Root]** Cross-stack data **SHOULD** be shared via cloud-native parameter stores → [Cross-Stack Data Sharing](#cross-stack-data-sharing)
+- **[Root]** `terraform_remote_state` **MAY** be used with documented coupling implications → [Cross-Stack Data Sharing](#cross-stack-data-sharing)
+- **[All]** Secrets **MUST NOT** be shared via parameter stores or remote state → [Cross-Stack Data Sharing](#cross-stack-data-sharing)
 
 ### Provider Management
 
@@ -587,6 +598,106 @@ Boolean variables and locals **SHOULD** use these prefixes:
 | `enable_*` | Feature flags | `enable_monitoring`, `enable_encryption` |
 | `is_*` | State checks | `is_public`, `is_production` |
 | `has_*` | Presence checks | `has_custom_domain`, `has_ssl_certificate` |
+
+### Globally Unique Resource Names
+
+Some cloud resources require globally unique names across all customers. Attempting to create these resources with simple, predictable names often results in `409 Conflict`, `BucketAlreadyExists`, or similar errors.
+
+#### Resources Requiring Globally Unique Names
+
+| Provider | Resources |
+| --- | --- |
+| **AWS** | S3 buckets, some IAM resources (roles with path-based ARNs) |
+| **Azure** | Storage Accounts, Key Vaults, App Services, Cosmos DB accounts |
+| **GCP** | GCS buckets, project IDs, Cloud SQL instances |
+
+#### Recommended Patterns
+
+**Pattern 1: Random suffix using `random_id`:**
+
+Use the `random_id` resource to generate a unique suffix that remains stable across applies:
+
+**AWS Example:**
+
+```hcl
+resource "random_id" "bucket_suffix" {
+  byte_length = 4
+}
+
+resource "aws_s3_bucket" "main" {
+  bucket = "${var.project_name}-${var.environment}-${random_id.bucket_suffix.hex}"
+}
+```
+
+**Azure Example:**
+
+```hcl
+resource "random_id" "storage_suffix" {
+  byte_length = 4
+}
+
+resource "azurerm_storage_account" "main" {
+  # Azure Storage Account names must be 3-24 characters, lowercase alphanumeric only
+  name                     = "st${var.project_short}${random_id.storage_suffix.hex}"
+  resource_group_name      = azurerm_resource_group.main.name
+  location                 = azurerm_resource_group.main.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+}
+```
+
+**GCP Example:**
+
+```hcl
+resource "random_id" "bucket_suffix" {
+  byte_length = 4
+}
+
+resource "google_storage_bucket" "main" {
+  name     = "${var.project_name}-${var.environment}-${random_id.bucket_suffix.hex}"
+  location = var.region
+}
+```
+
+**Pattern 2: Organization prefix:**
+
+For organizations with registered domain names, use a reversed domain prefix:
+
+```hcl
+locals {
+  # Produces: com-example-myproject-prod
+  globally_unique_prefix = "${replace(var.organization_domain, ".", "-")}-${var.project_name}-${var.environment}"
+}
+
+resource "aws_s3_bucket" "main" {
+  bucket = local.globally_unique_prefix
+}
+```
+
+#### When to Use Each Pattern
+
+| Pattern | Use Case |
+| --- | --- |
+| Random suffix | Default choice for most projects; provides uniqueness without organizational coordination |
+| Organization prefix | When naming convention consistency across an organization is required |
+| Combination | High-assurance uniqueness: `${org_prefix}-${project}-${random_suffix}` |
+
+#### Lifecycle Considerations
+
+Random suffixes are generated once and stored in state. The `random_id` resource is stable by default—it only regenerates when its inputs change. For explicit control over regeneration, use the `keepers` argument:
+
+```hcl
+resource "random_id" "bucket_suffix" {
+  byte_length = 4
+
+  # Regenerate only when project_name changes
+  keepers = {
+    project_name = var.project_name
+  }
+}
+```
+
+> **Warning:** If you lose the Terraform state containing the `random_id`, the suffix cannot be recovered, and new resources will be created with a different suffix on the next apply.
 
 ---
 
@@ -2083,6 +2194,203 @@ The following sections **MAY** not apply when using Terraform Cloud/Enterprise:
 - DynamoDB lock table configuration
 - S3/GCS/Azure Storage bucket configuration
 
+### Bootstrapping State Infrastructure
+
+When creating a new Terraform configuration, you face a chicken-and-egg problem: the remote backend (e.g., S3 bucket, Azure Storage Account, GCS bucket) must exist before Terraform can use it to store state, but you want Terraform to manage that backend infrastructure.
+
+#### Bootstrap Workflow
+
+**Step 1: Create bootstrap configuration with backend commented out:**
+
+Create your state storage resources in a dedicated bootstrap configuration, initially without a backend block (or with the backend block commented out). This allows Terraform to use local state temporarily.
+
+**AWS Example (`bootstrap/main.tf`):**
+
+```hcl
+# versions.tf - no backend block initially
+terraform {
+  required_version = ">= 1.6.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+
+  # Backend will be added after bootstrap
+  # backend "s3" {
+  #   bucket         = "REPLACE_ME_STATE_BUCKET"
+  #   key            = "bootstrap/terraform.tfstate"
+  #   region         = "REPLACE_ME_REGION"
+  #   encrypt        = true
+  #   dynamodb_table = "REPLACE_ME_LOCK_TABLE"
+  # }
+}
+
+# Create the S3 bucket for state storage
+# Note: S3 bucket names must be globally unique. See "Globally Unique Resource Names"
+# section for patterns using random_id or organization prefixes.
+resource "aws_s3_bucket" "terraform_state" {
+  bucket = "REPLACE_ME_STATE_BUCKET"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "aws_s3_bucket_versioning" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Create DynamoDB table for state locking
+resource "aws_dynamodb_table" "terraform_locks" {
+  name         = "REPLACE_ME_LOCK_TABLE"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "LockID"
+
+  attribute {
+    name = "LockID"
+    type = "S"
+  }
+}
+```
+
+**Azure Example (`bootstrap/main.tf`):**
+
+```hcl
+terraform {
+  required_version = ">= 1.6.0"
+
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 3.0"
+    }
+  }
+
+  # Backend will be added after bootstrap
+  # backend "azurerm" {
+  #   resource_group_name  = "REPLACE_ME_RESOURCE_GROUP"
+  #   storage_account_name = "REPLACE_ME_STORAGE_ACCOUNT"
+  #   container_name       = "REPLACE_ME_CONTAINER"
+  #   key                  = "bootstrap/terraform.tfstate"
+  # }
+}
+
+resource "azurerm_resource_group" "terraform_state" {
+  name     = "REPLACE_ME_RESOURCE_GROUP"
+  location = "REPLACE_ME_REGION"
+}
+
+resource "azurerm_storage_account" "terraform_state" {
+  name                     = "REPLACE_ME_STORAGE_ACCOUNT"
+  resource_group_name      = azurerm_resource_group.terraform_state.name
+  location                 = azurerm_resource_group.terraform_state.location
+  account_tier             = "Standard"
+  account_replication_type = "GRS"
+
+  blob_properties {
+    versioning_enabled = true
+  }
+}
+
+resource "azurerm_storage_container" "terraform_state" {
+  name                  = "REPLACE_ME_CONTAINER"
+  storage_account_name  = azurerm_storage_account.terraform_state.name
+  container_access_type = "private"
+}
+```
+
+**GCP Example (`bootstrap/main.tf`):**
+
+```hcl
+terraform {
+  required_version = ">= 1.6.0"
+
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 5.0"
+    }
+  }
+
+  # Backend will be added after bootstrap
+  # backend "gcs" {
+  #   bucket = "REPLACE_ME_STATE_BUCKET"
+  #   prefix = "bootstrap"
+  # }
+}
+
+resource "google_storage_bucket" "terraform_state" {
+  name     = "REPLACE_ME_STATE_BUCKET"
+  location = "REPLACE_ME_REGION"
+
+  versioning {
+    enabled = true
+  }
+
+  uniform_bucket_level_access = true
+}
+```
+
+**Step 2: Apply locally to create state storage:**
+
+```bash
+cd bootstrap
+terraform init
+terraform apply
+```
+
+This creates the state storage infrastructure using local state (stored in `terraform.tfstate`).
+
+**Step 3: Configure backend and migrate state:**
+
+Uncomment or add the backend block in your configuration, then run:
+
+```bash
+terraform init -migrate-state
+```
+
+Terraform will prompt you to confirm migration of the existing local state to the remote backend.
+
+**Step 4: Clean up local state file:**
+
+After successful migration, the local state file is no longer needed:
+
+```bash
+rm terraform.tfstate terraform.tfstate.backup
+```
+
+> **Warning:** Only delete local state files after confirming the remote state is properly configured and accessible. Run `terraform plan` to verify that Terraform can read from the remote backend before deleting local files.
+
+#### Alternative: Partial Backend Configuration
+
+As documented in [Backend Configuration](#backend-configuration), you can use partial backend configuration to separate the bootstrap workflow from the backend values. This approach allows you to:
+
+1. Commit a partial backend configuration without sensitive values
+2. Provide backend values via `-backend-config` during `terraform init`
+3. Manage state storage creation in a separate, pre-provisioned step
+
+#### Bootstrap Best Practices
+
+- **Separate bootstrap configuration:** Keep state infrastructure in a dedicated directory (`bootstrap/` or `infrastructure/state/`) separate from application infrastructure.
+- **Use `prevent_destroy`:** Protect state storage resources from accidental deletion.
+- **Enable versioning:** Always enable versioning on state storage buckets to allow recovery from corruption.
+- **Document the process:** Include bootstrap instructions in your repository's README or contributing guide.
+
 ### State Encryption
 
 State backends **MUST** enable encryption:
@@ -2258,6 +2566,212 @@ terraform apply
 Resource targeting is intended **only** for exceptional recovery scenarios where a specific resource must be modified in isolation.
 
 **If targeting is needed regularly**, this indicates the configuration is too large. Split the configuration into smaller, independent modules that can be applied separately.
+
+---
+
+## Cross-Stack Data Sharing
+
+When infrastructure is split across multiple independent Terraform configurations (often called "stacks"), you need a mechanism to share data between them. Common scenarios include:
+
+- **Network and application separation:** A networking team manages VPCs/VNets, and application teams need to reference VPC IDs and subnet IDs.
+- **Shared services:** Central services (e.g., logging, monitoring) need to be referenced by multiple application stacks.
+- **Multi-team ownership:** Different teams own different parts of infrastructure but need to integrate.
+
+### Approaches Comparison
+
+| Approach | Recommendation | Coupling | Security |
+| --- | --- | --- | --- |
+| Cloud-native parameter stores | **PREFERRED** | Loose | Configurable per-value |
+| `terraform_remote_state` data source | Acceptable with caveats | Tight | Full state exposure |
+| Hardcoding values | **DISCOURAGED** | None (brittle) | Poor |
+
+### Preferred: Cloud-Native Parameter Stores
+
+Cloud-native parameter stores provide a **loosely coupled** mechanism for sharing configuration values between stacks. Values are explicitly published and consumed, providing clear contracts between teams.
+
+#### AWS: SSM Parameter Store
+
+**Publishing values (network stack):**
+
+```hcl
+# outputs.tf - Network stack
+output "vpc_id" {
+  description = "VPC ID for application stacks"
+  value       = aws_vpc.main.id
+}
+
+# main.tf - Publish to SSM
+resource "aws_ssm_parameter" "vpc_id" {
+  name  = "/${var.environment}/network/vpc_id"
+  type  = "String"
+  value = aws_vpc.main.id
+
+  tags = local.common_tags
+}
+
+resource "aws_ssm_parameter" "private_subnet_ids" {
+  name  = "/${var.environment}/network/private_subnet_ids"
+  type  = "StringList"
+  value = join(",", aws_subnet.private[*].id)
+
+  tags = local.common_tags
+}
+```
+
+**Consuming values (application stack):**
+
+```hcl
+# data.tf - Application stack
+data "aws_ssm_parameter" "vpc_id" {
+  name = "/${var.environment}/network/vpc_id"
+}
+
+data "aws_ssm_parameter" "private_subnet_ids" {
+  name = "/${var.environment}/network/private_subnet_ids"
+}
+
+locals {
+  vpc_id             = data.aws_ssm_parameter.vpc_id.value
+  private_subnet_ids = split(",", data.aws_ssm_parameter.private_subnet_ids.value)
+}
+
+# Use in resources
+resource "aws_instance" "app" {
+  subnet_id = local.private_subnet_ids[0]
+  # ...
+}
+```
+
+#### Azure: App Configuration or Key Vault (Data Plane)
+
+**Publishing values (network stack):**
+
+```hcl
+resource "azurerm_app_configuration" "main" {
+  name                = "appconf-${var.project_name}-${var.environment}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+}
+
+resource "azurerm_app_configuration_key" "vnet_id" {
+  configuration_store_id = azurerm_app_configuration.main.id
+  key                    = "network/vnet_id"
+  value                  = azurerm_virtual_network.main.id
+}
+
+resource "azurerm_app_configuration_key" "subnet_ids" {
+  configuration_store_id = azurerm_app_configuration.main.id
+  key                    = "network/subnet_ids"
+  value                  = jsonencode(azurerm_subnet.private[*].id)
+}
+```
+
+**Consuming values (application stack):**
+
+```hcl
+data "azurerm_app_configuration" "main" {
+  name                = "appconf-${var.project_name}-${var.environment}"
+  resource_group_name = var.shared_resource_group_name
+}
+
+data "azurerm_app_configuration_key" "vnet_id" {
+  configuration_store_id = data.azurerm_app_configuration.main.id
+  key                    = "network/vnet_id"
+}
+
+locals {
+  vnet_id = data.azurerm_app_configuration_key.vnet_id.value
+}
+```
+
+#### GCP: Cloud Storage with Metadata or Runtime Config
+
+> **Note:** GCP does not have a direct equivalent to AWS SSM Parameter Store. For cross-stack configuration sharing, Cloud Storage buckets with JSON configuration files provide a simple, cost-effective approach.
+
+**Publishing values (network stack):**
+
+```hcl
+resource "google_storage_bucket" "config" {
+  name     = "${var.project_id}-terraform-config"
+  location = var.region
+
+  uniform_bucket_level_access = true
+}
+
+resource "google_storage_bucket_object" "network_config" {
+  name    = "config/${var.environment}/network.json"
+  bucket  = google_storage_bucket.config.name
+  content = jsonencode({
+    vpc_id     = google_compute_network.main.id
+    subnet_ids = google_compute_subnetwork.private[*].id
+  })
+}
+```
+
+**Consuming values (application stack):**
+
+```hcl
+data "google_storage_bucket_object_content" "network_config" {
+  name   = "config/${var.environment}/network.json"
+  bucket = "${var.project_id}-terraform-config"
+}
+
+locals {
+  network_config = jsondecode(data.google_storage_bucket_object_content.network_config.content)
+  vpc_id         = local.network_config.vpc_id
+  subnet_ids     = local.network_config.subnet_ids
+}
+```
+
+### Acceptable: terraform_remote_state Data Source
+
+The `terraform_remote_state` data source reads outputs from another Terraform state file. While functional, it creates **tight coupling** between configurations.
+
+```hcl
+data "terraform_remote_state" "network" {
+  backend = "s3"
+  config = {
+    bucket = "REPLACE_ME_STATE_BUCKET"
+    key    = "network/terraform.tfstate"
+    region = "REPLACE_ME_REGION"
+  }
+}
+
+# Access outputs from the network stack
+locals {
+  vpc_id     = data.terraform_remote_state.network.outputs.vpc_id
+  subnet_ids = data.terraform_remote_state.network.outputs.private_subnet_ids
+}
+```
+
+**Caveats when using `terraform_remote_state`:**
+
+- **Tight coupling:** Changes to the source stack's outputs can break consuming stacks.
+- **State file access:** Consumers need read access to the entire state file, not just specific outputs.
+- **No explicit contract:** No clear interface definition between producer and consumer.
+- **Harder to test:** Mocking remote state in tests is more complex than mocking parameter store lookups.
+
+### What to Share (and What Not to Share)
+
+| Share | Examples | Notes |
+| --- | --- | --- |
+| Resource IDs | VPC ID, Subnet IDs, Security Group IDs | Primary use case |
+| ARNs/Resource Names | Role ARNs, Bucket names, Queue ARNs | For cross-account references |
+| Endpoints | RDS endpoints, API Gateway URLs | For service discovery |
+| Non-sensitive configuration | CIDR blocks, region, environment name | Shared context |
+
+| Do NOT Share | Reason |
+| --- | --- |
+| Secrets/credentials | Use dedicated secret managers with proper access controls |
+| Full resource objects | Exposes unnecessary implementation details |
+| Internal implementation details | Creates coupling to internal structure |
+
+### Cross-Stack Data Sharing Best Practices
+
+- **Define explicit contracts:** Document what values are published and their format.
+- **Use consistent naming conventions:** Establish a parameter naming scheme (e.g., `/${environment}/${team}/${resource_type}`).
+- **Version your contracts:** When changing published values, consider backward compatibility.
+- **Prefer loose coupling:** Parameter stores allow consuming stacks to be applied independently of producer stacks (after initial setup).
 
 ---
 
