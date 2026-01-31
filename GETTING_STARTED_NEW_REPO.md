@@ -9,6 +9,7 @@ This guide walks you through creating a brand-new repository using `franklesniak
 ## Table of Contents
 
 - [What This Template Provides](#what-this-template-provides)
+  - [Repo Layout Examples](#repo-layout-examples)
 - [Prerequisites](#prerequisites)
   - [Windows Setup](#windows-setup)
   - [macOS Setup](#macos-setup)
@@ -45,6 +46,56 @@ This template repository includes:
 - **Issue Templates:** Structured templates for bug reports, feature requests, and documentation issues
 - **Pull Request Template:** Checklist-based template for consistent PR reviews
 - **CI Workflows:** GitHub Actions workflows for linting, testing, and validation
+
+### Repo Layout Examples
+
+Depending on your project's needs, you may organize your repository in different ways. Here are two common patterns:
+
+**Root-Only Repo (Single Configuration):**
+
+A simple repository with a single Terraform or application configuration:
+
+```text
+my-project/
+├── .github/
+│   ├── copilot-instructions.md
+│   ├── instructions/
+│   └── workflows/
+├── main.tf              # Primary configuration
+├── variables.tf         # Input variables
+├── outputs.tf           # Output values
+├── versions.tf          # Provider version constraints
+├── .terraform.lock.hcl  # Dependency lock file
+└── README.md
+```
+
+**Module-Based Repo:**
+
+A repository containing reusable modules with examples and tests:
+
+```text
+my-modules/
+├── .github/
+│   ├── copilot-instructions.md
+│   ├── instructions/
+│   └── workflows/
+├── modules/
+│   └── vpc/
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── outputs.tf
+│       ├── versions.tf
+│       └── README.md
+├── examples/
+│   └── basic-vpc/
+│       ├── main.tf
+│       └── README.md
+├── tests/
+│   └── vpc.tftest.hcl
+└── README.md
+```
+
+Choose the structure that best fits your project when customizing the template.
 
 ---
 

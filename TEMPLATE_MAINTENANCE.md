@@ -8,10 +8,33 @@ This guide is for **maintainers of the `franklesniak/copilot-repo-template` repo
 
 ## Table of Contents
 
+- [Recommended Review Cadence](#recommended-review-cadence)
 - [Updating Pre-commit Hook Versions](#updating-pre-commit-hook-versions)
 - [Reviewing Python Version Requirements](#reviewing-python-version-requirements)
 - [Reviewing Instruction File Versions](#reviewing-instruction-file-versions)
 - [Testing Template Changes](#testing-template-changes)
+
+---
+
+## Recommended Review Cadence
+
+To keep the template current and functional, maintainers should review template documentation and workflows on a **quarterly basis**.
+
+**Quarterly Review Checklist:**
+
+- [ ] Review and update pre-commit hook versions
+- [ ] Check for updates to GitHub Actions used in workflows
+- [ ] Review instruction files for accuracy and relevance
+- [ ] Verify all CI workflows still pass with latest dependency versions
+- [ ] Review and address any open issues or feedback
+
+**Annual Review:**
+
+- [ ] Review Python version requirements (typically October)
+- [ ] Review major version updates for key dependencies (Node.js, Terraform providers, etc.)
+- [ ] Evaluate new GitHub features that could enhance the template
+
+> **Tip:** Set a calendar reminder for quarterly reviews to ensure consistent maintenance.
 
 ---
 

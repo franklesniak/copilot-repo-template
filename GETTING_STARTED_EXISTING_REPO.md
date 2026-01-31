@@ -19,6 +19,7 @@ This guide walks you through adopting features from `franklesniak/copilot-repo-t
 - [Planning Your Adoption](#planning-your-adoption)
   - [Feature Decision Matrix](#feature-decision-matrix)
   - [Recommended Adoption Order](#recommended-adoption-order)
+  - [Repo Layout Examples](#repo-layout-examples)
 - [Getting the Template Files](#getting-the-template-files)
   - [Files to Skip (Example/Demonstration Code)](#files-to-skip-exampledemonstration-code)
 - [Adopting Simple Standalone Files](#adopting-simple-standalone-files)
@@ -69,6 +70,7 @@ This guide walks you through adopting features from `franklesniak/copilot-repo-t
 - [Cleanup and Documentation](#cleanup-and-documentation)
   - [Files to Review After Adoption](#files-to-review-after-adoption)
   - [Updating Your Project Documentation](#updating-your-project-documentation)
+- [Migration Notes for Existing Terraform Repos](#migration-notes-for-existing-terraform-repos)
 - [Next Steps](#next-steps)
 - [Summary Checklist](#summary-checklist)
 
@@ -194,6 +196,56 @@ For the smoothest experience, adopt features in this order:
 5. **CI workflows** — Most complex, most dependencies; adopt last
 
 > **Tip:** You don't need to adopt everything. Pick the features that provide the most value for your project.
+
+### Repo Layout Examples
+
+Before starting adoption, understand how your repository is structured. Here are two common patterns:
+
+**Root-Only Repo (Single Configuration):**
+
+A simple repository with a single Terraform or application configuration:
+
+```text
+my-project/
+├── .github/
+│   ├── copilot-instructions.md
+│   ├── instructions/
+│   └── workflows/
+├── main.tf              # Primary configuration
+├── variables.tf         # Input variables
+├── outputs.tf           # Output values
+├── versions.tf          # Provider version constraints
+├── .terraform.lock.hcl  # Dependency lock file
+└── README.md
+```
+
+**Module-Based Repo:**
+
+A repository containing reusable modules with examples and tests:
+
+```text
+my-modules/
+├── .github/
+│   ├── copilot-instructions.md
+│   ├── instructions/
+│   └── workflows/
+├── modules/
+│   └── vpc/
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── outputs.tf
+│       ├── versions.tf
+│       └── README.md
+├── examples/
+│   └── basic-vpc/
+│       ├── main.tf
+│       └── README.md
+├── tests/
+│   └── vpc.tftest.hcl
+└── README.md
+```
+
+Choose your adoption approach based on your repository's structure.
 
 ---
 
@@ -1375,6 +1427,92 @@ Consider informing collaborators about:
 - New pre-commit requirements
 - CI workflow changes
 - New issue/PR templates
+
+---
+
+## Migration Notes for Existing Terraform Repos
+
+If you are adopting this template into an existing Terraform repository, follow this step-by-step checklist to ensure a smooth migration:
+
+### Pre-Migration Checklist
+
+- [ ] **Baseline current state:** Run `terraform plan` and save the output. This gives you a baseline to verify no unintended changes occur after migration.
+- [ ] **Commit any pending changes:** Ensure your working tree is clean before starting migration.
+
+### Alignment Checklist
+
+- [ ] **Align `versions.tf`:** Ensure your `versions.tf` follows the template's format with explicit `required_version` and `required_providers` blocks:
+
+  ```hcl
+  terraform {
+    required_version = ">= 1.6.0"
+
+    required_providers {
+      aws = {
+        source  = "hashicorp/aws"
+        version = "~> 5.0"
+      }
+    }
+  }
+  ```
+
+- [ ] **Update `.terraform.lock.hcl`:** Regenerate your lock file to include hashes for all platforms used in CI:
+
+  ```bash
+  terraform providers lock \
+    -platform=linux_amd64 \
+    -platform=darwin_amd64 \
+    -platform=darwin_arm64
+  ```
+
+- [ ] **Commit `.terraform.lock.hcl`:** Ensure the lock file is tracked in version control.
+
+### Formatting and Validation Checklist
+
+- [ ] **Run `terraform fmt -recursive`:** Format all Terraform files to match the template's style.
+- [ ] **Run `terraform validate`:** Ensure all configurations are syntactically valid.
+- [ ] **Run `tflint`:** Use the template's `.tflint.hcl` configuration to lint your code:
+
+  ```bash
+  tflint --recursive
+  ```
+
+- [ ] **Fix any issues:** Address formatting, validation, and linting errors before proceeding.
+
+### Refactoring Checklist
+
+If you need to rename resources or restructure your configuration:
+
+- [ ] **Use `moved` blocks for renames:** Instead of manual state manipulation, use declarative `moved` blocks:
+
+  ```hcl
+  moved {
+    from = aws_instance.old_name
+    to   = aws_instance.new_name
+  }
+  ```
+
+- [ ] **Use `import` blocks for existing resources:** Bring unmanaged resources into Terraform using `import` blocks (Terraform 1.5+):
+
+  ```hcl
+  import {
+    to = aws_instance.example
+    id = "i-1234567890abcdef0"
+  }
+  ```
+
+- [ ] **Use `removed` blocks when appropriate:** Remove resources from state without destroying them using `removed` blocks (Terraform 1.7+).
+
+### Documentation Checklist
+
+- [ ] **Document deviations:** If your repository deviates from the template's Terraform standards, document these in the **Scope Exceptions & Deviations from Standards** section of `.github/instructions/terraform.instructions.md`.
+- [ ] **Update README:** Document any Terraform-specific setup requirements for your repository.
+
+### Post-Migration Verification
+
+- [ ] **Run `terraform plan`:** Compare against your pre-migration baseline. There should be no unexpected changes.
+- [ ] **Run CI workflows:** Verify all GitHub Actions workflows pass.
+- [ ] **Test in a non-production environment:** If possible, apply changes to a test environment before production.
 
 ---
 
