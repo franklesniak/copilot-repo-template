@@ -2949,6 +2949,8 @@ For unit testing without real infrastructure, use mock providers:
 
 > **Note:** The `mock_provider` block requires Terraform 1.7.0 or later. For earlier versions of the test framework (Terraform 1.6.x), tests must use real provider credentials or skip provider-dependent tests.
 
+**AWS Example:**
+
 ```hcl
 # tests/unit.tftest.hcl
 
@@ -2966,6 +2968,53 @@ run "uses_all_availability_zones" {
   assert {
     condition     = length(aws_subnet.private) == 3
     error_message = "Should create subnet in each AZ"
+  }
+}
+```
+
+**Azure Example:**
+
+```hcl
+# tests/unit.tftest.hcl
+
+mock_provider "azurerm" {
+  mock_data "azurerm_client_config" {
+    defaults = {
+      tenant_id       = "00000000-0000-0000-0000-000000000000"
+      subscription_id = "00000000-0000-0000-0000-000000000000"
+    }
+  }
+}
+
+run "resource_group_has_correct_location" {
+  command = plan
+
+  assert {
+    condition     = azurerm_resource_group.main.location == "eastus"
+    error_message = "Resource group should be in eastus"
+  }
+}
+```
+
+**GCP Example:**
+
+```hcl
+# tests/unit.tftest.hcl
+
+mock_provider "google" {
+  mock_data "google_compute_zones" {
+    defaults = {
+      names = ["us-central1-a", "us-central1-b", "us-central1-c"]
+    }
+  }
+}
+
+run "uses_all_compute_zones" {
+  command = plan
+
+  assert {
+    condition     = length(google_compute_instance.main) == 3
+    error_message = "Should create instance in each zone"
   }
 }
 ```
