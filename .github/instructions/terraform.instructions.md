@@ -641,7 +641,7 @@ provider "azurerm" {
 }
 ```
 
-> **Note:** Azure does not support provider-level default tags. Use the `azurerm_resource_group` or resource-level `tags` blocks consistently across resources.
+> **Note:** Azure does not support provider-level default tags, and Resource Group tags are not automatically inherited by resources. Define common tags in a `locals` block (for example, `local.common_tags`) and apply `tags = local.common_tags` consistently to each taggable resource; you can optionally enforce required tags via Azure Policy.
 
 **GCP Example:**
 
