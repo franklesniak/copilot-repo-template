@@ -5,13 +5,13 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.6.20260130.0
+**Version:** 1.7.20260131.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-01-30
+- **Last Updated:** 2026-01-31
 - **Scope:** Defines Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in this repository. Covers style, formatting, naming conventions, file organization, variable and output design, resource configuration, module design, refactoring, state management, security best practices, provider management, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -43,6 +43,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - ["Done" Definition for Terraform Changes](#done-definition-for-terraform-changes)
 - [Related Documentation](#related-documentation)
 - [Scope Exceptions & Deviations from Standards](#scope-exceptions--deviations-from-standards)
+- [Glossary](#glossary)
 
 ## Keywords
 
@@ -54,6 +55,8 @@ The key words "**MUST**", "**MUST NOT**", "**REQUIRED**", "**SHALL**", "**SHALL 
 - **SHOULD NOT** / **NOT RECOMMENDED** — Strong discouragement. Valid reasons may exist to do otherwise, but implications must be understood.
 - **MAY** / **OPTIONAL** — Truly optional. Implementations can choose to include or omit.
 
+> **Applicability rule:** Requirements in this document apply **when their scope is present**. For example, **module** requirements apply only when you maintain reusable modules; **test** requirements apply only when you add Terraform tests; **root module** requirements apply only when a root configuration exists. When a scoped construct exists, all associated **MUST/SHOULD** requirements are expected to be followed.
+
 ## Quick Reference Checklist
 
 This checklist provides a quick reference for both human developers and LLMs (like GitHub Copilot) to follow the Terraform style guidelines. Each item includes a scope tag indicating applicability:
@@ -62,6 +65,8 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[Module]** — Applies when developing reusable modules
 - **[Root]** — Applies to root configurations (deployments)
 - **[Test]** — Applies to test files (`.tftest.hcl`)
+
+> **Scope reminder:** Items tagged **[Module]**, **[Root]**, or **[Test]** are mandatory **when those constructs are present**. If the construct does not exist in your repo, the requirement is not yet applicable.
 
 ### Formatting and Style
 
@@ -392,6 +397,56 @@ resource "aws_security_group" "vpn_access" {
   # ...
 }
 ```
+
+### JSON Configuration Files (.tf.json)
+
+Terraform supports JSON syntax for configuration files using the `.tf.json` extension. When using JSON configuration:
+
+- `.tf.json` files **MUST** be valid JSON and **SHOULD** be consistently formatted
+- JSON files **SHOULD** use 2 spaces for indentation to match HCL conventions
+- JSON files **SHOULD** be validated and formatted using standard JSON tools such as `jq`, `prettier`, or IDE-integrated formatters
+- JSON configuration **SHOULD** be reserved for programmatically generated Terraform code; hand-written configuration **SHOULD** use HCL (`.tf`) format for readability
+
+**Validation command:**
+
+```bash
+# Validate JSON syntax
+jq empty *.tf.json
+
+# Format JSON files with jq
+jq '.' input.tf.json > formatted.tf.json
+
+# Format with prettier (if available)
+prettier --write "*.tf.json"
+```
+
+**Note:** `terraform fmt` does not format `.tf.json` files. Use external JSON formatting tools as part of your pre-commit or CI workflow.
+
+### Template File Formatting (.tftpl)
+
+Template files (`.tftpl`) are processed by the `templatefile()` function and generate dynamic content. Formatting expectations for template files:
+
+- Template files **MUST** use UTF-8 encoding
+- Template files **MUST** end with a single newline
+- Template files **SHOULD** use Unix-style line endings (LF) for cross-platform compatibility
+- Template variables **SHOULD** be documented at the top of the file using comments appropriate to the output format
+- Terraform template directives (`%{ ... }`, `${ ... }`) **SHOULD** be clearly formatted for readability
+- When generating structured output (JSON, YAML), the template **SHOULD** produce valid, well-formatted output
+
+**Comment conventions by output type:**
+
+| Output Format | Comment Style | Example |
+| --- | --- | --- |
+| Shell scripts | `#` comments | `# Variable: environment (string)` |
+| JSON | Document in separate header or external docs | N/A (JSON has no comments) |
+| YAML | `#` comments | `# Variable: app_name (string)` |
+| XML | `<!-- -->` comments | `<!-- Variable: config_value (string) -->` |
+
+**Validation:**
+
+- Template syntax errors are caught at `terraform plan` time when `templatefile()` is evaluated
+- For templates generating JSON/YAML, validate the rendered output format as part of testing
+- Use Terraform tests to verify template output for critical templates
 
 ---
 
@@ -2257,6 +2312,10 @@ terraform providers lock \
   -platform=windows_arm64
 ```
 
+> **When to regenerate `.terraform.lock.hcl`:**
+>
+> Regenerate the lock file **only** when you intentionally change provider versions, add/remove providers, or add new execution platforms (e.g., new CI OS/architecture). Avoid running `terraform init -upgrade` unless you intend to update providers. After regeneration, review diffs and commit the updated lock file.
+
 ### Pessimistic Constraints
 
 Use the pessimistic constraint operator (`~>`) for providers to allow patch updates while preventing breaking changes:
@@ -3365,3 +3424,27 @@ The following are common scenarios where deviations may be justified:
 > **Note:** Replace the examples below with actual deviations for your project, or remove this section if no deviations apply.
 
 *No deviations recorded yet. When deviations are necessary, document them here using the format above.*
+
+---
+
+## Glossary
+
+This glossary defines key Terraform terms used throughout this document.
+
+| Term | Definition |
+| --- | --- |
+| **check block** | A Terraform construct (v1.5+) that runs continuous validation assertions on every `plan` and `apply`, producing warnings rather than errors when assertions fail. |
+| **moved block** | A declarative block (v1.1+) that tells Terraform to treat a resource at a new address as the same resource that previously existed at a different address, enabling safe refactoring without destroying resources. |
+| **import block** | A declarative block (v1.5+) that brings existing infrastructure under Terraform management without using CLI commands, enabling version-controlled and reviewable imports. |
+| **removed block** | A declarative block (v1.7+) that removes a resource from Terraform state without destroying the underlying infrastructure. |
+| **partial backend configuration** | A pattern where static backend settings are committed to version control while dynamic values (bucket names, regions) are provided at runtime via `-backend-config` flags or files. |
+| **pessimistic constraint operator** | The `~>` operator used in version constraints that allows only the rightmost version component to increment (e.g., `~> 5.0` allows `5.x` but not `6.0`). |
+| **provider alias** | A named instance of a provider configuration that enables deploying resources to multiple regions, accounts, or with different settings within the same configuration. |
+| **root module** | The top-level Terraform configuration directory where `terraform init`, `plan`, and `apply` are executed. Contains provider and backend configuration. Contrast with reusable (child) modules. |
+| **reusable module** | A self-contained Terraform configuration designed to be called from root modules or other modules. Located in `modules/` directories and versioned for reuse. |
+| **state locking** | A mechanism that prevents concurrent Terraform operations on the same state file, avoiding race conditions and state corruption. |
+| **terraform.lock.hcl** | The dependency lock file that records the exact provider versions and checksums used, ensuring reproducible installations across team members and CI systems. |
+| **templatefile() function** | A Terraform function that reads a template file and renders it with provided variables, commonly used for generating scripts, policies, or configuration files. |
+| **.tftpl extension** | The recommended file extension for Terraform template files used with `templatefile()`. |
+| **.tf.json extension** | An alternative JSON syntax for Terraform configuration, typically used for programmatically generated code. |
+| **variable validation** | Custom validation rules defined within variable blocks that enforce constraints on input values at plan time. |
