@@ -1834,11 +1834,28 @@ pre-commit --version
 
 **Solution:** Re-install the hooks:
 
+**Windows (PowerShell):**
+
+```powershell
+pre-commit install
+```
+
+Or if `pre-commit` is not on PATH:
+
+```powershell
+python -m pre_commit install
+```
+
+**macOS/Linux/FreeBSD:**
+
 ```bash
 pre-commit install
-# If 'pre-commit' is not found on PATH, use the module form instead:
-# Windows: python -m pre_commit install
-# macOS/Linux: python3 -m pre_commit install
+```
+
+Or if `pre-commit` is not on PATH:
+
+```bash
+python3 -m pre_commit install
 ```
 
 Verify the hook exists:
@@ -1871,15 +1888,33 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed instructions.
 
 **Quick reference for daily development:**
 
+**Windows (PowerShell):**
+
+```powershell
+# Create a feature branch
+git checkout -b feature/your-feature-name
+
+# Make changes and run pre-commit
+pre-commit run --all-files
+# Or if 'pre-commit' is not on PATH: python -m pre_commit run --all-files
+
+# Stage and commit
+git add .
+git commit -m "Add your feature"
+
+# Push and open a PR
+git push origin feature/your-feature-name
+```
+
+**macOS/Linux/FreeBSD:**
+
 ```bash
 # Create a feature branch
 git checkout -b feature/your-feature-name
 
 # Make changes and run pre-commit
 pre-commit run --all-files
-# If 'pre-commit' is not found on PATH, use the module form instead:
-# Windows: python -m pre_commit run --all-files
-# macOS/Linux: python3 -m pre_commit run --all-files
+# Or if 'pre-commit' is not on PATH: python3 -m pre_commit run --all-files
 
 # Stage and commit
 git add .

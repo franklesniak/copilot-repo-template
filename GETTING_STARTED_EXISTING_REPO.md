@@ -1008,7 +1008,7 @@ If your project doesn't have a `.pre-commit-config.yaml`:
    python -m pre_commit install
    ```
 
-   **If you installed with pip3 (macOS/Linux/FreeBSD):**
+   **If you installed with pip (macOS/Linux/FreeBSD):**
 
    ```bash
    python3 -m pre_commit install
@@ -1515,16 +1515,16 @@ Before making changes, install pre-commit hooks:
 ```powershell
 # Install pre-commit (choose one method):
 # Option 1: Using pipx (recommended)
+# First install pipx if you don't have it: python -m pip install pipx
 python -m pipx install pre-commit
-# After first-time pipx install, ensure it's on your PATH:
 python -m pipx ensurepath
+# Restart your terminal for PATH changes to take effect, then run:
+pre-commit install
 
 # Option 2: Using pip (if you can't use pipx)
 python -m pip install pre-commit
-
-# Install the hooks
-pre-commit install
-# If 'pre-commit' is not on PATH, use: python -m pre_commit install
+# Use module invocation (avoids PATH issues):
+python -m pre_commit install
 ```
 
 **macOS/Linux/FreeBSD:**
@@ -1532,16 +1532,17 @@ pre-commit install
 ```bash
 # Install pre-commit (choose one method):
 # Option 1: Using pipx (recommended)
+# First install pipx if you don't have it: python3 -m pip install pipx
+# (Or use your OS package manager: sudo apt install pipx, brew install pipx, etc.)
 python3 -m pipx install pre-commit
-# After first-time pipx install, ensure it's on your PATH:
 python3 -m pipx ensurepath
+# Restart your terminal for PATH changes to take effect, then run:
+pre-commit install
 
 # Option 2: Using pip (if you can't use pipx)
 python3 -m pip install pre-commit
-
-# Install the hooks
-pre-commit install
-# If 'pre-commit' is not on PATH, use: python3 -m pre_commit install
+# Use module invocation (avoids PATH issues):
+python3 -m pre_commit install
 ```
 
 Pre-commit hooks will automatically run on each commit. You can also run them manually:
@@ -1550,14 +1551,24 @@ Pre-commit hooks will automatically run on each commit. You can also run them ma
 
 ```powershell
 pre-commit run --all-files
-# If 'pre-commit' is not on PATH, use: python -m pre_commit run --all-files
+```
+
+Or if `pre-commit` is not on PATH:
+
+```powershell
+python -m pre_commit run --all-files
 ```
 
 **macOS/Linux/FreeBSD:**
 
 ```bash
 pre-commit run --all-files
-# If 'pre-commit' is not on PATH, use: python3 -m pre_commit run --all-files
+```
+
+Or if `pre-commit` is not on PATH:
+
+```bash
+python3 -m pre_commit run --all-files
 ```
 ````
 
@@ -1591,16 +1602,16 @@ npm install
 ```powershell
 # Install pre-commit (choose one method):
 # Option 1: Using pipx (recommended)
+# First install pipx if you don't have it: python -m pip install pipx
 python -m pipx install pre-commit
-# After first-time pipx install, ensure it's on your PATH:
 python -m pipx ensurepath
+# Restart your terminal for PATH changes to take effect, then run:
+pre-commit install
 
 # Option 2: Using pip (if you can't use pipx)
 python -m pip install pre-commit
-
-# Set up git hooks
-pre-commit install
-# If 'pre-commit' is not on PATH, use: python -m pre_commit install
+# Use module invocation (avoids PATH issues):
+python -m pre_commit install
 ```
 
 **macOS/Linux/FreeBSD:**
@@ -1608,16 +1619,17 @@ pre-commit install
 ```bash
 # Install pre-commit (choose one method):
 # Option 1: Using pipx (recommended)
+# First install pipx if you don't have it: python3 -m pip install pipx
+# (Or use your OS package manager: sudo apt install pipx, brew install pipx, etc.)
 python3 -m pipx install pre-commit
-# After first-time pipx install, ensure it's on your PATH:
 python3 -m pipx ensurepath
+# Restart your terminal for PATH changes to take effect, then run:
+pre-commit install
 
 # Option 2: Using pip (if you can't use pipx)
 python3 -m pip install pre-commit
-
-# Set up git hooks
-pre-commit install
-# If 'pre-commit' is not on PATH, use: python3 -m pre_commit install
+# Use module invocation (avoids PATH issues):
+python3 -m pre_commit install
 ```
 ````
 
