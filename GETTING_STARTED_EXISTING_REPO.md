@@ -142,6 +142,9 @@ git --version
 # Python 3.9+ is required for pre-commit hooks and CI workflows
 python --version
 
+# Check pip version (if adopting Python features or pre-commit)
+python -m pip --version
+
 # Check Node.js version (if adopting markdown linting)
 node --version
 ```
@@ -155,6 +158,9 @@ git --version
 # Check Python version (if adopting Python features or pre-commit)
 # Python 3.9+ is required for pre-commit hooks and CI workflows
 python3 --version
+
+# Check pip version (if adopting Python features or pre-commit)
+pip3 --version
 
 # Check Node.js version (if adopting markdown linting)
 node --version
@@ -873,14 +879,23 @@ Pre-commit hooks run automated checks before each commit, catching issues early 
 **Windows (PowerShell):**
 
 ```powershell
-pip install pre-commit
+python -m pip install pre-commit
 ```
 
-**macOS/Linux:**
+**macOS/Linux/FreeBSD:**
 
 ```bash
 pip3 install pre-commit
+# Or using pipx (recommended for system Python conflicts):
+pipx install pre-commit
+# Or using Homebrew (macOS):
+brew install pre-commit
 ```
+
+> **Troubleshooting:**
+>
+> - **Windows:** If you see `pip: The term 'pip' is not recognized`, use `python -m pip` instead of `pip`.
+> - **macOS/Linux/FreeBSD:** If you see an `externally-managed-environment` error, use `pipx install pre-commit` or `brew install pre-commit` (macOS) instead.
 
 ### If You Don't Have Pre-commit Configured
 
@@ -974,8 +989,10 @@ If your project already uses pre-commit:
 
 | Issue | Platform | Solution |
 | --- | --- | --- |
-| Python not found | Windows | Add Python to PATH |
-| pip not found | macOS/Linux | Use `pip3` instead of `pip` |
+| `pip` not recognized | Windows | Use `python -m pip` instead of `pip` |
+| `pip` not found | macOS/Linux | Use `pip3` instead of `pip` |
+| `externally-managed-environment` error | Linux/macOS | Use `pipx install pre-commit` or `brew install pre-commit` (macOS) |
+| Python not found | Windows | Reinstall Python and check "Add Python to PATH" |
 | Hooks fail to initialize | All | Run `pre-commit clean && pre-commit install` |
 
 ---
