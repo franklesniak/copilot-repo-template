@@ -1712,37 +1712,18 @@ When adopting this template for a Terraform project, complete the following task
 3. **Verify required provider versions** and update the version constraint examples as needed
 4. **Add organization-specific required tags** to the Required Tags section if your organization mandates specific tags
 5. **Document any justified deviations** in the "Scope Exceptions & Deviations from Standards" section at the end of the file
-6. **Remove unused sections/examples** after adoption (e.g., if you only use Azure, you may want to modify AWS-specific examples)
+6. **Remove non-relevant provider examples** — The file includes parallel examples for AWS, Azure, and GCP. Delete examples for providers your project does not use to reduce noise and confusion. Search for "AWS Example", "Azure Example", "GCP Example", and combined labels like "AWS/Azure Example" to identify provider-specific blocks.
+7. **Replace all `REPLACE_ME_*` placeholders** with your organization's actual values. Run `grep -r "REPLACE_ME"` to find all placeholders requiring customization.
 
 ### Customizing Provider Examples
 
-The file uses AWS examples for illustration, but all style rules are provider-agnostic. To customize for your cloud provider:
+The file now includes parallel examples for AWS, Azure, and GCP throughout. Each example group is clearly labeled with "AWS Example", "Azure Example", "GCP Example", or combined labels like "AWS/Azure Example" (used when providers share the same pattern). To customize for your cloud provider:
 
-1. **For Azure-only projects:** Update backend examples to use `azurerm` backend instead of S3:
+1. **For single-provider projects:** Remove examples for providers you don't use. Search for the provider labels (e.g., "Azure Example", "GCP Example") and delete those code blocks and their headers.
 
-   ```hcl
-   terraform {
-     backend "azurerm" {
-       resource_group_name  = "REPLACE_ME_RESOURCE_GROUP"
-       storage_account_name = "REPLACE_ME_STORAGE_ACCOUNT"
-       container_name       = "REPLACE_ME_CONTAINER"
-       key                  = "terraform.tfstate"
-     }
-   }
-   ```
+2. **For multi-cloud projects:** Keep all examples or remove only those that don't apply to your specific environments.
 
-2. **For GCP-only projects:** Update backend examples to use `gcs` backend:
-
-   ```hcl
-   terraform {
-     backend "gcs" {
-       bucket = "REPLACE_ME_BUCKET"
-       prefix = "terraform/state"
-     }
-   }
-   ```
-
-3. **For multi-cloud projects:** Keep the generic guidance and add notes about which backend configurations apply to which environments.
+3. **For all projects:** Replace `REPLACE_ME_*` placeholders with your organization's actual values. See the "Placeholder Convention (`REPLACE_ME_*`)" section in `.github/instructions/terraform.instructions.md` for the complete list of standard placeholders.
 
 ### Customizing for Terraform Cloud/Enterprise
 
