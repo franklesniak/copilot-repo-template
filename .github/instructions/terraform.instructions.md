@@ -648,7 +648,7 @@ provider "google" {
 }
 ```
 
-> **Note:** GCP does not support provider-level default labels. Apply labels consistently at the resource level or use a `locals` block for common labels.
+> **Note:** GCP supports `default_labels` at the provider level (Google provider 4.x+), but label keys must be lowercase. For consistent lowercase enforcement or cross-provider compatibility, consider using a `locals` block for common labels.
 
 ### Backend Configuration
 
@@ -1330,11 +1330,11 @@ provider "aws" {
 }
 ```
 
-> **Note:** Azure and GCP do not support provider-level default tags/labels. For these providers, use a `locals` block to define common tags and apply them consistently at the resource level. See the [Local Tags Pattern](#local-tags-pattern) section below.
+> **Note:** Azure does not support provider-level default tags. GCP supports `default_labels` at the provider level (Google provider 4.x+), but label keys must be lowercase. For Azure, use a `locals` block to define common tags. For GCP, you may use `default_labels` or a `locals` block if you need consistent lowercase key enforcement. See the [Local Tags Pattern](#local-tags-pattern) section below.
 
 ### Local Tags Pattern
 
-Use locals for computed or merged tags. This pattern is **REQUIRED** for Azure and GCP where provider-level default tags are not supported:
+Use locals for computed or merged tags. This pattern is **REQUIRED** for Azure (no provider-level support) and **RECOMMENDED** for GCP when consistent lowercase label key enforcement is needed:
 
 **AWS/Azure Example (Tags):**
 
