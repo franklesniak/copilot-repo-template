@@ -731,7 +731,7 @@ After creating the label, uncomment the `- triage` line in each issue template (
 >
 > When you install Python packages with CLI tools using `pip`, the executables are placed in a `Scripts` folder (Windows) or `bin` folder (macOS/Linux) that may not be in your system PATH. This can cause "command not found" errors.
 >
-> `pipx` addresses this by installing Python CLI tools in isolated environments and, once installed and configured, managing PATH entries for the tools it installs. This is the [official recommendation from the pre-commit project](https://pre-commit.com/#install).
+> `pipx` addresses this by installing Python CLI tools in isolated environments and exposing their executables from a single, well-defined binary directory. To make that directory available on the command line, you must run `pipx ensurepath` once (and restart your shell); after that, new tools installed with `pipx` will typically be usable without additional PATH changes. This is the [official recommendation from the pre-commit project](https://pre-commit.com/#install).
 >
 > If the `pipx` command itself is not yet on your PATH (for example, just after installation on Windows), you can invoke it via the Python module instead, such as `python -m pipx ensurepath` on Windows or `python3 -m pipx ensurepath` on macOS/Linux/FreeBSD for the initial setup.
 >
@@ -741,7 +741,7 @@ After creating the label, uncomment the `- triage` line in each issue template (
 
 #### Option 1: Using pipx (recommended)
 
-[pipx](https://pipx.pypa.io/) installs Python applications in isolated environments while automatically managing PATH configuration. First install pipx if you don't have it:
+[pipx](https://pipx.pypa.io/) installs Python applications in isolated environments and, after you run `pipx ensurepath` once, manages PATH entries for the tools it installs. First install pipx if you don't have it:
 
 ```powershell
 # First, upgrade pip to the latest version (recommended)
@@ -797,14 +797,14 @@ You should see output like `pre-commit 4.0.1`.
 
 #### Option 1: Using pipx (recommended)
 
-[pipx](https://pipx.pypa.io/) installs Python applications in isolated environments while automatically managing PATH configuration. First install pipx if you don't have it:
+[pipx](https://pipx.pypa.io/) installs Python applications in isolated environments and, after you run `pipx ensurepath` once, manages PATH entries for the tools it installs. First install pipx if you don't have it:
 
 ```bash
 # First, upgrade pip to the latest version (recommended)
-pip3 install --upgrade pip
+python3 -m pip install --upgrade pip
 
 # Install pipx
-pip3 install pipx
+python3 -m pip install pipx
 
 # Configure PATH (use module invocation in case pipx isn't on PATH yet)
 python3 -m pipx ensurepath
@@ -827,15 +827,15 @@ brew install pre-commit
 
 ```bash
 # First, upgrade pip to the latest version (recommended)
-pip3 install --upgrade pip
+python3 -m pip install --upgrade pip
 
 # Then install pre-commit
-pip3 install pre-commit
+python3 -m pip install pre-commit
 ```
 
-> **Note:** When using pip3, the `pre-commit` command may not be recognized if Python's `bin` folder is not in your PATH. Use `python3 -m pre_commit` instead of `pre-commit` for all commands. For example, use `python3 -m pre_commit --version` to verify installation.
+> **Note:** When using pip, the `pre-commit` command may not be recognized if Python's `bin` folder is not in your PATH. Use `python3 -m pre_commit` instead of `pre-commit` for all commands. For example, use `python3 -m pre_commit --version` to verify installation.
 >
-> **Troubleshooting:** On newer Linux distributions (Ubuntu 23.04+, Fedora 38+) and some macOS configurations, you may see an `externally-managed-environment` error when using pip. In that case, do **not** use `pip3 install pipx`, as it can fail with the same error. Instead, install **pipx** via your OS package manager (or Homebrew on macOS) and then use it to install `pre-commit`. For example:
+> **Troubleshooting:** On newer Linux distributions (Ubuntu 23.04+, Fedora 38+) and some macOS configurations, you may see an `externally-managed-environment` error when using pip. In that case, do **not** use `python3 -m pip install pipx`, as it can fail with the same error. Instead, install **pipx** via your OS package manager (or Homebrew on macOS) and then use it to install `pre-commit`. For example:
 >
 > - Debian / Ubuntu: `sudo apt install pipx && pipx ensurepath`
 > - Fedora: `sudo dnf install pipx && pipx ensurepath`
