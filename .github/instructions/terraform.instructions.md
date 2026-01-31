@@ -727,9 +727,9 @@ terraform {
 ```hcl
 # config/prod.s3.tfbackend
 
-bucket         = "my-org-terraform-state"
-region         = "us-east-1"
-dynamodb_table = "terraform-locks"
+bucket         = "REPLACE_ME_STATE_BUCKET"
+region         = "REPLACE_ME_REGION"
+dynamodb_table = "REPLACE_ME_LOCK_TABLE"
 ```
 
 **Azure Backend file (committed):**
@@ -1493,7 +1493,7 @@ resource "aws_db_instance" "production" {
 
 # Protect Terraform state bucket
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = "my-org-terraform-state"
+  bucket = "REPLACE_ME_STATE_BUCKET"
 
   lifecycle {
     prevent_destroy = true
