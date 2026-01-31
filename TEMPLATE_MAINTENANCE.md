@@ -18,7 +18,7 @@ This guide is for **maintainers of the `franklesniak/copilot-repo-template` repo
 
 ## Recommended Review Cadence
 
-To keep the template current and functional, maintainers should review template documentation and workflows on a **quarterly basis**.
+To keep the template current and functional, maintainers **SHOULD** review template documentation and workflows on a **quarterly basis**.
 
 **Quarterly Review Checklist:**
 
@@ -40,7 +40,7 @@ To keep the template current and functional, maintainers should review template 
 
 ## Updating Pre-commit Hook Versions
 
-Pre-commit hooks should be kept up-to-date for security and compatibility:
+Pre-commit hooks **SHOULD** be kept up-to-date for security and compatibility:
 
 ```bash
 # Check for and apply updates to pre-commit hooks

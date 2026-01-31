@@ -203,7 +203,7 @@ Before starting adoption, understand how your repository is structured. Here are
 
 **Root-Only Repo (Single Configuration):**
 
-A simple repository with a single Terraform or application configuration:
+A repository with a single Terraform or application configuration:
 
 ```text
 my-project/
@@ -1501,7 +1501,13 @@ If you need to rename resources or restructure your configuration:
   }
   ```
 
-- [ ] **Use `removed` blocks when appropriate:** Remove resources from state without destroying them using `removed` blocks (Terraform 1.7+).
+- [ ] **Use `removed` blocks when appropriate:** Remove resources from state without destroying them using `removed` blocks (Terraform 1.7+):
+
+  ```hcl
+  removed {
+    from = aws_instance.legacy_server
+  }
+  ```
 
 ### Documentation Checklist
 

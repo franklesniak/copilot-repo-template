@@ -53,7 +53,7 @@ Depending on your project's needs, you may organize your repository in different
 
 **Root-Only Repo (Single Configuration):**
 
-A simple repository with a single Terraform or application configuration:
+A repository with a single Terraform or application configuration:
 
 ```text
 my-project/
