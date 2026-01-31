@@ -872,7 +872,7 @@ Pre-commit hooks run automated checks before each commit, catching issues early 
 **Prerequisites:**
 
 - Python installed (3.9+)
-- pre-commit installed globally
+- pre-commit installed and available on your PATH (see installation steps below)
 
 > **Why pipx is recommended:**
 >
@@ -1034,7 +1034,7 @@ If your project doesn't have a `.pre-commit-config.yaml`:
    python -m pre_commit run --all-files
    ```
 
-   **If you installed with pip3 (macOS/Linux/FreeBSD):**
+   **If you installed with pip (macOS/Linux/FreeBSD):**
 
    ```bash
    python3 -m pre_commit run --all-files
@@ -1077,7 +1077,7 @@ If your project already uses pre-commit:
    python -m pre_commit run --all-files
    ```
 
-   **If you installed with pip3 (macOS/Linux/FreeBSD):**
+   **If you installed with pip (macOS/Linux/FreeBSD):**
 
    ```bash
    python3 -m pre_commit run --all-files

@@ -761,7 +761,7 @@ Then install pre-commit:
 python -m pipx install pre-commit
 ```
 
-> **Note:** The shell restart is needed before running `pre-commit` commands directly. If you use `python -m pipx` for installation, you can continue in the same session.
+> **Note:** You still need to restart your shell (or open a new one) before running `pre-commit` directly by name, because PATH changes only apply to new shells. Using `python -m pipx` avoids needing `pipx` on PATH and lets you keep using pipx in the same session (for example, via `python -m pipx run pre-commit`), but it does not make `pre-commit` immediately available on PATH in the current shell.
 
 #### Option 2: Using pip
 
@@ -1844,10 +1844,10 @@ If you installed with pipx:
 pre-commit install
 ```
 
-If `pre-commit` is not on PATH (run `pipx ensurepath` and restart your terminal, or use `pipx run`):
+If `pre-commit` is not on PATH (run `pipx ensurepath` and restart your terminal, or use `python -m pipx run` as an alternative):
 
 ```powershell
-pipx run pre-commit install
+python -m pipx run pre-commit install
 ```
 
 If you installed with pip:
@@ -1864,10 +1864,10 @@ If you installed with pipx or Homebrew:
 pre-commit install
 ```
 
-If `pre-commit` is not on PATH (run `pipx ensurepath` and restart your terminal, or use `pipx run`):
+If `pre-commit` is not on PATH (run `pipx ensurepath` and restart your terminal, or use `python3 -m pipx run` as an alternative):
 
 ```bash
-pipx run pre-commit install
+python3 -m pipx run pre-commit install
 ```
 
 If you installed with pip:
@@ -1926,8 +1926,8 @@ git push origin feature/your-feature-name
 If `pre-commit` is not on PATH (pipx users: run `pipx ensurepath` and restart terminal):
 
 ```powershell
-# Alternative using pipx run (no PATH required)
-pipx run pre-commit run --all-files
+# Alternative using python -m pipx run (no PATH required)
+python -m pipx run pre-commit run --all-files
 
 # Or if you installed via pip:
 python -m pre_commit run --all-files
@@ -1953,8 +1953,8 @@ git push origin feature/your-feature-name
 If `pre-commit` is not on PATH (pipx users: run `pipx ensurepath` and restart terminal):
 
 ```bash
-# Alternative using pipx run (no PATH required)
-pipx run pre-commit run --all-files
+# Alternative using python3 -m pipx run (no PATH required)
+python3 -m pipx run pre-commit run --all-files
 
 # Or if you installed via pip:
 python3 -m pre_commit run --all-files
