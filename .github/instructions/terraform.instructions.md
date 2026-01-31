@@ -286,7 +286,7 @@ This repository approaches Terraform as **infrastructure as code** with the same
 
 The coding standards in this document enforce these principles through specific, actionable requirements.
 
-> **Provider-Agnostic Guidance:** Throughout this document, AWS is used for illustration in code examples, but all style rules and best practices are **provider-agnostic**. Users **MAY** substitute Azure (`azurerm`), Google Cloud (`google`), or any other Terraform provider to suit their use case. The principles of naming, structure, security, and documentation apply equally across all providers.
+> **Provider-Agnostic Guidance:** This document includes parallel examples for AWS, Azure, and GCP where applicable. All style rules and best practices are **provider-agnostic**. Users **MAY** remove examples for providers they do not use. The principles of naming, structure, security, and documentation apply equally across all providers.
 
 ---
 
