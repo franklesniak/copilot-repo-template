@@ -1510,31 +1510,54 @@ If you adopted the template's `CONTRIBUTING.md`, you should:
 
 Before making changes, install pre-commit hooks:
 
-```bash
+**Windows (PowerShell):**
+
+```powershell
 # Install pre-commit (choose one method):
 # Option 1: Using pipx (recommended)
-python -m pipx install pre-commit  # Windows
-# Or: python3 -m pipx install pre-commit  # macOS/Linux
+python -m pipx install pre-commit
 # After first-time pipx install, ensure it's on your PATH:
-python -m pipx ensurepath  # Windows
-# Or: python3 -m pipx ensurepath  # macOS/Linux
+python -m pipx ensurepath
 
 # Option 2: Using pip (if you can't use pipx)
-python -m pip install pre-commit  # Windows
-# Or: python3 -m pip install pre-commit  # macOS/Linux
+python -m pip install pre-commit
 
 # Install the hooks
 pre-commit install
 # If 'pre-commit' is not on PATH, use: python -m pre_commit install
-# Or: python3 -m pre_commit install (macOS/Linux)
+```
+
+**macOS/Linux/FreeBSD:**
+
+```bash
+# Install pre-commit (choose one method):
+# Option 1: Using pipx (recommended)
+python3 -m pipx install pre-commit
+# After first-time pipx install, ensure it's on your PATH:
+python3 -m pipx ensurepath
+
+# Option 2: Using pip (if you can't use pipx)
+python3 -m pip install pre-commit
+
+# Install the hooks
+pre-commit install
+# If 'pre-commit' is not on PATH, use: python3 -m pre_commit install
 ```
 
 Pre-commit hooks will automatically run on each commit. You can also run them manually:
 
-```bash
+**Windows (PowerShell):**
+
+```powershell
 pre-commit run --all-files
 # If 'pre-commit' is not on PATH, use: python -m pre_commit run --all-files
-# Or: python3 -m pre_commit run --all-files (macOS/Linux)
+```
+
+**macOS/Linux/FreeBSD:**
+
+```bash
+pre-commit run --all-files
+# If 'pre-commit' is not on PATH, use: python3 -m pre_commit run --all-files
 ```
 ````
 
@@ -1557,25 +1580,44 @@ Instead, update your existing README to document any new development requirement
 
 ### Setup
 
-```bash
-npm install          # Install markdown linting tools
+Install markdown linting tools:
 
+```bash
+npm install
+```
+
+**Windows (PowerShell):**
+
+```powershell
 # Install pre-commit (choose one method):
 # Option 1: Using pipx (recommended)
-python -m pipx install pre-commit  # Windows
-# Or: python3 -m pipx install pre-commit  # macOS/Linux
+python -m pipx install pre-commit
 # After first-time pipx install, ensure it's on your PATH:
-python -m pipx ensurepath  # Windows
-# Or: python3 -m pipx ensurepath  # macOS/Linux
+python -m pipx ensurepath
 
 # Option 2: Using pip (if you can't use pipx)
-python -m pip install pre-commit  # Windows
-# Or: python3 -m pip install pre-commit  # macOS/Linux
+python -m pip install pre-commit
 
 # Set up git hooks
 pre-commit install
 # If 'pre-commit' is not on PATH, use: python -m pre_commit install
-# Or: python3 -m pre_commit install (macOS/Linux)
+```
+
+**macOS/Linux/FreeBSD:**
+
+```bash
+# Install pre-commit (choose one method):
+# Option 1: Using pipx (recommended)
+python3 -m pipx install pre-commit
+# After first-time pipx install, ensure it's on your PATH:
+python3 -m pipx ensurepath
+
+# Option 2: Using pip (if you can't use pipx)
+python3 -m pip install pre-commit
+
+# Set up git hooks
+pre-commit install
+# If 'pre-commit' is not on PATH, use: python3 -m pre_commit install
 ```
 ````
 
