@@ -596,16 +596,16 @@ Boolean variables and locals **SHOULD** use these prefixes:
 
 Standard file organization for Terraform projects:
 
-| File | Purpose | Required |
+| File | Purpose | Requirement |
 | --- | --- | --- |
-| `main.tf` | Primary resource definitions | Yes |
-| `variables.tf` | Input variable declarations | Yes |
-| `outputs.tf` | Output value declarations | Yes |
-| `providers.tf` | Provider configuration | Yes (root modules) |
-| `versions.tf` | Version constraints | Yes |
-| `locals.tf` | Local value definitions | When needed |
-| `data.tf` | Data source definitions | When needed |
-| `backend.tf` | Backend configuration | Root modules only |
+| `main.tf` | Primary resource definitions | MUST |
+| `variables.tf` | Input variable declarations | MUST |
+| `outputs.tf` | Output value declarations | MUST |
+| `providers.tf` | Provider configuration | MUST (root modules) |
+| `versions.tf` | Version constraints | MUST |
+| `locals.tf` | Local value definitions | MAY |
+| `data.tf` | Data source definitions | MAY |
+| `backend.tf` | Backend configuration | MUST (root modules) |
 
 ### Version Constraints File
 
@@ -2927,13 +2927,13 @@ run "creates_required_subnets" {
 
 #### Test Block Reference
 
-| Block | Purpose | Required |
+| Block | Purpose | Requirement |
 | --- | --- | --- |
-| `variables {}` | Set input variable values for tests | Optional |
-| `provider {}` | Configure provider for tests (e.g., mock) | Optional |
-| `run "name" {}` | Define a test scenario | Required (at least one) |
-| `assert {}` | Define a test assertion within a run | Required (at least one per run) |
-| `expect_failures` | Expect specific resources/outputs to fail | Optional |
+| `variables {}` | Set input variable values for tests | MAY |
+| `provider {}` | Configure provider for tests (e.g., mock) | MAY |
+| `run "name" {}` | Define a test scenario | MUST (at least one) |
+| `assert {}` | Define a test assertion within a run | MUST (at least one per run) |
+| `expect_failures` | Expect specific resources/outputs to fail | MAY |
 
 ### Test Assertions
 
