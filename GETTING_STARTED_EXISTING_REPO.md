@@ -878,7 +878,9 @@ Pre-commit hooks run automated checks before each commit, catching issues early 
 >
 > When you install Python packages with CLI tools using `pip`, the executables are placed in a `Scripts` folder (Windows) or `bin` folder (macOS/Linux) that may not be in your system PATH. This can cause "command not found" errors.
 >
-> `pipx` solves this by installing Python CLI tools in isolated environments while automatically managing PATH configuration. This is the [official recommendation from the pre-commit project](https://pre-commit.com/#install).
+> `pipx` addresses this by installing Python CLI tools in isolated environments and, once installed and configured, managing PATH entries for the tools it installs. This is the [official recommendation from the pre-commit project](https://pre-commit.com/#install).
+>
+> If the `pipx` command itself is not yet on your PATH (for example, just after installation on Windows), you can invoke it via the Python module instead, such as `python -m pipx ensurepath` on Windows or `python3 -m pipx ensurepath` on macOS/Linux/FreeBSD for the initial setup.
 >
 > If you prefer to use `pip`, you can invoke pre-commit as a Python module using `python -m pre_commit` (Windows) or `python3 -m pre_commit` (macOS/Linux/FreeBSD) instead of the `pre-commit` command directly.
 
@@ -894,13 +896,16 @@ python -m pip install --upgrade pip
 
 # Install pipx
 python -m pip install pipx
-pipx ensurepath
+
+# Configure PATH (use module invocation in case pipx isn't on PATH yet)
+python -m pipx ensurepath
 ```
 
 Close and reopen PowerShell, then:
 
 ```powershell
-pipx install pre-commit
+# Use module invocation to ensure it works even if pipx isn't on PATH
+python -m pipx install pre-commit
 ```
 
 **Option 2: Using pip:**
@@ -925,13 +930,16 @@ pip3 install --upgrade pip
 
 # Install pipx
 pip3 install pipx
-pipx ensurepath
+
+# Configure PATH (use module invocation in case pipx isn't on PATH yet)
+python3 -m pipx ensurepath
 ```
 
 Restart your terminal, then:
 
 ```bash
-pipx install pre-commit
+# Use module invocation to ensure it works even if pipx isn't on PATH
+python3 -m pipx install pre-commit
 ```
 
 **Option 2: Using Homebrew (macOS only):**
@@ -955,7 +963,10 @@ pip3 install pre-commit
 > **Troubleshooting:**
 >
 > - **Windows:** If you see `pip: The term 'pip' is not recognized`, use `python -m pip` instead of `pip`.
-> - **macOS/Linux/FreeBSD:** If you see an `externally-managed-environment` error, use `pipx install pre-commit` or `brew install pre-commit` (macOS) instead.
+> - **macOS/Linux/FreeBSD:** If you see an `externally-managed-environment` error, do **not** use `pip3 install pipx`, as it can fail with the same error. Instead, install **pipx** via your OS package manager:
+>   - Debian / Ubuntu: `sudo apt install pipx && pipx ensurepath`
+>   - Fedora: `sudo dnf install pipx && pipx ensurepath`
+>   - macOS (Homebrew): `brew install pipx`
 
 ### If You Don't Have Pre-commit Configured
 
@@ -1095,9 +1106,9 @@ If your project already uses pre-commit:
 | `pre-commit` command not found | macOS/Linux | Use `python3 -m pre_commit` instead of `pre-commit`, or reinstall using `pipx` or Homebrew |
 | `pip` not recognized | Windows | Use `python -m pip` instead of `pip` |
 | `pip` not found | macOS/Linux | Use `pip3` instead of `pip` |
-| `externally-managed-environment` error | Linux/macOS | Use `pipx install pre-commit` or `brew install pre-commit` (macOS) |
+| `externally-managed-environment` error | Linux/macOS | Install pipx via OS package manager (`sudo apt install pipx`, `sudo dnf install pipx`, or `brew install pipx`) then use `pipx install pre-commit` |
 | Python not found | Windows | Reinstall Python and check "Add Python to PATH" |
-| Hooks fail to initialize | All | Run `pre-commit clean && pre-commit install` (or `python -m pre_commit clean && python -m pre_commit install` if using pip) |
+| Hooks fail to initialize | All | Run `pre-commit clean && pre-commit install` (or use module invocation: `python -m pre_commit clean && python -m pre_commit install` on Windows, `python3 -m pre_commit clean && python3 -m pre_commit install` on macOS/Linux) |
 
 ---
 

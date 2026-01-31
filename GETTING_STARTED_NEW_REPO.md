@@ -731,7 +731,9 @@ After creating the label, uncomment the `- triage` line in each issue template (
 >
 > When you install Python packages with CLI tools using `pip`, the executables are placed in a `Scripts` folder (Windows) or `bin` folder (macOS/Linux) that may not be in your system PATH. This can cause "command not found" errors.
 >
-> `pipx` solves this by installing Python CLI tools in isolated environments while automatically managing PATH configuration. This is the [official recommendation from the pre-commit project](https://pre-commit.com/#install).
+> `pipx` addresses this by installing Python CLI tools in isolated environments and, once installed and configured, managing PATH entries for the tools it installs. This is the [official recommendation from the pre-commit project](https://pre-commit.com/#install).
+>
+> If the `pipx` command itself is not yet on your PATH (for example, just after installation on Windows), you can invoke it via the Python module instead, such as `python -m pipx ensurepath` on Windows or `python3 -m pipx ensurepath` on macOS/Linux/FreeBSD for the initial setup.
 >
 > If you prefer to use `pip`, you can invoke pre-commit as a Python module using `python -m pre_commit` (Windows) or `python3 -m pre_commit` (macOS/Linux/FreeBSD) instead of the `pre-commit` command directly.
 
@@ -747,13 +749,16 @@ python -m pip install --upgrade pip
 
 # Install pipx
 python -m pip install pipx
-pipx ensurepath
+
+# Configure PATH (use module invocation in case pipx isn't on PATH yet)
+python -m pipx ensurepath
 ```
 
 Close and reopen PowerShell, then install pre-commit:
 
 ```powershell
-pipx install pre-commit
+# Use module invocation to ensure it works even if pipx isn't on PATH
+python -m pipx install pre-commit
 ```
 
 #### Option 2: Using pip
@@ -800,13 +805,16 @@ pip3 install --upgrade pip
 
 # Install pipx
 pip3 install pipx
-pipx ensurepath
+
+# Configure PATH (use module invocation in case pipx isn't on PATH yet)
+python3 -m pipx ensurepath
 ```
 
 Restart your terminal, then install pre-commit:
 
 ```bash
-pipx install pre-commit
+# Use module invocation to ensure it works even if pipx isn't on PATH
+python3 -m pipx install pre-commit
 ```
 
 #### Option 2: Using Homebrew (macOS only)
@@ -827,7 +835,11 @@ pip3 install pre-commit
 
 > **Note:** When using pip3, the `pre-commit` command may not be recognized if Python's `bin` folder is not in your PATH. Use `python3 -m pre_commit` instead of `pre-commit` for all commands. For example, use `python3 -m pre_commit --version` to verify installation.
 >
-> **Troubleshooting:** On newer Linux distributions (Ubuntu 23.04+, Fedora 38+) and some macOS configurations, you may see an `externally-managed-environment` error when using pip. Use **pipx** (Option 1) or **Homebrew** (Option 2, macOS) to install pre-commit in an isolated environment.
+> **Troubleshooting:** On newer Linux distributions (Ubuntu 23.04+, Fedora 38+) and some macOS configurations, you may see an `externally-managed-environment` error when using pip. In that case, do **not** use `pip3 install pipx`, as it can fail with the same error. Instead, install **pipx** via your OS package manager (or Homebrew on macOS) and then use it to install `pre-commit`. For example:
+>
+> - Debian / Ubuntu: `sudo apt install pipx && pipx ensurepath`
+> - Fedora: `sudo dnf install pipx && pipx ensurepath`
+> - macOS (Homebrew): `brew install pipx`
 
 #### Verifying installation
 
