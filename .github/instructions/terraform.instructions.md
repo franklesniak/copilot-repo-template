@@ -2204,10 +2204,9 @@ When creating a new Terraform configuration, you face a chicken-and-egg problem:
 
 Create your state storage resources in a dedicated bootstrap configuration, initially without a backend block (or with the backend block commented out). This allows Terraform to use local state temporarily.
 
-**AWS Example (`bootstrap/main.tf`):**
+**AWS Example (`bootstrap/versions.tf`):**
 
 ```hcl
-# versions.tf - no backend block initially
 terraform {
   required_version = ">= 1.6.0"
 
@@ -2288,6 +2287,10 @@ terraform {
   #   container_name       = "REPLACE_ME_CONTAINER"
   #   key                  = "bootstrap/terraform.tfstate"
   # }
+}
+
+provider "azurerm" {
+  features {}
 }
 
 resource "azurerm_resource_group" "terraform_state" {
@@ -2679,8 +2682,14 @@ data "azurerm_app_configuration_key" "vnet_id" {
   key                    = "network/vnet_id"
 }
 
+data "azurerm_app_configuration_key" "subnet_ids" {
+  configuration_store_id = data.azurerm_app_configuration.main.id
+  key                    = "network/subnet_ids"
+}
+
 locals {
-  vnet_id = data.azurerm_app_configuration_key.vnet_id.value
+  vnet_id    = data.azurerm_app_configuration_key.vnet_id.value
+  subnet_ids = jsondecode(data.azurerm_app_configuration_key.subnet_ids.value)
 }
 ```
 
