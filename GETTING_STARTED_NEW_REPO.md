@@ -741,7 +741,7 @@ After creating the label, uncomment the `- triage` line in each issue template (
 
 #### Option 1: Using pipx (recommended)
 
-[pipx](https://pipx.pypa.io/) installs Python applications in isolated environments and, after you run `pipx ensurepath` once, manages PATH entries for the tools it installs. First install pipx if you don't have it:
+[pipx](https://pipx.pypa.io/) installs Python applications in isolated environments and, after you run `pipx ensurepath` once, adds the pipx binaries directory to your PATH so you can run installed tools from the command line. First install pipx if you don't have it:
 
 ```powershell
 # First, upgrade pip to the latest version (recommended)
@@ -797,7 +797,7 @@ You should see output like `pre-commit 4.0.1`.
 
 #### Option 1: Using pipx (recommended)
 
-[pipx](https://pipx.pypa.io/) installs Python applications in isolated environments and, after you run `pipx ensurepath` once, manages PATH entries for the tools it installs. First install pipx if you don't have it:
+[pipx](https://pipx.pypa.io/) installs Python applications in isolated environments and, after you run `pipx ensurepath` once, adds the pipx binaries directory to your PATH so you can run installed tools from the command line. First install pipx if you don't have it:
 
 ```bash
 # First, upgrade pip to the latest version (recommended)
@@ -809,6 +809,12 @@ python3 -m pip install pipx
 # Configure PATH (use module invocation in case pipx isn't on PATH yet)
 python3 -m pipx ensurepath
 ```
+
+> **Troubleshooting:** On newer Linux distributions (Ubuntu 23.04+, Fedora 38+) and some macOS configurations, `python3 -m pip install pipx` may fail with an `externally-managed-environment` error. In that case, install pipx via your OS package manager instead:
+>
+> - Debian / Ubuntu: `sudo apt install pipx && pipx ensurepath`
+> - Fedora: `sudo dnf install pipx && pipx ensurepath`
+> - macOS (Homebrew): `brew install pipx && pipx ensurepath`
 
 Restart your terminal, then install pre-commit:
 
@@ -823,7 +829,7 @@ python3 -m pipx install pre-commit
 brew install pre-commit
 ```
 
-#### Option 3: Using pip3
+#### Option 3: Using pip
 
 ```bash
 # First, upgrade pip to the latest version (recommended)
@@ -1828,6 +1834,9 @@ pre-commit --version
 
 ```bash
 pre-commit install
+# If 'pre-commit' is not found on PATH, use the module form instead:
+# Windows: python -m pre_commit install
+# macOS/Linux: python3 -m pre_commit install
 ```
 
 Verify the hook exists:
@@ -1866,6 +1875,9 @@ git checkout -b feature/your-feature-name
 
 # Make changes and run pre-commit
 pre-commit run --all-files
+# If 'pre-commit' is not found on PATH, use the module form instead:
+# Windows: python -m pre_commit run --all-files
+# macOS/Linux: python3 -m pre_commit run --all-files
 
 # Stage and commit
 git add .

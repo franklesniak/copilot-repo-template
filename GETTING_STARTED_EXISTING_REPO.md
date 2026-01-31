@@ -1105,7 +1105,7 @@ If your project already uses pre-commit:
 | `pre-commit` not recognized | Windows | Use `python -m pre_commit` instead of `pre-commit`, or reinstall using `pipx` |
 | `pre-commit` command not found | macOS/Linux | Use `python3 -m pre_commit` instead of `pre-commit`, or reinstall using `pipx` or Homebrew |
 | `pip` not recognized | Windows | Use `python -m pip` instead of `pip` |
-| `pip` not found | macOS/Linux | Use `pip3` instead of `pip` |
+| `pip` not found | macOS/Linux | Use `python3 -m pip` instead of `pip` |
 | `externally-managed-environment` error | Linux/macOS | Install pipx via OS package manager (`sudo apt install pipx`, `sudo dnf install pipx`, or `brew install pipx`) then use `pipx install pre-commit` |
 | Python not found | Windows | Reinstall Python and check "Add Python to PATH" |
 | Hooks fail to initialize | All | Run `pre-commit clean && pre-commit install` (or use module invocation: `python -m pre_commit clean && python -m pre_commit install` on Windows, `python3 -m pre_commit clean && python3 -m pre_commit install` on macOS/Linux) |
@@ -1509,14 +1509,27 @@ If you adopted the template's `CONTRIBUTING.md`, you should:
 Before making changes, install pre-commit hooks:
 
 ```bash
+# Install pre-commit (choose one method):
+# Option 1: Using pipx (recommended)
+pipx install pre-commit
+
+# Option 2: Using pip (use python3 -m pip on macOS/Linux)
 pip install pre-commit
+# Or: python -m pip install pre-commit (Windows)
+# Or: python3 -m pip install pre-commit (macOS/Linux)
+
+# Install the hooks
 pre-commit install
+# If 'pre-commit' is not on PATH, use: python -m pre_commit install
+# Or: python3 -m pre_commit install (macOS/Linux)
 ```
 
 Pre-commit hooks will automatically run on each commit. You can also run them manually:
 
 ```bash
 pre-commit run --all-files
+# If 'pre-commit' is not on PATH, use: python -m pre_commit run --all-files
+# Or: python3 -m pre_commit run --all-files (macOS/Linux)
 ```
 ````
 
@@ -1541,8 +1554,20 @@ Instead, update your existing README to document any new development requirement
 
 ```bash
 npm install          # Install markdown linting tools
+
+# Install pre-commit (choose one method):
+# Option 1: Using pipx (recommended)
+pipx install pre-commit
+
+# Option 2: Using pip
 pip install pre-commit
-pre-commit install   # Set up git hooks
+# Or: python -m pip install pre-commit (Windows)
+# Or: python3 -m pip install pre-commit (macOS/Linux)
+
+# Set up git hooks
+pre-commit install
+# If 'pre-commit' is not on PATH, use: python -m pre_commit install
+# Or: python3 -m pre_commit install (macOS/Linux)
 ```
 ````
 
