@@ -754,12 +754,14 @@ python -m pip install pipx
 python -m pipx ensurepath
 ```
 
-Close and reopen PowerShell, then install pre-commit:
+Then install pre-commit:
 
 ```powershell
 # Use module invocation to ensure it works even if pipx isn't on PATH
 python -m pipx install pre-commit
 ```
+
+> **Note:** The shell restart is needed before running `pre-commit` commands directly. If you use `python -m pipx` for installation, you can continue in the same session.
 
 #### Option 2: Using pip
 
@@ -1836,11 +1838,19 @@ pre-commit --version
 
 **Windows (PowerShell):**
 
+If you installed with pipx:
+
 ```powershell
 pre-commit install
 ```
 
-Or if `pre-commit` is not on PATH:
+If `pre-commit` is not on PATH (run `pipx ensurepath` and restart your terminal, or use `pipx run`):
+
+```powershell
+pipx run pre-commit install
+```
+
+If you installed with pip:
 
 ```powershell
 python -m pre_commit install
@@ -1848,11 +1858,19 @@ python -m pre_commit install
 
 **macOS/Linux/FreeBSD:**
 
+If you installed with pipx or Homebrew:
+
 ```bash
 pre-commit install
 ```
 
-Or if `pre-commit` is not on PATH:
+If `pre-commit` is not on PATH (run `pipx ensurepath` and restart your terminal, or use `pipx run`):
+
+```bash
+pipx run pre-commit install
+```
+
+If you installed with pip:
 
 ```bash
 python3 -m pre_commit install
@@ -1896,7 +1914,6 @@ git checkout -b feature/your-feature-name
 
 # Make changes and run pre-commit
 pre-commit run --all-files
-# Or if 'pre-commit' is not on PATH: python -m pre_commit run --all-files
 
 # Stage and commit
 git add .
@@ -1904,6 +1921,16 @@ git commit -m "Add your feature"
 
 # Push and open a PR
 git push origin feature/your-feature-name
+```
+
+If `pre-commit` is not on PATH (pipx users: run `pipx ensurepath` and restart terminal):
+
+```powershell
+# Alternative using pipx run (no PATH required)
+pipx run pre-commit run --all-files
+
+# Or if you installed via pip:
+python -m pre_commit run --all-files
 ```
 
 **macOS/Linux/FreeBSD:**
@@ -1914,7 +1941,6 @@ git checkout -b feature/your-feature-name
 
 # Make changes and run pre-commit
 pre-commit run --all-files
-# Or if 'pre-commit' is not on PATH: python3 -m pre_commit run --all-files
 
 # Stage and commit
 git add .
@@ -1922,6 +1948,16 @@ git commit -m "Add your feature"
 
 # Push and open a PR
 git push origin feature/your-feature-name
+```
+
+If `pre-commit` is not on PATH (pipx users: run `pipx ensurepath` and restart terminal):
+
+```bash
+# Alternative using pipx run (no PATH required)
+pipx run pre-commit run --all-files
+
+# Or if you installed via pip:
+python3 -m pre_commit run --all-files
 ```
 
 ---

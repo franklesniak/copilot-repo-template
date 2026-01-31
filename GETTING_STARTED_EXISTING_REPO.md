@@ -996,7 +996,13 @@ If your project doesn't have a `.pre-commit-config.yaml`:
 
 3. Install the hooks:
 
-   **If you installed with pipx or Homebrew:**
+   **If you installed with pipx (Windows):**
+
+   ```powershell
+   pre-commit install
+   ```
+
+   **If you installed with pipx or Homebrew (macOS/Linux/FreeBSD):**
 
    ```bash
    pre-commit install
@@ -1110,7 +1116,7 @@ If your project already uses pre-commit:
 | `pip` not found | macOS/Linux | Use `python3 -m pip` instead of `pip` |
 | `externally-managed-environment` error | Linux/macOS | Install pipx via OS package manager (`sudo apt install pipx`, `sudo dnf install pipx`, or `brew install pipx`) then run `pipx ensurepath` and use `pipx install pre-commit` (or `python3 -m pipx install pre-commit`) |
 | Python not found | Windows | Reinstall Python and check "Add Python to PATH" |
-| Hooks fail to initialize | All | Run `pre-commit clean && pre-commit install` (or use module invocation: `python -m pre_commit clean && python -m pre_commit install` on Windows, `python3 -m pre_commit clean && python3 -m pre_commit install` on macOS/Linux) |
+| Hooks fail to initialize | All | Run `pre-commit clean && pre-commit install`. If `pre-commit` is not on PATH: for pipx users run `pipx ensurepath` and restart terminal (or use `pipx run pre-commit clean && pipx run pre-commit install`); for Homebrew users ensure Homebrew `bin` is on PATH; for pip users use `python -m pre_commit clean && python -m pre_commit install` (Windows) or `python3 -m pre_commit clean && python3 -m pre_commit install` (macOS/Linux) |
 
 ---
 
@@ -1516,9 +1522,9 @@ Before making changes, install pre-commit hooks:
 # Install pre-commit (choose one method):
 # Option 1: Using pipx (recommended)
 # First install pipx if you don't have it: python -m pip install pipx
-python -m pipx install pre-commit
 python -m pipx ensurepath
 # Restart your terminal for PATH changes to take effect, then run:
+python -m pipx install pre-commit
 pre-commit install
 
 # Option 2: Using pip (if you can't use pipx)
@@ -1534,9 +1540,9 @@ python -m pre_commit install
 # Option 1: Using pipx (recommended)
 # First install pipx if you don't have it: python3 -m pip install pipx
 # (Or use your OS package manager: sudo apt install pipx, brew install pipx, etc.)
-python3 -m pipx install pre-commit
 python3 -m pipx ensurepath
 # Restart your terminal for PATH changes to take effect, then run:
+python3 -m pipx install pre-commit
 pre-commit install
 
 # Option 2: Using pip (if you can't use pipx)
@@ -1603,9 +1609,9 @@ npm install
 # Install pre-commit (choose one method):
 # Option 1: Using pipx (recommended)
 # First install pipx if you don't have it: python -m pip install pipx
-python -m pipx install pre-commit
 python -m pipx ensurepath
 # Restart your terminal for PATH changes to take effect, then run:
+python -m pipx install pre-commit
 pre-commit install
 
 # Option 2: Using pip (if you can't use pipx)
@@ -1621,9 +1627,9 @@ python -m pre_commit install
 # Option 1: Using pipx (recommended)
 # First install pipx if you don't have it: python3 -m pip install pipx
 # (Or use your OS package manager: sudo apt install pipx, brew install pipx, etc.)
-python3 -m pipx install pre-commit
 python3 -m pipx ensurepath
 # Restart your terminal for PATH changes to take effect, then run:
+python3 -m pipx install pre-commit
 pre-commit install
 
 # Option 2: Using pip (if you can't use pipx)
