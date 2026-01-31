@@ -824,12 +824,14 @@ python3 -m pipx ensurepath
 > - Fedora: `sudo dnf install pipx && pipx ensurepath`
 > - macOS (Homebrew): `brew install pipx && pipx ensurepath`
 
-Restart your terminal, then install pre-commit:
+Then install pre-commit:
 
 ```bash
 # Use module invocation to ensure it works even if pipx isn't on PATH
 python3 -m pipx install pre-commit
 ```
+
+> **Note:** You still need to restart your terminal (or open a new one) before running `pre-commit` directly by name, because PATH changes only apply to new shells. Using `python3 -m pipx` avoids needing `pipx` on PATH and lets you keep using pipx in the same session (for example, via `python3 -m pipx run pre-commit`), but it does not make `pre-commit` immediately available on PATH in the current shell.
 
 #### Option 2: Using Homebrew (macOS only)
 

@@ -901,12 +901,14 @@ python -m pip install pipx
 python -m pipx ensurepath
 ```
 
-Close and reopen PowerShell, then:
+Then install pre-commit:
 
 ```powershell
 # Use module invocation to ensure it works even if pipx isn't on PATH
 python -m pipx install pre-commit
 ```
+
+> **Note:** You still need to restart your shell (or open a new one) before running `pre-commit` directly by name, because PATH changes only apply to new shells. Using `python -m pipx` avoids needing `pipx` on PATH and lets you keep using pipx in the same session (for example, via `python -m pipx run pre-commit`), but it does not make `pre-commit` immediately available on PATH in the current shell.
 
 **Option 2: Using pip:**
 
@@ -935,12 +937,14 @@ python3 -m pip install pipx
 python3 -m pipx ensurepath
 ```
 
-Restart your terminal, then:
+Then install pre-commit:
 
 ```bash
 # Use module invocation to ensure it works even if pipx isn't on PATH
 python3 -m pipx install pre-commit
 ```
+
+> **Note:** You still need to restart your terminal (or open a new one) before running `pre-commit` directly by name, because PATH changes only apply to new shells. Using `python3 -m pipx` avoids needing `pipx` on PATH and lets you keep using pipx in the same session (for example, via `python3 -m pipx run pre-commit`), but it does not make `pre-commit` immediately available on PATH in the current shell.
 
 **Option 2: Using Homebrew (macOS only):**
 
@@ -1116,7 +1120,58 @@ If your project already uses pre-commit:
 | `pip` not found | macOS/Linux | Use `python3 -m pip` instead of `pip` |
 | `externally-managed-environment` error | Linux/macOS | Install pipx via OS package manager (`sudo apt install pipx`, `sudo dnf install pipx`, or `brew install pipx`) then run `pipx ensurepath` and use `pipx install pre-commit` (or `python3 -m pipx install pre-commit`) |
 | Python not found | Windows | Reinstall Python and check "Add Python to PATH" |
-| Hooks fail to initialize | All | Run `pre-commit clean && pre-commit install`. If `pre-commit` is not on PATH: for pipx users run `pipx ensurepath` and restart terminal (or use `python -m pipx run pre-commit clean && python -m pipx run pre-commit install` on Windows, or `python3 -m pipx run pre-commit clean && python3 -m pipx run pre-commit install` on macOS/Linux); for Homebrew users ensure Homebrew `bin` is on PATH; for pip users use `python -m pre_commit clean && python -m pre_commit install` (Windows) or `python3 -m pre_commit clean && python3 -m pre_commit install` (macOS/Linux) |
+| Hooks fail to initialize | All | See [Hook initialization troubleshooting](#hook-initialization-troubleshooting) below |
+
+### Hook initialization troubleshooting
+
+If hooks fail to initialize, follow these steps based on your installation method:
+
+**If `pre-commit` is on your PATH:**
+
+Run the following to clear the cache and reinstall hooks:
+
+```bash
+pre-commit clean
+pre-commit install
+```
+
+**If `pre-commit` is NOT on your PATH:**
+
+First, fix your PATH configuration or use module invocation:
+
+- **pipx users:** Run `pipx ensurepath` and restart your terminal, then run the commands above. Or use module invocation without restarting:
+
+  Windows (PowerShell):
+
+  ```powershell
+  python -m pipx run pre-commit clean
+  python -m pipx run pre-commit install
+  ```
+
+  macOS/Linux:
+
+  ```bash
+  python3 -m pipx run pre-commit clean
+  python3 -m pipx run pre-commit install
+  ```
+
+- **Homebrew users (macOS):** Ensure your Homebrew `bin` directory (e.g., `/opt/homebrew/bin` or `/usr/local/bin`) is on your PATH, then run the commands above.
+
+- **pip users:** Use module invocation:
+
+  Windows (PowerShell):
+
+  ```powershell
+  python -m pre_commit clean
+  python -m pre_commit install
+  ```
+
+  macOS/Linux:
+
+  ```bash
+  python3 -m pre_commit clean
+  python3 -m pre_commit install
+  ```
 
 ---
 
