@@ -1139,7 +1139,7 @@ pre-commit install
 
 First, fix your PATH configuration or use module invocation:
 
-- **pipx users:** Run `pipx ensurepath` and restart your terminal, then run the commands above.
+- **pipx users:** Run `pipx ensurepath` (or `python -m pipx ensurepath` / `python3 -m pipx ensurepath` if `pipx` is not on your PATH) and restart your terminal, then run the commands above.
 
   > **Note:** Do not use `pipx run pre-commit install` because it runs from a temporary environment and can create hooks that reference a non-existent interpreter.
 

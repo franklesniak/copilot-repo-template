@@ -894,7 +894,7 @@ cd C:\path\to\your-repo-name
 pre-commit install
 ```
 
-> **Note:** If `pre-commit` is not found, run `pipx ensurepath` and restart your PowerShell window. Do not use `pipx run pre-commit install` because it runs from a temporary environment and can create hooks that reference a non-existent interpreter.
+> **Note:** If `pre-commit` is not found, run `python -m pipx ensurepath` and restart your PowerShell window. Do not use `pipx run pre-commit install` because it runs from a temporary environment and can create hooks that reference a non-existent interpreter.
 
 **If you installed with pip:**
 
@@ -912,7 +912,7 @@ cd ~/projects/your-repo-name
 pre-commit install
 ```
 
-> **Note:** If `pre-commit` is not found, run `pipx ensurepath` and restart your terminal. Do not use `pipx run pre-commit install` because it runs from a temporary environment and can create hooks that reference a non-existent interpreter.
+> **Note:** If `pre-commit` is not found, run `python3 -m pipx ensurepath` (or `pipx ensurepath` if `pipx` is already on your PATH) and restart your terminal. Do not use `pipx run pre-commit install` because it runs from a temporary environment and can create hooks that reference a non-existent interpreter.
 
 **If you installed with Homebrew:**
 
@@ -944,7 +944,7 @@ Run pre-commit on all files:
 pre-commit run --all-files
 ```
 
-> **Note:** If `pre-commit` is not found, run `pipx ensurepath` and restart your terminal. `pipx run pre-commit` can be used for one-off commands but runs from a temporary environment (slower and doesn't validate your installed version).
+> **Note:** If `pre-commit` is not found, run `python3 -m pipx ensurepath` (or `pipx ensurepath` if `pipx` is already on your PATH) and restart your terminal. `pipx run pre-commit` can be used for one-off commands but runs from a temporary environment (slower and doesn't validate your installed version).
 
 **If you installed with Homebrew:**
 
@@ -1879,7 +1879,7 @@ If you installed with pipx:
 pre-commit install
 ```
 
-> **Note:** If `pre-commit` is not found, run `pipx ensurepath` and restart your PowerShell window. Do not use `pipx run pre-commit install` because it runs from a temporary environment and can create hooks that reference a non-existent interpreter.
+> **Note:** If `pre-commit` is not found, run `python -m pipx ensurepath` and restart your PowerShell window. Do not use `pipx run pre-commit install` because it runs from a temporary environment and can create hooks that reference a non-existent interpreter.
 
 If you installed with pip:
 
@@ -1895,7 +1895,7 @@ If you installed with pipx:
 pre-commit install
 ```
 
-> **Note:** If `pre-commit` is not found, run `pipx ensurepath` and restart your terminal. Do not use `pipx run pre-commit install` because it runs from a temporary environment and can create hooks that reference a non-existent interpreter.
+> **Note:** If `pre-commit` is not found, run `python3 -m pipx ensurepath` (or `pipx ensurepath` if `pipx` is already on your PATH) and restart your terminal. Do not use `pipx run pre-commit install` because it runs from a temporary environment and can create hooks that reference a non-existent interpreter.
 
 If you installed with Homebrew:
 
