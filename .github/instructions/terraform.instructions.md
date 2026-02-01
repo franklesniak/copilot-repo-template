@@ -215,7 +215,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[Module]** Modules **MUST** have a `README.md` with usage examples → [Module README Requirements](#module-readme-requirements)
 - **[All]** Inline comments **SHOULD** explain "why," not "what" → [Inline Comment Conventions](#inline-comment-conventions)
 - **[All]** TODO comments **SHOULD** include username and context → [TODO Comment Format](#todo-comment-format)
-- **[All]** Error messages in validation blocks **MUST** be actionable and include valid options → [Error Message Best Practices](#error-message-best-practices)
+- **[All]** Error messages in validation blocks **SHOULD** be actionable and reference valid options or acceptable ranges → [Error Message Best Practices](#error-message-best-practices)
 
 ### Code Authoring Guidelines
 
@@ -1481,8 +1481,8 @@ locals {
 variable "instance_config" {
   type = object({
     instance_type = string
-    volume_size   = optional(number, 20)      # Defaults to 20 if null
-    monitoring    = optional(bool, false)     # Defaults to false if null
+    volume_size   = optional(number, 20)      # Defaults to 20 when attribute is not set
+    monitoring    = optional(bool, false)     # Defaults to false when attribute is not set
   })
 }
 ```
@@ -2025,11 +2025,11 @@ output "log_group_arn" {
   value       = var.enable_logging ? aws_cloudwatch_log_group.main[0].arn : null
 }
 
-# Alternative using one() function (Terraform 1.0+)
-# one() returns null for an empty list, making it equivalent to the conditional approach above but more concise
+# Alternative using try() for readability
+# try() returns the first argument when the resource exists, or null when it does not
 output "log_group_name" {
   description = "Name of the log group, if created"
-  value       = one(aws_cloudwatch_log_group.main[*].name)
+  value       = try(aws_cloudwatch_log_group.main[0].name, null)
 }
 ```
 
