@@ -1458,8 +1458,8 @@ resource "aws_instance" "main" {
   ami           = var.ami_id
   instance_type = var.instance_type
 
-  # Only set subnet_id if provided
-  subnet_id = var.subnet_id != null ? var.subnet_id : null
+  # Only set user_data if provided, otherwise use default script
+  user_data = var.custom_user_data != null ? var.custom_user_data : file("${path.module}/default_user_data.sh")
 }
 ```
 
@@ -2026,6 +2026,7 @@ output "log_group_arn" {
 }
 
 # Alternative using one() function (Terraform 1.0+)
+# one() returns null for an empty list, making it equivalent to the conditional approach above but more concise
 output "log_group_name" {
   description = "Name of the log group, if created"
   value       = one(aws_cloudwatch_log_group.main[*].name)
@@ -4127,7 +4128,7 @@ This section consolidates common anti-patterns to help developers avoid frequent
 | Wildcard IAM actions (`"*"`) | Violates least-privilege; security risk | Specify exact required actions → [IAM Policy Guidelines](#iam-policy-guidelines) |
 | Local state in team/production environments | No locking, no encryption, easily lost | Configure remote backend → [Remote Backend Configuration](#remote-backend-configuration) |
 | Committing `.tfstate` files to version control | Exposes sensitive data; causes merge conflicts | Add to `.gitignore`; use remote backend → [State File Exclusion](#state-file-exclusion) |
-| Empty `catch` blocks or swallowed errors | Hides problems; makes debugging difficult | Log errors; fail explicitly when appropriate |
+| Using `try()` without understanding failure modes | Silently masks errors that should be investigated | Document expected failures; consider explicit null checks |
 | Overly complex expressions in resource blocks | Reduces readability; hard to debug | Extract to `locals` with descriptive names |
 | Default values for sensitive variables | Encourages insecure deployments | Require explicit values; no defaults for secrets → [No Secret Defaults](#no-secret-defaults) |
 
