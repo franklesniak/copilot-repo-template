@@ -28,6 +28,8 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - [File Organization](#file-organization)
 - [Variable and Output Design](#variable-and-output-design)
   - [Nullable Variables](#nullable-variables)
+  - [Null Value Patterns](#null-value-patterns)
+  - [Defensive Attribute Access with try()](#defensive-attribute-access-with-try)
   - [Terraform Cloud Variable Precedence](#terraform-cloud-variable-precedence)
 - [Continuous Validation with check Blocks](#continuous-validation-with-check-blocks)
 - [Resource Configuration](#resource-configuration)
@@ -37,6 +39,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - [State Management](#state-management)
   - [Bootstrapping State Infrastructure](#bootstrapping-state-infrastructure)
   - [Resource Targeting](#resource-targeting)
+  - [Reviewing Plan Output](#reviewing-plan-output)
 - [Cross-Stack Data Sharing](#cross-stack-data-sharing)
 - [Provider Management](#provider-management)
   - [Provider Aliasing](#provider-aliasing)
@@ -44,6 +47,8 @@ description: "Terraform coding standards: secure, modular, and well-documented i
   - [Sensitive Values in Meta-Arguments](#sensitive-values-in-meta-arguments)
 - [Testing with Terraform Test](#testing-with-terraform-test)
 - [Documentation Standards](#documentation-standards)
+  - [Error Message Best Practices](#error-message-best-practices)
+- [Common Anti-Patterns to Avoid](#common-anti-patterns-to-avoid)
 - [Pre-commit Discipline for Terraform](#pre-commit-discipline-for-terraform)
 - ["Done" Definition for Terraform Changes](#done-definition-for-terraform-changes)
 - [Related Documentation](#related-documentation)
@@ -118,6 +123,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** Outputs **MUST** include a `description` → [Output Documentation Requirements](#output-documentation-requirements)
 - **[All]** Sensitive outputs **MUST** be marked with `sensitive = true` → [Sensitive Output Marking](#sensitive-output-marking)
 - **[All]** Variables **SHOULD** explicitly set `nullable` to document null-handling behavior → [Nullable Variables](#nullable-variables)
+- **[All]** `try()` **SHOULD** be used for defensive access to attributes that may not exist → [Defensive Attribute Access with try()](#defensive-attribute-access-with-try)
 
 ### Continuous Validation
 
@@ -166,6 +172,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** State files **MUST NOT** be committed to version control → [State File Exclusion](#state-file-exclusion)
 - **[All]** `terraform apply -target` **SHOULD NOT** be used in normal workflows → [Resource Targeting](#resource-targeting)
 - **[Root]** New state storage infrastructure **SHOULD** follow the bootstrap workflow → [Bootstrapping State Infrastructure](#bootstrapping-state-infrastructure)
+- **[All]** Plan output **MUST** be reviewed for unexpected destroys or replacements before applying → [Reviewing Plan Output](#reviewing-plan-output)
 
 ### Cross-Stack Data Sharing
 
@@ -208,6 +215,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[Module]** Modules **MUST** have a `README.md` with usage examples → [Module README Requirements](#module-readme-requirements)
 - **[All]** Inline comments **SHOULD** explain "why," not "what" → [Inline Comment Conventions](#inline-comment-conventions)
 - **[All]** TODO comments **SHOULD** include username and context → [TODO Comment Format](#todo-comment-format)
+- **[All]** Error messages in validation blocks **SHOULD** be actionable and reference valid options or acceptable ranges → [Error Message Best Practices](#error-message-best-practices)
 
 ### Code Authoring Guidelines
 
@@ -1427,6 +1435,103 @@ resource "aws_vpc_ipv4_cidr_block_association" "secondary" {
 }
 ```
 
+### Null Value Patterns
+
+Terraform provides several functions and patterns for handling null values effectively. This section documents common patterns for working with potentially null values.
+
+**Using `coalesce()` for fallback values:**
+
+```hcl
+locals {
+  # Use provided value or fall back to default
+  instance_type = coalesce(var.instance_type_override, "t3.micro")
+
+  # Chain multiple fallbacks
+  region = coalesce(var.region, data.aws_region.current.name, "us-east-1")
+}
+```
+
+**Handling null in conditional expressions:**
+
+```hcl
+resource "aws_instance" "main" {
+  ami           = var.ami_id
+  instance_type = var.instance_type
+
+  # Only set user_data if provided, otherwise use default script
+  user_data = var.custom_user_data != null ? var.custom_user_data : file("${path.module}/default_user_data.sh")
+}
+```
+
+**Null handling in `for` expressions:**
+
+```hcl
+locals {
+  # Filter out null values from a list
+  valid_subnets = [for s in var.subnet_ids : s if s != null]
+
+  # Filter out entries with null values from a map
+  valid_tags = { for k, v in var.tags : k => v if v != null }
+}
+```
+
+**Using `optional()` with defaults (Terraform 1.3+):**
+
+```hcl
+variable "instance_config" {
+  type = object({
+    instance_type = string
+    volume_size   = optional(number, 20)      # Defaults to 20 when attribute is not set
+    monitoring    = optional(bool, false)     # Defaults to false when attribute is not set
+  })
+}
+```
+
+### Defensive Attribute Access with try()
+
+The `try()` function attempts to evaluate expressions and returns a fallback value if any expression fails. Use it for defensive access to attributes that may not exist.
+
+**Syntax:** `try(expression, fallback)`
+
+**Use cases:**
+
+```hcl
+locals {
+  # Safely access nested attributes that may not exist
+  instance_ip = try(aws_instance.main.private_ip, "unknown")
+
+  # Handle optional nested blocks
+  root_volume_size = try(aws_instance.main.root_block_device[0].volume_size, 8)
+
+  # Chain multiple attempts
+  endpoint = try(
+    aws_db_instance.main.endpoint,
+    aws_rds_cluster.main.endpoint,
+    "no-database-configured"
+  )
+}
+```
+
+**Difference between `try()` and `can()`:**
+
+| Function | Returns | Use Case |
+| --- | --- | --- |
+| `try(expr, fallback)` | The value of `expr` if successful, otherwise `fallback` | Getting a value with a default |
+| `can(expr)` | `true` if `expr` evaluates without error, `false` otherwise | Validation conditions |
+
+```hcl
+# Use can() in validation blocks
+validation {
+  condition     = can(regex("^[a-z][a-z0-9-]*$", var.name))
+  error_message = "Name must start with a letter and contain only lowercase alphanumeric characters and hyphens."
+}
+
+# Use try() when you need the actual value
+locals {
+  parsed_json = try(jsondecode(var.config_json), {})
+}
+```
+
 ---
 
 ## Continuous Validation with check Blocks
@@ -1889,6 +1994,42 @@ resource "aws_instance" "servers" {
 resource "aws_cloudwatch_log_group" "main" {
   count = var.enable_logging ? 1 : 0
   name  = "/app/${var.environment}"
+}
+```
+
+#### Conditional Resource Creation
+
+The `count` meta-argument is appropriate for conditional resource creation using a boolean toggle:
+
+```hcl
+variable "enable_logging" {
+  description = "Whether to create the CloudWatch log group"
+  type        = bool
+  default     = false
+}
+
+resource "aws_cloudwatch_log_group" "main" {
+  count = var.enable_logging ? 1 : 0
+  name  = "/app/${var.environment}"
+}
+```
+
+**Referencing conditional resources:**
+
+When referencing a conditionally created resource, use index `[0]` and handle the case where it doesn't exist:
+
+```hcl
+# Safe reference to conditional resource
+output "log_group_arn" {
+  description = "ARN of the log group, if created"
+  value       = var.enable_logging ? aws_cloudwatch_log_group.main[0].arn : null
+}
+
+# Alternative using try() for readability
+# try() returns the first argument when the resource exists, or null when it does not
+output "log_group_name" {
+  description = "Name of the log group, if created"
+  value       = try(aws_cloudwatch_log_group.main[0].name, null)
 }
 ```
 
@@ -2687,6 +2828,29 @@ terraform apply
 Resource targeting is intended **only** for exceptional recovery scenarios where a specific resource must be modified in isolation.
 
 **If targeting is needed regularly**, this indicates the configuration is too large. Split the configuration into smaller, independent modules that can be applied separately.
+
+### Reviewing Plan Output
+
+Before running `terraform apply`, review the plan output carefully. Understanding the plan symbols and identifying warning signs helps prevent unintended infrastructure changes.
+
+**Plan output symbols:**
+
+| Symbol | Meaning | Action |
+| --- | --- | --- |
+| `+` (green) | Resource will be created | Verify this is intentional |
+| `-` (red) | Resource will be destroyed | Verify this is intentional; check for data loss |
+| `~` (yellow) | Resource will be updated in-place | Review which attributes are changing |
+| `-/+` | Resource will be destroyed and recreated | Investigate why; consider `lifecycle` rules |
+| `<=` | Data source will be read | Normal behavior |
+
+**Warning signs to investigate:**
+
+- Unexpected destroys, especially for stateful resources (databases, storage)
+- Resources being replaced (`-/+`) when you expected an in-place update
+- Changes to resources you didn't modify (may indicate drift or upstream changes)
+- Large numbers of changes from a small code modification (may indicate a variable or module change with wide impact)
+
+**Best practice:** Use `terraform plan -out=tfplan` to save the plan, then `terraform apply tfplan` to ensure the exact reviewed plan is applied.
 
 ---
 
@@ -3905,6 +4069,68 @@ Use standardized TODO format:
 # TODO(username): Migrate to new VPC module after v2.0 release
 # TODO(team-name): Add support for IPv6 when available
 ```
+
+### Error Message Best Practices
+
+Error messages in `validation`, `precondition`, `postcondition`, and `assert` blocks **MUST** be actionable and help users understand how to fix the problem.
+
+**Requirements:**
+
+- Error messages **MUST** be actionable and tell the user how to fix the problem
+- Error messages **SHOULD** include the actual value that failed validation when possible
+- Error messages **SHOULD** reference valid options or acceptable ranges
+- Error messages **MUST NOT** expose sensitive values
+
+**Validation block examples:**
+
+```hcl
+# Poor: Not actionable
+validation {
+  condition     = contains(["dev", "staging", "prod"], var.environment)
+  error_message = "Invalid environment."
+}
+
+# Good: Actionable with valid options
+validation {
+  condition     = contains(["dev", "staging", "prod"], var.environment)
+  error_message = "Environment must be one of: dev, staging, prod. Received: ${var.environment}"
+}
+```
+
+**Postcondition examples:**
+
+```hcl
+# Poor: No context
+postcondition {
+  condition     = self.public_ip != null
+  error_message = "No public IP."
+}
+
+# Good: Explains what to check
+postcondition {
+  condition     = self.public_ip != null
+  error_message = "Instance must have a public IP assigned. Verify that the subnet has map_public_ip_on_launch enabled or associate an Elastic IP."
+}
+```
+
+---
+
+## Common Anti-Patterns to Avoid
+
+This section consolidates common anti-patterns to help developers avoid frequent mistakes. Each anti-pattern links to detailed guidance elsewhere in this document.
+
+| Anti-Pattern | Why It's Problematic | Correct Approach |
+| --- | --- | --- |
+| Hardcoded secrets in `.tf` files | Secrets exposed in version control and state | Use environment variables or secret managers → [Secret Management](#secret-management) |
+| Using `terraform apply -target` regularly | Creates state drift and inconsistent infrastructure | Split into smaller, independent configurations → [Resource Targeting](#resource-targeting) |
+| Redundant `depends_on` for inferable dependencies | Adds noise and can mask actual dependency issues | Let Terraform infer dependencies from references → [Explicit Dependencies](#explicit-dependencies) |
+| Using `count` with collections that may reorder | Index shifts cause unintended resource recreation | Use `for_each` with stable keys → [for_each vs count](#for_each-vs-count) |
+| Wildcard IAM actions (`"*"`) | Violates least-privilege; security risk | Specify exact required actions → [IAM Policy Guidelines](#iam-policy-guidelines) |
+| Local state in team/production environments | No locking, no encryption, easily lost | Configure remote backend → [Remote Backend Configuration](#remote-backend-configuration) |
+| Committing `.tfstate` files to version control | Exposes sensitive data; causes merge conflicts | Add to `.gitignore`; use remote backend → [State File Exclusion](#state-file-exclusion) |
+| Using `try()` without understanding failure modes | Silently masks errors that should be investigated | Document expected failures; consider explicit null checks |
+| Overly complex expressions in resource blocks | Reduces readability; hard to debug | Extract to `locals` with descriptive names |
+| Default values for sensitive variables | Encourages insecure deployments | Require explicit values; no defaults for secrets → [No Secret Defaults](#no-secret-defaults) |
 
 ---
 
