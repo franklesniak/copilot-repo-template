@@ -3142,20 +3142,20 @@ resource "azurerm_storage_account" "secondary" {
 
 provider "google" {
   project = var.primary_project_id
-  region  = "us-east-1"  # e.g., us-central1
+  region  = "us-central1"
   # Default provider (no alias)
 }
 
 provider "google" {
   alias   = "europe"
   project = var.primary_project_id
-  region  = "europe-west1"  # e.g., europe-west1
+  region  = "europe-west1"
 }
 
 provider "google" {
   alias   = "secondary_project"
   project = var.secondary_project_id
-  region  = "us-west-2"  # e.g., us-central1
+  region  = "us-west1"
 }
 ```
 
