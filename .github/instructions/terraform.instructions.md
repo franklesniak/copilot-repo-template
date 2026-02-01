@@ -5,7 +5,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.9.20260201.0
+**Version:** 1.10.20260201.0
 
 ## Metadata
 
@@ -18,8 +18,8 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 ## Table of Contents
 
 - [Keywords](#keywords)
+- [About Examples in This Document](#about-examples-in-this-document)
 - [Quick Reference Checklist](#quick-reference-checklist)
-- [Placeholder Convention (`REPLACE_ME_*`)](#placeholder-convention-replace_me_)
 - [Executive Summary: Terraform Philosophy](#executive-summary-terraform-philosophy)
 - [Terraform Version Requirements](#terraform-version-requirements)
 - [Formatting and Style](#formatting-and-style)
@@ -66,6 +66,22 @@ The key words "**MUST**", "**MUST NOT**", "**REQUIRED**", "**SHALL**", "**SHALL 
 - **MAY** / **OPTIONAL** — Truly optional. Implementations can choose to include or omit.
 
 > **Applicability rule:** Requirements in this document apply **when their scope is present**. For example, **module** requirements apply only when you maintain reusable modules; **test** requirements apply only when you add Terraform tests; **root module** requirements apply only when a root configuration exists. When a scoped construct exists, all associated **MUST/SHOULD** requirements are expected to be followed.
+
+## About Examples in This Document
+
+All code examples in this document are illustrative. Resource names, bucket names, regions,
+account IDs, project IDs, and other configuration values are examples only and do not represent
+actual infrastructure.
+
+When applying these patterns to your infrastructure:
+
+- Replace example resource names (e.g., `acme-corp-terraform-state`) with names following your organization's conventions
+- Select regions appropriate for your latency, compliance, and cost requirements
+- Use account IDs, project IDs, and subscription IDs from your cloud environment
+- Adjust instance types, storage sizes, and other parameters for your workload
+
+Examples use common conventions (e.g., `us-east-1`, `prod`, `main`) for familiarity. These choices
+are not recommendations for your specific use case.
 
 ## Quick Reference Checklist
 
@@ -229,109 +245,6 @@ The following guidelines apply to all code authors, including human developers a
 - **[All]** Authors **SHOULD NOT** assume a default cloud provider; when the provider is not specified, authors **SHOULD** use provider-agnostic examples and document that provider selection is required
 - **[All]** Authors **SHOULD** include `description` for all variables and outputs, and use `sensitive = true` as appropriate
 - **[All]** Authors **MUST NOT** modify lock files (`.terraform.lock.hcl`) or commit state unless explicitly required
-- **[All]** Authors **MUST** use placeholder markers following the `REPLACE_ME_*` pattern for values that require customization → [Placeholder Convention](#placeholder-convention-replace_me_)
-
-## Placeholder Convention (`REPLACE_ME_*`)
-
-This document uses the `REPLACE_ME_*` placeholder convention for values that **MUST** be customized before use. This convention applies across all cloud providers (AWS, Azure, GCP) and ensures that examples remain portable while clearly identifying required customizations.
-
-### Purpose
-
-Placeholders serve multiple purposes:
-
-- **Safety:** Prevent accidental deployment of example values to production
-- **Clarity:** Clearly identify which values require organization-specific configuration
-- **Searchability:** Enable easy discovery of all values requiring customization via `grep -r "REPLACE_ME"`
-- **Consistency:** Provide a uniform approach across all examples regardless of provider
-
-### Standard Placeholders
-
-The following standard placeholders **SHOULD** be used consistently throughout this document and in derived configurations:
-
-| Placeholder | Description | Example Replacement |
-| --- | --- | --- |
-| `REPLACE_ME_REGION` | Cloud provider region | `us-east-1`, `eastus`, `us-central1` |
-| `REPLACE_ME_STATE_BUCKET` | State storage bucket/container name | `my-org-terraform-state` |
-| `REPLACE_ME_LOCK_TABLE` | State locking table (AWS DynamoDB) | `terraform-locks` |
-| `REPLACE_ME_RESOURCE_GROUP` | Azure resource group name | `rg-terraform-state` |
-| `REPLACE_ME_STORAGE_ACCOUNT` | Azure storage account name | `stterraformstate` |
-| `REPLACE_ME_CONTAINER` | Azure blob container name | `tfstate` |
-| `REPLACE_ME_PROJECT_ID` | GCP project ID | `my-gcp-project-123` |
-| `REPLACE_ME_ORG` | Terraform Cloud/Enterprise organization | `my-organization` |
-| `REPLACE_ME_WORKSPACE` | Terraform Cloud/Enterprise workspace | `prod-infrastructure` |
-| `REPLACE_ME_INSTANCE_ID` | Cloud instance/resource ID for imports | `i-1234567890abcdef0` |
-| `REPLACE_ME_AMI_ID` | AWS AMI ID | `ami-0abcdef1234567890` |
-| `REPLACE_ME_INSTANCE_TYPE` | Cloud instance/VM type | `t3.micro`, `Standard_B1s`, `e2-micro` |
-| `REPLACE_ME_SUBSCRIPTION_ID` | Azure subscription ID | `00000000-0000-0000-0000-000000000000` |
-| `REPLACE_ME_TENANT_ID` | Azure tenant ID | `00000000-0000-0000-0000-000000000000` |
-| `REPLACE_ME_PRIMARY_BUCKET` | Primary storage bucket name | `my-org-primary-bucket` |
-| `REPLACE_ME_REPLICA_BUCKET` | Replica storage bucket name | `my-org-replica-bucket` |
-| `REPLACE_ME_EUROPE_BUCKET` | Europe region bucket name | `my-org-europe-bucket` |
-| `REPLACE_ME_PRIMARY_STORAGE` | Primary Azure storage account name | `stprimarystorage` |
-| `REPLACE_ME_SECONDARY_STORAGE` | Secondary Azure storage account name | `stsecondarystorage` |
-| `REPLACE_ME_KEYVAULT_NAME` | Azure Key Vault name | `kv-my-org-secrets` |
-| `REPLACE_ME_SECRET_NAME` | Secret name in secret manager | `database-password` |
-| `REPLACE_ME_VAULT_SECRET_PATH` | HashiCorp Vault secret path | `secret/data/database` |
-| `REPLACE_ME_PRIMARY_REGION` | Primary cloud provider region | `us-east-1`, `eastus`, `us-central1` |
-| `REPLACE_ME_WEST_REGION` | West/secondary region (AWS) | `us-west-2` |
-| `REPLACE_ME_EU_REGION` | Europe region (AWS) | `eu-west-1` |
-| `REPLACE_ME_EUROPE_REGION` | Europe region (GCP) | `europe-west1` |
-| `REPLACE_ME_SECONDARY_REGION` | Secondary region | `us-west-2`, `westus2`, `us-west1` |
-| `REPLACE_ME_AWS_AZ_1` | AWS availability zone (first) | `us-east-1a` |
-| `REPLACE_ME_AWS_AZ_2` | AWS availability zone (second) | `us-east-1b` |
-| `REPLACE_ME_AWS_AZ_3` | AWS availability zone (third) | `us-east-1c` |
-| `REPLACE_ME_GCP_ZONE_1` | GCP compute zone (first) | `us-central1-a` |
-| `REPLACE_ME_GCP_ZONE_2` | GCP compute zone (second) | `us-central1-b` |
-| `REPLACE_ME_GCP_ZONE_3` | GCP compute zone (third) | `us-central1-c` |
-
-### Usage Rules
-
-- **[All]** Authors **MUST** use `REPLACE_ME_*` placeholders for values that require customization
-- **[All]** Placeholder names **MUST** use `UPPER_SNAKE_CASE` with the `REPLACE_ME_` prefix
-- **[All]** Placeholder names **SHOULD** be descriptive (e.g., `REPLACE_ME_STATE_BUCKET` not `REPLACE_ME_BUCKET`)
-- **[All]** When adopting configurations, search for all placeholders using `grep -r "REPLACE_ME"` and replace with actual values
-- **[All]** Production code **MUST NOT** contain any `REPLACE_ME_*` placeholders
-- **[All]** `REPLACE_ME_*` values in `backend` blocks **MUST** be replaced via manual editing or scripting (e.g., `sed`, `envsubst`) **before** running `terraform init`, as Terraform cannot interpolate variables or environment variables in backend configuration
-
-### Scope Limitation
-
-The `REPLACE_ME_*` placeholder convention is intended for **static configuration** where Terraform variables cannot be used:
-
-- Backend configurations (variables are not allowed in backend blocks)
-- Documentation examples and standalone code snippets
-- One-time setup values in `.tfbackend` files
-
-For resource attributes in production Terraform configurations, use input variables instead of placeholders:
-
-**Correct - Use variables for resource configuration:**
-
-```hcl
-resource "aws_instance" "main" {
-  ami           = var.ami_id
-  instance_type = var.instance_type
-  subnet_id     = var.subnet_id
-}
-```
-
-**Incorrect - Do not use placeholders in resource blocks:**
-
-```hcl
-# WRONG: Placeholders should not be used here
-resource "aws_instance" "main" {
-  ami           = "REPLACE_ME_AMI_ID"      # Use var.ami_id instead
-  instance_type = "REPLACE_ME_INSTANCE_TYPE"  # Use var.instance_type instead
-}
-```
-
-This distinction ensures that:
-
-- Resource configurations remain parameterized and reusable
-- Placeholders are only used where variables are syntactically prohibited
-- AI assistants generate code that follows proper variable patterns
-
-### Provider-Specific Notes
-
-This document provides examples for multiple cloud providers (AWS, Azure, GCP). When examples include provider-specific placeholders, each provider's version is labeled accordingly. For step-by-step guidance and a checklist for removing examples for providers you do not use, see the [Copilot Terraform Instructions Configuration](../../OPTIONAL_CONFIGURATIONS.md#copilot-terraform-instructions-configuration) guide. If you remove or substantially alter provider examples, record this as a documented deviation following the [Scope Exceptions & Deviations from Standards](#scope-exceptions--deviations-from-standards) section.
 
 ## Executive Summary: Terraform Philosophy
 
@@ -919,15 +832,15 @@ Root modules **MUST** configure a remote backend, either in `backend.tf` or with
 **AWS Example:**
 
 ```hcl
-# backend.tf
+# backend.tf - Example configuration
 
 terraform {
   backend "s3" {
-    bucket         = "REPLACE_ME_STATE_BUCKET"
+    bucket         = "acme-corp-terraform-state"  # Use your state bucket name
     key            = "environments/prod/terraform.tfstate"
-    region         = "REPLACE_ME_REGION"
+    region         = "us-east-1"  # Use your preferred region
     encrypt        = true
-    dynamodb_table = "REPLACE_ME_LOCK_TABLE"
+    dynamodb_table = "terraform-locks"
   }
 }
 ```
@@ -935,13 +848,13 @@ terraform {
 **Azure Example:**
 
 ```hcl
-# backend.tf
+# backend.tf - Example configuration
 
 terraform {
   backend "azurerm" {
-    resource_group_name  = "REPLACE_ME_RESOURCE_GROUP"
-    storage_account_name = "REPLACE_ME_STORAGE_ACCOUNT"
-    container_name       = "REPLACE_ME_CONTAINER"
+    resource_group_name  = "rg-terraform-state"  # Use your resource group
+    storage_account_name = "stacmeterraform"  # Use your storage account
+    container_name       = "tfstate"
     key                  = "environments/prod/terraform.tfstate"
   }
 }
@@ -950,17 +863,17 @@ terraform {
 **GCP Example:**
 
 ```hcl
-# backend.tf
+# backend.tf - Example configuration
 
 terraform {
   backend "gcs" {
-    bucket = "REPLACE_ME_STATE_BUCKET"
+    bucket = "acme-corp-terraform-state"  # Use your state bucket name
     prefix = "environments/prod"
   }
 }
 ```
 
-> **Important:** Unlike resource blocks, backend blocks do not support variable interpolation. All `REPLACE_ME_*` placeholders in backend configuration **MUST** be replaced with actual values via manual editing or scripting before running `terraform init`. Alternatively, use [partial backend configuration](#partial-backend-configuration) to provide values at runtime.
+> **Important:** Unlike resource blocks, backend blocks do not support variable interpolation. Example values in backend configuration (such as bucket names and regions) must be replaced with your organization's actual values before running `terraform init`. Alternatively, use [partial backend configuration](#partial-backend-configuration) to provide values at runtime.
 
 #### Partial Backend Configuration
 
@@ -985,9 +898,9 @@ terraform {
 ```hcl
 # config/prod.s3.tfbackend
 
-bucket         = "REPLACE_ME_STATE_BUCKET"
-region         = "REPLACE_ME_REGION"
-dynamodb_table = "REPLACE_ME_LOCK_TABLE"
+bucket         = "acme-corp-terraform-state"
+region         = "us-east-1"
+dynamodb_table = "terraform-locks"
 ```
 
 **Azure Backend file (committed):**
@@ -1008,9 +921,9 @@ terraform {
 ```hcl
 # config/prod.azurerm.tfbackend
 
-resource_group_name  = "REPLACE_ME_RESOURCE_GROUP"
-storage_account_name = "REPLACE_ME_STORAGE_ACCOUNT"
-container_name       = "REPLACE_ME_CONTAINER"
+resource_group_name  = "rg-terraform-state"
+storage_account_name = "stacmeterraform"
+container_name       = "tfstate"
 ```
 
 **GCP Backend file (committed):**
@@ -1031,7 +944,7 @@ terraform {
 ```hcl
 # config/prod.gcs.tfbackend
 
-bucket = "REPLACE_ME_STATE_BUCKET"
+bucket = "acme-corp-terraform-state"
 ```
 
 **Usage:**
@@ -1048,7 +961,7 @@ This pattern is useful when:
 - Teams prefer runtime configuration over placeholder replacement
 - CI/CD pipelines inject backend configuration dynamically
 
-Both the [`REPLACE_ME_*` placeholder pattern](#placeholder-convention-replace_me_) and partial configuration pattern are valid approaches. Choose the pattern that best fits your team's workflow.
+Both the inline example values and partial configuration pattern are valid approaches. Choose the pattern that best fits your team's workflow.
 
 ### Variable Files (.tfvars)
 
@@ -1848,7 +1761,7 @@ resource "aws_db_instance" "production" {
 
 # Protect Terraform state bucket
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = "REPLACE_ME_STATE_BUCKET"
+  bucket = "acme-corp-terraform-state"
 
   lifecycle {
     prevent_destroy = true
@@ -2289,13 +2202,13 @@ The `import` block (Terraform 1.5+) brings existing infrastructure under Terrafo
 ```hcl
 import {
   to = aws_instance.example
-  id = "REPLACE_ME_INSTANCE_ID"
+  id = "i-0abc123def456789"
 }
 
 resource "aws_instance" "example" {
   # Configuration matching the imported resource
-  ami           = "REPLACE_ME_AMI_ID"
-  instance_type = "REPLACE_ME_INSTANCE_TYPE"
+  ami           = "ami-0abcdef1234567890"
+  instance_type = "t3.micro"
   # ...
 }
 ```
@@ -2376,11 +2289,11 @@ Root modules **MUST** configure a remote backend for team environments:
 ```hcl
 terraform {
   backend "s3" {
-    bucket         = "REPLACE_ME_STATE_BUCKET"
+    bucket         = "acme-corp-terraform-state"
     key            = "environments/prod/terraform.tfstate"
-    region         = "REPLACE_ME_REGION"
+    region         = "us-east-1"
     encrypt        = true
-    dynamodb_table = "REPLACE_ME_LOCK_TABLE"
+    dynamodb_table = "terraform-locks"
   }
 }
 ```
@@ -2390,9 +2303,9 @@ terraform {
 ```hcl
 terraform {
   backend "azurerm" {
-    resource_group_name  = "REPLACE_ME_RESOURCE_GROUP"
-    storage_account_name = "REPLACE_ME_STORAGE_ACCOUNT"
-    container_name       = "REPLACE_ME_CONTAINER"
+    resource_group_name  = "rg-terraform-state"
+    storage_account_name = "stacmeterraform"
+    container_name       = "tfstate"
     key                  = "environments/prod/terraform.tfstate"
   }
 }
@@ -2403,13 +2316,13 @@ terraform {
 ```hcl
 terraform {
   backend "gcs" {
-    bucket = "REPLACE_ME_STATE_BUCKET"
+    bucket = "acme-corp-terraform-state"
     prefix = "environments/prod"
   }
 }
 ```
 
-> **Placeholder Values:** The examples above use placeholder values (e.g., `REPLACE_ME_STATE_BUCKET`). Replace these with your organization's actual values when adopting this template. See [Placeholder Convention](#placeholder-convention-replace_me_) for the complete list of standard placeholders.
+> **Example Values:** The examples above use illustrative values (e.g., `acme-corp-terraform-state`). Replace these with your organization's actual values when adopting this template.
 
 **Backend requirements:**
 
@@ -2431,9 +2344,9 @@ Organizations using **Terraform Cloud**, **Terraform Enterprise**, **Spacelift**
 ```hcl
 terraform {
   cloud {
-    organization = "REPLACE_ME_ORG"
+    organization = "acme-corp"
     workspaces {
-      name = "REPLACE_ME_WORKSPACE"
+      name = "prod-infrastructure"
     }
   }
 }
@@ -2476,11 +2389,11 @@ terraform {
 
   # Backend will be added after bootstrap
   # backend "s3" {
-  #   bucket         = "REPLACE_ME_STATE_BUCKET"
+  #   bucket         = "acme-corp-terraform-state"
   #   key            = "bootstrap/terraform.tfstate"
-  #   region         = "REPLACE_ME_REGION"
+  #   region         = "us-east-1"
   #   encrypt        = true
-  #   dynamodb_table = "REPLACE_ME_LOCK_TABLE"
+  #   dynamodb_table = "terraform-locks"
   # }
 }
 
@@ -2488,7 +2401,7 @@ terraform {
 # Note: S3 bucket names must be globally unique. See "Globally Unique Resource Names"
 # section for patterns using random_id or organization prefixes.
 resource "aws_s3_bucket" "terraform_state" {
-  bucket = "REPLACE_ME_STATE_BUCKET"
+  bucket = "acme-corp-terraform-state"
 
   lifecycle {
     prevent_destroy = true
@@ -2513,7 +2426,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" 
 
 # Create DynamoDB table for state locking
 resource "aws_dynamodb_table" "terraform_locks" {
-  name         = "REPLACE_ME_LOCK_TABLE"
+  name         = "terraform-locks"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "LockID"
 
@@ -2539,9 +2452,9 @@ terraform {
 
   # Backend will be added after bootstrap
   # backend "azurerm" {
-  #   resource_group_name  = "REPLACE_ME_RESOURCE_GROUP"
-  #   storage_account_name = "REPLACE_ME_STORAGE_ACCOUNT"
-  #   container_name       = "REPLACE_ME_CONTAINER"
+  #   resource_group_name  = "rg-terraform-state"
+  #   storage_account_name = "stacmeterraform"
+  #   container_name       = "tfstate"
   #   key                  = "bootstrap/terraform.tfstate"
   # }
 }
@@ -2551,12 +2464,12 @@ provider "azurerm" {
 }
 
 resource "azurerm_resource_group" "terraform_state" {
-  name     = "REPLACE_ME_RESOURCE_GROUP"
-  location = "REPLACE_ME_REGION"
+  name     = "rg-terraform-state"
+  location = "eastus"
 }
 
 resource "azurerm_storage_account" "terraform_state" {
-  name                     = "REPLACE_ME_STORAGE_ACCOUNT"
+  name                     = "stacmeterraform"
   resource_group_name      = azurerm_resource_group.terraform_state.name
   location                 = azurerm_resource_group.terraform_state.location
   account_tier             = "Standard"
@@ -2568,7 +2481,7 @@ resource "azurerm_storage_account" "terraform_state" {
 }
 
 resource "azurerm_storage_container" "terraform_state" {
-  name                  = "REPLACE_ME_CONTAINER"
+  name                  = "tfstate"
   storage_account_name  = azurerm_storage_account.terraform_state.name
   container_access_type = "private"
 }
@@ -2589,14 +2502,14 @@ terraform {
 
   # Backend will be added after bootstrap
   # backend "gcs" {
-  #   bucket = "REPLACE_ME_STATE_BUCKET"
+  #   bucket = "acme-corp-terraform-state"
   #   prefix = "bootstrap"
   # }
 }
 
 resource "google_storage_bucket" "terraform_state" {
-  name     = "REPLACE_ME_STATE_BUCKET"
-  location = "REPLACE_ME_REGION"
+  name     = "acme-corp-terraform-state"
+  location = "US"
 
   versioning {
     enabled = true
@@ -2661,9 +2574,9 @@ State backends **MUST** enable encryption:
 # S3 backend with encryption
 terraform {
   backend "s3" {
-    bucket  = "REPLACE_ME_STATE_BUCKET"
+    bucket  = "acme-corp-terraform-state"
     key     = "prod/terraform.tfstate"
-    region  = "REPLACE_ME_REGION"
+    region  = "us-east-1"
     encrypt = true  # REQUIRED
   }
 }
@@ -2675,9 +2588,9 @@ terraform {
 # Azure Storage backend (encryption is enabled by default on Azure Storage accounts)
 terraform {
   backend "azurerm" {
-    resource_group_name  = "REPLACE_ME_RESOURCE_GROUP"
-    storage_account_name = "REPLACE_ME_STORAGE_ACCOUNT"
-    container_name       = "REPLACE_ME_CONTAINER"
+    resource_group_name  = "rg-terraform-state"
+    storage_account_name = "stacmeterraform"
+    container_name       = "tfstate"
     key                  = "prod/terraform.tfstate"
   }
 }
@@ -2691,7 +2604,7 @@ terraform {
 # GCS backend (encryption is enabled by default on GCS buckets)
 terraform {
   backend "gcs" {
-    bucket = "REPLACE_ME_STATE_BUCKET"
+    bucket = "acme-corp-terraform-state"
     prefix = "prod"
   }
 }
@@ -2709,11 +2622,11 @@ State backends **MUST** support and enable state locking:
 # S3 backend with DynamoDB locking
 terraform {
   backend "s3" {
-    bucket         = "REPLACE_ME_STATE_BUCKET"
+    bucket         = "acme-corp-terraform-state"
     key            = "prod/terraform.tfstate"
-    region         = "REPLACE_ME_REGION"
+    region         = "us-east-1"
     encrypt        = true
-    dynamodb_table = "REPLACE_ME_LOCK_TABLE"  # REQUIRED for locking
+    dynamodb_table = "terraform-locks"  # REQUIRED for locking
   }
 }
 ```
@@ -2724,9 +2637,9 @@ terraform {
 # Azure Storage backend (locking is built-in via blob leases)
 terraform {
   backend "azurerm" {
-    resource_group_name  = "REPLACE_ME_RESOURCE_GROUP"
-    storage_account_name = "REPLACE_ME_STORAGE_ACCOUNT"
-    container_name       = "REPLACE_ME_CONTAINER"
+    resource_group_name  = "rg-terraform-state"
+    storage_account_name = "stacmeterraform"
+    container_name       = "tfstate"
     key                  = "prod/terraform.tfstate"
   }
 }
@@ -2740,7 +2653,7 @@ terraform {
 # GCS backend (locking is built-in)
 terraform {
   backend "gcs" {
-    bucket = "REPLACE_ME_STATE_BUCKET"
+    bucket = "acme-corp-terraform-state"
     prefix = "prod"
   }
 }
@@ -3022,9 +2935,9 @@ The `terraform_remote_state` data source reads outputs from another Terraform st
 data "terraform_remote_state" "network" {
   backend = "s3"
   config = {
-    bucket = "REPLACE_ME_STATE_BUCKET"
+    bucket = "acme-corp-terraform-state"
     key    = "network/terraform.tfstate"
-    region = "REPLACE_ME_REGION"
+    region = "us-east-1"
   }
 }
 
@@ -3151,18 +3064,18 @@ Provider aliasing enables multiple instances of the same provider for multi-regi
 # providers.tf
 
 provider "aws" {
-  region = "REPLACE_ME_PRIMARY_REGION"  # e.g., us-east-1
+  region = "us-east-1"  # e.g., us-east-1
   # Default provider (no alias)
 }
 
 provider "aws" {
   alias  = "west"
-  region = "REPLACE_ME_WEST_REGION"  # e.g., us-west-2
+  region = "us-west-2"  # e.g., us-west-2
 }
 
 provider "aws" {
   alias  = "eu"
-  region = "REPLACE_ME_EU_REGION"  # e.g., eu-west-1
+  region = "eu-west-1"  # e.g., eu-west-1
 }
 ```
 
@@ -3171,13 +3084,13 @@ provider "aws" {
 ```hcl
 # Use default provider
 resource "aws_s3_bucket" "primary" {
-  bucket = "REPLACE_ME_PRIMARY_BUCKET"
+  bucket = "acme-corp-primary-data"
 }
 
 # Use aliased provider
 resource "aws_s3_bucket" "replica" {
   provider = aws.west
-  bucket   = "REPLACE_ME_REPLICA_BUCKET"
+  bucket   = "acme-corp-replica-data"
 }
 ```
 
@@ -3204,7 +3117,7 @@ provider "azurerm" {
 ```hcl
 # Use default provider
 resource "azurerm_storage_account" "primary" {
-  name                     = "REPLACE_ME_PRIMARY_STORAGE"
+  name                     = "stacmeprimary"
   resource_group_name      = azurerm_resource_group.primary.name
   location                 = azurerm_resource_group.primary.location
   account_tier             = "Standard"
@@ -3214,7 +3127,7 @@ resource "azurerm_storage_account" "primary" {
 # Use aliased provider
 resource "azurerm_storage_account" "secondary" {
   provider                 = azurerm.secondary
-  name                     = "REPLACE_ME_SECONDARY_STORAGE"
+  name                     = "stacmesecondary"
   resource_group_name      = azurerm_resource_group.secondary.name
   location                 = azurerm_resource_group.secondary.location
   account_tier             = "Standard"
@@ -3229,20 +3142,20 @@ resource "azurerm_storage_account" "secondary" {
 
 provider "google" {
   project = var.primary_project_id
-  region  = "REPLACE_ME_PRIMARY_REGION"  # e.g., us-central1
+  region  = "us-central1"
   # Default provider (no alias)
 }
 
 provider "google" {
   alias   = "europe"
   project = var.primary_project_id
-  region  = "REPLACE_ME_EUROPE_REGION"  # e.g., europe-west1
+  region  = "europe-west1"
 }
 
 provider "google" {
   alias   = "secondary_project"
   project = var.secondary_project_id
-  region  = "REPLACE_ME_SECONDARY_REGION"  # e.g., us-central1
+  region  = "us-west1"
 }
 ```
 
@@ -3251,14 +3164,14 @@ provider "google" {
 ```hcl
 # Use default provider
 resource "google_storage_bucket" "primary" {
-  name     = "REPLACE_ME_PRIMARY_BUCKET"
+  name     = "acme-corp-primary-data"
   location = "US"
 }
 
 # Use aliased provider for different region
 resource "google_storage_bucket" "europe" {
   provider = google.europe
-  name     = "REPLACE_ME_EUROPE_BUCKET"
+  name     = "acme-corp-europe-data"
   location = "EU"
 }
 ```
@@ -3330,13 +3243,13 @@ variable "db_password" {
 # Choose one of the following exports based on your cloud provider:
 
 # AWS
-export TF_VAR_db_password="$(aws secretsmanager get-secret-value --secret-id REPLACE_ME_SECRET_NAME --query SecretString --output text)"
+export TF_VAR_db_password="$(aws secretsmanager get-secret-value --secret-id database-password --query SecretString --output text)"
 
 # Azure
-export TF_VAR_db_password="$(az keyvault secret show --vault-name REPLACE_ME_KEYVAULT_NAME --name REPLACE_ME_SECRET_NAME --query value -o tsv)"
+export TF_VAR_db_password="$(az keyvault secret show --vault-name kv-acme-prod --name database-password --query value -o tsv)"
 
 # GCP
-export TF_VAR_db_password="$(gcloud secrets versions access latest --secret=REPLACE_ME_SECRET_NAME)"
+export TF_VAR_db_password="$(gcloud secrets versions access latest --secret=database-password)"
 
 # Then run terraform apply
 terraform apply
@@ -3348,7 +3261,7 @@ terraform apply
 
 ```hcl
 data "aws_secretsmanager_secret_version" "db_password" {
-  secret_id = "REPLACE_ME_SECRET_NAME"
+  secret_id = "database-password"
 }
 
 resource "aws_db_instance" "main" {
@@ -3360,12 +3273,12 @@ resource "aws_db_instance" "main" {
 
 ```hcl
 data "azurerm_key_vault" "main" {
-  name                = "REPLACE_ME_KEYVAULT_NAME"
-  resource_group_name = "REPLACE_ME_RESOURCE_GROUP"
+  name                = "kv-acme-prod"
+  resource_group_name = "rg-terraform-state"
 }
 
 data "azurerm_key_vault_secret" "db_password" {
-  name         = "REPLACE_ME_SECRET_NAME"
+  name         = "database-password"
   key_vault_id = data.azurerm_key_vault.main.id
 }
 
@@ -3379,7 +3292,7 @@ resource "azurerm_mssql_server" "main" {
 
 ```hcl
 data "google_secret_manager_secret_version" "db_password" {
-  secret  = "REPLACE_ME_SECRET_NAME"
+  secret  = "database-password"
   project = var.project_id
 }
 
@@ -3396,7 +3309,7 @@ resource "google_sql_database_instance" "main" {
 ```hcl
 data "vault_generic_secret" "db_creds" {
   # Path MUST be customized for your Vault secret location.
-  path = "REPLACE_ME_VAULT_SECRET_PATH"
+  path = "secret/data/production/database"
 }
 
 # AWS Example
@@ -3456,11 +3369,11 @@ State files contain sensitive data and **MUST** be protected.
 ```hcl
 terraform {
   backend "s3" {
-    bucket         = "REPLACE_ME_STATE_BUCKET"
+    bucket         = "acme-corp-terraform-state"
     key            = "prod/terraform.tfstate"
-    region         = "REPLACE_ME_REGION"
+    region         = "us-east-1"
     encrypt        = true                    # REQUIRED
-    dynamodb_table = "REPLACE_ME_LOCK_TABLE"  # REQUIRED for locking
+    dynamodb_table = "terraform-locks"  # REQUIRED for locking
     # Use IAM role or credentials from environment
   }
 }
@@ -3471,9 +3384,9 @@ terraform {
 ```hcl
 terraform {
   backend "azurerm" {
-    resource_group_name  = "REPLACE_ME_RESOURCE_GROUP"
-    storage_account_name = "REPLACE_ME_STORAGE_ACCOUNT"
-    container_name       = "REPLACE_ME_CONTAINER"
+    resource_group_name  = "rg-terraform-state"
+    storage_account_name = "stacmeterraform"
+    container_name       = "tfstate"
     key                  = "prod/terraform.tfstate"
     # Encryption and locking are enabled by default on Azure Storage
     # Use managed identity or service principal for authentication
@@ -3486,7 +3399,7 @@ terraform {
 ```hcl
 terraform {
   backend "gcs" {
-    bucket = "REPLACE_ME_STATE_BUCKET"
+    bucket = "acme-corp-terraform-state"
     prefix = "prod"
     # Encryption and locking are enabled by default on GCS
     # Use service account for authentication
@@ -3828,7 +3741,7 @@ For unit testing without real infrastructure, use mock providers:
 mock_provider "aws" {
   mock_data "aws_availability_zones" {
     defaults = {
-      names = ["REPLACE_ME_AWS_AZ_1", "REPLACE_ME_AWS_AZ_2", "REPLACE_ME_AWS_AZ_3"]
+      names = ["us-east-1a", "us-east-1b", "us-east-1c"]
     }
   }
 }
@@ -3851,8 +3764,8 @@ run "uses_all_availability_zones" {
 mock_provider "azurerm" {
   mock_data "azurerm_client_config" {
     defaults = {
-      tenant_id       = "REPLACE_ME_TENANT_ID"
-      subscription_id = "REPLACE_ME_SUBSCRIPTION_ID"
+      tenant_id       = "00000000-0000-0000-0000-000000000002"
+      subscription_id = "00000000-0000-0000-0000-000000000001"
     }
   }
 }
@@ -3861,8 +3774,8 @@ run "resource_group_has_correct_location" {
   command = plan
 
   assert {
-    condition     = azurerm_resource_group.main.location == "REPLACE_ME_REGION"
-    error_message = "Resource group should be in REPLACE_ME_REGION"
+    condition     = azurerm_resource_group.main.location == "eastus"
+    error_message = "Resource group should be in eastus"
   }
 }
 ```
@@ -3875,7 +3788,7 @@ run "resource_group_has_correct_location" {
 mock_provider "google" {
   mock_data "google_compute_zones" {
     defaults = {
-      names = ["REPLACE_ME_GCP_ZONE_1", "REPLACE_ME_GCP_ZONE_2", "REPLACE_ME_GCP_ZONE_3"]
+      names = ["us-central1-a", "us-central1-b", "us-central1-c"]
     }
   }
 }
@@ -4246,15 +4159,19 @@ A Terraform change is considered complete when:
 
 ## Related Documentation
 
-For detailed implementation guidance beyond this instruction file, see the companion documents in `docs/terraform/`:
+For additional Terraform guidance beyond this instruction file:
 
-| Document | Purpose |
+| Topic | Resource |
 | --- | --- |
-| [Terraform Linting Guide](../../docs/terraform/TERRAFORM_LINTING_GUIDE.md) | Detailed guidance on CI linting setup, TFLint configuration, and security scanning |
-| [Terraform Testing Guide](../../docs/terraform/TERRAFORM_TESTING_GUIDE.md) | Comprehensive guide to Terraform test framework, test patterns, and CI integration |
-| [Terraform Copilot Instructions Guide](../../docs/terraform/TERRAFORM_COPILOT_INSTRUCTIONS_GUIDE.md) | Design rationale and structure guidance for this instruction file |
+| Terraform Language Documentation | [developer.hashicorp.com/terraform/language](https://developer.hashicorp.com/terraform/language) |
+| Terraform CLI Commands | [developer.hashicorp.com/terraform/cli](https://developer.hashicorp.com/terraform/cli) |
+| Terraform Test Framework | [developer.hashicorp.com/terraform/cli/commands/test](https://developer.hashicorp.com/terraform/cli/commands/test) |
+| TFLint Documentation | [github.com/terraform-linters/tflint](https://github.com/terraform-linters/tflint) |
+| AWS Provider Documentation | [registry.terraform.io/providers/hashicorp/aws](https://registry.terraform.io/providers/hashicorp/aws/latest/docs) |
+| Azure Provider Documentation | [registry.terraform.io/providers/hashicorp/azurerm](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs) |
+| GCP Provider Documentation | [registry.terraform.io/providers/hashicorp/google](https://registry.terraform.io/providers/hashicorp/google/latest/docs) |
 
-These documents provide in-depth coverage of topics summarized in this instruction file.
+These resources provide authoritative guidance on Terraform features, syntax, and provider-specific configuration options.
 
 ---
 
