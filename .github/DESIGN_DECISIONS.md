@@ -181,6 +181,40 @@ CONTRIBUTING.md uses policy-based language ("Python version currently receiving 
 - Slightly more verbose than "Python 3.13+", but eliminates drift risk between sections.
 - Template adopters who want specific version requirements can still customize the Python Version Requirements section as instructed.
 
+### Design Decision: Realistic Examples in Terraform Instructions (No REPLACE_ME_* Placeholders)
+
+The `.github/instructions/terraform.instructions.md` file uses realistic example values (e.g., `acme-corp-terraform-state`, `us-east-1`) instead of `REPLACE_ME_*` placeholder patterns.
+
+**Rationale:**
+
+1. **No adoption burden**: Consumers don't need to find-replace `REPLACE_ME_*` patterns throughout examples before the documentation is useful.
+
+2. **Cleaner examples**: Code looks like real Terraform, improving readability and comprehension for both humans and LLMs.
+
+3. **Consistency with other instructions**: PowerShell and Python instruction files in this repository use realistic examples without placeholders—Terraform instructions now follow the same pattern.
+
+4. **Reduced document length**: No need for a lengthy "Placeholder Convention" section with placeholder tables and usage rules.
+
+5. **Better LLM comprehension**: LLMs are trained on realistic code patterns, not `REPLACE_ME_*` conventions, making realistic examples more effective for AI-assisted coding.
+
+**What ensures examples aren't mistaken for prescriptive values:**
+
+- **"About Examples in This Document" section**: A clear statement at the beginning of the document explains that all code examples are illustrative.
+
+- **Inline comments on key examples**: Backend configuration blocks include comments like `# Use your state bucket name` to reinforce that values require customization.
+
+- **Self-documenting names**: Example names like `acme-corp-terraform-state` are obviously placeholder-like through their fictional organization prefix.
+
+**Alternative considered:** Use `REPLACE_ME_*` placeholder markers for all values requiring customization.
+
+**Rejected because:**
+
+- Adds friction for consumers who must do find-replace before examples are useful
+- Looks unusual compared to typical Terraform documentation in the ecosystem
+- Creates inconsistency with how PowerShell and Python instructions handle examples
+- The only scenario where `REPLACE_ME_*` provides unique value is when someone might literally copy-paste a backend block into production without reading—but that's a user error, not a documentation problem, and the same risk exists with any example code in any documentation
+- A clear "About Examples" note addresses the "examples are illustrative" concern sufficiently
+
 ---
 
 ## Node.js Package Configuration
