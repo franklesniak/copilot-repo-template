@@ -282,12 +282,12 @@ The following table summarizes Terraform version requirements for features refer
 | `precondition` / `postcondition` blocks | 1.2.0 |
 | `replace_triggered_by` lifecycle argument | 1.2.0 |
 | `optional()` type constraint modifier | 1.3.0 |
+| `terraform_data` resource | 1.4.0 |
 | `check` blocks | 1.5.0 |
 | `import` blocks | 1.5.0 |
 | Native test framework (`terraform test`) | 1.6.0 |
 | `removed` blocks | 1.7.0 |
 | `mock_provider` in tests | 1.7.0 |
-| `terraform_data` resource | 1.4.0 |
 | `ephemeral` values | 1.10.0 |
 
 > **Note:** Examples in this document assume Terraform 1.10.0 or later unless otherwise noted. Users on older Terraform versions should verify feature availability before adopting specific patterns.
