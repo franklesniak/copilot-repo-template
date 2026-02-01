@@ -5,13 +5,13 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.8.20260131.0
+**Version:** 1.9.20260201.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-01-31
+- **Last Updated:** 2026-02-01
 - **Scope:** Defines Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in this repository. Covers style, formatting, naming conventions, file organization, variable and output design, resource configuration, module design, refactoring, state management, cross-stack data sharing, security best practices, provider management, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -104,6 +104,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[Module]** Modules **SHOULD** include `tests/` directory → [Module Tests](#module-tests)
 - **[All]** Template files **SHOULD** use `.tftpl` extension → [Template Files (.tftpl)](#template-files-tftpl)
 - **[All]** Template files **SHOULD** be placed in a `templates/` subdirectory → [Template Files (.tftpl)](#template-files-tftpl)
+- **[Root]** Large root modules **MAY** split resources into domain-specific files → [Splitting Large Configurations](#splitting-large-configurations)
 
 ### Variable and Output Design
 
@@ -279,6 +280,42 @@ The following standard placeholders **SHOULD** be used consistently throughout t
 - **[All]** Placeholder names **SHOULD** be descriptive (e.g., `REPLACE_ME_STATE_BUCKET` not `REPLACE_ME_BUCKET`)
 - **[All]** When adopting configurations, search for all placeholders using `grep -r "REPLACE_ME"` and replace with actual values
 - **[All]** Production code **MUST NOT** contain any `REPLACE_ME_*` placeholders
+
+### Scope Limitation
+
+The `REPLACE_ME_*` placeholder convention is intended for **static configuration** where Terraform variables cannot be used:
+
+- Backend configurations (variables are not allowed in backend blocks)
+- Documentation examples and standalone code snippets
+- One-time setup values in `.tfbackend` files
+
+For resource attributes in production Terraform configurations, use input variables instead of placeholders:
+
+**Correct - Use variables for resource configuration:**
+
+```hcl
+resource "aws_instance" "main" {
+  ami           = var.ami_id
+  instance_type = var.instance_type
+  subnet_id     = var.subnet_id
+}
+```
+
+**Incorrect - Do not use placeholders in resource blocks:**
+
+```hcl
+# WRONG: Placeholders should not be used here
+resource "aws_instance" "main" {
+  ami           = "REPLACE_ME_AMI_ID"      # Use var.ami_id instead
+  instance_type = "REPLACE_ME_INSTANCE_TYPE"  # Use var.instance_type instead
+}
+```
+
+This distinction ensures that:
+
+- Resource configurations remain parameterized and reusable
+- Placeholders are only used where variables are syntactically prohibited
+- AI assistants generate code that follows proper variable patterns
 
 ### Provider-Specific Notes
 
@@ -717,6 +754,26 @@ Standard file organization for Terraform projects:
 | `locals.tf` | Local value definitions | MAY |
 | `data.tf` | Data source definitions | MAY |
 | `backend.tf` | Backend configuration | MUST (root modules) |
+
+#### Splitting Large Configurations
+
+For large root modules with many resources, the `main.tf` file **MAY** be split into domain-specific files to improve readability and maintainability:
+
+| File | Purpose | When to Use |
+| --- | --- | --- |
+| `network.tf` | VPC, subnets, route tables, security groups | When networking resources exceed ~100 lines |
+| `compute.tf` | EC2 instances, ASGs, Lambda functions | When compute resources are distinct from other domains |
+| `storage.tf` | S3 buckets, EBS volumes, RDS instances | When storage configuration is substantial |
+| `iam.tf` | IAM roles, policies, instance profiles | When IAM configuration is complex |
+
+**Guidelines for splitting:**
+
+- Split by **logical domain**, not by resource type
+- Keep related resources together (e.g., an EC2 instance and its security group)
+- The `main.tf` file remains the default for simple configurations
+- Variable declarations **MUST** remain in `variables.tf` regardless of how resources are split
+
+This approach is **RECOMMENDED** when `main.tf` exceeds 300-400 lines or when multiple team members frequently edit the same file.
 
 ### Version Constraints File
 
@@ -2546,6 +2603,8 @@ state-bucket/
     └── iam/
         └── terraform.tfstate
 ```
+
+> **Note:** This diagram represents the **key/path structure in your remote backend** (S3 object keys, Azure blob paths, GCS object prefixes), not a local filesystem directory structure. These paths are configured via the `key` or `prefix` attribute in your backend configuration. Your local repository structure is separate and typically organized by environment directories containing Terraform configuration files.
 
 ### Workspace Usage
 
