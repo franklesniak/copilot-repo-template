@@ -983,8 +983,6 @@ python3 -m pip install pre-commit
 ```
 
 > **Note:** When using pip, the `pre-commit` command may not be recognized if Python's `bin` folder is not in your PATH. Use `python3 -m pre_commit` instead of `pre-commit` for all commands.
->
-> **Troubleshooting (Windows):** If you see `pip: The term 'pip' is not recognized`, use `python -m pip` instead of `pip`.
 
 ### If You Don't Have Pre-commit Configured
 
