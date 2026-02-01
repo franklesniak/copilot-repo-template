@@ -801,7 +801,17 @@ You should see output like `pre-commit 4.0.1`.
 
 #### Option 1: Using pipx (recommended)
 
-[pipx](https://pipx.pypa.io/) installs Python applications in isolated environments and, after you run `pipx ensurepath` once, adds the pipx binaries directory to your PATH so you can run installed tools from the command line. First install pipx if you don't have it:
+[pipx](https://pipx.pypa.io/) installs Python applications in isolated environments and, after you run `pipx ensurepath` once, adds the pipx binaries directory to your PATH so you can run installed tools from the command line.
+
+> **Important (PEP 668 systems):** On newer Linux distributions (Ubuntu 23.04+, Fedora 38+) and some macOS configurations, `python3 -m pip install` commands fail with an `externally-managed-environment` error. If you're on one of these systems, **skip the pip commands below** and install pipx via your OS package manager instead:
+>
+> - Debian / Ubuntu: `sudo apt install pipx && pipx ensurepath`
+> - Fedora: `sudo dnf install pipx && pipx ensurepath`
+> - macOS (Homebrew): `brew install pipx && pipx ensurepath`
+>
+> After running `pipx ensurepath`, restart your terminal, then proceed to the "Then install pre-commit" step below.
+
+If pip works on your system, first install pipx:
 
 ```bash
 # First, upgrade pip to the latest version (recommended)
@@ -813,12 +823,6 @@ python3 -m pip install pipx
 # Configure PATH (use module invocation in case pipx isn't on PATH yet)
 python3 -m pipx ensurepath
 ```
-
-> **Troubleshooting:** On newer Linux distributions (Ubuntu 23.04+, Fedora 38+) and some macOS configurations, `python3 -m pip install pipx` may fail with an `externally-managed-environment` error. In that case, install pipx via your OS package manager instead:
->
-> - Debian / Ubuntu: `sudo apt install pipx && pipx ensurepath`
-> - Fedora: `sudo dnf install pipx && pipx ensurepath`
-> - macOS (Homebrew): `brew install pipx && pipx ensurepath`
 
 Then install pre-commit:
 
@@ -837,6 +841,16 @@ brew install pre-commit
 
 #### Option 3: Using pip
 
+> **Important (PEP 668 systems):** On newer Linux distributions (Ubuntu 23.04+, Fedora 38+) and some macOS configurations, `python3 -m pip install` commands fail with an `externally-managed-environment` error. If you're on one of these systems, **do not use pip**—use Option 1 (pipx via OS package manager) instead:
+>
+> - Debian / Ubuntu: `sudo apt install pipx && pipx ensurepath`
+> - Fedora: `sudo dnf install pipx && pipx ensurepath`
+> - macOS (Homebrew): `brew install pipx && pipx ensurepath`
+>
+> After running `pipx ensurepath`, restart your terminal, then run `pipx install pre-commit`.
+
+If pip works on your system:
+
 ```bash
 # First, upgrade pip to the latest version (recommended)
 python3 -m pip install --upgrade pip
@@ -846,14 +860,6 @@ python3 -m pip install pre-commit
 ```
 
 > **Note:** When using pip, the `pre-commit` command may not be recognized if Python's `bin` folder is not in your PATH. Use `python3 -m pre_commit` instead of `pre-commit` for all commands. For example, use `python3 -m pre_commit --version` to verify installation.
->
-> **Troubleshooting:** On newer Linux distributions (Ubuntu 23.04+, Fedora 38+) and some macOS configurations, you may see an `externally-managed-environment` error when using pip. In that case, do **not** use `python3 -m pip install pipx`, as it can fail with the same error. Instead, install **pipx** via your OS package manager (or Homebrew on macOS) and then use it to install `pre-commit`. For example:
->
-> - Debian / Ubuntu: `sudo apt install pipx && pipx ensurepath`
-> - Fedora: `sudo dnf install pipx && pipx ensurepath`
-> - macOS (Homebrew): `brew install pipx && pipx ensurepath`
->
-> After running `pipx ensurepath`, you MAY need to restart your terminal session for PATH changes to take effect.
 
 #### Verifying installation
 
