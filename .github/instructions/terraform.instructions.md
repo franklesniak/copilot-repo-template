@@ -280,6 +280,7 @@ The following standard placeholders **SHOULD** be used consistently throughout t
 - **[All]** Placeholder names **SHOULD** be descriptive (e.g., `REPLACE_ME_STATE_BUCKET` not `REPLACE_ME_BUCKET`)
 - **[All]** When adopting configurations, search for all placeholders using `grep -r "REPLACE_ME"` and replace with actual values
 - **[All]** Production code **MUST NOT** contain any `REPLACE_ME_*` placeholders
+- **[All]** `REPLACE_ME_*` values in `backend` blocks **MUST** be replaced via manual editing or scripting (e.g., `sed`, `envsubst`) **before** running `terraform init`, as Terraform cannot interpolate variables or environment variables in backend configuration
 
 ### Scope Limitation
 
@@ -785,12 +786,12 @@ Every Terraform directory **MUST** have a `versions.tf` file with Terraform and 
 # versions.tf
 
 terraform {
-  required_version = ">= 1.6.0"
+  required_version = ">= 1.7.0"
 
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
   }
 }
@@ -802,12 +803,12 @@ terraform {
 # versions.tf
 
 terraform {
-  required_version = ">= 1.6.0"
+  required_version = ">= 1.7.0"
 
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.0"
+      version = "~> 4.0"
     }
   }
 }
@@ -819,12 +820,12 @@ terraform {
 # versions.tf
 
 terraform {
-  required_version = ">= 1.6.0"
+  required_version = ">= 1.7.0"
 
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 5.0"
+      version = "~> 7.0"
     }
   }
 }
@@ -926,6 +927,8 @@ terraform {
   }
 }
 ```
+
+> **Important:** Unlike resource blocks, backend blocks do not support variable interpolation. All `REPLACE_ME_*` placeholders in backend configuration **MUST** be replaced with actual values via manual editing or scripting before running `terraform init`. Alternatively, use [partial backend configuration](#partial-backend-configuration) to provide values at runtime.
 
 #### Partial Backend Configuration
 
@@ -1925,12 +1928,12 @@ Modules **MUST** specify required Terraform and provider versions:
 # versions.tf in module directory
 
 terraform {
-  required_version = ">= 1.6.0"
+  required_version = ">= 1.7.0"
 
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = ">= 5.0.0"
+      version = ">= 6.0.0"
     }
   }
 }
@@ -2265,12 +2268,12 @@ Create your state storage resources in a dedicated bootstrap configuration, init
 
 ```hcl
 terraform {
-  required_version = ">= 1.6.0"
+  required_version = ">= 1.7.0"
 
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
   }
 
@@ -2328,12 +2331,12 @@ resource "aws_dynamodb_table" "terraform_locks" {
 
 ```hcl
 terraform {
-  required_version = ">= 1.6.0"
+  required_version = ">= 1.7.0"
 
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = "~> 3.0"
+      version = "~> 4.0"
     }
   }
 
@@ -2378,12 +2381,12 @@ resource "azurerm_storage_container" "terraform_state" {
 
 ```hcl
 terraform {
-  required_version = ">= 1.6.0"
+  required_version = ">= 1.7.0"
 
   required_providers {
     google = {
       source  = "hashicorp/google"
-      version = "~> 5.0"
+      version = "~> 7.0"
     }
   }
 
@@ -2816,6 +2819,7 @@ locals {
 
 - **Tight coupling:** Changes to the source stack's outputs can break consuming stacks.
 - **State file access:** Consumers need read access to the entire state file, not just specific outputs.
+- **Least Privilege violation:** Consumers gain access to **all** outputs in the source state file, potentially exposing sensitive data not intended for sharing. This over-fetching of permissions violates security best practices.
 - **No explicit contract:** No clear interface definition between producer and consumer.
 - **Harder to test:** Mocking remote state in tests is more complex than mocking parameter store lookups.
 
@@ -2859,12 +2863,12 @@ Provider versions **MUST** be constrained in `versions.tf`:
 
 ```hcl
 terraform {
-  required_version = ">= 1.6.0"
+  required_version = ">= 1.7.0"
 
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 6.0"
     }
     random = {
       source  = "hashicorp/random"
@@ -2903,11 +2907,11 @@ terraform providers lock \
 Use the pessimistic constraint operator (`~>`) for providers to allow patch updates while preventing breaking changes:
 
 ```hcl
-# Good: Allows 5.x updates but not 6.0
-version = "~> 5.0"
+# Good: Allows 6.x updates but not 7.0
+version = "~> 6.0"
 
-# Good: Allows 5.31.x updates but not 5.32.0
-version = "~> 5.31.0"
+# Good: Allows 6.31.x updates but not 6.32.0
+version = "~> 6.31.0"
 ```
 
 ### Provider Aliasing
@@ -3432,7 +3436,7 @@ Security scanning tools **SHOULD** be integrated into the development workflow.
 
 Terraform's native test framework (introduced in Terraform 1.6) provides a way to validate configurations without external testing tools. This section documents testing conventions that integrate with the coding standards in this guide.
 
-> **Note:** Terraform tests require Terraform 1.6.0 or later. For older Terraform versions, consider Terratest or other external testing frameworks.
+> **Note:** Terraform tests require Terraform 1.6.0 or later. Mock providers require Terraform 1.7.0 or later. For older Terraform versions, consider Terratest or other external testing frameworks.
 
 ### Test File Naming
 
