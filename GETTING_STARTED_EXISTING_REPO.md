@@ -1079,7 +1079,7 @@ If your project already uses pre-commit:
 
 4. Run all hooks to verify:
 
-   **If you installed with pipx or Homebrew:**
+   **If you installed with pipx or Homebrew (same command on all platforms/shells):**
 
    ```bash
    pre-commit run --all-files

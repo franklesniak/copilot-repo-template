@@ -827,11 +827,10 @@ python3 -m pipx ensurepath
 Then install pre-commit:
 
 ```bash
-# Use module invocation to ensure it works even if pipx isn't on PATH
-python3 -m pipx install pre-commit
+pipx install pre-commit
 ```
 
-> **Note:** You need to restart your terminal (or open a new one) before running `pre-commit` directly by name, because PATH changes only apply to new shells. Using `python3 -m pipx` avoids needing `pipx` on PATH and lets you install packages in the same session, but `pipx run pre-commit` runs from a temporary environment and should not be used for `pre-commit install` (it can create hooks that reference a non-existent interpreter).
+> **Note:** If you installed pipx via an OS package manager (Homebrew, apt, dnf), use `pipx install pre-commit` as shown above. If you installed pipx via pip and pipx isn't on your PATH yet, you can use `python3 -m pipx install pre-commit` instead. After installing pre-commit, you'll need to restart your terminal before running `pre-commit` directly by name. Do not use `pipx run pre-commit install`—it runs from a temporary environment and can create hooks referencing a non-existent interpreter.
 
 #### Option 2: Using Homebrew (macOS only)
 
