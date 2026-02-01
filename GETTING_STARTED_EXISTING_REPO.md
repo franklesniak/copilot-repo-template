@@ -872,7 +872,7 @@ Pre-commit hooks run automated checks before each commit, catching issues early 
 **Prerequisites:**
 
 - Python installed (3.9+)
-- pre-commit installed and available on your PATH (see installation steps below)
+- pre-commit installed (see installation steps below; pipx/Homebrew installs make `pre-commit` available via PATH, pip installs require module invocation)
 
 > **Why pipx is recommended:**
 >
