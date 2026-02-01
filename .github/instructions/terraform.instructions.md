@@ -5,7 +5,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.10.20260201.0
+**Version:** 1.11.20260201.0
 
 ## Metadata
 
@@ -34,6 +34,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - [Continuous Validation with check Blocks](#continuous-validation-with-check-blocks)
 - [Resource Configuration](#resource-configuration)
   - [Resource Timeouts](#resource-timeouts)
+  - [The terraform_data Resource](#the-terraform_data-resource)
 - [Module Design](#module-design)
 - [Refactoring](#refactoring)
 - [State Management](#state-management)
@@ -45,6 +46,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
   - [Provider Aliasing](#provider-aliasing)
 - [Security Best Practices](#security-best-practices)
   - [Sensitive Values in Meta-Arguments](#sensitive-values-in-meta-arguments)
+  - [Ephemeral Values](#ephemeral-values)
 - [Testing with Terraform Test](#testing-with-terraform-test)
 - [Documentation Standards](#documentation-standards)
   - [Error Message Best Practices](#error-message-best-practices)
@@ -53,6 +55,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - ["Done" Definition for Terraform Changes](#done-definition-for-terraform-changes)
 - [Related Documentation](#related-documentation)
 - [Scope Exceptions & Deviations from Standards](#scope-exceptions--deviations-from-standards)
+- [Changelog](#changelog)
 - [Glossary](#glossary)
 
 ## Keywords
@@ -284,8 +287,10 @@ The following table summarizes Terraform version requirements for features refer
 | Native test framework (`terraform test`) | 1.6.0 |
 | `removed` blocks | 1.7.0 |
 | `mock_provider` in tests | 1.7.0 |
+| `terraform_data` resource | 1.4.0 |
+| `ephemeral` values | 1.10.0 |
 
-> **Note:** Examples in this document assume Terraform 1.7.0 or later unless otherwise noted. Users on older Terraform versions should verify feature availability before adopting specific patterns.
+> **Note:** Examples in this document assume Terraform 1.10.0 or later unless otherwise noted. Users on older Terraform versions should verify feature availability before adopting specific patterns.
 
 ---
 
@@ -2014,6 +2019,85 @@ resource "aws_security_group" "web" {
 # dynamic "ingress" { ... }
 ```
 
+### The terraform_data Resource
+
+The `terraform_data` resource (Terraform 1.4+) is a built-in managed resource that provides trigger-based replacement and data passing without requiring any provider. It is the **preferred replacement** for `null_resource` in modern Terraform configurations.
+
+#### When to Use terraform_data
+
+- **Trigger-based replacement:** Force resource replacement when specific values change
+- **Data passing:** Store and pass values between resources or modules
+- **Provisioner execution:** Run local-exec or remote-exec provisioners (same as null_resource)
+
+**Advantages over null_resource:**
+
+- No provider dependency (built into Terraform core)
+- Clearer semantics with `input` and `output` attributes
+- Better integration with the dependency graph
+
+#### Basic Usage Pattern
+
+```hcl
+resource "terraform_data" "replacement" {
+  input = var.revision
+
+  # Force replacement when any of these values change
+  triggers_replace = [
+    aws_instance.main.id,
+    var.force_replacement,
+  ]
+}
+
+# Reference the trigger in other resources
+resource "aws_instance" "dependent" {
+  # ...
+
+  lifecycle {
+    replace_triggered_by = [terraform_data.replacement]
+  }
+}
+```
+
+#### Using input and output Attributes
+
+The `input` attribute accepts any value and makes it available as `output`:
+
+```hcl
+resource "terraform_data" "config" {
+  input = {
+    environment = var.environment
+    version     = var.app_version
+    timestamp   = timestamp()
+  }
+}
+
+# Access the stored values
+output "deployment_config" {
+  description = "Configuration used for this deployment."
+  value       = terraform_data.config.output
+}
+```
+
+#### Migration from null_resource
+
+When migrating from `null_resource` to `terraform_data`:
+
+```hcl
+# Before (null_resource)
+resource "null_resource" "trigger" {
+  triggers = {
+    instance_id = aws_instance.main.id
+  }
+}
+
+# After (terraform_data) - preferred
+resource "terraform_data" "trigger" {
+  triggers_replace = [aws_instance.main.id]
+}
+```
+
+> **Note:** `terraform_data` requires Terraform 1.4.0 or later. For configurations that must support older versions, `null_resource` remains available via the `hashicorp/null` provider.
+
 ---
 
 ## Module Design
@@ -3540,18 +3624,72 @@ resource "aws_secretsmanager_secret" "secrets" {
 }
 ```
 
+### Ephemeral Values
+
+Terraform 1.10 introduced `ephemeral` values—a mechanism for handling sensitive data that should never be persisted to state. Unlike `sensitive` values (which are stored in state but redacted in output), ephemeral values are never written to state at all.
+
+#### When to Use Ephemeral vs Sensitive
+
+| Attribute | Behavior | Use Case |
+| --- | --- | --- |
+| `sensitive = true` | Value is stored in state but redacted in plan/apply output | Secrets that Terraform needs to track for drift detection |
+| `ephemeral = true` | Value is never written to state | Temporary tokens, session credentials, values that should not persist |
+
+**Key constraint:** Ephemeral values **MUST NOT** be used in resource arguments that persist to state. They are intended for use in providers, provisioners, and other contexts where the value is consumed but not stored.
+
+#### Ephemeral Variable Declaration
+
+```hcl
+variable "temporary_token" {
+  description = "Short-lived authentication token for provider configuration."
+  type        = string
+  ephemeral   = true  # Value is never written to state
+}
+
+variable "session_credentials" {
+  description = "Temporary session credentials that should not persist."
+  type = object({
+    access_key    = string
+    secret_key    = string
+    session_token = string
+  })
+  ephemeral = true
+}
+```
+
+#### Ephemeral Output Declaration
+
+```hcl
+output "generated_token" {
+  description = "Token generated during apply (not persisted to state)."
+  value       = local.computed_token
+  ephemeral   = true
+}
+```
+
+#### Use Cases for Ephemeral Values
+
+- **Provider authentication:** Temporary tokens used to authenticate providers that should not persist in state
+- **Session credentials:** Short-lived credentials from assume-role operations
+- **One-time values:** Tokens or secrets used during provisioning but not needed afterward
+- **Compliance requirements:** Values that organizational policy prohibits from being stored
+
+> **Note:** Ephemeral values require Terraform 1.10.0 or later. For older versions, use `sensitive = true` and implement additional state protection measures.
+
 ### Security Scanning
 
 Security scanning tools **SHOULD** be integrated into the development workflow.
 
 #### Recommended Tools
 
-| Tool | Purpose | Integration |
-| --- | --- | --- |
-| `tfsec` | Static security analysis | Pre-commit, CI |
-| `checkov` | Policy-as-code scanning | Pre-commit, CI |
-| `terrascan` | Security and compliance | CI |
-| `trivy` | Misconfiguration scanning | CI |
+| Tool | Purpose | Integration | Notes |
+| --- | --- | --- | --- |
+| `trivy` | Comprehensive security scanning | Pre-commit, CI | Recommended; successor to tfsec |
+| `checkov` | Policy-as-code scanning | Pre-commit, CI | |
+| `terrascan` | Security and compliance | CI | |
+| `tfsec` | Static security analysis | Pre-commit, CI | Legacy; now part of Trivy |
+
+> **Note:** `tfsec` has been absorbed into Aqua Security's `trivy` and is now in maintenance mode. New projects **SHOULD** use `trivy` for Terraform security scanning. Existing workflows using `tfsec` will continue to work but **SHOULD** plan migration to `trivy`.
 
 #### Pre-commit Integration Example
 
@@ -3559,8 +3697,9 @@ Security scanning tools **SHOULD** be integrated into the development workflow.
 - repo: https://github.com/antonbabenko/pre-commit-terraform
   rev: v1.96.3
   hooks:
-    - id: terraform_tfsec
+    - id: terraform_trivy  # Recommended for new projects
     - id: terraform_checkov
+    # - id: terraform_tfsec  # Legacy; use terraform_trivy instead
 ```
 
 ---
@@ -4209,6 +4348,19 @@ The following are common scenarios where deviations may be justified:
 > **Note:** Replace the examples below with actual deviations for your project, or remove this section if no deviations apply.
 
 *No deviations recorded yet. When deviations are necessary, document them here using the format above.*
+
+---
+
+## Changelog
+
+This section tracks significant changes to the Terraform instruction file.
+
+| Version | Date | Changes |
+| --- | --- | --- |
+| 1.11.20260201.0 | 2026-02-01 | Added ephemeral values (1.10+), terraform_data resource (1.4+), updated security scanning tools (tfsec → trivy transition), added changelog |
+| 1.10.20260201.0 | 2026-02-01 | Initial version targeting Terraform 1.10+ |
+
+When updating this document, add a new row describing the changes made.
 
 ---
 
