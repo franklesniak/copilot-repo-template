@@ -944,7 +944,7 @@ Run pre-commit on all files:
 pre-commit run --all-files
 ```
 
-> **Note:** If `pre-commit` is not found, run `python3 -m pipx ensurepath` (or `pipx ensurepath` if `pipx` is already on your PATH) and restart your terminal. `pipx run pre-commit` can be used for one-off commands but runs from a temporary environment (slower and doesn't validate your installed version).
+> **Note:** If `pre-commit` is not found, you may need to add the pipx binary location to your PATH. On **Windows**, run `python -m pipx ensurepath`. On **macOS/Linux/FreeBSD**, run `python3 -m pipx ensurepath`. In both cases, you can alternatively run `pipx ensurepath` if `pipx` itself is already on your PATH, then restart your terminal. `pipx run pre-commit` can be used for one-off commands but runs from a temporary environment (slower and doesn't validate your installed version).
 
 **If you installed with Homebrew:**
 
@@ -1960,7 +1960,7 @@ git push origin feature/your-feature-name
 
 If `pre-commit` is not on PATH:
 
-- **pipx users:** Run `pipx ensurepath` and restart your PowerShell window, then run `pre-commit run --all-files`.
+- **pipx users:** Run `python -m pipx ensurepath` (or `pipx ensurepath` if `pipx` is already on your PATH) and restart your PowerShell window, then run `pre-commit run --all-files`.
 - **pip users:** Use module invocation:
 
   ```powershell
@@ -1986,7 +1986,7 @@ git push origin feature/your-feature-name
 
 If `pre-commit` is not on PATH:
 
-- **pipx users:** Run `pipx ensurepath` and restart your terminal, then run `pre-commit run --all-files`.
+- **pipx users:** Run `python3 -m pipx ensurepath` (or `pipx ensurepath` if `pipx` is already on your PATH) and restart your terminal, then run `pre-commit run --all-files`.
 - **pip users:** Use module invocation:
 
   ```bash
