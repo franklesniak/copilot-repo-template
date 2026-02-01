@@ -1559,36 +1559,42 @@ If you adopted the template's `CONTRIBUTING.md`, you should:
 
 Before making changes, install pre-commit hooks:
 
-**Windows (PowerShell):**
+**Option 1: Using pipx (recommended)**
+
+Windows (PowerShell):
 
 ```powershell
-# Install pre-commit (choose one method):
-# Option 1: Using pipx (recommended)
-# First install pipx if you don't have it: python -m pip install pipx
+python -m pip install pipx
 python -m pipx ensurepath
 # Restart your terminal for PATH changes to take effect, then run:
 python -m pipx install pre-commit
 pre-commit install
+```
 
-# Option 2: Using pip (if you can't use pipx)
+macOS/Linux/FreeBSD:
+
+```bash
+python3 -m pip install pipx
+# Or use your OS package manager: sudo apt install pipx, brew install pipx, etc.
+python3 -m pipx ensurepath
+# Restart your terminal for PATH changes to take effect, then run:
+python3 -m pipx install pre-commit
+pre-commit install
+```
+
+**Option 2: Using pip (if you can't use pipx)**
+
+Windows (PowerShell):
+
+```powershell
 python -m pip install pre-commit
 # Use module invocation (avoids PATH issues):
 python -m pre_commit install
 ```
 
-**macOS/Linux/FreeBSD:**
+macOS/Linux/FreeBSD:
 
 ```bash
-# Install pre-commit (choose one method):
-# Option 1: Using pipx (recommended)
-# First install pipx if you don't have it: python3 -m pip install pipx
-# (Or use your OS package manager: sudo apt install pipx, brew install pipx, etc.)
-python3 -m pipx ensurepath
-# Restart your terminal for PATH changes to take effect, then run:
-python3 -m pipx install pre-commit
-pre-commit install
-
-# Option 2: Using pip (if you can't use pipx)
 python3 -m pip install pre-commit
 # Use module invocation (avoids PATH issues):
 python3 -m pre_commit install
@@ -1646,36 +1652,44 @@ Install markdown linting tools:
 npm install
 ```
 
-**Windows (PowerShell):**
+Install pre-commit hooks:
+
+**Option 1: Using pipx (recommended)**
+
+Windows (PowerShell):
 
 ```powershell
-# Install pre-commit (choose one method):
-# Option 1: Using pipx (recommended)
-# First install pipx if you don't have it: python -m pip install pipx
+python -m pip install pipx
 python -m pipx ensurepath
 # Restart your terminal for PATH changes to take effect, then run:
 python -m pipx install pre-commit
 pre-commit install
+```
 
-# Option 2: Using pip (if you can't use pipx)
+macOS/Linux/FreeBSD:
+
+```bash
+python3 -m pip install pipx
+# Or use your OS package manager: sudo apt install pipx, brew install pipx, etc.
+python3 -m pipx ensurepath
+# Restart your terminal for PATH changes to take effect, then run:
+python3 -m pipx install pre-commit
+pre-commit install
+```
+
+**Option 2: Using pip (if you can't use pipx)**
+
+Windows (PowerShell):
+
+```powershell
 python -m pip install pre-commit
 # Use module invocation (avoids PATH issues):
 python -m pre_commit install
 ```
 
-**macOS/Linux/FreeBSD:**
+macOS/Linux/FreeBSD:
 
 ```bash
-# Install pre-commit (choose one method):
-# Option 1: Using pipx (recommended)
-# First install pipx if you don't have it: python3 -m pip install pipx
-# (Or use your OS package manager: sudo apt install pipx, brew install pipx, etc.)
-python3 -m pipx ensurepath
-# Restart your terminal for PATH changes to take effect, then run:
-python3 -m pipx install pre-commit
-pre-commit install
-
-# Option 2: Using pip (if you can't use pipx)
 python3 -m pip install pre-commit
 # Use module invocation (avoids PATH issues):
 python3 -m pre_commit install
