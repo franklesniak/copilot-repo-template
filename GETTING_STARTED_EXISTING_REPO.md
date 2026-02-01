@@ -1566,8 +1566,8 @@ Windows (PowerShell):
 ```powershell
 python -m pip install pipx
 python -m pipx ensurepath
-# Restart your terminal for PATH changes to take effect, then run:
 python -m pipx install pre-commit
+# Restart your terminal for PATH changes to take effect, then run:
 pre-commit install
 ```
 
@@ -1577,8 +1577,8 @@ macOS/Linux/FreeBSD:
 python3 -m pip install pipx
 # Or use your OS package manager: sudo apt install pipx, brew install pipx, etc.
 python3 -m pipx ensurepath
-# Restart your terminal for PATH changes to take effect, then run:
 python3 -m pipx install pre-commit
+# Restart your terminal for PATH changes to take effect, then run:
 pre-commit install
 ```
 
@@ -1661,8 +1661,8 @@ Windows (PowerShell):
 ```powershell
 python -m pip install pipx
 python -m pipx ensurepath
-# Restart your terminal for PATH changes to take effect, then run:
 python -m pipx install pre-commit
+# Restart your terminal for PATH changes to take effect, then run:
 pre-commit install
 ```
 
@@ -1672,8 +1672,8 @@ macOS/Linux/FreeBSD:
 python3 -m pip install pipx
 # Or use your OS package manager: sudo apt install pipx, brew install pipx, etc.
 python3 -m pipx ensurepath
-# Restart your terminal for PATH changes to take effect, then run:
 python3 -m pipx install pre-commit
+# Restart your terminal for PATH changes to take effect, then run:
 pre-commit install
 ```
 
