@@ -21,6 +21,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - [Quick Reference Checklist](#quick-reference-checklist)
 - [Placeholder Convention (`REPLACE_ME_*`)](#placeholder-convention-replace_me_)
 - [Executive Summary: Terraform Philosophy](#executive-summary-terraform-philosophy)
+- [Terraform Version Requirements](#terraform-version-requirements)
 - [Formatting and Style](#formatting-and-style)
 - [Naming Conventions](#naming-conventions)
   - [Globally Unique Resource Names](#globally-unique-resource-names)
@@ -30,6 +31,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
   - [Terraform Cloud Variable Precedence](#terraform-cloud-variable-precedence)
 - [Continuous Validation with check Blocks](#continuous-validation-with-check-blocks)
 - [Resource Configuration](#resource-configuration)
+  - [Resource Timeouts](#resource-timeouts)
 - [Module Design](#module-design)
 - [Refactoring](#refactoring)
 - [State Management](#state-management)
@@ -136,6 +138,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** Dynamic blocks **SHOULD** be used sparingly → [Dynamic Blocks](#dynamic-blocks)
 - **[All]** `prevent_destroy` **SHOULD** be used for critical resources → [Lifecycle Block Options](#lifecycle-block-options)
 - **[All]** `ignore_changes` **SHOULD** be used for attributes managed outside Terraform → [Lifecycle Block Options](#lifecycle-block-options)
+- **[All]** Custom `timeouts` blocks **MAY** be used for long-running resource operations → [Resource Timeouts](#resource-timeouts)
 
 ### Module Design
 
@@ -341,6 +344,27 @@ This repository approaches Terraform as **infrastructure as code** with the same
 The coding standards in this document enforce these principles through specific, actionable requirements.
 
 > **Provider-Agnostic Guidance:** This document includes parallel examples for AWS, Azure, and GCP where applicable. All style rules and best practices are **provider-agnostic**. Users **MAY** remove examples for providers they do not use. The principles of naming, structure, security, and documentation apply equally across all providers.
+
+---
+
+## Terraform Version Requirements
+
+The following table summarizes Terraform version requirements for features referenced in this document:
+
+| Feature | Minimum Terraform Version |
+| --- | --- |
+| `moved` blocks | 1.1.0 |
+| `nullable` variable attribute | 1.1.0 |
+| `precondition` / `postcondition` blocks | 1.2.0 |
+| `replace_triggered_by` lifecycle argument | 1.2.0 |
+| `optional()` type constraint modifier | 1.3.0 |
+| `check` blocks | 1.5.0 |
+| `import` blocks | 1.5.0 |
+| Native test framework (`terraform test`) | 1.6.0 |
+| `removed` blocks | 1.7.0 |
+| `mock_provider` in tests | 1.7.0 |
+
+> **Note:** Examples in this document assume Terraform 1.7.0 or later unless otherwise noted. Users on older Terraform versions should verify feature availability before adopting specific patterns.
 
 ---
 
@@ -1743,6 +1767,38 @@ resource "aws_instance" "main" {
   }
 }
 ```
+
+### Resource Timeouts
+
+Some Terraform resources support custom timeout configurations for create, update, and delete operations via a `timeouts` block. Timeouts are provider-specific—not all resources support them, and available timeout options vary by resource type.
+
+#### Timeout Block Structure
+
+```hcl
+resource "aws_db_instance" "main" {
+  identifier     = "production-database"
+  engine         = "postgres"
+  instance_class = var.db_instance_class
+  # ... other configuration
+
+  timeouts {
+    create = "60m"
+    update = "90m"
+    delete = "30m"
+  }
+}
+```
+
+#### Common Use Cases
+
+Custom timeouts are commonly needed for:
+
+- **RDS/database instances:** Database creation and modification can take 30-60+ minutes
+- **Large EKS/AKS/GKE clusters:** Kubernetes cluster operations may exceed default timeouts
+- **Complex networking resources:** VPN gateways, Transit Gateway attachments, and peering connections
+- **Large-scale storage operations:** Creating or resizing large storage volumes
+
+> **Note:** Default timeouts are usually sufficient for most operations. Custom timeouts **SHOULD** only be set when operations consistently exceed default values or when specific SLAs require longer wait times.
 
 ### Explicit Dependencies
 
@@ -4019,18 +4075,25 @@ This glossary defines key Terraform terms used throughout this document.
 
 | Term | Definition |
 | --- | --- |
+| **.tf.json extension** | An alternative JSON syntax for Terraform configuration, typically used for programmatically generated code. |
+| **.tftpl extension** | The recommended file extension for Terraform template files used with `templatefile()`. |
+| **backend** | The configuration that determines where Terraform stores its state file. Common backends include S3, Azure Storage, GCS, and Terraform Cloud. |
 | **check block** | A Terraform construct (v1.5+) that runs continuous validation assertions on every `plan` and `apply`, producing warnings rather than errors when assertions fail. |
-| **moved block** | A declarative block (v1.1+) that tells Terraform to treat a resource at a new address as the same resource that previously existed at a different address, enabling safe refactoring without destroying resources. |
+| **child module** | A module that is called by another module (the parent). Child modules are reusable components typically located in a `modules/` directory. Contrast with root module. |
+| **HCL** | HashiCorp Configuration Language. The primary language used to write Terraform configurations in `.tf` files. |
 | **import block** | A declarative block (v1.5+) that brings existing infrastructure under Terraform management without using CLI commands, enabling version-controlled and reviewable imports. |
-| **removed block** | A declarative block (v1.7+) that removes a resource from Terraform state without destroying the underlying infrastructure. |
+| **moved block** | A declarative block (v1.1+) that tells Terraform to treat a resource at a new address as the same resource that previously existed at a different address, enabling safe refactoring without destroying resources. |
 | **partial backend configuration** | A pattern where static backend settings are committed to version control while dynamic values (bucket names, regions) are provided at runtime via `-backend-config` flags or files. |
 | **pessimistic constraint operator** | The `~>` operator used in version constraints that allows only the rightmost version component to increment (e.g., `~> 5.0` allows `5.x` but not `6.0`). |
+| **provider** | A plugin that Terraform uses to interact with cloud platforms, SaaS providers, and other APIs. Examples include `aws`, `azurerm`, and `google`. |
 | **provider alias** | A named instance of a provider configuration that enables deploying resources to multiple regions, accounts, or with different settings within the same configuration. |
-| **root module** | The top-level Terraform configuration directory where `terraform init`, `plan`, and `apply` are executed. Contains provider and backend configuration. Contrast with reusable (child) modules. |
+| **removed block** | A declarative block (v1.7+) that removes a resource from Terraform state without destroying the underlying infrastructure. |
+| **resource** | A block that describes one or more infrastructure objects, such as virtual machines, storage buckets, or DNS records. |
 | **reusable module** | A self-contained Terraform configuration designed to be called from root modules or other modules. Located in `modules/` directories and versioned for reuse. |
+| **root module** | The top-level Terraform configuration directory where `terraform init`, `plan`, and `apply` are executed. Contains provider and backend configuration. Contrast with reusable (child) modules. |
+| **state file** | A JSON file (typically named `terraform.tfstate`) that Terraform uses to map configuration to real-world resources and track metadata. |
 | **state locking** | A mechanism that prevents concurrent Terraform operations on the same state file, avoiding race conditions and state corruption. |
-| **terraform.lock.hcl** | The dependency lock file that records the exact provider versions and checksums used, ensuring reproducible installations across team members and CI systems. |
 | **templatefile() function** | A Terraform function that reads a template file and renders it with provided variables, commonly used for generating scripts, policies, or configuration files. |
-| **.tftpl extension** | The recommended file extension for Terraform template files used with `templatefile()`. |
-| **.tf.json extension** | An alternative JSON syntax for Terraform configuration, typically used for programmatically generated code. |
+| **terraform.lock.hcl** | The dependency lock file that records the exact provider versions and checksums used, ensuring reproducible installations across team members and CI systems. |
+| **tfvars** | A file with the `.tfvars` extension that provides values for input variables. Commonly used for environment-specific configuration. |
 | **variable validation** | Custom validation rules defined within variable blocks that enforce constraints on input values at plan time. |
