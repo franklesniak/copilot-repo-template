@@ -5,7 +5,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.15.20260202.0
+**Version:** 1.16.20260202.0
 
 ## Metadata
 
@@ -61,6 +61,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - [Documentation Standards](#documentation-standards)
   - [Error Message Best Practices](#error-message-best-practices)
 - [Common Anti-Patterns to Avoid](#common-anti-patterns-to-avoid)
+- [Troubleshooting Common Issues](#troubleshooting-common-issues)
 - [Pre-commit Discipline for Terraform](#pre-commit-discipline-for-terraform)
 - ["Done" Definition for Terraform Changes](#done-definition-for-terraform-changes)
 - [Related Documentation](#related-documentation)
@@ -5195,6 +5196,290 @@ This section consolidates common anti-patterns to help developers avoid frequent
 
 ---
 
+## Troubleshooting Common Issues
+
+This section provides guidance for resolving common Terraform errors and issues. Each entry includes the error message or symptom, cause, solution, and prevention strategies.
+
+### Error: Error acquiring the state lock
+
+**Symptom:**
+
+```text
+Error: Error acquiring the state lock
+
+Error message: ConditionalCheckFailedException: The conditional request failed
+Lock Info:
+  ID:        a1b2c3d4-e5f6-7890-abcd-ef1234567890
+  Path:      terraform.tfstate
+  Operation: OperationTypePlan
+  Who:       user@hostname
+  Version:   1.7.0
+  Created:   2026-01-15 10:30:00.000000000 +0000 UTC
+```
+
+**Cause:** A previous Terraform operation was interrupted (crash, network failure, timeout), or another user/process is running Terraform concurrently against the same state file.
+
+**Solution:**
+
+1. **Verify no other operations are running.** Check with your team and CI/CD system to confirm no other Terraform operations are in progress.
+2. **If confirmed safe, force-unlock the state:**
+
+   ```bash
+   terraform force-unlock a1b2c3d4-e5f6-7890-abcd-ef1234567890
+   ```
+
+3. **If in CI/CD,** check for stuck or parallel jobs that may be holding the lock.
+
+**Prevention:**
+
+- Implement a single-operator policy or use CI/CD serialization to prevent concurrent operations
+- Configure appropriate timeouts for long-running operations
+- Use CI/CD pipelines with proper concurrency controls
+
+> **Warning:** Never force-unlock a state if another operation is genuinely in progress. This can cause state corruption.
+
+### Error: Provider configuration not present
+
+**Symptom:**
+
+```text
+Error: Provider configuration not present
+
+To work with aws_instance.example its original provider configuration at
+provider["registry.terraform.io/hashicorp/aws"] is required, but it has been removed.
+```
+
+**Cause:** A resource exists in the state file, but the provider configuration that created it has been removed from the Terraform code.
+
+**Solution:**
+
+1. **Re-add the provider configuration** if the resource should still be managed:
+
+   ```hcl
+   provider "aws" {
+     region = "us-east-1"
+   }
+   ```
+
+2. **Remove the orphaned resource from state** if it was intentionally deleted:
+
+   ```bash
+   terraform state rm aws_instance.example
+   ```
+
+3. **Use a `removed` block** (Terraform 1.7+) to cleanly remove from state without destroying:
+
+   ```hcl
+   removed {
+     from = aws_instance.example
+
+     lifecycle {
+       destroy = false
+     }
+   }
+   ```
+
+**Prevention:**
+
+- Use `moved` blocks when refactoring resources
+- Never remove provider configurations while resources using them still exist in state
+- Review `terraform plan` output carefully before removing providers
+
+### Error: Cycle detected
+
+**Symptom:**
+
+```text
+Error: Cycle: aws_security_group.a, aws_security_group.b
+```
+
+**Cause:** Circular dependency between resources where resource A depends on resource B, and resource B depends on resource A.
+
+**Solution:**
+
+1. **Identify the cycle** from the error message—Terraform lists the resources involved
+2. **Restructure to break the cycle:**
+   - Use separate `aws_security_group_rule` resources instead of inline rules:
+
+     ```hcl
+     resource "aws_security_group" "a" {
+       name = "sg-a"
+       # No inline ingress/egress rules
+     }
+
+     resource "aws_security_group" "b" {
+       name = "sg-b"
+       # No inline ingress/egress rules
+     }
+
+     resource "aws_security_group_rule" "a_to_b" {
+       type                     = "ingress"
+       security_group_id        = aws_security_group.a.id
+       source_security_group_id = aws_security_group.b.id
+       from_port                = 443
+       to_port                  = 443
+       protocol                 = "tcp"
+     }
+     ```
+
+   - Create a shared resource that both can reference
+   - Reorganize dependencies to create a one-way relationship
+
+**Prevention:**
+
+- Avoid bidirectional references between resources
+- Prefer one-way dependency graphs
+- Use separate rule resources instead of inline blocks for security groups
+- Review resource relationships before adding cross-references
+
+### Error: Invalid for_each argument
+
+**Symptom:**
+
+```text
+Error: Invalid for_each argument
+
+The "for_each" value depends on resource attributes that cannot be determined until apply,
+so Terraform cannot predict how many instances will be created.
+```
+
+**Cause:** The `for_each` or `count` expression depends on values that are not known until after `terraform apply` runs (e.g., resource IDs, computed attributes).
+
+**Solution:**
+
+1. **Restructure to use values known at plan time:**
+
+   ```hcl
+   # Instead of using computed values
+   # BAD: for_each = toset(aws_subnet.private[*].id)
+
+   # Use input variables or static values
+   # GOOD: for_each = var.subnet_names
+   variable "subnet_names" {
+     type    = set(string)
+     default = ["private-a", "private-b", "private-c"]
+   }
+   ```
+
+2. **Split into separate configurations** if the dependency is unavoidable
+3. **Use `-target` to create dependencies first** (not recommended for regular use):
+
+   ```bash
+   terraform apply -target=aws_subnet.private
+   terraform apply
+   ```
+
+**Prevention:**
+
+- Design `for_each` keys to use static values, input variables, or `locals` computed from known values
+- Avoid using computed resource attributes as `for_each` keys
+- Consider data architecture that separates resource creation from resource consumption
+
+### Error: Unsupported Terraform Core version
+
+**Symptom:**
+
+```text
+Error: Unsupported Terraform Core version
+
+This configuration does not support Terraform version 1.5.0. To proceed,
+either choose another supported Terraform version or update this version constraint.
+Required version: >= 1.7.0
+```
+
+**Cause:** The installed Terraform version does not meet the `required_version` constraint specified in the configuration.
+
+**Solution:**
+
+1. **Install a compatible Terraform version:**
+
+   ```bash
+   # Using tfenv (recommended)
+   tfenv install 1.7.0
+   tfenv use 1.7.0
+
+   # Or download directly from HashiCorp
+   # https://releases.hashicorp.com/terraform/
+   ```
+
+2. **Update the version constraint** if the older version is acceptable for your use case:
+
+   ```hcl
+   terraform {
+     required_version = ">= 1.5.0"  # Lowered from 1.7.0
+   }
+   ```
+
+**Prevention:**
+
+- Document version requirements in README files
+- Use version managers like `tfenv` or `asdf` for consistent environments
+- Pin Terraform versions in CI/CD pipelines
+- Communicate version requirements to team members
+
+### Error: Failed to query available provider packages
+
+**Symptom:**
+
+```text
+Error: Failed to query available provider packages
+
+Could not retrieve the list of available versions for provider hashicorp/aws:
+could not connect to registry.terraform.io
+```
+
+**Cause:** Network connectivity issues, registry temporarily unavailable, proxy misconfiguration, or incorrect provider source specification.
+
+**Solution:**
+
+1. **Check network and proxy settings:**
+
+   ```bash
+   # Test registry connectivity
+   curl -I https://registry.terraform.io
+
+   # If using a proxy, ensure Terraform can access it
+   export HTTPS_PROXY=http://proxy.example.com:8080
+   ```
+
+2. **Verify provider source is correct** in `required_providers`:
+
+   ```hcl
+   terraform {
+     required_providers {
+       aws = {
+         source  = "hashicorp/aws"  # Verify this is correct
+         version = "~> 5.0"
+       }
+     }
+   }
+   ```
+
+3. **Wait and retry** if the registry is temporarily unavailable
+4. **For air-gapped environments,** use provider mirroring:
+
+   ```bash
+   # Create a local mirror
+   terraform providers mirror /path/to/mirror
+
+   # Configure Terraform to use the mirror
+   # In ~/.terraformrc or terraform.rc:
+   provider_installation {
+     filesystem_mirror {
+       path = "/path/to/mirror"
+     }
+   }
+   ```
+
+**Prevention:**
+
+- Commit `.terraform.lock.hcl` to version control to cache provider checksums
+- Consider setting up a provider mirror for reliability in enterprise environments
+- Use explicit provider source specifications in all configurations
+- Test network connectivity before long Terraform operations
+
+---
+
 ## Pre-commit Discipline for Terraform
 
 **⚠️ ALWAYS run pre-commit checks before committing Terraform code.**
@@ -5366,6 +5651,7 @@ This section tracks significant changes to the Terraform instruction file.
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 1.16.20260202.0 | 2026-02-02 | Added Troubleshooting Common Issues section with guidance for 6 common Terraform errors: state lock acquisition, provider configuration not present, cycle detected, invalid for_each argument, unsupported Terraform version, and failed provider package queries |
 | 1.15.20260202.0 | 2026-02-02 | Added Cross-Account and Service Account Patterns section with AWS assume_role, Azure skip_provider_registration and multi-subscription patterns, GCP impersonate_service_account, summary comparison table, and security considerations |
 | 1.14.20260202.0 | 2026-02-02 | Added State Backup and Recovery section with backup strategies, manual backup procedures, common state problems and recovery guidance, and state versioning requirements |
 | 1.13.20260202.0 | 2026-02-02 | Added Environment Separation Strategies section with guidance on workspaces vs directory-based environment separation |
