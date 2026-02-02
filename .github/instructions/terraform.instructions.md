@@ -5,7 +5,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.11.20260201.0
+**Version:** 1.12.20260201.0
 
 ## Metadata
 
@@ -32,21 +32,27 @@ description: "Terraform coding standards: secure, modular, and well-documented i
   - [Defensive Attribute Access with try()](#defensive-attribute-access-with-try)
   - [Terraform Cloud Variable Precedence](#terraform-cloud-variable-precedence)
 - [Continuous Validation with check Blocks](#continuous-validation-with-check-blocks)
-- [Resource Configuration](#resource-configuration)
+- [Resource Configuration](#resource-configuration-1)
   - [Resource Timeouts](#resource-timeouts)
   - [The terraform_data Resource](#the-terraform_data-resource)
-- [Module Design](#module-design)
-- [Refactoring](#refactoring)
-- [State Management](#state-management)
+  - [Explicit Dependencies](#explicit-dependencies)
+  - [Module-Level depends_on](#module-level-depends_on)
+- [Module Design](#module-design-1)
+- [Refactoring](#refactoring-1)
+- [State Management](#state-management-1)
+  - [Terraform Cloud, Enterprise, and Alternative Backends](#terraform-cloud-enterprise-and-alternative-backends)
+  - [Terraform Cloud Workspace Configuration](#terraform-cloud-workspace-configuration)
   - [Bootstrapping State Infrastructure](#bootstrapping-state-infrastructure)
   - [Resource Targeting](#resource-targeting)
   - [Reviewing Plan Output](#reviewing-plan-output)
-- [Cross-Stack Data Sharing](#cross-stack-data-sharing)
-- [Provider Management](#provider-management)
+- [Cross-Stack Data Sharing](#cross-stack-data-sharing-1)
+- [Provider Management](#provider-management-1)
   - [Provider Aliasing](#provider-aliasing)
+  - [Module Provider Configuration with configuration_aliases](#module-provider-configuration-with-configuration_aliases)
 - [Security Best Practices](#security-best-practices)
   - [Sensitive Values in Meta-Arguments](#sensitive-values-in-meta-arguments)
   - [Ephemeral Values](#ephemeral-values)
+  - [Sensitive Output Exposure in CLI](#sensitive-output-exposure-in-cli)
 - [Testing with Terraform Test](#testing-with-terraform-test)
 - [Documentation Standards](#documentation-standards)
   - [Error Message Best Practices](#error-message-best-practices)
@@ -174,6 +180,8 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[Module]** Complex inputs **SHOULD** use object types with documented structure → [Complex Input Types](#complex-input-types)
 - **[Module]** Modules **SHOULD** expose only necessary outputs → [Module Output Design](#module-output-design)
 - **[Module]** Published modules **MUST** use semantic versioning → [Module Versioning](#module-versioning)
+- **[Module]** Modules accepting multiple provider configurations **MUST** use `configuration_aliases` → [Module Provider Configuration with configuration_aliases](#module-provider-configuration-with-configuration_aliases)
+- **[All]** Module-level `depends_on` **SHOULD** be avoided unless implicit dependencies are insufficient → [Module-Level depends_on](#module-level-depends_on)
 
 ### Refactoring
 
@@ -215,6 +223,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** IAM policies **MUST** follow least-privilege principles → [Least-Privilege Principles](#least-privilege-principles)
 - **[All]** Wildcard actions **SHOULD NOT** be used in IAM policies → [IAM Policy Guidelines](#iam-policy-guidelines)
 - **[All]** Sensitive values **MUST NOT** be used in `for_each` or `count` expressions → [Sensitive Values in Meta-Arguments](#sensitive-values-in-meta-arguments)
+- **[All]** Sensitive outputs **MUST NOT** be logged in CI/CD pipelines → [Sensitive Output Exposure in CLI](#sensitive-output-exposure-in-cli)
 
 ### Testing
 
@@ -1866,6 +1875,54 @@ resource "aws_instance" "main" {
 }
 ```
 
+### Module-Level depends_on
+
+The `depends_on` meta-argument can also be used at the module level (Terraform 0.13+). However, module-level `depends_on` has different implications than resource-level `depends_on` and **SHOULD** be used sparingly.
+
+**Key differences from resource-level depends_on:**
+
+- When a module block uses `depends_on` with a **module address** (for example, `depends_on = [module.networking]`), it creates a dependency on **all resources in that referenced module**
+- When a module block uses `depends_on` with a **resource address**, it creates a dependency only on that specific resource (not all resources in its module)
+- This can cause unnecessary serialization and slower apply times when used with module addresses
+- It is a blunt instrument that should only be used when finer-grained dependencies cannot be expressed
+
+**When module-level depends_on is appropriate:**
+
+- When a module depends on side effects from another module (e.g., IAM propagation, DNS resolution delays)
+- When there is no data to pass between modules but ordering is required
+- When debugging timing issues during development (should be removed after identifying root cause)
+
+**Example: Legitimate use case:**
+
+```hcl
+# Module-level depends_on - use sparingly
+module "application" {
+  source = "./modules/application"
+
+  vpc_id = module.networking.vpc_id
+
+  # Only use when implicit dependencies are insufficient
+  # (e.g., module.networking creates IAM roles needed by the application)
+  depends_on = [module.networking]
+}
+```
+
+**Anti-pattern: Redundant module depends_on:**
+
+```hcl
+# AVOID: Unnecessary module depends_on when data is already passed
+module "application" {
+  source = "./modules/application"
+
+  vpc_id     = module.networking.vpc_id      # This creates implicit dependency
+  subnet_ids = module.networking.subnet_ids  # This too
+
+  depends_on = [module.networking]  # REDUNDANT - remove this
+}
+```
+
+**Best practice:** Prefer explicit data passing between modules over `depends_on`. When you pass outputs from one module as inputs to another, Terraform automatically understands the dependency relationship.
+
 ### for_each vs count
 
 When creating multiple instances of a resource, `for_each` **SHOULD** be preferred over `count` for collections where resources have unique identifiers.
@@ -2447,6 +2504,55 @@ The following sections **MAY** not apply when using Terraform Cloud/Enterprise:
 - Manual `backend.tf` configuration
 - DynamoDB lock table configuration
 - S3/GCS/Azure Storage bucket configuration
+
+### Terraform Cloud Workspace Configuration
+
+Terraform Cloud supports two patterns for workspace selection: explicit naming and tag-based selection.
+
+**Explicit workspace selection:**
+
+The `name` attribute selects a specific, named workspace:
+
+```hcl
+terraform {
+  cloud {
+    organization = "acme-corp"
+    workspaces {
+      name = "prod-infrastructure"
+    }
+  }
+}
+```
+
+**Tag-based workspace selection:**
+
+The `tags` attribute enables dynamic workspace selection based on workspace tags. Terraform will operate on all workspaces that have **all** of the specified tags:
+
+```hcl
+terraform {
+  cloud {
+    organization = "acme-corp"
+    workspaces {
+      tags = ["app:my-application", "env:production"]
+    }
+  }
+}
+```
+
+**Key differences:**
+
+| Attribute | Behavior | Use Case |
+| --- | --- | --- |
+| `name` | Selects a single, specific workspace | Standard deployments with known workspace names |
+| `tags` | Selects all workspaces matching the specified tags | Multi-workspace operations, batch deployments |
+
+**Common patterns with tags:**
+
+- Use `tags` for operations that should apply to multiple environments (e.g., deploying a fix to all production workspaces)
+- Combine application and environment tags for precise targeting
+- Tags are defined in Terraform Cloud, not in the configuration
+
+> **Note:** You cannot use both `name` and `tags` in the same `workspaces` block. Choose one pattern based on your workflow requirements.
 
 ### Bootstrapping State Infrastructure
 
@@ -3274,6 +3380,73 @@ module "vpc_west" {
 }
 ```
 
+### Module Provider Configuration with configuration_aliases
+
+When a module needs to accept multiple provider configurations (e.g., for multi-region deployments), it **MUST** declare the expected provider configurations using `configuration_aliases` in the `required_providers` block.
+
+**Why configuration_aliases is required:**
+
+- Modules **SHOULD NOT** define provider configurations directly; provider configurations **MUST** be defined in root modules. Terraform **CAN** accept provider blocks in child modules only as a legacy pattern and imposes limitations on such modules.
+- Modules that use provider aliases internally must declare which aliases they expect
+- This creates an explicit contract between the module and its callers
+
+**Module declaration example:**
+
+```hcl
+# modules/multi-region-storage/versions.tf
+
+terraform {
+  required_version = ">= 1.7.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+      configuration_aliases = [aws.primary, aws.secondary]
+    }
+  }
+}
+```
+
+**Using aliased providers in module resources:**
+
+```hcl
+# modules/multi-region-storage/main.tf
+
+resource "aws_s3_bucket" "primary" {
+  provider = aws.primary
+  bucket   = "${var.name}-primary"
+}
+
+resource "aws_s3_bucket" "secondary" {
+  provider = aws.secondary
+  bucket   = "${var.name}-secondary"
+}
+```
+
+**Calling module with provider mappings:**
+
+```hcl
+# Root module
+
+module "multi_region_storage" {
+  source = "./modules/multi-region-storage"
+
+  providers = {
+    aws.primary   = aws.us_east
+    aws.secondary = aws.eu_west
+  }
+
+  name = "my-storage"
+}
+```
+
+**Key requirements:**
+
+- The `configuration_aliases` list **MUST** include all provider aliases used within the module
+- Calling modules **MUST** map their provider configurations to the expected aliases
+- Provider alias names in the module do not need to match the caller's alias names—the `providers` argument handles the mapping
+
 ---
 
 ## Security Best Practices
@@ -3675,6 +3848,57 @@ output "generated_token" {
 - **Compliance requirements:** Values that organizational policy prohibits from being stored
 
 > **Note:** Ephemeral values require Terraform 1.10.0 or later. For older versions, use `sensitive = true` and implement additional state protection measures.
+
+### Sensitive Output Exposure in CLI
+
+Marking outputs as `sensitive = true` prevents values from appearing in `terraform plan` and `terraform apply` output, but it **does not** prevent programmatic access via certain CLI commands:
+
+- `terraform output -json` — Returns all outputs, and sensitive values are present in the JSON payload
+- `terraform output -raw <name>` — Prints the raw value of the named output, including sensitive values, in plaintext
+- `terraform output <name>` — Prints non-sensitive outputs in plaintext; sensitive outputs are redacted unless you use `-raw` or `-json`
+- `terraform show -json` — When used to show **state** (current or historical), the JSON output can include sensitive values from that state; when used to show a **plan** file, Terraform intentionally redacts/omits sensitive values from the plan JSON
+
+This behavior is intentional—it allows programmatic access to sensitive values when needed (primarily via state and outputs). However, it creates significant security risks in CI/CD pipelines.
+
+**CI/CD Security Implications:**
+
+When accessing sensitive outputs in CI/CD pipelines:
+
+- **DO NOT** log the output of `terraform output -json` directly
+- Use targeted output access: `terraform output -raw <name>` for single values
+- Pipe sensitive values directly to consumers without intermediate logging
+- Consider using external secret managers instead of Terraform outputs for highly sensitive values
+
+**Anti-pattern:**
+
+```bash
+# BAD: Logs all outputs including sensitive values
+terraform output -json | tee outputs.json
+
+# BAD: May appear in CI logs
+echo "Database password: $(terraform output -raw database_password)"
+```
+
+**Recommended patterns:**
+
+```bash
+# GOOD: Targeted access without logging
+DB_PASSWORD=$(terraform output -raw database_password)
+
+# GOOD: Direct pipe to consumer without intermediate storage
+terraform output -raw rendered_manifest | kubectl apply -f -
+
+# GOOD: Mask in CI systems that support it (GitHub Actions example)
+echo "::add-mask::$(terraform output -raw api_key)"
+API_KEY=$(terraform output -raw api_key)
+```
+
+**Best practices:**
+
+- Use CI platform secret masking features when available
+- Prefer external secret managers (AWS Secrets Manager, Azure Key Vault, HashiCorp Vault) for highly sensitive values
+- Audit CI pipeline logs to ensure sensitive values are not exposed
+- Consider using `nonsensitive()` function only when you explicitly need to expose a value and understand the security implications
 
 ### Security Scanning
 
@@ -4357,6 +4581,7 @@ This section tracks significant changes to the Terraform instruction file.
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 1.12.20260201.0 | 2026-02-01 | Added `configuration_aliases` for module provider configuration, module-level `depends_on` documentation, sensitive output exposure in CLI security guidance, Terraform Cloud workspace tags pattern |
 | 1.11.20260201.0 | 2026-02-01 | Added ephemeral values (1.10+), terraform_data resource (1.4+), updated security scanning tools (tfsec → trivy transition), added changelog |
 | 1.10.20260201.0 | 2026-02-01 | Initial version targeting Terraform 1.10+ |
 
@@ -4375,6 +4600,7 @@ This glossary defines key Terraform terms used throughout this document.
 | **backend** | The configuration that determines where Terraform stores its state file. Common backends include S3, Azure Storage, GCS, and Terraform Cloud. |
 | **check block** | A Terraform construct (v1.5+) that runs continuous validation assertions on every `plan` and `apply`, producing warnings rather than errors when assertions fail. |
 | **child module** | A module that is called by another module (the parent). Child modules are reusable components typically located in a `modules/` directory. Contrast with root module. |
+| **configuration_aliases** | A list in the `required_providers` block that declares which provider aliases a module expects to receive from calling modules. Required when modules use provider aliases internally. |
 | **HCL** | HashiCorp Configuration Language. The primary language used to write Terraform configurations in `.tf` files. |
 | **import block** | A declarative block (v1.5+) that brings existing infrastructure under Terraform management without using CLI commands, enabling version-controlled and reviewable imports. |
 | **moved block** | A declarative block (v1.1+) that tells Terraform to treat a resource at a new address as the same resource that previously existed at a different address, enabling safe refactoring without destroying resources. |
