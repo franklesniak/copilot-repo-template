@@ -3183,7 +3183,7 @@ Provider versions **MUST** be constrained in `versions.tf`:
 | Exact version | `= 6.31.0` | Strict reproducibility required |
 | Range constraint | `>= 6.0, < 7.0` | Explicit major version bounds (any 6.x, but not 7.0.0+) |
 
-In general, for a major version **M**, use a range of the form "greater than or equal to M.0 and less than (M+1).0" to constrain to that major version while allowing all patch and minor updates within it.
+In general, for a major version **M**, use a range of the form `>= M.0, < (M+1).0` to constrain to that major version while allowing all patch and minor updates within it (for example, for **M = 6**: `>= 6.0, < 7.0`).
 
 **Recommended approach:**
 
@@ -4609,7 +4609,7 @@ This glossary defines key Terraform terms used throughout this document.
 | **import block** | A declarative block (v1.5+) that brings existing infrastructure under Terraform management without using CLI commands, enabling version-controlled and reviewable imports. |
 | **moved block** | A declarative block (v1.1+) that tells Terraform to treat a resource at a new address as the same resource that previously existed at a different address, enabling safe refactoring without destroying resources. |
 | **partial backend configuration** | A pattern where static backend settings are committed to version control while dynamic values (bucket names, regions) are provided at runtime via `-backend-config` flags or files. |
-| **pessimistic constraint operator** | The `~>` operator used in version constraints that allows only the rightmost version component to increment (for example, `~> X.0` allows versions `X.*` but not `(X+1).0`). |
+| **pessimistic constraint operator** | The `~>` operator used in version constraints that allows only the rightmost version component to increment (for example, `~> X.0` allows versions `>= X.0.0` and `< (X+1).0.0`, i.e., all `X.*` but no `(X+1).0.0` or later). |
 | **provider** | A plugin that Terraform uses to interact with cloud platforms, SaaS providers, and other APIs. Examples include `aws`, `azurerm`, and `google`. |
 | **provider alias** | A named instance of a provider configuration that enables deploying resources to multiple regions, accounts, or with different settings within the same configuration. |
 | **removed block** | A declarative block (v1.7+) that removes a resource from Terraform state without destroying the underlying infrastructure. |
