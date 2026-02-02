@@ -3385,7 +3385,7 @@ When a module needs to accept multiple provider configurations (e.g., for multi-
 
 **Why configuration_aliases is required:**
 
-- Modules cannot define provider configurations directly (providers are configured in root modules)
+- Modules **SHOULD NOT** define provider configurations directly; provider configurations **MUST** be defined in root modules. Terraform **CAN** accept provider blocks in child modules only as a legacy pattern and imposes limitations on such modules.
 - Modules that use provider aliases internally must declare which aliases they expect
 - This creates an explicit contract between the module and its callers
 
@@ -3850,10 +3850,11 @@ output "generated_token" {
 
 ### Sensitive Output Exposure in CLI
 
-Marking outputs as `sensitive = true` prevents values from appearing in `terraform plan` and `terraform apply` output, but **does not** prevent exposure via CLI commands:
+Marking outputs as `sensitive = true` prevents values from appearing in `terraform plan` and `terraform apply` output, but it **does not** prevent programmatic access via certain CLI commands:
 
-- `terraform output -json` — Returns all outputs including sensitive values in plaintext
-- `terraform output <name>` — Returns the specific output value in plaintext
+- `terraform output -json` — Returns all outputs, and sensitive values are present in the JSON payload
+- `terraform output -raw <name>` — Prints the raw value of the named output, including sensitive values, in plaintext
+- `terraform output <name>` — Prints non-sensitive outputs in plaintext; sensitive outputs are redacted unless you use `-raw` or `-json`
 - `terraform show -json` — Includes sensitive values in the JSON state representation
 
 This behavior is intentional—it allows programmatic access to sensitive values when needed. However, it creates significant security risks in CI/CD pipelines.
@@ -3884,7 +3885,7 @@ echo "Database password: $(terraform output -raw database_password)"
 DB_PASSWORD=$(terraform output -raw database_password)
 
 # GOOD: Direct pipe to consumer without intermediate storage
-terraform output -raw kubeconfig | kubectl apply -f -
+terraform output -raw rendered_manifest | kubectl apply -f -
 
 # GOOD: Mask in CI systems that support it (GitHub Actions example)
 echo "::add-mask::$(terraform output -raw api_key)"
