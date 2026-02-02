@@ -5,7 +5,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.12.20260202.0
+**Version:** 1.13.20260202.0
 
 ## Metadata
 
@@ -44,6 +44,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
   - [Terraform Cloud, Enterprise, and Alternative Backends](#terraform-cloud-enterprise-and-alternative-backends)
   - [Terraform Cloud Workspace Configuration](#terraform-cloud-workspace-configuration)
   - [Bootstrapping State Infrastructure](#bootstrapping-state-infrastructure)
+  - [Environment Separation Strategies](#environment-separation-strategies)
   - [Resource Targeting](#resource-targeting)
   - [Reviewing Plan Output](#reviewing-plan-output)
 - [Cross-Stack Data Sharing](#cross-stack-data-sharing-1)
@@ -2921,6 +2922,179 @@ terraform apply
 
 **Caution:** For complex environments, separate state files per environment are often clearer than workspaces.
 
+### Environment Separation Strategies
+
+Organizations need a consistent strategy for managing multiple environments (dev, staging, prod). Two primary approaches exist: **workspaces** and **directory-based separation**. This section provides guidance on when to use each approach.
+
+#### Comparison Table
+
+| Approach | Use When | Advantages | Disadvantages |
+| --- | --- | --- | --- |
+| **Workspaces** | Identical infrastructure across environments; only variable values differ; small team with clear workflow | Single codebase; easy to switch between environments; built-in Terraform feature | Shared backend configuration; risk of applying to wrong workspace; no visible configuration differences in version control |
+| **Directory-based** | Different configurations per environment; team isolation needed; production requires explicit review; compliance requirements | Explicit, reviewable configuration per environment; no risk of workspace confusion; better audit trail; environment-specific customization | Some code duplication; requires discipline to keep shared modules updated |
+| **Hybrid** | Large organizations with both simple and complex environments; gradual migration between approaches | Flexibility; can use workspaces for non-production and directories for production | Increased complexity; requires clear documentation of which pattern applies where |
+
+#### Workspace-Based Approach
+
+Workspaces create isolated state files within a single configuration. Each workspace shares the same backend configuration but maintains separate state.
+
+**How workspaces work:**
+
+```bash
+# Create a new workspace
+terraform workspace new staging
+
+# List available workspaces
+terraform workspace list
+
+# Switch to an existing workspace
+terraform workspace select prod
+
+# Show current workspace
+terraform workspace show
+```
+
+**Using `terraform.workspace` for environment-specific values:**
+
+```hcl
+locals {
+  environment_config = {
+    dev = {
+      instance_type = "t3.micro"
+      instance_count = 1
+    }
+    staging = {
+      instance_type = "t3.small"
+      instance_count = 2
+    }
+    prod = {
+      instance_type = "t3.medium"
+      instance_count = 3
+    }
+  }
+
+  config = local.environment_config[terraform.workspace]
+}
+
+resource "aws_instance" "app" {
+  count         = local.config.instance_count
+  instance_type = local.config.instance_type
+  # ...
+}
+```
+
+**When workspaces are appropriate:**
+
+- Infrastructure is identical across environments except for variable values
+- Small team with clear communication about which workspace is active
+- Non-production environments where accidental applies have limited impact
+- Rapid prototyping or development scenarios
+
+**Limitations of workspaces:**
+
+- All environments share the same backend configuration
+- No visible difference in repository between environments
+- Risk of running `terraform apply` in the wrong workspace
+- Difficult to implement environment-specific features or configurations
+- Code review cannot distinguish between environment configurations
+
+#### Directory-Based Approach
+
+Directory-based separation uses distinct directories for each environment, each with its own configuration files and backend configuration. Shared logic is extracted into reusable modules.
+
+**Recommended directory structure:**
+
+```text
+.
+├── modules/                    # Shared reusable modules
+│   ├── vpc/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   └── outputs.tf
+│   └── application/
+│       ├── main.tf
+│       ├── variables.tf
+│       └── outputs.tf
+├── environments/
+│   ├── dev/
+│   │   ├── main.tf            # Calls modules with dev-specific values
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   ├── providers.tf
+│   │   ├── backend.tf         # Dev-specific backend configuration
+│   │   └── terraform.tfvars   # Dev-specific variable values
+│   ├── staging/
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   ├── providers.tf
+│   │   ├── backend.tf
+│   │   └── terraform.tfvars
+│   └── prod/
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── outputs.tf
+│       ├── providers.tf
+│       ├── backend.tf
+│       └── terraform.tfvars
+└── README.md
+```
+
+**Example environment configuration (`environments/prod/main.tf`):**
+
+```hcl
+module "vpc" {
+  source = "../../modules/vpc"
+
+  environment = "prod"
+  cidr_block  = "10.0.0.0/16"
+}
+
+module "application" {
+  source = "../../modules/application"
+
+  environment    = "prod"
+  vpc_id         = module.vpc.vpc_id
+  instance_type  = "t3.medium"
+  instance_count = 3
+}
+```
+
+**When directory separation is preferred:**
+
+- Different configurations per environment (not just variable values)
+- Production environments require explicit review and approval
+- Team isolation—different teams manage different environments
+- Compliance requirements mandate separation of concerns
+- Environment-specific features or integrations
+
+**Sharing modules across environment directories:**
+
+- Extract common infrastructure patterns into modules under `modules/`
+- Each environment directory calls these modules with environment-specific values
+- Modules **SHOULD** be versioned when used across repositories
+- Use relative paths (`../../modules/vpc`) for repository-local modules
+
+#### Recommendation
+
+For production use, directory-based separation is **RECOMMENDED** as the default approach because:
+
+1. **Explicit configuration:** Each environment has its own visible, reviewable configuration in version control
+2. **Safety:** No risk of accidentally applying changes to the wrong environment
+3. **Flexibility:** Easy to implement environment-specific configurations or features
+4. **Audit trail:** Git history clearly shows what changed in each environment
+5. **Team isolation:** Different teams or approval processes can manage different environments
+6. **Compliance:** Easier to demonstrate separation of concerns for auditors
+
+Workspaces **MAY** be used for:
+
+- Development and testing environments where rapid iteration is prioritized
+- Scenarios where infrastructure is truly identical across environments
+- Small teams with established workspace discipline
+- Temporary or ephemeral environments
+
+Teams **SHOULD** document their chosen approach in the repository's README or contributing guide to ensure consistency.
+
 ### Resource Targeting
 
 `terraform apply -target` **SHOULD NOT** be used in normal workflows. Resource targeting:
@@ -4584,6 +4758,7 @@ This section tracks significant changes to the Terraform instruction file.
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 1.13.20260202.0 | 2026-02-02 | Added Environment Separation Strategies section with guidance on workspaces vs directory-based environment separation |
 | 1.12.20260202.0 | 2026-02-02 | Added Table of Contents entry for Code Authoring Guidelines section, updated AWS provider version reference in README template to `~> 6.0`, made version constraint examples in Provider Version Constraints table and glossary provider-agnostic |
 | 1.12.20260201.0 | 2026-02-01 | Added `configuration_aliases` for module provider configuration, module-level `depends_on` documentation, sensitive output exposure in CLI security guidance, Terraform Cloud workspace tags pattern |
 | 1.11.20260201.0 | 2026-02-01 | Added ephemeral values (1.10+), terraform_data resource (1.4+), updated security scanning tools (tfsec → trivy transition), added changelog |
