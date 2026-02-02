@@ -5,7 +5,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.14.20260202.0
+**Version:** 1.15.20260202.0
 
 ## Metadata
 
@@ -52,6 +52,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - [Provider Management](#provider-management-1)
   - [Provider Aliasing](#provider-aliasing)
   - [Module Provider Configuration with configuration_aliases](#module-provider-configuration-with-configuration_aliases)
+  - [Cross-Account and Service Account Patterns](#cross-account-and-service-account-patterns)
 - [Security Best Practices](#security-best-practices)
   - [Sensitive Values in Meta-Arguments](#sensitive-values-in-meta-arguments)
   - [Ephemeral Values](#ephemeral-values)
@@ -4034,6 +4035,203 @@ module "multi_region_storage" {
 - Calling modules **MUST** map their provider configurations to the expected aliases
 - Provider alias names in the module do not need to match the caller's alias names—the `providers` argument handles the mapping
 
+### Cross-Account and Service Account Patterns
+
+Enterprise environments often require accessing resources across multiple accounts, subscriptions, or projects. This section documents provider-specific authentication patterns for cross-account access.
+
+#### AWS: Assume Role Configuration
+
+The `assume_role` block enables Terraform to assume an IAM role in a different AWS account, providing temporary credentials for cross-account access. This pattern **SHOULD** be used instead of static credentials for cross-account AWS access.
+
+**Basic assume_role configuration:**
+
+```hcl
+provider "aws" {
+  region = "us-east-1"
+
+  assume_role {
+    role_arn     = "arn:aws:iam::ACCOUNT_ID:role/TerraformRole"
+    session_name = "terraform-session"
+    external_id  = var.external_id  # Optional, for third-party access
+  }
+}
+```
+
+**When to use assume_role:**
+
+- Cross-account resource management from a central deployment account
+- Implementing least-privilege access patterns
+- Enabling CI/CD pipelines to access multiple accounts with a single identity
+- Third-party access scenarios (using `external_id` for additional security)
+
+**IAM trust relationship requirement:**
+
+The target role must have a trust policy that allows the source principal to assume it. The trust policy should specify the source account, role, or user that is permitted to assume the role.
+
+**Multi-account pattern with provider aliases:**
+
+```hcl
+provider "aws" {
+  alias  = "production"
+  region = "us-east-1"
+
+  assume_role {
+    role_arn     = "arn:aws:iam::PROD_ACCOUNT_ID:role/TerraformRole"
+    session_name = "terraform-prod"
+  }
+}
+
+provider "aws" {
+  alias  = "staging"
+  region = "us-east-1"
+
+  assume_role {
+    role_arn     = "arn:aws:iam::STAGING_ACCOUNT_ID:role/TerraformRole"
+    session_name = "terraform-staging"
+  }
+}
+
+resource "aws_s3_bucket" "prod_bucket" {
+  provider = aws.production
+  bucket   = "my-prod-bucket"
+}
+
+resource "aws_s3_bucket" "staging_bucket" {
+  provider = aws.staging
+  bucket   = "my-staging-bucket"
+}
+```
+
+#### Azure: Subscription and Tenant Patterns
+
+Azure provider configuration supports multi-subscription and multi-tenant scenarios through explicit subscription and tenant IDs.
+
+**Basic multi-subscription configuration:**
+
+```hcl
+provider "azurerm" {
+  features {}
+
+  subscription_id = var.subscription_id
+  tenant_id       = var.tenant_id  # Required for multi-tenant scenarios
+
+  # Skip provider registration when lacking permissions
+  skip_provider_registration = true  # Use when service principal lacks registration permissions
+}
+```
+
+**When to use `skip_provider_registration = true`:**
+
+- Service principal lacks `Microsoft.Authorization/*/register/action` permission
+- Deploying to shared subscriptions where resource providers are pre-registered
+- Operating in environments with strict permission boundaries
+
+> **Note:** When using `skip_provider_registration = true`, the required resource providers **MUST** already be registered in the subscription. Terraform will fail if it attempts to create resources for unregistered providers.
+
+**Multi-subscription pattern with provider aliases:**
+
+```hcl
+provider "azurerm" {
+  alias = "production"
+  features {}
+
+  subscription_id = var.production_subscription_id
+  tenant_id       = var.tenant_id
+}
+
+provider "azurerm" {
+  alias = "shared_services"
+  features {}
+
+  subscription_id = var.shared_services_subscription_id
+  tenant_id       = var.tenant_id
+}
+
+resource "azurerm_resource_group" "prod" {
+  provider = azurerm.production
+  name     = "rg-prod-app"
+  location = "eastus"
+}
+
+resource "azurerm_resource_group" "shared" {
+  provider = azurerm.shared_services
+  name     = "rg-shared-networking"
+  location = "eastus"
+}
+```
+
+#### GCP: Service Account Impersonation
+
+Service account impersonation allows Terraform to act as a service account without requiring its key file. This pattern **SHOULD** be preferred over service account key files.
+
+**Basic impersonation configuration:**
+
+```hcl
+provider "google" {
+  project = var.project_id
+  region  = var.region
+
+  # Impersonate a service account instead of using default credentials
+  impersonate_service_account = "terraform@${var.project_id}.iam.gserviceaccount.com"
+}
+```
+
+**When to use impersonation:**
+
+- CI/CD pipelines where the runner uses a less-privileged service account
+- Local development with user credentials that need elevated access
+- Implementing least-privilege access patterns
+- Avoiding long-lived service account key files
+
+**Required IAM permissions for impersonation:**
+
+The calling identity must have `roles/iam.serviceAccountTokenCreator` on the target service account, or the `iam.serviceAccounts.getAccessToken` permission.
+
+**Benefits over service account keys:**
+
+- No key rotation required—credentials are short-lived
+- Audit trail shows both the calling identity and impersonated account
+- Reduced risk of credential exposure
+- Easier to revoke access by removing IAM bindings
+
+**Multi-project pattern with impersonation:**
+
+```hcl
+provider "google" {
+  alias   = "production"
+  project = var.production_project_id
+  region  = var.region
+
+  impersonate_service_account = "terraform@${var.production_project_id}.iam.gserviceaccount.com"
+}
+
+provider "google" {
+  alias   = "staging"
+  project = var.staging_project_id
+  region  = var.region
+
+  impersonate_service_account = "terraform@${var.staging_project_id}.iam.gserviceaccount.com"
+}
+```
+
+#### Cross-Account Pattern Summary
+
+| Provider | Pattern | Use Case |
+| --- | --- | --- |
+| AWS | `assume_role` | Access resources in different AWS accounts |
+| Azure | Multiple providers with different `subscription_id` | Manage resources across subscriptions |
+| GCP | `impersonate_service_account` or project-per-provider | Access resources with elevated permissions |
+
+#### Security Considerations for Cross-Account Access
+
+Cross-account patterns **MUST** follow security best practices:
+
+- **Prefer short-lived credentials:** `assume_role` and `impersonate_service_account` **SHOULD** be used instead of static access keys or service account key files
+- **Document requirements:** Cross-account access patterns **MUST** be documented in module README files when modules require cross-account permissions
+- **Use external_id for third parties:** When granting cross-account access to third parties in AWS, use `external_id` to prevent confused deputy attacks
+- **Apply least-privilege:** Cross-account roles and service accounts **SHOULD** have only the permissions required for their specific tasks
+- **Audit cross-account access:** Enable logging to track which identities are assuming roles or impersonating service accounts
+
 ---
 
 ## Security Best Practices
@@ -5168,6 +5366,7 @@ This section tracks significant changes to the Terraform instruction file.
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 1.15.20260202.0 | 2026-02-02 | Added Cross-Account and Service Account Patterns section with AWS assume_role, Azure skip_provider_registration and multi-subscription patterns, GCP impersonate_service_account, summary comparison table, and security considerations |
 | 1.14.20260202.0 | 2026-02-02 | Added State Backup and Recovery section with backup strategies, manual backup procedures, common state problems and recovery guidance, and state versioning requirements |
 | 1.13.20260202.0 | 2026-02-02 | Added Environment Separation Strategies section with guidance on workspaces vs directory-based environment separation |
 | 1.12.20260202.0 | 2026-02-02 | Added Table of Contents entry for Code Authoring Guidelines section, updated AWS provider version reference in README template to `~> 6.0`, made version constraint examples in Provider Version Constraints table and glossary provider-agnostic |
