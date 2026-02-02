@@ -2939,6 +2939,7 @@ Enable versioning on the S3 bucket used for state storage:
 resource "aws_s3_bucket" "terraform_state" {
   bucket = "acme-corp-terraform-state"
 
+  # Protect critical state storage from accidental deletion
   lifecycle {
     prevent_destroy = true
   }
@@ -2952,6 +2953,7 @@ resource "aws_s3_bucket_versioning" "terraform_state" {
 }
 
 # Optional: Configure lifecycle policy for version retention
+# Uses time-based retention (90 days). Adjust based on your recovery requirements.
 resource "aws_s3_bucket_lifecycle_configuration" "terraform_state" {
   bucket = aws_s3_bucket.terraform_state.id
 
@@ -3042,6 +3044,10 @@ resource "google_storage_bucket" "terraform_state" {
   }
 
   # Optional: Configure lifecycle policy for version retention
+  # GCS uses count-based retention (num_newer_versions) while AWS uses
+  # time-based retention (noncurrent_days). Choose based on your needs:
+  # - Count-based: Keeps last N versions regardless of age
+  # - Time-based: Keeps versions for N days regardless of count
   lifecycle_rule {
     action {
       type = "Delete"
@@ -3090,8 +3096,11 @@ curl \
 Before performing risky operations, create a manual state backup:
 
 ```bash
-# Create timestamped backup
+# Create timestamped backup (Unix/Linux/macOS)
 terraform state pull > terraform.tfstate.backup.$(date +%Y%m%d_%H%M%S)
+
+# Windows PowerShell equivalent
+# terraform state pull > "terraform.tfstate.backup.$(Get-Date -Format 'yyyyMMdd_HHmmss')"
 ```
 
 **When manual backups are recommended:**
@@ -3106,8 +3115,8 @@ terraform state pull > terraform.tfstate.backup.$(date +%Y%m%d_%H%M%S)
 **To restore from a manual backup:**
 
 ```bash
-# Review the backup contents first
-terraform show terraform.tfstate.backup.20260202_120000
+# Review the backup contents first (local state file)
+terraform show -json terraform.tfstate.backup.20260202_120000 | head -50
 
 # Push the backup to the remote backend (use with caution)
 terraform state push terraform.tfstate.backup.20260202_120000
