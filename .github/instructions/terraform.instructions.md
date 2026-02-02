@@ -1881,8 +1881,9 @@ The `depends_on` meta-argument can also be used at the module level (Terraform 0
 
 **Key differences from resource-level depends_on:**
 
-- Module-level `depends_on` creates a dependency on **ALL resources** in the referenced module or resource
-- This can cause unnecessary serialization and slower apply times
+- When a module block uses `depends_on` with a **module address** (for example, `depends_on = [module.networking]`), it creates a dependency on **all resources in that referenced module**
+- When a module block uses `depends_on` with a **resource address**, it creates a dependency only on that specific resource (not all resources in its module)
+- This can cause unnecessary serialization and slower apply times when used with module addresses
 - It is a blunt instrument that should only be used when finer-grained dependencies cannot be expressed
 
 **When module-level depends_on is appropriate:**
@@ -3855,9 +3856,9 @@ Marking outputs as `sensitive = true` prevents values from appearing in `terrafo
 - `terraform output -json` — Returns all outputs, and sensitive values are present in the JSON payload
 - `terraform output -raw <name>` — Prints the raw value of the named output, including sensitive values, in plaintext
 - `terraform output <name>` — Prints non-sensitive outputs in plaintext; sensitive outputs are redacted unless you use `-raw` or `-json`
-- `terraform show -json` — Includes sensitive values in the JSON state representation
+- `terraform show -json` — When used to show **state** (current or historical), the JSON output can include sensitive values from that state; when used to show a **plan** file, Terraform intentionally redacts/omits sensitive values from the plan JSON
 
-This behavior is intentional—it allows programmatic access to sensitive values when needed. However, it creates significant security risks in CI/CD pipelines.
+This behavior is intentional—it allows programmatic access to sensitive values when needed (primarily via state and outputs). However, it creates significant security risks in CI/CD pipelines.
 
 **CI/CD Security Implications:**
 
