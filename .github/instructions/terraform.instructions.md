@@ -3179,7 +3179,7 @@ Provider versions **MUST** be constrained in `versions.tf`:
 
 | Pattern | Example | Use Case |
 | --- | --- | --- |
-| Pessimistic constraint | `~> 6.0` | Allow minor version updates only (6.0.x, 6.1.x, …, but not 7.0.0) |
+| Pessimistic constraint | `~> 6.0` | Allow minor and patch version updates within major 6 (any 6.x.y, but not 7.0.0) |
 | Exact version | `= 6.31.0` | Strict reproducibility required |
 | Range constraint | `>= 6.0, < 7.0` | Explicit major version bounds (any 6.x, but not 7.0.0+) |
 
