@@ -423,6 +423,8 @@ If issues occur after upgrading Terraform, follow this rollback procedure:
      terraform state push terraform.tfstate.backup
      ```
 
+     > **Warning:** `terraform state push` overwrites the remote state. Ensure no other operations are in progress and that you have verified the backup contents before pushing.
+
 3. **Regenerate lock file:**
    - Run `terraform providers lock` with the previous Terraform version
 
