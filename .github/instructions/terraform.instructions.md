@@ -5,13 +5,13 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.12.20260201.0
+**Version:** 1.12.20260202.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-02-01
+- **Last Updated:** 2026-02-02
 - **Scope:** Defines Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in this repository. Covers style, formatting, naming conventions, file organization, variable and output design, resource configuration, module design, refactoring, state management, cross-stack data sharing, security best practices, provider management, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -20,6 +20,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - [Keywords](#keywords)
 - [About Examples in This Document](#about-examples-in-this-document)
 - [Quick Reference Checklist](#quick-reference-checklist)
+  - [Code Authoring Guidelines](#code-authoring-guidelines)
 - [Executive Summary: Terraform Philosophy](#executive-summary-terraform-philosophy)
 - [Terraform Version Requirements](#terraform-version-requirements)
 - [Formatting and Style](#formatting-and-style)
@@ -3178,9 +3179,11 @@ Provider versions **MUST** be constrained in `versions.tf`:
 
 | Pattern | Example | Use Case |
 | --- | --- | --- |
-| Pessimistic constraint | `~> 5.0` | Allow minor version updates only |
-| Exact version | `= 5.31.0` | Strict reproducibility required |
-| Range constraint | `>= 5.0, < 6.0` | Explicit major version bounds |
+| Pessimistic constraint | `~> 6.0` | Allow minor and patch version updates within major 6 (any 6.x.y, but not 7.0.0) |
+| Exact version | `= 6.31.0` | Strict reproducibility required |
+| Range constraint | `>= 6.0, < 7.0` | Explicit major version bounds (any 6.x, but not 7.0.0+) |
+
+In general, for a major version **M**, use a range of the form `>= M.0, < (M+1).0` to constrain to that major version while allowing all patch and minor updates within it (for example, for **M = 6**: `>= 6.0, < 7.0`).
 
 **Recommended approach:**
 
@@ -4288,7 +4291,7 @@ module "example" {
 | Name | Version |
 | --- | --- |
 | terraform | >= 1.6.0 |
-| aws | ~> 5.0 |
+| aws | ~> 6.0 |
 
 ## Inputs
 
@@ -4581,6 +4584,7 @@ This section tracks significant changes to the Terraform instruction file.
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 1.12.20260202.0 | 2026-02-02 | Added Table of Contents entry for Code Authoring Guidelines section, updated AWS provider version reference in README template to `~> 6.0`, made version constraint examples in Provider Version Constraints table and glossary provider-agnostic |
 | 1.12.20260201.0 | 2026-02-01 | Added `configuration_aliases` for module provider configuration, module-level `depends_on` documentation, sensitive output exposure in CLI security guidance, Terraform Cloud workspace tags pattern |
 | 1.11.20260201.0 | 2026-02-01 | Added ephemeral values (1.10+), terraform_data resource (1.4+), updated security scanning tools (tfsec → trivy transition), added changelog |
 | 1.10.20260201.0 | 2026-02-01 | Initial version targeting Terraform 1.10+ |
@@ -4605,7 +4609,7 @@ This glossary defines key Terraform terms used throughout this document.
 | **import block** | A declarative block (v1.5+) that brings existing infrastructure under Terraform management without using CLI commands, enabling version-controlled and reviewable imports. |
 | **moved block** | A declarative block (v1.1+) that tells Terraform to treat a resource at a new address as the same resource that previously existed at a different address, enabling safe refactoring without destroying resources. |
 | **partial backend configuration** | A pattern where static backend settings are committed to version control while dynamic values (bucket names, regions) are provided at runtime via `-backend-config` flags or files. |
-| **pessimistic constraint operator** | The `~>` operator used in version constraints that allows only the rightmost version component to increment (e.g., `~> 5.0` allows `5.x` but not `6.0`). |
+| **pessimistic constraint operator** | The `~>` operator used in version constraints that allows only the rightmost version component to increment (for example, `~> X.0` allows versions `>= X.0.0` and `< (X+1).0.0`, i.e., all `X.*` but no `(X+1).0.0` or later). |
 | **provider** | A plugin that Terraform uses to interact with cloud platforms, SaaS providers, and other APIs. Examples include `aws`, `azurerm`, and `google`. |
 | **provider alias** | A named instance of a provider configuration that enables deploying resources to multiple regions, accounts, or with different settings within the same configuration. |
 | **removed block** | A declarative block (v1.7+) that removes a resource from Terraform state without destroying the underlying infrastructure. |
