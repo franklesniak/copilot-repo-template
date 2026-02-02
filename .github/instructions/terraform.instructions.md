@@ -20,6 +20,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 - [Keywords](#keywords)
 - [About Examples in This Document](#about-examples-in-this-document)
 - [Quick Reference Checklist](#quick-reference-checklist)
+  - [Code Authoring Guidelines](#code-authoring-guidelines)
 - [Executive Summary: Terraform Philosophy](#executive-summary-terraform-philosophy)
 - [Terraform Version Requirements](#terraform-version-requirements)
 - [Formatting and Style](#formatting-and-style)
@@ -4288,7 +4289,7 @@ module "example" {
 | Name | Version |
 | --- | --- |
 | terraform | >= 1.6.0 |
-| aws | ~> 5.0 |
+| aws | ~> 6.0 |
 
 ## Inputs
 
@@ -4581,6 +4582,7 @@ This section tracks significant changes to the Terraform instruction file.
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 1.12.20260202.0 | 2026-02-02 | Added Table of Contents entry for Code Authoring Guidelines section, updated AWS provider version reference in README template from `~> 5.0` to `~> 6.0` |
 | 1.12.20260201.0 | 2026-02-01 | Added `configuration_aliases` for module provider configuration, module-level `depends_on` documentation, sensitive output exposure in CLI security guidance, Terraform Cloud workspace tags pattern |
 | 1.11.20260201.0 | 2026-02-01 | Added ephemeral values (1.10+), terraform_data resource (1.4+), updated security scanning tools (tfsec → trivy transition), added changelog |
 | 1.10.20260201.0 | 2026-02-01 | Initial version targeting Terraform 1.10+ |
