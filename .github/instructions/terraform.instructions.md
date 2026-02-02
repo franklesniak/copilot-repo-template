@@ -5,7 +5,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.13.20260202.0
+**Version:** 1.14.20260202.0
 
 ## Metadata
 
@@ -47,6 +47,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
   - [Environment Separation Strategies](#environment-separation-strategies)
   - [Resource Targeting](#resource-targeting)
   - [Reviewing Plan Output](#reviewing-plan-output)
+  - [State Backup and Recovery](#state-backup-and-recovery)
 - [Cross-Stack Data Sharing](#cross-stack-data-sharing-1)
 - [Provider Management](#provider-management-1)
   - [Provider Aliasing](#provider-aliasing)
@@ -202,6 +203,9 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** `terraform apply -target` **SHOULD NOT** be used in normal workflows → [Resource Targeting](#resource-targeting)
 - **[Root]** New state storage infrastructure **SHOULD** follow the bootstrap workflow → [Bootstrapping State Infrastructure](#bootstrapping-state-infrastructure)
 - **[All]** Plan output **MUST** be reviewed for unexpected destroys or replacements before applying → [Reviewing Plan Output](#reviewing-plan-output)
+- **[Root]** State storage buckets **MUST** have versioning enabled for production use → [State Versioning Requirements](#state-versioning-requirements)
+- **[All]** Manual state backups **SHOULD** be created before risky operations → [Manual State Backup](#manual-state-backup)
+- **[All]** State files **MUST NOT** be manually edited → [Common State Problems and Recovery](#common-state-problems-and-recovery)
 
 ### Cross-Stack Data Sharing
 
@@ -2911,6 +2915,403 @@ state-bucket/
 
 > **Note:** This diagram represents the **key/path structure in your remote backend** (S3 object keys, Azure blob paths, GCS object prefixes), not a local filesystem directory structure. These paths are configured via the `key` or `prefix` attribute in your backend configuration. Your local repository structure is separate and typically organized by environment directories containing Terraform configuration files.
 
+### State Backup and Recovery
+
+State files are critical infrastructure artifacts. Losing or corrupting state can result in significant operational challenges. This section documents backup strategies, manual backup procedures, and recovery approaches for common state-related problems.
+
+#### State Versioning Requirements
+
+State storage backends **MUST** have versioning enabled for production use:
+
+- Versioning enables recovery from accidental state corruption or deletion
+- Version retention period **SHOULD** be defined based on organizational requirements (typically 30-90 days minimum)
+- Versioned state serves as a backup mechanism without additional tooling
+
+#### State Backup Strategies
+
+Each cloud provider offers native mechanisms for state versioning and backup.
+
+**AWS S3 Backend:**
+
+Enable versioning on the S3 bucket used for state storage:
+
+```hcl
+resource "aws_s3_bucket" "terraform_state" {
+  bucket = "acme-corp-terraform-state"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "aws_s3_bucket_versioning" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Optional: Configure lifecycle policy for version retention
+resource "aws_s3_bucket_lifecycle_configuration" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+
+  rule {
+    id     = "retain-old-versions"
+    status = "Enabled"
+
+    noncurrent_version_expiration {
+      noncurrent_days = 90
+    }
+  }
+}
+```
+
+To recover a previous state version from S3:
+
+```bash
+# List available versions
+aws s3api list-object-versions \
+  --bucket acme-corp-terraform-state \
+  --prefix environments/prod/terraform.tfstate
+
+# Download a specific version
+aws s3api get-object \
+  --bucket acme-corp-terraform-state \
+  --key environments/prod/terraform.tfstate \
+  --version-id <VERSION_ID> \
+  terraform.tfstate.recovered
+```
+
+**Azure Storage Backend:**
+
+Enable blob versioning or soft delete on the storage account:
+
+```hcl
+resource "azurerm_storage_account" "terraform_state" {
+  name                     = "stacmeterraform"
+  resource_group_name      = azurerm_resource_group.terraform_state.name
+  location                 = azurerm_resource_group.terraform_state.location
+  account_tier             = "Standard"
+  account_replication_type = "GRS"
+
+  blob_properties {
+    versioning_enabled = true
+
+    delete_retention_policy {
+      days = 90
+    }
+
+    container_delete_retention_policy {
+      days = 90
+    }
+  }
+}
+```
+
+To recover a previous state version from Azure Storage:
+
+```bash
+# List blob versions
+az storage blob list \
+  --account-name stacmeterraform \
+  --container-name tfstate \
+  --include v \
+  --prefix environments/prod/terraform.tfstate \
+  --output table
+
+# Download a specific version
+az storage blob download \
+  --account-name stacmeterraform \
+  --container-name tfstate \
+  --name environments/prod/terraform.tfstate \
+  --version-id <VERSION_ID> \
+  --file terraform.tfstate.recovered
+```
+
+**GCS Backend:**
+
+Enable object versioning on the GCS bucket:
+
+```hcl
+resource "google_storage_bucket" "terraform_state" {
+  name     = "acme-corp-terraform-state"
+  location = "US"
+
+  versioning {
+    enabled = true
+  }
+
+  # Optional: Configure lifecycle policy for version retention
+  lifecycle_rule {
+    action {
+      type = "Delete"
+    }
+    condition {
+      num_newer_versions = 10
+      with_state         = "ARCHIVED"
+    }
+  }
+
+  uniform_bucket_level_access = true
+}
+```
+
+To recover a previous state version from GCS:
+
+```bash
+# List object versions
+gsutil ls -la gs://acme-corp-terraform-state/environments/prod/
+
+# Copy a specific generation (version)
+gsutil cp gs://acme-corp-terraform-state/environments/prod/terraform.tfstate#<GENERATION> \
+  terraform.tfstate.recovered
+```
+
+**Terraform Cloud:**
+
+State versioning is automatic in Terraform Cloud. To access state history:
+
+1. Navigate to your workspace in the Terraform Cloud UI
+2. Click on "States" in the left navigation
+3. Browse the list of state versions with timestamps
+4. Click on any version to view details or download
+
+State versions can also be accessed via the Terraform Cloud API:
+
+```bash
+# List state versions for a workspace
+curl \
+  --header "Authorization: Bearer $TFC_TOKEN" \
+  https://app.terraform.io/api/v2/workspaces/<WORKSPACE_ID>/state-versions
+```
+
+#### Manual State Backup
+
+Before performing risky operations, create a manual state backup:
+
+```bash
+# Create timestamped backup
+terraform state pull > terraform.tfstate.backup.$(date +%Y%m%d_%H%M%S)
+```
+
+**When manual backups are recommended:**
+
+- Before running `terraform state rm` to remove resources from state
+- Before running `terraform state mv` to move or rename resources
+- Before major refactoring with `moved` blocks
+- Before upgrading Terraform to a new major version
+- Before running `terraform force-unlock`
+- Before any operation that modifies state outside normal `apply` workflows
+
+**To restore from a manual backup:**
+
+```bash
+# Review the backup contents first
+terraform show terraform.tfstate.backup.20260202_120000
+
+# Push the backup to the remote backend (use with caution)
+terraform state push terraform.tfstate.backup.20260202_120000
+```
+
+> **Warning:** `terraform state push` overwrites the remote state. Ensure no other operations are in progress and that you have verified the backup contents before pushing.
+
+#### Common State Problems and Recovery
+
+##### Error: "Error acquiring the state lock"
+
+**Symptoms:**
+
+```text
+Error: Error acquiring the state lock
+
+Error message: ConditionalCheckFailedException: The conditional request failed
+Lock Info:
+  ID:        a1b2c3d4-e5f6-7890-abcd-ef1234567890
+  Path:      terraform.tfstate
+  Operation: OperationTypeApply
+  Who:       user@hostname
+  Version:   1.7.0
+  Created:   2026-02-01 10:30:00.000000000 +0000 UTC
+```
+
+**Cause:**
+
+- A previous Terraform operation was interrupted (crash, network failure, timeout)
+- Another user or CI job is currently running Terraform against the same state
+- The lock was not properly released after a failed operation
+
+**Solution:**
+
+1. **First, verify no operations are in progress.** Check with your team and CI system.
+
+2. **If confirmed safe, force-unlock the state:**
+
+   ```bash
+   terraform force-unlock a1b2c3d4-e5f6-7890-abcd-ef1234567890
+   ```
+
+3. **If the lock ID is unknown, check your backend directly:**
+   - For DynamoDB (AWS): Check the lock table for the lock entry
+   - For Azure: Check blob lease status
+   - For GCS: Lock is file-based; typically auto-expires
+
+**Prevention:**
+
+- Ensure only one operator or CI job runs Terraform at a time
+- Use CI/CD pipelines with proper concurrency controls
+- Configure appropriate timeouts for long-running operations
+
+> **Warning:** Never force-unlock a state if another operation is genuinely in progress. This can cause state corruption.
+
+##### Error: "State file corrupted or invalid JSON"
+
+**Symptoms:**
+
+```text
+Error: Failed to load state: unexpected end of JSON input
+```
+
+or
+
+```text
+Error: Failed to load state: invalid character '<' looking for beginning of value
+```
+
+**Cause:**
+
+- Write operation was interrupted (network failure, process termination)
+- Manual editing of state file with syntax errors
+- Storage backend returned an error page instead of state file
+
+**Solution:**
+
+1. **Restore from backend versioning:**
+
+   ```bash
+   # Example for S3 - list versions and recover previous
+   aws s3api list-object-versions \
+     --bucket your-state-bucket \
+     --prefix path/to/terraform.tfstate
+   ```
+
+2. **Restore from manual backup (if available):**
+
+   ```bash
+   terraform state push terraform.tfstate.backup.YYYYMMDD_HHMMSS
+   ```
+
+3. **If no backup exists, reconstruct from infrastructure:**
+
+   ```bash
+   # Remove corrupted state (create backup first)
+   mv terraform.tfstate terraform.tfstate.corrupted
+
+   # Re-import all resources using import blocks
+   # See "Importing Resources with Import Blocks" section
+   ```
+
+**Prevention:**
+
+- State files **MUST NOT** be manually edited
+- Enable versioning on state storage (see [State Versioning Requirements](#state-versioning-requirements))
+- Use reliable network connections for Terraform operations
+
+##### Error: "Resource exists in state but not in cloud"
+
+**Symptoms:**
+
+```text
+Error: Error reading resource: ResourceNotFoundException
+```
+
+Terraform shows a resource in state, but the actual cloud resource has been deleted outside of Terraform (manually, via console, or by another tool).
+
+**Cause:**
+
+- Resource was deleted outside Terraform (console, CLI, another tool)
+- Resource was deleted by cloud provider (expiration, policy enforcement)
+- Incorrect AWS account, Azure subscription, or GCP project configured
+
+**Solution:**
+
+**Option 1: Remove from state using `removed` block (preferred):**
+
+```hcl
+removed {
+  from = aws_instance.deleted_instance
+
+  lifecycle {
+    destroy = false
+  }
+}
+```
+
+**Option 2: Remove from state using CLI:**
+
+```bash
+# Create backup first
+terraform state pull > terraform.tfstate.backup.$(date +%Y%m%d_%H%M%S)
+
+# Remove the resource from state
+terraform state rm aws_instance.deleted_instance
+```
+
+**Prevention:**
+
+- Establish processes to ensure infrastructure changes go through Terraform
+- Use `prevent_destroy` lifecycle rule for critical resources
+- Implement drift detection (scheduled `terraform plan` in CI)
+
+##### Error: "Resource exists in cloud but not in state"
+
+**Symptoms:**
+
+Terraform plans to create a resource, but the resource already exists in the cloud. Or, you have infrastructure created outside Terraform that you want to bring under management.
+
+**Cause:**
+
+- Resource was created outside Terraform (manually, via console, or by another tool)
+- State was lost or corrupted
+- Resource was removed from state but not destroyed
+
+**Solution:**
+
+**Option 1: Use `import` block (preferred, Terraform 1.5+):**
+
+```hcl
+import {
+  to = aws_instance.existing
+  id = "i-0abc123def456789"
+}
+
+resource "aws_instance" "existing" {
+  ami           = "ami-0abcdef1234567890"
+  instance_type = "t3.micro"
+  # ... configuration matching existing resource
+}
+```
+
+Then run:
+
+```bash
+terraform plan  # Verify import will succeed
+terraform apply # Perform the import
+```
+
+**Option 2: Use CLI import (legacy):**
+
+```bash
+terraform import aws_instance.existing i-0abc123def456789
+```
+
+After importing, review the state and update your configuration to match the imported resource's attributes.
+
+**Prevention:**
+
+- Establish processes to ensure infrastructure creation goes through Terraform
+- Use workspace-specific naming conventions to identify Terraform-managed resources
+- Tag resources with `ManagedBy = "terraform"` to identify ownership
+
 ### Workspace Usage
 
 Workspaces **MAY** be used for environment separation in simple cases:
@@ -4758,6 +5159,7 @@ This section tracks significant changes to the Terraform instruction file.
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 1.14.20260202.0 | 2026-02-02 | Added State Backup and Recovery section with backup strategies, manual backup procedures, common state problems and recovery guidance, and state versioning requirements |
 | 1.13.20260202.0 | 2026-02-02 | Added Environment Separation Strategies section with guidance on workspaces vs directory-based environment separation |
 | 1.12.20260202.0 | 2026-02-02 | Added Table of Contents entry for Code Authoring Guidelines section, updated AWS provider version reference in README template to `~> 6.0`, made version constraint examples in Provider Version Constraints table and glossary provider-agnostic |
 | 1.12.20260201.0 | 2026-02-01 | Added `configuration_aliases` for module provider configuration, module-level `depends_on` documentation, sensitive output exposure in CLI security guidance, Terraform Cloud workspace tags pattern |
@@ -4780,6 +5182,7 @@ This glossary defines key Terraform terms used throughout this document.
 | **check block** | A Terraform construct (v1.5+) that runs continuous validation assertions on every `plan` and `apply`, producing warnings rather than errors when assertions fail. |
 | **child module** | A module that is called by another module (the parent). Child modules are reusable components typically located in a `modules/` directory. Contrast with root module. |
 | **configuration_aliases** | A list in the `required_providers` block that declares which provider aliases a module expects to receive from calling modules. Required when modules use provider aliases internally. |
+| **force-unlock** | A Terraform CLI command (`terraform force-unlock <LOCK_ID>`) that manually releases a state lock. Used to recover from interrupted operations but dangerous if used while another operation is genuinely in progress. |
 | **HCL** | HashiCorp Configuration Language. The primary language used to write Terraform configurations in `.tf` files. |
 | **import block** | A declarative block (v1.5+) that brings existing infrastructure under Terraform management without using CLI commands, enabling version-controlled and reviewable imports. |
 | **moved block** | A declarative block (v1.1+) that tells Terraform to treat a resource at a new address as the same resource that previously existed at a different address, enabling safe refactoring without destroying resources. |
@@ -4793,6 +5196,7 @@ This glossary defines key Terraform terms used throughout this document.
 | **root module** | The top-level Terraform configuration directory where `terraform init`, `plan`, and `apply` are executed. Contains provider and backend configuration. Contrast with reusable (child) modules. |
 | **state file** | A JSON file (typically named `terraform.tfstate`) that Terraform uses to map configuration to real-world resources and track metadata. |
 | **state locking** | A mechanism that prevents concurrent Terraform operations on the same state file, avoiding race conditions and state corruption. |
+| **state versioning** | A backup mechanism where the state storage backend (S3, GCS, Azure Storage) retains previous versions of state files, enabling recovery from corruption or accidental changes. |
 | **templatefile() function** | A Terraform function that reads a template file and renders it with provided variables, commonly used for generating scripts, policies, or configuration files. |
 | **terraform.lock.hcl** | The dependency lock file that records the exact provider versions and checksums used, ensuring reproducible installations across team members and CI systems. |
 | **tfvars** | A file with the `.tfvars` extension that provides values for input variables. Commonly used for environment-specific configuration. |
