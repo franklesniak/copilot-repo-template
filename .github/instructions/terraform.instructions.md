@@ -5,7 +5,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.16.20260202.0
+**Version:** 1.17.20260202.0
 
 ## Metadata
 
@@ -23,6 +23,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
   - [Code Authoring Guidelines](#code-authoring-guidelines)
 - [Executive Summary: Terraform Philosophy](#executive-summary-terraform-philosophy)
 - [Terraform Version Requirements](#terraform-version-requirements)
+- [Upgrading Terraform Versions](#upgrading-terraform-versions)
 - [Formatting and Style](#formatting-and-style)
 - [Naming Conventions](#naming-conventions)
   - [Globally Unique Resource Names](#globally-unique-resource-names)
@@ -308,6 +309,169 @@ The following table summarizes Terraform version requirements for features refer
 | `ephemeral` values | 1.10.0 |
 
 > **Note:** Examples in this document assume Terraform 1.10.0 or later unless otherwise noted. Users on older Terraform versions should verify feature availability before adopting specific patterns.
+
+---
+
+## Upgrading Terraform Versions
+
+This section provides guidance for safely upgrading Terraform versions, including preparation steps, upgrade procedures, and rollback strategies.
+
+### Version Upgrade Checklist
+
+Before upgrading Terraform, complete the following checklist:
+
+- [ ] Read the [Terraform Changelog](https://github.com/hashicorp/terraform/blob/main/CHANGELOG.md) for breaking changes
+- [ ] Create a state backup before upgrading
+- [ ] Test the upgrade in a non-production environment first
+- [ ] Update `.terraform.lock.hcl` after upgrading
+- [ ] Run `terraform plan` and verify no unexpected changes
+- [ ] Update CI/CD pipeline Terraform version after validation
+- [ ] Update `required_version` constraint if needed
+
+### Pre-Upgrade Preparation
+
+Before upgrading, document your current state and create recovery points:
+
+```bash
+# 1. Backup current state
+terraform state pull > terraform.tfstate.backup
+
+# 2. Document current version
+terraform version
+
+# 3. Review current plan (baseline)
+terraform plan -out=pre-upgrade.tfplan
+```
+
+> **Note:** Store the backup and plan output in a secure location outside the working directory. These files **MUST NOT** be committed to version control as they may contain sensitive information.
+
+### Upgrade Process
+
+The upgrade process varies based on the scope of the version change.
+
+#### Patch and Minor Upgrades (e.g., 1.7.0 → 1.7.5 or 1.7.0 → 1.8.0)
+
+Patch and minor version upgrades are generally safe:
+
+1. Update the Terraform binary to the new version
+2. Run `terraform init -upgrade` to update provider dependencies
+3. Run `terraform plan` and compare output to your pre-upgrade baseline
+4. Verify no unexpected changes appear in the plan
+5. If the plan is clean, proceed with normal operations
+
+#### Major Version Upgrades (e.g., 1.x → 2.x, when applicable)
+
+Major version upgrades require additional care:
+
+1. Read the official upgrade guide for the specific version transition
+2. Review the changelog for all breaking changes and deprecated features
+3. Update the Terraform binary to the new version
+4. Run `terraform init -upgrade` to update provider lock file
+5. Address any deprecation warnings or errors
+6. Update configuration for any removed or changed features
+7. Run `terraform plan` and carefully review all changes
+8. Test thoroughly in a non-production environment before production deployment
+
+### Lock File Updates
+
+After upgrading Terraform, regenerate the `.terraform.lock.hcl` file to ensure all platforms used by your team and CI/CD systems are covered:
+
+```bash
+# Regenerate lock file for all platforms
+terraform providers lock \
+  -platform=linux_amd64 \
+  -platform=linux_arm64 \
+  -platform=darwin_amd64 \
+  -platform=darwin_arm64 \
+  -platform=windows_amd64 \
+  -platform=windows_arm64
+
+# Commit the updated lock file
+git add .terraform.lock.hcl
+git commit -m "chore: Update provider lock file for Terraform X.Y.Z"
+```
+
+### CI/CD Considerations
+
+When managing Terraform versions in CI/CD pipelines:
+
+- **Pin Terraform versions:** Use explicit version pinning in CI workflows for reproducibility
+- **Test in branches first:** Test new Terraform versions in a feature branch before updating main/production pipelines
+- **Update after local validation:** Update the version in workflow files **after** successful local validation
+
+**Example GitHub Actions workflow snippet:**
+
+```yaml
+- name: Setup Terraform
+  uses: hashicorp/setup-terraform@v3
+  with:
+    terraform_version: "1.7.0"  # Pin to specific version
+```
+
+### Rollback Procedure
+
+If issues occur after upgrading Terraform, follow this rollback procedure:
+
+1. **Restore the previous Terraform binary version:**
+   - Use your version manager to switch back (e.g., `tfenv use 1.6.0`)
+   - Or download and install the previous version manually
+
+2. **Restore state if modified:**
+   - If the new Terraform version modified state, restore from your backup:
+
+     ```bash
+     terraform state push terraform.tfstate.backup
+     ```
+
+     > **Warning:** `terraform state push` overwrites the remote state. Ensure no other operations are in progress and that you have verified the backup contents before pushing.
+
+3. **Regenerate lock file:**
+   - Run `terraform providers lock` with the previous Terraform version
+
+4. **Document the issue:**
+   - Record what went wrong for future reference
+   - Consider opening an issue on the Terraform repository if you encountered a bug
+
+### Version Managers
+
+Using a version manager simplifies switching between Terraform versions and ensures team consistency:
+
+**tfenv:**
+
+```bash
+# Install a specific version
+tfenv install 1.7.0
+
+# Use a specific version
+tfenv use 1.7.0
+
+# List installed versions
+tfenv list
+```
+
+**asdf:**
+
+```bash
+# Add Terraform plugin (one-time)
+asdf plugin add terraform
+
+# Install a specific version
+asdf install terraform 1.7.0
+
+# Set local version for a project
+asdf local terraform 1.7.0
+```
+
+> **Note:** Version specification files (`.terraform-version` for tfenv or `.tool-versions` for asdf) **MAY** be committed to the repository to ensure team consistency. If committed, these files **SHOULD** be updated as part of the version upgrade process.
+
+### Version Upgrade Requirements Summary
+
+The following requirements apply to Terraform version upgrades:
+
+- Version upgrades **MUST** be tested in non-production environments first
+- State **SHOULD** be backed up before any version upgrade
+- `.terraform.lock.hcl` **MUST** be updated and committed after version changes
+- Major version upgrades **MUST** include review of the official upgrade guide
 
 ---
 
@@ -5651,6 +5815,7 @@ This section tracks significant changes to the Terraform instruction file.
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 1.17.20260202.0 | 2026-02-02 | Added Upgrading Terraform Versions section with version upgrade checklist, pre-upgrade preparation steps, patch/minor and major upgrade procedures, lock file update guidance, CI/CD considerations, rollback procedures, and version manager recommendations |
 | 1.16.20260202.0 | 2026-02-02 | Added Troubleshooting Common Issues section with guidance for 6 common Terraform errors: state lock acquisition, provider configuration not present, cycle detected, invalid for_each argument, unsupported Terraform version, and failed provider package queries |
 | 1.15.20260202.0 | 2026-02-02 | Added Cross-Account and Service Account Patterns section with AWS assume_role, Azure skip_provider_registration and multi-subscription patterns, GCP impersonate_service_account, summary comparison table, and security considerations |
 | 1.14.20260202.0 | 2026-02-02 | Added State Backup and Recovery section with backup strategies, manual backup procedures, common state problems and recovery guidance, and state versioning requirements |
