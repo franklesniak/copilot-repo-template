@@ -3179,9 +3179,9 @@ Provider versions **MUST** be constrained in `versions.tf`:
 
 | Pattern | Example | Use Case |
 | --- | --- | --- |
-| Pessimistic constraint | `~> 5.0` | Allow minor version updates only |
-| Exact version | `= 5.31.0` | Strict reproducibility required |
-| Range constraint | `>= 5.0, < 6.0` | Explicit major version bounds |
+| Pessimistic constraint | `~> X.0` | Allow minor version updates only |
+| Exact version | `= X.Y.Z` | Strict reproducibility required |
+| Range constraint | `>= X.0, < Y.0` | Explicit major version bounds |
 
 **Recommended approach:**
 
@@ -4582,7 +4582,7 @@ This section tracks significant changes to the Terraform instruction file.
 
 | Version | Date | Changes |
 | --- | --- | --- |
-| 1.12.20260202.0 | 2026-02-02 | Added Table of Contents entry for Code Authoring Guidelines section, updated AWS provider version reference in README template from `~> 5.0` to `~> 6.0` |
+| 1.12.20260202.0 | 2026-02-02 | Added Table of Contents entry for Code Authoring Guidelines section, updated AWS provider version reference in README template from `~> 5.0` to `~> 6.0`, made version constraint examples in Provider Version Constraints table and glossary provider-agnostic |
 | 1.12.20260201.0 | 2026-02-01 | Added `configuration_aliases` for module provider configuration, module-level `depends_on` documentation, sensitive output exposure in CLI security guidance, Terraform Cloud workspace tags pattern |
 | 1.11.20260201.0 | 2026-02-01 | Added ephemeral values (1.10+), terraform_data resource (1.4+), updated security scanning tools (tfsec → trivy transition), added changelog |
 | 1.10.20260201.0 | 2026-02-01 | Initial version targeting Terraform 1.10+ |
@@ -4607,7 +4607,7 @@ This glossary defines key Terraform terms used throughout this document.
 | **import block** | A declarative block (v1.5+) that brings existing infrastructure under Terraform management without using CLI commands, enabling version-controlled and reviewable imports. |
 | **moved block** | A declarative block (v1.1+) that tells Terraform to treat a resource at a new address as the same resource that previously existed at a different address, enabling safe refactoring without destroying resources. |
 | **partial backend configuration** | A pattern where static backend settings are committed to version control while dynamic values (bucket names, regions) are provided at runtime via `-backend-config` flags or files. |
-| **pessimistic constraint operator** | The `~>` operator used in version constraints that allows only the rightmost version component to increment (e.g., `~> 5.0` allows `5.x` but not `6.0`). |
+| **pessimistic constraint operator** | The `~>` operator used in version constraints that allows only the rightmost version component to increment (e.g., `~> X.0` allows `X.x` but not `Y.0`). |
 | **provider** | A plugin that Terraform uses to interact with cloud platforms, SaaS providers, and other APIs. Examples include `aws`, `azurerm`, and `google`. |
 | **provider alias** | A named instance of a provider configuration that enables deploying resources to multiple regions, accounts, or with different settings within the same configuration. |
 | **removed block** | A declarative block (v1.7+) that removes a resource from Terraform state without destroying the underlying infrastructure. |
