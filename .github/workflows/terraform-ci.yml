@@ -30,10 +30,10 @@
 #    workflows on all changes to ensure accuracy when the template is used.
 #
 # 4. Terraform Version Policy:
-#    Pin to a specific Terraform version for reproducibility. Format and validate
-#    jobs use 1.6.0 (minimum for test framework). The test job uses 1.7.0 which
-#    supports mock_provider for unit testing without cloud credentials. Update
-#    when upstream support changes or new features are needed.
+#    Pin to a specific Terraform version for reproducibility. All jobs use
+#    the latest stable Terraform version (1.14.4). The test framework requires
+#    Terraform 1.6.0+ and mock_provider requires 1.7.0+, both satisfied by
+#    the latest version. Review and update quarterly per TEMPLATE_MAINTENANCE.md.
 #
 # 5. TFLint Version Policy:
 #    Pin to a specific TFLint version (v0.51.1) for reproducibility. Update when
@@ -71,7 +71,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.6.0"
+          terraform_version: "1.14.4"
 
       - name: Terraform Format Check
         run: terraform fmt -check -recursive -diff
@@ -88,7 +88,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.6.0"
+          terraform_version: "1.14.4"
 
       - name: Cache Terraform Providers
         uses: actions/cache@v5
@@ -161,7 +161,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.7.0"
+          terraform_version: "1.14.4"
 
       - name: Cache Terraform Providers
         uses: actions/cache@v5
