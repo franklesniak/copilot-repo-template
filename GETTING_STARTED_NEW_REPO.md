@@ -25,6 +25,7 @@ This guide walks you through creating a brand-new repository using `franklesniak
 - [Customizing the Pull Request Template](#customizing-the-pull-request-template)
 - [Updating README.md](#updating-readmemd)
 - [Customizing CONTRIBUTING.md](#customizing-contributingmd)
+- [Customizing CODE_OF_CONDUCT.md](#customizing-code_of_conductmd)
 - [Updating Copilot Instructions](#updating-copilot-instructions)
 - [Additional Configuration (Optional)](#additional-configuration-optional)
 - [Validation and Testing](#validation-and-testing)
@@ -565,7 +566,7 @@ This template uses placeholder values that you **must** replace with your actual
 - **`OWNER/REPO`:** Combined format used in GitHub URLs (e.g., `franklesniak/my-new-project`)
 - **`@OWNER`:** GitHub username with @ prefix for CODEOWNERS file (e.g., `@franklesniak`)
 - **`Frank Lesniak`:** The template author's name in the LICENSE file. Replace with your name or organization name (the copyright holder for your project).
-- **`[INSERT CONTACT METHOD]`:** A contact method for reporting code of conduct violations (e.g., an email address or link to a reporting form)
+- **`[INSERT CONTACT METHOD]`:** A method for reporting code of conduct violations (e.g., an email address, a form URL, or instructions to contact maintainers). This should be actively monitored and capable of receiving sensitive reports.
 - **`[security contact email]`:** An email address for receiving security vulnerability reports
 - **`window.title` in `.vscode/settings.json`:** The VS Code window title that appears in the title bar when working in this repository. Replace the instruction text with your repository name for easy identification.
 
@@ -1502,6 +1503,55 @@ See [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md) for additional `CON
 - Replacing `OWNER/REPO` placeholders with your organization and repository name
 - Updating Python version requirements
 - Removing language-specific sections you don't use
+
+---
+
+## Customizing CODE_OF_CONDUCT.md
+
+**File:** `CODE_OF_CONDUCT.md`
+
+The `CODE_OF_CONDUCT.md` file defines community standards and expectations for behavior when participating in your project. It also establishes enforcement procedures for handling violations.
+
+### Understanding the Contact Method Placeholder
+
+The `[INSERT CONTACT METHOD]` placeholder in `CODE_OF_CONDUCT.md` should be replaced with a method for reporting code of conduct violations that:
+
+- Is actively monitored
+- Can receive sensitive reports privately
+- Is appropriate for your project's size and community
+
+**Examples of contact methods:**
+
+- An email address (e.g., `conduct@example.com`)
+- A link to a reporting form
+- Instructions to contact specific maintainers via direct message
+
+If you used the same email for both `CODE_OF_CONDUCT.md` and `SECURITY.md` during the [Initial Placeholder Replacement](#initial-placeholder-replacement) step, consider whether you want a separate contact method for code of conduct issues versus security vulnerabilities.
+
+### About the Contributor Covenant
+
+This template includes the [Contributor Covenant v3.0](https://www.contributor-covenant.org/version/3/0/code_of_conduct/), which is:
+
+- **Widely recognized:** Used by over 200,000 open source projects
+- **GitHub-supported:** Listed as a recommended code of conduct when creating new repositories
+- **Comprehensive:** Covers encouraged behaviors, restricted behaviors, enforcement procedures, and scope
+
+### Whether to Keep or Remove
+
+**Keep the file if your project:**
+
+- Accepts contributions from others
+- Has or expects community interaction (issues, discussions, PRs)
+- Is part of an organization that requires a code of conduct
+
+**Consider removing the file if your project:**
+
+- Is a personal project that doesn't accept external contributions
+- Is internal/private with no external community interaction
+
+> **Note:** The placeholder check workflow treats `CODE_OF_CONDUCT.md` as optional—it will continue to pass if the file is missing.
+
+See [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md#code-of-conduct-configuration) for advanced customization options including alternative code of conduct templates and customizing enforcement procedures.
 
 ---
 

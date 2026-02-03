@@ -16,6 +16,7 @@ This guide covers optional customizations you can make after completing the init
   - [Feature Request Template Customization](#feature-request-template-customization)
   - [Documentation Issue Template Customization](#documentation-issue-template-customization)
 - [Security Configuration](#security-configuration)
+- [Code of Conduct Configuration](#code-of-conduct-configuration)
 - [Pull Request Template Customization](#pull-request-template-customization)
 - [Dependabot Configuration](#dependabot-configuration)
 - [Pre-commit Configuration](#pre-commit-configuration)
@@ -553,6 +554,88 @@ The default `SECURITY.md` includes a minimal supported versions table:
 ```
 
 Update this table to reflect which versions of your project receive security updates.
+
+---
+
+## Code of Conduct Configuration
+
+**File:** `CODE_OF_CONDUCT.md`
+
+The template includes the Contributor Covenant v3.0, a widely-adopted code of conduct for open source projects. This section covers customization options and alternatives.
+
+### Alternative Code of Conduct Templates
+
+While the Contributor Covenant is the most widely used code of conduct for open source, you may choose a different template based on your project's needs:
+
+| Template | Description | Best For |
+| --- | --- | --- |
+| [Contributor Covenant v3.0](https://www.contributor-covenant.org/version/3/0/code_of_conduct/) | Comprehensive, widely recognized | Most open source projects (template default) |
+| [Citizen Code of Conduct](https://github.com/stumpsyn/policies/blob/master/citizen_code_of_conduct.md) | Community-focused, detailed examples | Projects emphasizing community building |
+| Organization-specific | Custom policies matching org standards | Enterprise or organizational projects |
+
+**To use a different template:**
+
+1. Replace the contents of `CODE_OF_CONDUCT.md` with your chosen template
+2. Update any contact information or placeholders
+3. Review enforcement procedures and adjust as needed
+
+### Customizing Enforcement Procedures
+
+The default enforcement section includes a four-tier ladder (Warning → Temporarily Limited Activities → Temporary Suspension → Permanent Ban). You may customize this based on your project's needs:
+
+#### Enforcement Contact Information
+
+Replace `[INSERT CONTACT METHOD]` with your preferred reporting method:
+
+```markdown
+To report a possible violation, contact us via: conduct@your-project.org
+```
+
+**Contact method options:**
+
+- **Email address:** Simple, widely understood, but requires email monitoring
+- **Web form:** Provides structured reporting, can integrate with issue tracking
+- **Multiple channels:** List several options (email, form, direct message to maintainers)
+
+#### Response Timeline Commitments
+
+Consider adding explicit timeline commitments to the enforcement section:
+
+```markdown
+Community Moderators will acknowledge receipt of reports within 48 hours and
+aim to provide a resolution within 7 days for straightforward cases. Complex
+cases may require additional time, and reporters will be updated on progress.
+```
+
+#### Scope Customization
+
+The default scope section covers community spaces and official representation. Customize based on your project's context:
+
+```markdown
+## Scope
+
+This Code of Conduct applies within:
+
+- All repository spaces (issues, pull requests, discussions)
+- Project communication channels (Slack, Discord, mailing lists)
+- Project events (meetups, conferences, online gatherings)
+- When representing the project in public spaces
+```
+
+### Removing the Code of Conduct
+
+Small personal projects or projects that don't accept external contributions may not need a code of conduct file.
+
+**To remove:**
+
+1. Delete `CODE_OF_CONDUCT.md` from your repository
+2. The placeholder check workflow will continue to pass—`CODE_OF_CONDUCT.md` is treated as optional
+
+**Considerations before removing:**
+
+- Projects that grow to accept contributions later may want to add one
+- Some organizations require a code of conduct for all projects
+- Having a code of conduct signals that your project welcomes diverse contributors
 
 ---
 
