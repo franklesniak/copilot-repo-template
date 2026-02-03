@@ -90,7 +90,7 @@ jobs:
           #   7. .github/CODEOWNERS - @OWNER placeholder
           #
           # Note: Files 1-4 and 7 are optional. If a file doesn't exist, its check is
-          # skipped with "⚠️ <file> not found (optional)" message.
+          # skipped with a "file not found (optional)" message.
           #
           # WARNING ONLY (no exit 1):
           #   - README.md containing OWNER/REPO in link contexts (emits ::warning but
@@ -98,7 +98,8 @@ jobs:
           #
           # FILE-TYPE-AWARE COMMENT FILTERING:
           #   - YAML files: Lines starting with # are comments (ignored)
-          #   - Markdown files: Lines with <!-- --> are HTML comments (ignored)
+          #   - Markdown files: Single-line <!-- ... --> HTML comments are ignored
+          #     (multi-line HTML comments are NOT filtered; see filter_md_html_comments)
           #   - Markdown #: These are HEADINGS, not comments (checked!)
           #   - CODEOWNERS: Lines starting with # are comments (ignored)
           #
@@ -114,8 +115,12 @@ jobs:
           }
 
           # Helper function to filter lines that are inside Markdown HTML comments
-          # Note: This is a simple filter for single-line HTML comments containing the pattern
-          # It won't catch multi-line comments, but those are rare for placeholder patterns
+          # Note: This is a simple filter for SINGLE-LINE HTML comments only (<!-- ... --> on same line)
+          # Multi-line HTML comment blocks are NOT filtered. This is acceptable because:
+          # - Multi-line comments containing placeholders are rare in practice
+          # - Template design decisions (like in CONTRIBUTING.md) use multi-line comments intentionally
+          # - Implementing a proper multi-line filter while preserving line numbers is complex
+          # If you need to exclude a multi-line comment, restructure as single-line or move content
           filter_md_html_comments() {
             grep -v "<!--.*-->" || true
           }
@@ -310,7 +315,7 @@ jobs:
               echo "✅ No @OWNER placeholder in CODEOWNERS"
             fi
           else
-            echo "ℹ️  CODEOWNERS file not found (optional)"
+            echo "⚠️  CODEOWNERS file not found (optional)"
           fi
 
           echo ""
