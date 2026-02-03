@@ -203,8 +203,8 @@ jobs:
           echo "=== [4] Checking CODE_OF_CONDUCT.md for placeholder markers ==="
           COC_FILE="CODE_OF_CONDUCT.md"
           if [ -f "$COC_FILE" ]; then
-            # Check for "[INSERT CONTACT METHOD]" placeholder
-            contact_matches=$(grep -n "\[INSERT CONTACT METHOD\]" "$COC_FILE" 2>/dev/null || true)
+            # Check for "[INSERT CONTACT METHOD]" placeholder, excluding HTML comments
+            contact_matches=$(grep -n "\[INSERT CONTACT METHOD\]" "$COC_FILE" 2>/dev/null | filter_md_html_comments || true)
             if [ -n "$contact_matches" ]; then
               echo "❌ Found placeholder in $COC_FILE:"
               echo "$contact_matches"
