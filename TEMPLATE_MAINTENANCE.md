@@ -42,7 +42,9 @@ To keep the template current and functional, maintainers **SHOULD** review templ
 
 ## Updating Pre-commit Hook Versions
 
-Pre-commit hooks **SHOULD** be kept up-to-date for security and compatibility:
+Pre-commit hooks **SHOULD** be kept up-to-date for security and compatibility.
+
+### Quick Update
 
 ```bash
 # Check for and apply updates to pre-commit hooks
@@ -53,6 +55,81 @@ pre-commit run --all-files
 ```
 
 **Frequency:** Monthly or when security advisories are published for hook dependencies.
+
+### Tools to Track
+
+The following pre-commit hooks are configured in this template. Check their repositories for the latest releases:
+
+| Tool | Repository | Purpose |
+| --- | --- | --- |
+| pre-commit-hooks | <https://github.com/pre-commit/pre-commit-hooks> | General file checks (trailing whitespace, YAML validation, etc.) |
+| Black | <https://github.com/psf/black> | Python code formatting |
+| Ruff | <https://github.com/astral-sh/ruff-pre-commit> | Python linting and formatting |
+| markdownlint-cli2 | <https://github.com/DavidAnson/markdownlint-cli2> | Markdown linting |
+| pre-commit-terraform | <https://github.com/antonbabenko/pre-commit-terraform> | Terraform formatting, validation, and linting |
+
+### Files Requiring Manual Updates
+
+After running `pre-commit autoupdate`, manually update version references in documentation files. The `pre-commit autoupdate` command only updates `.pre-commit-config.yaml`—version references in documentation examples require manual updates.
+
+#### Black (Python formatter)
+
+- `.pre-commit-config.yaml` (updated by `pre-commit autoupdate`)
+- `OPTIONAL_CONFIGURATIONS.md` (Python pre-commit examples)
+- `GETTING_STARTED_NEW_REPO.md` (commented example in pre-commit config)
+- `GETTING_STARTED_EXISTING_REPO.md` (Python pre-commit examples)
+
+#### Ruff (Python linter)
+
+- `.pre-commit-config.yaml` (updated by `pre-commit autoupdate`)
+- `OPTIONAL_CONFIGURATIONS.md` (Python pre-commit examples)
+- `GETTING_STARTED_NEW_REPO.md` (commented example in pre-commit config)
+- `GETTING_STARTED_EXISTING_REPO.md` (Python pre-commit examples)
+
+#### pre-commit-terraform (Terraform hooks)
+
+- `.pre-commit-config.yaml` (updated by `pre-commit autoupdate`)
+- `.github/instructions/terraform.instructions.md` (pre-commit configuration examples)
+- `docs/terraform/TERRAFORM_LINTING_GUIDE.md` (pre-commit configuration examples)
+- `docs/terraform/TERRAFORM_COPILOT_INSTRUCTIONS_GUIDE.md` (pre-commit configuration examples)
+- `docs/terraform/TERRAFORM_TESTING_GUIDE.md` (pre-commit configuration examples)
+
+#### Other Hooks (no documentation references)
+
+The following hooks are only referenced in `.pre-commit-config.yaml` and do not require manual documentation updates:
+
+- pre-commit-hooks
+- markdownlint-cli2
+
+### Verification
+
+After updating versions, use these commands to search for potentially stale version references:
+
+```bash
+# Check for Black version references (update the version number as appropriate)
+grep -rn "rev:.*26\.1\.0" --include="*.md" --include="*.yaml" .
+
+# Check for Ruff version references (update the version number as appropriate)
+grep -rn "rev:.*v0\.14\.14" --include="*.md" --include="*.yaml" .
+
+# Check for pre-commit-terraform version references (update the version number as appropriate)
+grep -rn "rev:.*v1\.105\.0" --include="*.md" --include="*.yaml" .
+
+# Generic search for any rev: patterns with version numbers
+grep -rn "rev:.*v\?[0-9]\+\.[0-9]\+\.[0-9]\+" --include="*.md" --include="*.yaml" .
+```
+
+### Breaking Change Considerations
+
+When updating to new major versions, check the release notes for breaking changes:
+
+- **pre-commit-hooks:** May remove deprecated hooks or change Python version requirements. Review [pre-commit-hooks releases](https://github.com/pre-commit/pre-commit-hooks/releases).
+
+- **Black:** Major releases may introduce style changes that reformat existing code differently. Review [Black changelog](https://github.com/psf/black/blob/main/CHANGES.md). Consider running `black --check` on a representative codebase before upgrading.
+
+- **Ruff:** Frequently adds new rules that may flag previously-passing code. Review [Ruff changelog](https://github.com/astral-sh/ruff/blob/main/CHANGELOG.md). New rules are typically disabled by default, but rule behavior changes can affect existing configurations.
+
+- **pre-commit-terraform:** May change hook IDs, arguments, or tool dependencies. Review [pre-commit-terraform releases](https://github.com/antonbabenko/pre-commit-terraform/releases). Ensure any referenced external tools (terraform, tflint, etc.) remain compatible.
 
 ---
 
