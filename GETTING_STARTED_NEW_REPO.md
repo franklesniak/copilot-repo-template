@@ -620,7 +620,16 @@ sed -i.bak "s|OWNER/REPO|$OWNER/$REPO|g" CONTRIBUTING.md && rm CONTRIBUTING.md.b
 sed -i.bak "s|@OWNER|@$OWNER|g" .github/CODEOWNERS && rm .github/CODEOWNERS.bak
 
 # Replace contact method placeholder in CODE_OF_CONDUCT.md (uses security email; change if different contact preferred)
-sed -i.bak 's|\[INSERT CONTACT METHOD\]|'"$SECURITY_EMAIL"'|g' CODE_OF_CONDUCT.md && rm CODE_OF_CONDUCT.md.bak
+# Note: Uses Python to safely handle special characters in the contact method
+python3 -c "
+import sys
+from pathlib import Path
+contact = sys.argv[1]
+path = Path('CODE_OF_CONDUCT.md')
+text = path.read_text(encoding='utf-8')
+text = text.replace('[INSERT CONTACT METHOD]', contact)
+path.write_text(text, encoding='utf-8')
+" "$SECURITY_EMAIL"
 
 # Replace security email placeholder in SECURITY.md
 sed -i.bak 's|\[security contact email\]|'"$SECURITY_EMAIL"'|g' SECURITY.md && rm SECURITY.md.bak
