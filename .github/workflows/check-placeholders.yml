@@ -87,8 +87,11 @@ jobs:
           #   5. Issue templates (.yml/.yaml) with OWNER/REPO in lines containing "http"
           #   6. Recursive scan of .github/ for https://github.com/OWNER/REPO links
           #      (excluding this workflow file itself)
-          #   7. README.md containing OWNER/REPO placeholders
-          #   8. @OWNER placeholder in .github/CODEOWNERS
+          #   7. @OWNER placeholder in .github/CODEOWNERS
+          #
+          # WARNING ONLY (no exit 1):
+          #   - README.md containing OWNER/REPO in link contexts (emits ::warning but
+          #     does not fail CI, as README may contain legitimate examples)
           #
           # FILE-TYPE-AWARE COMMENT FILTERING:
           #   - YAML files: Lines starting with # are comments (ignored)
@@ -273,7 +276,7 @@ jobs:
           echo "✅ .github/ directory scan complete"
 
           echo ""
-          echo "=== [7] Optional: Checking README.md for OWNER/REPO in links ==="
+          echo "=== [Warning] Optional: Checking README.md for OWNER/REPO in links ==="
           README_FILE="README.md"
           if [ -f "$README_FILE" ]; then
             # Only fail if OWNER/REPO appears in active link contexts (contains http or markdown link syntax)
@@ -289,7 +292,7 @@ jobs:
           fi
 
           echo ""
-          echo "=== [8] Checking CODEOWNERS for @OWNER placeholder ==="
+          echo "=== [7] Checking CODEOWNERS for @OWNER placeholder ==="
           CODEOWNERS_FILE=".github/CODEOWNERS"
           if [ -f "$CODEOWNERS_FILE" ]; then
             # Check for @OWNER placeholder (the pattern template adopters must replace)
