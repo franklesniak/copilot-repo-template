@@ -121,7 +121,7 @@ jobs:
           # Rationale: A proper multi-line filter while preserving grep -n line numbers is complex,
           # and multi-line comments containing placeholders are rare in practice.
           filter_single_line_html_comments() {
-            grep -v "^[0-9]*:[[:space:]]*<!--.*-->" || true
+            grep -v "^[0-9]*:[[:space:]]*<!--.*-->[[:space:]]*$" || true
           }
 
           echo "=== [1] Checking config.yml (contact_links URLs) ==="
