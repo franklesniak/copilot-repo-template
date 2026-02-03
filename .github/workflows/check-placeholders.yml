@@ -83,10 +83,11 @@ jobs:
           #   1. Active contact_links URLs in config.yml containing OWNER/REPO
           #   2. OWNER/REPO occurrences in CONTRIBUTING.md (clone instructions, issue links)
           #   3. SECURITY.md containing "[security contact email]" or "TODO: Replace"
-          #   4. Issue templates (.yml/.yaml) with OWNER/REPO in lines containing "http"
-          #   5. Recursive scan of .github/ for https://github.com/OWNER/REPO links
+          #   4. CODE_OF_CONDUCT.md containing "[INSERT CONTACT METHOD]"
+          #   5. Issue templates (.yml/.yaml) with OWNER/REPO in lines containing "http"
+          #   6. Recursive scan of .github/ for https://github.com/OWNER/REPO links
           #      (excluding this workflow file itself)
-          #   6. @OWNER placeholder in .github/CODEOWNERS
+          #   7. @OWNER placeholder in .github/CODEOWNERS
           #
           # FILE-TYPE-AWARE COMMENT FILTERING:
           #   - YAML files: Lines starting with # are comments (ignored)
@@ -192,7 +193,25 @@ jobs:
           fi
 
           echo ""
-          echo "=== [4] Scanning issue templates for OWNER/REPO in URLs ==="
+          echo "=== [4] Checking CODE_OF_CONDUCT.md for placeholder markers ==="
+          COC_FILE="CODE_OF_CONDUCT.md"
+          if [ -f "$COC_FILE" ]; then
+            # Check for "[INSERT CONTACT METHOD]" placeholder
+            contact_matches=$(grep -n "\[INSERT CONTACT METHOD\]" "$COC_FILE" 2>/dev/null || true)
+            if [ -n "$contact_matches" ]; then
+              echo "❌ Found placeholder in $COC_FILE:"
+              echo "$contact_matches"
+              echo "::error file=$COC_FILE::Found [INSERT CONTACT METHOD] placeholder. Replace with your actual contact method."
+              FOUND_PLACEHOLDERS=true
+            else
+              echo "✅ No placeholder markers in CODE_OF_CONDUCT.md"
+            fi
+          else
+            echo "⚠️  CODE_OF_CONDUCT.md not found (optional)"
+          fi
+
+          echo ""
+          echo "=== [5] Scanning issue templates for OWNER/REPO in URLs ==="
           # Use find to avoid issues with unmatched glob patterns
           # Check both .yml and .yaml extensions
           while IFS= read -r -d '' file; do
@@ -217,7 +236,7 @@ jobs:
           echo "✅ Issue template URL check complete"
 
           echo ""
-          echo "=== [5] Scanning .github/ directory for OWNER/REPO URLs ==="
+          echo "=== [6] Scanning .github/ directory for OWNER/REPO URLs ==="
           # Recursive scan of .github/ for https://github.com/OWNER/REPO links
           # This provides comprehensive coverage and catches any OWNER/REPO URLs
           # that might be added to new files in the future.
@@ -253,7 +272,7 @@ jobs:
           echo "✅ .github/ directory scan complete"
 
           echo ""
-          echo "=== [6] Optional: Checking README.md for OWNER/REPO in links ==="
+          echo "=== [7] Optional: Checking README.md for OWNER/REPO in links ==="
           README_FILE="README.md"
           if [ -f "$README_FILE" ]; then
             # Only fail if OWNER/REPO appears in active link contexts (contains http or markdown link syntax)
@@ -269,7 +288,7 @@ jobs:
           fi
 
           echo ""
-          echo "=== [7] Checking CODEOWNERS for @OWNER placeholder ==="
+          echo "=== [8] Checking CODEOWNERS for @OWNER placeholder ==="
           CODEOWNERS_FILE=".github/CODEOWNERS"
           if [ -f "$CODEOWNERS_FILE" ]; then
             # Check for @OWNER placeholder (the pattern template adopters must replace)
