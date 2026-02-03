@@ -615,6 +615,7 @@ The default scope section covers community spaces and official representation. C
 ## Scope
 
 This Code of Conduct applies within:
+
 - All repository spaces (issues, pull requests, discussions)
 - Project communication channels (Slack, Discord, mailing lists)
 - Project events (meetups, conferences, online gatherings)
