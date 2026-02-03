@@ -129,7 +129,7 @@ jobs:
           if [ -f "$CONFIG_FILE" ]; then
             # Check for OWNER/REPO in URL lines (lines containing 'url:')
             # Exclude commented-out lines (YAML comments start with #)
-            matches=$(grep -n "url:.*OWNER/REPO" "$CONFIG_FILE" | filter_yaml_comments)
+            matches=$(grep -n "url:.*OWNER/REPO" "$CONFIG_FILE" 2>/dev/null | filter_yaml_comments || true)
             if [ -n "$matches" ]; then
               echo "❌ Found in $CONFIG_FILE:"
               echo "$matches"
@@ -148,7 +148,7 @@ jobs:
           if [ -f "$CONTRIB_FILE" ]; then
             # Check for OWNER/REPO, excluding HTML comments (<!-- ... -->)
             # Note: In Markdown, # is a heading, NOT a comment, so we don't filter it
-            matches=$(grep -n "OWNER/REPO" "$CONTRIB_FILE" | filter_single_line_html_comments)
+            matches=$(grep -n "OWNER/REPO" "$CONTRIB_FILE" 2>/dev/null | filter_single_line_html_comments || true)
             if [ -n "$matches" ]; then
               echo "❌ Found in $CONTRIB_FILE:"
               echo "$matches"
