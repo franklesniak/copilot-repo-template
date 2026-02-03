@@ -552,6 +552,7 @@ This template uses placeholder values that you **must** replace with your actual
 | --- | --- |
 | `.github/ISSUE_TEMPLATE/config.yml` | `OWNER/REPO` (appears in URLs twice) |
 | `.github/CODEOWNERS` | `@OWNER` (appears four times) |
+| `CODE_OF_CONDUCT.md` | `[INSERT CONTACT METHOD]` (enforcement contact for code of conduct violations) |
 | `CONTRIBUTING.md` | `OWNER/REPO` (appears in clone URL and issues URL) |
 | `LICENSE` | `Frank Lesniak` (copyright holder name — replace with your name or organization) |
 | `SECURITY.md` | `[security contact email]` |
@@ -564,6 +565,7 @@ This template uses placeholder values that you **must** replace with your actual
 - **`OWNER/REPO`:** Combined format used in GitHub URLs (e.g., `franklesniak/my-new-project`)
 - **`@OWNER`:** GitHub username with @ prefix for CODEOWNERS file (e.g., `@franklesniak`)
 - **`Frank Lesniak`:** The template author's name in the LICENSE file. Replace with your name or organization name (the copyright holder for your project).
+- **`[INSERT CONTACT METHOD]`:** A contact method for reporting code of conduct violations (e.g., an email address or link to a reporting form)
 - **`[security contact email]`:** An email address for receiving security vulnerability reports
 - **`window.title` in `.vscode/settings.json`:** The VS Code window title that appears in the title bar when working in this repository. Replace the instruction text with your repository name for easy identification.
 
@@ -580,50 +582,90 @@ $Repo = "your-repo-name"
 $SecurityEmail = "security@example.com"
 
 # Replace OWNER/REPO in config.yml
-(Get-Content ".github/ISSUE_TEMPLATE/config.yml") -replace 'OWNER/REPO', "$Owner/$Repo" | Set-Content ".github/ISSUE_TEMPLATE/config.yml"
+(Get-Content ".github/ISSUE_TEMPLATE/config.yml" -Raw -Encoding UTF8).Replace('OWNER/REPO', "$Owner/$Repo") | Set-Content ".github/ISSUE_TEMPLATE/config.yml" -Encoding UTF8
 
 # Replace OWNER/REPO in CONTRIBUTING.md
-(Get-Content "CONTRIBUTING.md") -replace 'OWNER/REPO', "$Owner/$Repo" | Set-Content "CONTRIBUTING.md"
+(Get-Content "CONTRIBUTING.md" -Raw -Encoding UTF8).Replace('OWNER/REPO', "$Owner/$Repo") | Set-Content "CONTRIBUTING.md" -Encoding UTF8
 
 # Replace @OWNER in CODEOWNERS (note the @ prefix)
-(Get-Content ".github/CODEOWNERS") -replace '@OWNER', "@$Owner" | Set-Content ".github/CODEOWNERS"
+(Get-Content ".github/CODEOWNERS" -Raw -Encoding UTF8).Replace('@OWNER', "@$Owner") | Set-Content ".github/CODEOWNERS" -Encoding UTF8
+
+# Replace contact method placeholder in CODE_OF_CONDUCT.md (uses security email; change if different contact preferred)
+(Get-Content "CODE_OF_CONDUCT.md" -Raw -Encoding UTF8).Replace('[INSERT CONTACT METHOD]', $SecurityEmail) | Set-Content "CODE_OF_CONDUCT.md" -Encoding UTF8
 
 # Replace security email placeholder in SECURITY.md
-(Get-Content "SECURITY.md") -replace '\[security contact email\]', $SecurityEmail | Set-Content "SECURITY.md"
+(Get-Content "SECURITY.md" -Raw -Encoding UTF8).Replace('[security contact email]', $SecurityEmail) | Set-Content "SECURITY.md" -Encoding UTF8
 
 # Replace window.title placeholder in VS Code settings
-(Get-Content ".vscode\settings.json") -replace 'Go to \.vscode/settings\.json and make this the name of the repo', $Repo | Set-Content ".vscode\settings.json"
+(Get-Content ".vscode\settings.json" -Raw -Encoding UTF8).Replace('Go to .vscode/settings.json and make this the name of the repo', $Repo) | Set-Content ".vscode\settings.json" -Encoding UTF8
 ```
 
 #### macOS/Linux/FreeBSD (Bash)
 
-Open Terminal in your repository directory and run these commands. Replace the placeholder values with your actual information:
+Open Terminal in your repository directory and run the commands below. Replace the placeholder values with your actual information.
+
+> **Note:** The `LICENSE` file contains the template author's name (`Frank Lesniak`) in the copyright notice. This is not a pattern-based placeholder, so you'll need to manually update it with your own name or organization. Optionally update the copyright year to the current year or your project's start year.
+
+**Step 1: Define your values** (all platforms):
 
 ```bash
 # Define your values (replace these with your actual username/org, repo name, and email)
 OWNER="your-username"
 REPO="your-repo-name"
 SECURITY_EMAIL="security@example.com"
-
-# Replace OWNER/REPO in config.yml
-sed -i.bak "s|OWNER/REPO|$OWNER/$REPO|g" .github/ISSUE_TEMPLATE/config.yml && rm .github/ISSUE_TEMPLATE/config.yml.bak
-
-# Replace OWNER/REPO in CONTRIBUTING.md
-sed -i.bak "s|OWNER/REPO|$OWNER/$REPO|g" CONTRIBUTING.md && rm CONTRIBUTING.md.bak
-
-# Replace @OWNER in CODEOWNERS
-sed -i.bak "s|@OWNER|@$OWNER|g" .github/CODEOWNERS && rm .github/CODEOWNERS.bak
-
-# Replace security email placeholder in SECURITY.md
-sed -i.bak 's|\[security contact email\]|'"$SECURITY_EMAIL"'|g' SECURITY.md && rm SECURITY.md.bak
-
-# Replace window.title placeholder in VS Code settings
-sed -i.bak 's|Go to \.vscode/settings\.json and make this the name of the repo|'"$REPO"'|g' .vscode/settings.json && rm .vscode/settings.json.bak
 ```
 
-> **Note for macOS users:** The `sed -i.bak` syntax creates a backup file before modifying. The `&& rm *.bak` part removes the backup. If you're using GNU sed (Linux), you can use `sed -i` without the `.bak` extension.
->
-> **Note:** The `LICENSE` file contains the template author's name (`Frank Lesniak`) in the copyright notice. This is not a pattern-based placeholder, so you'll need to manually update it with your own name or organization. Optionally update the copyright year to the current year or your project's start year.
+**Step 2: Run the replacement commands** for your platform:
+
+##### Linux (GNU sed)
+
+```bash
+# Replace OWNER/REPO in config.yml
+sed -i "s|OWNER/REPO|$OWNER/$REPO|g" .github/ISSUE_TEMPLATE/config.yml
+
+# Replace OWNER/REPO in CONTRIBUTING.md
+sed -i "s|OWNER/REPO|$OWNER/$REPO|g" CONTRIBUTING.md
+
+# Replace @OWNER in CODEOWNERS
+sed -i "s|@OWNER|@$OWNER|g" .github/CODEOWNERS
+
+# Replace contact method placeholder in CODE_OF_CONDUCT.md
+sed -i "s|\[INSERT CONTACT METHOD\]|$SECURITY_EMAIL|g" CODE_OF_CONDUCT.md
+
+# Replace security email placeholder in SECURITY.md
+sed -i "s|\[security contact email\]|$SECURITY_EMAIL|g" SECURITY.md
+
+# Replace window.title placeholder in VS Code settings
+sed -i 's|Go to \.vscode/settings\.json and make this the name of the repo|'"$REPO"'|g' .vscode/settings.json
+```
+
+##### macOS / FreeBSD (BSD sed)
+
+```bash
+# Replace OWNER/REPO in config.yml
+sed -i '' "s|OWNER/REPO|$OWNER/$REPO|g" .github/ISSUE_TEMPLATE/config.yml
+
+# Replace OWNER/REPO in CONTRIBUTING.md
+sed -i '' "s|OWNER/REPO|$OWNER/$REPO|g" CONTRIBUTING.md
+
+# Replace @OWNER in CODEOWNERS
+sed -i '' "s|@OWNER|@$OWNER|g" .github/CODEOWNERS
+
+# Replace contact method placeholder in CODE_OF_CONDUCT.md
+sed -i '' "s|\[INSERT CONTACT METHOD\]|$SECURITY_EMAIL|g" CODE_OF_CONDUCT.md
+
+# Replace security email placeholder in SECURITY.md
+sed -i '' "s|\[security contact email\]|$SECURITY_EMAIL|g" SECURITY.md
+
+# Replace window.title placeholder in VS Code settings
+sed -i '' 's|Go to \.vscode/settings\.json and make this the name of the repo|'"$REPO"'|g' .vscode/settings.json
+```
+
+##### Windows (Git Bash or WSL)
+
+If using **Git Bash**, use the Linux (GNU sed) commands above. If using **WSL (Windows Subsystem for Linux)**, use the Linux commands. Alternatively, use the PowerShell commands in the previous section.
+
+> **Note on special characters:** If your email or contact method contains special `sed` characters (`&`, `\`, or `|`), escape them with a backslash or use the PowerShell commands instead, which handle special characters more reliably.
 
 ### Option B: Manual Replacement
 
@@ -637,19 +679,23 @@ If you prefer, you can open each file in a text editor and manually find and rep
    - Find: `@OWNER`
    - Replace with: `@your-username` (appears four times)
 
-3. **`CONTRIBUTING.md`:**
+3. **`CODE_OF_CONDUCT.md`:**
+   - Find: `[INSERT CONTACT METHOD]`
+   - Replace with: your contact method for code of conduct reports (e.g., email address)
+
+4. **`CONTRIBUTING.md`:**
    - Find: `OWNER/REPO`
    - Replace with: `your-username/your-repo-name` (appears in clone URL and issues link)
 
-4. **`SECURITY.md`:**
+5. **`SECURITY.md`:**
    - Find: `[security contact email]`
    - Replace with: your actual security contact email address
 
-5. **`.vscode/settings.json`:**
+6. **`.vscode/settings.json`:**
    - Find: `Go to .vscode/settings.json and make this the name of the repo`
    - Replace with: your repository name (e.g., `my-awesome-project`)
 
-6. **`LICENSE`:**
+7. **`LICENSE`:**
    - Find: `Frank Lesniak`
    - Replace with: your name or organization name (the copyright holder)
    - Optionally update the copyright year to the current year or your project's start year
