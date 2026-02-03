@@ -590,7 +590,7 @@ $SecurityEmail = "security@example.com"
 # Replace @OWNER in CODEOWNERS (note the @ prefix)
 (Get-Content ".github/CODEOWNERS") -replace '@OWNER', "@$Owner" | Set-Content ".github/CODEOWNERS"
 
-# Replace contact method placeholder in CODE_OF_CONDUCT.md
+# Replace contact method placeholder in CODE_OF_CONDUCT.md (uses security email; change if different contact preferred)
 (Get-Content "CODE_OF_CONDUCT.md") -replace '\[INSERT CONTACT METHOD\]', $SecurityEmail | Set-Content "CODE_OF_CONDUCT.md"
 
 # Replace security email placeholder in SECURITY.md
@@ -619,7 +619,7 @@ sed -i.bak "s|OWNER/REPO|$OWNER/$REPO|g" CONTRIBUTING.md && rm CONTRIBUTING.md.b
 # Replace @OWNER in CODEOWNERS
 sed -i.bak "s|@OWNER|@$OWNER|g" .github/CODEOWNERS && rm .github/CODEOWNERS.bak
 
-# Replace contact method placeholder in CODE_OF_CONDUCT.md
+# Replace contact method placeholder in CODE_OF_CONDUCT.md (uses security email; change if different contact preferred)
 sed -i.bak 's|\[INSERT CONTACT METHOD\]|'"$SECURITY_EMAIL"'|g' CODE_OF_CONDUCT.md && rm CODE_OF_CONDUCT.md.bak
 
 # Replace security email placeholder in SECURITY.md
