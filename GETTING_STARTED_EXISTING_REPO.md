@@ -27,6 +27,7 @@ This guide walks you through adopting features from `franklesniak/copilot-repo-t
   - [Dependabot](#dependabot)
   - [Security Policy](#security-policy)
   - [LICENSE File](#license-file)
+  - [Code of Conduct](#code-of-conduct)
   - [VS Code Settings](#vs-code-settings)
 - [Adopting Issue Templates](#adopting-issue-templates)
   - [Full Adoption](#full-adoption-recommended-if-you-have-none)
@@ -454,6 +455,24 @@ The template includes an MIT License file with the template author's name as the
 
 3. **If you want a different license type:**
    - See the [License Customization](OPTIONAL_CONFIGURATIONS.md#license-customization) section in `OPTIONAL_CONFIGURATIONS.md` for guidance on Apache 2.0, proprietary licenses, and updating all license references across your project
+
+### Code of Conduct
+
+The code of conduct defines community standards and expectations for behavior.
+
+**Location:** `CODE_OF_CONDUCT.md` (repository root)
+
+**Steps:**
+
+1. **If you don't have a CODE_OF_CONDUCT.md file:**
+   - Copy `CODE_OF_CONDUCT.md` from the template to your repository root
+   - Replace `[INSERT CONTACT METHOD]` with an email address, form URL, or other contact method for reporting violations
+
+2. **If you already have a CODE_OF_CONDUCT.md file:**
+   - Review the template's structure for ideas
+   - Consider adding sections you may be missing (enforcement ladder, scope definition)
+
+> **Note:** Small personal projects or projects that don't accept external contributions may choose to delete this file entirely. The placeholder check workflow treats the file as optional.
 
 ### VS Code Settings
 
