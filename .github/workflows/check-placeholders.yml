@@ -326,6 +326,7 @@ jobs:
             echo "Please replace placeholders with your actual values:"
             echo "  - OWNER/REPO: Replace with your organization/repository name"
             echo "  - @OWNER: Replace with your GitHub username or team"
+            echo "  - [INSERT CONTACT METHOD]: Replace with your Code of Conduct contact info"
             echo "See the Template Setup Checklist in README.md for details."
             exit 1
           else
