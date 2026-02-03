@@ -87,7 +87,8 @@ jobs:
           #   5. Issue templates (.yml/.yaml) with OWNER/REPO in lines containing "http"
           #   6. Recursive scan of .github/ for https://github.com/OWNER/REPO links
           #      (excluding this workflow file itself)
-          #   7. @OWNER placeholder in .github/CODEOWNERS
+          #   7. README.md containing OWNER/REPO placeholders
+          #   8. @OWNER placeholder in .github/CODEOWNERS
           #
           # FILE-TYPE-AWARE COMMENT FILTERING:
           #   - YAML files: Lines starting with # are comments (ignored)
