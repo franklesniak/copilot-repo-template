@@ -99,7 +99,7 @@ jobs:
           # FILE-TYPE-AWARE COMMENT FILTERING:
           #   - YAML files: Lines starting with # are comments (ignored)
           #   - Markdown files: Single-line <!-- ... --> HTML comments are ignored
-          #     (multi-line HTML comments are NOT filtered; see filter_md_html_comments)
+          #     (multi-line HTML comments are NOT filtered; see filter_single_line_html_comments)
           #   - Markdown #: These are HEADINGS, not comments (checked!)
           #   - CODEOWNERS: Lines starting with # are comments (ignored)
           #
@@ -114,14 +114,12 @@ jobs:
             grep -v "^[0-9]*:[[:space:]]*#" || true
           }
 
-          # Helper function to filter lines that are inside Markdown HTML comments
-          # Note: This is a simple filter for SINGLE-LINE HTML comments only (<!-- ... --> on same line)
-          # Multi-line HTML comment blocks are NOT filtered. This is acceptable because:
-          # - Multi-line comments containing placeholders are rare in practice
-          # - Template design decisions (like in CONTRIBUTING.md) use multi-line comments intentionally
-          # - Implementing a proper multi-line filter while preserving line numbers is complex
-          # If you need to exclude a multi-line comment, restructure as single-line or move content
-          filter_md_html_comments() {
+          # Helper function to remove lines containing single-line HTML comments (<!-- ... --> on same line)
+          # This drops any grep output line that matches the single-line HTML comment pattern.
+          # Multi-line HTML comment blocks (where <!-- and --> are on different lines) are NOT handled.
+          # Rationale: A proper multi-line filter while preserving grep -n line numbers is complex,
+          # and multi-line comments containing placeholders are rare in practice.
+          filter_single_line_html_comments() {
             grep -v "<!--.*-->" || true
           }
 
@@ -149,7 +147,7 @@ jobs:
           if [ -f "$CONTRIB_FILE" ]; then
             # Check for OWNER/REPO, excluding HTML comments (<!-- ... -->)
             # Note: In Markdown, # is a heading, NOT a comment, so we don't filter it
-            matches=$(grep -n "OWNER/REPO" "$CONTRIB_FILE" | filter_md_html_comments)
+            matches=$(grep -n "OWNER/REPO" "$CONTRIB_FILE" | filter_single_line_html_comments)
             if [ -n "$matches" ]; then
               echo "❌ Found in $CONTRIB_FILE:"
               echo "$matches"
@@ -209,7 +207,7 @@ jobs:
           COC_FILE="CODE_OF_CONDUCT.md"
           if [ -f "$COC_FILE" ]; then
             # Check for "[INSERT CONTACT METHOD]" placeholder, excluding HTML comments
-            contact_matches=$(grep -n "\[INSERT CONTACT METHOD\]" "$COC_FILE" 2>/dev/null | filter_md_html_comments || true)
+            contact_matches=$(grep -n "\[INSERT CONTACT METHOD\]" "$COC_FILE" 2>/dev/null | filter_single_line_html_comments || true)
             if [ -n "$contact_matches" ]; then
               echo "❌ Found placeholder in $COC_FILE:"
               echo "$contact_matches"
@@ -267,7 +265,7 @@ jobs:
                 matches=$(grep -n "https://github.com/OWNER/REPO" "$file" 2>/dev/null | filter_yaml_comments || true)
                 ;;
               *.md)
-                matches=$(grep -n "https://github.com/OWNER/REPO" "$file" 2>/dev/null | filter_md_html_comments || true)
+                matches=$(grep -n "https://github.com/OWNER/REPO" "$file" 2>/dev/null | filter_single_line_html_comments || true)
                 ;;
               *)
                 matches=$(grep -n "https://github.com/OWNER/REPO" "$file" 2>/dev/null || true)
@@ -288,7 +286,7 @@ jobs:
           README_FILE="README.md"
           if [ -f "$README_FILE" ]; then
             # Only fail if OWNER/REPO appears in active link contexts (contains http or markdown link syntax)
-            matches=$(grep -n "OWNER/REPO" "$README_FILE" | filter_md_html_comments | grep -E "(http|\]\()" || true)
+            matches=$(grep -n "OWNER/REPO" "$README_FILE" | filter_single_line_html_comments | grep -E "(http|\]\()" || true)
             if [ -n "$matches" ]; then
               echo "⚠️  Found OWNER/REPO in link context in $README_FILE:"
               echo "$matches"
