@@ -602,45 +602,70 @@ $SecurityEmail = "security@example.com"
 
 #### macOS/Linux/FreeBSD (Bash)
 
-Open Terminal in your repository directory and run these commands. Replace the placeholder values with your actual information:
+Open Terminal in your repository directory and run the commands below. Replace the placeholder values with your actual information.
+
+> **Note:** The `LICENSE` file contains the template author's name (`Frank Lesniak`) in the copyright notice. This is not a pattern-based placeholder, so you'll need to manually update it with your own name or organization. Optionally update the copyright year to the current year or your project's start year.
+
+**Step 1: Define your values** (all platforms):
 
 ```bash
 # Define your values (replace these with your actual username/org, repo name, and email)
 OWNER="your-username"
 REPO="your-repo-name"
 SECURITY_EMAIL="security@example.com"
-
-# Replace OWNER/REPO in config.yml
-sed -i.bak "s|OWNER/REPO|$OWNER/$REPO|g" .github/ISSUE_TEMPLATE/config.yml && rm .github/ISSUE_TEMPLATE/config.yml.bak
-
-# Replace OWNER/REPO in CONTRIBUTING.md
-sed -i.bak "s|OWNER/REPO|$OWNER/$REPO|g" CONTRIBUTING.md && rm CONTRIBUTING.md.bak
-
-# Replace @OWNER in CODEOWNERS
-sed -i.bak "s|@OWNER|@$OWNER|g" .github/CODEOWNERS && rm .github/CODEOWNERS.bak
-
-# Replace contact method placeholder in CODE_OF_CONDUCT.md (uses security email; change if different contact preferred)
-# Note: Uses Python to safely handle special characters in the contact method
-python3 -c "
-import sys
-from pathlib import Path
-contact = sys.argv[1]
-path = Path('CODE_OF_CONDUCT.md')
-text = path.read_text(encoding='utf-8')
-text = text.replace('[INSERT CONTACT METHOD]', contact)
-path.write_text(text, encoding='utf-8')
-" "$SECURITY_EMAIL"
-
-# Replace security email placeholder in SECURITY.md
-sed -i.bak 's|\[security contact email\]|'"$SECURITY_EMAIL"'|g' SECURITY.md && rm SECURITY.md.bak
-
-# Replace window.title placeholder in VS Code settings
-sed -i.bak 's|Go to \.vscode/settings\.json and make this the name of the repo|'"$REPO"'|g' .vscode/settings.json && rm .vscode/settings.json.bak
 ```
 
-> **Note for macOS users:** The `sed -i.bak` syntax creates a backup file before modifying. The `&& rm *.bak` part removes the backup. If you're using GNU sed (Linux), you can use `sed -i` without the `.bak` extension.
->
-> **Note:** The `LICENSE` file contains the template author's name (`Frank Lesniak`) in the copyright notice. This is not a pattern-based placeholder, so you'll need to manually update it with your own name or organization. Optionally update the copyright year to the current year or your project's start year.
+**Step 2: Run the replacement commands** for your platform:
+
+##### Linux (GNU sed)
+
+```bash
+# Replace OWNER/REPO in config.yml
+sed -i "s|OWNER/REPO|$OWNER/$REPO|g" .github/ISSUE_TEMPLATE/config.yml
+
+# Replace OWNER/REPO in CONTRIBUTING.md
+sed -i "s|OWNER/REPO|$OWNER/$REPO|g" CONTRIBUTING.md
+
+# Replace @OWNER in CODEOWNERS
+sed -i "s|@OWNER|@$OWNER|g" .github/CODEOWNERS
+
+# Replace contact method placeholder in CODE_OF_CONDUCT.md
+sed -i "s|\[INSERT CONTACT METHOD\]|$SECURITY_EMAIL|g" CODE_OF_CONDUCT.md
+
+# Replace security email placeholder in SECURITY.md
+sed -i "s|\[security contact email\]|$SECURITY_EMAIL|g" SECURITY.md
+
+# Replace window.title placeholder in VS Code settings
+sed -i 's|Go to \.vscode/settings\.json and make this the name of the repo|'"$REPO"'|g' .vscode/settings.json
+```
+
+##### macOS / FreeBSD (BSD sed)
+
+```bash
+# Replace OWNER/REPO in config.yml
+sed -i '' "s|OWNER/REPO|$OWNER/$REPO|g" .github/ISSUE_TEMPLATE/config.yml
+
+# Replace OWNER/REPO in CONTRIBUTING.md
+sed -i '' "s|OWNER/REPO|$OWNER/$REPO|g" CONTRIBUTING.md
+
+# Replace @OWNER in CODEOWNERS
+sed -i '' "s|@OWNER|@$OWNER|g" .github/CODEOWNERS
+
+# Replace contact method placeholder in CODE_OF_CONDUCT.md
+sed -i '' "s|\[INSERT CONTACT METHOD\]|$SECURITY_EMAIL|g" CODE_OF_CONDUCT.md
+
+# Replace security email placeholder in SECURITY.md
+sed -i '' "s|\[security contact email\]|$SECURITY_EMAIL|g" SECURITY.md
+
+# Replace window.title placeholder in VS Code settings
+sed -i '' 's|Go to \.vscode/settings\.json and make this the name of the repo|'"$REPO"'|g' .vscode/settings.json
+```
+
+##### Windows (Git Bash or WSL)
+
+If using **Git Bash**, use the Linux (GNU sed) commands above. If using **WSL (Windows Subsystem for Linux)**, use the Linux commands. Alternatively, use the PowerShell commands in the previous section.
+
+> **Note on special characters:** If your email or contact method contains special `sed` characters (`&`, `\`, or `|`), escape them with a backslash or use the PowerShell commands instead, which handle special characters more reliably.
 
 ### Option B: Manual Replacement
 
