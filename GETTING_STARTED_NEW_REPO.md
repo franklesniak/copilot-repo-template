@@ -591,7 +591,7 @@ $SecurityEmail = "security@example.com"
 (Get-Content ".github/CODEOWNERS") -replace '@OWNER', "@$Owner" | Set-Content ".github/CODEOWNERS" -Encoding UTF8
 
 # Replace contact method placeholder in CODE_OF_CONDUCT.md (uses security email; change if different contact preferred)
-(Get-Content "CODE_OF_CONDUCT.md") -replace '\[INSERT CONTACT METHOD\]', $SecurityEmail | Set-Content "CODE_OF_CONDUCT.md" -Encoding UTF8
+(Get-Content "CODE_OF_CONDUCT.md" -Raw).Replace('[INSERT CONTACT METHOD]', $SecurityEmail) | Set-Content "CODE_OF_CONDUCT.md" -Encoding UTF8
 
 # Replace security email placeholder in SECURITY.md
 (Get-Content "SECURITY.md") -replace '\[security contact email\]', $SecurityEmail | Set-Content "SECURITY.md" -Encoding UTF8
