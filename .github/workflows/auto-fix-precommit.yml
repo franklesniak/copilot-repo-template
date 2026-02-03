@@ -51,6 +51,14 @@ jobs:
         with:
           python-version: "3.x"
 
+      # Install Terraform for pre-commit-terraform hooks (terraform_fmt, etc.)
+      # This is required because the pre-commit config includes Terraform hooks
+      # that need the Terraform binary to be available.
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.6.0"
+
       - name: Install pre-commit
         run: pip install pre-commit
 
