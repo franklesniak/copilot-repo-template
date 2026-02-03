@@ -1544,7 +1544,7 @@ Consider adding test-related pre-commit hooks:
 ```yaml
 # .pre-commit-config.yaml additions (recommendations only)
 - repo: https://github.com/antonbabenko/pre-commit-terraform
-  rev: v1.96.3
+  rev: v1.105.0
   hooks:
     # Existing hooks...
     - id: terraform_validate
