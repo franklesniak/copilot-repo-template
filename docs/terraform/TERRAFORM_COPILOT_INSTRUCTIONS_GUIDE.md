@@ -405,7 +405,7 @@ terraform fmt -recursive
 
 \`\`\`yaml
 - repo: https://github.com/antonbabenko/pre-commit-terraform
-  rev: v1.96.0
+  rev: v1.105.0
   hooks:
     - id: terraform_fmt
 \`\`\`
@@ -1045,7 +1045,7 @@ Security scanning tools **SHOULD** be integrated into the development workflow.
 
 \`\`\`yaml
 - repo: https://github.com/antonbabenko/pre-commit-terraform
-  rev: v1.96.0
+  rev: v1.105.0
   hooks:
     - id: terraform_tfsec
     - id: terraform_checkov
@@ -1589,7 +1589,7 @@ The following pre-commit configuration is **RECOMMENDED** for Terraform:
 # .pre-commit-config.yaml (Terraform section)
 repos:
   - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.96.0  # Use latest version
+    rev: v1.105.0  # Use latest version
     hooks:
       # Required hooks
       - id: terraform_fmt
