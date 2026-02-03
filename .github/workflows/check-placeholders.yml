@@ -114,13 +114,14 @@ jobs:
             grep -v "^[0-9]*:[[:space:]]*#" || true
           }
 
-          # Helper function to remove lines containing single-line HTML comments (<!-- ... --> on same line)
-          # This drops any grep output line that matches the single-line HTML comment pattern.
+          # Helper function to filter lines where the content (after the grep -n line number prefix)
+          # is itself a single-line HTML comment. Lines that contain HTML comments *and* other content
+          # are preserved so that placeholders outside the comment are still detected.
           # Multi-line HTML comment blocks (where <!-- and --> are on different lines) are NOT handled.
           # Rationale: A proper multi-line filter while preserving grep -n line numbers is complex,
           # and multi-line comments containing placeholders are rare in practice.
           filter_single_line_html_comments() {
-            grep -v "<!--.*-->" || true
+            grep -v "^[0-9]*:[[:space:]]*<!--.*-->" || true
           }
 
           echo "=== [1] Checking config.yml (contact_links URLs) ==="

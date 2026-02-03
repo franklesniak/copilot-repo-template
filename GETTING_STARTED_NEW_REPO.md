@@ -582,22 +582,22 @@ $Repo = "your-repo-name"
 $SecurityEmail = "security@example.com"
 
 # Replace OWNER/REPO in config.yml
-(Get-Content ".github/ISSUE_TEMPLATE/config.yml") -replace 'OWNER/REPO', "$Owner/$Repo" | Set-Content ".github/ISSUE_TEMPLATE/config.yml"
+(Get-Content ".github/ISSUE_TEMPLATE/config.yml") -replace 'OWNER/REPO', "$Owner/$Repo" | Set-Content ".github/ISSUE_TEMPLATE/config.yml" -Encoding UTF8
 
 # Replace OWNER/REPO in CONTRIBUTING.md
-(Get-Content "CONTRIBUTING.md") -replace 'OWNER/REPO', "$Owner/$Repo" | Set-Content "CONTRIBUTING.md"
+(Get-Content "CONTRIBUTING.md") -replace 'OWNER/REPO', "$Owner/$Repo" | Set-Content "CONTRIBUTING.md" -Encoding UTF8
 
 # Replace @OWNER in CODEOWNERS (note the @ prefix)
-(Get-Content ".github/CODEOWNERS") -replace '@OWNER', "@$Owner" | Set-Content ".github/CODEOWNERS"
+(Get-Content ".github/CODEOWNERS") -replace '@OWNER', "@$Owner" | Set-Content ".github/CODEOWNERS" -Encoding UTF8
 
 # Replace contact method placeholder in CODE_OF_CONDUCT.md (uses security email; change if different contact preferred)
-(Get-Content "CODE_OF_CONDUCT.md") -replace '\[INSERT CONTACT METHOD\]', $SecurityEmail | Set-Content "CODE_OF_CONDUCT.md"
+(Get-Content "CODE_OF_CONDUCT.md") -replace '\[INSERT CONTACT METHOD\]', $SecurityEmail | Set-Content "CODE_OF_CONDUCT.md" -Encoding UTF8
 
 # Replace security email placeholder in SECURITY.md
-(Get-Content "SECURITY.md") -replace '\[security contact email\]', $SecurityEmail | Set-Content "SECURITY.md"
+(Get-Content "SECURITY.md") -replace '\[security contact email\]', $SecurityEmail | Set-Content "SECURITY.md" -Encoding UTF8
 
 # Replace window.title placeholder in VS Code settings
-(Get-Content ".vscode\settings.json") -replace 'Go to \.vscode/settings\.json and make this the name of the repo', $Repo | Set-Content ".vscode\settings.json"
+(Get-Content ".vscode\settings.json") -replace 'Go to \.vscode/settings\.json and make this the name of the repo', $Repo | Set-Content ".vscode\settings.json" -Encoding UTF8
 ```
 
 #### macOS/Linux/FreeBSD (Bash)
