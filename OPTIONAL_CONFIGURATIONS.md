@@ -875,13 +875,13 @@ The default line length is 100 characters for both Black and Ruff:
 
 ```yaml
 - repo: https://github.com/psf/black
-  rev: 25.12.0
+  rev: 26.1.0
   hooks:
     - id: black
       args: [--line-length=100]
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.14.11
+  rev: v0.14.14
   hooks:
     - id: ruff-check
       args: [--fix, --line-length=100]

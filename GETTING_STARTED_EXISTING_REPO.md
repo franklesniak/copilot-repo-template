@@ -1014,14 +1014,14 @@ If your project doesn't have a `.pre-commit-config.yaml`:
    ```yaml
    # Remove this section if not using Python
    - repo: https://github.com/psf/black
-     rev: 25.12.0
+     rev: 26.1.0
      hooks:
        - id: black
          args: [--line-length=100]
 
    # Remove this section if not using Python
    - repo: https://github.com/astral-sh/ruff-pre-commit
-     rev: v0.14.11
+     rev: v0.14.14
      hooks:
        - id: ruff-check
          args: [--fix, --line-length=100]
@@ -1122,7 +1122,7 @@ If your project already uses pre-commit:
 
 ```yaml
 - repo: https://github.com/psf/black
-  rev: 25.12.0
+  rev: 26.1.0
   hooks:
     - id: black
       args: [--line-length=88]  # Change from 100 to 88 (Black's default)

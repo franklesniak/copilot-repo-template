@@ -1078,7 +1078,7 @@ The repository's current configuration:
 ```yaml
 # Terraform formatting and validation (remove if not using Terraform)
 - repo: https://github.com/antonbabenko/pre-commit-terraform
-  rev: v1.96.3  # Pin to specific version
+  rev: v1.105.0  # Pin to specific version
   hooks:
     - id: terraform_fmt
     - id: terraform_validate
@@ -1548,7 +1548,7 @@ The repository follows best practice by pinning pre-commit hook versions:
 
 ```yaml
 - repo: https://github.com/antonbabenko/pre-commit-terraform
-  rev: v1.96.3  # Pinned version
+  rev: v1.105.0  # Pinned version
 ```
 
 **MUST** pin versions in pre-commit configuration for:
