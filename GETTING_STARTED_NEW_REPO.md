@@ -566,7 +566,7 @@ This template uses placeholder values that you **must** replace with your actual
 - **`OWNER/REPO`:** Combined format used in GitHub URLs (e.g., `franklesniak/my-new-project`)
 - **`@OWNER`:** GitHub username with @ prefix for CODEOWNERS file (e.g., `@franklesniak`)
 - **`Frank Lesniak`:** The template author's name in the LICENSE file. Replace with your name or organization name (the copyright holder for your project).
-- **`[INSERT CONTACT METHOD]`:** A method for reporting code of conduct violations (e.g., an email address, a form URL, or instructions to contact maintainers). This should be actively monitored and capable of receiving confidential reports.
+- **`[INSERT CONTACT METHOD]`:** A method for reporting code of conduct violations (e.g., an email address, a form URL, or instructions to contact maintainers). This should be actively monitored and capable of receiving sensitive reports.
 - **`[security contact email]`:** An email address for receiving security vulnerability reports
 - **`window.title` in `.vscode/settings.json`:** The VS Code window title that appears in the title bar when working in this repository. Replace the instruction text with your repository name for easy identification.
 
