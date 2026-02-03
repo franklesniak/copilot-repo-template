@@ -1589,7 +1589,7 @@ The following pre-commit configuration is **RECOMMENDED** for Terraform:
 # .pre-commit-config.yaml (Terraform section)
 repos:
   - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.105.0  # Use latest version
+    rev: v1.105.0  # Pinned version – update periodically
     hooks:
       # Required hooks
       - id: terraform_fmt
