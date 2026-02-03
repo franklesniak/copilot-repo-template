@@ -94,10 +94,12 @@ jobs:
       # Install Terraform for pre-commit-terraform hooks (terraform_fmt, etc.)
       # This is required because the pre-commit config includes Terraform hooks
       # that need the Terraform binary to be available.
+      # Version Policy: Use the latest stable Terraform version for pre-commit.
+      # Review and update quarterly per TEMPLATE_MAINTENANCE.md.
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.6.0"
+          terraform_version: "1.14.4"
 
       - name: Cache pre-commit hooks
         uses: actions/cache@v5
