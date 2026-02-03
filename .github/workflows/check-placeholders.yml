@@ -79,15 +79,18 @@ jobs:
           # This check enforces different severity levels based on the impact of
           # unreplaced placeholders:
           #
-          # HARD FAIL (exit 1):
-          #   1. Active contact_links URLs in config.yml containing OWNER/REPO
-          #   2. OWNER/REPO occurrences in CONTRIBUTING.md (clone instructions, issue links)
-          #   3. SECURITY.md containing "[security contact email]" or "TODO: Replace"
-          #   4. CODE_OF_CONDUCT.md containing "[INSERT CONTACT METHOD]"
-          #   5. Issue templates (.yml/.yaml) with OWNER/REPO in lines containing "http"
-          #   6. Recursive scan of .github/ for https://github.com/OWNER/REPO links
+          # HARD FAIL (exit 1) - when file exists and contains placeholders:
+          #   1. config.yml - Active contact_links URLs containing OWNER/REPO
+          #   2. CONTRIBUTING.md - OWNER/REPO occurrences (clone instructions, issue links)
+          #   3. SECURITY.md - "[security contact email]" or "TODO: Replace" placeholders
+          #   4. CODE_OF_CONDUCT.md - "[INSERT CONTACT METHOD]" placeholder
+          #   5. Issue templates (.yml/.yaml) - OWNER/REPO in lines containing "http"
+          #   6. .github/ directory - recursive scan for https://github.com/OWNER/REPO links
           #      (excluding this workflow file itself)
-          #   7. @OWNER placeholder in .github/CODEOWNERS
+          #   7. .github/CODEOWNERS - @OWNER placeholder
+          #
+          # Note: Files 1-4 and 7 are optional. If a file doesn't exist, its check is
+          # skipped with "⚠️ <file> not found (optional)" message.
           #
           # WARNING ONLY (no exit 1):
           #   - README.md containing OWNER/REPO in link contexts (emits ::warning but
