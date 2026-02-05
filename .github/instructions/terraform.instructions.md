@@ -5642,6 +5642,65 @@ could not connect to registry.terraform.io
 - Use explicit provider source specifications in all configurations
 - Test network connectivity before long Terraform operations
 
+### Debugging with TF_LOG
+
+Terraform provides environment variables for enabling detailed logging when troubleshooting unexpected behavior. These logs can help diagnose issues that don't match specific error patterns.
+
+**TF_LOG levels:**
+
+| Level | Description |
+| --- | --- |
+| `TRACE` | Most verbose; includes all internal operations |
+| `DEBUG` | Detailed information for debugging |
+| `INFO` | General operational information |
+| `WARN` | Warning messages only |
+| `ERROR` | Error messages only |
+
+**Basic usage examples:**
+
+```bash
+# Enable debug logging
+export TF_LOG=DEBUG
+terraform plan
+
+# Save logs to a file
+export TF_LOG=TRACE
+export TF_LOG_PATH=./terraform.log
+terraform apply
+
+# Disable logging when done
+unset TF_LOG TF_LOG_PATH
+```
+
+**Provider-specific logging:**
+
+Use `TF_LOG_PROVIDER` to isolate provider logs from core Terraform logs. This is useful when debugging provider-specific issues without the noise from Terraform core operations:
+
+```bash
+export TF_LOG_CORE=WARN
+export TF_LOG_PROVIDER=DEBUG
+terraform plan
+```
+
+**Common debugging scenarios:**
+
+| Scenario | Recommended Level | What to Look For |
+| --- | --- | --- |
+| API errors | DEBUG | HTTP request/response details |
+| Authentication issues | DEBUG | Credential resolution, assume role operations |
+| Unexpected resource changes | TRACE | Attribute comparisons, diff calculations |
+| Slow operations | INFO | Timing information, API call patterns |
+
+> **Security Warning:** Terraform logs **MAY** contain sensitive information including credentials, API keys, and resource configurations. Log files **MUST NOT** be committed to version control or shared without careful redaction of sensitive data.
+
+**Clean up reminder:**
+
+After debugging, always unset the logging environment variables to avoid log accumulation and potential sensitive data exposure:
+
+```bash
+unset TF_LOG TF_LOG_PATH TF_LOG_CORE TF_LOG_PROVIDER
+```
+
 ---
 
 ## Pre-commit Discipline for Terraform
