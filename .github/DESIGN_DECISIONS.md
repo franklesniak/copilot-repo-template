@@ -12,6 +12,9 @@ This document records design decisions made during the creation and maintenance 
 - [Pull Request Template](#pull-request-template)
 - [Pre-commit and Git Hooks](#pre-commit-and-git-hooks)
 - [Coding Standards and Instructions](#coding-standards-and-instructions)
+  - [Current Provider Versions in Terraform Examples](#design-decision-current-provider-versions-in-terraform-examples)
+  - [Terraform Instructions Document Length Strategy](#design-decision-terraform-instructions-document-length-strategy)
+  - [Instruction Files Scope (Code Authoring, Not CI/CD)](#design-decision-instruction-files-scope-code-authoring-not-cicd)
 - [Node.js Package Configuration](#nodejs-package-configuration)
 - [CI Workflow Configuration](#ci-workflow-configuration)
 - [Python Configuration](#python-configuration)
@@ -214,6 +217,101 @@ The `.github/instructions/terraform.instructions.md` file uses realistic example
 - Creates inconsistency with how PowerShell and Python instructions handle examples
 - The only scenario where `REPLACE_ME_*` provides unique value is when someone might literally copy-paste a backend block into production without reading—but that's a user error, not a documentation problem, and the same risk exists with any example code in any documentation
 - A clear "About Examples" note addresses the "examples are illustrative" concern sufficiently
+
+### Design Decision: Current Provider Versions in Terraform Examples
+
+The `.github/instructions/terraform.instructions.md` file uses the newest stable major versions in all provider version constraint examples.
+
+**Current versions as of 2026-02-04:**
+
+| Provider | Example Constraint | Current Stable |
+| --- | --- | --- |
+| AWS | `~> 6.0` | 6.31.0 |
+| Azure | `~> 4.0` | 4.58.0 |
+| GCP | `~> 7.0` | 7.18.0 |
+
+**Rationale:**
+
+1. **Best practice demonstration**: Examples should show current recommended practices, not outdated patterns.
+
+2. **Reduces adopter confusion**: Using current versions prevents questions like "why does the template use AWS provider 5.x when 6.x is current?"
+
+3. **Forward-compatible constraints**: The pessimistic constraint operator (`~>`) allows minor/patch updates within the major version, so examples remain valid until the next major version release.
+
+**Trade-offs:**
+
+- Requires periodic review to update when new major versions become the recommended stable release
+- Examples may reference features not available in older provider versions (mitigated by the pessimistic constraint allowing updates)
+
+**When to update:**
+
+- When a new major version becomes the recommended stable release (not just released, but recommended for production use)
+- When significant new features change best practices (e.g., a new authentication pattern becomes standard)
+- As part of quarterly maintenance reviews
+
+### Design Decision: Terraform Instructions Document Length Strategy
+
+The `.github/instructions/terraform.instructions.md` file is intentionally comprehensive (~195KB) rather than split into multiple smaller files.
+
+**Rationale:**
+
+1. **Single source of truth**: All Terraform coding standards in one location eliminates questions about which file to consult.
+
+2. **LLM optimization**: The file is designed to be consumed by GitHub Copilot and similar LLMs. A single comprehensive file provides complete context without requiring the LLM to navigate between files or potentially miss relevant guidance.
+
+3. **Consistency with Terraform ecosystem**: HashiCorp's own Terraform documentation and style guides tend toward comprehensive single documents rather than fragmented collections.
+
+**Discoverability mitigations already in place:**
+
+- **Quick Reference Checklist**: A complete checklist near the top provides a scannable summary of all requirements
+- **Scope tags**: Each checklist item is tagged with `[All]`, `[Module]`, `[Root]`, or `[Test]` for quick filtering
+- **Comprehensive Table of Contents**: Full ToC with anchor links for navigation
+- **Consistent heading structure**: Three-level hierarchy (section → topic → detail) for predictable navigation
+
+**Alternative considered:** Split into multiple files (e.g., `terraform-formatting.md`, `terraform-modules.md`, `terraform-testing.md`)
+
+**Rejected because:**
+
+- Creates navigation burden for both humans and LLMs
+- Increases maintenance burden (cross-file consistency, duplicate content, broken links)
+- The Quick Reference Checklist already provides the "summary view" that splitting would attempt to create
+- No evidence that document length impairs usability given existing navigation aids
+
+### Design Decision: Instruction Files Scope (Code Authoring, Not CI/CD)
+
+Instruction files in `.github/instructions/` are scoped to **code authoring standards**, not CI/CD pipeline design or deployment workflows.
+
+**Rationale:**
+
+1. **Clear purpose**: Instruction files are for GitHub Copilot and developers writing code, not for DevOps engineers designing pipelines.
+
+2. **Separation of concerns**: CI/CD configuration lives in `.github/workflows/` where it can be versioned, tested, and maintained independently of coding standards.
+
+3. **Consistency across languages**: All instruction files (Python, PowerShell, Terraform, Markdown) follow this scope boundary, making the pattern predictable.
+
+4. **LLM context optimization**: Keeping instruction files focused on code authoring prevents context pollution with operational details that would distract from the primary task of writing code.
+
+**What instruction files cover:**
+
+- Syntax, formatting, and style rules
+- Naming conventions
+- File organization and structure
+- Testing patterns (unit tests, integration tests, test file conventions)
+- Security patterns in code (input validation, secret handling in code)
+- Documentation standards (docstrings, comments, README patterns)
+
+**What instruction files do NOT cover:**
+
+- CI/CD pipeline design (workflow triggers, job dependencies, runner selection)
+- Deployment workflows (approval gates, environment promotion, rollback procedures)
+- Drift detection and remediation procedures
+- Operational runbooks
+
+**Where CI/CD guidance lives:**
+
+- `.github/workflows/` — Workflow files with inline comments explaining design choices
+- `DESIGN_DECISIONS.md` — The "CI Workflow Configuration" section documents CI/CD design decisions
+- `README.md` — High-level overview of available workflows and their purposes
 
 ---
 

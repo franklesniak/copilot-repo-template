@@ -12,6 +12,7 @@ This guide is for **maintainers of the `franklesniak/copilot-repo-template` repo
 - [Updating Pre-commit Hook Versions](#updating-pre-commit-hook-versions)
 - [Reviewing Python Version Requirements](#reviewing-python-version-requirements)
 - [Reviewing Terraform Version Requirements](#reviewing-terraform-version-requirements)
+- [Reviewing Terraform Provider Versions](#reviewing-terraform-provider-versions)
 - [Reviewing Instruction File Versions](#reviewing-instruction-file-versions)
 - [Testing Template Changes](#testing-template-changes)
 
@@ -174,6 +175,50 @@ This template uses a pinned Terraform version in CI workflows for reproducibilit
 
 ---
 
+## Reviewing Terraform Provider Versions
+
+The Terraform instructions file uses the newest stable major versions in provider version constraint examples. These should be reviewed periodically to ensure examples reflect current best practices.
+
+**When to review:** Quarterly, or when a new major version of a provider becomes the recommended stable release.
+
+**What to check:**
+
+1. Visit the provider registries:
+   - [AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest)
+   - [Azure Provider](https://registry.terraform.io/providers/hashicorp/azurerm/latest)
+   - [GCP Provider](https://registry.terraform.io/providers/hashicorp/google/latest)
+2. Identify current stable major versions for each provider
+3. If a new major version is now the recommended stable release, update the following files:
+   - `.github/instructions/terraform.instructions.md` (version constraint examples throughout)
+   - `.github/DESIGN_DECISIONS.md` (current versions table in "Current Provider Versions in Terraform Examples" section)
+
+**Current versions (as of last update):**
+
+| Provider | Example Constraint | Current Stable |
+| --- | --- | --- |
+| AWS | `~> 6.0` | 6.31.0 |
+| Azure | `~> 4.0` | 4.58.0 |
+| GCP | `~> 7.0` | 7.18.0 |
+
+**How to update:**
+
+When updating provider versions in terraform.instructions.md, search for the version constraint patterns:
+
+```bash
+# Search for AWS provider version references
+grep -n "~> 5\.0\|~> 6\.0" .github/instructions/terraform.instructions.md
+
+# Search for Azure provider version references
+grep -n "~> 3\.0\|~> 4\.0" .github/instructions/terraform.instructions.md
+
+# Search for GCP provider version references
+grep -n "~> 6\.0\|~> 7\.0" .github/instructions/terraform.instructions.md
+```
+
+Update all occurrences to the new major version constraint (e.g., `~> 6.0` to `~> 7.0`).
+
+---
+
 ## Reviewing Instruction File Versions
 
 The instruction files in `.github/instructions/` include version numbers in the format `Major.Minor.YYYYMMDD.Revision`.
@@ -189,6 +234,7 @@ The instruction files in `.github/instructions/` include version numbers in the 
 - `.github/instructions/docs.instructions.md`
 - `.github/instructions/python.instructions.md`
 - `.github/instructions/powershell.instructions.md`
+- `.github/instructions/terraform.instructions.md`
 
 ---
 
