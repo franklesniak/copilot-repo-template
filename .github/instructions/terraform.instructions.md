@@ -5803,9 +5803,28 @@ The following are common scenarios where deviations may be justified:
 
 ### Recorded Deviations
 
-> **Note:** Replace the examples below with actual deviations for your project, or remove this section if no deviations apply.
+> **Note:** Replace the example below with actual deviations for your project, or remove this section if no deviations apply.
 
 *No deviations recorded yet. When deviations are necessary, document them here using the format above.*
+
+<!--
+#### Example: Alternative Backend (Terraform Cloud)
+
+- **Standard Affected:** [Remote Backend Configuration](#remote-backend-configuration)
+- **Reason:** Organization uses Terraform Cloud for state management, which provides built-in state storage, locking, and encryption.
+- **Scope:** All root modules in this repository
+- **Approved By:** @platform-team
+- **Date:** 2026-01-15
+- **Review Date:** 2027-01-15
+
+The following Remote Backend Configuration requirements are handled by Terraform Cloud and do not require explicit configuration:
+- State encryption (automatic in Terraform Cloud)
+- State locking (automatic in Terraform Cloud)
+- DynamoDB lock table configuration (not applicable)
+- S3/GCS/Azure Storage bucket configuration (not applicable)
+
+The `cloud` block in `versions.tf` replaces the `backend` block for this repository.
+-->
 
 ---
 
