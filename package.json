@@ -18,10 +18,10 @@
     "node": ">=20.0.0"
   },
   "devDependencies": {
-    "glob": "^13.0.1",
+    "glob": "^13.0.3",
     "jsonc-parser": "^3.3.1",
-    "markdown-it": "^14.0.0",
+    "markdown-it": "^14.1.1",
     "markdownlint": "^0.40.0",
-    "markdownlint-cli2": "^0.20.0"
+    "markdownlint-cli2": "^0.21.0"
   }
 }
