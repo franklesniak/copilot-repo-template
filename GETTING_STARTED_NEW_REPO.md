@@ -47,6 +47,7 @@ This template repository includes:
 - **Issue Templates:** Structured templates for bug reports, feature requests, and documentation issues
 - **Pull Request Template:** Checklist-based template for consistent PR reviews
 - **CI Workflows:** GitHub Actions workflows for linting, testing, and validation
+- **Multi-Agent Support:** Instruction files for Claude Code, OpenAI Codex CLI, and Gemini Code Assist
 
 ### Repo Layout Examples
 
@@ -1634,6 +1635,22 @@ Review the files in `.github/instructions/` and remove or modify any that don't 
 - `powershell.instructions.md` - PowerShell standards (remove if not using PowerShell)
 - `python.instructions.md` - Python standards (remove if not using Python)
 - `terraform.instructions.md` - Terraform/IaC standards (remove if not using Terraform)
+
+### Reviewing Agent Instruction Files
+
+The template includes three agent instruction files at the repository root for multi-platform AI coding agent support:
+
+- `CLAUDE.md` — Claude Code, GitHub Copilot coding agent
+- `AGENTS.md` — OpenAI Codex CLI, GitHub Copilot coding agent
+- `GEMINI.md` — Gemini Code Assist, GitHub Copilot coding agent
+
+These files are synchronized summaries of the rules in `.github/copilot-instructions.md`. They provide essential guidance to their respective AI coding platforms.
+
+**To customize for your project:**
+
+1. **Remove unneeded files** — Delete agent files for platforms you do not use (e.g., if not using Claude Code, delete `CLAUDE.md`)
+2. **Keep remaining files** — Keep all agent files for platforms you want to support, or accept that agents on those platforms receive no project-specific instructions
+3. **Keep files synchronized** — If you modified `.github/copilot-instructions.md` (language table, testing table, linting table, or Source of Truth section), apply equivalent changes to any remaining agent files to keep them synchronized
 
 ---
 
