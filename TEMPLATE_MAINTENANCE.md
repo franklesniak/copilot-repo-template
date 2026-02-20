@@ -242,7 +242,7 @@ The instruction files in `.github/instructions/` include version numbers in the 
 
 ## Reviewing Agent Instruction Files
 
-Agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) must be kept synchronized with `.github/copilot-instructions.md`. These files contain inline summaries of the canonical rules so that each AI coding agent receives project-specific guidance without needing to follow file references.
+Agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) **MUST** be kept synchronized with `.github/copilot-instructions.md`. These files contain inline summaries of the canonical rules so that each AI coding agent receives project-specific guidance without needing to follow file references.
 
 **What to check during review:**
 
@@ -255,8 +255,9 @@ Agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) must be kept syn
 **Verification command:**
 
 ```bash
-# Quick diff check - compare key sections
-# If copilot-instructions.md has changed, manually verify agent files match
+# Compare recent commit history to identify unsynchronized changes
+# If copilot-instructions.md was modified more recently than agent files,
+# manually verify agent files still match
 git log --oneline -5 .github/copilot-instructions.md
 git log --oneline -5 CLAUDE.md AGENTS.md GEMINI.md
 ```
