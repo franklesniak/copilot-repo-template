@@ -148,6 +148,25 @@ This repository uses modular instruction files for language-specific standards:
 
 > **Terraform note:** If your project does not use Terraform, remove the Terraform instruction file (`.github/instructions/terraform.instructions.md`), remove the Terraform row from the table above, and remove Terraform-related entries from the Linting Configurations and Testing Tools sections below.
 
+## Agent Instruction Files
+
+This repository includes agent instruction files at the repository root to support multi-platform AI coding agents:
+
+| File | Target Agent(s) |
+| --- | --- |
+| `CLAUDE.md` | Claude Code, GitHub Copilot coding agent |
+| `AGENTS.md` | OpenAI Codex CLI, GitHub Copilot coding agent |
+| `GEMINI.md` | Gemini Code Assist, GitHub Copilot coding agent |
+
+`.github/copilot-instructions.md` remains the **canonical source of truth** for all repository rules. The agent instruction files are synchronized summaries that provide essential guidance to their respective platforms.
+
+When modifying rules in `.github/copilot-instructions.md`, the corresponding content in all three agent files must also be updated to maintain consistency.
+
+**To customize for your project:**
+
+- Remove agent files for platforms you do not use
+- Keep rules synchronized between `.github/copilot-instructions.md` and any remaining agent files
+
 ## Linting Configurations
 
 This repository includes linting tool configurations that align with the coding standards:
