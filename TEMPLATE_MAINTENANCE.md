@@ -14,6 +14,7 @@ This guide is for **maintainers of the `franklesniak/copilot-repo-template` repo
 - [Reviewing Terraform Version Requirements](#reviewing-terraform-version-requirements)
 - [Reviewing Terraform Provider Versions](#reviewing-terraform-provider-versions)
 - [Reviewing Instruction File Versions](#reviewing-instruction-file-versions)
+- [Reviewing Agent Instruction Files](#reviewing-agent-instruction-files)
 - [Testing Template Changes](#testing-template-changes)
 
 ---
@@ -29,6 +30,7 @@ To keep the template current and functional, maintainers **SHOULD** review templ
 - [ ] Review and update Terraform version in CI workflows
 - [ ] Review instruction files for accuracy and relevance
 - [ ] Verify all CI workflows still pass with latest dependency versions
+- [ ] Verify agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are synchronized with `.github/copilot-instructions.md`
 - [ ] Review and address any open issues or feedback
 
 **Annual Review:**
@@ -235,6 +237,31 @@ The instruction files in `.github/instructions/` include version numbers in the 
 - `.github/instructions/python.instructions.md`
 - `.github/instructions/powershell.instructions.md`
 - `.github/instructions/terraform.instructions.md`
+
+---
+
+## Reviewing Agent Instruction Files
+
+Agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) must be kept synchronized with `.github/copilot-instructions.md`. These files contain inline summaries of the canonical rules so that each AI coding agent receives project-specific guidance without needing to follow file references.
+
+**What to check during review:**
+
+- Safety rules match between `.github/copilot-instructions.md` and all three agent files
+- Pre-commit discipline requirements match
+- Build/test commands match (including any new tools or changed commands)
+- Language-specific instruction file references match (if instruction files are added/removed/renamed)
+- "What Not to Do" rules match
+
+**Verification command:**
+
+```bash
+# Quick diff check - compare key sections
+# If copilot-instructions.md has changed, manually verify agent files match
+git log --oneline -5 .github/copilot-instructions.md
+git log --oneline -5 CLAUDE.md AGENTS.md GEMINI.md
+```
+
+**When to update:** Whenever `.github/copilot-instructions.md` is modified, or when new agent platforms emerge that require their own convention files.
 
 ---
 
