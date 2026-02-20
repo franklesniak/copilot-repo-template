@@ -29,6 +29,7 @@ This guide covers optional customizations you can make after completing the init
 - [Copilot PowerShell Instructions Configuration](#copilot-powershell-instructions-configuration)
 - [Copilot Terraform Instructions Configuration](#copilot-terraform-instructions-configuration)
 - [Copilot Main Instructions Configuration](#copilot-main-instructions-configuration)
+- [Customizing Agent Instruction Files](#customizing-agent-instruction-files)
 - [CI Workflow Configuration](#ci-workflow-configuration)
 - [Auto-fix Pre-commit Workflow Configuration](#auto-fix-pre-commit-workflow-configuration)
 - [Placeholder Check Workflow Configuration](#placeholder-check-workflow-configuration)
@@ -2021,6 +2022,39 @@ When customizing the Pre-commit or Testing sections, you may also need to update
 - **How to Work (Definition of Done):** Update test location references (e.g., `tests/` to `spec/`)
 - **Language-Specific Instructions table:** Ensure it matches your language instruction files
 - **Linting Configurations:** Update linting tool references if you use different linters
+
+---
+
+## Customizing Agent Instruction Files
+
+**Files:** `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`
+
+The template includes three agent instruction files at the repository root. These files are synchronized summaries of the rules in `.github/copilot-instructions.md` (the canonical source of truth). Each file targets a specific AI coding platform:
+
+| File | Target Agent(s) |
+| --- | --- |
+| `CLAUDE.md` | Claude Code, GitHub Copilot coding agent |
+| `AGENTS.md` | OpenAI Codex CLI, GitHub Copilot coding agent |
+| `GEMINI.md` | Gemini Code Assist, GitHub Copilot coding agent |
+
+### Removing Unneeded Files
+
+Delete agent files for platforms you do not use. For example, if your team does not use Claude Code, delete `CLAUDE.md`. If your team does not use OpenAI Codex CLI, delete `AGENTS.md`. Removing unused files reduces maintenance burden without affecting other platforms.
+
+### Keeping Files Synchronized
+
+When rules change in `.github/copilot-instructions.md`, apply the same changes to all remaining agent files. Common changes that require synchronization include:
+
+- **Language table updates** — Adding or removing languages
+- **Linting tool changes** — Different linting commands or configurations
+- **Test command changes** — Different test frameworks or commands
+- **Build and test commands** — Updated pre-commit or CI commands
+
+> **Note:** No CI enforcement exists for agent file synchronization — this is a manual maintenance responsibility. Review agent files whenever you update `.github/copilot-instructions.md` to keep them consistent.
+
+### Adding Platform-Specific Notes
+
+If an agent has unique behavioral requirements (e.g., different command syntax, specific tool limitations, or platform-specific workarounds), add agent-specific sections to the appropriate file. Platform-specific notes should supplement, not contradict, the canonical rules in `.github/copilot-instructions.md`.
 
 ---
 

@@ -43,6 +43,7 @@ This guide walks you through adopting features from `franklesniak/copilot-repo-t
   - [Language-Specific Instructions](#language-specific-instructions)
   - [Merging with Existing Copilot Instructions](#merging-with-existing-copilot-instructions)
   - [Creating Instructions for Other Languages](#creating-instructions-for-other-languages)
+  - [Agent Instruction Files (Multi-Platform Support)](#agent-instruction-files-multi-platform-support)
 - [Adopting Markdown Linting](#adopting-markdown-linting)
   - [If You Don't Have package.json](#if-you-dont-have-packagejson)
   - [If You Already Have package.json](#if-you-already-have-packagejson)
@@ -91,6 +92,7 @@ This template repository includes several features you can adopt individually or
 | **Linting Configurations** | Pre-configured settings for markdownlint and PSScriptAnalyzer |
 | **Dependabot** | Automated dependency update monitoring |
 | **CODEOWNERS** | Automatic reviewer assignment for pull requests |
+| **Multi-Agent Support** | Instruction files for Claude Code, OpenAI Codex CLI, and Gemini Code Assist |
 
 ---
 
@@ -191,6 +193,7 @@ Use this matrix to decide which features to adopt based on complexity and depend
 | PowerShell CI Workflow | `.github/workflows/powershell-ci.yml` | PowerShell, Pester | Medium |
 | PSScriptAnalyzer Config | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell | Low |
 | Python CI Workflow | `.github/workflows/python-ci.yml` | Python project structure | High |
+| Agent Instruction Files | `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` | Adopt `.github/copilot-instructions.md` first | Low |
 
 ### Recommended Adoption Order
 
@@ -772,6 +775,24 @@ If your project uses languages not covered by the template (JavaScript, TypeScri
 4. Define your project's coding standards for that language
 
 5. Update the language table in `.github/copilot-instructions.md`
+
+### Agent Instruction Files (Multi-Platform Support)
+
+The template includes three agent instruction files at the repository root to support multi-platform AI coding agents:
+
+| File | Target Agent(s) |
+| --- | --- |
+| `CLAUDE.md` | Claude Code, GitHub Copilot coding agent |
+| `AGENTS.md` | OpenAI Codex CLI, GitHub Copilot coding agent |
+| `GEMINI.md` | Gemini Code Assist, GitHub Copilot coding agent |
+
+These files are synchronized summaries of the rules in `.github/copilot-instructions.md`. They provide essential guidance to their respective AI coding platforms without requiring each platform to read `.github/copilot-instructions.md` directly.
+
+**Adoption steps:**
+
+1. **Copy agent files** — Copy the agent files you want from the template repository to your repository root
+2. **Update to match your project** — If you customized `.github/copilot-instructions.md` (different languages, different linting tools, different test commands), update the copied agent files to match
+3. **Remove unneeded files** — Delete agent files for platforms you do not use
 
 ---
 
