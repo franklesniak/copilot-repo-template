@@ -31,6 +31,7 @@ This is a template repository providing best-practice GitHub Copilot instruction
 This template includes:
 
 - **GitHub Copilot Instructions:** Comprehensive coding standards that guide AI-assisted development
+- **Multi-Agent Support:** Instruction files for Claude Code, OpenAI Codex CLI, and Gemini Code Assist (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`)
 - **Language-Specific Guidelines:** Modular instruction files for Markdown, PowerShell, and Python
 - **Linting Configurations:** Pre-configured settings for markdownlint and PSScriptAnalyzer
 - **Pre-commit Hooks:** Automated code quality checks before commits
@@ -83,6 +84,9 @@ templates/                           # Reference templates for project setup
 pyproject.toml                       # Python project configuration
 .markdownlint.jsonc                  # Markdown linting configuration
 .pre-commit-config.yaml              # Pre-commit hooks (Python focused)
+AGENTS.md                            # Agent instructions for OpenAI Codex CLI
+CLAUDE.md                            # Agent instructions for Claude Code
+GEMINI.md                            # Agent instructions for Gemini Code Assist
 ```
 
 #### Key Files Explained
@@ -99,6 +103,9 @@ pyproject.toml                       # Python project configuration
 | `.github/workflows/python-ci.yml` | Python linting and testing CI workflow (optional - remove if not using Python) |
 | `.markdownlint.jsonc` | Markdown linting rules prioritizing auto-fixable checks |
 | `.pre-commit-config.yaml` | Pre-commit hooks for all projects (Python formatting, linting, Markdown) |
+| `AGENTS.md` | Agent instructions for OpenAI Codex CLI and GitHub Copilot coding agent |
+| `CLAUDE.md` | Agent instructions for Claude Code and GitHub Copilot coding agent |
+| `GEMINI.md` | Agent instructions for Gemini Code Assist and GitHub Copilot coding agent |
 | `pyproject.toml` | Python project configuration with dev dependencies |
 | `src/copilot_repo_template/` | Example Python package - rename for your project |
 | `tests/` | Test directory with pytest tests (Python) and Pester tests (PowerShell) |
