@@ -97,7 +97,7 @@ jobs:
       # Version Policy: Use the latest stable Terraform version for pre-commit.
       # Review and update quarterly per TEMPLATE_MAINTENANCE.md.
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.14.4"
 
