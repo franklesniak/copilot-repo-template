@@ -961,7 +961,7 @@ For a multi-language project (Python + PowerShell):
 - Pre-commit
 - Test
 - Markdown Lint
-- lint (PowerShell)
+- Lint (PSScriptAnalyzer)
 - PowerShell Tests (Pester)
 
 ---

@@ -2301,7 +2301,7 @@ The PowerShell CI workflow runs PSScriptAnalyzer linting and Pester tests for Po
 
 The workflow consists of two jobs:
 
-1. **lint**: Runs PSScriptAnalyzer on all `.ps1` files (skips if no files found)
+1. **Lint (PSScriptAnalyzer)**: Runs PSScriptAnalyzer on all `.ps1` files (skips if no files found)
 2. **test**: Runs Pester tests on Windows, macOS, and Linux (skips if no `*.Tests.ps1` files found)
 
 The workflow uses automatic detection, so you don't need to configure anything if you have PowerShell files—it just works.
