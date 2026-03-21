@@ -547,7 +547,7 @@ jobs:
 #### Benefits of This Approach
 
 - **All jobs appear in PR checks:** Not hidden in Actions tab
-- **Easy branch protection:** Configure required jobs directly
+- **Easy branch ruleset setup:** Configure required jobs directly
 - **Efficient CI minutes:** Failed jobs skip downstream work
 - **Simpler maintenance:** Single file to manage
 
@@ -1209,7 +1209,7 @@ Every workflow file **SHOULD** include a comprehensive header comment explaining
 # 1. Single Workflow with Job Dependencies:
 #    Combines format, validate, lint, and test into one workflow file using
 #    `needs:` for job dependencies. Benefits: all jobs visible in PR checks,
-#    simpler branch protection config, efficient CI minutes.
+#    simpler branch ruleset config, efficient CI minutes.
 #
 # 2. Job Dependencies:
 #    format → validate → lint (sequential)
@@ -1372,9 +1372,9 @@ on:
 | security (primary) | Configurable | Depends on security policy |
 | security (advisory) | No | Informational only |
 
-#### Configuring Required Jobs in Branch Protection
+#### Configuring Required Jobs in Branch Ruleset
 
-In GitHub branch protection settings, configure these jobs as required:
+In GitHub branch ruleset settings, configure these jobs as required status checks:
 
 1. `Terraform CI / Format Check`
 2. `Terraform CI / Validate`
