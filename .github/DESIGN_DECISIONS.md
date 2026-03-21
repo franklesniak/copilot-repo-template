@@ -862,10 +862,12 @@ The template provides these CI jobs that can be configured as required status ch
 | `powershell-ci.yml` | **PowerShell Tests (Pester)** | Optional | Only if using PowerShell with tests |
 | `check-placeholders.yml` | **Check for OWNER/REPO Placeholders** | Optional | Only runs in repos created from this template (skipped in template repo itself) |
 
-> **Note:** Job names must match exactly as they appear in the GitHub Actions UI.
-> The names listed above are the exact `name:` values (or job keys, if no
-> `name:` is set) from the template workflows. Status checks only appear for
-> selection after the corresponding workflow has run at least once.
+> **Note:** In the GitHub Actions UI and branch ruleset status-check picker,
+> checks appear in the format **`Workflow name / Job name`** (for example,
+> `Python CI / Pre-commit`). The **Job Name** column above lists only the
+> job-level name; prepend the workflow name when searching for checks in the
+> ruleset configuration. Status checks only appear for selection after the
+> corresponding workflow has run at least once.
 >
 > The `auto-fix-precommit.yml` workflow is intentionally **not listed** above
 > because it only triggers on pushes to `copilot/**` branches by the Copilot
@@ -880,7 +882,7 @@ Complete this step **after** your CI workflows have run at least once so that st
 2. Navigate to **Settings** > **Rules** > **Rulesets**
 3. Click **New ruleset** → **New branch ruleset**
 4. Configure the ruleset:
-   - **Ruleset name:** `main branch protection`
+   - **Ruleset name:** `main branch ruleset`
    - **Enforcement status:** **Active**
 5. Under **Target branches**, click **Add target** → **Include default branch**
 6. Under **Branch rules**, enable the following:
