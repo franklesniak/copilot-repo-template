@@ -875,25 +875,20 @@ Complete this step **after** your CI workflows have run at least once so that st
 4. Configure the ruleset:
    - **Ruleset name:** `main branch protection`
    - **Enforcement status:** **Active**
-5. Under **Target branches**, click **Add target** → **Include default
-   branch**
+5. Under **Target branches**, click **Add target** → **Include default branch**
 6. Under **Branch rules**, enable the following:
    - ✅ **Restrict deletions**
    - ✅ **Require a pull request before merging**
      - Required approvals: **1**
-     - ✅ Dismiss stale pull request approvals when new commits are
-       pushed
+     - ✅ Dismiss stale pull request approvals when new commits are pushed
    - ✅ **Require status checks to pass**
      - ✅ Require branches to be up to date before merging
-     - Click **Add checks** and search for the status checks you want
-       to require (see the [CI Jobs table](#ci-jobs-available-as-required-status-checks)
-       above for recommended checks)
+     - Click **Add checks** and search for the status checks you want to require (see the [CI Jobs table](#ci-jobs-available-as-required-status-checks) above for recommended checks)
    - ✅ **Require conversation resolution before merging** (optional)
    - ✅ **Block force pushes**
 7. Under **Bypass list** (at the top of the ruleset):
    - Leave empty if you want no one to bypass the rules
-   - Optionally click **Add bypass** → **Repository admin** if you want
-     the ability to force-merge as an admin
+   - Optionally click **Add bypass** → **Repository admin** if you want the ability to force-merge as an admin
 8. Click **Create**
 
 > **Note:** Repository rulesets offer more granular control than classic
