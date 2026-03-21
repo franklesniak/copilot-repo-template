@@ -1735,11 +1735,11 @@ schedule:
 
 Delete `.github/dependabot.yml` from your repository.
 
-### Branch Protection (Recommended)
+### Branch Ruleset (Recommended)
 
-Branch protection rules help prevent accidental force pushes and ensure code review. See [GitHub's branch protection documentation](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches) for setup instructions.
+Repository rulesets help prevent accidental force pushes and ensure code review. Rulesets are the recommended replacement for classic branch protection rules and offer more granular control. See [GitHub's rulesets documentation](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets) for setup instructions.
 
-For detailed guidance on branch protection setup, see the "Branch Protection Setup" section in [`.github/DESIGN_DECISIONS.md`](.github/DESIGN_DECISIONS.md).
+For detailed guidance on branch ruleset setup, see the "Branch Ruleset Setup" section in [`.github/DESIGN_DECISIONS.md`](.github/DESIGN_DECISIONS.md).
 
 ---
 

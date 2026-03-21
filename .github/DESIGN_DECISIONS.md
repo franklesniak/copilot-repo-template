@@ -26,7 +26,7 @@ This document records design decisions made during the creation and maintenance 
 - [Dependabot Configuration](#dependabot-configuration)
 - [CODEOWNERS Configuration](#codeowners-configuration)
 - [Issue Template Design Decisions](#issue-template-design-decisions)
-- [Branch Protection Setup](#branch-protection-setup)
+- [Branch Ruleset Setup](#branch-ruleset-setup)
 
 ---
 
@@ -613,7 +613,7 @@ The template includes a CODEOWNERS file with `@OWNER` placeholders that template
 **Rationale:**
 
 - CODEOWNERS enables automatic review requests for PRs affecting specific paths
-- Works well with branch protection rules requiring code owner approval
+- Works well with branch rulesets requiring code owner approval
 - Using `@OWNER` placeholder follows the existing `OWNER/REPO` pattern in this template
 - Placeholder check workflow ensures adopters don't forget to customize
 - Default rules cover repository root, workflows, and Copilot instructions
@@ -622,7 +622,7 @@ The template includes a CODEOWNERS file with `@OWNER` placeholders that template
 
 - Pro: Automatic PR review assignment reduces manual reviewer selection
 - Pro: Documents code ownership explicitly in the repository
-- Pro: Works with branch protection "required reviews from code owners" setting
+- Pro: Works with branch ruleset "required reviews from code owners" setting
 - Pro: Placeholder check workflow ensures customization before use
 - Con: Requires placeholder replacement during template adoption
 - Con: Solo maintainers may not benefit from CODEOWNERS
@@ -820,33 +820,33 @@ To enable:
 
 ---
 
-## Branch Protection Setup
+## Branch Ruleset Setup
 
-This section documents how to configure branch protection using the CI workflows provided by this template.
+This section documents how to configure a branch ruleset using the CI workflows provided by this template. Repository rulesets are the recommended approach for protecting branches, replacing classic branch protection rules. They offer more granular control and can be applied across multiple branches or repositories.
 
-### Design Decision: Branch Protection Documentation
+### Design Decision: Branch Ruleset Documentation
 
-This template includes documentation for branch protection setup rather than attempting to configure it automatically. Branch protection is a repository setting that cannot be included in template repositories, so documentation is the appropriate way to guide adopters.
+This template includes documentation for branch ruleset setup rather than attempting to configure it automatically. Branch rulesets are repository settings that cannot be included in template repositories, so documentation is the appropriate way to guide adopters.
 
 **Rationale:**
 
 - Helps adopters set up proper CI gates for their default branch
-- Explains the intended use of CI workflows and how they relate to branch protection
+- Explains the intended use of CI workflows and how they relate to branch rulesets
 - Documents which CI jobs are good candidates for required status checks
-- Clarifies the relationship between `needs:` dependencies and branch protection
+- Clarifies the relationship between `needs:` dependencies and branch rulesets
 
 **Trade-offs:**
 
 - Pro: Helps adopters set up proper CI gates quickly
 - Pro: Explains intended use of CI workflows from this template
-- Pro: Clarifies complementary nature of CI dependencies vs branch protection
+- Pro: Clarifies complementary nature of CI dependencies vs branch rulesets
 - Con: GitHub UI may change over time, requiring documentation updates
 - Con: Cannot be enforced via template (requires manual setup in each repository)
 - Con: Adopters must manually configure settings in GitHub UI
 
 **Recommendation:**
 
-Configure branch protection for your default branch after initial repository setup. At minimum, require the pre-commit check to pass before merging. For additional protection, also require downstream checks like tests and type checking.
+Configure a branch ruleset for your default branch after initial repository setup. At minimum, require the pre-commit check to pass before merging. For additional protection, also require downstream checks like tests and type checking.
 
 ### CI Jobs Available as Required Status Checks
 
@@ -860,29 +860,49 @@ The template provides these CI jobs that can be configured as required status ch
 | `markdownlint.yml` | **Markdown Lint** | ✅ Yes | Ensures documentation quality |
 | `powershell-ci.yml` | **lint** | Optional | Only if using PowerShell |
 | `powershell-ci.yml` | **PowerShell Tests (Pester)** | Optional | Only if using PowerShell with tests |
+| `auto-fix-precommit.yml` | **Pre-commit** | ✅ Yes | Pre-commit check on Copilot agent branches |
+| `check-placeholders.yml` | **check-placeholders** | Optional | Checks for unreplaced template placeholders |
 
-**Note:** Job names must match exactly as they appear in the GitHub Actions UI. The names listed above are the exact job names from the template workflows.
+**Note:** Job names must match exactly as they appear in the GitHub Actions UI. The names listed above are the exact job names from the template workflows. Status checks only appear for selection after the corresponding workflow has run at least once.
 
-### How to Configure Branch Protection
+### How to Configure a Branch Ruleset
+
+Complete this step **after** your CI workflows have run at least once so that status checks are available to select.
 
 1. Go to your repository on GitHub
-2. Navigate to **Settings** > **Branches**
-3. Click **Add branch protection rule** (or edit existing rule)
-4. Enter your branch name pattern (e.g., `main` or `master`)
-5. Configure the following settings:
+2. Navigate to **Settings** > **Rules** > **Rulesets**
+3. Click **New ruleset** → **New branch ruleset**
+4. Configure the ruleset:
+   - **Ruleset name:** `main branch protection`
+   - **Enforcement status:** **Active**
+5. Under **Target branches**, click **Add target** → **Include default
+   branch**
+6. Under **Branch rules**, enable the following:
+   - ✅ **Restrict deletions**
+   - ✅ **Require a pull request before merging**
+     - Required approvals: **1**
+     - ✅ Dismiss stale pull request approvals when new commits are
+       pushed
+   - ✅ **Require status checks to pass**
+     - ✅ Require branches to be up to date before merging
+     - Click **Add checks** and search for the status checks you want
+       to require (see the [CI Jobs table](#ci-jobs-available-as-required-status-checks)
+       above for recommended checks)
+   - ✅ **Require conversation resolution before merging** (optional)
+   - ✅ **Block force pushes**
+7. Under **Bypass list** (at the top of the ruleset):
+   - Leave empty if you want no one to bypass the rules
+   - Optionally click **Add bypass** → **Repository admin** if you want
+     the ability to force-merge as an admin
+8. Click **Create**
 
-**Recommended settings:**
+> **Note:** Repository rulesets offer more granular control than classic
+> branch protection rules and can be applied across multiple branches or
+> repositories. See GitHub's
+> [rulesets documentation](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets)
+> for more details.
 
-- ✅ **Require a pull request before merging**
-  - ✅ Require approvals (set to 1 or more)
-  - ✅ Dismiss stale pull request approvals when new commits are pushed
-- ✅ **Require status checks to pass before merging**
-  - ✅ Require branches to be up to date before merging
-  - Search for and select the job names you want to require (e.g., "Pre-commit", "Test")
-- ✅ **Require conversation resolution before merging** (optional but recommended)
-- ✅ **Do not allow bypassing the above settings** (for strict enforcement)
-
-### Understanding `needs:` vs Branch Protection
+### Understanding `needs:` vs Branch Rulesets
 
 The template CI workflows use `needs:` to create internal job dependencies:
 
@@ -898,25 +918,25 @@ test:
 - This saves CI minutes by not running tests on poorly-formatted code
 - The dependency is internal to the workflow—GitHub Actions manages it
 
-**How branch protection works (external gate):**
+**How branch rulesets work (external gate):**
 
-- Branch protection is configured in repository settings, not in workflows
-- It prevents PR merges until selected status checks pass
-- It's an external enforcement mechanism that operates at the PR level
+- Branch rulesets are configured in repository settings, not in workflows
+- They prevent PR merges until selected status checks pass
+- They are an external enforcement mechanism that operates at the PR level
 
 **These are complementary:**
 
 - `needs:` optimizes CI execution (skip downstream jobs on early failure)
-- Branch protection enforces quality gates (block merges until checks pass)
+- Branch rulesets enforce quality gates (block merges until checks pass)
 - Using both provides defense in depth
 
-**Recommendation:** Require **both** the `Pre-commit` job AND downstream jobs like `Test` in branch protection. Even though `Test` won't run if `Pre-commit` fails (due to `needs:`), requiring both ensures that:
+**Recommendation:** Require **both** the `Pre-commit` job AND downstream jobs like `Test` in the branch ruleset. Even though `Test` won't run if `Pre-commit` fails (due to `needs:`), requiring both ensures that:
 
 1. Format/lint issues block the PR (Pre-commit requirement)
 2. Test failures block the PR (Test requirement)
 3. Skipped jobs (due to upstream failure) also block the PR
 
-### Example Branch Protection Configuration
+### Example Branch Ruleset Configuration
 
 For a Python project using this template:
 

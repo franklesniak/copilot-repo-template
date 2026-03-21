@@ -12,7 +12,7 @@
 #
 #    Benefits of this approach:
 #    - All jobs appear directly in the PR checks list (not hidden in Actions tab)
-#    - Easy to configure branch protection rules that require specific jobs
+#    - Easy to configure branch rulesets that require specific jobs
 #    - Later jobs don't run if earlier ones fail (saves CI minutes)
 #    - Simpler maintenance with a single workflow file
 #
