@@ -860,10 +860,17 @@ The template provides these CI jobs that can be configured as required status ch
 | `markdownlint.yml` | **Markdown Lint** | ✅ Yes | Ensures documentation quality |
 | `powershell-ci.yml` | **lint** | Optional | Only if using PowerShell |
 | `powershell-ci.yml` | **PowerShell Tests (Pester)** | Optional | Only if using PowerShell with tests |
-| `auto-fix-precommit.yml` | **Pre-commit** | ✅ Yes | Pre-commit check on Copilot agent branches |
-| `check-placeholders.yml` | **check-placeholders** | Optional | Checks for unreplaced template placeholders |
+| `check-placeholders.yml` | **Check for OWNER/REPO Placeholders** | Optional | Only runs in repos created from this template (skipped in template repo itself) |
 
-**Note:** Job names must match exactly as they appear in the GitHub Actions UI. The names listed above are the exact job names from the template workflows. Status checks only appear for selection after the corresponding workflow has run at least once.
+> **Note:** Job names must match exactly as they appear in the GitHub Actions UI.
+> The names listed above are the exact `name:` values (or job keys, if no
+> `name:` is set) from the template workflows. Status checks only appear for
+> selection after the corresponding workflow has run at least once.
+>
+> The `auto-fix-precommit.yml` workflow is intentionally **not listed** above
+> because it only triggers on pushes to `copilot/**` branches by the Copilot
+> bot. Making it a required status check would block PRs from all other
+> branches where the check never runs.
 
 ### How to Configure a Branch Ruleset
 
