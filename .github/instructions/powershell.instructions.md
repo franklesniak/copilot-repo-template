@@ -5,13 +5,13 @@ description: "PowerShell coding standards"
 
 # PowerShell Writing Style
 
-**Version:** 1.6.20260326.0
+**Version:** 1.6.20260409.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-03-26
+- **Last Updated:** 2026-04-09
 - **Scope:** Defines PowerShell coding standards for all `.ps1` files in this repository. Covers style, formatting, naming conventions, error handling, documentation requirements, and compatibility patterns for both legacy (v1.0) and modern (v5.1+/v7.x+) PowerShell codebases.
 
 ## Table of Contents
@@ -80,6 +80,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** Comment-based help **MUST** use single-line comments (#) with dotted keywords (.SYNOPSIS, .DESCRIPTION, etc.) → [Comment-Based Help: Structure and Format](#comment-based-help-structure-and-format)
 - **[v1.0]** Block comments (`<# ... #>`) **MUST NOT** be used — they cause parser errors in PowerShell v1.0; use single-line comments (`#`) instead → [Help Format Options: Comparison](#help-format-options-comparison)
 - **[All]** Comment-based help **MUST** include sections: .SYNOPSIS, .DESCRIPTION, .PARAMETER (one per parameter, if any), .EXAMPLE, .INPUTS, .OUTPUTS, .NOTES → [Comment-Based Help: Structure and Format](#comment-based-help-structure-and-format)
+- **[All]** Explanatory or output-description lines within `.EXAMPLE` blocks **MUST** use double `#` (`# # <text>`) so that `Get-Help` renders them as valid PowerShell comments (`# <text>`) → [Inline Comments Within `.EXAMPLE` Blocks](#inline-comments-within-example-blocks)
 - **[All]** Functions **SHOULD** provide multiple examples with input, output, and explanation → [Help Content Quality: High Standards](#help-content-quality-high-standards)
 - **[All]** All return codes **MUST** be documented with exact meanings in .OUTPUTS → [Help Content Quality: High Standards](#help-content-quality-high-standards)
 - **[All]** Positional parameter support **MUST** be documented in .NOTES → [Help Content Quality: High Standards](#help-content-quality-high-standards)
@@ -105,12 +106,12 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[v1.0]** Exception: Test-* functions **MAY** return Boolean when no practical error handling needed → [Return Semantics: Explicit Status Codes](#return-semantics-explicit-status-codes)
 - **[v1.0]** Positional parameters **SHOULD** be supported for v1.0 usability → [Positional Parameter Support](#positional-parameter-support)
 - **[v1.0]** v1.0-targeted functions **MUST** use trap-based error handling (not try/catch) → [Overview of Function Architecture](#overview-of-function-architecture)
-- **[Modern]** Modern functions **MUST** use [CmdletBinding()] attribute → [Rule: "Modern Advanced" Function/Script Requirements (v2.0+)](#rule-modern-advanced-functionscript-requirements-v20)
-- **[Modern]** Modern functions **MUST** use [OutputType()] declaring singular primary type → [Rule: "Modern Advanced" Function/Script Requirements (v2.0+)](#rule-modern-advanced-functionscript-requirements-v20)
-- **[Modern]** Modern functions **MUST** use streaming output (write objects directly to pipeline in loop) → [Rule: "Modern Advanced" Function/Script Requirements (v2.0+)](#rule-modern-advanced-functionscript-requirements-v20)
-- **[Modern]** Modern functions **MUST** use try/catch for error handling → [Rule: "Modern Advanced" Function/Script Requirements (v2.0+)](#rule-modern-advanced-functionscript-requirements-v20)
-- **[Modern]** Modern functions **MUST** use Write-Verbose and Write-Debug (not manual preference toggling) → [Rule: "Modern Advanced" Function/Script Requirements (v2.0+)](#rule-modern-advanced-functionscript-requirements-v20)
-- **[Modern]** Exception: Modern functions **MAY** temporarily suppress $VerbosePreference for noisy nested commands using try/finally → ["Modern Advanced" Functions/Scripts: Exception for Suppressing Nested Verbose Streams](#modern-advanced-functionsscripts-exception-for-suppressing-nested-verbose-streams)
+- **[Modern]** Modern functions and scripts **MUST** use [CmdletBinding()] attribute → [Rule: "Modern Advanced" Function/Script Requirements (v2.0+)](#rule-modern-advanced-functionscript-requirements-v20)
+- **[Modern]** Modern functions and scripts **MUST** use [OutputType()] declaring singular primary type → [Rule: "Modern Advanced" Function/Script Requirements (v2.0+)](#rule-modern-advanced-functionscript-requirements-v20)
+- **[Modern]** Modern functions and scripts **MUST** use streaming output (write objects directly to pipeline in loop) → [Rule: "Modern Advanced" Function/Script Requirements (v2.0+)](#rule-modern-advanced-functionscript-requirements-v20)
+- **[Modern]** Modern functions and scripts **MUST** use try/catch for error handling → [Rule: "Modern Advanced" Function/Script Requirements (v2.0+)](#rule-modern-advanced-functionscript-requirements-v20)
+- **[Modern]** Modern functions and scripts **MUST** use Write-Verbose and Write-Debug (not manual preference toggling) → [Rule: "Modern Advanced" Function/Script Requirements (v2.0+)](#rule-modern-advanced-functionscript-requirements-v20)
+- **[Modern]** Exception: Modern functions and scripts **MAY** temporarily suppress $VerbosePreference for noisy nested commands using try/finally → ["Modern Advanced" Functions/Scripts: Exception for Suppressing Nested Verbose Streams](#modern-advanced-functionsscripts-exception-for-suppressing-nested-verbose-streams)
 - **[Modern]** [Parameter(Mandatory=$true)] **SHOULD** be used only when function cannot work without value → ["Modern Advanced" Functions/Scripts: Parameter Validation and Attributes (`[Parameter()]`)](#modern-advanced-functionsscripts-parameter-validation-and-attributes-parameter)
 - **[Modern]** [ValidateNotNullOrEmpty()] **SHOULD** be used for optional-but-not-empty parameters → ["Modern Advanced" Functions/Scripts: Parameter Validation and Attributes (`[Parameter()]`)](#modern-advanced-functionsscripts-parameter-validation-and-attributes-parameter)
 - **[Modern]** Multiple [OutputType()] **SHOULD** only be used for intentionally polymorphic returns → ["Modern Advanced" Functions/Scripts: Handling Multiple or Dynamic Output Types](#modern-advanced-functionsscripts-handling-multiple-or-dynamic-output-types)
@@ -122,7 +123,8 @@ This checklist provides a quick reference for both human developers and LLMs (li
 ### Error Handling
 
 - **[v1.0]** v1.0-targeted functions **MUST** use trap {} for error suppression → [Core Error Suppression Mechanism](#core-error-suppression-mechanism)
-- **[Modern]** catch blocks **MUST NOT** be empty; **MUST** log to Debug stream at minimum → [Modern catch Block Requirements](#modern-catch-block-requirements)
+- **[Modern]** catch blocks **MUST NOT** be empty; default pattern is `Write-Debug` + `throw` → [Modern catch Block Requirements](#modern-catch-block-requirements)
+- **[Modern]** Non-throwing catch (no `throw`) **MUST** have a documented non-throwing contract → [Modern catch Block Requirements](#modern-catch-block-requirements)
 
 ### File Writeability Testing
 
@@ -143,6 +145,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[Modern]** Streaming function calls **SHOULD** be wrapped in @(...) to handle 0-1-Many problem → [Consuming Streaming Functions (The `0-1-Many` Problem)](#consuming-streaming-functions-the-0-1-many-problem)
 - **[All]** Code **MUST** use Write-Warning for user-facing anomalies; Write-Debug for internal details → [Choosing Between Warning and Debug Streams](#choosing-between-warning-and-debug-streams)
 - **[All]** .NET method output **MUST** be suppressed with [void](...), not | Out-Null → [Suppression of Method Output](#suppression-of-method-output)
+- **[All]** `Write-Verbose` / `Write-Debug` **MUST NOT** emit raw PII, credentials, tokens, or other sensitive identifiers → [Sensitive Data in Verbose and Debug Streams](#sensitive-data-in-verbose-and-debug-streams)
 
 ### Language Interop and .NET
 
@@ -666,6 +669,27 @@ For shared state, the author would use:
 
 This eliminates environment-dependent behavior and ensures deterministic execution.
 
+> **Note:** The guidance to avoid relative paths targets bare `.` / `..` paths
+> that depend on `[Environment]::CurrentDirectory` or `$PWD`. Paths anchored to
+> `$PSScriptRoot` — such as `"$PSScriptRoot/../config.json"` or
+> `Join-Path -Path $PSScriptRoot -ChildPath '../src/Helper.ps1'` — are
+> **deterministic** because they resolve relative to the executing script's
+> directory, not the process working directory.
+
+**Non-compliant** (CWD-dependent):
+
+```powershell
+# Bad — result changes depending on where the caller invoked the script:
+Get-Content -Path '../config.json'
+```
+
+**Compliant** (`$PSScriptRoot`-anchored):
+
+```powershell
+# Good — always resolves relative to the script's own directory:
+Get-Content -Path (Join-Path -Path $PSScriptRoot -ChildPath '../config.json')
+```
+
 ### Options for Local Variable Prefixes: Analysis
 
 The broader PowerShell community considers the use of type prefixes on local variables a **"matter of taste"** for private variables. Some style guides recommend plain camelCase (e.g., `$message`, `$count`) as a cleaner, more modern approach that aligns with .NET naming conventions. Below is a comparison of the two approaches for context:
@@ -741,8 +765,61 @@ All functions **MUST** include **full comment-based help** using **single-line c
 # .OUTPUTS
 # [int] Status code: 0=success, 1-5=partial success with extras, -1=failure
 # .NOTES
-# Supports positional parameters. Version: 1.0.20250218.0
+# This function/script supports positional parameters:
+#   Position 0: ReferenceToResultObject
+#   Position 1: ReferenceArrayOfExtraStrings
+#   Position 2: InputString
+# Version: 1.0.20250218.0
 ```
+
+> **Note:** The terse form is acceptable where brevity is preferred, for
+> example: `# Supports positional parameters.` followed by
+> `# Version: 1.0.20250218.0`. The multi-line format shown above is
+> **RECOMMENDED** because it explicitly identifies which parameters are
+> positional and at which positions. See
+> [Positional Parameter Support](#positional-parameter-support) for full
+> guidance.
+
+#### Inline Comments Within `.EXAMPLE` Blocks
+
+When writing explanatory or output-description lines within a `.EXAMPLE` section of comment-based help, use **double `#`** — that is, `# # <text>`. The first `#` is the standard comment-based help line prefix (required for all help content). The second `#` creates a PowerShell comment within the rendered example output so that:
+
+1. `Get-Help -Examples` renders the line as `# <text>`, which is valid PowerShell syntax and can be safely copy-pasted.
+2. The explanatory text is visually distinct from executable code lines in the example.
+
+**Compliant** — explanatory lines use `# #`:
+
+```powershell
+# .EXAMPLE
+# $arrRows = @(ConvertTo-VectorRow -Counts $arrCounts -FeatureIndexObject $objIndex)
+# # $arrRows[0].PrincipalKey = 'user-abc'
+# # $arrRows[0].Vector = [double[]] (fixed-length array)
+```
+
+Rendered by `Get-Help`:
+
+```text
+$arrRows = @(ConvertTo-VectorRow -Counts $arrCounts -FeatureIndexObject $objIndex)
+# $arrRows[0].PrincipalKey = 'user-abc'
+# $arrRows[0].Vector = [double[]] (fixed-length array)
+```
+
+**Non-compliant** — single `#` for explanation text:
+
+```powershell
+# .EXAMPLE
+# $arrRows = @(ConvertTo-VectorRow -Counts $arrCounts -FeatureIndexObject $objIndex)
+# Returns vector row objects with PrincipalKey, Vector, and TotalActions.
+```
+
+Rendered by `Get-Help`:
+
+```text
+$arrRows = @(ConvertTo-VectorRow -Counts $arrCounts -FeatureIndexObject $objIndex)
+Returns vector row objects with PrincipalKey, Vector, and TotalActions.
+```
+
+The non-compliant form renders bare prose that (a) is not valid PowerShell, (b) can be confused with actual command output, and (c) is not safely copy-pasteable.
 
 ---
 
@@ -1165,6 +1242,24 @@ This enables:
 - **Script compatibility** with older calling patterns
 - **Flexibility** without sacrificing type safety
 
+#### Documenting Positional Parameters in `.NOTES`
+
+When a function or script supports positional parameters, the `.NOTES` section **SHOULD** use the following multi-line format to document which parameters are positional and at which positions:
+
+```powershell
+# .NOTES
+# This function/script supports positional parameters:
+#   Position 0: VectorRows
+#   Position 1: KMeansResult
+# Version: 1.0.20250218.0
+```
+
+Guidance for this format:
+
+1. The header line **SHOULD** be `# This function/script supports positional parameters:` followed by each position listed on its own indented line as `#   Position N: ParameterName`.
+2. Only list parameters that are expected to be used positionally. For functions or scripts with many optional parameters, listing only the mandatory or commonly-used positional parameters is acceptable.
+3. The parameter name **SHOULD** match the declared parameter name without the `-` prefix (e.g., `VectorRows`, not `-VectorRows`), since the `.NOTES` section documents the parameter's identity, not its call syntax.
+
 ---
 
 ### Advanced Feature Emulation (v1.0-Native)
@@ -1198,16 +1293,16 @@ The use of explicit `return` vs. implicit output represents a **philosophical ch
 
 The "v1.0 Classicist" style is the default for standalone, portable utilities that **MUST** maintain backward compatibility.
 
-However, if a script or function **cannot** target v1.0, it **MUST** be written as a "Modern Advanced" function. This condition is met if the code:
+However, if a script or function **cannot** target v1.0, it **MUST** be written in the "Modern Advanced" style. This condition is met if the code:
 
 1. Has external module dependencies that require a modern PowerShell version (e.g., `AWS.Tools`, `Az`, `Microsoft.Graph`).
 2. Intentionally uses features from PowerShell v2.0 or later (e.g., `try/catch`, `[pscustomobject]` literals, `Add-Type -AssemblyName`), and there are no reasonable alternative approaches that can be used to ensure support for PowerShell v1.0.
 
-Functions written in this "Modern Advanced" style **MUST** adhere to the following rules:
+Functions and scripts written in this "Modern Advanced" style **MUST** adhere to the following rules:
 
-1. **Must Use `[CmdletBinding()]`:** All modern functions **MUST** begin with the `[CmdletBinding()]` attribute. This is the non-negotiable identifier of an advanced function and enables support for common parameters (`-Verbose`, `-Debug`, `-ErrorAction`, etc.).
-2. **Must Use `[OutputType()]`:** The function **MUST** declare its primary output object type using `[OutputType()]`. This is critical for discoverability, integration, and validating the function's contract.
-3. **Must Use Streaming Output:** Functions that return collections **MUST** write objects directly to the pipeline (stream) from within a loop. They **MUST NOT** collect results in a `List<T>` or array to be returned at the end. (See *Processing Collections in Modern Functions*).
+1. **Must Use `[CmdletBinding()]`:** All modern functions and scripts **MUST** use the `[CmdletBinding()]` attribute. This is the non-negotiable identifier of an advanced function or script and enables support for common parameters (`-Verbose`, `-Debug`, `-ErrorAction`, etc.). For modern scripts (`.ps1` files that are not functions), `[CmdletBinding()]` and the `param` block **MUST** appear as the first statement in the script, other than permitted `using` statements, comments, and blank lines. Placing other statements before `[CmdletBinding()]` / `param` causes a `ParseException` when the script is invoked via the call operator (`& $path`).
+2. **Must Use `[OutputType()]`:** All modern functions and scripts **MUST** declare their primary output object type using `[OutputType()]`. This is critical for discoverability, integration, and validating the function's or script's contract.
+3. **Must Use Streaming Output:** Functions and scripts that return collections **MUST** write objects directly to the pipeline (stream) from within a loop. They **MUST NOT** collect results in a `List<T>` or array to be returned at the end. (See *Processing Collections in Modern Functions*).
 4. **Must Use `try/catch`:** Error handling **MUST** use `try/catch` blocks. The v1.0 `trap` / preference-toggling pattern is **prohibited** in this style.
 5. **Must Use Proper Streams:** Verbose and debug messages **MUST** be written to their respective streams (`Write-Verbose`, `Write-Debug`). Manual toggling of `$VerbosePreference` is **prohibited**.
 
@@ -1332,9 +1427,9 @@ To ensure the result is **always** an array (even if empty or with a single item
 
 ```powershell
 # .EXAMPLE
-# This example shows how to safely call the function and guarantee the
-# result is an array, even if only one principal is returned.
-$arrPrincipals = @(Expand-TrustPrincipal -PrincipalNode $statement.Principal)
+# # This example shows how to safely call the function and guarantee the
+# # result is an array, even if only one principal is returned.
+# $arrPrincipals = @(Expand-TrustPrincipal -PrincipalNode $statement.Principal)
 ```
 
 ---
@@ -1508,14 +1603,58 @@ The v1.0 pattern is **functionally equivalent** but **more verbose** and **dupli
 
 ### Modern `catch` Block Requirements
 
-In modern functions using `try/catch` (i.e., those not targeting v1.0), `catch` blocks **MUST NOT** be empty. An empty `catch` block is flagged by PSScriptAnalyzer and provides no diagnostic value. At a minimum, the error **SHOULD** be logged to the **Debug** stream, as it represents an *internal, handled* failure.
+In modern functions using `try/catch` (i.e., those not targeting v1.0), `catch` blocks **MUST NOT** be empty. An empty `catch` block is flagged by PSScriptAnalyzer and provides no diagnostic value.
+
+#### Architectural Context: Library/Helper Functions vs. Higher-Level Code
+
+The return-code and error-swallowing patterns described in the preceding v1.0 sections are primarily associated with **library/helper functions** — highly reusable building blocks that handle operational errors internally and communicate failure through an explicitly documented contract (e.g., integer return codes, reference outputs). These functions are designed to **never throw**, and their non-throwing behavior **MUST** be documented in `.DESCRIPTION` and `.OUTPUTS`. While v1.0 compatibility is a common consequence of this design goal, the non-throwing contract itself is the primary architectural motivation; a modern function can adopt the same pattern when the design requires it.
+
+For **modern higher-level functions and scripts** — code that orchestrates these building blocks or performs tasks for end users — the default expectation is that unexpected failures **propagate** to the caller.
+
+#### Default Pattern: `Write-Debug` + `throw`
+
+The standard `catch` pattern for modern advanced functions and scripts **SHOULD** log the error to the **Debug** stream and then **re-throw** it so that unexpected failures propagate to the caller. This **SHOULD** be the default unless the function is explicitly designed as a non-throwing wrapper with a documented contract.
 
 ```powershell
-# Compliant
+# Default: log and re-throw
 try {
     ...
 } catch {
-    Write-Debug ("Failed to do X: {0}" -f ($_.Exception.Message -or $_.ToString()))
+    Write-Debug ("Failed to do X: {0}" -f $_)
+    throw
+}
+```
+
+#### Documented Non-Throwing Exception
+
+A modern function **MAY** intentionally handle an exception without re-throwing **only** when its contract explicitly specifies non-throwing behavior. In that case, the function's comment-based help (`.DESCRIPTION` and `.OUTPUTS`) **MUST** clearly document that failures are communicated through return values, output state, warnings, or another defined mechanism rather than by throwing.
+
+```powershell
+# Non-throwing wrapper with documented contract
+function Convert-SafelyFromJson {
+    # .DESCRIPTION
+    # Attempts to convert a JSON string to an object. This function does
+    # NOT throw on invalid input; instead it returns $null and logs the
+    # error to the Debug stream. Callers MUST check the return value.
+    #
+    # .OUTPUTS
+    # [object] on success; $null on failure.
+    [CmdletBinding()]
+    [OutputType([object])]
+    param (
+        [string]$JsonString
+    )
+
+    if ([string]::IsNullOrEmpty($JsonString)) {
+        return $null
+    }
+
+    try {
+        $JsonString | ConvertFrom-Json -ErrorAction Stop
+    } catch {
+        Write-Debug ("JSON conversion failed: {0}" -f $_)
+        $null
+    }
 }
 ```
 
@@ -2107,6 +2246,27 @@ For file paths, the author would use:
 - **Explicit provider qualifiers** (e.g., `FileSystem::C:\path`)
 - **Join-Path** with validated roots
 
+> **Note:** The guidance to avoid relative paths targets bare `.` / `..` paths
+> that depend on `[Environment]::CurrentDirectory` or `$PWD`. Paths anchored to
+> `$PSScriptRoot` — such as `"$PSScriptRoot/../config.json"` or
+> `Join-Path -Path $PSScriptRoot -ChildPath '../src/Helper.ps1'` — are
+> **deterministic** because they resolve relative to the executing script's
+> directory, not the process working directory.
+
+**Non-compliant** (CWD-dependent):
+
+```powershell
+# Bad — result changes depending on where the caller invoked the script:
+Get-Content -Path '../config.json'
+```
+
+**Compliant** (`$PSScriptRoot`-anchored):
+
+```powershell
+# Good — always resolves relative to the script's own directory:
+Get-Content -Path (Join-Path -Path $PSScriptRoot -ChildPath '../config.json')
+```
+
 ---
 
 ### .NET Type Usage Summary
@@ -2381,6 +2541,8 @@ process {
 }
 ```
 
+> **Note:** This example uses `$StringToProcess` for brevity. When the logged variable could contain PII, credentials, or other sensitive data, follow the guidance in [Sensitive Data in Verbose and Debug Streams](#sensitive-data-in-verbose-and-debug-streams).
+
 **Streams enabled**:
 
 - **Verbose** → operational details
@@ -2428,6 +2590,20 @@ When calling .NET methods that return a value (like `System.Collections.ArrayLis
 # Non-Compliant (Typically slower than casting to void)
 $list.Add($item) | Out-Null
 ```
+
+### Sensitive Data in Verbose and Debug Streams
+
+When logging parameter values or internal state via `Write-Verbose` or `Write-Debug`, functions **MUST NOT** emit raw personally identifiable information (PII), credentials, secrets, tokens, or other sensitive identifiers that could be exposed in console output, transcript files, automation logs, or CI logs.
+
+Instead, code **SHOULD** use safe alternatives such as:
+
+- Boolean presence flags (for example, `ObjectIdPresent = $true`)
+- Non-sensitive metadata (for example, string length, item count, or type name)
+- Redacted or intentionally truncated values, but only when doing so does not expose sensitive information
+
+This applies especially to values such as user principal names (UPNs), email addresses, Azure AD object IDs, application IDs, tenant IDs, access tokens, client secrets, and similar identifiers.
+
+If diagnostic traceability is required, prefer logging whether a value was supplied, its general type, or other non-sensitive characteristics rather than the original value itself.
 
 ## Testing with Pester
 
@@ -2510,7 +2686,9 @@ It "Returns success code 0 when given valid input" {
 
 ### Testing Return Code Conventions
 
-Tests **MUST** verify the return code conventions documented in [Return Semantics: Explicit Status Codes](#return-semantics-explicit-status-codes).
+For functions and scripts that use explicit integer status codes, tests **MUST** verify the return code conventions documented in [Return Semantics: Explicit Status Codes](#return-semantics-explicit-status-codes).
+
+> **Note for functions and scripts that return objects:** If a function or script returns `[pscustomobject]` or other structured data instead of integer status codes, this section does not apply. For such cases, output contract verification — including edge cases such as `$null` returns — SHOULD be covered by Pester tests in accordance with [Testing with Pester](#testing-with-pester), where applicable.
 
 #### Functions Returning Integer Status Codes
 
