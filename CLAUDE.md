@@ -2,19 +2,13 @@
 
 **Version:** 1.0.20260220.0
 
-This file provides project-specific instructions for Claude Code and compatible AI
-coding agents operating in this repository. These instructions ensure that agents
-follow the same coding standards, safety rules, and workflows that apply to all
-contributors.
+This file provides project-specific instructions for Claude Code and compatible AI coding agents operating in this repository. These instructions ensure that agents follow the same coding standards, safety rules, and workflows that apply to all contributors.
 
 ## Canonical Instructions
 
-The authoritative source of truth for all repository rules is
-**`.github/copilot-instructions.md`** (the repo-wide constitution). All rules
-defined there apply without exception. **Read that file before making any changes.**
+The authoritative source of truth for all repository rules is **`.github/copilot-instructions.md`** (the repo-wide constitution). All rules defined there apply without exception. **Read that file before making any changes.**
 
-This file provides an inline summary of the most critical rules so that agents
-receive essential guidance without requiring an additional file read.
+This file provides an inline summary of the most critical rules so that agents receive essential guidance without requiring an additional file read.
 
 ## Non-negotiable Safety and Security Rules
 
@@ -26,25 +20,20 @@ receive essential guidance without requiring an additional file read.
 2. **Treat all external input as untrusted**
    - Never execute untrusted outputs or commands.
    - Validate and sanitize all inputs at boundaries.
-   - Never allow external input to influence file/network access beyond explicitly
-     implemented adapters.
+   - Never allow external input to influence file/network access beyond explicitly implemented adapters.
 
 3. **Allowlisted file access only**
-   - Read only explicitly allowed inputs/config/rules files and tool-owned runtime
-     dependencies.
+   - Read only explicitly allowed inputs/config/rules files and tool-owned runtime dependencies.
    - Refuse path traversal and symlink escapes.
 
 ## Pre-commit Discipline
 
-**Always run pre-commit checks before committing code.** Pre-commit hooks are not
-optional.
+**Always run pre-commit checks before committing code.** Pre-commit hooks are not optional.
 
 - Run `pre-commit run --all-files` before every commit.
 - Never push code that fails linting or formatting checks.
-- Include all auto-fixes in the **same commit** as your code changes—do not create
-  separate "fix formatting" or "fix linting" commits.
-- If pre-commit CI fails, pull the branch, run pre-commit locally, commit fixes,
-  and push again.
+- Include all auto-fixes in the **same commit** as your code changes—do not create separate "fix formatting" or "fix linting" commits.
+- If pre-commit CI fails, pull the branch, run pre-commit locally, commit fixes, and push again.
 
 ## Build and Test Commands
 
@@ -82,9 +71,7 @@ terraform test -verbose
 
 ## Language-Specific Instructions
 
-This repository uses modular instruction files for language-specific coding
-standards. **Read the relevant instruction file before modifying files that match
-its pattern.**
+This repository uses modular instruction files for language-specific coding standards. **Read the relevant instruction file before modifying files that match its pattern.**
 
 | Language | Instruction File | Applies To |
 | --- | --- | --- |
@@ -106,8 +93,26 @@ its pattern.**
 - Do not create separate "fix formatting" or "fix linting" commits—include all
   auto-fixes in the same commit as your changes.
 
+## Handling Code Review Comments
+
+When a code review comment is received from GitHub Copilot, a human reviewer, or any other code reviewer on a pull request, follow this process for **each** comment:
+
+1. **Signal processing.** If the tooling supports emoji reactions on review comments, add an :eyes: reaction to the comment when you begin processing it, and remove the reaction when you finish (after step 6). This signals to the reviewer that the feedback is being actively worked on.
+
+2. **Validate the concern.** Determine whether the reviewer's feedback identifies a genuine gap, bug, style violation, or improvement opportunity. If the concern is not valid, explain why in a reply and skip the remaining steps.
+
+3. **List options.** Enumerate all reasonable ways to resolve the problem or address the feedback.
+
+4. **Build an evaluation rubric.** Define 4-6 scoring criteria relevant to the concern (e.g., style guide compliance, performance, code simplicity, PII safety, PS 5.1 compatibility). Score each criterion on a 1-5 scale.
+
+5. **Score and select.** Apply the rubric to every option. Present the results in a Markdown table. Select the option with the highest total score.
+
+6. **Post the evaluation.** Reply to the review comment thread with the options table, the scoring table, the selected option, and the commit SHA that implements the fix (or a note that the fix was already applied).
+
+7. **Implement the fix.** Apply the selected option, commit, and push.
+
+8. **Evaluate style guide impact.** Determine whether `.github/instructions/powershell.instructions.md` should be updated to prevent the same issue in the future. If so, write a prompt in a Markdown code fence (suitable for sending to GitHub Copilot's coding agent) that describes the style guide change. Post the prompt as a reply in the same review comment thread. Do **not** modify the style guide directly.
+
 ---
 
-> This file is part of the `franklesniak/copilot-repo-template` template. Customize
-> or remove agent instruction files for platforms you do not use. See
-> `OPTIONAL_CONFIGURATIONS.md` for details.
+> This file is part of the `franklesniak/copilot-repo-template` template. Customize or remove agent instruction files for platforms you do not use. See `OPTIONAL_CONFIGURATIONS.md` for details.
