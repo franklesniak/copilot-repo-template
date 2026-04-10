@@ -5,13 +5,13 @@ description: "PowerShell coding standards"
 
 # PowerShell Writing Style
 
-**Version:** 1.6.20260409.0
+**Version:** 1.7.20260410.3
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-04-09
+- **Last Updated:** 2026-04-10
 - **Scope:** Defines PowerShell coding standards for all `.ps1` files in this repository. Covers style, formatting, naming conventions, error handling, documentation requirements, and compatibility patterns for both legacy (v1.0) and modern (v5.1+/v7.x+) PowerShell codebases.
 
 ## Table of Contents
@@ -125,6 +125,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[v1.0]** v1.0-targeted functions **MUST** use trap {} for error suppression → [Core Error Suppression Mechanism](#core-error-suppression-mechanism)
 - **[Modern]** catch blocks **MUST NOT** be empty; default pattern is `Write-Debug` + `throw` → [Modern catch Block Requirements](#modern-catch-block-requirements)
 - **[Modern]** Non-throwing catch (no `throw`) **MUST** have a documented non-throwing contract → [Modern catch Block Requirements](#modern-catch-block-requirements)
+- **[Modern]** Variables referenced in `finally` that are assigned in `try` **MUST** be initialized before the `try` block → [Set-StrictMode Considerations for finally Blocks](#set-strictmode-considerations-for-finally-blocks)
 
 ### File Writeability Testing
 
@@ -146,6 +147,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** Code **MUST** use Write-Warning for user-facing anomalies; Write-Debug for internal details → [Choosing Between Warning and Debug Streams](#choosing-between-warning-and-debug-streams)
 - **[All]** .NET method output **MUST** be suppressed with [void](...), not | Out-Null → [Suppression of Method Output](#suppression-of-method-output)
 - **[All]** `Write-Verbose` / `Write-Debug` **MUST NOT** emit raw PII, credentials, tokens, or other sensitive identifiers → [Sensitive Data in Verbose and Debug Streams](#sensitive-data-in-verbose-and-debug-streams)
+- **[Modern]** Hot-path `Write-Verbose` / `Write-Debug` with string formatting **SHOULD** be guarded behind a preference check → [Performance-Sensitive `Write-Verbose` / `Write-Debug` in Hot Paths](#performance-sensitive-write-verbose--write-debug-in-hot-paths)
 
 ### Language Interop and .NET
 
@@ -160,6 +162,8 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** Tests **SHOULD** use Arrange-Act-Assert pattern in test cases → [Test Structure: Arrange-Act-Assert](#test-structure-arrange-act-assert)
 - **[All]** Tests **MUST** verify all documented return codes for functions → [Testing Return Code Conventions](#testing-return-code-conventions)
 - **[All]** Test-* functions **MUST** have tests for both `$true` and `$false` cases → [Testing Return Code Conventions](#testing-return-code-conventions)
+- **[All]** Tests asserting property names on `[pscustomobject]` **MUST** use order-insensitive comparisons → [Testing Property Names on PSCustomObject](#testing-property-names-on-pscustomobject)
+- **[All]** Test `BeforeAll` dot-sourcing **MUST** use the `Split-Path` + `Join-Path` two-step pattern; multi-segment `Join-Path` forms **MUST NOT** be used → [Test File Dot-Sourcing Pattern](#test-file-dot-sourcing-pattern)
 
 ## Executive Summary: Author Profile
 
@@ -1660,6 +1664,30 @@ function Convert-SafelyFromJson {
 
 ---
 
+### Set-StrictMode Considerations for `finally` Blocks
+
+When `Set-StrictMode -Version Latest` is in effect, referencing a variable that has never been assigned raises a terminating error. This creates a subtle but important pitfall when a `finally` block references a variable that is assigned inside the corresponding `try` block (for example, a disposable resource). If an exception occurs before the assignment executes, `Set-StrictMode` will raise a terminating error for the uninitialized variable inside `finally`, which can mask the original exception and interfere with proper cleanup.
+
+**Rule:** When a `finally` block references a variable that is assigned inside the corresponding `try` block, that variable **MUST** be initialized before the `try` block, typically to `$null`.
+
+**Compliant Example:**
+
+```powershell
+$objResource = $null
+try {
+    $objResource = [SomeDisposable]::Create()
+    # ... use $objResource ...
+} finally {
+    if ($null -ne $objResource) {
+        $objResource.Dispose()
+    }
+}
+```
+
+In this example, `$objResource` is initialized to `$null` before the `try` block. If `[SomeDisposable]::Create()` throws before the assignment completes, the `finally` block can safely check `$null -ne $objResource` without triggering a `Set-StrictMode` violation.
+
+---
+
 ### Summary: Error Handling as Diagnostic Instrumentation
 
 The error handling system is a **masterclass in v1.0 reliability engineering**:
@@ -2605,6 +2633,50 @@ This applies especially to values such as user principal names (UPNs), email add
 
 If diagnostic traceability is required, prefer logging whether a value was supplied, its general type, or other non-sensitive characteristics rather than the original value itself.
 
+**Non-Compliant** — logs a raw sensitive identifier:
+
+```powershell
+# Non-Compliant
+Write-Verbose -Message ('PrincipalKey: ' + $PrincipalKey)
+```
+
+**Compliant** — logs safe, non-sensitive metadata:
+
+```powershell
+# Compliant - logs whether the value is present (boolean)
+Write-Verbose -Message ('PrincipalKey present: {0}' -f ($null -ne $PrincipalKey))
+
+# Compliant - logs the value's type name with a null-safe fallback
+$strPrincipalKeyTypeName = if ($null -ne $PrincipalKey) { $PrincipalKey.GetType().Name } else { '<null>' }
+Write-Debug -Message ('PrincipalKey type: {0}' -f $strPrincipalKeyTypeName)
+
+# Compliant - logs non-sensitive metadata (string length) with a type-safe fallback
+$strPrincipalKeyLength = if ($PrincipalKey -is [string]) { [string]$PrincipalKey.Length } else { '<n/a>' }
+Write-Verbose -Message ('PrincipalKey length: {0}' -f $strPrincipalKeyLength)
+```
+
+### Performance-Sensitive `Write-Verbose` / `Write-Debug` in Hot Paths
+
+**[Modern]** functions that are called per-record or inside tight loops (that is, hot paths) **SHOULD** guard `Write-Verbose` and `Write-Debug` calls that perform string formatting — such as with the `-f` operator or string concatenation — behind an appropriate preference check to avoid unconditional string allocation overhead when the stream is not enabled.
+
+**Recommended pattern for `Write-Verbose`:**
+
+```powershell
+if ($VerbosePreference -ne 'SilentlyContinue') {
+    Write-Verbose ("Processing item: {0}" -f $strCurrentItem)
+}
+```
+
+**Recommended pattern for `Write-Debug`:**
+
+```powershell
+if ($DebugPreference -ne 'SilentlyContinue') {
+    Write-Debug ("Processing item: {0}" -f $strCurrentItem)
+}
+```
+
+> **Note:** This guard is recommended only for performance-sensitive code paths and is **NOT** required for functions that run once, or only a small number of times, per pipeline or script execution.
+
 ## Testing with Pester
 
 **Pester** is the standard testing framework for PowerShell, providing a domain-specific language for writing and executing tests. This section documents testing conventions that integrate with the coding standards in this guide. For comprehensive Pester documentation, see [pester.dev](https://pester.dev/).
@@ -2653,6 +2725,24 @@ Tests **MUST** use Pester 5.x syntax. Legacy Pester 3.x/4.x patterns **MUST NOT*
 - Use `BeforeAll` for dot-sourcing scripts (not at the file level outside blocks)
 - Discovery and Run phases are separate—code at the top level runs during discovery
 - Code **MUST** use `Should -Be`, `Should -BeExactly`, `Should -BeNullOrEmpty`, etc. (not legacy `Assert-*` patterns)
+
+---
+
+### Test File Dot-Sourcing Pattern
+
+Pester test files that dot-source scripts under test in `BeforeAll` **MUST** use the `Split-Path` + `Join-Path` two-step pattern. This pattern resolves the parent directory of the test file's directory and then builds the path to the source file:
+
+```powershell
+BeforeAll {
+    $strSrcPath = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'src'
+    . (Join-Path -Path $strSrcPath -ChildPath 'FunctionName.ps1')
+}
+```
+
+**Why this pattern is required:**
+
+- Multi-segment `Join-Path` forms such as `Join-Path $PSScriptRoot '..' 'src' 'FunctionName.ps1'` rely on the `-AdditionalChildPath` parameter, which was introduced in PowerShell 6.0 and is **not available** in Windows PowerShell 5.1. Test files **MUST NOT** use this form.
+- For consistency and canonical style in test files, `$PSScriptRoot`-anchored `..` path forms such as `$PSScriptRoot/../src/...` or `Join-Path -Path $PSScriptRoot -ChildPath '../src/...'` **MUST NOT** be used; use the explicit parent-resolution pattern instead.
 
 ---
 
@@ -2710,7 +2800,8 @@ Additionally, if the function uses `[ref]` parameters for output:
 ```powershell
 Describe "Convert-StringToObject" {
     BeforeAll {
-        . $PSScriptRoot/../src/Convert-StringToObject.ps1
+        $strSrcPath = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'src'
+        . (Join-Path -Path $strSrcPath -ChildPath 'Convert-StringToObject.ps1')
     }
 
     Context "When given valid input" {
@@ -2767,7 +2858,8 @@ For `Test-*` functions that return Boolean values (as documented in the exceptio
 ```powershell
 Describe "Test-PathExists" {
     BeforeAll {
-        . $PSScriptRoot/../src/Test-PathExists.ps1
+        $strSrcPath = Join-Path -Path (Split-Path -Path $PSScriptRoot -Parent) -ChildPath 'src'
+        . (Join-Path -Path $strSrcPath -ChildPath 'Test-PathExists.ps1')
     }
 
     Context "When the path exists" {
@@ -2796,6 +2888,38 @@ Describe "Test-PathExists" {
         }
     }
 }
+```
+
+---
+
+### Testing Property Names on PSCustomObject
+
+When testing that a `[pscustomobject]` contains the expected property names, assertions **MUST** use an **order-insensitive** comparison. Although `PSObject.Properties.Name` preserves declaration order in practice for objects created via the `[pscustomobject]` type accelerator with a hashtable literal, this ordering is not a documented guarantee. Tests **SHOULD NOT** rely on property ordering because:
+
+1. Future refactors might change the property declaration order.
+2. Objects constructed via `Add-Member` or other mechanisms may not preserve insertion order.
+3. Order-insensitive tests are more resilient and communicate intent more clearly.
+
+**Per-property containment** (preferred when property count is small):
+
+```powershell
+$objResult.PSObject.Properties.Name | Should -Contain 'Key'
+$objResult.PSObject.Properties.Name | Should -Contain 'Type'
+$objResult.PSObject.Properties.Name | Should -HaveCount 2
+```
+
+**Sorted array comparison** (acceptable alternative — the expected array must be in sorted order to match the `Sort-Object` output):
+
+```powershell
+($objResult.PSObject.Properties.Name | Sort-Object) |
+    Should -Be @('Key', 'Type')
+```
+
+**Non-Compliant** (order-sensitive — fragile):
+
+```powershell
+# Non-Compliant
+$objResult.PSObject.Properties.Name | Should -Be @('Key', 'Type')
 ```
 
 ---
