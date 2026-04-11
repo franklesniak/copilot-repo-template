@@ -2,7 +2,7 @@
 # ISSUE TEMPLATE CONFIG
 # =============================================================================
 # For detailed design decisions and customization options, see:
-# .github/DESIGN_DECISIONS.md > Issue Template Design Decisions > config.yml
+# .github/TEMPLATE_DESIGN_DECISIONS.md > Issue Template Design Decisions > config.yml
 #
 # CUSTOMIZE: markers below indicate actionable customization points.
 # Look for `# CUSTOMIZE:` comments throughout this file.
@@ -35,7 +35,7 @@ contact_links:
   # - This link will NOT provide a "Report a vulnerability" option to external users
   # - You MUST provide an email contact in SECURITY.md for security reports
   # - Consider removing or commenting out this link if it would confuse reporters
-  # See .github/DESIGN_DECISIONS.md for detailed guidance on private vs. public repos.
+  # See .github/TEMPLATE_DESIGN_DECISIONS.md for detailed guidance on private vs. public repos.
   #
   # Trade-off notes on Security link target options:
   # - Option A: /security (used here) - Broad compatibility; general entry point that

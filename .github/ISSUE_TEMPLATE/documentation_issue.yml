@@ -2,7 +2,7 @@
 # DOCUMENTATION ISSUE TEMPLATE
 # =============================================================================
 # For detailed design decisions and customization options, see:
-# .github/DESIGN_DECISIONS.md > Issue Template Design Decisions
+# .github/TEMPLATE_DESIGN_DECISIONS.md > Issue Template Design Decisions
 #
 # CUSTOMIZE: markers below indicate actionable customization points.
 # Look for `# CUSTOMIZE:` comments throughout this file.

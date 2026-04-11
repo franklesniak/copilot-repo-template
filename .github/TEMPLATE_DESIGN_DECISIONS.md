@@ -32,7 +32,7 @@ This document records design decisions made during the creation and maintenance 
 
 ## File Placement
 
-### Design Decision: DESIGN_DECISIONS.md Location
+### Design Decision: TEMPLATE_DESIGN_DECISIONS.md Location
 
 This file is placed in `.github/` because it is GitHub-specific configuration guidance that relates directly to other files in this directory (pull_request_template.md, ISSUE_TEMPLATE/, workflows/, etc.). Keeping it here makes it discoverable alongside the files it documents and ensures template maintainers encounter it when exploring GitHub configuration. This is preferable to `docs/` (general project documentation) or the repo root (which should remain clean for end users).
 
@@ -64,7 +64,7 @@ This relative link has been tested and confirmed to work correctly in rendered P
 - GitHub Enterprise Server (GHES) compatibility varies by version.
 
 If you need the link to work in PR drafts, GHES, or external contexts, replace with:
-`https://github.com/OWNER/REPO/blob/HEAD/CONTRIBUTING.md` (remembering to replace OWNER/REPO with your actual org/repo name).
+`https://github.com/<owner>/<repo>/blob/HEAD/CONTRIBUTING.md` (remembering to replace `<owner>/<repo>` with your actual org/repo name).
 
 ### Design Decision: Link Strategy in PR Template
 
@@ -313,7 +313,7 @@ Instruction files in `.github/instructions/` are scoped to **code authoring stan
 **Where CI/CD guidance lives:**
 
 - `.github/workflows/` — Workflow files with inline comments explaining design choices
-- `DESIGN_DECISIONS.md` — The "CI Workflow Configuration" section documents CI/CD design decisions
+- `.github/TEMPLATE_DESIGN_DECISIONS.md` — The "CI Workflow Configuration" section documents CI/CD design decisions
 - `README.md` — High-level overview of available workflows and their purposes
 
 ---

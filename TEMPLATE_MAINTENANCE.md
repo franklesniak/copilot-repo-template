@@ -192,7 +192,7 @@ The Terraform instructions file uses the newest stable major versions in provide
 2. Identify current stable major versions for each provider
 3. If a new major version is now the recommended stable release, update the following files:
    - `.github/instructions/terraform.instructions.md` (version constraint examples throughout)
-   - `.github/DESIGN_DECISIONS.md` (current versions table in "Current Provider Versions in Terraform Examples" section)
+   - `.github/TEMPLATE_DESIGN_DECISIONS.md` (current versions table in "Current Provider Versions in Terraform Examples" section)
 
 **Current versions (as of last update):**
 
