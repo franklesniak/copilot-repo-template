@@ -97,7 +97,7 @@ PR comments and review comments that begin with `@copilot` are commands addresse
 
 When a code review comment is received from GitHub Copilot, a human reviewer, or any other code reviewer on a pull request, follow this process for **each** comment:
 
-1. **Signal processing.** If the tooling supports emoji reactions on review comments, add an :eyes: reaction to the comment when you begin processing it, and remove the reaction when you finish (after step 6). This signals to the reviewer that the feedback is being actively worked on. **Known limitation:** The GitHub MCP server does not currently expose `add_reaction` or `remove_reaction` endpoints for review comments. Skip this step until the tooling is available.
+1. **Signal processing.** If the tooling supports emoji reactions on review comments, add an :eyes: reaction to the comment when you begin processing it, and remove the reaction when you finish (after step 9). This signals to the reviewer that the feedback is being actively worked on. **Known limitation:** The GitHub MCP server does not currently expose `add_reaction` or `remove_reaction` endpoints for review comments. Skip this step until the tooling is available.
 
 2. **Validate the concern.** Determine whether the reviewer's feedback identifies a genuine gap, bug, style violation, or improvement opportunity. If the concern is not valid, explain why in a reply and skip the remaining steps.
 
@@ -107,11 +107,11 @@ When a code review comment is received from GitHub Copilot, a human reviewer, or
 
 5. **Score and select.** Apply the rubric to every option. Present the results in a Markdown table. Select the option with the highest total score.
 
-6. **Post the evaluation.** Reply to the review comment thread with the options table, the scoring table, the selected option, and the commit SHA that implements the fix (or a note that the fix was already applied).
+6. **Post the evaluation.** Reply to the review comment thread with the options table, the scoring table, the selected option, and either a note that implementation will follow in step 7 or, if the fix was already applied, the commit SHA that implements it.
 
 7. **Implement the fix.** Apply the selected option, commit, and push.
 
-8. **Evaluate style guide impact.** Determine whether `.github/instructions/powershell.instructions.md` should be updated to prevent the same issue in the future. **Read the full style guide before answering** — the recommendation must account for what the guide already covers to avoid duplicating or contradicting existing rules. If an update is warranted, write a prompt in a Markdown code fence (suitable for sending to GitHub Copilot's coding agent) that describes the style guide change. Post the prompt as a reply in the same review comment thread. Do **not** modify the style guide directly.
+8. **Evaluate style guide impact.** Determine whether the relevant language instruction file(s) under `.github/instructions/` should be updated to prevent the same issue in the future. **Read the full applicable style guide(s) before answering** — the recommendation must account for what the guide already covers to avoid duplicating or contradicting existing rules. If an update is warranted, write a prompt in a Markdown code fence (suitable for sending to GitHub Copilot's coding agent) that describes the style guide change. Post the prompt as a reply in the same review comment thread. Do **not** modify the style guide directly.
 
 9. **Resolve or leave open.** If **no** style guide update was recommended in step 8, resolve the review comment thread using the `resolve_review_thread` tool (or equivalent). If a style guide update **was** recommended, leave the thread **open** so the owner can see and act on the prompt before it is dismissed. **Known limitation:** The `resolve_review_thread` tool requires a GraphQL thread node ID (`PRRT_...`), but the `get_review_comments` response currently omits thread-level node IDs. Until the MCP server includes them, this step cannot be performed automatically. Skip it and note the limitation if the tool call fails.
 
