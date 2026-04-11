@@ -313,7 +313,7 @@ Instruction files in `.github/instructions/` are scoped to **code authoring stan
 **Where CI/CD guidance lives:**
 
 - `.github/workflows/` — Workflow files with inline comments explaining design choices
-- `TEMPLATE_DESIGN_DECISIONS.md` — The "CI Workflow Configuration" section documents CI/CD design decisions
+- `.github/TEMPLATE_DESIGN_DECISIONS.md` — The "CI Workflow Configuration" section documents CI/CD design decisions
 - `README.md` — High-level overview of available workflows and their purposes
 
 ---

@@ -35,7 +35,7 @@ body:
   # DESIGN DECISION: REDUNDANT SECURITY WARNINGS
   # This template intentionally includes multiple security warnings (top-of-form,
   # checkbox, severity dropdown). This defense-in-depth approach maximizes chance
-  # of catching accidental security disclosure. See TEMPLATE_DESIGN_DECISIONS.md for rationale.
+  # of catching accidental security disclosure. See .github/TEMPLATE_DESIGN_DECISIONS.md for rationale.
   - type: markdown
     attributes:
       value: |
