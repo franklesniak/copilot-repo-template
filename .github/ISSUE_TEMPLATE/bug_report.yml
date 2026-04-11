@@ -2,7 +2,7 @@
 # BUG REPORT TEMPLATE
 # =============================================================================
 # For detailed design decisions and customization options, see:
-# .github/DESIGN_DECISIONS.md > Issue Template Design Decisions > bug_report.yml
+# .github/TEMPLATE_DESIGN_DECISIONS.md > Issue Template Design Decisions > bug_report.yml
 #
 # CUSTOMIZE: markers below indicate actionable customization points.
 # Look for `# CUSTOMIZE:` comments throughout this file.
@@ -35,7 +35,7 @@ body:
   # DESIGN DECISION: REDUNDANT SECURITY WARNINGS
   # This template intentionally includes multiple security warnings (top-of-form,
   # checkbox, severity dropdown). This defense-in-depth approach maximizes chance
-  # of catching accidental security disclosure. See DESIGN_DECISIONS.md for rationale.
+  # of catching accidental security disclosure. See TEMPLATE_DESIGN_DECISIONS.md for rationale.
   - type: markdown
     attributes:
       value: |

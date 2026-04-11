@@ -1739,7 +1739,7 @@ Delete `.github/dependabot.yml` from your repository.
 
 Repository rulesets help prevent accidental force pushes and ensure code review. Rulesets are the recommended replacement for classic branch protection rules and offer more granular control. See [GitHub's rulesets documentation](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets) for setup instructions.
 
-For detailed guidance on branch ruleset setup, see the "Branch Ruleset Setup" section in [`.github/DESIGN_DECISIONS.md`](.github/DESIGN_DECISIONS.md).
+For detailed guidance on branch ruleset setup, see the "Branch Ruleset Setup" section in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md).
 
 ---
 
@@ -1876,16 +1876,16 @@ After completing the setup checklist, perform the following quick verification:
 
 After completing setup and verification, clean up template-specific files.
 
-### Keep DESIGN_DECISIONS.md
+### Review TEMPLATE_DESIGN_DECISIONS.md
 
-The design decisions document (`.github/DESIGN_DECISIONS.md`) contains rationale for template design choices. **We recommend keeping this file** as it provides valuable context for:
+The template design decisions document (`.github/TEMPLATE_DESIGN_DECISIONS.md`) contains rationale for design choices made in the **template itself**, not your downstream project. Review it during setup to understand why the template is structured the way it is.
 
-- Understanding why certain configurations were made
-- Onboarding new maintainers who benefit from design context
-- Recording your own design decisions alongside the template's rationale
-- Future code reviews and maintenance decisions
+**After review, choose one of these options:**
 
-The file is internal documentation that does not affect end users or repository functionality.
+1. **Keep it** if you want to preserve template rationale for future reference (e.g., onboarding new maintainers or understanding why configurations were made)
+2. **Delete it** if the template rationale is not useful for your project going forward
+
+> **Note:** This file documents the *template's* design decisions. It is not about your project's design decisions. If you keep it, be aware that its content is template-specific and may reference context that does not apply to your repository.
 
 ### Consider This Getting Started Guide
 
