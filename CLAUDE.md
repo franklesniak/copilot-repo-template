@@ -128,9 +128,7 @@ When a pull request is created or when the owner posts a PR comment containing `
 4. **Process each comment.** Follow the "Handling Code Review Comments" protocol above (steps 1-8) for every comment in the review.
 5. **Check for style guide recommendations.** If **any** comment produced a style guide update prompt (step 8), **PAUSE** and post a PR comment:
    `Review loop paused: style guide update(s) recommended — see review thread(s) above. Apply the style guide changes, then post "@claude resume review loop" to continue.`
-6. **Check for code changes.** If no code changes were committed during step 7 of any comment (all comments were informational, already fixed, or invalid), **PAUSE** and post a PR comment:
-   `Review loop paused: no code changes were needed. Post "@claude resume review loop" to continue.`
-7. **Re-request review.** If code changes were made and no style guide updates were recommended, go to step 1.
+6. **Re-request review.** If no style guide updates were recommended, go to step 1. This applies regardless of whether code changes were made — even if all comments were addressed without code changes (e.g., concern noted but no action taken), re-requesting a review allows Copilot to find different issues on a fresh pass.
 
 ### Safety limits
 
