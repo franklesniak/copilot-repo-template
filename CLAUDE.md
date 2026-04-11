@@ -33,7 +33,7 @@ This file provides an inline summary of the most critical rules so that agents r
 - Run `pre-commit run --all-files` before every commit.
 - Never push code that fails linting or formatting checks.
 - Include all auto-fixes in the **same commit** as your code changes—do not create separate "fix formatting" or "fix linting" commits.
-- If pre-commit CI fails, pull the branch, run pre-commit locally, commit fixes, and push again.
+- If pre-commit CI fails, pull or sync the branch, run pre-commit locally, add the resulting auto-fixes to your existing change, amend the prior commit (or otherwise squash before merge), and push the updated branch. Do not leave a separate fix-only commit in the branch history.
 
 ## Build and Test Commands
 
@@ -97,9 +97,9 @@ PR comments and review comments that begin with `@copilot` are commands addresse
 
 When a code review comment is received from GitHub Copilot, a human reviewer, or any other code reviewer on a pull request, follow this process for **each** comment:
 
-1. **Signal processing.** If the tooling supports emoji reactions on review comments, add an :eyes: reaction to the comment when you begin processing it, and remove the reaction when you finish (after step 9). This signals to the reviewer that the feedback is being actively worked on. **Known limitation:** The GitHub MCP server does not currently expose `add_reaction` or `remove_reaction` endpoints for review comments. Skip this step until the tooling is available.
+1. **Signal processing.** If the tooling supports emoji reactions on review comments, add an :eyes: reaction to the comment when you begin processing it, and remove the reaction when you finish processing the comment, whether that occurs after step 9 or via the early-exit path in step 2. This signals to the reviewer that the feedback is being actively worked on. **Known limitation:** The GitHub MCP server does not currently expose `add_reaction` or `remove_reaction` endpoints for review comments. Skip this step until the tooling is available.
 
-2. **Validate the concern.** Determine whether the reviewer's feedback identifies a genuine gap, bug, style violation, or improvement opportunity. If the concern is not valid, explain why in a reply and skip the remaining steps.
+2. **Validate the concern.** Determine whether the reviewer's feedback identifies a genuine gap, bug, style violation, or improvement opportunity. If the concern is not valid, explain why in a reply, skip steps 3-8, and continue to step 9 to complete any required thread resolution and cleanup.
 
 3. **List options.** Enumerate all reasonable ways to resolve the problem or address the feedback.
 
@@ -125,7 +125,7 @@ When a pull request is created or when the owner posts a PR comment containing `
 2. **Wait for the review.** Subscribe to PR activity and wait for the review to arrive. The review is complete when Copilot posts its **review summary** comment (the "Pull request overview" that states "generated N comments"). This summary is the authoritative signal — do **not** wait for individual comment webhooks when N is zero, because none will arrive.
 3. **Check for comments.** If the review contains **zero** actionable comments, the code is clean — **PAUSE** and post a PR comment:
    `Review loop paused: Copilot review returned no comments. Post "@claude resume review loop" to continue.`
-4. **Process each comment.** Follow the "Handling Code Review Comments" protocol above (steps 1-8) for every comment in the review.
+4. **Process each comment.** Follow the "Handling Code Review Comments" protocol above (steps 1-9) for every comment in the review, **where tooling allows**. If the available tooling cannot perform step 9 automatically, you **MUST** still complete steps 1-8 and **MUST** ensure the step 9 completion work is handled before treating the comment as fully processed: remove any temporary `:eyes:` reaction per the protocol and resolve the review thread manually when appropriate.
 5. **Check for style guide recommendations.** If **any** comment produced a style guide update prompt (step 8), **PAUSE** and post a PR comment:
    `Review loop paused: style guide update(s) recommended — see review thread(s) above. Apply the style guide changes, then post "@claude resume review loop" to continue.`
 6. **Re-request review.** If no style guide updates were recommended, go to step 1. This applies regardless of whether code changes were made — even if all comments were addressed without code changes (e.g., concern noted but no action taken), re-requesting a review allows Copilot to find different issues on a fresh pass.
