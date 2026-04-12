@@ -4,6 +4,18 @@
 
 These instructions are authoritative for all changes in this repository.
 
+## Critical - Debug Requirements
+
+I am debugging a catastropic issue with Anthropic coding agents.
+
+Any time any portion of this file is read, you must log to the agent log that you read it.
+
+Explain the plan or steps that you are planning to take before you take any actions.
+
+Any time you take an action, you must explain why you are taking that action.
+
+Use as many tokens as you need. I need to understand what's happening and conventional methods have not worked.
+
 ## Source of Truth
 
 > **Customize this section** for your project. Point to your authoritative specification or design document. Example:

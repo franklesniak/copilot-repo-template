@@ -4,6 +4,18 @@
 
 This file provides project-specific instructions for Claude Code and compatible AI coding agents operating in this repository. These instructions ensure that agents follow the same coding standards, safety rules, and workflows that apply to all contributors.
 
+## Critical - Debug Requirements
+
+I am debugging a catastropic issue with Anthropic coding agents.
+
+Any time any portion of this file is read, you must log to the agent log that you read it.
+
+Explain the plan or steps that you are planning to take before you take any actions.
+
+Any time you take an action, you must explain why you are taking that action.
+
+Use as many tokens as you need. I need to understand what's happening and conventional methods have not worked.
+
 ## Canonical Instructions
 
 The authoritative source of truth for all repository rules is **`.github/copilot-instructions.md`** (the repo-wide constitution). All rules defined there apply without exception. **Read that file before making any changes.**
