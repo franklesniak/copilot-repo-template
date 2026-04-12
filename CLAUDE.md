@@ -21,6 +21,8 @@ This file intentionally keeps only a minimal inline summary of the highest-prior
 - **Pre-commit and validation**
   - Run `pre-commit run --all-files` before every commit.
   - Include all auto-fixes in the same commit as the related change.
+  - Do not push code when pre-commit or required validation checks are failing;
+    fix issues and re-run until the checks pass.
   - Use the repository's existing validation commands as needed:
     - `npm run lint:md`
     - `pytest tests/ -v --cov --cov-report=term-missing`
