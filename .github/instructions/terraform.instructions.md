@@ -5,96 +5,11 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 2.1.20260412.1
-
-## Metadata
-
-- **Status:** Active
-- **Owner:** Repository Maintainers
-- **Last Updated:** 2026-04-12
-- **Scope:** Defines Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in this repository. Covers style, formatting, naming conventions, file organization, variable and output design, resource configuration, module design, refactoring, state management, cross-stack data sharing, security best practices, provider management, testing, and documentation requirements.
-
-## Table of Contents
-
-- [Keywords](#keywords)
-- [About Examples in This Document](#about-examples-in-this-document)
-- [Quick Reference Checklist](#quick-reference-checklist)
-  - [Code Authoring Guidelines (Quick Reference)](#code-authoring-guidelines-quick-reference)
-- [Terraform Version Requirements](#terraform-version-requirements)
-- [Upgrading Terraform Versions](#upgrading-terraform-versions)
-- [Formatting and Style](#formatting-and-style)
-- [Naming Conventions](#naming-conventions)
-  - [Globally Unique Resource Names](#globally-unique-resource-names)
-- [File Organization](#file-organization)
-- [Variable and Output Design](#variable-and-output-design)
-  - [Nullable Variables](#nullable-variables)
-  - [Null Value Patterns](#null-value-patterns)
-  - [Defensive Attribute Access with try()](#defensive-attribute-access-with-try)
-  - [Terraform Cloud Variable Precedence](#terraform-cloud-variable-precedence)
-- [Continuous Validation with check Blocks](#continuous-validation-with-check-blocks)
-- [Resource Configuration](#resource-configuration)
-  - [Resource Timeouts](#resource-timeouts)
-  - [The terraform_data Resource](#the-terraform_data-resource)
-  - [Explicit Dependencies](#explicit-dependencies)
-  - [Module-Level depends_on](#module-level-depends_on)
-- [Module Design](#module-design)
-- [Refactoring](#refactoring)
-- [State Management](#state-management)
-  - [Terraform Cloud, Enterprise, and Alternative Backends](#terraform-cloud-enterprise-and-alternative-backends)
-  - [Terraform Cloud Workspace Configuration](#terraform-cloud-workspace-configuration)
-  - [Bootstrapping State Infrastructure](#bootstrapping-state-infrastructure)
-  - [Environment Separation Strategies](#environment-separation-strategies)
-  - [Resource Targeting](#resource-targeting)
-  - [Reviewing Plan Output](#reviewing-plan-output)
-  - [State Backup and Recovery](#state-backup-and-recovery)
-- [Cross-Stack Data Sharing](#cross-stack-data-sharing)
-- [Provider Management](#provider-management)
-  - [Provider Aliasing](#provider-aliasing)
-  - [Module Provider Configuration with configuration_aliases](#module-provider-configuration-with-configuration_aliases)
-  - [Cross-Account and Service Account Patterns](#cross-account-and-service-account-patterns)
-- [Security Best Practices](#security-best-practices)
-  - [Sensitive Values in Meta-Arguments](#sensitive-values-in-meta-arguments)
-  - [Ephemeral Values](#ephemeral-values)
-  - [Sensitive Output Exposure in CLI](#sensitive-output-exposure-in-cli)
-- [Testing with Terraform Test](#testing-with-terraform-test)
-- [Documentation Standards](#documentation-standards)
-  - [Error Message Best Practices](#error-message-best-practices)
-- [Common Anti-Patterns to Avoid](#common-anti-patterns-to-avoid)
-- [Troubleshooting Common Issues](#troubleshooting-common-issues)
-- [Pre-commit Discipline for Terraform](#pre-commit-discipline-for-terraform)
-- ["Done" Definition for Terraform Changes](#done-definition-for-terraform-changes)
-- [Related Documentation](#related-documentation)
-- [Scope Exceptions & Deviations from Standards](#scope-exceptions--deviations-from-standards)
-- [Changelog](#changelog)
-- [Glossary](#glossary)
+**Version:** 2.2.20260412.0
 
 ## Keywords
 
-The key words "**MUST**", "**MUST NOT**", "**REQUIRED**", "**SHALL**", "**SHALL NOT**", "**SHOULD**", "**SHOULD NOT**", "**RECOMMENDED**", "**MAY**", and "**OPTIONAL**" in this document are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
-
-- **MUST** / **REQUIRED** / **SHALL** — Absolute requirement. Non-negotiable.
-- **MUST NOT** / **SHALL NOT** — Absolute prohibition.
-- **SHOULD** / **RECOMMENDED** — Strong recommendation. Valid reasons may exist to deviate, but implications must be understood.
-- **SHOULD NOT** / **NOT RECOMMENDED** — Strong discouragement. Valid reasons may exist to do otherwise, but implications must be understood.
-- **MAY** / **OPTIONAL** — Truly optional. Implementations can choose to include or omit.
-
-> **Applicability rule:** Requirements in this document apply **when their scope is present**. For example, **module** requirements apply only when you maintain reusable modules; **test** requirements apply only when you add Terraform tests; **root module** requirements apply only when a root configuration exists. When a scoped construct exists, all associated **MUST/SHOULD** requirements are expected to be followed.
-
-## About Examples in This Document
-
-All code examples in this document are illustrative. Resource names, bucket names, regions,
-account IDs, project IDs, and other configuration values are examples only and do not represent
-actual infrastructure.
-
-When applying these patterns to your infrastructure:
-
-- Replace example resource names (e.g., `acme-corp-terraform-state`) with names following your organization's conventions
-- Select regions appropriate for your latency, compliance, and cost requirements
-- Use account IDs, project IDs, and subscription IDs from your cloud environment
-- Adjust instance types, storage sizes, and other parameters for your workload
-
-Examples use common conventions (e.g., `us-east-1`, `prod`, `main`) for familiarity. These choices
-are not recommendations for your specific use case.
+The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **SHOULD**, **SHOULD NOT**, **RECOMMENDED**, **MAY**, and **OPTIONAL** are defined in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119). Requirements apply when their scope is present (e.g., module rules apply only when modules exist).
 
 ## Quick Reference Checklist
 
@@ -109,148 +24,148 @@ This checklist provides a quick reference for both human developers and LLMs (li
 
 ### Formatting and Style (Quick Reference)
 
-- **[All]** Code **MUST** pass `terraform fmt` without modifications → [terraform fmt Compliance](#terraform-fmt-compliance)
-- **[All]** Code **MUST** use 2 spaces for indentation, never tabs → [Indentation Rules](#indentation-rules)
-- **[All]** Files **MUST** use UTF-8 encoding → [File Encoding](#file-encoding)
-- **[All]** Files **MUST** end with a single newline → [File Endings](#file-endings)
-- **[All]** Lines **SHOULD NOT** exceed 120 characters except for long strings or URLs → [Line Length](#line-length)
-- **[All]** Blank lines **MUST** be completely empty (no whitespace) → [Blank Lines](#blank-lines)
-- **[All]** Comments **MUST** use `#` for single-line; `/* */` **MAY** be used for multi-line → [Comment Style](#comment-style)
+- **[All]** Code **MUST** pass `terraform fmt` without modifications
+- **[All]** Code **MUST** use 2 spaces for indentation, never tabs
+- **[All]** Files **MUST** use UTF-8 encoding
+- **[All]** Files **MUST** end with a single newline
+- **[All]** Lines **SHOULD NOT** exceed 120 characters except for long strings or URLs
+- **[All]** Blank lines **MUST** be completely empty (no whitespace)
+- **[All]** Comments **MUST** use `#` for single-line; `/* */` **MAY** be used for multi-line
 
 ### Naming Conventions (Quick Reference)
 
-- **[All]** Resources **MUST** use `snake_case` names → [Resource Naming](#resource-naming)
-- **[All]** Variables **MUST** use `snake_case` with descriptive names → [Variable Naming](#variable-naming)
-- **[All]** Outputs **MUST** use `snake_case` matching resource attribute patterns → [Output Naming](#output-naming)
-- **[Module]** Module directory names **MUST** use hyphen-separated lowercase words → [Module Naming](#module-naming)
-- **[All]** Data sources **MUST** be prefixed with purpose when multiple exist → [Data Source Naming](#data-source-naming)
-- **[All]** Locals **MUST** use `snake_case` with descriptive names → [Local Value Naming](#local-value-naming)
-- **[All]** Boolean variables **SHOULD** use `enable_*`, `is_*`, or `has_*` prefixes → [Boolean Naming Patterns](#boolean-naming-patterns)
-- **[All]** Globally unique resource names **SHOULD** include random suffixes or organization prefixes → [Globally Unique Resource Names](#globally-unique-resource-names)
+- **[All]** Resources **MUST** use `snake_case` names
+- **[All]** Variables **MUST** use `snake_case` with descriptive names
+- **[All]** Outputs **MUST** use `snake_case` matching resource attribute patterns
+- **[Module]** Module directory names **MUST** use hyphen-separated lowercase words
+- **[All]** Data sources **MUST** be prefixed with purpose when multiple exist
+- **[All]** Locals **MUST** use `snake_case` with descriptive names
+- **[All]** Boolean variables **SHOULD** use `enable_*`, `is_*`, or `has_*` prefixes
+- **[All]** Globally unique resource names **SHOULD** include random suffixes or organization prefixes
 
 ### File Organization (Quick Reference)
 
-- **[All]** Every Terraform directory **MUST** have a `versions.tf` file → [Version Constraints File](#version-constraints-file)
-- **[All]** Input variables **MUST** be in `variables.tf` → [Standard File Organization](#standard-file-organization)
-- **[All]** Outputs **MUST** be in `outputs.tf` → [Standard File Organization](#standard-file-organization)
-- **[Root]** Root modules **MUST** have a `providers.tf` file → [Provider Configuration File](#provider-configuration-file)
-- **[Root]** Root modules **MUST** have a `backend.tf` or backend configuration → [Backend Configuration](#backend-configuration)
-- **[Module]** Modules **MUST** include a `README.md` → [Module README Requirements](#module-readme-requirements)
-- **[Module]** Modules **SHOULD** include `examples/` directory → [Module Examples](#module-examples)
-- **[Module]** Modules **SHOULD** include `tests/` directory → [Module Tests](#module-tests)
-- **[All]** Template files **SHOULD** use `.tftpl` extension → [Template Files (.tftpl)](#template-files-tftpl)
-- **[All]** Template files **SHOULD** be placed in a `templates/` subdirectory → [Template Files (.tftpl)](#template-files-tftpl)
-- **[Root]** Large root modules **MAY** split resources into domain-specific files → [Splitting Large Configurations](#splitting-large-configurations)
+- **[All]** Every Terraform directory **MUST** have a `versions.tf` file
+- **[All]** Input variables **MUST** be in `variables.tf`
+- **[All]** Outputs **MUST** be in `outputs.tf`
+- **[Root]** Root modules **MUST** have a `providers.tf` file
+- **[Root]** Root modules **MUST** have a `backend.tf` or backend configuration
+- **[Module]** Modules **MUST** include a `README.md`
+- **[Module]** Modules **SHOULD** include `examples/` directory
+- **[Module]** Modules **SHOULD** include `tests/` directory
+- **[All]** Template files **SHOULD** use `.tftpl` extension
+- **[All]** Template files **SHOULD** be placed in a `templates/` subdirectory
+- **[Root]** Large root modules **MAY** split resources into domain-specific files
 
 ### Variable and Output Design (Quick Reference)
 
-- **[All]** Variables **MUST** include a `description` → [Variable Documentation Requirements](#variable-documentation-requirements)
-- **[All]** Variables **MUST** include explicit `type` constraint → [Variable Type Constraints](#variable-type-constraints)
-- **[All]** Optional variables **MUST** have a `default` value → [Variable Defaults](#variable-defaults)
-- **[All]** Sensitive variables **MUST** be marked with `sensitive = true` → [Sensitive Variable Marking](#sensitive-variable-marking)
-- **[All]** Variables with constrained values **SHOULD** use `validation` blocks → [Variable Validation](#variable-validation)
-- **[All]** Outputs **MUST** include a `description` → [Output Documentation Requirements](#output-documentation-requirements)
-- **[All]** Sensitive outputs **MUST** be marked with `sensitive = true` → [Sensitive Output Marking](#sensitive-output-marking)
-- **[All]** Variables **SHOULD** explicitly set `nullable` to document null-handling behavior → [Nullable Variables](#nullable-variables)
-- **[All]** `try()` **SHOULD** be used for defensive access to attributes that may not exist → [Defensive Attribute Access with try()](#defensive-attribute-access-with-try)
+- **[All]** Variables **MUST** include a `description`
+- **[All]** Variables **MUST** include explicit `type` constraint
+- **[All]** Optional variables **MUST** have a `default` value
+- **[All]** Sensitive variables **MUST** be marked with `sensitive = true`
+- **[All]** Variables with constrained values **SHOULD** use `validation` blocks
+- **[All]** Outputs **MUST** include a `description`
+- **[All]** Sensitive outputs **MUST** be marked with `sensitive = true`
+- **[All]** Variables **SHOULD** explicitly set `nullable` to document null-handling behavior
+- **[All]** `try()` **SHOULD** be used for defensive access to attributes that may not exist
 
 ### Continuous Validation (Quick Reference)
 
-- **[All]** `check` blocks **MAY** be used for continuous validation → [Continuous Validation with check Blocks](#continuous-validation-with-check-blocks)
+- **[All]** `check` blocks **MAY** be used for continuous validation
 
 ### Resource Configuration (Quick Reference)
 
-- **[All]** Meta-arguments **MUST** appear first in resource blocks → [Meta-Argument Ordering](#meta-argument-ordering)
-- **[All]** Required arguments **MUST** appear before optional arguments → [Argument Ordering](#argument-ordering)
-- **[All]** Nested blocks **MUST** appear last in resource blocks → [Nested Block Placement](#nested-block-placement)
-- **[All]** Resources **MUST** include required tags → [Required Tags](#required-tags)
-- **[Root]** Provider-level default tags **SHOULD** be configured → [Default Tags Configuration](#default-tags-configuration)
-- **[All]** Local values **SHOULD** be used for computed or merged tags → [Local Tags Pattern](#local-tags-pattern)
-- **[All]** `precondition` blocks **SHOULD** validate assumptions before resource creation → [Resource Preconditions](#resource-preconditions)
-- **[All]** `postcondition` blocks **SHOULD** validate resource state after creation → [Resource Postconditions](#resource-postconditions)
-- **[All]** `depends_on` **SHOULD** be avoided unless dependencies are not inferable → [Explicit Dependencies](#explicit-dependencies)
-- **[All]** `for_each` **SHOULD** be preferred over `count` for collections → [for_each vs count](#for_each-vs-count)
-- **[All]** Dynamic blocks **SHOULD** be used sparingly → [Dynamic Blocks](#dynamic-blocks)
-- **[All]** `prevent_destroy` **SHOULD** be used for critical resources → [Lifecycle Block Options](#lifecycle-block-options)
-- **[All]** `ignore_changes` **SHOULD** be used for attributes managed outside Terraform → [Lifecycle Block Options](#lifecycle-block-options)
-- **[All]** Custom `timeouts` blocks **MAY** be used for long-running resource operations → [Resource Timeouts](#resource-timeouts)
+- **[All]** Meta-arguments **MUST** appear first in resource blocks
+- **[All]** Required arguments **MUST** appear before optional arguments
+- **[All]** Nested blocks **MUST** appear last in resource blocks
+- **[All]** Resources **MUST** include required tags
+- **[Root]** Provider-level default tags **SHOULD** be configured
+- **[All]** Local values **SHOULD** be used for computed or merged tags
+- **[All]** `precondition` blocks **SHOULD** validate assumptions before resource creation
+- **[All]** `postcondition` blocks **SHOULD** validate resource state after creation
+- **[All]** `depends_on` **SHOULD** be avoided unless dependencies are not inferable
+- **[All]** `for_each` **SHOULD** be preferred over `count` for collections
+- **[All]** Dynamic blocks **SHOULD** be used sparingly
+- **[All]** `prevent_destroy` **SHOULD** be used for critical resources
+- **[All]** `ignore_changes` **SHOULD** be used for attributes managed outside Terraform
+- **[All]** Custom `timeouts` blocks **MAY** be used for long-running resource operations
 
 ### Module Design (Quick Reference)
 
-- **[Module]** Modules **MUST** have a single, well-defined responsibility → [Single Responsibility](#single-responsibility)
-- **[Module]** Modules **MUST** specify required Terraform and provider versions → [Module Version Constraints](#module-version-constraints)
-- **[Module]** Module inputs **MUST** use consistent naming across modules → [Module Interface Design](#module-interface-design)
-- **[Module]** Required module variables **SHOULD** be minimized → [Minimal Required Inputs](#minimal-required-inputs)
-- **[Module]** Complex inputs **SHOULD** use object types with documented structure → [Complex Input Types](#complex-input-types)
-- **[Module]** Modules **SHOULD** expose only necessary outputs → [Module Output Design](#module-output-design)
-- **[Module]** Published modules **MUST** use semantic versioning → [Module Versioning](#module-versioning)
-- **[Module]** Modules accepting multiple provider configurations **MUST** use `configuration_aliases` → [Module Provider Configuration with configuration_aliases](#module-provider-configuration-with-configuration_aliases)
-- **[All]** Module-level `depends_on` **SHOULD** be avoided unless implicit dependencies are insufficient → [Module-Level depends_on](#module-level-depends_on)
+- **[Module]** Modules **MUST** have a single, well-defined responsibility
+- **[Module]** Modules **MUST** specify required Terraform and provider versions
+- **[Module]** Module inputs **MUST** use consistent naming across modules
+- **[Module]** Required module variables **SHOULD** be minimized
+- **[Module]** Complex inputs **SHOULD** use object types with documented structure
+- **[Module]** Modules **SHOULD** expose only necessary outputs
+- **[Module]** Published modules **MUST** use semantic versioning
+- **[Module]** Modules accepting multiple provider configurations **MUST** use `configuration_aliases`
+- **[All]** Module-level `depends_on` **SHOULD** be avoided unless implicit dependencies are insufficient
 
 ### Refactoring (Quick Reference)
 
-- **[All]** Resource renames **MUST** use `moved` blocks instead of manual state commands → [Refactoring with Moved Blocks](#refactoring-with-moved-blocks)
-- **[All]** Existing infrastructure imports **SHOULD** use `import` blocks instead of CLI commands → [Importing Resources with Import Blocks](#importing-resources-with-import-blocks)
-- **[All]** Resources removed from management **SHOULD** use `removed` blocks → [Removing Resources from State with Removed Blocks](#removing-resources-from-state-with-removed-blocks)
-- **[All]** Direct state manipulation commands **SHOULD** be avoided → [State Manipulation Commands](#state-manipulation-commands)
+- **[All]** Resource renames **MUST** use `moved` blocks instead of manual state commands
+- **[All]** Existing infrastructure imports **SHOULD** use `import` blocks instead of CLI commands
+- **[All]** Resources removed from management **SHOULD** use `removed` blocks
+- **[All]** Direct state manipulation commands **SHOULD** be avoided
 
 ### State Management (Quick Reference)
 
-- **[Root]** Root modules **MUST** configure a remote backend → [Remote Backend Configuration](#remote-backend-configuration)
-- **[Root]** State files **MUST** be encrypted at rest → [State Encryption](#state-encryption)
-- **[Root]** State locking **MUST** be enabled → [State Locking](#state-locking)
-- **[All]** Local state files **MUST NOT** be used in production → [No Local State in Production](#no-local-state-in-production)
-- **[All]** State files **MUST NOT** be committed to version control → [State File Exclusion](#state-file-exclusion)
-- **[All]** `terraform apply -target` **SHOULD NOT** be used in normal workflows → [Resource Targeting](#resource-targeting)
-- **[Root]** New state storage infrastructure **SHOULD** follow the bootstrap workflow → [Bootstrapping State Infrastructure](#bootstrapping-state-infrastructure)
-- **[All]** Plan output **MUST** be reviewed for unexpected destroys or replacements before applying → [Reviewing Plan Output](#reviewing-plan-output)
-- **[Root]** State storage buckets **MUST** have versioning enabled for production use → [State Versioning Requirements](#state-versioning-requirements)
-- **[All]** Manual state backups **SHOULD** be created before risky operations → [Manual State Backup](#manual-state-backup)
-- **[All]** State files **MUST NOT** be manually edited → [Common State Problems and Recovery](#common-state-problems-and-recovery)
+- **[Root]** Root modules **MUST** configure a remote backend
+- **[Root]** State files **MUST** be encrypted at rest
+- **[Root]** State locking **MUST** be enabled
+- **[All]** Local state files **MUST NOT** be used in production
+- **[All]** State files **MUST NOT** be committed to version control
+- **[All]** `terraform apply -target` **SHOULD NOT** be used in normal workflows
+- **[Root]** New state storage infrastructure **SHOULD** follow the bootstrap workflow
+- **[All]** Plan output **MUST** be reviewed for unexpected destroys or replacements before applying
+- **[Root]** State storage buckets **MUST** have versioning enabled for production use
+- **[All]** Manual state backups **SHOULD** be created before risky operations
+- **[All]** State files **MUST NOT** be manually edited
 
 ### Cross-Stack Data Sharing (Quick Reference)
 
-- **[Root]** Cross-stack data **SHOULD** be shared via cloud-native parameter stores → [Cross-Stack Data Sharing](#cross-stack-data-sharing)
-- **[Root]** `terraform_remote_state` **MAY** be used with documented coupling implications → [Cross-Stack Data Sharing](#cross-stack-data-sharing)
-- **[All]** Secrets **MUST NOT** be shared via parameter stores or remote state → [Cross-Stack Data Sharing](#cross-stack-data-sharing)
+- **[Root]** Cross-stack data **SHOULD** be shared via cloud-native parameter stores
+- **[Root]** `terraform_remote_state` **MAY** be used with documented coupling implications
+- **[All]** Secrets **MUST NOT** be shared via parameter stores or remote state
 
 ### Provider Management (Quick Reference)
 
-- **[All]** Provider versions **MUST** be constrained → [Provider Version Constraints](#provider-version-constraints)
-- **[All]** `.terraform.lock.hcl` **MUST** be committed to version control → [Lock File Management](#lock-file-management)
-- **[All]** Pessimistic constraint operator (`~>`) **SHOULD** be used for providers → [Pessimistic Constraints](#pessimistic-constraints)
-- **[All]** Multi-region or multi-account deployments **MUST** use provider aliases → [Provider Aliasing](#provider-aliasing)
+- **[All]** Provider versions **MUST** be constrained
+- **[All]** `.terraform.lock.hcl` **MUST** be committed to version control
+- **[All]** Pessimistic constraint operator (`~>`) **SHOULD** be used for providers
+- **[All]** Multi-region or multi-account deployments **MUST** use provider aliases
 
 ### Security (Quick Reference)
 
-- **[All]** Secrets **MUST NOT** appear in `.tf` files → [Secret Management](#secret-management)
-- **[All]** Secrets **MUST NOT** have default values → [No Secret Defaults](#no-secret-defaults)
-- **[All]** Secrets **MUST** be provided via environment variables or secret managers → [Approved Secret Patterns](#approved-secret-patterns)
-- **[Root]** State backends **MUST** enable encryption → [State Security](#state-security)
-- **[All]** IAM policies **MUST** follow least-privilege principles → [Least-Privilege Principles](#least-privilege-principles)
-- **[All]** Wildcard actions **SHOULD NOT** be used in IAM policies → [IAM Policy Guidelines](#iam-policy-guidelines)
-- **[All]** Sensitive values **MUST NOT** be used in `for_each` or `count` expressions → [Sensitive Values in Meta-Arguments](#sensitive-values-in-meta-arguments)
-- **[All]** Sensitive outputs **MUST NOT** be logged in CI/CD pipelines → [Sensitive Output Exposure in CLI](#sensitive-output-exposure-in-cli)
+- **[All]** Secrets **MUST NOT** appear in `.tf` files
+- **[All]** Secrets **MUST NOT** have default values
+- **[All]** Secrets **MUST** be provided via environment variables or secret managers
+- **[Root]** State backends **MUST** enable encryption
+- **[All]** IAM policies **MUST** follow least-privilege principles
+- **[All]** Wildcard actions **SHOULD NOT** be used in IAM policies
+- **[All]** Sensitive values **MUST NOT** be used in `for_each` or `count` expressions
+- **[All]** Sensitive outputs **MUST NOT** be logged in CI/CD pipelines
 
 ### Testing (Quick Reference)
 
-- **[Test]** Test files **MUST** use `.tftest.hcl` extension → [Test File Naming](#test-file-naming)
-- **[Test]** Test files **SHOULD** be in a `tests/` directory → [Test File Location](#test-file-location)
-- **[Test]** Tests **MUST** include at least one `run` block → [Test Structure](#test-structure)
-- **[Test]** Each `run` block **MUST** include at least one `assert` → [Test Assertions](#test-assertions)
-- **[Test]** Variable validation **SHOULD** be tested → [Testing Variable Validation](#testing-variable-validation)
-- **[Test]** Unit tests **SHOULD** use `command = plan` → [Unit Tests](#unit-tests)
-- **[Test]** Integration tests **MAY** use `command = apply` → [Integration Tests](#integration-tests)
-- **[Module]** Modules **SHOULD** include corresponding Terraform tests → [Module Tests](#module-tests)
-- **[Test]** Mock providers **SHOULD** be used for unit tests → [Mock Providers](#mock-providers)
-- **[Test]** Negative test cases **SHOULD** use `expect_failures` → [Testing Variable Validation](#testing-variable-validation)
+- **[Test]** Test files **MUST** use `.tftest.hcl` extension
+- **[Test]** Test files **SHOULD** be in a `tests/` directory
+- **[Test]** Tests **MUST** include at least one `run` block
+- **[Test]** Each `run` block **MUST** include at least one `assert`
+- **[Test]** Variable validation **SHOULD** be tested
+- **[Test]** Unit tests **SHOULD** use `command = plan`
+- **[Test]** Integration tests **MAY** use `command = apply`
+- **[Module]** Modules **SHOULD** include corresponding Terraform tests
+- **[Test]** Mock providers **SHOULD** be used for unit tests
+- **[Test]** Negative test cases **SHOULD** use `expect_failures`
 
 ### Documentation (Quick Reference)
 
-- **[Module]** Modules **MUST** have a `README.md` with usage examples → [Module README Requirements](#module-readme-requirements)
-- **[All]** Inline comments **SHOULD** explain "why," not "what" → [Inline Comment Conventions](#inline-comment-conventions)
-- **[All]** TODO comments **SHOULD** include username and context → [TODO Comment Format](#todo-comment-format)
-- **[All]** Error messages in validation blocks **SHOULD** be actionable and reference valid options or acceptable ranges → [Error Message Best Practices](#error-message-best-practices)
+- **[Module]** Modules **MUST** have a `README.md` with usage examples
+- **[All]** Inline comments **SHOULD** explain "why," not "what"
+- **[All]** TODO comments **SHOULD** include username and context
+- **[All]** Error messages in validation blocks **SHOULD** be actionable and reference valid options or acceptable ranges
 
 ### Code Authoring Guidelines (Quick Reference)
 
@@ -290,159 +205,7 @@ The following table summarizes Terraform version requirements for features refer
 
 ---
 
-## Upgrading Terraform Versions
-
-This section provides guidance for safely upgrading Terraform versions, including preparation steps, upgrade procedures, and rollback strategies.
-
-### Version Upgrade Checklist
-
-Before upgrading Terraform, complete the following checklist:
-
-- [ ] Read the [Terraform Changelog](https://github.com/hashicorp/terraform/blob/main/CHANGELOG.md) for breaking changes
-- [ ] Create a state backup before upgrading
-- [ ] Test the upgrade in a non-production environment first
-- [ ] Update `.terraform.lock.hcl` after upgrading
-- [ ] Run `terraform plan` and verify no unexpected changes
-- [ ] Update CI/CD pipeline Terraform version after validation
-- [ ] Update `required_version` constraint if needed
-
-### Pre-Upgrade Preparation
-
-Before upgrading, document your current state and create recovery points:
-
-```bash
-# 1. Backup current state
-terraform state pull > terraform.tfstate.backup
-
-# 2. Document current version
-terraform version
-
-# 3. Review current plan (baseline)
-terraform plan -out=pre-upgrade.tfplan
-```
-
-> **Note:** Store the backup and plan output in a secure location outside the working directory. These files **MUST NOT** be committed to version control as they may contain sensitive information.
-
-### Upgrade Process
-
-The upgrade process varies based on the scope of the version change.
-
-#### Patch and Minor Upgrades (e.g., 1.7.0 → 1.7.5 or 1.7.0 → 1.8.0)
-
-Patch and minor version upgrades are generally safe:
-
-1. Update the Terraform binary to the new version
-2. Run `terraform init -upgrade` to update provider dependencies
-3. Run `terraform plan` and compare output to your pre-upgrade baseline
-4. Verify no unexpected changes appear in the plan
-5. If the plan is clean, proceed with normal operations
-
-#### Major Version Upgrades (e.g., 1.x → 2.x, when applicable)
-
-Major version upgrades require additional care:
-
-1. Read the official upgrade guide for the specific version transition
-2. Review the changelog for all breaking changes and deprecated features
-3. Update the Terraform binary to the new version
-4. Run `terraform init -upgrade` to update provider lock file
-5. Address any deprecation warnings or errors
-6. Update configuration for any removed or changed features
-7. Run `terraform plan` and carefully review all changes
-8. Test thoroughly in a non-production environment before production deployment
-
-### Lock File Updates
-
-After upgrading Terraform, regenerate the `.terraform.lock.hcl` file to ensure all platforms used by your team and CI/CD systems are covered:
-
-```bash
-# Regenerate lock file for all platforms
-terraform providers lock \
-  -platform=linux_amd64 \
-  -platform=linux_arm64 \
-  -platform=darwin_amd64 \
-  -platform=darwin_arm64 \
-  -platform=windows_amd64 \
-  -platform=windows_arm64
-
-# Commit the updated lock file
-git add .terraform.lock.hcl
-git commit -m "chore: Update provider lock file for Terraform X.Y.Z"
-```
-
-### CI/CD Considerations
-
-When managing Terraform versions in CI/CD pipelines:
-
-- **Pin Terraform versions:** Use explicit version pinning in CI workflows for reproducibility
-- **Test in branches first:** Test new Terraform versions in a feature branch before updating main/production pipelines
-- **Update after local validation:** Update the version in workflow files **after** successful local validation
-
-**Example GitHub Actions workflow snippet:**
-
-```yaml
-- name: Setup Terraform
-  uses: hashicorp/setup-terraform@v3
-  with:
-    terraform_version: "1.7.0"  # Pin to specific version
-```
-
-### Rollback Procedure
-
-If issues occur after upgrading Terraform, follow this rollback procedure:
-
-1. **Restore the previous Terraform binary version:**
-   - Use your version manager to switch back (e.g., `tfenv use 1.6.0`)
-   - Or download and install the previous version manually
-
-2. **Restore state if modified:**
-   - If the new Terraform version modified state, restore from your backup:
-
-     ```bash
-     terraform state push terraform.tfstate.backup
-     ```
-
-     > **Warning:** `terraform state push` overwrites the remote state. Ensure no other operations are in progress and that you have verified the backup contents before pushing.
-
-3. **Regenerate lock file:**
-   - Run `terraform providers lock` with the previous Terraform version
-
-4. **Document the issue:**
-   - Record what went wrong for future reference
-   - Consider opening an issue on the Terraform repository if you encountered a bug
-
-### Version Managers
-
-Using a version manager simplifies switching between Terraform versions and ensures team consistency:
-
-**tfenv:**
-
-```bash
-# Install a specific version
-tfenv install 1.7.0
-
-# Use a specific version
-tfenv use 1.7.0
-
-# List installed versions
-tfenv list
-```
-
-**asdf:**
-
-```bash
-# Add Terraform plugin (one-time)
-asdf plugin add terraform
-
-# Install a specific version
-asdf install terraform 1.7.0
-
-# Set local version for a project
-asdf local terraform 1.7.0
-```
-
-> **Note:** Version specification files (`.terraform-version` for tfenv or `.tool-versions` for asdf) **MAY** be committed to the repository to ensure team consistency. If committed, these files **SHOULD** be updated as part of the version upgrade process.
-
-### Version Upgrade Requirements Summary
+### Version Upgrade Requirements
 
 The following requirements apply to Terraform version upgrades:
 
@@ -555,56 +318,6 @@ resource "aws_security_group" "vpn_access" {
   # ...
 }
 ```
-
-### JSON Configuration Files (.tf.json)
-
-Terraform supports JSON syntax for configuration files using the `.tf.json` extension. When using JSON configuration:
-
-- `.tf.json` files **MUST** be valid JSON and **SHOULD** be consistently formatted
-- JSON files **SHOULD** use 2 spaces for indentation to match HCL conventions
-- JSON files **SHOULD** be validated and formatted using standard JSON tools such as `jq`, `prettier`, or IDE-integrated formatters
-- JSON configuration **SHOULD** be reserved for programmatically generated Terraform code; hand-written configuration **SHOULD** use HCL (`.tf`) format for readability
-
-**Validation command:**
-
-```bash
-# Validate JSON syntax
-jq empty *.tf.json
-
-# Format JSON files with jq
-jq '.' input.tf.json > formatted.tf.json
-
-# Format with prettier (if available)
-prettier --write "*.tf.json"
-```
-
-**Note:** `terraform fmt` does not format `.tf.json` files. Use external JSON formatting tools as part of your pre-commit or CI workflow.
-
-### Template File Formatting (.tftpl)
-
-Template files (`.tftpl`) are processed by the `templatefile()` function and generate dynamic content. Formatting expectations for template files:
-
-- Template files **MUST** use UTF-8 encoding
-- Template files **MUST** end with a single newline
-- Template files **SHOULD** use Unix-style line endings (LF) for cross-platform compatibility
-- Template variables **SHOULD** be documented at the top of the file using comments appropriate to the output format
-- Terraform template directives (`%{ ... }`, `${ ... }`) **SHOULD** be clearly formatted for readability
-- When generating structured output (JSON, YAML), the template **SHOULD** produce valid, well-formatted output
-
-**Comment conventions by output type:**
-
-| Output Format | Comment Style | Example |
-| --- | --- | --- |
-| Shell scripts | `#` comments | `# Variable: environment (string)` |
-| JSON | Document in separate header or external docs | N/A (JSON has no comments) |
-| YAML | `#` comments | `# Variable: app_name (string)` |
-| XML | `<!-- -->` comments | `<!-- Variable: config_value (string) -->` |
-
-**Validation:**
-
-- Template syntax errors are caught at `terraform plan` time when `templatefile()` is evaluated
-- For templates generating JSON/YAML, validate the rendered output format as part of testing
-- Use Terraform tests to verify template output for critical templates
 
 ---
 
@@ -776,169 +489,7 @@ resource "aws_s3_bucket" "main" {
 }
 ```
 
-**Azure Example:**
-
-```hcl
-resource "random_id" "storage_suffix" {
-  byte_length = 4
-}
-
-resource "azurerm_storage_account" "main" {
-  # Azure Storage Account names must be 3-24 characters, lowercase alphanumeric only
-  name                     = "st${var.project_short}${random_id.storage_suffix.hex}"
-  resource_group_name      = azurerm_resource_group.main.name
-  location                 = azurerm_resource_group.main.location
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
-}
-```
-
-**GCP Example:**
-
-```hcl
-resource "random_id" "bucket_suffix" {
-  byte_length = 4
-}
-
-resource "google_storage_bucket" "main" {
-  name     = "${var.project_name}-${var.environment}-${random_id.bucket_suffix.hex}"
-  location = var.region
-}
-```
-
-**Pattern 2: Organization prefix:**
-
-For organizations with registered domain names, use a reversed domain prefix:
-
-```hcl
-locals {
-  # Produces: com-example-myproject-prod
-  globally_unique_prefix = "${replace(var.organization_domain, ".", "-")}-${var.project_name}-${var.environment}"
-}
-
-resource "aws_s3_bucket" "main" {
-  bucket = local.globally_unique_prefix
-}
-```
-
-#### When to Use Each Pattern
-
-| Pattern | Use Case |
-| --- | --- |
-| Random suffix | Default choice for most projects; provides uniqueness without organizational coordination |
-| Organization prefix | When naming convention consistency across an organization is required |
-| Combination | High-assurance uniqueness: `${org_prefix}-${project}-${random_suffix}` |
-
-#### Lifecycle Considerations
-
-Random suffixes are generated once and stored in state. The `random_id` resource is stable by default—it only regenerates when its inputs change. For explicit control over regeneration, use the `keepers` argument:
-
-```hcl
-resource "random_id" "bucket_suffix" {
-  byte_length = 4
-
-  # Regenerate only when project_name changes
-  keepers = {
-    project_name = var.project_name
-  }
-}
-```
-
-> **Warning:** If you lose the Terraform state containing the `random_id`, the suffix cannot be recovered, and new resources will be created with a different suffix on the next apply.
-
----
-
-## File Organization
-
-### Standard File Organization
-
-Standard file organization for Terraform projects:
-
-| File | Purpose | Requirement |
-| --- | --- | --- |
-| `main.tf` | Primary resource definitions | MUST |
-| `variables.tf` | Input variable declarations | MUST |
-| `outputs.tf` | Output value declarations | MUST |
-| `providers.tf` | Provider configuration | MUST (root modules) |
-| `versions.tf` | Version constraints | MUST |
-| `locals.tf` | Local value definitions | MAY |
-| `data.tf` | Data source definitions | MAY |
-| `backend.tf` | Backend configuration | MUST (root modules) |
-
-#### Splitting Large Configurations
-
-For large root modules with many resources, the `main.tf` file **MAY** be split into domain-specific files to improve readability and maintainability:
-
-| File | Purpose | When to Use |
-| --- | --- | --- |
-| `network.tf` | VPC, subnets, route tables, security groups | When networking resources exceed ~100 lines |
-| `compute.tf` | EC2 instances, ASGs, Lambda functions | When compute resources are distinct from other domains |
-| `storage.tf` | S3 buckets, EBS volumes, RDS instances | When storage configuration is substantial |
-| `iam.tf` | IAM roles, policies, instance profiles | When IAM configuration is complex |
-
-**Guidelines for splitting:**
-
-- Split by **logical domain**, not by resource type
-- Keep related resources together (e.g., an EC2 instance and its security group)
-- The `main.tf` file remains the default for simple configurations
-- Variable declarations **MUST** remain in `variables.tf` regardless of how resources are split
-
-This approach is **RECOMMENDED** when `main.tf` exceeds 300-400 lines or when multiple team members frequently edit the same file.
-
-### Version Constraints File
-
-Every Terraform directory **MUST** have a `versions.tf` file with Terraform and provider version constraints:
-
-**AWS Example:**
-
-```hcl
-# versions.tf
-
-terraform {
-  required_version = ">= 1.7.0"
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 6.0"
-    }
-  }
-}
-```
-
-**Azure Example:**
-
-```hcl
-# versions.tf
-
-terraform {
-  required_version = ">= 1.7.0"
-
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 4.0"
-    }
-  }
-}
-```
-
-**GCP Example:**
-
-```hcl
-# versions.tf
-
-terraform {
-  required_version = ">= 1.7.0"
-
-  required_providers {
-    google = {
-      source  = "hashicorp/google"
-      version = "~> 7.0"
-    }
-  }
-}
-```
+> **Note:** If you are not using AWS, replace `aws_s3_bucket` and the `bucket` argument with the equivalent resource type and naming attribute for your provider.
 
 ### Provider Configuration File
 
@@ -962,32 +513,7 @@ provider "aws" {
 }
 ```
 
-**Azure Example:**
-
-```hcl
-# providers.tf
-
-provider "azurerm" {
-  features {}
-
-  subscription_id = var.subscription_id
-}
-```
-
-> **Note:** Azure does not support provider-level default tags, and Resource Group tags are not automatically inherited by resources. Define common tags in a `locals` block (for example, `local.common_tags`) and apply `tags = local.common_tags` consistently to each taggable resource; you can optionally enforce required tags via Azure Policy.
-
-**GCP Example:**
-
-```hcl
-# providers.tf
-
-provider "google" {
-  project = var.project_id
-  region  = var.region
-}
-```
-
-> **Note:** GCP supports `default_labels` at the provider level (Google provider 4.x+), but label keys must be lowercase. For consistent lowercase enforcement or cross-provider compatibility, consider using a `locals` block for common labels.
+> **Note:** Azure does not support provider-level default tags; define common tags in a `locals` block. GCP supports `default_labels` at the provider level (Google provider 4.x+), but label keys must be lowercase.
 
 ### Backend Configuration
 
@@ -1009,34 +535,8 @@ terraform {
 }
 ```
 
-**Azure Example:**
-
-```hcl
-# backend.tf - Example configuration
-
-terraform {
-  backend "azurerm" {
-    resource_group_name  = "rg-terraform-state"  # Use your resource group
-    storage_account_name = "stacmeterraform"  # Use your storage account
-    container_name       = "tfstate"
-    key                  = "environments/prod/terraform.tfstate"
-  }
-}
-```
-
-**GCP Example:**
-
-```hcl
-# backend.tf - Example configuration
-
-terraform {
-  backend "gcs" {
-    bucket = "acme-corp-terraform-state"  # Use your state bucket name
-    prefix = "environments/prod"
-  }
-}
-```
-
+> **Note:** Azure uses the `azurerm` backend with a Storage Account, and GCP uses the `gcs` backend with a Cloud Storage bucket.
+>
 > **Important:** Unlike resource blocks, backend blocks do not support variable interpolation. Example values in backend configuration (such as bucket names and regions) must be replaced with your organization's actual values before running `terraform init`. Alternatively, use [partial backend configuration](#partial-backend-configuration) to provide values at runtime.
 
 #### Partial Backend Configuration
@@ -1065,50 +565,6 @@ terraform {
 bucket         = "acme-corp-terraform-state"
 region         = "us-east-1"
 dynamodb_table = "terraform-locks"
-```
-
-**Azure Backend file (committed):**
-
-```hcl
-# backend.tf - partial configuration
-
-terraform {
-  backend "azurerm" {
-    key = "environments/prod/terraform.tfstate"
-    # resource_group_name, storage_account_name, container_name provided via -backend-config
-  }
-}
-```
-
-**Azure Backend config file (environment-specific):**
-
-```hcl
-# config/prod.azurerm.tfbackend
-
-resource_group_name  = "rg-terraform-state"
-storage_account_name = "stacmeterraform"
-container_name       = "tfstate"
-```
-
-**GCP Backend file (committed):**
-
-```hcl
-# backend.tf - partial configuration
-
-terraform {
-  backend "gcs" {
-    prefix = "environments/prod"
-    # bucket provided via -backend-config
-  }
-}
-```
-
-**GCP Backend config file (environment-specific):**
-
-```hcl
-# config/prod.gcs.tfbackend
-
-bucket = "acme-corp-terraform-state"
 ```
 
 **Usage:**
@@ -1792,48 +1248,7 @@ locals {
 }
 ```
 
-**GCP Example (Labels - lowercase keys required):**
-
-```hcl
-locals {
-  # GCP labels must use lowercase keys
-  common_labels = {
-    name        = "${var.project_name}-${var.environment}"
-    environment = var.environment
-    project     = var.project_name
-    managed_by  = "terraform"
-  }
-
-  # Merge common labels with resource-specific labels
-  instance_labels = merge(local.common_labels, {
-    role = "web-server"
-  })
-}
-```
-
-> **Note:** GCP label keys must be lowercase and can only contain lowercase letters, numeric characters, underscores, and dashes. AWS and Azure tags support mixed-case keys.
-
-**Azure Example - Applying local tags to resources:**
-
-```hcl
-resource "azurerm_resource_group" "main" {
-  name     = "rg-${var.project_name}-${var.environment}"
-  location = var.location
-  tags     = local.common_tags
-}
-```
-
-**GCP Example - Applying local labels to resources:**
-
-```hcl
-resource "google_compute_instance" "main" {
-  name         = "${var.project_name}-${var.environment}"
-  machine_type = var.machine_type
-  zone         = var.zone
-
-  labels = local.common_labels
-}
-```
+> **Note:** GCP label keys must be lowercase and can only contain lowercase letters, numeric characters, underscores, and dashes. AWS and Azure tags support mixed-case keys. See STYLE_GUIDE_RATIONALE.md for GCP-specific label examples.
 
 ### Lifecycle Validation
 
@@ -2585,32 +2000,7 @@ terraform {
 }
 ```
 
-**Azure Example:**
-
-```hcl
-terraform {
-  backend "azurerm" {
-    resource_group_name  = "rg-terraform-state"
-    storage_account_name = "stacmeterraform"
-    container_name       = "tfstate"
-    key                  = "environments/prod/terraform.tfstate"
-  }
-}
-```
-
-**GCP Example:**
-
-```hcl
-terraform {
-  backend "gcs" {
-    bucket = "acme-corp-terraform-state"
-    prefix = "environments/prod"
-  }
-}
-```
-
-> **Example Values:** The examples above use illustrative values (e.g., `acme-corp-terraform-state`). Replace these with your organization's actual values when adopting this template.
-
+> **Note:** Azure uses `azurerm` backend and GCP uses `gcs` backend. See STYLE_GUIDE_RATIONALE.md for provider-specific examples.
 **Backend requirements:**
 
 - State files **MUST** be encrypted at rest
@@ -2773,88 +2163,6 @@ resource "aws_dynamodb_table" "terraform_locks" {
 }
 ```
 
-**Azure Example (`bootstrap/main.tf`):**
-
-```hcl
-terraform {
-  required_version = ">= 1.7.0"
-
-  required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 4.0"
-    }
-  }
-
-  # Backend will be added after bootstrap
-  # backend "azurerm" {
-  #   resource_group_name  = "rg-terraform-state"
-  #   storage_account_name = "stacmeterraform"
-  #   container_name       = "tfstate"
-  #   key                  = "bootstrap/terraform.tfstate"
-  # }
-}
-
-provider "azurerm" {
-  features {}
-}
-
-resource "azurerm_resource_group" "terraform_state" {
-  name     = "rg-terraform-state"
-  location = "eastus"
-}
-
-resource "azurerm_storage_account" "terraform_state" {
-  name                     = "stacmeterraform"
-  resource_group_name      = azurerm_resource_group.terraform_state.name
-  location                 = azurerm_resource_group.terraform_state.location
-  account_tier             = "Standard"
-  account_replication_type = "GRS"
-
-  blob_properties {
-    versioning_enabled = true
-  }
-}
-
-resource "azurerm_storage_container" "terraform_state" {
-  name                  = "tfstate"
-  storage_account_name  = azurerm_storage_account.terraform_state.name
-  container_access_type = "private"
-}
-```
-
-**GCP Example (`bootstrap/main.tf`):**
-
-```hcl
-terraform {
-  required_version = ">= 1.7.0"
-
-  required_providers {
-    google = {
-      source  = "hashicorp/google"
-      version = "~> 7.0"
-    }
-  }
-
-  # Backend will be added after bootstrap
-  # backend "gcs" {
-  #   bucket = "acme-corp-terraform-state"
-  #   prefix = "bootstrap"
-  # }
-}
-
-resource "google_storage_bucket" "terraform_state" {
-  name     = "acme-corp-terraform-state"
-  location = "US"
-
-  versioning {
-    enabled = true
-  }
-
-  uniform_bucket_level_access = true
-}
-```
-
 **Step 2: Apply locally to create state storage:**
 
 ```bash
@@ -2918,35 +2226,7 @@ terraform {
 }
 ```
 
-**Azure Example:**
-
-```hcl
-# Azure Storage backend (encryption is enabled by default on Azure Storage accounts)
-terraform {
-  backend "azurerm" {
-    resource_group_name  = "rg-terraform-state"
-    storage_account_name = "stacmeterraform"
-    container_name       = "tfstate"
-    key                  = "prod/terraform.tfstate"
-  }
-}
-```
-
-> **Note:** Azure Storage accounts have encryption enabled by default. Ensure your storage account is configured with appropriate encryption settings.
-
-**GCP Example:**
-
-```hcl
-# GCS backend (encryption is enabled by default on GCS buckets)
-terraform {
-  backend "gcs" {
-    bucket = "acme-corp-terraform-state"
-    prefix = "prod"
-  }
-}
-```
-
-> **Note:** GCS buckets are encrypted by default using Google-managed encryption keys. For additional security, configure Customer-Managed Encryption Keys (CMEK).
+> **Note:** Azure Storage and GCS backends encrypt state by default. For additional security, configure customer-managed keys.
 
 ### State Locking
 
@@ -2967,35 +2247,7 @@ terraform {
 }
 ```
 
-**Azure Example:**
-
-```hcl
-# Azure Storage backend (locking is built-in via blob leases)
-terraform {
-  backend "azurerm" {
-    resource_group_name  = "rg-terraform-state"
-    storage_account_name = "stacmeterraform"
-    container_name       = "tfstate"
-    key                  = "prod/terraform.tfstate"
-  }
-}
-```
-
-> **Note:** Azure Storage backend uses blob leases for state locking automatically. No additional configuration is required.
-
-**GCP Example:**
-
-```hcl
-# GCS backend (locking is built-in)
-terraform {
-  backend "gcs" {
-    bucket = "acme-corp-terraform-state"
-    prefix = "prod"
-  }
-}
-```
-
-> **Note:** GCS backend supports state locking natively. No additional configuration is required.
+> **Note:** Azure Storage backend uses blob leases for locking automatically. GCS backend supports state locking natively. No additional configuration required for either.
 
 ### No Local State in Production
 
@@ -3124,112 +2376,7 @@ aws s3api get-object \
   terraform.tfstate.recovered
 ```
 
-**Azure Storage Backend:**
-
-Enable blob versioning or soft delete on the storage account:
-
-```hcl
-resource "azurerm_storage_account" "terraform_state" {
-  name                     = "stacmeterraform"
-  resource_group_name      = azurerm_resource_group.terraform_state.name
-  location                 = azurerm_resource_group.terraform_state.location
-  account_tier             = "Standard"
-  account_replication_type = "GRS"
-
-  blob_properties {
-    versioning_enabled = true
-
-    delete_retention_policy {
-      days = 90
-    }
-
-    container_delete_retention_policy {
-      days = 90
-    }
-  }
-}
-```
-
-To recover a previous state version from Azure Storage:
-
-```bash
-# List blob versions
-az storage blob list \
-  --account-name stacmeterraform \
-  --container-name tfstate \
-  --include v \
-  --prefix environments/prod/terraform.tfstate \
-  --output table
-
-# Download a specific version
-az storage blob download \
-  --account-name stacmeterraform \
-  --container-name tfstate \
-  --name environments/prod/terraform.tfstate \
-  --version-id <VERSION_ID> \
-  --file terraform.tfstate.recovered
-```
-
-**GCS Backend:**
-
-Enable object versioning on the GCS bucket:
-
-```hcl
-resource "google_storage_bucket" "terraform_state" {
-  name     = "acme-corp-terraform-state"
-  location = "US"
-
-  versioning {
-    enabled = true
-  }
-
-  # Optional: Configure lifecycle policy for version retention
-  # GCS uses count-based retention (num_newer_versions) while AWS uses
-  # time-based retention (noncurrent_days). Choose based on your needs:
-  # - Count-based: Keeps last N versions regardless of age
-  # - Time-based: Keeps versions for N days regardless of count
-  lifecycle_rule {
-    action {
-      type = "Delete"
-    }
-    condition {
-      num_newer_versions = 10
-      with_state         = "ARCHIVED"
-    }
-  }
-
-  uniform_bucket_level_access = true
-}
-```
-
-To recover a previous state version from GCS:
-
-```bash
-# List object versions
-gsutil ls -la gs://acme-corp-terraform-state/environments/prod/
-
-# Copy a specific generation (version)
-gsutil cp gs://acme-corp-terraform-state/environments/prod/terraform.tfstate#<GENERATION> \
-  terraform.tfstate.recovered
-```
-
-**Terraform Cloud:**
-
-State versioning is automatic in Terraform Cloud. To access state history:
-
-1. Navigate to your workspace in the Terraform Cloud UI
-2. Click on "States" in the left navigation
-3. Browse the list of state versions with timestamps
-4. Click on any version to view details or download
-
-State versions can also be accessed via the Terraform Cloud API:
-
-```bash
-# List state versions for a workspace
-curl \
-  --header "Authorization: Bearer $TFC_TOKEN" \
-  https://app.terraform.io/api/v2/workspaces/<WORKSPACE_ID>/state-versions
-```
+> **Note:** Azure Storage supports blob versioning with soft delete. GCS supports object versioning. Terraform Cloud provides automatic state versioning. See STYLE_GUIDE_RATIONALE.md for provider-specific backup and recovery examples.
 
 #### Manual State Backup
 
@@ -3263,203 +2410,6 @@ terraform state push terraform.tfstate.backup.20260202_120000
 ```
 
 > **Warning:** `terraform state push` overwrites the remote state. Ensure no other operations are in progress and that you have verified the backup contents before pushing.
-
-#### Common State Problems and Recovery
-
-##### Error: "Error acquiring the state lock"
-
-**Symptoms:**
-
-```text
-Error: Error acquiring the state lock
-
-Error message: ConditionalCheckFailedException: The conditional request failed
-Lock Info:
-  ID:        a1b2c3d4-e5f6-7890-abcd-ef1234567890
-  Path:      terraform.tfstate
-  Operation: OperationTypeApply
-  Who:       user@hostname
-  Version:   1.7.0
-  Created:   2026-02-01 10:30:00.000000000 +0000 UTC
-```
-
-**Cause:**
-
-- A previous Terraform operation was interrupted (crash, network failure, timeout)
-- Another user or CI job is currently running Terraform against the same state
-- The lock was not properly released after a failed operation
-
-**Solution:**
-
-1. **First, verify no operations are in progress.** Check with your team and CI system.
-
-2. **If confirmed safe, force-unlock the state:**
-
-   ```bash
-   terraform force-unlock a1b2c3d4-e5f6-7890-abcd-ef1234567890
-   ```
-
-3. **If the lock ID is unknown, check your backend directly:**
-   - For DynamoDB (AWS): Check the lock table for the lock entry
-   - For Azure: Check blob lease status
-   - For GCS: Lock is file-based; typically auto-expires
-
-**Prevention:**
-
-- Ensure only one operator or CI job runs Terraform at a time
-- Use CI/CD pipelines with proper concurrency controls
-- Configure appropriate timeouts for long-running operations
-
-> **Warning:** Never force-unlock a state if another operation is genuinely in progress. This can cause state corruption.
-
-##### Error: "State file corrupted or invalid JSON"
-
-**Symptoms:**
-
-```text
-Error: Failed to load state: unexpected end of JSON input
-```
-
-or
-
-```text
-Error: Failed to load state: invalid character '<' looking for beginning of value
-```
-
-**Cause:**
-
-- Write operation was interrupted (network failure, process termination)
-- Manual editing of state file with syntax errors
-- Storage backend returned an error page instead of state file
-
-**Solution:**
-
-1. **Restore from backend versioning:**
-
-   ```bash
-   # Example for S3 - list versions and recover previous
-   aws s3api list-object-versions \
-     --bucket your-state-bucket \
-     --prefix path/to/terraform.tfstate
-   ```
-
-2. **Restore from manual backup (if available):**
-
-   ```bash
-   terraform state push terraform.tfstate.backup.YYYYMMDD_HHMMSS
-   ```
-
-3. **If no backup exists, reconstruct from infrastructure:**
-
-   ```bash
-   # Remove corrupted state (create backup first)
-   mv terraform.tfstate terraform.tfstate.corrupted
-
-   # Re-import all resources using import blocks
-   # See "Importing Resources with Import Blocks" section
-   ```
-
-**Prevention:**
-
-- State files **MUST NOT** be manually edited
-- Enable versioning on state storage (see [State Versioning Requirements](#state-versioning-requirements))
-- Use reliable network connections for Terraform operations
-
-##### Error: "Resource exists in state but not in cloud"
-
-**Symptoms:**
-
-```text
-Error: Error reading resource: ResourceNotFoundException
-```
-
-Terraform shows a resource in state, but the actual cloud resource has been deleted outside of Terraform (manually, via console, or by another tool).
-
-**Cause:**
-
-- Resource was deleted outside Terraform (console, CLI, another tool)
-- Resource was deleted by cloud provider (expiration, policy enforcement)
-- Incorrect AWS account, Azure subscription, or GCP project configured
-
-**Solution:**
-
-**Option 1: Remove from state using `removed` block (preferred):**
-
-```hcl
-removed {
-  from = aws_instance.deleted_instance
-
-  lifecycle {
-    destroy = false
-  }
-}
-```
-
-**Option 2: Remove from state using CLI:**
-
-```bash
-# Create backup first
-terraform state pull > terraform.tfstate.backup.$(date +%Y%m%d_%H%M%S)
-
-# Remove the resource from state
-terraform state rm aws_instance.deleted_instance
-```
-
-**Prevention:**
-
-- Establish processes to ensure infrastructure changes go through Terraform
-- Use `prevent_destroy` lifecycle rule for critical resources
-- Implement drift detection (scheduled `terraform plan` in CI)
-
-##### Error: "Resource exists in cloud but not in state"
-
-**Symptoms:**
-
-Terraform plans to create a resource, but the resource already exists in the cloud. Or, you have infrastructure created outside Terraform that you want to bring under management.
-
-**Cause:**
-
-- Resource was created outside Terraform (manually, via console, or by another tool)
-- State was lost or corrupted
-- Resource was removed from state but not destroyed
-
-**Solution:**
-
-**Option 1: Use `import` block (preferred, Terraform 1.5+):**
-
-```hcl
-import {
-  to = aws_instance.existing
-  id = "i-0abc123def456789"
-}
-
-resource "aws_instance" "existing" {
-  ami           = "ami-0abcdef1234567890"
-  instance_type = "t3.micro"
-  # ... configuration matching existing resource
-}
-```
-
-Then run:
-
-```bash
-terraform plan  # Verify import will succeed
-terraform apply # Perform the import
-```
-
-**Option 2: Use CLI import (legacy):**
-
-```bash
-terraform import aws_instance.existing i-0abc123def456789
-```
-
-After importing, review the state and update your configuration to match the imported resource's attributes.
-
-**Prevention:**
-
-- Establish processes to ensure infrastructure creation goes through Terraform
-- Use workspace-specific naming conventions to identify Terraform-managed resources
-- Tag resources with `ManagedBy = "terraform"` to identify ownership
 
 ### Workspace Usage
 
@@ -3725,92 +2675,7 @@ resource "aws_instance" "app" {
 }
 ```
 
-#### Azure: App Configuration or Key Vault (Data Plane)
-
-**Publishing values (network stack):**
-
-```hcl
-resource "azurerm_app_configuration" "main" {
-  name                = "appconf-${var.project_name}-${var.environment}"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
-}
-
-resource "azurerm_app_configuration_key" "vnet_id" {
-  configuration_store_id = azurerm_app_configuration.main.id
-  key                    = "network/vnet_id"
-  value                  = azurerm_virtual_network.main.id
-}
-
-resource "azurerm_app_configuration_key" "subnet_ids" {
-  configuration_store_id = azurerm_app_configuration.main.id
-  key                    = "network/subnet_ids"
-  value                  = jsonencode(azurerm_subnet.private[*].id)
-}
-```
-
-**Consuming values (application stack):**
-
-```hcl
-data "azurerm_app_configuration" "main" {
-  name                = "appconf-${var.project_name}-${var.environment}"
-  resource_group_name = var.shared_resource_group_name
-}
-
-data "azurerm_app_configuration_key" "vnet_id" {
-  configuration_store_id = data.azurerm_app_configuration.main.id
-  key                    = "network/vnet_id"
-}
-
-data "azurerm_app_configuration_key" "subnet_ids" {
-  configuration_store_id = data.azurerm_app_configuration.main.id
-  key                    = "network/subnet_ids"
-}
-
-locals {
-  vnet_id    = data.azurerm_app_configuration_key.vnet_id.value
-  subnet_ids = jsondecode(data.azurerm_app_configuration_key.subnet_ids.value)
-}
-```
-
-#### GCP: Cloud Storage with Metadata or Runtime Config
-
-> **Note:** GCP does not have a direct equivalent to AWS SSM Parameter Store. For cross-stack configuration sharing, Cloud Storage buckets with JSON configuration files provide a simple, cost-effective approach.
-
-**Publishing values (network stack):**
-
-```hcl
-resource "google_storage_bucket" "config" {
-  name     = "${var.project_id}-terraform-config"
-  location = var.region
-
-  uniform_bucket_level_access = true
-}
-
-resource "google_storage_bucket_object" "network_config" {
-  name    = "config/${var.environment}/network.json"
-  bucket  = google_storage_bucket.config.name
-  content = jsonencode({
-    vpc_id     = google_compute_network.main.id
-    subnet_ids = google_compute_subnetwork.private[*].id
-  })
-}
-```
-
-**Consuming values (application stack):**
-
-```hcl
-data "google_storage_bucket_object_content" "network_config" {
-  name   = "config/${var.environment}/network.json"
-  bucket = "${var.project_id}-terraform-config"
-}
-
-locals {
-  network_config = jsondecode(data.google_storage_bucket_object_content.network_config.content)
-  vpc_id         = local.network_config.vpc_id
-  subnet_ids     = local.network_config.subnet_ids
-}
-```
+> **Note:** Azure App Configuration and GCP Cloud Storage with JSON config files provide equivalent cross-stack sharing. See STYLE_GUIDE_RATIONALE.md for provider-specific examples.
 
 ### Acceptable: terraform_remote_state Data Source
 
@@ -3975,87 +2840,7 @@ resource "aws_s3_bucket" "replica" {
 }
 ```
 
-**Azure Example - Defining aliased providers:**
-
-```hcl
-# providers.tf
-
-provider "azurerm" {
-  features {}
-  subscription_id = var.primary_subscription_id
-  # Default provider (no alias)
-}
-
-provider "azurerm" {
-  alias           = "secondary"
-  features {}
-  subscription_id = var.secondary_subscription_id
-}
-```
-
-**Azure Example - Using aliased providers in resources:**
-
-```hcl
-# Use default provider
-resource "azurerm_storage_account" "primary" {
-  name                     = "stacmeprimary"
-  resource_group_name      = azurerm_resource_group.primary.name
-  location                 = azurerm_resource_group.primary.location
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
-}
-
-# Use aliased provider
-resource "azurerm_storage_account" "secondary" {
-  provider                 = azurerm.secondary
-  name                     = "stacmesecondary"
-  resource_group_name      = azurerm_resource_group.secondary.name
-  location                 = azurerm_resource_group.secondary.location
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
-}
-```
-
-**GCP Example - Defining aliased providers:**
-
-```hcl
-# providers.tf
-
-provider "google" {
-  project = var.primary_project_id
-  region  = "us-central1"
-  # Default provider (no alias)
-}
-
-provider "google" {
-  alias   = "europe"
-  project = var.primary_project_id
-  region  = "europe-west1"
-}
-
-provider "google" {
-  alias   = "secondary_project"
-  project = var.secondary_project_id
-  region  = "us-west1"
-}
-```
-
-**GCP Example - Using aliased providers in resources:**
-
-```hcl
-# Use default provider
-resource "google_storage_bucket" "primary" {
-  name     = "acme-corp-primary-data"
-  location = "US"
-}
-
-# Use aliased provider for different region
-resource "google_storage_bucket" "europe" {
-  provider = google.europe
-  name     = "acme-corp-europe-data"
-  location = "EU"
-}
-```
+> **Note:** Azure uses `subscription_id` and GCP uses `project`/`region` for aliased providers. See STYLE_GUIDE_RATIONALE.md for provider-specific examples.
 
 **Passing providers to modules:**
 
@@ -4136,8 +2921,6 @@ module "multi_region_storage" {
 
 ### Cross-Account and Service Account Patterns
 
-Enterprise environments often require accessing resources across multiple accounts, subscriptions, or projects. This section documents provider-specific authentication patterns for cross-account access.
-
 #### AWS: Assume Role Configuration
 
 The `assume_role` block enables Terraform to assume an IAM role in a different AWS account, providing temporary credentials for cross-account access. This pattern **SHOULD** be used instead of static credentials for cross-account AWS access.
@@ -4201,112 +2984,7 @@ resource "aws_s3_bucket" "staging_bucket" {
 }
 ```
 
-#### Azure: Subscription and Tenant Patterns
-
-Azure provider configuration supports multi-subscription and multi-tenant scenarios through explicit subscription and tenant IDs.
-
-**Basic multi-subscription configuration:**
-
-```hcl
-provider "azurerm" {
-  features {}
-
-  subscription_id = var.subscription_id
-  tenant_id       = var.tenant_id  # Required for multi-tenant scenarios
-
-  # Skip provider registration when lacking permissions
-  skip_provider_registration = true  # Use when service principal lacks registration permissions
-}
-```
-
-**When to use `skip_provider_registration = true`:**
-
-- Service principal lacks `Microsoft.Authorization/*/register/action` permission
-- Deploying to shared subscriptions where resource providers are pre-registered
-- Operating in environments with strict permission boundaries
-
-> **Note:** When using `skip_provider_registration = true`, the required resource providers **MUST** already be registered in the subscription. Terraform will fail if it attempts to create resources for unregistered providers.
-
-**Multi-subscription pattern with provider aliases:**
-
-```hcl
-provider "azurerm" {
-  alias = "production"
-  features {}
-
-  subscription_id = var.production_subscription_id
-  tenant_id       = var.tenant_id
-}
-
-provider "azurerm" {
-  alias = "shared_services"
-  features {}
-
-  subscription_id = var.shared_services_subscription_id
-  tenant_id       = var.tenant_id
-}
-
-resource "azurerm_resource_group" "prod" {
-  provider = azurerm.production
-  name     = "rg-prod-app"
-  location = "eastus"
-}
-
-resource "azurerm_resource_group" "shared" {
-  provider = azurerm.shared_services
-  name     = "rg-shared-networking"
-  location = "eastus"
-}
-```
-
-#### GCP: Service Account Impersonation
-
-Service account impersonation allows Terraform to act as a service account without requiring its key file. This pattern **SHOULD** be preferred over service account key files.
-
-**Basic impersonation configuration:**
-
-```hcl
-provider "google" {
-  project = var.project_id
-  region  = var.region
-
-  # Impersonate a service account instead of using default credentials
-  impersonate_service_account = "terraform@${var.project_id}.iam.gserviceaccount.com"
-}
-```
-
-**When to use impersonation:**
-
-- CI/CD pipelines where the runner uses a less-privileged service account
-- Local development with user credentials that need elevated access
-- Implementing least-privilege access patterns
-- Avoiding long-lived service account key files
-
-**Required IAM permissions for impersonation:**
-
-The calling identity must have `roles/iam.serviceAccountTokenCreator` on the target service account, or the `iam.serviceAccounts.getAccessToken` permission.
-
-<!-- RATIONALE: benefits-of-service-account-impersonation-over-keys -->
-
-**Multi-project pattern with impersonation:**
-
-```hcl
-provider "google" {
-  alias   = "production"
-  project = var.production_project_id
-  region  = var.region
-
-  impersonate_service_account = "terraform@${var.production_project_id}.iam.gserviceaccount.com"
-}
-
-provider "google" {
-  alias   = "staging"
-  project = var.staging_project_id
-  region  = var.region
-
-  impersonate_service_account = "terraform@${var.staging_project_id}.iam.gserviceaccount.com"
-}
-```
+> **Note:** Azure uses multi-subscription with `subscription_id`/`tenant_id` and GCP uses `impersonate_service_account`. See STYLE_GUIDE_RATIONALE.md for detailed examples.
 
 #### Cross-Account Pattern Summary
 
@@ -4405,38 +3083,7 @@ resource "aws_db_instance" "main" {
 }
 ```
 
-**Azure Example - Key Vault:**
-
-```hcl
-data "azurerm_key_vault" "main" {
-  name                = "kv-acme-prod"
-  resource_group_name = "rg-terraform-state"
-}
-
-data "azurerm_key_vault_secret" "db_password" {
-  name         = "database-password"
-  key_vault_id = data.azurerm_key_vault.main.id
-}
-
-resource "azurerm_mssql_server" "main" {
-  administrator_login_password = data.azurerm_key_vault_secret.db_password.value
-  # ... other configuration
-}
-```
-
-**GCP Example - Secret Manager:**
-
-```hcl
-data "google_secret_manager_secret_version" "db_password" {
-  secret  = "database-password"
-  project = var.project_id
-}
-
-resource "google_sql_database_instance" "main" {
-  # Password accessed via: data.google_secret_manager_secret_version.db_password.secret_data
-  # ... other configuration
-}
-```
+> **Note:** Azure Key Vault and GCP Secret Manager follow the same data source pattern. See STYLE_GUIDE_RATIONALE.md for provider-specific examples.
 
 #### Pattern 3: HashiCorp Vault (Provider-Agnostic)
 
@@ -4454,19 +3101,6 @@ resource "aws_db_instance" "main" {
   password = data.vault_generic_secret.db_creds.data["password"]
 }
 
-# Azure Example
-resource "azurerm_mssql_server" "main" {
-  administrator_login          = data.vault_generic_secret.db_creds.data["username"]
-  administrator_login_password = data.vault_generic_secret.db_creds.data["password"]
-  # ... other configuration
-}
-
-# GCP Example
-resource "google_sql_user" "main" {
-  name     = data.vault_generic_secret.db_creds.data["username"]
-  password = data.vault_generic_secret.db_creds.data["password"]
-  instance = google_sql_database_instance.main.name
-}
 ```
 
 ### Sensitive Marking Requirements
@@ -5276,359 +3910,16 @@ This section consolidates common anti-patterns to help developers avoid frequent
 
 | Anti-Pattern | Why It's Problematic | Correct Approach |
 | --- | --- | --- |
-| Hardcoded secrets in `.tf` files | Secrets exposed in version control and state | Use environment variables or secret managers → [Secret Management](#secret-management) |
-| Using `terraform apply -target` regularly | Creates state drift and inconsistent infrastructure | Split into smaller, independent configurations → [Resource Targeting](#resource-targeting) |
-| Redundant `depends_on` for inferable dependencies | Adds noise and can mask actual dependency issues | Let Terraform infer dependencies from references → [Explicit Dependencies](#explicit-dependencies) |
-| Using `count` with collections that may reorder | Index shifts cause unintended resource recreation | Use `for_each` with stable keys → [for_each vs count](#for_each-vs-count) |
-| Wildcard IAM actions (`"*"`) | Violates least-privilege; security risk | Specify exact required actions → [IAM Policy Guidelines](#iam-policy-guidelines) |
-| Local state in team/production environments | No locking, no encryption, easily lost | Configure remote backend → [Remote Backend Configuration](#remote-backend-configuration) |
-| Committing `.tfstate` files to version control | Exposes sensitive data; causes merge conflicts | Add to `.gitignore`; use remote backend → [State File Exclusion](#state-file-exclusion) |
+| Hardcoded secrets in `.tf` files | Secrets exposed in version control and state | Use environment variables or secret managers |
+| Using `terraform apply -target` regularly | Creates state drift and inconsistent infrastructure | Split into smaller, independent configurations |
+| Redundant `depends_on` for inferable dependencies | Adds noise and can mask actual dependency issues | Let Terraform infer dependencies from references |
+| Using `count` with collections that may reorder | Index shifts cause unintended resource recreation | Use `for_each` with stable keys |
+| Wildcard IAM actions (`"*"`) | Violates least-privilege; security risk | Specify exact required actions |
+| Local state in team/production environments | No locking, no encryption, easily lost | Configure remote backend |
+| Committing `.tfstate` files to version control | Exposes sensitive data; causes merge conflicts | Add to `.gitignore`; use remote backend |
 | Using `try()` without understanding failure modes | Silently masks errors that should be investigated | Document expected failures; consider explicit null checks |
 | Overly complex expressions in resource blocks | Reduces readability; hard to debug | Extract to `locals` with descriptive names |
-| Default values for sensitive variables | Encourages insecure deployments | Require explicit values; no defaults for secrets → [No Secret Defaults](#no-secret-defaults) |
-
----
-
-## Troubleshooting Common Issues
-
-This section provides guidance for resolving common Terraform errors and issues. Each entry includes the error message or symptom, cause, solution, and prevention strategies.
-
-### Error: Error acquiring the state lock
-
-**Symptom:**
-
-```text
-Error: Error acquiring the state lock
-
-Error message: ConditionalCheckFailedException: The conditional request failed
-Lock Info:
-  ID:        a1b2c3d4-e5f6-7890-abcd-ef1234567890
-  Path:      terraform.tfstate
-  Operation: OperationTypePlan
-  Who:       user@hostname
-  Version:   1.7.0
-  Created:   2026-01-15 10:30:00.000000000 +0000 UTC
-```
-
-**Cause:** A previous Terraform operation was interrupted (crash, network failure, timeout), or another user/process is running Terraform concurrently against the same state file.
-
-**Solution:**
-
-1. **Verify no other operations are running.** Check with your team and CI/CD system to confirm no other Terraform operations are in progress.
-2. **If confirmed safe, force-unlock the state:**
-
-   ```bash
-   terraform force-unlock a1b2c3d4-e5f6-7890-abcd-ef1234567890
-   ```
-
-3. **If in CI/CD,** check for stuck or parallel jobs that may be holding the lock.
-
-**Prevention:**
-
-- Implement a single-operator policy or use CI/CD serialization to prevent concurrent operations
-- Configure appropriate timeouts for long-running operations
-- Use CI/CD pipelines with proper concurrency controls
-
-> **Warning:** Never force-unlock a state if another operation is genuinely in progress. This can cause state corruption.
-
-### Error: Provider configuration not present
-
-**Symptom:**
-
-```text
-Error: Provider configuration not present
-
-To work with aws_instance.example its original provider configuration at
-provider["registry.terraform.io/hashicorp/aws"] is required, but it has been removed.
-```
-
-**Cause:** A resource exists in the state file, but the provider configuration that created it has been removed from the Terraform code.
-
-**Solution:**
-
-1. **Re-add the provider configuration** if the resource should still be managed:
-
-   ```hcl
-   provider "aws" {
-     region = "us-east-1"
-   }
-   ```
-
-2. **Remove the orphaned resource from state** if it was intentionally deleted:
-
-   ```bash
-   terraform state rm aws_instance.example
-   ```
-
-3. **Use a `removed` block** (Terraform 1.7+) to cleanly remove from state without destroying:
-
-   ```hcl
-   removed {
-     from = aws_instance.example
-
-     lifecycle {
-       destroy = false
-     }
-   }
-   ```
-
-**Prevention:**
-
-- Use `moved` blocks when refactoring resources
-- Never remove provider configurations while resources using them still exist in state
-- Review `terraform plan` output carefully before removing providers
-
-### Error: Cycle detected
-
-**Symptom:**
-
-```text
-Error: Cycle: aws_security_group.a, aws_security_group.b
-```
-
-**Cause:** Circular dependency between resources where resource A depends on resource B, and resource B depends on resource A.
-
-**Solution:**
-
-1. **Identify the cycle** from the error message—Terraform lists the resources involved
-2. **Restructure to break the cycle:**
-   - Use separate `aws_security_group_rule` resources instead of inline rules:
-
-     ```hcl
-     resource "aws_security_group" "a" {
-       name = "sg-a"
-       # No inline ingress/egress rules
-     }
-
-     resource "aws_security_group" "b" {
-       name = "sg-b"
-       # No inline ingress/egress rules
-     }
-
-     resource "aws_security_group_rule" "a_to_b" {
-       type                     = "ingress"
-       security_group_id        = aws_security_group.a.id
-       source_security_group_id = aws_security_group.b.id
-       from_port                = 443
-       to_port                  = 443
-       protocol                 = "tcp"
-     }
-     ```
-
-   - Create a shared resource that both can reference
-   - Reorganize dependencies to create a one-way relationship
-
-**Prevention:**
-
-- Avoid bidirectional references between resources
-- Prefer one-way dependency graphs
-- Use separate rule resources instead of inline blocks for security groups
-- Review resource relationships before adding cross-references
-
-### Error: Invalid for_each argument
-
-**Symptom:**
-
-```text
-Error: Invalid for_each argument
-
-The "for_each" value depends on resource attributes that cannot be determined until apply,
-so Terraform cannot predict how many instances will be created.
-```
-
-**Cause:** The `for_each` or `count` expression depends on values that are not known until after `terraform apply` runs (e.g., resource IDs, computed attributes).
-
-**Solution:**
-
-1. **Restructure to use values known at plan time:**
-
-   ```hcl
-   # Instead of using computed values
-   # BAD: for_each = toset(aws_subnet.private[*].id)
-
-   # Use input variables or static values
-   # GOOD: for_each = var.subnet_names
-   variable "subnet_names" {
-     type    = set(string)
-     default = ["private-a", "private-b", "private-c"]
-   }
-   ```
-
-2. **Split into separate configurations** if the dependency is unavoidable
-3. **Use `-target` to create dependencies first** (not recommended for regular use):
-
-   ```bash
-   terraform apply -target=aws_subnet.private
-   terraform apply
-   ```
-
-**Prevention:**
-
-- Design `for_each` keys to use static values, input variables, or `locals` computed from known values
-- Avoid using computed resource attributes as `for_each` keys
-- Consider data architecture that separates resource creation from resource consumption
-
-### Error: Unsupported Terraform Core version
-
-**Symptom:**
-
-```text
-Error: Unsupported Terraform Core version
-
-This configuration does not support Terraform version 1.5.0. To proceed,
-either choose another supported Terraform version or update this version constraint.
-Required version: >= 1.7.0
-```
-
-**Cause:** The installed Terraform version does not meet the `required_version` constraint specified in the configuration.
-
-**Solution:**
-
-1. **Install a compatible Terraform version:**
-
-   ```bash
-   # Using tfenv (recommended)
-   tfenv install 1.7.0
-   tfenv use 1.7.0
-
-   # Or download directly from HashiCorp
-   # https://releases.hashicorp.com/terraform/
-   ```
-
-2. **Update the version constraint** if the older version is acceptable for your use case:
-
-   ```hcl
-   terraform {
-     required_version = ">= 1.5.0"  # Lowered from 1.7.0
-   }
-   ```
-
-**Prevention:**
-
-- Document version requirements in README files
-- Use version managers like `tfenv` or `asdf` for consistent environments
-- Pin Terraform versions in CI/CD pipelines
-- Communicate version requirements to team members
-
-### Error: Failed to query available provider packages
-
-**Symptom:**
-
-```text
-Error: Failed to query available provider packages
-
-Could not retrieve the list of available versions for provider hashicorp/aws:
-could not connect to registry.terraform.io
-```
-
-**Cause:** Network connectivity issues, registry temporarily unavailable, proxy misconfiguration, or incorrect provider source specification.
-
-**Solution:**
-
-1. **Check network and proxy settings:**
-
-   ```bash
-   # Test registry connectivity
-   curl -I https://registry.terraform.io
-
-   # If using a proxy, ensure Terraform can access it
-   export HTTPS_PROXY=http://proxy.example.com:8080
-   ```
-
-2. **Verify provider source is correct** in `required_providers`:
-
-   ```hcl
-   terraform {
-     required_providers {
-       aws = {
-         source  = "hashicorp/aws"  # Verify this is correct
-         version = "~> 5.0"
-       }
-     }
-   }
-   ```
-
-3. **Wait and retry** if the registry is temporarily unavailable
-4. **For air-gapped environments,** use provider mirroring:
-
-   ```bash
-   # Create a local mirror
-   terraform providers mirror /path/to/mirror
-
-   # Configure Terraform to use the mirror
-   # In ~/.terraformrc or terraform.rc:
-   provider_installation {
-     filesystem_mirror {
-       path = "/path/to/mirror"
-     }
-   }
-   ```
-
-**Prevention:**
-
-- Commit `.terraform.lock.hcl` to version control to cache provider checksums
-- Consider setting up a provider mirror for reliability in enterprise environments
-- Use explicit provider source specifications in all configurations
-- Test network connectivity before long Terraform operations
-
-### Debugging with TF_LOG
-
-Terraform provides environment variables for enabling detailed logging when troubleshooting unexpected behavior. These logs can help diagnose issues that don't match specific error patterns.
-
-**TF_LOG levels:**
-
-| Level | Description |
-| --- | --- |
-| `TRACE` | Most verbose; includes all internal operations |
-| `DEBUG` | Detailed information for debugging |
-| `INFO` | General operational information |
-| `WARN` | Warning messages only |
-| `ERROR` | Error messages only |
-
-**Basic usage examples:**
-
-```bash
-# Enable debug logging
-export TF_LOG=DEBUG
-terraform plan
-
-# Save logs to a file
-export TF_LOG=TRACE
-export TF_LOG_PATH=./terraform.log
-terraform apply
-
-# Disable logging when done
-unset TF_LOG TF_LOG_PATH
-```
-
-**Provider-specific logging:**
-
-Use `TF_LOG_PROVIDER` to isolate provider logs from core Terraform logs. This is useful when debugging provider-specific issues without the noise from Terraform core operations:
-
-```bash
-export TF_LOG_CORE=WARN
-export TF_LOG_PROVIDER=DEBUG
-terraform plan
-```
-
-**Common debugging scenarios:**
-
-| Scenario | Recommended Level | What to Look For |
-| --- | --- | --- |
-| API errors | DEBUG | HTTP request/response details |
-| Authentication issues | DEBUG | Credential resolution, assume role operations |
-| Unexpected resource changes | TRACE | Attribute comparisons, diff calculations |
-| Slow operations | INFO | Timing information, API call patterns |
-
-> **Security Warning:** Terraform logs **MAY** contain sensitive information including credentials, API keys, and resource configurations. Log files **MUST NOT** be committed to version control or shared without careful redaction of sensitive data.
-
-**Clean up reminder:**
-
-After debugging, always unset the logging environment variables to avoid log accumulation and potential sensitive data exposure:
-
-```bash
-unset TF_LOG TF_LOG_PATH TF_LOG_CORE TF_LOG_PROVIDER
-```
+| Default values for sensitive variables | Encourages insecure deployments | Require explicit values; no defaults for secrets |
 
 ---
 
@@ -5742,134 +4033,6 @@ A Terraform change is considered complete when:
 
 ---
 
-## Related Documentation
-
-For additional Terraform guidance beyond this instruction file:
-
-| Topic | Resource |
-| --- | --- |
-| Terraform Language Documentation | [developer.hashicorp.com/terraform/language](https://developer.hashicorp.com/terraform/language) |
-| Terraform CLI Commands | [developer.hashicorp.com/terraform/cli](https://developer.hashicorp.com/terraform/cli) |
-| Terraform Test Framework | [developer.hashicorp.com/terraform/cli/commands/test](https://developer.hashicorp.com/terraform/cli/commands/test) |
-| TFLint Documentation | [github.com/terraform-linters/tflint](https://github.com/terraform-linters/tflint) |
-| AWS Provider Documentation | [registry.terraform.io/providers/hashicorp/aws](https://registry.terraform.io/providers/hashicorp/aws/latest/docs) |
-| Azure Provider Documentation | [registry.terraform.io/providers/hashicorp/azurerm](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs) |
-| GCP Provider Documentation | [registry.terraform.io/providers/hashicorp/google](https://registry.terraform.io/providers/hashicorp/google/latest/docs) |
-
-These resources provide authoritative guidance on Terraform features, syntax, and provider-specific configuration options.
-
----
-
 ## Scope Exceptions & Deviations from Standards
 
-This section documents justified deviations from the standards defined in this document. When adopting this template, use this section to record exceptions specific to your organization, project, or deployment environment.
-
-### How to Document Deviations
-
-When a deviation from these standards is necessary, document it using the following format:
-
-```markdown
-#### [Short Description of Deviation]
-
-- **Standard Affected:** [Link to or name of the standard being modified]
-- **Reason:** [Business, technical, or organizational justification]
-- **Scope:** [Which files, modules, or configurations are affected]
-- **Approved By:** [Person or team who approved the deviation]
-- **Date:** [YYYY-MM-DD]
-- **Review Date:** [Optional: When this deviation should be reconsidered]
-```
-
-### Common Deviation Scenarios
-
-The following are common scenarios where deviations may be justified:
-
-- **Alternative Backend Workflows:** Using Terraform Cloud, Terraform Enterprise, Spacelift, or other orchestration tools instead of `backend.tf`. Document which backend sections do not apply.
-- **Provider-Specific Requirements:** Organization policies that mandate specific provider configurations (e.g., required regions, mandatory tags beyond those listed).
-- **Legacy Compatibility:** Maintaining compatibility with older Terraform versions or modules that cannot be immediately updated.
-- **Organizational Naming Conventions:** Pre-existing naming conventions that conflict with this template but are required for consistency with other systems.
-- **Security Policy Overrides:** Stricter security requirements that go beyond or differ from those specified here.
-
-### Recorded Deviations
-
-> **Note:** Replace the example below with actual deviations for your project, or remove this section if no deviations apply.
-
-*No deviations recorded yet. When deviations are necessary, document them here using the format above.*
-
-<!--
-#### Example: Alternative Backend (Terraform Cloud)
-
-- **Standard Affected:** [Remote Backend Configuration](#remote-backend-configuration)
-- **Reason:** Organization uses Terraform Cloud for state management, which provides built-in state storage, locking, and encryption.
-- **Scope:** All root modules in this repository
-- **Approved By:** @platform-team
-- **Date:** 2026-01-15
-- **Review Date:** 2027-01-15
-
-The following Remote Backend Configuration requirements are handled by Terraform Cloud and do not require explicit configuration:
-- State encryption (automatic in Terraform Cloud)
-- State locking (automatic in Terraform Cloud)
-- DynamoDB lock table configuration (not applicable)
-- S3/GCS/Azure Storage bucket configuration (not applicable)
-
-The `cloud` block in `versions.tf` replaces the `backend` block for this repository.
--->
-
----
-
-## Changelog
-
-This section tracks significant changes to the Terraform instruction file.
-
-| Version | Date | Changes |
-| --- | --- | --- |
-| 2.1.20260412.0 | 2026-04-12 | Added extended rationale content to companion STYLE_GUIDE_RATIONALE.md: terraform_data advantages over null_resource, environment separation comparison table, workspace limitations, directory-based recommendation details, terraform_remote_state caveats, configuration_aliases rationale, and service account impersonation benefits |
-| 2.0.20260412.0 | 2026-04-12 | Restructured into main guide (STYLE_GUIDE.md) and companion rationale document (STYLE_GUIDE_RATIONALE.md) |
-| 1.17.20260202.0 | 2026-02-02 | Added Upgrading Terraform Versions section with version upgrade checklist, pre-upgrade preparation steps, patch/minor and major upgrade procedures, lock file update guidance, CI/CD considerations, rollback procedures, and version manager recommendations |
-| 1.16.20260202.0 | 2026-02-02 | Added Troubleshooting Common Issues section with guidance for 6 common Terraform errors: state lock acquisition, provider configuration not present, cycle detected, invalid for_each argument, unsupported Terraform version, and failed provider package queries |
-| 1.15.20260202.0 | 2026-02-02 | Added Cross-Account and Service Account Patterns section with AWS assume_role, Azure skip_provider_registration and multi-subscription patterns, GCP impersonate_service_account, summary comparison table, and security considerations |
-| 1.14.20260202.0 | 2026-02-02 | Added State Backup and Recovery section with backup strategies, manual backup procedures, common state problems and recovery guidance, and state versioning requirements |
-| 1.13.20260202.0 | 2026-02-02 | Added Environment Separation Strategies section with guidance on workspaces vs directory-based environment separation |
-| 1.12.20260202.0 | 2026-02-02 | Added Table of Contents entry for Code Authoring Guidelines section, updated AWS provider version reference in README template to `~> 6.0`, made version constraint examples in Provider Version Constraints table and glossary provider-agnostic |
-| 1.12.20260201.0 | 2026-02-01 | Added `configuration_aliases` for module provider configuration, module-level `depends_on` documentation, sensitive output exposure in CLI security guidance, Terraform Cloud workspace tags pattern |
-| 1.11.20260201.0 | 2026-02-01 | Added ephemeral values (1.10+), terraform_data resource (1.4+), updated security scanning tools (tfsec → trivy transition), added changelog |
-| 1.10.20260201.0 | 2026-02-01 | Initial version targeting Terraform 1.10+ |
-
-When updating this document, add a new row describing the changes made.
-
----
-
-## Glossary
-
-This glossary defines key Terraform terms used throughout this document.
-
-| Term | Definition |
-| --- | --- |
-| **.tf.json extension** | An alternative JSON syntax for Terraform configuration, typically used for programmatically generated code. |
-| **.tftpl extension** | The recommended file extension for Terraform template files used with `templatefile()`. |
-| **backend** | The configuration that determines where Terraform stores its state file. Common backends include S3, Azure Storage, GCS, and Terraform Cloud. |
-| **check block** | A Terraform construct (v1.5+) that runs continuous validation assertions on every `plan` and `apply`, producing warnings rather than errors when assertions fail. |
-| **child module** | A module that is called by another module (the parent). Child modules are reusable components typically located in a `modules/` directory. Contrast with root module. |
-| **configuration_aliases** | A list in the `required_providers` block that declares which provider aliases a module expects to receive from calling modules. Required when modules use provider aliases internally. |
-| **data source** | A Terraform configuration element that reads information from external sources (cloud APIs, files, other Terraform state) without creating or managing resources. Data sources are declared with `data` blocks and provide read-only access to existing infrastructure or external data. |
-| **force-unlock** | A Terraform CLI command (`terraform force-unlock <LOCK_ID>`) that manually releases a state lock. Used to recover from interrupted operations but dangerous if used while another operation is genuinely in progress. |
-| **HCL** | HashiCorp Configuration Language. The primary language used to write Terraform configurations in `.tf` files. |
-| **import block** | A declarative block (v1.5+) that brings existing infrastructure under Terraform management without using CLI commands, enabling version-controlled and reviewable imports. |
-| **lifecycle block** | A nested block within resource or data source blocks that customizes resource behavior. Supports `create_before_destroy`, `prevent_destroy`, `ignore_changes`, `replace_triggered_by`, `precondition`, and `postcondition` arguments. |
-| **locals** | Named expressions defined in a `locals` block that can be referenced throughout a module. Local values simplify configuration by assigning names to expressions, reducing repetition, and improving readability. Also called "local values." |
-| **moved block** | A declarative block (v1.1+) that tells Terraform to treat a resource at a new address as the same resource that previously existed at a different address, enabling safe refactoring without destroying resources. |
-| **partial backend configuration** | A pattern where static backend settings are committed to version control while dynamic values (bucket names, regions) are provided at runtime via `-backend-config` flags or files. |
-| **pessimistic constraint operator** | The `~>` operator used in version constraints that allows only the rightmost version component to increment (for example, `~> X.0` allows versions `>= X.0.0` and `< (X+1).0.0`, i.e., all `X.*` but no `(X+1).0.0` or later). |
-| **provider** | A plugin that Terraform uses to interact with cloud platforms, SaaS providers, and other APIs. Examples include `aws`, `azurerm`, and `google`. |
-| **provider alias** | A named instance of a provider configuration that enables deploying resources to multiple regions, accounts, or with different settings within the same configuration. |
-| **removed block** | A declarative block (v1.7+) that removes a resource from Terraform state without destroying the underlying infrastructure. |
-| **resource** | A block that describes one or more infrastructure objects, such as virtual machines, storage buckets, or DNS records. |
-| **reusable module** | A self-contained Terraform configuration designed to be called from root modules or other modules. Located in `modules/` directories and versioned for reuse. |
-| **root module** | The top-level Terraform configuration directory where `terraform init`, `plan`, and `apply` are executed. Contains provider and backend configuration. Contrast with reusable (child) modules. |
-| **state file** | A JSON file (typically named `terraform.tfstate`) that Terraform uses to map configuration to real-world resources and track metadata. |
-| **state locking** | A mechanism that prevents concurrent Terraform operations on the same state file, avoiding race conditions and state corruption. |
-| **state versioning** | A backup mechanism where the state storage backend (S3, GCS, Azure Storage) retains previous versions of state files, enabling recovery from corruption or accidental changes. |
-| **templatefile() function** | A Terraform function that reads a template file and renders it with provided variables, commonly used for generating scripts, policies, or configuration files. |
-| **terraform.lock.hcl** | The dependency lock file that records the exact provider versions and checksums used, ensuring reproducible installations across team members and CI systems. |
-| **tfvars** | A file with the `.tfvars` extension that provides values for input variables. Commonly used for environment-specific configuration. |
-| **variable validation** | Custom validation rules defined within variable blocks that enforce constraints on input values at plan time. |
-| **workspace** | An isolated instance of state data within a single Terraform configuration. Workspaces enable multiple deployments of the same configuration with separate state files. The default workspace is named "default." Referenced via `terraform.workspace` in configuration. |
+Document justified deviations from these standards. No deviations are currently recorded.
