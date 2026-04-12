@@ -47,29 +47,8 @@ This checklist provides a quick reference for both human developers and LLMs (li
 
 ### Code Layout and Formatting
 
-- **[All]** Code **MUST** use 4 spaces for indentation, never tabs → [Indentation Rules](#indentation-rules)
-- **[All]** Opening braces **MUST** be placed on same line (OTBS) → [Brace Placement (OTBS)](#brace-placement-otbs)
-- **[All]** `catch`, `finally`, `else` **MUST** be on same line as closing brace → [Exception: catch, finally, and else Keywords](#exception-catch-finally-and-else-keywords)
-- **[All]** Code **MUST** use single space around operators, no extra alignment → [Operator Spacing and Alignment](#operator-spacing-and-alignment)
-- **[All]** Operators **MUST NOT** be vertically aligned across multiple lines → [Operator Spacing and Alignment](#operator-spacing-and-alignment)
-- **[All]** Multi-line method parameters **MUST** have extra indentation → [Multi-line Method Indentation](#multi-line-method-indentation)
-- **[All]** Blank lines **SHOULD** be used sparingly: two around functions, one within → [Blank Line Usage](#blank-line-usage)
-- **[All]** Blank lines **MUST NOT** contain any whitespace (spaces or tabs) → [Blank Line Usage](#blank-line-usage)
-- **[All]** Lines **MUST NOT** end with trailing whitespace → [Trailing Whitespace](#trailing-whitespace)
-- **[All]** Variables in strings **SHOULD** be delimited with `${}` or `-f` operator → [Variable Delimiting in Strings](#variable-delimiting-in-strings)
-
 ### Capitalization and Naming Conventions
 
-- **[All]** Public identifiers (functions, parameters, properties) **MUST** use PascalCase → [Overview of Observed Naming Discipline](#overview-of-observed-naming-discipline)
-- **[All]** PowerShell keywords (function, param, if, else, return, trap) **MUST** be lowercase → [Overview of Observed Naming Discipline](#overview-of-observed-naming-discipline)
-- **[All]** Local variables **MUST** use camelCase with type-hinting prefixes, fully descriptive (e.g., $strMessage, $intCount, no abbreviations) → [Local Variable Naming: Type-Prefixed camelCase](#local-variable-naming-type-prefixed-camelcase)
-- **[All]** Functions **MUST** follow Verb-Noun pattern with approved verbs → [Script and Function Naming: Full Explicit Form](#script-and-function-naming-full-explicit-form)
-- **[All]** Functions **MUST** use singular nouns in function names → [Script and Function Naming: Nouns](#script-and-function-naming-nouns)
-- **[All]** Modules **MUST** use PascalCase nouns (containers, not actions) → [Module Naming: Noun-Based Containers](#module-naming-noun-based-containers)
-- **[All]** Aliases **MUST NOT** be used in code → [Do Not Use Aliases](#do-not-use-aliases)
-- **[Modern]** Modules **MUST NOT** export compatibility aliases (exception: genuine interactive shortcuts) → [Do Not Use Aliases](#do-not-use-aliases)
-- **[All]** Parameters **MUST** use PascalCase, fully descriptive names → [Parameter Naming](#parameter-naming)
-- **[v1.0]** Reference parameters **MUST** use "ReferenceTo" prefix → [Parameter Naming](#parameter-naming)
 - **[All]** Code **SHOULD** avoid relative paths and tilde (~) shortcut → [Path and Scope Handling](#path-and-scope-handling)
 - **[All]** Code **SHOULD** use explicit scoping ($global:, $script:) → [Path and Scope Handling](#path-and-scope-handling)
 
