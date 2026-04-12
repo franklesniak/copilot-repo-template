@@ -254,7 +254,7 @@ Agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are thin entry p
 **Verification command:**
 
 ```bash
-# Compare recent commit history to identify unsynchronized changes
+# Compare recent commit history to identify changes that may require alignment review
 # If copilot-instructions.md was modified more recently than agent files,
 # manually verify the minimal summaries and any platform-specific sections
 git log --oneline -5 .github/copilot-instructions.md
