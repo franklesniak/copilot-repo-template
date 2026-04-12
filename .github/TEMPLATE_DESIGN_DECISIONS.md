@@ -17,7 +17,7 @@ This document records design decisions made during the creation and maintenance 
   - [Instruction Files Scope (Code Authoring, Not CI/CD)](#design-decision-instruction-files-scope-code-authoring-not-cicd)
 - [Agent Instruction Files](#agent-instruction-files)
   - [Multi-Agent Instruction Files at Repository Root](#design-decision-multi-agent-instruction-files-at-repository-root)
-- [Agent Files as Minimal Entry-Point Summaries (Not Canonical)](#design-decision-agent-files-as-minimal-entry-point-summaries-not-canonical)
+  - [Agent Files as Minimal Entry-Point Summaries (Not Canonical)](#design-decision-agent-files-as-minimal-entry-point-summaries-not-canonical)
 - [Node.js Package Configuration](#nodejs-package-configuration)
 - [CI Workflow Configuration](#ci-workflow-configuration)
 - [Python Configuration](#python-configuration)
