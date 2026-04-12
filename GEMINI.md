@@ -13,9 +13,9 @@ The authoritative source of truth for all repository rules is
 **`.github/copilot-instructions.md`** (the repo-wide constitution). All rules
 defined there apply without exception. **Read that file before making any changes.**
 
-This file intentionally keeps only a minimal repository-specific summary so that
-agents receive critical guidance immediately. The full shared rule set remains
-in the canonical file above.
+This file intentionally keeps only a minimal inline summary of the
+highest-priority shared rules so that agents receive critical guidance
+immediately. The full shared rule set remains in the canonical file above.
 
 ## Essential Repository Summary
 
