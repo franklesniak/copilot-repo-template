@@ -44,7 +44,7 @@ The key words "**MUST**", "**MUST NOT**", "**REQUIRED**", "**SHALL**", "**SHALL 
 
 This checklist provides a quick reference for both human developers and LLMs (like GitHub Copilot) to follow the PowerShell style guidelines. Each item includes a scope tag indicating applicability: **[All]** applies to all PowerShell scripts regardless of target version, **[Modern]** applies only to scripts targeting PowerShell 5.1+ (with .NET Framework 4.6.2+) and PowerShell 7.x+ (requires features not available in v1.0), and **[v1.0]** applies only to scripts that **MUST** be backward compatible with Windows PowerShell v1.0. Each checklist item links to its detailed section for more information. This checklist is intentionally placed within the first 100-200 lines to give LLMs a complete picture of the style guide's requirements early in the document.
 
-### Remaining Path and Scope Rules
+### Path and Scope Handling Rules
 
 - **[All]** Code **SHOULD** avoid relative paths and tilde (~) shortcut → [Path and Scope Handling](#path-and-scope-handling)
 - **[All]** Code **SHOULD** use explicit scoping ($global:, $script:) → [Path and Scope Handling](#path-and-scope-handling)
