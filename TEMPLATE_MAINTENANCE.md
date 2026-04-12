@@ -30,7 +30,7 @@ To keep the template current and functional, maintainers **SHOULD** review templ
 - [ ] Review and update Terraform version in CI workflows
 - [ ] Review instruction files for accuracy and relevance
 - [ ] Verify all CI workflows still pass with latest dependency versions
-- [ ] Verify agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are synchronized with `.github/copilot-instructions.md`
+- [ ] Verify agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) remain aligned with `.github/copilot-instructions.md`
 - [ ] Review and address any open issues or feedback
 
 **Annual Review:**

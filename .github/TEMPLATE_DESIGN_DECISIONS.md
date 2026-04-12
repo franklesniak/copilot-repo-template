@@ -372,7 +372,7 @@ Agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are minimal entr
 - Pro: Single source of truth remains `.github/copilot-instructions.md`
 - Pro: Agents that don't follow file references still receive critical rules
 - Con: Rule changes require updating multiple files
-- Con: No automated enforcement of synchronization
+- Con: No automated enforcement that alignment reviews happen after shared-rule changes
 
 ---
 
