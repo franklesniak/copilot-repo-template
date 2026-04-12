@@ -5,23 +5,21 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 1.17.20260202.0
+**Version:** 2.1.20260412.1
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-02-02
+- **Last Updated:** 2026-04-12
 - **Scope:** Defines Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in this repository. Covers style, formatting, naming conventions, file organization, variable and output design, resource configuration, module design, refactoring, state management, cross-stack data sharing, security best practices, provider management, testing, and documentation requirements.
-- **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
 ## Table of Contents
 
 - [Keywords](#keywords)
 - [About Examples in This Document](#about-examples-in-this-document)
 - [Quick Reference Checklist](#quick-reference-checklist)
-  - [Code Authoring Guidelines](#code-authoring-guidelines)
-- [Executive Summary: Terraform Philosophy](#executive-summary-terraform-philosophy)
+  - [Code Authoring Guidelines (Quick Reference)](#code-authoring-guidelines-quick-reference)
 - [Terraform Version Requirements](#terraform-version-requirements)
 - [Upgrading Terraform Versions](#upgrading-terraform-versions)
 - [Formatting and Style](#formatting-and-style)
@@ -34,14 +32,14 @@ description: "Terraform coding standards: secure, modular, and well-documented i
   - [Defensive Attribute Access with try()](#defensive-attribute-access-with-try)
   - [Terraform Cloud Variable Precedence](#terraform-cloud-variable-precedence)
 - [Continuous Validation with check Blocks](#continuous-validation-with-check-blocks)
-- [Resource Configuration](#resource-configuration-1)
+- [Resource Configuration](#resource-configuration)
   - [Resource Timeouts](#resource-timeouts)
   - [The terraform_data Resource](#the-terraform_data-resource)
   - [Explicit Dependencies](#explicit-dependencies)
   - [Module-Level depends_on](#module-level-depends_on)
-- [Module Design](#module-design-1)
-- [Refactoring](#refactoring-1)
-- [State Management](#state-management-1)
+- [Module Design](#module-design)
+- [Refactoring](#refactoring)
+- [State Management](#state-management)
   - [Terraform Cloud, Enterprise, and Alternative Backends](#terraform-cloud-enterprise-and-alternative-backends)
   - [Terraform Cloud Workspace Configuration](#terraform-cloud-workspace-configuration)
   - [Bootstrapping State Infrastructure](#bootstrapping-state-infrastructure)
@@ -49,8 +47,8 @@ description: "Terraform coding standards: secure, modular, and well-documented i
   - [Resource Targeting](#resource-targeting)
   - [Reviewing Plan Output](#reviewing-plan-output)
   - [State Backup and Recovery](#state-backup-and-recovery)
-- [Cross-Stack Data Sharing](#cross-stack-data-sharing-1)
-- [Provider Management](#provider-management-1)
+- [Cross-Stack Data Sharing](#cross-stack-data-sharing)
+- [Provider Management](#provider-management)
   - [Provider Aliasing](#provider-aliasing)
   - [Module Provider Configuration with configuration_aliases](#module-provider-configuration-with-configuration_aliases)
   - [Cross-Account and Service Account Patterns](#cross-account-and-service-account-patterns)
@@ -109,7 +107,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 
 > **Scope reminder:** Items tagged **[Module]**, **[Root]**, or **[Test]** are mandatory **when those constructs are present**. If the construct does not exist in your repo, the requirement is not yet applicable.
 
-### Formatting and Style
+### Formatting and Style (Quick Reference)
 
 - **[All]** Code **MUST** pass `terraform fmt` without modifications → [terraform fmt Compliance](#terraform-fmt-compliance)
 - **[All]** Code **MUST** use 2 spaces for indentation, never tabs → [Indentation Rules](#indentation-rules)
@@ -119,7 +117,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** Blank lines **MUST** be completely empty (no whitespace) → [Blank Lines](#blank-lines)
 - **[All]** Comments **MUST** use `#` for single-line; `/* */` **MAY** be used for multi-line → [Comment Style](#comment-style)
 
-### Naming Conventions
+### Naming Conventions (Quick Reference)
 
 - **[All]** Resources **MUST** use `snake_case` names → [Resource Naming](#resource-naming)
 - **[All]** Variables **MUST** use `snake_case` with descriptive names → [Variable Naming](#variable-naming)
@@ -130,7 +128,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** Boolean variables **SHOULD** use `enable_*`, `is_*`, or `has_*` prefixes → [Boolean Naming Patterns](#boolean-naming-patterns)
 - **[All]** Globally unique resource names **SHOULD** include random suffixes or organization prefixes → [Globally Unique Resource Names](#globally-unique-resource-names)
 
-### File Organization
+### File Organization (Quick Reference)
 
 - **[All]** Every Terraform directory **MUST** have a `versions.tf` file → [Version Constraints File](#version-constraints-file)
 - **[All]** Input variables **MUST** be in `variables.tf` → [Standard File Organization](#standard-file-organization)
@@ -144,7 +142,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** Template files **SHOULD** be placed in a `templates/` subdirectory → [Template Files (.tftpl)](#template-files-tftpl)
 - **[Root]** Large root modules **MAY** split resources into domain-specific files → [Splitting Large Configurations](#splitting-large-configurations)
 
-### Variable and Output Design
+### Variable and Output Design (Quick Reference)
 
 - **[All]** Variables **MUST** include a `description` → [Variable Documentation Requirements](#variable-documentation-requirements)
 - **[All]** Variables **MUST** include explicit `type` constraint → [Variable Type Constraints](#variable-type-constraints)
@@ -156,11 +154,11 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** Variables **SHOULD** explicitly set `nullable` to document null-handling behavior → [Nullable Variables](#nullable-variables)
 - **[All]** `try()` **SHOULD** be used for defensive access to attributes that may not exist → [Defensive Attribute Access with try()](#defensive-attribute-access-with-try)
 
-### Continuous Validation
+### Continuous Validation (Quick Reference)
 
 - **[All]** `check` blocks **MAY** be used for continuous validation → [Continuous Validation with check Blocks](#continuous-validation-with-check-blocks)
 
-### Resource Configuration
+### Resource Configuration (Quick Reference)
 
 - **[All]** Meta-arguments **MUST** appear first in resource blocks → [Meta-Argument Ordering](#meta-argument-ordering)
 - **[All]** Required arguments **MUST** appear before optional arguments → [Argument Ordering](#argument-ordering)
@@ -177,7 +175,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** `ignore_changes` **SHOULD** be used for attributes managed outside Terraform → [Lifecycle Block Options](#lifecycle-block-options)
 - **[All]** Custom `timeouts` blocks **MAY** be used for long-running resource operations → [Resource Timeouts](#resource-timeouts)
 
-### Module Design
+### Module Design (Quick Reference)
 
 - **[Module]** Modules **MUST** have a single, well-defined responsibility → [Single Responsibility](#single-responsibility)
 - **[Module]** Modules **MUST** specify required Terraform and provider versions → [Module Version Constraints](#module-version-constraints)
@@ -189,14 +187,14 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[Module]** Modules accepting multiple provider configurations **MUST** use `configuration_aliases` → [Module Provider Configuration with configuration_aliases](#module-provider-configuration-with-configuration_aliases)
 - **[All]** Module-level `depends_on` **SHOULD** be avoided unless implicit dependencies are insufficient → [Module-Level depends_on](#module-level-depends_on)
 
-### Refactoring
+### Refactoring (Quick Reference)
 
 - **[All]** Resource renames **MUST** use `moved` blocks instead of manual state commands → [Refactoring with Moved Blocks](#refactoring-with-moved-blocks)
 - **[All]** Existing infrastructure imports **SHOULD** use `import` blocks instead of CLI commands → [Importing Resources with Import Blocks](#importing-resources-with-import-blocks)
 - **[All]** Resources removed from management **SHOULD** use `removed` blocks → [Removing Resources from State with Removed Blocks](#removing-resources-from-state-with-removed-blocks)
 - **[All]** Direct state manipulation commands **SHOULD** be avoided → [State Manipulation Commands](#state-manipulation-commands)
 
-### State Management
+### State Management (Quick Reference)
 
 - **[Root]** Root modules **MUST** configure a remote backend → [Remote Backend Configuration](#remote-backend-configuration)
 - **[Root]** State files **MUST** be encrypted at rest → [State Encryption](#state-encryption)
@@ -210,20 +208,20 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** Manual state backups **SHOULD** be created before risky operations → [Manual State Backup](#manual-state-backup)
 - **[All]** State files **MUST NOT** be manually edited → [Common State Problems and Recovery](#common-state-problems-and-recovery)
 
-### Cross-Stack Data Sharing
+### Cross-Stack Data Sharing (Quick Reference)
 
 - **[Root]** Cross-stack data **SHOULD** be shared via cloud-native parameter stores → [Cross-Stack Data Sharing](#cross-stack-data-sharing)
 - **[Root]** `terraform_remote_state` **MAY** be used with documented coupling implications → [Cross-Stack Data Sharing](#cross-stack-data-sharing)
 - **[All]** Secrets **MUST NOT** be shared via parameter stores or remote state → [Cross-Stack Data Sharing](#cross-stack-data-sharing)
 
-### Provider Management
+### Provider Management (Quick Reference)
 
 - **[All]** Provider versions **MUST** be constrained → [Provider Version Constraints](#provider-version-constraints)
 - **[All]** `.terraform.lock.hcl` **MUST** be committed to version control → [Lock File Management](#lock-file-management)
 - **[All]** Pessimistic constraint operator (`~>`) **SHOULD** be used for providers → [Pessimistic Constraints](#pessimistic-constraints)
 - **[All]** Multi-region or multi-account deployments **MUST** use provider aliases → [Provider Aliasing](#provider-aliasing)
 
-### Security
+### Security (Quick Reference)
 
 - **[All]** Secrets **MUST NOT** appear in `.tf` files → [Secret Management](#secret-management)
 - **[All]** Secrets **MUST NOT** have default values → [No Secret Defaults](#no-secret-defaults)
@@ -234,7 +232,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[All]** Sensitive values **MUST NOT** be used in `for_each` or `count` expressions → [Sensitive Values in Meta-Arguments](#sensitive-values-in-meta-arguments)
 - **[All]** Sensitive outputs **MUST NOT** be logged in CI/CD pipelines → [Sensitive Output Exposure in CLI](#sensitive-output-exposure-in-cli)
 
-### Testing
+### Testing (Quick Reference)
 
 - **[Test]** Test files **MUST** use `.tftest.hcl` extension → [Test File Naming](#test-file-naming)
 - **[Test]** Test files **SHOULD** be in a `tests/` directory → [Test File Location](#test-file-location)
@@ -247,14 +245,14 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[Test]** Mock providers **SHOULD** be used for unit tests → [Mock Providers](#mock-providers)
 - **[Test]** Negative test cases **SHOULD** use `expect_failures` → [Testing Variable Validation](#testing-variable-validation)
 
-### Documentation
+### Documentation (Quick Reference)
 
 - **[Module]** Modules **MUST** have a `README.md` with usage examples → [Module README Requirements](#module-readme-requirements)
 - **[All]** Inline comments **SHOULD** explain "why," not "what" → [Inline Comment Conventions](#inline-comment-conventions)
 - **[All]** TODO comments **SHOULD** include username and context → [TODO Comment Format](#todo-comment-format)
 - **[All]** Error messages in validation blocks **SHOULD** be actionable and reference valid options or acceptable ranges → [Error Message Best Practices](#error-message-best-practices)
 
-### Code Authoring Guidelines
+### Code Authoring Guidelines (Quick Reference)
 
 The following guidelines apply to all code authors, including human developers and AI assistants such as GitHub Copilot:
 
@@ -266,26 +264,6 @@ The following guidelines apply to all code authors, including human developers a
 - **[All]** Authors **SHOULD NOT** assume a default cloud provider; when the provider is not specified, authors **SHOULD** use provider-agnostic examples and document that provider selection is required
 - **[All]** Authors **SHOULD** include `description` for all variables and outputs, and use `sensitive = true` as appropriate
 - **[All]** Authors **MUST NOT** modify lock files (`.terraform.lock.hcl`) or commit state unless explicitly required
-
-## Executive Summary: Terraform Philosophy
-
-This repository approaches Terraform as **infrastructure as code** with the same rigor applied to application code. The following principles guide all Terraform development:
-
-- **Deterministic and reproducible:** Infrastructure changes **MUST** produce predictable, repeatable results. The same configuration **MUST** produce the same infrastructure across environments.
-
-- **Security-first:** Secrets **MUST NEVER** appear in code or state unencrypted. Least-privilege **MUST** be the default for all IAM policies and resource access controls.
-
-- **Modular and reusable:** Common infrastructure patterns **SHOULD** be extracted into versioned modules with well-defined interfaces. Modules **MUST** be designed for reuse across projects.
-
-- **Well-documented:** Every variable, output, and module **MUST** be documented. Documentation is not optional—it is a first-class deliverable.
-
-- **Testable:** Infrastructure **SHOULD** be validated with automated tests before deployment. Terraform's native test framework enables validation of configuration logic.
-
-- **Version-controlled:** All Terraform code, including lock files, **MUST** be version-controlled. State files **MUST** be stored remotely with encryption and locking.
-
-The coding standards in this document enforce these principles through specific, actionable requirements.
-
-> **Provider-Agnostic Guidance:** This document includes parallel examples for AWS, Azure, and GCP where applicable. All style rules and best practices are **provider-agnostic**. Users **MAY** remove examples for providers they do not use. The principles of naming, structure, security, and documentation apply equally across all providers.
 
 ---
 
@@ -1153,7 +1131,7 @@ Both the inline example values and partial configuration pattern are valid appro
 
 Terraform variable files (`.tfvars`) provide environment-specific or deployment-specific values. This section defines conventions for organizing and managing these files.
 
-#### Naming Conventions
+#### Variable File Naming Conventions
 
 | Pattern | Use Case | Example |
 | --- | --- | --- |
@@ -2110,7 +2088,7 @@ When creating multiple instances of a resource, `for_each` **SHOULD** be preferr
 
 #### Why for_each is Preferred
 
-Removing an item from a `count`-based list causes all subsequent resources to be recreated due to index shifting. `for_each` uses map keys, so only the specific resource is affected.
+<!-- RATIONALE: why-foreach-is-preferred -->
 
 ```hcl
 # BAD: Using count with a list - removing any item shifts all subsequent indices
@@ -2258,11 +2236,7 @@ The `terraform_data` resource (Terraform 1.4+) is a built-in managed resource th
 - **Data passing:** Store and pass values between resources or modules
 - **Provisioner execution:** Run local-exec or remote-exec provisioners (same as null_resource)
 
-**Advantages over null_resource:**
-
-- No provider dependency (built into Terraform core)
-- Clearer semantics with `input` and `output` attributes
-- Better integration with the dependency graph
+<!-- RATIONALE: advantages-of-terraformdata-over-nullresource -->
 
 #### Basic Usage Pattern
 
@@ -3502,13 +3476,7 @@ terraform apply
 
 Organizations need a consistent strategy for managing multiple environments (dev, staging, prod). Two primary approaches exist: **workspaces** and **directory-based separation**. This section provides guidance on when to use each approach.
 
-#### Comparison Table
-
-| Approach | Use When | Advantages | Disadvantages |
-| --- | --- | --- | --- |
-| **Workspaces** | Identical infrastructure across environments; only variable values differ; small team with clear workflow | Single codebase; easy to switch between environments; built-in Terraform feature | Shared backend configuration; risk of applying to wrong workspace; no visible configuration differences in version control |
-| **Directory-based** | Different configurations per environment; team isolation needed; production requires explicit review; compliance requirements | Explicit, reviewable configuration per environment; no risk of workspace confusion; better audit trail; environment-specific customization | Some code duplication; requires discipline to keep shared modules updated |
-| **Hybrid** | Large organizations with both simple and complex environments; gradual migration between approaches | Flexibility; can use workspaces for non-production and directories for production | Increased complexity; requires clear documentation of which pattern applies where |
+<!-- RATIONALE: environment-separation-strategies-comparison-table -->
 
 #### Workspace-Based Approach
 
@@ -3566,13 +3534,7 @@ resource "aws_instance" "app" {
 - Non-production environments where accidental applies have limited impact
 - Rapid prototyping or development scenarios
 
-**Limitations of workspaces:**
-
-- All environments share the same backend configuration
-- No visible difference in repository between environments
-- Risk of running `terraform apply` in the wrong workspace
-- Difficult to implement environment-specific features or configurations
-- Code review cannot distinguish between environment configurations
+<!-- RATIONALE: workspace-limitations -->
 
 #### Directory-Based Approach
 
@@ -3655,21 +3617,7 @@ module "application" {
 
 For production use, directory-based separation is **RECOMMENDED** as the default approach because:
 
-1. **Explicit configuration:** Each environment has its own visible, reviewable configuration in version control
-2. **Safety:** No risk of accidentally applying changes to the wrong environment
-3. **Flexibility:** Easy to implement environment-specific configurations or features
-4. **Audit trail:** Git history clearly shows what changed in each environment
-5. **Team isolation:** Different teams or approval processes can manage different environments
-6. **Compliance:** Easier to demonstrate separation of concerns for auditors
-
-Workspaces **MAY** be used for:
-
-- Development and testing environments where rapid iteration is prioritized
-- Scenarios where infrastructure is truly identical across environments
-- Small teams with established workspace discipline
-- Temporary or ephemeral environments
-
-Teams **SHOULD** document their chosen approach in the repository's README or contributing guide to ensure consistency.
+<!-- RATIONALE: environment-separation-recommendation -->
 
 ### Resource Targeting
 
@@ -3718,11 +3666,7 @@ When infrastructure is split across multiple independent Terraform configuration
 
 ### Approaches Comparison
 
-| Approach | Recommendation | Coupling | Security |
-| --- | --- | --- | --- |
-| Cloud-native parameter stores | **PREFERRED** | Loose | Configurable per-value |
-| `terraform_remote_state` data source | Acceptable with caveats | Tight | Full state exposure |
-| Hardcoding values | **DISCOURAGED** | None (brittle) | Poor |
+<!-- RATIONALE: approaches-comparison -->
 
 ### Preferred: Cloud-Native Parameter Stores
 
@@ -3889,13 +3833,7 @@ locals {
 }
 ```
 
-**Caveats when using `terraform_remote_state`:**
-
-- **Tight coupling:** Changes to the source stack's outputs can break consuming stacks.
-- **State file access:** Consumers need read access to the entire state file, not just specific outputs.
-- **Least Privilege violation:** Consumers gain access to **all** outputs in the source state file, potentially exposing sensitive data not intended for sharing. This over-fetching of permissions violates security best practices.
-- **No explicit contract:** No clear interface definition between producer and consumer.
-- **Harder to test:** Mocking remote state in tests is more complex than mocking parameter store lookups.
+<!-- RATIONALE: caveats-when-using-terraformremotestate -->
 
 ### What to Share (and What Not to Share)
 
@@ -4137,11 +4075,7 @@ module "vpc_west" {
 
 When a module needs to accept multiple provider configurations (e.g., for multi-region deployments), it **MUST** declare the expected provider configurations using `configuration_aliases` in the `required_providers` block.
 
-**Why configuration_aliases is required:**
-
-- Modules **SHOULD NOT** define provider configurations directly; provider configurations **MUST** be defined in root modules. Terraform **CAN** accept provider blocks in child modules only as a legacy pattern and imposes limitations on such modules.
-- Modules that use provider aliases internally must declare which aliases they expect
-- This creates an explicit contract between the module and its callers
+<!-- RATIONALE: why-configurationaliases-is-required -->
 
 **Module declaration example:**
 
@@ -4352,12 +4286,7 @@ provider "google" {
 
 The calling identity must have `roles/iam.serviceAccountTokenCreator` on the target service account, or the `iam.serviceAccounts.getAccessToken` permission.
 
-**Benefits over service account keys:**
-
-- No key rotation required—credentials are short-lived
-- Audit trail shows both the calling identity and impersonated account
-- Reduced risk of credential exposure
-- Easier to revoke access by removing IAM bindings
+<!-- RATIONALE: benefits-of-service-account-impersonation-over-keys -->
 
 **Multi-project pattern with impersonation:**
 
@@ -4436,7 +4365,7 @@ variable "database_password" {
 
 ### Approved Secret Patterns
 
-**Pattern 1: Environment Variables**
+#### Pattern 1: Environment Variables
 
 ```hcl
 variable "db_password" {
@@ -4462,7 +4391,7 @@ export TF_VAR_db_password="$(gcloud secrets versions access latest --secret=data
 terraform apply
 ```
 
-**Pattern 2: Cloud Provider Secret Managers**
+#### Pattern 2: Cloud Provider Secret Managers
 
 **AWS Example - Secrets Manager:**
 
@@ -4509,7 +4438,7 @@ resource "google_sql_database_instance" "main" {
 }
 ```
 
-**Pattern 3: HashiCorp Vault (Provider-Agnostic)**
+#### Pattern 3: HashiCorp Vault (Provider-Agnostic)
 
 > **Note:** This example uses `vault_generic_secret` which works with both KV v1 and KV v2 secrets engines. For KV v2, include `/data/` in the path (e.g., `secret/data/database`). The data is accessed via `.data["key"]` regardless of KV version.
 
@@ -4540,7 +4469,7 @@ resource "google_sql_user" "main" {
 }
 ```
 
-### Sensitive Variable Marking
+### Sensitive Marking Requirements
 
 Variables containing sensitive data **MUST** be marked:
 
@@ -5893,6 +5822,8 @@ This section tracks significant changes to the Terraform instruction file.
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 2.1.20260412.0 | 2026-04-12 | Added extended rationale content to companion STYLE_GUIDE_RATIONALE.md: terraform_data advantages over null_resource, environment separation comparison table, workspace limitations, directory-based recommendation details, terraform_remote_state caveats, configuration_aliases rationale, and service account impersonation benefits |
+| 2.0.20260412.0 | 2026-04-12 | Restructured into main guide (STYLE_GUIDE.md) and companion rationale document (STYLE_GUIDE_RATIONALE.md) |
 | 1.17.20260202.0 | 2026-02-02 | Added Upgrading Terraform Versions section with version upgrade checklist, pre-upgrade preparation steps, patch/minor and major upgrade procedures, lock file update guidance, CI/CD considerations, rollback procedures, and version manager recommendations |
 | 1.16.20260202.0 | 2026-02-02 | Added Troubleshooting Common Issues section with guidance for 6 common Terraform errors: state lock acquisition, provider configuration not present, cycle detected, invalid for_each argument, unsupported Terraform version, and failed provider package queries |
 | 1.15.20260202.0 | 2026-02-02 | Added Cross-Account and Service Account Patterns section with AWS assume_role, Azure skip_provider_registration and multi-subscription patterns, GCP impersonate_service_account, summary comparison table, and security considerations |
