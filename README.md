@@ -103,9 +103,9 @@ GEMINI.md                            # Agent instructions for Gemini Code Assist
 | `.github/workflows/python-ci.yml` | Python linting and testing CI workflow (optional - remove if not using Python) |
 | `.markdownlint.jsonc` | Markdown linting rules prioritizing auto-fixable checks |
 | `.pre-commit-config.yaml` | Pre-commit hooks for all projects (Python formatting, linting, Markdown) |
-| `AGENTS.md` | Agent instructions for OpenAI Codex CLI and GitHub Copilot coding agent |
-| `CLAUDE.md` | Agent instructions for Claude Code and GitHub Copilot coding agent |
-| `GEMINI.md` | Agent instructions for Gemini Code Assist and GitHub Copilot coding agent |
+| `AGENTS.md` | Minimal agent entry point instructions for OpenAI Codex CLI and GitHub Copilot coding agent |
+| `CLAUDE.md` | Minimal agent entry point instructions plus Claude-specific workflow guidance |
+| `GEMINI.md` | Minimal agent entry point instructions for Gemini Code Assist and GitHub Copilot coding agent |
 | `pyproject.toml` | Python project configuration with dev dependencies |
 | `src/copilot_repo_template/` | Example Python package - rename for your project |
 | `tests/` | Test directory with pytest tests (Python) and Pester tests (PowerShell) |

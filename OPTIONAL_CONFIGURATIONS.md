@@ -2029,7 +2029,7 @@ When customizing the Pre-commit or Testing sections, you may also need to update
 
 **Files:** `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`
 
-The template includes three agent instruction files at the repository root. These files are synchronized summaries of the rules in `.github/copilot-instructions.md` (the canonical source of truth). Each file targets a specific AI coding platform:
+The template includes three agent instruction files at the repository root. `.github/copilot-instructions.md` remains the canonical source of truth, while these files act as thin entry points that keep a minimal inline summary of the highest-priority shared rules plus any platform-specific guidance. Each file targets a specific AI coding platform:
 
 | File | Target Agent(s) |
 | --- | --- |
@@ -2041,16 +2041,17 @@ The template includes three agent instruction files at the repository root. Thes
 
 Delete agent files for platforms you do not use. For example, if your team does not use Claude Code, delete `CLAUDE.md`. If your team does not use OpenAI Codex CLI, delete `AGENTS.md`. Removing unused files reduces maintenance burden without affecting other platforms.
 
-### Keeping Files Synchronized
+### Keeping Minimal Summaries Aligned
 
-When rules change in `.github/copilot-instructions.md`, apply the same changes to all remaining agent files. Common changes that require synchronization include:
+When high-priority shared guidance changes in `.github/copilot-instructions.md`, update the minimal summaries in any remaining agent files as needed. Common changes that require alignment include:
 
 - **Language table updates** — Adding or removing languages
 - **Linting tool changes** — Different linting commands or configurations
 - **Test command changes** — Different test frameworks or commands
 - **Build and test commands** — Updated pre-commit or CI commands
+- **Canonical-file guidance** — Changes to how agents should locate or interpret the canonical instructions
 
-> **Note:** No CI enforcement exists for agent file synchronization — this is a manual maintenance responsibility. Review agent files whenever you update `.github/copilot-instructions.md` to keep them consistent.
+> **Note:** No CI enforcement exists for agent-file alignment. Review the remaining agent files whenever you update `.github/copilot-instructions.md` so their minimal summaries stay accurate without regrowing into full duplicates.
 
 ### Adding Platform-Specific Notes
 

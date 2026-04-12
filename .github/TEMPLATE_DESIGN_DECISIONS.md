@@ -17,7 +17,7 @@ This document records design decisions made during the creation and maintenance 
   - [Instruction Files Scope (Code Authoring, Not CI/CD)](#design-decision-instruction-files-scope-code-authoring-not-cicd)
 - [Agent Instruction Files](#agent-instruction-files)
   - [Multi-Agent Instruction Files at Repository Root](#design-decision-multi-agent-instruction-files-at-repository-root)
-  - [Agent Files as Synchronized Summaries (Not Canonical)](#design-decision-agent-files-as-synchronized-summaries-not-canonical)
+- [Agent Files as Minimal Entry-Point Summaries (Not Canonical)](#design-decision-agent-files-as-minimal-entry-point-summaries-not-canonical)
 - [Node.js Package Configuration](#nodejs-package-configuration)
 - [CI Workflow Configuration](#ci-workflow-configuration)
 - [Python Configuration](#python-configuration)
@@ -332,7 +332,7 @@ The template includes three agent-specific instruction files at the repository r
 
 3. **Template mission alignment**: The template's mission is to provide coding standards for AI-assisted development—limiting to a single AI platform contradicts this mission.
 
-4. **Synchronized summaries**: Agent files contain synchronized summaries of `.github/copilot-instructions.md` rather than being the canonical source. This avoids multiple sources of truth while ensuring all agents receive guidance.
+4. **Minimal entry-point summaries**: Agent files keep only a minimal inline summary of the highest-priority shared rules from `.github/copilot-instructions.md`, rather than restating the full canonical document. This avoids multiple sources of truth while preserving reliable first-read guidance.
 
 **Trade-offs:**
 
@@ -340,22 +340,22 @@ The template includes three agent-specific instruction files at the repository r
 - Pro: GitHub Copilot coding agent receives enriched context from additional files
 - Pro: Template adopters can delete files for platforms they don't use
 - Con: Three additional files at the repository root
-- Con: Manual synchronization burden when rules change in `.github/copilot-instructions.md`
-- Con: No CI enforcement for synchronization between the canonical file and agent files
+- Con: Manual alignment burden when high-priority shared guidance changes in `.github/copilot-instructions.md`
+- Con: No CI enforcement for alignment between the canonical file and the agent entry points
 
 **Alternatives considered:**
 
 1. **Single `AGENTS.md` only:** Rejected because Claude Code reads only `CLAUDE.md` and Gemini reads only `GEMINI.md`—a single file does not cover all agents.
 
-2. **Symlinks from agent files to `.github/copilot-instructions.md`:** Rejected because agent files need inline summaries (not the full Copilot-specific format with `applyTo` references), and symlinks may not work correctly on all platforms or in all agent runtimes.
+2. **Symlinks from agent files to `.github/copilot-instructions.md`:** Rejected because agent files need a small amount of inline guidance for reliability, and symlinks may not work correctly on all platforms or in all agent runtimes.
 
 3. **No agent files (Copilot-only):** Rejected because it contradicts the template's mission of supporting AI-assisted development broadly.
 
-**Recommendation:** Keep all three files unless your project exclusively uses one AI coding agent. Delete files for platforms you do not use. When modifying `.github/copilot-instructions.md`, update all remaining agent files to match.
+**Recommendation:** Keep all three files unless your project exclusively uses one AI coding agent. Delete files for platforms you do not use. When modifying high-priority shared guidance in `.github/copilot-instructions.md`, update the remaining agent files so their minimal summaries stay accurate.
 
-### Design Decision: Agent Files as Synchronized Summaries (Not Canonical)
+### Design Decision: Agent Files as Minimal Entry-Point Summaries (Not Canonical)
 
-Agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are synchronized summaries of `.github/copilot-instructions.md`, not independent canonical sources.
+Agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are minimal entry-point summaries of `.github/copilot-instructions.md`, not independent canonical sources.
 
 **Rationale:**
 
@@ -363,9 +363,9 @@ Agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are synchronized
 
 2. **Avoids divergence**: Making agent files canonical would create multiple sources of truth that could diverge.
 
-3. **Agent discoverability**: Agent files contain inline summaries of key rules (safety, pre-commit, build commands) because some agents (notably Claude Code) only auto-read their convention file and may not follow references to other files without explicit instruction.
+3. **Agent discoverability**: Agent files contain a minimal inline summary of key rules (safety, pre-commit, validation commands, language-instruction pointers) because some agents may only auto-read their convention file and may not reliably follow references to other files without explicit instruction.
 
-4. **DRY vs. discoverability trade-off**: The trade-off between DRY (Don't Repeat Yourself) and agent discoverability favors some duplication to ensure agents actually receive the rules.
+4. **DRY vs. discoverability trade-off**: The trade-off between DRY (Don't Repeat Yourself) and agent discoverability favors a small, intentional amount of duplication to ensure agents actually receive the rules.
 
 **Trade-offs:**
 
