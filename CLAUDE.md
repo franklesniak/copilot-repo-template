@@ -13,7 +13,8 @@ This file intentionally keeps only a minimal repository-specific summary so that
 ## Essential Repository Summary
 
 - **Safety and security**
-  - No secrets in code or repo.
+  - No secrets in code or repo; never hardcode API keys, tokens, credentials, or
+    connection strings.
   - Treat all external input as untrusted.
   - Respect allowlisted file access boundaries; reject path traversal and symlink escapes.
 - **Pre-commit and validation**
