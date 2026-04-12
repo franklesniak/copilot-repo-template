@@ -30,7 +30,7 @@ To keep the template current and functional, maintainers **SHOULD** review templ
 - [ ] Review and update Terraform version in CI workflows
 - [ ] Review instruction files for accuracy and relevance
 - [ ] Verify all CI workflows still pass with latest dependency versions
-- [ ] Verify agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are synchronized with `.github/copilot-instructions.md`
+- [ ] Verify agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) remain aligned with `.github/copilot-instructions.md`
 - [ ] Review and address any open issues or feedback
 
 **Annual Review:**
@@ -242,27 +242,26 @@ The instruction files in `.github/instructions/` include version numbers in the 
 
 ## Reviewing Agent Instruction Files
 
-Agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) **MUST** be kept synchronized with `.github/copilot-instructions.md`. These files contain inline summaries of the canonical rules so that each AI coding agent receives project-specific guidance without needing to follow file references.
+Agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are thin entry points that **MUST** stay aligned with `.github/copilot-instructions.md`. The canonical file holds the full shared rule set; the root agent files keep only a minimal inline summary of the highest-priority shared rules plus any platform-specific guidance.
 
 **What to check during review:**
 
-- Safety rules match between `.github/copilot-instructions.md` and all three agent files
-- Pre-commit discipline requirements match
-- Build/test commands match (including any new tools or changed commands)
-- Language-specific instruction file references match (if instruction files are added/removed/renamed)
-- "What Not to Do" rules match
+- Canonical-source wording is accurate in `.github/copilot-instructions.md` and the root agent files
+- Minimal shared guidance in the agent files still matches the canonical file for safety, pre-commit, validation commands, and language-instruction references
+- Platform-specific sections still apply and do not contradict the canonical file
+- Removed duplication does not creep back into the agent entry points unnecessarily
 
 **Verification command:**
 
 ```bash
-# Compare recent commit history to identify unsynchronized changes
+# Compare recent commit history to identify changes that may require alignment review
 # If copilot-instructions.md was modified more recently than agent files,
-# manually verify agent files still match
+# manually verify the minimal summaries and any platform-specific sections
 git log --oneline -5 .github/copilot-instructions.md
 git log --oneline -5 CLAUDE.md AGENTS.md GEMINI.md
 ```
 
-**When to update:** Whenever `.github/copilot-instructions.md` is modified, or when new agent platforms emerge that require their own convention files.
+**When to update:** Whenever high-priority shared guidance in `.github/copilot-instructions.md` changes, whenever platform-specific guidance changes, or when new agent platforms emerge that require their own convention files.
 
 ---
 

@@ -1644,13 +1644,13 @@ The template includes three agent instruction files at the repository root for m
 - `AGENTS.md` — OpenAI Codex CLI, GitHub Copilot coding agent
 - `GEMINI.md` — Gemini Code Assist, GitHub Copilot coding agent
 
-These files are synchronized summaries of the rules in `.github/copilot-instructions.md`. They provide essential guidance to their respective AI coding platforms.
+These files are thin entry points for their respective AI coding platforms. `.github/copilot-instructions.md` remains canonical, and the root agent files keep only a minimal inline summary of the highest-priority shared rules plus any platform-specific guidance.
 
 **To customize for your project:**
 
 1. **Remove unneeded files** — Delete agent files for platforms you do not use (e.g., if not using Claude Code, delete `CLAUDE.md`)
 2. **Keep remaining files** — Keep all agent files for platforms you want to support, or accept that agents on those platforms receive no project-specific instructions
-3. **Keep files synchronized** — If you modified `.github/copilot-instructions.md` (language table, testing table, linting table, or Source of Truth section), apply equivalent changes to any remaining agent files to keep them synchronized
+3. **Keep minimal summaries aligned** — If you modified high-priority shared guidance in `.github/copilot-instructions.md` (for example, safety rules, pre-commit requirements, validation commands, language instruction references, or canonical-file guidance), update any remaining agent files so their minimal summaries stay accurate
 
 ---
 
