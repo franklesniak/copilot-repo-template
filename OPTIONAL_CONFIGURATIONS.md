@@ -3044,8 +3044,10 @@ Some projects offer multiple license options (e.g., GPL for open source use, com
 The template ships with this default encoding for PowerShell files:
 
 ```json
-"[powershell]": {
-    "files.encoding": "utf8"
+{
+    "[powershell]": {
+        "files.encoding": "utf8"
+    }
 }
 ```
 
@@ -3068,8 +3070,10 @@ then you should change the VS Code workspace encoding setting for PowerShell fil
 In `.vscode/settings.json`, replace the `files.encoding` value for PowerShell files:
 
 ```json
-"[powershell]": {
-    "files.encoding": "utf8bom"
+{
+    "[powershell]": {
+        "files.encoding": "utf8bom"
+    }
 }
 ```
 
