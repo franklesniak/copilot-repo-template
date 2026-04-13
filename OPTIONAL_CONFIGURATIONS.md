@@ -3054,7 +3054,7 @@ The template ships with this default encoding for PowerShell files:
 This is the correct default for the common case and should be kept when:
 
 - Your `.ps1` files contain **only ASCII characters**, or
-- Your repository targets **PowerShell 6.0+ / 7+ only** (which defaults to UTF-8).
+- Your repository targets **PowerShell 7+ only** (which defaults to UTF-8).
 
 ### When to Change the Encoding
 
