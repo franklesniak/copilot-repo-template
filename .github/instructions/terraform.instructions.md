@@ -1248,7 +1248,7 @@ locals {
 }
 ```
 
-> **Note:** GCP label keys must be lowercase and can only contain lowercase letters, numeric characters, underscores, and dashes. AWS and Azure tags support mixed-case keys. See STYLE_GUIDE_RATIONALE.md for GCP-specific label examples.
+> **Note:** GCP label keys must be lowercase and can only contain lowercase letters, numeric characters, underscores, and dashes. AWS and Azure tags support mixed-case keys.
 
 ### Lifecycle Validation
 
@@ -2000,7 +2000,7 @@ terraform {
 }
 ```
 
-> **Note:** Azure uses `azurerm` backend and GCP uses `gcs` backend. See STYLE_GUIDE_RATIONALE.md for provider-specific examples.
+> **Note:** Azure uses `azurerm` backend and GCP uses `gcs` backend.
 **Backend requirements:**
 
 - State files **MUST** be encrypted at rest
@@ -2376,7 +2376,7 @@ aws s3api get-object \
   terraform.tfstate.recovered
 ```
 
-> **Note:** Azure Storage supports blob versioning with soft delete. GCS supports object versioning. Terraform Cloud provides automatic state versioning. See STYLE_GUIDE_RATIONALE.md for provider-specific backup and recovery examples.
+> **Note:** Azure Storage supports blob versioning with soft delete. GCS supports object versioning. Terraform Cloud provides automatic state versioning.
 
 #### Manual State Backup
 
@@ -2675,7 +2675,7 @@ resource "aws_instance" "app" {
 }
 ```
 
-> **Note:** Azure App Configuration and GCP Cloud Storage with JSON config files provide equivalent cross-stack sharing. See STYLE_GUIDE_RATIONALE.md for provider-specific examples.
+> **Note:** Azure App Configuration and GCP Cloud Storage with JSON config files provide equivalent cross-stack sharing.
 
 ### Acceptable: terraform_remote_state Data Source
 
@@ -2840,7 +2840,7 @@ resource "aws_s3_bucket" "replica" {
 }
 ```
 
-> **Note:** Azure uses `subscription_id` and GCP uses `project`/`region` for aliased providers. See STYLE_GUIDE_RATIONALE.md for provider-specific examples.
+> **Note:** Azure uses `subscription_id` and GCP uses `project`/`region` for aliased providers.
 
 **Passing providers to modules:**
 
@@ -2984,7 +2984,7 @@ resource "aws_s3_bucket" "staging_bucket" {
 }
 ```
 
-> **Note:** Azure uses multi-subscription with `subscription_id`/`tenant_id` and GCP uses `impersonate_service_account`. See STYLE_GUIDE_RATIONALE.md for detailed examples.
+> **Note:** Azure uses multi-subscription with `subscription_id`/`tenant_id` and GCP uses `impersonate_service_account`.
 
 #### Cross-Account Pattern Summary
 
@@ -3083,7 +3083,7 @@ resource "aws_db_instance" "main" {
 }
 ```
 
-> **Note:** Azure Key Vault and GCP Secret Manager follow the same data source pattern. See STYLE_GUIDE_RATIONALE.md for provider-specific examples.
+> **Note:** Azure Key Vault and GCP Secret Manager follow the same data source pattern.
 
 #### Pattern 3: HashiCorp Vault (Provider-Agnostic)
 
