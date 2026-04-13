@@ -41,6 +41,7 @@ This guide covers optional customizations you can make after completing the init
 - [Node.js Package Configuration](#nodejs-package-configuration)
 - [Gitignore Configuration](#gitignore-configuration)
 - [License Customization](#license-customization)
+- [VS Code PowerShell File Encoding for Non-ASCII Characters](#vs-code-powershell-file-encoding-for-non-ascii-characters)
 - [Ongoing Maintenance](#ongoing-maintenance)
   - [Updating Pre-commit Hooks](#updating-pre-commit-hooks)
   - [Reviewing Python Version Requirements](#reviewing-python-version-requirements)
@@ -3033,6 +3034,64 @@ Some projects offer multiple license options (e.g., GPL for open source use, com
 1. Include both license texts in `LICENSE` (or separate files like `LICENSE-MIT` and `LICENSE-APACHE`)
 2. Clearly explain the licensing options in `README.md`
 3. Document which license applies under which conditions
+
+---
+
+## VS Code PowerShell File Encoding for Non-ASCII Characters
+
+**File:** `.vscode/settings.json`
+
+The template ships with this default encoding for PowerShell files:
+
+```json
+{
+    "[powershell]": {
+        "files.encoding": "utf8"
+    }
+}
+```
+
+This is the correct default for the common case and should be kept when:
+
+- Your `.ps1` files contain **only ASCII characters**, or
+- Your repository targets **PowerShell 7+ only** (which defaults to UTF-8).
+
+### When to Change the Encoding
+
+If your repository's PowerShell `.ps1` files:
+
+- contain **non-ASCII characters** (for example, accented characters, CJK text, or special symbols in strings or comments), **and**
+- must run on **Windows PowerShell** (v5.1 or earlier),
+
+then you should change the VS Code workspace encoding setting for PowerShell files to UTF-8 **with** BOM.
+
+### What to Change
+
+In `.vscode/settings.json`, replace the `files.encoding` value for PowerShell files:
+
+```json
+{
+    "[powershell]": {
+        "files.encoding": "utf8bom"
+    }
+}
+```
+
+`utf8bom` is VS Code's identifier for UTF-8 with BOM (Byte Order Mark, `U+FEFF`).
+
+### Why This May Be Necessary
+
+When a `.ps1` file is saved as UTF-8 **without** a BOM, older Windows PowerShell versions may not detect the encoding correctly. Instead, they may interpret the file using the system's ANSI code page, which can cause non-ASCII characters in strings, comments, or variable content to be read incorrectly.
+
+Adding a BOM lets Windows PowerShell detect that the file is UTF-8 and interpret it correctly. PowerShell 7+ defaults to UTF-8 regardless of BOM, so the BOM is unnecessary (but harmless) on modern PowerShell.
+
+### Down-Level Compatibility Note
+
+For very old Windows PowerShell compatibility scenarios, the safest portable strategy is often to **avoid non-ASCII source text entirely** when practical. If all characters in the script are ASCII, the file is interpreted identically regardless of whether the system reads it as UTF-8 or as ANSI, making the BOM question moot.
+
+Relying on "ANSI" or locale-specific encodings (for example, Windows-1252 or Shift_JIS) is generally **not recommended** because those encodings are non-portable and brittle across systems with different locale settings.
+
+> **Reference:** The full encoding rules are defined in the `### File Encoding` subsection of `.github/instructions/powershell.instructions.md`.
 
 ---
 
