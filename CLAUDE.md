@@ -1,6 +1,6 @@
 # Agent Instructions for Claude Code
 
-**Version:** 1.1.20260412.1
+**Version:** 1.1.20260414.0
 
 This file provides project-specific instructions for Claude Code and compatible AI coding agents operating in this repository. These instructions ensure that agents follow the same coding standards, safety rules, and workflows that apply to all contributors.
 
@@ -87,7 +87,9 @@ When a pull request is created or when the owner posts a PR comment containing `
 ### Loop procedure
 
 1. **Request a Copilot code review.** Use the `request_copilot_review` tool (or equivalent) to ask GitHub Copilot to review the PR.
-2. **Wait for the review.** Subscribe to PR activity and wait for the review to arrive. The review is complete when Copilot posts its **review summary** comment (the "Pull request overview" that states "generated N comments"). This summary is the authoritative signal — do **not** wait for individual comment webhooks when N is zero, because none will arrive. **Fallback:** If no review summary webhook arrives after requesting the review, proactively poll using `get_reviews` (and `get_review_comments`) to check whether the review has completed. Poll at **1-minute intervals** with a **10-minute timeout**. If the review has not arrived after 10 minutes, **PAUSE** the loop and post a PR comment explaining that the Copilot review did not arrive. Do not wait passively for a webhook that may never arrive — always confirm review completion before proceeding.
+2. **Wait for the review.** Subscribe to PR activity and wait for the review summary webhook to arrive. The review is complete when Copilot posts its **review summary** comment (the "Pull request overview" that states "generated N comments"). This summary is the authoritative signal — do **not** wait for individual comment webhooks when N is zero, because none will arrive.
+
+   **Known harness limitation:** Claude Code's current harness is event-driven; there is no autonomous scheduling primitive available (`CronCreate`, `ScheduleWakeup`, and `Monitor` are not exposed in this environment). Polling therefore cannot be automated. If no review-summary webhook arrives within ~10 minutes of requesting the review, the PR owner should either wait longer or re-ping with a PR comment like `@claude check review status` to trigger a reactive poll.
 3. **Check review coverage.** The review summary states how many files Copilot reviewed out of the total changed files (e.g., "Copilot reviewed 9 out of 9 changed files"). If Copilot did **not** review all changed files, post a PR comment noting the partial coverage so the PR owner is aware. Example: `Note: Copilot reviewed only 7 out of 9 changed files in round N. Files not reviewed by Copilot may benefit from additional manual or AI-assisted review.` Continue the loop normally regardless of coverage.
 4. **Check for comments.** If the review contains **zero** actionable comments, the code is clean — **PAUSE** and post a PR comment:
    `Review loop paused: Copilot review returned no comments. Post "@claude resume review loop" to continue.`
