@@ -1,6 +1,6 @@
 # Agent Instructions for Claude Code
 
-**Version:** 1.2.20260414.2
+**Version:** 1.2.20260414.3
 
 This file provides project-specific instructions for Claude Code and compatible AI coding agents operating in this repository. These instructions ensure that agents follow the same coding standards, safety rules, and workflows that apply to all contributors.
 
@@ -90,12 +90,12 @@ When a pull request is created or when the owner posts a PR comment containing `
 
    > **Baseline for `get_review_comments`:** In addition to the `get_reviews` baseline above, also use `get_review_comments` (or equivalent) to record the `created_at` timestamp of the most recent comment authored by `copilot-pull-request-reviewer[bot]` (or note that no such comment exists yet). This is the baseline for the `get_review_comments` detection path in step 2.
 2. **Wait for the review (active polling).** Immediately after requesting the review, begin an active poll loop — do **not** rely solely on webhook delivery, which may be delayed or never arrive. The poll loop **MUST** follow these rules:
-   - **Poll interval.** Wait at least 60 seconds between each poll cycle, including the gap between the baseline fetch in step 1 and the first poll. Each poll cycle calls both `get_reviews` and `get_review_comments` at most once. Do **not** call either endpoint back-to-back without a 60-second gap. The exact mechanism used to implement the wait (for example, shell sleep, background task, or equivalent tooling) is left to the agent runtime.
+   - **Poll interval.** Wait at least 60 seconds between each poll cycle, including the gap between the baseline fetch in step 1 and the first poll. Each poll cycle calls both `get_reviews` and `get_review_comments` at most once. The exact mechanism used to implement the wait (for example, shell sleep, background task, or equivalent tooling) is left to the agent runtime.
    - **Detection criterion.** On each poll, use **both** `get_reviews` **and** `get_review_comments` as co-equal detection signals. A new review round is detected when **either** of the following is true:
-     - `get_reviews` returns a new review authored by `copilot-pull-request-reviewer[bot]` with a `submitted_at` timestamp **strictly newer** than the recorded baseline from step 1.
-     - `get_review_comments` returns new **unresolved** comments authored by `copilot-pull-request-reviewer[bot]` with a `created_at` timestamp **strictly newer** than the recorded baseline from step 1.
+     - `get_reviews` returns a new review authored by `copilot-pull-request-reviewer[bot]` with a `submitted_at` timestamp **strictly newer** than the `get_reviews` baseline recorded in step 1.
+     - `get_review_comments` returns new comments authored by `copilot-pull-request-reviewer[bot]` with a `created_at` timestamp **strictly newer** than the `get_review_comments` baseline recorded in step 1.
 
-     If no baseline exists (no prior review by the bot), any review or unresolved comment by the bot is considered new. A fresh set of unresolved Copilot comments newer than the baseline is itself sufficient evidence that the review round has arrived; the agent **MUST** proceed to step 3 without waiting for `get_reviews` to catch up.
+     If no baseline exists (no prior review by the bot), any review or comment by the bot is considered new. A fresh set of Copilot comments newer than the baseline is itself sufficient evidence that the review round has arrived; the agent **MUST** proceed to step 3 without waiting for `get_reviews` to catch up.
    - **Timeout.** If no new review is detected after **10 consecutive polls** (approximately 10 minutes), **PAUSE** the loop and post a PR comment: `Review loop paused: Copilot review did not arrive after 10 poll attempts (~10 min). Post "@claude resume review loop" to continue.`
    - **State tracking (recommended).** On each poll, update a visible progress indicator in the session transcript (for example, a todo-list entry such as `"Round N: awaiting Copilot review, poll M/10"`) so that stalls are observable.
    - **On success.** As soon as a new review is detected, proceed immediately to step 3.
