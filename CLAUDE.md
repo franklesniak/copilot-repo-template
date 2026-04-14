@@ -1,6 +1,6 @@
 # Agent Instructions for Claude Code
 
-**Version:** 1.2.20260414.3
+**Version:** 1.2.20260414.4
 
 This file provides project-specific instructions for Claude Code and compatible AI coding agents operating in this repository. These instructions ensure that agents follow the same coding standards, safety rules, and workflows that apply to all contributors.
 
@@ -86,9 +86,11 @@ When a pull request is created or when the owner posts a PR comment containing `
 
 ### Loop procedure
 
-1. **Request a Copilot code review.** First, use `get_reviews` (or equivalent) to record the `submitted_at` timestamp of the most recent review authored by `copilot-pull-request-reviewer[bot]` (or note that no such review exists yet). This is the baseline for detecting a *new* review in step 2. Then use the `request_copilot_review` tool (or equivalent) to ask GitHub Copilot to review the PR.
+1. **Request a Copilot code review.** First, record baselines from **both** endpoints (these **MUST** be recorded before requesting the review):
+   - Use `get_reviews` (or equivalent) to record the `submitted_at` timestamp of the most recent review authored by `copilot-pull-request-reviewer[bot]` (or note that no such review exists yet). This is the `get_reviews` baseline for step 2.
+   - Use `get_review_comments` (or equivalent) to record the `created_at` timestamp of the most recent comment authored by `copilot-pull-request-reviewer[bot]` (or note that no such comment exists yet). This is the `get_review_comments` baseline for step 2.
 
-   > **Baseline for `get_review_comments`:** In addition to the `get_reviews` baseline above, also use `get_review_comments` (or equivalent) to record the `created_at` timestamp of the most recent comment authored by `copilot-pull-request-reviewer[bot]` (or note that no such comment exists yet). This is the baseline for the `get_review_comments` detection path in step 2.
+   After recording both baselines, use the `request_copilot_review` tool (or equivalent) to ask GitHub Copilot to review the PR.
 2. **Wait for the review (active polling).** Immediately after requesting the review, begin an active poll loop — do **not** rely solely on webhook delivery, which may be delayed or never arrive. The poll loop **MUST** follow these rules:
    - **Poll interval.** Wait at least 60 seconds between each poll cycle, including the gap between the baseline fetch in step 1 and the first poll. Each poll cycle calls both `get_reviews` and `get_review_comments` at most once. The exact mechanism used to implement the wait (for example, shell sleep, background task, or equivalent tooling) is left to the agent runtime.
    - **Detection criterion.** On each poll, use **both** `get_reviews` **and** `get_review_comments` as co-equal detection signals. A new review round is detected when **either** of the following is true:
