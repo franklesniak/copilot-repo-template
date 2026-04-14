@@ -1,6 +1,6 @@
 # Agent Instructions for Claude Code
 
-**Version:** 1.2.20260414.6
+**Version:** 1.2.20260414.7
 
 This file provides project-specific instructions for Claude Code and compatible AI coding agents operating in this repository. These instructions ensure that agents follow the same coding standards, safety rules, and workflows that apply to all contributors.
 
@@ -74,7 +74,7 @@ When a code review comment is received from GitHub Copilot, a human reviewer, or
 
 6. **Post the evaluation.** Reply to the review comment thread with the options table, the scoring table, the selected option, and either a note that implementation will follow in step 7 or, if the fix was already applied, the commit SHA that implements it.
 
-7. **Implement the fix.** Apply the selected option, commit, and push so that the change is visible on the PR (i.e., reachable from the PR's head ref). If the agent's current development branch is not the PR head branch, the agent **MUST** state in its step-6 reply which branch the commit was pushed to and whether a merge or cherry-pick is required to make it visible on the PR.
+7. **Implement the fix.** Apply the selected option, commit, and push so that the change is visible on the PR (i.e., reachable from the PR's head ref). If the agent's current development branch is not the PR head branch, the agent **MUST** state in its step-6 reply which branch the commit will be pushed to and whether a merge or cherry-pick will be required to make it visible on the PR.
 
 8. **Evaluate style guide impact.** Determine whether the relevant language instruction file(s) under `.github/instructions/` should be updated to prevent the same issue in the future. **Read the full applicable style guide(s) before answering** — the recommendation must account for what the guide already covers to avoid duplicating or contradicting existing rules. If an update is warranted, write a prompt in a Markdown code fence (suitable for sending to GitHub Copilot's coding agent) that describes the style guide change. Post the prompt as a reply in the same review comment thread. Do **not** modify the style guide directly.
 
