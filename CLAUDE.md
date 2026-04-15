@@ -120,8 +120,9 @@ When a pull request is created or when the owner posts a PR comment containing `
 
    When direct PR-head placement is used, the agent **MUST** record the resulting PR-head commit SHA(s) for the reachability check below and **MUST** note in its step-6 reply that the fix was placed directly on the PR head branch.
 
-   **Fallback.** If any precondition above is not met, or if the direct push fails for any reason, the agent **MUST NOT** re-request the review; instead it **MUST** pause and post a PR comment:
+   **Fallback.** If any recorded PR-head fix commit for the current round is not reachable from the PR head, the agent **MUST NOT** re-request the review; instead it **MUST** pause and post a PR comment:
    `Review loop paused: final fix commit(s) <SHA1>, <SHA2>, ... expected on PR head <pr-head-branch> are not reachable from that head. Merge or cherry-pick the fix onto <pr-head-branch>, record the resulting PR-head SHA(s), then post "@claude resume review loop" to continue.`
+   If the agent intended to use direct PR-head placement during an active review loop but any precondition above was not met, or the direct push failed for any reason, the agent **MUST** treat the fix as not yet placed on the PR head, **MUST** wait for the fix to be merged or cherry-picked onto `<pr-head-branch>`, and **MUST** record the resulting PR-head SHA(s) before re-requesting the review.
    If all recorded PR-head fix commits are reachable (or no code changes were made in this round), and no style guide updates were recommended, go to step 1. This applies regardless of whether code changes were made — even if all comments were addressed without code changes (e.g., concern noted but no action taken), re-requesting a review allows Copilot to find different issues on a fresh pass.
 
 ### Safety limits
