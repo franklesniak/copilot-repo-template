@@ -118,7 +118,7 @@ When a pull request is created or when the owner posts a PR comment containing `
    4. All existing branch protections, required status checks, signing requirements, and CI/CD validation rules on the PR head branch continue to be satisfied.
    5. The agent retains the fix commit on its own development branch so that every round's changes remain in the development branch history as a per-round ledger.
 
-   When direct PR-head placement is used, the agent **MUST** record the resulting PR-head commit SHA(s) for the reachability check below and **MUST** note in its step-6 reply that the fix was placed directly on the PR head branch.
+   When direct PR-head placement is used, the agent **MUST** record the resulting PR-head commit SHA(s) for the reachability check below. In the reply posted for **Handling Code Review Comments** step 6, the agent **MUST** state that it intends to place the fix directly on the PR head branch. After the push completes, the agent **MUST** post a follow-up reply confirming that the fix was placed directly on the PR head branch and listing the resulting PR-head commit SHA(s).
 
    **Fallback.** If any recorded PR-head fix commit for the current round is not reachable from the PR head, the agent **MUST NOT** re-request the review; instead it **MUST** pause and post a PR comment:
    `Review loop paused: final fix commit(s) <SHA1>, <SHA2>, ... expected on PR head <pr-head-branch> are not reachable from that head. Merge or cherry-pick the fix onto <pr-head-branch>, record the resulting PR-head SHA(s), then post "@claude resume review loop" to continue.`
