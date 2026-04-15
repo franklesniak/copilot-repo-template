@@ -74,7 +74,7 @@ When a code review comment is received from GitHub Copilot, a human reviewer, or
 
 6. **Post the evaluation.** Reply to the review comment thread with the options table, the scoring table, the selected option, and either a note that implementation will follow in step 7 or, if the fix was already applied, the commit SHA that implements it.
 
-7. **Implement the fix.** Apply the selected option, commit, and push so that the change is visible on the PR (i.e., reachable from the PR's head ref). If the agent's current development branch is not the PR head branch, the following rules apply:
+7. **Implement the fix.** Apply the selected option, commit, and push. The goal is for the change to become visible on the PR (i.e., reachable from the PR's head ref). If the agent's current development branch is not the PR head branch, the following rules determine how and when that visibility is achieved:
    - **Outside an active automated review loop:** Cross-branch integration onto the PR head is a manual owner action. The agent **MUST NOT** push directly to the PR head branch. Instead, the agent **MUST** state in its step-6 reply which branch the commit will be pushed to and whether a merge or cherry-pick will be required to make it visible on the PR.
    - **During an active automated review loop:** A narrowly scoped exception permits the agent to place fix commits directly onto the PR head branch when specific preconditions are met. See the "Direct PR-head placement during an active review loop" paragraph in Automated Review Loop step 7 for the full set of required conditions, safety constraints, and fallback behavior.
 
