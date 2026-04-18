@@ -5,7 +5,7 @@
 - **Last Updated:** 2026-04-18
 - **Scope:** Ready-to-use prompts for responding to PR comments, code review
   feedback, branch management, and common false positives during code review.
-- **Related:** [Copilot Chat Prompts for Template Adoption](COPILOT_CHAT_PROMPTS.md)
+- **Related:** [Copilot Chat Prompts for Template Adoption](../COPILOT_CHAT_PROMPTS.md)
 
 ## Purpose
 
