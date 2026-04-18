@@ -51,7 +51,7 @@ Then, determine whether the style guide should be updated based on your
 evaluation. If so, please write a prompt in a Markdown code fence that I can
 send to GitHub Copilot's coding agent separately to update and clarify the
 style guide to match the style you determined was best. Don't update the style
-guide; just give me a prompt
+guide; just give me a prompt.
 ```
 
 ### Evaluate, Decide, and Implement (without Style Guide Update)
@@ -78,8 +78,7 @@ placeholder with the actual commit link:
 
 ```markdown
 @copilot I need to catch this branch up with recent changes made to `main`, so
-please merge `main` into this branch, using `main`'s tip (**link to commit
-here**) as the merge base.
+please merge `main` (at **link to commit here**) into this branch.
 ```
 
 ### Merge Main into Branch (Scoped to One File)
@@ -89,21 +88,20 @@ as modified in the PR. Replace the placeholder commit link and filename:
 
 ```markdown
 @copilot I need to catch this branch up with recent changes made to `main`, so
-please merge `main` into this branch, using `main`'s tip (**link to commit
-here**) as the merge base. After this operation, only `File-We-Are-Working-On.xyz`
-should appear as modified in the PR.
+please merge `main` (at **link to commit here**) into this branch. After this
+operation, only `File-We-Are-Working-On.xyz` should appear as modified in the
+PR.
 ```
 
 ### Fix Incorrect Merge Base
 
-Use this when the branch's merge base with `main` was not set correctly.
-Replace the placeholder commit link and filename:
+Use this when the branch is not up to date with `main`, causing extra files to
+appear in the PR diff. Replace the placeholder commit link and filename:
 
 ```markdown
-@copilot, it seems something got a bit off the rails. I don't believe the
-branch's merge base with `main` was set to `main`'s tip. Please fix this by
-merging `main` into the branch and moving the merge base to `main`'s tip
-(**link to commit here**), so that the PR shows only
+@copilot, it seems something got a bit off the rails. I don't believe this
+branch is up to date with `main`. Please fix this by merging `main` (at **link
+to commit here**) into the branch, so that the PR shows only
 `File-We-Are-Working-On.xyz` as a modified file.
 ```
 
