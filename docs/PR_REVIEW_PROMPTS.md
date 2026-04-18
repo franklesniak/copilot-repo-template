@@ -34,10 +34,9 @@ they pointed out is valid, then I agree with the code reviewer's comment.
 
 ### Evaluate, Decide, and Implement (with Style Guide Update)
 
-This is the most commonly used prompt for responding to GitHub Copilot code
-reviewer comments. It validates the concern, evaluates options with a scoring
-rubric, implements the best option, and determines whether a style guide update
-is warranted:
+Use this to validate the reviewer's concern, evaluate response options with a
+scoring rubric, implement the best option, and determine whether a style guide
+update is warranted:
 
 ```markdown
 Please double-check the code reviewer's recommendation. If the gap or concern
@@ -137,10 +136,11 @@ indented. If it's not markdownlint-compliant the way it currently is, fix it.
 ### PowerShell Version Support
 
 Use this when a new version of PowerShell is released and the script's version
-support requirements need to be updated. Adjust the version numbers as needed:
+support requirements need to be updated. Adjust the version numbers and release
+context as needed:
 
 ```markdown
-PowerShell 7.6.x was released just a few days ago. So, the script must support
+PowerShell 7.6.x was recently released. So, the script must support
 Windows PowerShell 5.1, PowerShell 7.4.x, PowerShell 7.5.x, and PowerShell
 7.6.x. Please ensure this requirement is thoroughly clarified.
 ```
