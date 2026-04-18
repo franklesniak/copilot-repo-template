@@ -83,8 +83,9 @@ please merge `main` (at **link to commit here**) into this branch.
 
 ### Merge Main into Branch (Scoped to One File)
 
-Use this variant when the merge should result in only a specific file appearing
-as modified in the PR. Replace the placeholder commit link and filename:
+Use this variant when you need to catch the branch up with `main` while
+ensuring that only a specific file remains modified in the PR. Replace the
+placeholder commit link and filename:
 
 ```markdown
 @copilot I need to catch this branch up with recent changes made to `main`, so
@@ -93,7 +94,7 @@ operation, only `File-We-Are-Working-On.xyz` should appear as modified in the
 PR.
 ```
 
-### Fix Incorrect Merge Base
+### Bring Branch Up to Date with Main
 
 Use this when the branch is not up to date with `main`, causing extra files to
 appear in the PR diff. Replace the placeholder commit link and filename:
