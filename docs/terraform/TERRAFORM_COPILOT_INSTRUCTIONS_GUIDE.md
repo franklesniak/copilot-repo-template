@@ -1503,7 +1503,7 @@ Use standardized TODO format:
 
 ## Integration with Repository Constitution
 
-The instruction file **MUST** integrate with the repository's `copilot-instructions.md`.
+The instruction file **MUST** integrate with the repository's `.github/copilot-instructions.md`.
 
 ### Referencing the Constitution
 
@@ -1543,7 +1543,7 @@ Pre-commit hooks for Terraform **SHOULD** include:
 
 ### Updating the Modular Instructions Table
 
-When the `terraform.instructions.md` file is created, the table in `copilot-instructions.md` **MUST** be updated:
+When the `terraform.instructions.md` file is created, the table in `.github/copilot-instructions.md` **MUST** be updated:
 
 ```text
 | Scope | Instruction File | Applies To |
@@ -1802,7 +1802,7 @@ Use this checklist when creating the `terraform.instructions.md` file:
 - [ ] Reference to repository constitution
 - [ ] Pre-commit discipline guidance
 - [ ] "Done" definition section
-- [ ] Instructions for updating `copilot-instructions.md` tables
+- [ ] Instructions for updating `.github/copilot-instructions.md` tables
 
 ### Quality Checks
 
@@ -1831,7 +1831,7 @@ Use this checklist when creating the `terraform.instructions.md` file:
 
 4. **Validate the instruction file:**
    - Verify all anchor links work
-   - Ensure no contradictions with `copilot-instructions.md`
+   - Ensure no contradictions with `.github/copilot-instructions.md`
    - Test that the applyTo pattern works correctly
 
 5. **Iterate based on usage:**
