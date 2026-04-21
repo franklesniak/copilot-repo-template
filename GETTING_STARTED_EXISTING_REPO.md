@@ -40,7 +40,7 @@ This guide walks you through adopting features from `franklesniak/copilot-repo-t
   - [Merging with Existing PR Template](#merging-with-existing-pr-template)
 - [Adopting GitHub Copilot Instructions](#adopting-github-copilot-instructions)
   - [Main Instructions File](#main-instructions-file)
-  - [Language-Specific Instructions](#language-specific-instructions)
+  - [Modular Instructions](#modular-instructions)
   - [Merging with Existing Copilot Instructions](#merging-with-existing-copilot-instructions)
   - [Creating Instructions for Other Languages](#creating-instructions-for-other-languages)
   - [Agent Instruction Files (Multi-Platform Support)](#agent-instruction-files-multi-platform-support)
@@ -693,11 +693,12 @@ This file serves as the "constitution" for all Copilot suggestions in your repos
    > - If any instruction here conflicts with the spec, **the spec wins**.
    ```
 
-3. **Update the language table** — Modify to reflect your project's languages:
+3. **Update the modular instructions table** — Modify to reflect your project's languages and cross-cutting rules:
 
    ```markdown
-   | Language | Instruction File | Applies To |
+   | Scope | Instruction File | Applies To |
    | --- | --- | --- |
+   | Git attributes | `.github/instructions/gitattributes.instructions.md` | `**/.gitattributes` |
    | Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` |
    | Python | `.github/instructions/python.instructions.md` | `**/*.py` |
    | PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` |
@@ -711,7 +712,7 @@ This file serves as the "constitution" for all Copilot suggestions in your repos
    - **Linting Configurations table** — Remove the PSScriptAnalyzer row if not using PowerShell
    - **Testing Tools table** — Remove rows for languages you're not using (Python row if not using Python, PowerShell row if not using PowerShell)
 
-### Language-Specific Instructions
+### Modular Instructions
 
 **Location:** `.github/instructions/`
 
@@ -728,6 +729,7 @@ description: "Python coding standards for this repository"
 
 | File | Purpose | Recommended For |
 | --- | --- | --- |
+| `gitattributes.instructions.md` | `.gitattributes` rules for byte-exact text artifacts | All projects |
 | `docs.instructions.md` | Markdown/documentation standards | All projects |
 | `python.instructions.md` | Python coding standards | Python projects |
 | `powershell.instructions.md` | PowerShell coding standards | PowerShell projects |

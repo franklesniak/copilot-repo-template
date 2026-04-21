@@ -1432,7 +1432,7 @@ Add TFLint to the existing table:
 | TFLint | `.tflint.hcl` | Terraform linting |
 ```
 
-> **Note:** This is already present in the current `copilot-instructions.md`.
+> **Note:** This is already present in the current `.github/copilot-instructions.md`.
 
 #### Running Linters Section
 
@@ -1445,7 +1445,7 @@ terraform fmt -check -recursive
 tflint --recursive
 ```
 
-> **Note:** This is already present in the current `copilot-instructions.md`.
+> **Note:** This is already present in the current `.github/copilot-instructions.md`.
 
 ---
 
