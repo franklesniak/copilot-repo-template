@@ -1546,12 +1546,13 @@ Pre-commit hooks for Terraform **SHOULD** include:
 When the `terraform.instructions.md` file is created, the table in `copilot-instructions.md` **MUST** be updated:
 
 ```text
-| Language | Instruction File | Applies To |
+| Scope | Instruction File | Applies To |
 | --- | --- | --- |
+| Git attributes | `.github/instructions/gitattributes.instructions.md` | `**/.gitattributes` |
 | Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` |
 | PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` |
 | Python | `.github/instructions/python.instructions.md` | `**/*.py` |
-| Terraform | `.github/instructions/terraform.instructions.md` | `**/*.tf, **/*.tfvars, **/*.tftest.hcl` |
+| Terraform | `.github/instructions/terraform.instructions.md` | `**/*.tf`, `**/*.tfvars`, `**/*.tftest.hcl` |
 ```
 
 The Linting Configurations table **SHOULD** also be updated if Terraform-specific linting configurations are added:
@@ -1561,7 +1562,7 @@ The Linting Configurations table **SHOULD** also be updated if Terraform-specifi
 | --- | --- | --- |
 | PSScriptAnalyzer | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell formatting/linting (OTBS style) |
 | markdownlint | `.markdownlint.jsonc` | Markdown linting |
-| tflint | `.tflint.hcl` | Terraform linting |
+| TFLint | `.tflint.hcl` | Terraform linting |
 ```
 
 The Testing Tools table **SHOULD** be updated:
@@ -1569,9 +1570,9 @@ The Testing Tools table **SHOULD** be updated:
 ```text
 | Language | Framework | Configuration | Test Location |
 | --- | --- | --- | --- |
-| Python | pytest | `pyproject.toml` | `tests/` |
-| PowerShell | Pester 5.x | Inline in CI | `tests/PowerShell/` |
-| Terraform | Terraform Test | Built-in (1.6+) | `modules/*/tests/` |
+| Python | pytest | `pyproject.toml` (`[tool.pytest.ini_options]`) | `tests/` |
+| PowerShell | Pester 5.x | Inline in `.github/workflows/powershell-ci.yml` | `tests/PowerShell/` |
+| Terraform | Terraform Test (requires Terraform 1.6+) | Built-in | `modules/*/tests/` or `tests/` |
 ```
 
 ---
