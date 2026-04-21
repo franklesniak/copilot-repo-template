@@ -1868,11 +1868,11 @@ The file includes a "Scope Exceptions & Deviations from Standards" section at th
 
 **File:** `.github/copilot-instructions.md`
 
-The main `copilot-instructions.md` file provides repository-wide instructions that GitHub Copilot applies when generating or editing code. It includes sections on pre-commit discipline, testing tools, and other project-wide standards. These sections should be customized to match your project's actual tools and workflows.
+The main `.github/copilot-instructions.md` file provides repository-wide instructions that GitHub Copilot applies when generating or editing code. It includes sections on pre-commit discipline, testing tools, and other project-wide standards. These sections should be customized to match your project's actual tools and workflows.
 
 ### Customizing the Pre-commit Discipline Section
 
-The Pre-commit Discipline section (near the top of `copilot-instructions.md`) tells Copilot how to run pre-commit checks, what commands to use, and how to handle CI failures. This ensures Copilot generates code that follows your project's code quality workflow.
+The Pre-commit Discipline section (near the top of `.github/copilot-instructions.md`) tells Copilot how to run pre-commit checks, what commands to use, and how to handle CI failures. This ensures Copilot generates code that follows your project's code quality workflow.
 
 The default configuration assumes:
 
@@ -1932,7 +1932,7 @@ The default configuration assumes:
 
 ### Customizing the Testing Tools Section
 
-The Testing Tools section (near the bottom of `copilot-instructions.md`) tells Copilot what test frameworks your project uses, where tests are located, and how to run them. This ensures Copilot generates tests that match your project's conventions.
+The Testing Tools section (near the bottom of `.github/copilot-instructions.md`) tells Copilot what test frameworks your project uses, where tests are located, and how to run them. This ensures Copilot generates tests that match your project's conventions.
 
 The default configuration includes:
 
@@ -2018,7 +2018,7 @@ The default configuration includes:
 
 ### Updating Related Sections
 
-When customizing the Pre-commit or Testing sections, you may also need to update these related sections in `copilot-instructions.md`:
+When customizing the Pre-commit or Testing sections, you may also need to update these related sections in `.github/copilot-instructions.md`:
 
 - **How to Work (Definition of Done):** Update test location references (e.g., `tests/` to `spec/`)
 - **Modular Instructions table:** Ensure it matches your instruction files
