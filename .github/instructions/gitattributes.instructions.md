@@ -23,9 +23,9 @@ This file defines the normative rule for entries in `.gitattributes` that protec
 
 ## Quick Reference Checklist
 
-- **[All]** Any committed text file whose identity is its exact byte sequence **MUST** be pinned to LF in `.gitattributes` using a path pattern as specific as practical. See [Rule:  Pin Byte-Exact Text Artifacts to LF](#rule--pin-byte-exact-text-artifacts-to-lf).
+- **[All]** Any committed text file whose identity is its exact byte sequence **MUST** be pinned to LF in `.gitattributes` using a path pattern as specific as practical. See [Rule: Pin Byte-Exact Text Artifacts to LF](#rule-pin-byte-exact-text-artifacts-to-lf).
 
-## Rule:  Pin Byte-Exact Text Artifacts to LF
+## Rule: Pin Byte-Exact Text Artifacts to LF
 
 Any committed text file whose identity is its exact byte sequence **MUST** be pinned to LF line endings in `.gitattributes` using a pattern as specific as practical to the affected artifact class. Examples of byte-exact artifacts include, but are not limited to:
 
