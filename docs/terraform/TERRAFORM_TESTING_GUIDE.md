@@ -1370,7 +1370,7 @@ modules/
 
 ## Part 7: Integration with Repository Patterns
 
-### Updating the Testing Tools Table in copilot-instructions.md
+### Updating the Testing Tools Table in .github/copilot-instructions.md
 
 The `.github/copilot-instructions.md` file includes a Testing Tools table that **SHOULD** include Terraform. The current table already includes Terraform:
 
@@ -1379,7 +1379,7 @@ The `.github/copilot-instructions.md` file includes a Testing Tools table that *
 | --- | --- | --- | --- |
 | Python | pytest | `pyproject.toml` (`[tool.pytest.ini_options]`) | `tests/` |
 | PowerShell | Pester 5.x | Inline in `.github/workflows/powershell-ci.yml` | `tests/PowerShell/` |
-| Terraform | Terraform Test | Built-in (Terraform 1.6+) | `modules/*/tests/` |
+| Terraform | Terraform Test (requires Terraform 1.6+) | Built-in | `modules/*/tests/` or `tests/` |
 ```
 
 **Verification:** The Terraform entry is already present in the current `.github/copilot-instructions.md`.

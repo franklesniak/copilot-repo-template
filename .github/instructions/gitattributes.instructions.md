@@ -63,7 +63,7 @@ Downstream adopters **MUST** extend these entries whenever they introduce a new 
 
 ### Excluding Binary Files Under Fixture Paths
 
-If a project stores binary assets (for example, `.png` screenshots or `.zip` archives) inside a directory that is pinned to `text eol=lf`, those binaries **MUST** be declassified explicitly so Git does not rewrite them as if they were text. The standard idiom is a later-evaluated pattern that sets the `binary` macro (which expands to `-text -diff`). Later patterns override earlier ones per attribute, so the binary override wins over the directory-wide pin:
+If a project stores binary assets (for example, `.png` screenshots or `.zip` archives) inside a directory that is pinned to `text eol=lf`, those binaries **MUST** be declassified explicitly so Git does not rewrite them as if they were text. The standard idiom is a later-evaluated pattern that sets Git's built-in `binary` macro. Later patterns override earlier ones per attribute, so the binary override wins over the directory-wide pin:
 
 ```gitattributes
 tests/**/snapshots/**    text eol=lf

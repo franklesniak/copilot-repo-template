@@ -11,7 +11,7 @@
 # fixtures regardless of extension (including ad-hoc names like `expected`
 # or `baseline`). Binary file types commonly stored alongside text
 # fixtures (images, archives, media, fonts, compiled artifacts) are
-# declassified further down with the `binary` macro (`-text -diff`) so
+# declassified further down with Git's built-in `binary` macro so
 # Git does not apply line-ending conversion to them. Later patterns win
 # per-attribute in `.gitattributes`, so the binary overrides take
 # precedence over the directory-wide `text eol=lf` pins.
