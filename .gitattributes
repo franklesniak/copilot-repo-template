@@ -1,0 +1,21 @@
+# ---------------------------------------------------------------------------
+# Byte-exact text artifact protection
+# ---------------------------------------------------------------------------
+# The rules below pin committed text fixtures to LF line endings so that
+# checkouts on Windows hosts with `core.autocrlf=true` do not silently
+# rewrite the on-disk bytes. Any test or tool that performs byte-exact
+# comparison (hash equality, signature verification, snapshot diffing)
+# depends on this stability.
+#
+# DO NOT DELETE these rules when customizing this template unless you are
+# certain no byte-exact comparison exists in your repository. See
+# .github/instructions/gitattributes.instructions.md for the normative rule
+# and guidance on adding project-specific entries.
+# ---------------------------------------------------------------------------
+
+tests/**/golden/**            text eol=lf
+tests/**/goldens/**           text eol=lf
+tests/**/snapshots/**         text eol=lf
+tests/**/__snapshots__/**     text eol=lf
+tests/**/fixtures/**          text eol=lf
+testdata/**                   text eol=lf
