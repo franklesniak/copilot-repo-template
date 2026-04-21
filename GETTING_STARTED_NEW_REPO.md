@@ -1573,17 +1573,18 @@ Edit `.github/copilot-instructions.md` and update the "Source of Truth" section 
 
 If you don't have a specification document yet, you can simplify this section or leave the placeholder guidance.
 
-### Updating the Language Table
+### Updating the Modular Instructions Table
 
-If you removed Python or PowerShell support, update the language table to reflect your project's languages:
+If you removed Python or PowerShell support, update the modular instructions table to reflect your project's languages and cross-cutting rules:
 
 ```markdown
-## Language-Specific Instructions
+## Modular Instructions
 
-This repository uses modular instruction files for language-specific standards:
+This repository uses modular instruction files covering both language-specific standards and cross-cutting repository rules:
 
-| Language | Instruction File | Applies To |
+| Scope | Instruction File | Applies To |
 | --- | --- | --- |
+| Git attributes | `.github/instructions/gitattributes.instructions.md` | `**/.gitattributes` |
 | Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` |
 ```
 

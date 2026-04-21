@@ -127,24 +127,25 @@ For each PR-sized change:
 - Do not silently invent behavior when specs or requirements are ambiguous—open an issue or add an explicit "Open Question" instead.
 - Do not create separate "fix formatting" or "fix linting" commits—include all auto-fixes in the same commit as your changes.
 
-## Language-Specific Instructions
+## Modular Instructions
 
-This repository uses modular instruction files for language-specific standards:
+This repository uses modular instruction files covering both language-specific standards and cross-cutting repository rules:
 
-| Language | Instruction File | Applies To |
+| Scope | Instruction File | Applies To |
 | --- | --- | --- |
+| Git attributes | `.github/instructions/gitattributes.instructions.md` | `**/.gitattributes` |
 | Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` |
 | PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` |
 | Python | `.github/instructions/python.instructions.md` | `**/*.py` |
-| Terraform | `.github/instructions/terraform.instructions.md` | `**/*.tf`, `**/*.tfvars`, `**/*.tftest.hcl` |
+| Terraform | `.github/instructions/terraform.instructions.md` | `**/*.tf`, `**/*.tfvars`, `**/*.tftest.hcl`, `**/*.tf.json`, `**/*.tftpl`, `**/*.tfbackend` |
 
 **Note:** The PowerShell instructions include comprehensive guidance on Pester testing. The Terraform instructions include comprehensive guidance on Terraform Test framework.
 
 **To customize for your project:**
 
-- Remove instruction files for languages you don't use
-- Add new instruction files for additional languages as needed
-- Update this table to reflect your project's languages
+- Remove instruction files for scopes you don't use
+- Add new instruction files for additional languages or cross-cutting rules as needed
+- Update this table to reflect the instruction files present in your project
 
 > **Terraform note:** If your project does not use Terraform, remove the Terraform instruction file (`.github/instructions/terraform.instructions.md`), remove the Terraform row from the table above, and remove Terraform-related entries from the Linting Configurations and Testing Tools sections below.
 

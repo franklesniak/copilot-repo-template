@@ -1370,19 +1370,19 @@ modules/
 
 ## Part 7: Integration with Repository Patterns
 
-### Updating the Testing Tools Table in copilot-instructions.md
+### Updating the Testing Tools Table in .github/copilot-instructions.md
 
-The `copilot-instructions.md` file includes a Testing Tools table that **SHOULD** include Terraform. The current table already includes Terraform:
+The `.github/copilot-instructions.md` file includes a Testing Tools table that **SHOULD** include Terraform. The current table already includes Terraform:
 
 ```markdown
 | Language | Framework | Configuration | Test Location |
 | --- | --- | --- | --- |
 | Python | pytest | `pyproject.toml` (`[tool.pytest.ini_options]`) | `tests/` |
 | PowerShell | Pester 5.x | Inline in `.github/workflows/powershell-ci.yml` | `tests/PowerShell/` |
-| Terraform | Terraform Test | Built-in (Terraform 1.6+) | `modules/*/tests/` |
+| Terraform | Terraform Test (requires Terraform 1.6+) | Built-in | `modules/*/tests/` or `tests/` |
 ```
 
-**Verification:** The Terraform entry is already present in the current `copilot-instructions.md`.
+**Verification:** The Terraform entry is already present in the current `.github/copilot-instructions.md`.
 
 ### Template Test File Creation
 
@@ -1834,7 +1834,7 @@ This section lists Terraform features and behaviors that **SHOULD** be verified 
 ### Documentation Updates
 
 1. **Update README.md:** Add testing section with commands
-2. **Verify copilot-instructions.md:** Terraform is already in the Testing Tools table
+2. **Verify `.github/copilot-instructions.md`:** Terraform is already in the Testing Tools table
 3. **Cross-reference guides:** Link this guide from terraform.instructions.md if desired
 
 ### Validation Steps

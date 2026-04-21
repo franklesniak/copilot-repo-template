@@ -49,7 +49,7 @@
   - [Failure Handling](#failure-handling)
 - [Integration with Existing Infrastructure](#integration-with-existing-infrastructure)
   - [Auto-fix Workflow Integration](#auto-fix-workflow-integration)
-  - [Updates to copilot-instructions.md](#updates-to-copilot-instructionsmd)
+  - [Updates to .github/copilot-instructions.md](#updates-to-githubcopilot-instructionsmd)
   - [README Update Recommendations](#readme-update-recommendations)
 - [Versioning Policy Guidance](#versioning-policy-guidance)
 - [Summary of Recommended Steps](#summary-of-recommended-steps)
@@ -1416,7 +1416,7 @@ For repositories where TFLint can auto-fix issues, consider:
 
 ---
 
-### Updates to copilot-instructions.md
+### Updates to .github/copilot-instructions.md
 
 When implementing Terraform linting, the following sections in `.github/copilot-instructions.md` should be updated:
 
@@ -1427,12 +1427,12 @@ Add TFLint to the existing table:
 ```markdown
 | Tool | Configuration File | Purpose |
 | --- | --- | --- |
-| PSScriptAnalyzer | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell formatting/linting |
+| PSScriptAnalyzer | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell formatting/linting (OTBS style) |
 | markdownlint | `.markdownlint.jsonc` | Markdown linting |
 | TFLint | `.tflint.hcl` | Terraform linting |
 ```
 
-> **Note:** This is already present in the current `copilot-instructions.md`.
+> **Note:** This is already present in the current `.github/copilot-instructions.md`.
 
 #### Running Linters Section
 
@@ -1445,7 +1445,7 @@ terraform fmt -check -recursive
 tflint --recursive
 ```
 
-> **Note:** This is already present in the current `copilot-instructions.md`.
+> **Note:** This is already present in the current `.github/copilot-instructions.md`.
 
 ---
 

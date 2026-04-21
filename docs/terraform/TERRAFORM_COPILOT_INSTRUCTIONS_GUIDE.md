@@ -1503,7 +1503,7 @@ Use standardized TODO format:
 
 ## Integration with Repository Constitution
 
-The instruction file **MUST** integrate with the repository's `copilot-instructions.md`.
+The instruction file **MUST** integrate with the repository's `.github/copilot-instructions.md`.
 
 ### Referencing the Constitution
 
@@ -1541,17 +1541,18 @@ Pre-commit hooks for Terraform **SHOULD** include:
 **CI is a safety net, not a substitute for local checks.**
 ```
 
-### Updating the Language-Specific Instructions Table
+### Updating the Modular Instructions Table
 
-When the `terraform.instructions.md` file is created, the table in `copilot-instructions.md` **MUST** be updated:
+When the `terraform.instructions.md` file is created, the table in `.github/copilot-instructions.md` **MUST** be updated:
 
 ```text
-| Language | Instruction File | Applies To |
+| Scope | Instruction File | Applies To |
 | --- | --- | --- |
+| Git attributes | `.github/instructions/gitattributes.instructions.md` | `**/.gitattributes` |
 | Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` |
 | PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` |
 | Python | `.github/instructions/python.instructions.md` | `**/*.py` |
-| Terraform | `.github/instructions/terraform.instructions.md` | `**/*.tf, **/*.tfvars, **/*.tftest.hcl` |
+| Terraform | `.github/instructions/terraform.instructions.md` | `**/*.tf`, `**/*.tfvars`, `**/*.tftest.hcl`, `**/*.tf.json`, `**/*.tftpl`, `**/*.tfbackend` |
 ```
 
 The Linting Configurations table **SHOULD** also be updated if Terraform-specific linting configurations are added:
@@ -1561,7 +1562,7 @@ The Linting Configurations table **SHOULD** also be updated if Terraform-specifi
 | --- | --- | --- |
 | PSScriptAnalyzer | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell formatting/linting (OTBS style) |
 | markdownlint | `.markdownlint.jsonc` | Markdown linting |
-| tflint | `.tflint.hcl` | Terraform linting |
+| TFLint | `.tflint.hcl` | Terraform linting |
 ```
 
 The Testing Tools table **SHOULD** be updated:
@@ -1569,9 +1570,9 @@ The Testing Tools table **SHOULD** be updated:
 ```text
 | Language | Framework | Configuration | Test Location |
 | --- | --- | --- | --- |
-| Python | pytest | `pyproject.toml` | `tests/` |
-| PowerShell | Pester 5.x | Inline in CI | `tests/PowerShell/` |
-| Terraform | Terraform Test | Built-in (1.6+) | `modules/*/tests/` |
+| Python | pytest | `pyproject.toml` (`[tool.pytest.ini_options]`) | `tests/` |
+| PowerShell | Pester 5.x | Inline in `.github/workflows/powershell-ci.yml` | `tests/PowerShell/` |
+| Terraform | Terraform Test (requires Terraform 1.6+) | Built-in | `modules/*/tests/` or `tests/` |
 ```
 
 ---
@@ -1801,7 +1802,7 @@ Use this checklist when creating the `terraform.instructions.md` file:
 - [ ] Reference to repository constitution
 - [ ] Pre-commit discipline guidance
 - [ ] "Done" definition section
-- [ ] Instructions for updating `copilot-instructions.md` tables
+- [ ] Instructions for updating `.github/copilot-instructions.md` tables
 
 ### Quality Checks
 
@@ -1824,13 +1825,13 @@ Use this checklist when creating the `terraform.instructions.md` file:
    - Create `.github/workflows/terraform-ci.yml`
 
 3. **Update the repository constitution:**
-   - Add Terraform to the Language-Specific Instructions table
+   - Add Terraform to the Modular Instructions table
    - Add TFLint to the Linting Configurations table
    - Add Terraform Test to the Testing Tools table
 
 4. **Validate the instruction file:**
    - Verify all anchor links work
-   - Ensure no contradictions with `copilot-instructions.md`
+   - Ensure no contradictions with `.github/copilot-instructions.md`
    - Test that the applyTo pattern works correctly
 
 5. **Iterate based on usage:**
