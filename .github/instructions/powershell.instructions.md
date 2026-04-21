@@ -5,7 +5,7 @@ description: "PowerShell coding standards"
 
 # PowerShell Writing Style
 
-**Version:** 2.6.20260413.0
+**Version:** 2.15.20260421.3
 
 **Scope:** PowerShell coding standards for all `.ps1` files in this repository — style, formatting, naming, error handling, documentation, and compatibility patterns for both legacy (v1.0) and modern (v2.0+) codebases.
 
@@ -33,6 +33,9 @@ Scope tags: **[All]** = all PowerShell versions, **[Modern]** = PowerShell v2.0+
 - **[All]** Variables in strings **SHOULD** be delimited with `${}` or `-f` operator → [Variable Delimiting in Strings](#variable-delimiting-in-strings)
 - **[All]** Source `.ps1` files **MUST** be UTF-8 without BOM by default; see [File Encoding](#file-encoding) for the Windows PowerShell/non-ASCII exception
 - **[All]** When writing text files programmatically, encoding **MUST** be specified explicitly; prefer `.NET` for cross-version UTF-8 without BOM → [Programmatic File Writing Encoding](#programmatic-file-writing-encoding)
+- **[All]** When producing byte-exact text artifacts, serializer output **MUST** be normalized to LF in memory before writing or comparing → [Line Endings for Byte-Exact Text Artifacts](#line-endings-for-byte-exact-text-artifacts)
+- **[All]** Text-level file comparison **MUST** read files with `Get-Content -Raw` or `[System.IO.File]::ReadAllText()` under a fixed encoding/BOM convention; `Get-Content` without `-Raw` **MUST NOT** be used → [Line Endings for Byte-Exact Text Artifacts](#line-endings-for-byte-exact-text-artifacts)
+- **[All]** True byte-for-byte comparison **MUST** read files with `[System.IO.File]::ReadAllBytes()`; this is required for hash/signature inputs and any other byte-exact identity check → [Line Endings for Byte-Exact Text Artifacts](#line-endings-for-byte-exact-text-artifacts)
 
 ### Capitalization and Naming Conventions (Quick Reference)
 
@@ -42,6 +45,7 @@ Scope tags: **[All]** = all PowerShell versions, **[Modern]** = PowerShell v2.0+
 - **[All]** Functions **MUST** follow Verb-Noun pattern with approved verbs → [Script and Function Naming: Full Explicit Form](#script-and-function-naming-full-explicit-form)
 - **[All]** Functions **MUST** use singular nouns in function names → [Script and Function Naming: Nouns](#script-and-function-naming-nouns)
 - **[All]** Modules **MUST** use PascalCase nouns (containers, not actions) → [Module Naming: Noun-Based Containers](#module-naming-noun-based-containers)
+- **[Modern]** Module manifest `Tags` key **MUST** be populated aggressively with relevant keywords for discoverability → [Module Naming: Noun-Based Containers](#module-naming-noun-based-containers)
 - **[All]** Aliases **MUST NOT** be used in code → [Do Not Use Aliases](#do-not-use-aliases)
 - **[Modern]** Modules **MUST NOT** export compatibility aliases (exception: genuine interactive shortcuts) → [Do Not Use Aliases](#do-not-use-aliases)
 - **[All]** Parameters **MUST** use PascalCase, fully descriptive names → [Parameter Naming](#parameter-naming)
@@ -50,6 +54,9 @@ Scope tags: **[All]** = all PowerShell versions, **[Modern]** = PowerShell v2.0+
 - **[All]** Code **SHOULD** use explicit scoping ($global:, $script:) → [Path and Scope Handling](#path-and-scope-handling)
 - **[All]** `-LiteralPath` **SHOULD** be used instead of `-Path` when operating on concrete (non-wildcard) paths derived from variables or `Join-Path` → [Prefer `-LiteralPath` Over `-Path` for Concrete Paths](#prefer--literalpath-over--path-for-concrete-paths)
 - **[All]** For destructive cmdlets (`Remove-Item`, `Move-Item`), `-LiteralPath` **MUST** be used for variable-derived paths → [Prefer `-LiteralPath` Over `-Path` for Concrete Paths](#prefer--literalpath-over--path-for-concrete-paths)
+- **[All]** `New-Item` does **not** support `-LiteralPath`; use `-Path` with `New-Item` → [Prefer `-LiteralPath` Over `-Path` for Concrete Paths](#prefer--literalpath-over--path-for-concrete-paths)
+- **[All]** For directory creation from variable-derived paths that may contain wildcard characters, prefer `[System.IO.Directory]::CreateDirectory()` → [Prefer `-LiteralPath` Over `-Path` for Concrete Paths](#prefer--literalpath-over--path-for-concrete-paths)
+- **[All]** Paths passed to .NET file APIs (`System.IO.*`) **MUST** be resolved to absolute via `GetUnresolvedProviderPathFromPSPath()` first; non-FileSystem provider paths **MUST NOT** be used → [Resolving Paths for .NET Static Methods](#resolving-paths-for-net-static-methods)
 
 ### Documentation and Comments (Quick Reference)
 
@@ -62,6 +69,9 @@ Scope tags: **[All]** = all PowerShell versions, **[Modern]** = PowerShell v2.0+
 - **[All]** Functions **SHOULD** provide multiple examples with input, output, and explanation → [Help Content Quality: High Standards](#help-content-quality-high-standards)
 - **[All]** Every possible output/return value **MUST** be documented in .OUTPUTS with exact type and meaning; integer status codes **MUST** include full code-to-meaning mapping; output examples **MUST** be placed in .EXAMPLE blocks → [Help Content Quality: High Standards](#help-content-quality-high-standards)
 - **[All]** Positional parameter support **MUST** be documented in .NOTES → [Help Content Quality: High Standards](#help-content-quality-high-standards)
+- **[All]** Private/internal helper functions' `.NOTES` **MUST** begin with a private-helper banner → [Private/Internal Helper Function Documentation](#privateinternal-helper-function-documentation)
+- **[Modern]** Functions omitted from module manifest `FunctionsToExport` are treated as private/internal helpers → [Private/Internal Helper Function Documentation](#privateinternal-helper-function-documentation)
+- **[All]** Positional parameter documentation for private/internal helpers **SHOULD** state it is an internal-caller contract only → [Positional Parameter Support](#positional-parameter-support)
 - **[All]** Version number **MUST** be included in .NOTES (format: Major.Minor.YYYYMMDD.Revision) → [Function and Script Versioning](#function-and-script-versioning)
 - **[All]** Version build component **MUST** be current date in YYYYMMDD format → [Function and Script Versioning](#function-and-script-versioning)
 - **[All]** Inline comments **SHOULD** focus on "why" not "what" → [Inline Comments: Purpose and Placement](#inline-comments-purpose-and-placement)
@@ -92,7 +102,9 @@ Scope tags: **[All]** = all PowerShell versions, **[Modern]** = PowerShell v2.0+
 - **[Modern]** Exception: Modern functions and scripts **MAY** temporarily suppress $VerbosePreference for noisy nested commands using try/finally → ["Modern Advanced" Functions/Scripts: Exception for Suppressing Nested Verbose Streams](#modern-advanced-functionsscripts-exception-for-suppressing-nested-verbose-streams)
 - **[Modern]** [Parameter(Mandatory=$true)] **SHOULD** be used only when function cannot work without value → ["Modern Advanced" Functions/Scripts: Parameter Validation and Attributes (`[Parameter()]`)](#modern-advanced-functionsscripts-parameter-validation-and-attributes-parameter)
 - **[Modern]** [ValidateNotNullOrEmpty()] **SHOULD** be used for optional-but-not-empty parameters and for mandatory [string] parameters whose logic depends on a non-empty value → ["Modern Advanced" Functions/Scripts: Parameter Validation and Attributes (`[Parameter()]`)](#modern-advanced-functionsscripts-parameter-validation-and-attributes-parameter)
+- **[Modern]** [ValidateRange(min, max)] **SHOULD** be used on numeric parameters with a constrained valid domain (counts, delays/timeouts, thresholds, percentages) so invalid input fails at parameter binding rather than producing a confusing downstream error → ["Modern Advanced" Functions/Scripts: Parameter Validation and Attributes (`[Parameter()]`)](#modern-advanced-functionsscripts-parameter-validation-and-attributes-parameter)
 - **[Modern]** Multiple [OutputType()] **SHOULD** only be used for intentionally polymorphic returns → ["Modern Advanced" Functions/Scripts: Handling Multiple or Dynamic Output Types](#modern-advanced-functionsscripts-handling-multiple-or-dynamic-output-types)
+- **[Modern]** Subset-only positional contracts **MUST** use `PositionalBinding = $false` with explicit `[Parameter(Position = N)]` → [Positional Parameter Support](#positional-parameter-support)
 - **[All]** Functions **MUST** be atomic, reusable tools with single purpose → [Function Declaration and Structure](#function-declaration-and-structure)
 - **[All]** Polymorphic parameters (multiple incompatible types) **SHOULD** be left un-typed or [object] → [Parameter Block Design: Detailed Analysis](#parameter-block-design-detailed-analysis)
 - **[All]** [ref] **MUST** be used exclusively for output requiring write-back to caller scope → [Input/Output Contract: Reference Parameters](#inputoutput-contract-reference-parameters)
@@ -106,6 +118,8 @@ Scope tags: **[All]** = all PowerShell versions, **[Modern]** = PowerShell v2.0+
 - **[Modern]** `throw "message"` and `throw ("fmt" -f $args)` **MUST NOT** be used in catch blocks intended to rethrow → [Rethrow Anti-Pattern](#rethrow-anti-pattern)
 - **[Modern]** Exception wrapping **SHOULD** use `$PSCmdlet.ThrowTerminatingError()` with the original as `InnerException` → [Wrapping Exceptions with `$PSCmdlet.ThrowTerminatingError()`](#wrapping-exceptions-with-pscmdletthrowterminatingerror)
 - **[Modern]** Variables referenced in `finally` that are assigned in `try` **MUST** be initialized before the `try` block → [Set-StrictMode Considerations for finally Blocks](#set-strictmode-considerations-for-finally-blocks)
+- **[Modern]** In files bundled into a module or other aggregate script artifact, `Set-StrictMode -Version Latest` **MUST** be placed at script scope as the first executable statement in the file, after any `#requires` comments, `using` statements, and any script-level `[CmdletBinding()]`/`param` block → [Set-StrictMode Placement for Dot-Sourced Files](#set-strictmode-placement-for-dot-sourced-files)
+- **[Modern]** In files intended to be dot-sourced directly into the caller's scope (test fixtures, ad-hoc scripts, build tooling), `Set-StrictMode -Version Latest` **MUST NOT** be placed at script scope; it **MUST** be placed inside the function body (as the first statement in `begin {}` when using a `begin/process/end` layout, or otherwise as the first statement in the function body) → [Set-StrictMode Placement for Dot-Sourced Files](#set-strictmode-placement-for-dot-sourced-files)
 
 ### File Writeability Testing (Quick Reference)
 
@@ -128,6 +142,7 @@ Scope tags: **[All]** = all PowerShell versions, **[Modern]** = PowerShell v2.0+
 - **[All]** .NET method output **MUST** be suppressed with [void](...), not | Out-Null → [Suppression of Method Output](#suppression-of-method-output)
 - **[All]** `Write-Verbose` / `Write-Debug` **MUST NOT** emit raw PII, credentials, tokens, or other sensitive identifiers → [Sensitive Data in Verbose and Debug Streams](#sensitive-data-in-verbose-and-debug-streams)
 - **[Modern]** Hot-path `Write-Verbose` / `Write-Debug` with string formatting **SHOULD** be guarded behind a preference check → [Performance-Sensitive `Write-Verbose` / `Write-Debug` in Hot Paths](#performance-sensitive-write-verbose--write-debug-in-hot-paths)
+- **[All]** `-f` format operator **MUST** be applied inside the argument-expression parentheses of cmdlet calls → [String Formatting in Cmdlet Arguments (`-f` Scoping)](#string-formatting-in-cmdlet-arguments--f-scoping)
 
 ### Language Interop and .NET (Quick Reference)
 
@@ -143,7 +158,10 @@ Scope tags: **[All]** = all PowerShell versions, **[Modern]** = PowerShell v2.0+
 - **[All]** Tests **MUST** verify all documented return codes for functions → [Testing Return Code Conventions](#testing-return-code-conventions)
 - **[All]** Test-* functions **MUST** have tests for both `$true` and `$false` cases → [Testing Return Code Conventions](#testing-return-code-conventions)
 - **[All]** Tests asserting property names on `[pscustomobject]` **MUST** use order-insensitive comparisons → [Testing Property Names on PSCustomObject](#testing-property-names-on-pscustomobject)
+- **[All]** Tests asserting strongly-typed array properties **MUST** check non-emptiness first, then assert the exact array type with `-is`; **MUST NOT** permit `[object[]]` fallback → [Testing Strongly-Typed Array Properties](#testing-strongly-typed-array-properties)
 - **[All]** Test `BeforeAll` dot-sourcing **MUST** use the `Split-Path` + `Join-Path` two-step pattern; multi-segment `Join-Path` forms **MUST NOT** be used → [Test File Dot-Sourcing Pattern](#test-file-dot-sourcing-pattern)
+- **[All]** Tests iterating a returned collection with `foreach` **MUST** assert non-emptiness before the loop → [Defensive Assertions Before Iteration and Indexing](#defensive-assertions-before-iteration-and-indexing)
+- **[All]** Tests accessing specific indices of a returned collection **MUST** assert count before any indexed access → [Defensive Assertions Before Iteration and Indexing](#defensive-assertions-before-iteration-and-indexing)
 
 <!-- rationale-anchor: executive-summary-author-profile -->
 
@@ -259,6 +277,31 @@ When a variable in an expandable string (`"..."`) is immediately followed by pun
   $strMessage = ("{0}: Error occurred" -f $SSORegion)
   ```
 
+### String Formatting in Cmdlet Arguments (`-f` Scoping)
+
+When a composed string expression is passed to a cmdlet or language construct using parentheses as the argument expression (for example `Write-Warning`, `Write-Host`, `Write-Error`, `Write-Verbose`, `Write-Debug`, `Write-Output`, or `throw (...)`), any `-f` format operator **MUST** be applied inside the same parentheses that form the argument expression. Once the argument-expression parentheses close, PowerShell may parse `-f` as a parameter token rather than as the format operator.
+
+See also [Variable Delimiting in Strings](#variable-delimiting-in-strings) for broader guidance on composing strings safely.
+
+- **Non-Compliant:**
+
+  ```powershell
+  Write-Warning ("foo {0}" + "bar") -f $x
+  ```
+
+- **Compliant (Preferred):** Place the `-f` operator inside the argument-expression parentheses:
+
+  ```powershell
+  Write-Warning (("foo {0}" + "bar") -f $x)
+  ```
+
+- **Compliant (Alternative):** Assign the formatted string to a variable first:
+
+  ```powershell
+  $strMessage = ("foo {0}" + "bar") -f $x
+  Write-Warning $strMessage
+  ```
+
 ### File Encoding
 
 PowerShell `.ps1` source files **MUST** be saved as UTF-8 **without** a Byte Order Mark (BOM, `U+FEFF`), **unless** the script contains non-ASCII characters (e.g., accented characters, CJK text, or special symbols in string literals or comments) **and** must run on Windows PowerShell v5.1 or earlier. In that case, the file **MUST** either (a) be saved as UTF-8 **with** BOM so that Windows PowerShell can detect the encoding, or (b) remain ASCII-only so that BOM-less UTF-8 and the system ANSI code page produce identical byte sequences. This exception does not apply to PowerShell 7+, which defaults to UTF-8. Editors used for PowerShell development **SHOULD** be configured to save `.ps1` files as UTF-8 without BOM by default. If tool-specific examples are included, they **SHOULD** be presented as examples rather than assumptions that all environments behave identically.
@@ -277,6 +320,21 @@ $objUtf8NoBomEncoding = New-Object System.Text.UTF8Encoding($false)
 `Set-Content` and similar cmdlets **MUST** include an explicit `-Encoding` parameter when writing generated artifacts, because default encoding behavior varies across PowerShell versions and can make output non-deterministic.
 
 `-Encoding utf8NoBOM` **MUST NOT** be the required cross-version pattern, because it is unavailable in Windows PowerShell 5.1. For code that explicitly targets only PowerShell 7+, it **MAY** be used.
+
+### Line Endings for Byte-Exact Text Artifacts
+
+When a PowerShell script or test produces text output whose identity is its exact byte sequence (for example, golden baselines, snapshot fixtures, hash inputs, or signed payloads), the producer **MUST** normalize line endings to LF at serialization time. Consumers reading the entire file as text **MUST NOT** use `Get-Content` without `-Raw`; they **MUST** use `Get-Content -Raw` or the equivalent .NET `[System.IO.File]::ReadAllText()` API. Those text-returning APIs are acceptable only for text-level comparison when the encoding convention, including BOM presence or absence, is already fixed. For true byte-for-byte identity (for example, hash inputs and signed payloads), consumers **MUST** use `[System.IO.File]::ReadAllBytes()`, because `Get-Content -Raw` and `[System.IO.File]::ReadAllText()` decode bytes into a `System.String` and can mask byte-level differences such as a UTF-8 BOM or other encoding distinctions.
+
+Cross-version differences in `ConvertTo-Json` and other serializers can emit CRLF on some hosts and LF on others, causing byte-exact comparisons to fail unless line endings are normalized in memory before writing or comparing. The recommended pattern is to normalize CRLF to LF immediately after serialization:
+
+```powershell
+$strJson = $objInput | ConvertTo-Json -Depth 5
+$strJson = $strJson -replace "`r`n", "`n"
+# If the artifact convention requires a trailing LF, also append one:
+# $strJson = $strJson + "`n"
+```
+
+`Get-Content` without `-Raw` strips line terminators and returns an array of lines rather than the original on-disk text, so it **MUST NOT** be used for byte-exact comparison. Use `Get-Content -Raw` or `[System.IO.File]::ReadAllText()` to read the decoded text as a single string when the comparison is text-level, or use `[System.IO.File]::ReadAllBytes()` when true byte-for-byte identity is required. When using the .NET APIs, paths **MUST** first be resolved to an absolute filesystem path per [Resolving Paths for .NET Static Methods](#resolving-paths-for-net-static-methods).
 
 ## Capitalization and Naming Conventions
 
@@ -480,7 +538,9 @@ Use the `Test` verb.
 - **Correct:** `ObjectFlattener`, `NetworkManager`, `DataParser`
 - **Incorrect:** `FlattenObject`, `ManageNetwork`, `ParseData`
 
-Module names **MUST NOT** be compromised for the sake of keyword searching. Instead, rely on the **Module Manifest (`.psd1`)** to handle discoverability. The `Tags` key in the manifest **MUST** be populated aggressively with relevant keywords (including verbs) to ensure the module is found during searches, while keeping the architectural name pure.
+Module names **MUST NOT** be compromised for the sake of keyword searching.
+
+**[Modern]** In module-based code, the **Module Manifest (`.psd1`)** handles discoverability. The `Tags` key in the manifest **MUST** be populated aggressively with relevant keywords (including verbs) to ensure the module is found during searches, while keeping the architectural name pure.
 
 ### Do Not Use Aliases
 
@@ -561,6 +621,27 @@ Get-Content -Path '../config.json'
 ```powershell
 # Good — always resolves relative to the script's own directory:
 Get-Content -LiteralPath (Join-Path -Path $PSScriptRoot -ChildPath '../config.json')
+```
+
+#### Resolving Paths for .NET Static Methods
+
+**[All]** When a script or function passes a user-provided or otherwise unresolved PowerShell path to a .NET file API (for example, `[System.IO.File]::WriteAllText()`, `[System.IO.File]::WriteAllLines()`, or other `System.IO.*` methods that expect a file-system path), the path **MUST** first be converted to an absolute file-system path via `$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath()`. This method assumes the path resolves through the FileSystem provider; non-FileSystem provider paths (such as `HKLM:\…` or `Cert:\…`) **MUST NOT** be passed to `System.IO.*` methods.
+
+**Compliant:**
+
+```powershell
+# Resolve the PowerShell path before passing it to .NET
+$strOutputPath = '.\output.txt'
+$strOutputPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($strOutputPath)
+[System.IO.File]::WriteAllText($strOutputPath, $strContent, $objEncoding)
+```
+
+**Non-Compliant:**
+
+```powershell
+# Non-Compliant: passing an unresolved PowerShell path directly to a .NET method
+$strOutputPath = '.\output.txt'
+[System.IO.File]::WriteAllText($strOutputPath, $strContent, $objEncoding)
 ```
 
 <!-- rationale-anchor: options-for-local-variable-prefixes-analysis -->
@@ -676,6 +757,56 @@ Lines within `.EXAMPLE` blocks that are intended to render as PowerShell comment
 2. **Edge Case Coverage**: Examples include valid input, invalid segments, overflow conditions, excess parts.
 3. **Positional Parameter Support**: `.NOTES` explicitly documents positional ordering.
 4. **Versioning**: Includes internal version in `.NOTES` for change tracking.
+
+---
+
+### Private/Internal Helper Function Documentation
+
+**[All]** If a function is intended only for internal use and is not part of the script, module, or tool's public API surface, its `.NOTES` section **MUST** begin with a clear private-helper banner. That banner **MUST** state that the function is not part of the public API surface, and **MUST** warn that parameters, return shape, and positional contract may change without notice.
+
+**[Modern]** In module-based code, a function intentionally omitted from the module manifest's `FunctionsToExport` is treated as a private/internal helper for purposes of the documentation requirements above.
+
+All other comment-based help requirements (`.SYNOPSIS`, `.DESCRIPTION`, `.PARAMETER`, `.EXAMPLE`, `.INPUTS`, `.OUTPUTS`, `.NOTES`) still apply to private/internal helpers — the banner is an addition, not a replacement.
+
+**Compliant — private/internal helper with required `.NOTES` banner:**
+
+```powershell
+function Convert-RawRecord {
+    # .SYNOPSIS
+    # Transforms a raw input record into a normalized internal format.
+    # .DESCRIPTION
+    # Parses the raw record hashtable, validates required keys, and
+    # returns a normalized [pscustomobject]. This function is used
+    # only by Import-DataSet and is not part of the public API.
+    # .PARAMETER ReferenceToResultObject
+    # Reference to store the resulting normalized object.
+    # .PARAMETER RawRecord
+    # The raw hashtable to normalize.
+    # .EXAMPLE
+    # $objResult = $null
+    # $intReturnCode = Convert-RawRecord ([ref]$objResult) $hashtableInput
+    # # $intReturnCode = 0, $objResult contains the normalized record
+    # .INPUTS
+    # None. You can't pipe objects to this function.
+    # .OUTPUTS
+    # [int] Status code: 0 = success, -1 = failure (missing keys)
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER — This function is not part of the
+    # public API surface. Parameters, return shape, and positional
+    # contract may change without notice.
+    # This function supports positional parameters
+    # (internal-caller contract only; subject to change):
+    #   Position 0: ReferenceToResultObject
+    #   Position 1: RawRecord
+    # Version: 1.0.20260415.0
+    param (
+        [ref]$ReferenceToResultObject,
+        [hashtable]$RawRecord
+    )
+
+    # Implementation omitted for brevity
+}
+```
 
 ---
 
@@ -979,6 +1110,66 @@ Guidance for this format:
 1. The header line **SHOULD** be `# This function/script supports positional parameters:` followed by each position listed on its own indented line as `#   Position N: ParameterName`.
 2. Only list parameters that are expected to be used positionally. For functions or scripts with many optional parameters, listing only the mandatory or commonly-used positional parameters is acceptable.
 3. The parameter name **SHOULD** match the declared parameter name without the `-` prefix (e.g., `VectorRows`, not `-VectorRows`), since the `.NOTES` section documents the parameter's identity, not its call syntax.
+4. **[All]** If positional parameter behavior is documented for a private/internal helper, that documentation **SHOULD** clearly state that it is an internal-caller contract only and is subject to change. For example, the header line **SHOULD** read `# This function supports positional parameters` / `# (internal-caller contract only; subject to change):` instead of the standard header.
+
+#### [Modern] Enforcing a Subset-Only Positional Contract
+
+**[Modern]** When a `[CmdletBinding()]` function or script documents only a **subset** of its parameters as positional, it **MUST** use `[CmdletBinding(PositionalBinding = $false)]` and **MUST** apply explicit `[Parameter(Position = N)]` attributes only to the parameters intended to be positional. This rule does not apply to v1.0-targeted functions, which cannot use `[CmdletBinding()]`.
+
+**Compliant — subset-only positional contract enforced:**
+
+```powershell
+function Import-DataSet {
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([pscustomobject])]
+    param (
+        [Parameter(Mandatory = $true, Position = 0)]
+        [string]$InputMode,
+
+        [Parameter(Mandatory = $true, Position = 1)]
+        [string]$OutputPath,
+
+        [Parameter()]
+        [switch]$Force,
+
+        [Parameter()]
+        [int]$RetryCount
+    )
+
+    # Only InputMode and OutputPath are positional;
+    # Force and RetryCount must always be named.
+    # ...
+}
+```
+
+**Non-compliant — default PositionalBinding contradicts documented subset contract:**
+
+```powershell
+# BAD: Documentation claims only InputMode and OutputPath are positional,
+# but CmdletBinding() defaults to PositionalBinding = $true, which silently
+# makes Force and RetryCount positional as well.
+function Import-DataSet {
+    [CmdletBinding()]
+    [OutputType([pscustomobject])]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$InputMode,
+
+        [Parameter(Mandatory = $true)]
+        [string]$OutputPath,
+
+        [Parameter()]
+        [switch]$Force,
+
+        [Parameter()]
+        [int]$RetryCount
+    )
+
+    # .NOTES claims "Position 0: InputMode, Position 1: OutputPath"
+    # but all parameters accept positional input — mismatch.
+    # ...
+}
+```
 
 ---
 
@@ -1116,6 +1307,12 @@ These are **not stylistic requirements**; they are **design tools** that **MUST*
   - PowerShell coerces `$null` to `[string]::Empty` for `[string]`-typed parameters. Because `[string]::Empty` is not `$null`, a mandatory `[string]` parameter satisfied by this coercion will pass the mandatory check but silently bind an empty string. This can cause incorrect behavior—for example, hashing an empty string instead of rejecting invalid input.
   - Adding `[ValidateNotNullOrEmpty()]` alongside `[Parameter(Mandatory = $true)]` catches this edge case at parameter-binding time and produces a clear error message.
   - This guidance applies to functions and scripts targeting Windows PowerShell 2.0 or newer, because `[ValidateNotNullOrEmpty()]` is not available in Windows PowerShell v1.0.
+
+- **Use `[ValidateRange(min, max)]` on numeric parameters when:**
+  - The parameter has a constrained valid domain, such as counts, delays or timeouts, thresholds, or percentages.
+  - Fail-fast parameter binding provides a clearer error than allowing an invalid value to surface later in downstream logic.
+  - When the domain is naturally bounded on both sides, prefer explicit bounds (for example `0, 100` for percentages). When only a lower bound is principled, a type maximum such as `[int]::MaxValue` or `[double]::MaxValue` **SHOULD** be used as the upper bound to preserve the fail-fast benefit for the lower bound without imposing an artificial ceiling.
+  - This attribute is available in Windows PowerShell 2.0 and newer.
 
 ### Consuming Streaming Functions (The `0-1-Many` Problem)
 
@@ -1392,6 +1589,96 @@ In this example, `$objResource` is initialized to `$null` before the `try` block
 
 ---
 
+### Set-StrictMode Placement for Dot-Sourced Files
+
+Where `Set-StrictMode -Version Latest` belongs depends on how the `.ps1` file is consumed at runtime. A `.ps1` file that is dot-sourced executes its script-scope statements in the **caller's scope**, which means a script-scope `Set-StrictMode` call leaks into the caller and silently changes the caller's strict-mode setting. By contrast, when code is consumed through an imported module or by executing a script or aggregate artifact normally (for example, `.\Helpers.ps1`, `& .\Helpers.ps1`, or `Import-Module`), script-scope statements run in that artifact's own script scope, so a script-scope `Set-StrictMode` call is contained to that scope.
+
+**Rule (bundled files):** For files bundled into a module or other aggregate script artifact, `Set-StrictMode -Version Latest` **MUST** be placed at script scope as the first executable statement in the file, after any required file-header constructs such as `#requires` comments, `using` statements, and any script-level `[CmdletBinding()]`/`param` block. The bundled artifact may also establish strict mode, making this redundant at runtime, but it preserves file-level correctness if the source file is ever executed directly. This rule does **not** make dot-sourcing the source file safe: dot-sourcing any `.ps1` file — including an individual bundled source file or a monolithic bundled artifact — still runs its script-scope statements in the caller's scope and will leak strict mode.
+
+**Rule (dot-sourced files):** For files that are not bundled and are instead intended to be dot-sourced directly into the caller's scope (for example, test fixtures, ad-hoc scripts, or build tooling), `Set-StrictMode -Version Latest` **MUST NOT** be placed at script scope. Instead, it **MUST** be placed inside the function body — as the first statement in `begin {}` when the function uses a `begin/process/end` layout (so strict mode covers `begin`, `process`, and `end`, and is not re-invoked for every pipeline input), or otherwise as the first statement in the function body.
+
+#### Bundled File — Compliant Example
+
+```powershell
+#requires -Version 5.1
+using namespace System.Text
+
+Set-StrictMode -Version Latest
+
+function Get-Thing {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param (
+        [string]$Name
+    )
+
+    process {
+        # ... implementation ...
+    }
+}
+```
+
+#### Bundled File — Non-Compliant Example
+
+```powershell
+# Set-StrictMode is missing at file scope. If the bundled artifact fails to
+# establish strict mode, or if this file is executed independently,
+# strict-mode guarantees are lost.
+function Get-Thing {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param (
+        [string]$Name
+    )
+
+    process {
+        # ... implementation ...
+    }
+}
+```
+
+#### Dot-Sourced File — Compliant Example
+
+```powershell
+function Invoke-TestFixture {
+    [CmdletBinding()]
+    [OutputType([void])]
+    param (
+        [string]$Path
+    )
+
+    begin {
+        Set-StrictMode -Version Latest
+    }
+
+    process {
+        # ... implementation ...
+    }
+}
+```
+
+#### Dot-Sourced File — Non-Compliant Example
+
+```powershell
+# WRONG — when this file is dot-sourced, Set-StrictMode executes in the
+# caller's scope and silently changes the caller's strict-mode setting.
+Set-StrictMode -Version Latest
+
+function Invoke-TestFixture {
+    [CmdletBinding()]
+    [OutputType([void])]
+    param (
+        [string]$Path
+    )
+
+    process {
+        # ... implementation ...
+    }
+}
+```
+
+---
+
 <!-- rationale-anchor: summary-error-handling-as-diagnostic-instrumentation -->
 
 ## File Writeability Testing
@@ -1430,25 +1717,16 @@ if (-not $boolIsWritable) {
 
 ```powershell
 try {
-    [void](New-Item -Path $OutputPath -ItemType File -Force -ErrorAction Stop)
-    Remove-Item -LiteralPath $OutputPath -Force -ErrorAction Stop
+    $strOutputPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath)
+    $strWriteTestPath = [System.IO.Path]::Combine([System.IO.Path]::GetDirectoryName($strOutputPath), ('.write_test_{0}.tmp' -f [Guid]::NewGuid().ToString('N')))
+    [System.IO.File]::Open($strWriteTestPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write).Dispose()
+    [System.IO.File]::Delete($strWriteTestPath)
 } catch {
-    throw "Cannot write to '$OutputPath': $($_.Exception.Message)"
+    throw ("Cannot write to '{0}': {1}" -f $OutputPath, $_.Exception.Message)
 }
 ```
 
-**Note**: Using `-LiteralPath` with `Remove-Item` is important to avoid wildcard interpretation issues. See [Prefer `-LiteralPath` Over `-Path` for Concrete Paths](#prefer--literalpath-over--path-for-concrete-paths) for the general rule.
-
-#### try/catch Alternative (.NET Methods)
-
-```powershell
-try {
-    [System.IO.File]::WriteAllText($OutputPath, '')
-    [System.IO.File]::Delete($OutputPath)
-} catch {
-    throw "Cannot write to '$OutputPath': $($_.Exception.Message)"
-}
-```
+> **Warning:** File APIs with create-or-overwrite semantics (e.g., `[System.IO.File]::Create()`, `New-Item -Force`) **SHOULD NOT** be used for writeability probes unless the probe filename is guaranteed unique. Using the actual output path as the probe can destroy pre-existing data or cause false failures when the file already exists.
 
 ---
 
@@ -1796,6 +2074,71 @@ It "Returns success code 0 when given valid input" {
 
 ---
 
+### Defensive Assertions Before Iteration and Indexing
+
+When a test iterates or indexes into a collection returned by the function or script under test, the test **MUST** include defensive pre-assertions so that an empty or `$null` result produces a clear, immediate Pester failure instead of silently passing or generating a confusing runtime error.
+
+1. **Pre-iteration non-emptiness.** Tests that iterate a collection with `foreach ($x in $collection) { ... }` **MUST** assert `$collection | Should -Not -BeNullOrEmpty` before the `foreach`. A `foreach` over `$null` or an empty collection executes zero iterations, causing all inner assertions to be silently skipped.
+
+2. **Pre-index count assertion.** Tests that access specific indices of a returned collection (e.g., `$arrResult[0]`) **MUST** assert `$arrResult.Count | Should -Be <N>` before any indexed access when the exact count is part of the contract being tested. If exact count is not part of the contract, the test **MUST** assert a minimum-count condition that covers the highest index accessed—for example, `Should -BeGreaterThan <highest-index-accessed>` (since collections are zero-based, `$arr.Count | Should -BeGreaterThan 2` guarantees that `$arr[0]`, `$arr[1]`, and `$arr[2]` are safe to access).
+
+3. **Pre-index non-empty on nested properties.** When a test indexes into a property of a returned element (e.g., `$arrResult[0].Principals[0]`), the test **MUST** also assert `$arrResult[0].Principals | Should -Not -BeNullOrEmpty` before the inner index.
+
+4. **Ordering.** For a test that accesses `$arr[i].Prop[j]`, assertions **SHOULD** follow this order:
+   1. `$arr | Should -Not -BeNullOrEmpty` or `$arr.Count | Should -Be <N>`
+   2. `$arr[i].Prop | Should -Not -BeNullOrEmpty`
+   3. Strong-type check on `$arr[i].Prop`, if applicable
+   4. Assertions that verify the actual behavior under test
+
+**Compliant** (`foreach` — assert non-emptiness before iterating):
+
+```powershell
+It "Each ClusterActions entry includes a Principals array" {
+    # Assert
+    $script:objResult.ClusterActions | Should -Not -BeNullOrEmpty
+    foreach ($objCluster in $script:objResult.ClusterActions) {
+        $objCluster.PSObject.Properties.Name | Should -Contain 'Principals'
+        $objCluster.Principals | Should -Not -BeNullOrEmpty
+        ($objCluster.Principals -is [string[]]) | Should -BeTrue
+    }
+}
+```
+
+**Non-Compliant** (`foreach` — missing non-emptiness assertion):
+
+```powershell
+# Non-Compliant: foreach over $null or an empty collection can execute zero
+# iterations and leave the test without any evaluated inner assertions.
+It "Each ClusterActions entry includes a Principals array" {
+    # Assert
+    foreach ($objCluster in $script:objResult.ClusterActions) {
+        $objCluster.PSObject.Properties.Name | Should -Contain 'Principals'
+    }
+}
+```
+
+**Compliant** (indexed access — count and nested non-emptiness before indexing):
+
+```powershell
+# Assert
+$arrResult.Count | Should -Be 1
+$arrResult[0].Principals | Should -Not -BeNullOrEmpty
+$arrResult[0].Principals.Count | Should -Be 2
+$arrResult[0].Principals[0] | Should -Be 'userA'
+$arrResult[0].Principals[1] | Should -Be 'userB'
+```
+
+**Non-Compliant** (indexed access — no count assertion before `[0]`):
+
+```powershell
+# Non-Compliant: no count assertion before [0].
+# Assert
+$arrResult[0].Principals.Count | Should -Be 1
+$arrResult[0].Principals[0] | Should -Be 'userA'
+```
+
+---
+
 ### Testing Return Code Conventions
 
 For functions and scripts that use explicit integer status codes, tests **MUST** verify the return code conventions documented in [Return Semantics: Explicit Status Codes](#return-semantics-explicit-status-codes).
@@ -1946,6 +2289,57 @@ $objResult.PSObject.Properties.Name | Should -Be @('Key', 'Type')
 
 ---
 
+### Testing Strongly-Typed Array Properties
+
+When asserting that a property on a returned object is a non-empty, strongly-typed array, tests **MUST** follow these rules:
+
+1. **Non-emptiness first.** Tests **MUST** use `Should -Not -BeNullOrEmpty` before any `.Count`-based assertion. This produces a clear failure message when the property is `$null` or empty, rather than a confusing "expected greater than 0" when the property is `$null`.
+
+2. **Strongly-typed assertion.** When production code explicitly casts an output property to a strongly-typed array (e.g., `[string[]]`), tests **MUST** assert that exact array type using the `-is` operator wrapped in `Should -BeTrue`:
+
+   ```powershell
+   ($obj.Prop -is [string[]]) | Should -BeTrue
+   ```
+
+   Tests **MUST NOT** use a disjunction that also permits `[object[]]`, because that masks regressions when the intended production cast is accidentally removed.
+
+3. **Avoid `Should -BeOfType [string[]]` for array types.** Tests **SHOULD NOT** use `$x | Should -BeOfType [string[]]` to assert array type, because the pipeline unrolls the array before Pester evaluates the type. Prefer the `-is [string[]]` pattern.
+
+4. **Ordering.** When combined with a property-name check, the recommended assertion order **SHOULD** be: property name first, then non-empty assertion, then strongly-typed assertion.
+
+**Compliant** (preferred pattern):
+
+```powershell
+$script:objResult.ClusterActions | Should -Not -BeNullOrEmpty
+foreach ($objCluster in $script:objResult.ClusterActions) {
+    $objCluster.PSObject.Properties.Name | Should -Contain 'Principals'
+    $objCluster.Principals | Should -Not -BeNullOrEmpty
+    ($objCluster.Principals -is [string[]]) | Should -BeTrue
+}
+```
+
+**Non-Compliant** (too permissive):
+
+```powershell
+# Non-Compliant: [object[]] disjunction masks regressions in the
+# production strongly-typed cast.
+(($objCluster.Principals -is [string[]]) -or ($objCluster.Principals -is [object[]])) |
+    Should -BeTrue
+
+# Non-Compliant: .Count on a potentially-null value is asserted before
+# proving the property is non-empty.
+$objCluster.Principals.Count | Should -BeGreaterThan 0
+```
+
+**Non-Compliant** (pipeline unrolling):
+
+```powershell
+# Non-Compliant: the array is unrolled before Pester evaluates the type assertion.
+$objCluster.Principals | Should -BeOfType [string[]]
+```
+
+---
+
 ### Mocking External Dependencies
 
 Use Pester's `Mock` command to isolate the function under test from external dependencies:
@@ -1997,7 +2391,20 @@ For **destructive** operations—`Remove-Item`, `Move-Item`—`-LiteralPath` **M
 
 Reserve `-Path` for cases where wildcard expansion is **explicitly intended**.
 
-**Common cmdlets where this rule applies:** `Test-Path`, `Get-Item`, `Get-ChildItem`, `Get-Content`, `Set-Content`, `Copy-Item`, `Move-Item`, `Remove-Item`.
+**Exception — `New-Item`:** `New-Item` does **not** have a `-LiteralPath` parameter (across Windows PowerShell 5.1 and PowerShell 7.x). Use `New-Item -Path` for item creation. Because `-Path` still interprets wildcard characters, code **SHOULD** validate or reject untrusted input containing `[`, `]`, `*`, or `?` as literal characters, or use a .NET file API (e.g., `[System.IO.File]::Create()`) when literal path semantics are required.
+
+**Directory creation:** When creating a directory from a variable-derived path that may contain wildcard characters (`[`, `]`, `*`, or `?`), code **SHOULD** prefer `[System.IO.Directory]::CreateDirectory()` over `New-Item -Path ... -ItemType Directory`. The path **MUST** first be resolved to an absolute filesystem path per [Resolving Paths for .NET Static Methods](#resolving-paths-for-net-static-methods).
+
+**Compliant** (wildcard-safe directory creation):
+
+```powershell
+$strOutputPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputPath)
+if (-not (Test-Path -LiteralPath $strOutputPath)) {
+    [void]([System.IO.Directory]::CreateDirectory($strOutputPath))
+}
+```
+
+**Common cmdlets where this rule applies:** `Copy-Item`, `Get-ChildItem`, `Get-Content`, `Get-Item`, `Move-Item`, `Remove-Item`, `Set-Content`, `Test-Path`.
 
 **Compliant:**
 
