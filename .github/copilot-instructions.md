@@ -1,6 +1,6 @@
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.1.20260112.0
+**Version:** 1.2.20260422.0
 
 These instructions are authoritative for all changes in this repository.
 

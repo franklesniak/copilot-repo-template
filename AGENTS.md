@@ -1,6 +1,6 @@
 # Agent Instructions for OpenAI Codex CLI
 
-**Version:** 1.1.20260412.1
+**Version:** 1.2.20260421.0
 
 This file provides project-specific instructions for OpenAI Codex CLI and compatible
 AI coding agents operating in this repository. These instructions ensure that agents
