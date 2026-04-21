@@ -39,9 +39,10 @@ immediately. The full shared rule set remains in the canonical file above.
     - `tflint --recursive`
     - `terraform test -verbose`
 
-- **Language-specific instruction files**
+- **Modular instruction files**
   - Read the relevant file under `.github/instructions/` before modifying matching
     files:
+    - Git attributes: `.github/instructions/gitattributes.instructions.md`
     - Markdown/Docs: `.github/instructions/docs.instructions.md`
     - PowerShell: `.github/instructions/powershell.instructions.md`
     - Python: `.github/instructions/python.instructions.md`

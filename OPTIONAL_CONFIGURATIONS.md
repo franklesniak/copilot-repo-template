@@ -2021,7 +2021,7 @@ The default configuration includes:
 When customizing the Pre-commit or Testing sections, you may also need to update these related sections in `copilot-instructions.md`:
 
 - **How to Work (Definition of Done):** Update test location references (e.g., `tests/` to `spec/`)
-- **Language-Specific Instructions table:** Ensure it matches your language instruction files
+- **Modular Instructions table:** Ensure it matches your instruction files
 - **Linting Configurations:** Update linting tool references if you use different linters
 
 ---

@@ -1541,7 +1541,7 @@ Pre-commit hooks for Terraform **SHOULD** include:
 **CI is a safety net, not a substitute for local checks.**
 ```
 
-### Updating the Language-Specific Instructions Table
+### Updating the Modular Instructions Table
 
 When the `terraform.instructions.md` file is created, the table in `copilot-instructions.md` **MUST** be updated:
 
@@ -1824,7 +1824,7 @@ Use this checklist when creating the `terraform.instructions.md` file:
    - Create `.github/workflows/terraform-ci.yml`
 
 3. **Update the repository constitution:**
-   - Add Terraform to the Language-Specific Instructions table
+   - Add Terraform to the Modular Instructions table
    - Add TFLint to the Linting Configurations table
    - Add Terraform Test to the Testing Tools table
 

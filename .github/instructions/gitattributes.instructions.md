@@ -57,7 +57,21 @@ This template ships a repo-root `.gitattributes` file with LF-pinning defaults f
 - `tests/**/fixtures/**`
 - `testdata/**`
 
+These paths are assumed to contain **text** fixtures. To keep the defaults safe when binary assets are committed under the same directories (for example, `.png` screenshots under `__snapshots__/`), the shipped `.gitattributes` also declassifies a curated list of common binary extensions (images, documents and archives, compiled artifacts, audio and video, fonts) using the `binary` macro so that Git does not apply line-ending conversion to them.
+
 Downstream adopters **MUST** extend these entries whenever they introduce a new byte-exact fixture location that is not already covered (for example, a project-specific `expected/` directory, a `golden_files/` tree, or signed payloads under a custom path). New entries **SHOULD** follow the "as narrow as practical" guidance above. Existing template entries **SHOULD NOT** be removed unless the maintainer has confirmed that no byte-exact comparison exists in the repository that depends on those paths.
+
+### Excluding Binary Files Under Fixture Paths
+
+If a project stores binary assets (for example, `.png` screenshots or `.zip` archives) inside a directory that is pinned to `text eol=lf`, those binaries **MUST** be declassified explicitly so Git does not rewrite them as if they were text. The standard idiom is a later-evaluated pattern that sets the `binary` macro (which expands to `-text -diff`). Later patterns override earlier ones per attribute, so the binary override wins over the directory-wide pin:
+
+```gitattributes
+tests/**/snapshots/**    text eol=lf
+*.png                    binary
+*.zip                    binary
+```
+
+The shipped `.gitattributes` already declassifies a curated list of common binary extensions. Adopters **SHOULD** extend that list if they commit binary fixtures in formats not covered (for example, custom binary serialization formats, proprietary container formats, or simulator traces stored as opaque blobs). A narrower path-scoped form **MAY** be used (for example, `tests/**/fixtures/*.bin binary`) when a binary extension is project-specific and scoping it globally would be too broad.
 
 ## Interaction With Language-Specific Producer/Consumer Rules
 
