@@ -5,13 +5,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.1.20260112.1
+**Version:** 1.2.20260427.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-01-12
+- **Last Updated:** 2026-04-27
 - **Scope:** Defines documentation standards for all Markdown files in this repository, including specs, design docs, runbooks, ADRs, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -40,7 +40,7 @@ This file governs all Markdown documentation (including `README.md`, `docs/**`, 
 - **Operational docs / runbooks:** `docs/runbooks/` (diagnosis, remediation, safe operations)
 - **Architecture Decision Records (ADRs):** `docs/adr/` (durable decisions)
 
-If you introduce new doc categories, they MUST be added to this taxonomy section.
+If you introduce a new **top-level documentation category** (a bucket that represents a distinct kind of doc, such as specs vs. runbooks vs. ADRs), it MUST be added to this taxonomy section. Purely **organizational subdirectories under an existing category** (for example, grouping related developer docs under `docs/<topic>/`) are a filing convention, MUST NOT be treated as new top-level categories, and MUST NOT trigger an update to this section. When in doubt, prefer treating a new directory as a subdirectory of an existing category unless it represents a fundamentally different kind of document.
 
 > **Customize for your project:** The taxonomy categories shown above are recommendations, not requirements. Projects SHOULD update this taxonomy to reflect their actual documentation structure. Categories MAY be added, removed, or renamed as appropriate for the project's needs.
 
