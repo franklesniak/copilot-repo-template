@@ -3,9 +3,11 @@ applyTo: "**/*.md"
 description: "Documentation standards:  contract-first, traceable, drift-resistant Markdown."
 ---
 
+<!-- markdownlint-disable MD013 -->
+
 # Documentation Writing Style
 
-**Version:** 1.2.20260428.3
+**Version:** 1.2.20260428.4
 
 ## Metadata
 
@@ -89,7 +91,8 @@ For any document longer than ~30 lines or intended as a durable reference (specs
 - Avoid trailing whitespace; keep blank lines truly blank.
 - Prefer relative links within the repo (e.g., `docs/spec/requirements.md`).
 - Avoid raw URLs in prose; use descriptive link text when possible.
-- Markdown files in this repository SHOULD include `<!-- markdownlint-disable MD013 -->` immediately above the first H1 heading, after any front matter or badges.
+- Markdown files in this repository SHOULD include `<!-- markdownlint-disable MD013 -->` immediately after any YAML front matter (or at the very top of the file if there is no front matter), and **before any other content**, including badges, links, the H1 heading, and any prose.
+  - Placement matters: markdownlint's inline `<!-- markdownlint-disable RULE -->` directive only suppresses the rule for content that follows it. Placing the directive after badges or other long lines leaves those lines unprotected when the file is processed with default markdownlint settings outside this repo.
   - This intentionally duplicates the repo-wide `"MD013": false` setting in `.markdownlint.jsonc`.
   - This is a deliberate **portability convention** for cases where a file is read or processed outside this repository, for example:
     - sent to an external LLM for analysis or editing
