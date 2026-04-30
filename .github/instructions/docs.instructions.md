@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.2.20260428.4
+**Version:** 1.2.20260430.1
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-04-28
+- **Last Updated:** 2026-04-30
 - **Scope:** Defines documentation standards for all Markdown files in this repository, including specs, design docs, runbooks, ADRs, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -61,6 +61,8 @@ For any document longer than ~30 lines or intended as a durable reference (specs
 - **Last Updated:** YYYY-MM-DD
 - **Scope:** What this doc covers (and does not cover)
 - **Related:** Links to related docs and relevant requirement IDs / ADR IDs
+
+The metadata header block MUST appear at the document level and MUST NOT be placed inside fenced code blocks, quoted excerpts, block quotes, or examples. When the document has a top-level `#` heading near the top (within approximately the first 30 lines), the header block MUST be placed immediately after that heading. If the document has no top-level `#` heading within approximately the first 30 lines, the header block MUST be placed immediately after any leading `<!-- markdownlint-disable ... -->` directive, or at the very top of the file if no such directive is present. This placement is compatible with the convention (see **Markdown Conventions** below) that Markdown files SHOULD include `<!-- markdownlint-disable MD013 -->` immediately after any YAML front matter, or at the very top of the file if there is no front matter.
 
 ## Writing Rules
 
