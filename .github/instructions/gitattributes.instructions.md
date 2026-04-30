@@ -3,6 +3,8 @@ applyTo: "**/.gitattributes"
 description: "Rules for .gitattributes entries, including line-ending pinning for byte-exact text artifacts."
 ---
 
+<!-- markdownlint-disable MD013 -->
+
 # `.gitattributes` Rules
 
 **Version:** 1.0.20260421.0
