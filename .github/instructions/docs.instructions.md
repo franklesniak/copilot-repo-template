@@ -7,7 +7,7 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.2.20260430.1
+**Version:** 1.2.20260430.2
 
 ## Metadata
 
@@ -62,7 +62,13 @@ For any document longer than ~30 lines or intended as a durable reference (specs
 - **Scope:** What this doc covers (and does not cover)
 - **Related:** Links to related docs and relevant requirement IDs / ADR IDs
 
-The metadata header block MUST appear at the document level and MUST NOT be placed inside fenced code blocks, quoted excerpts, block quotes, or examples. When the document has a top-level `#` heading near the top (within approximately the first 30 lines), the header block MUST be placed immediately after that heading. If the document has no top-level `#` heading within approximately the first 30 lines, the header block MUST be placed immediately after any leading `<!-- markdownlint-disable ... -->` directive, or at the very top of the file if no such directive is present. This placement is compatible with the convention (see **Markdown Conventions** below) that Markdown files SHOULD include `<!-- markdownlint-disable MD013 -->` immediately after any YAML front matter, or at the very top of the file if there is no front matter.
+Placement rules for the metadata header block:
+
+- The block MUST appear at the document level. It MUST NOT be placed inside fenced code blocks, quoted excerpts, block quotes, or examples.
+- "Top of body" means the first line after any YAML front matter, or line 1 if there is no front matter. "First 30 lines" means lines 1-30 of the body, counting every line (including blank lines and HTML comment directives such as `<!-- markdownlint-disable ... -->`).
+- If a top-level `#` heading appears within the first 30 lines of the body, the block MUST be placed immediately after that heading.
+- Otherwise, the block MUST be placed immediately after any leading `<!-- markdownlint-disable ... -->` directive at the top of the body, or at the top of the body if no such directive is present.
+- This placement is compatible with the convention (see **Markdown Conventions** below) that Markdown files SHOULD include `<!-- markdownlint-disable MD013 -->` immediately after any YAML front matter, or at the very top of the file if there is no front matter.
 
 ## Writing Rules
 
