@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.4.20260430.0
+**Version:** 1.4.20260430.1
 
 This file provides project-specific instructions for Claude Code and compatible AI coding agents operating in this repository. These instructions ensure that agents follow the same coding standards, safety rules, and workflows that apply to all contributors.
 
@@ -14,16 +14,14 @@ This file intentionally keeps only a minimal inline summary of the highest-prior
 ## Essential Repository Summary
 
 - **Safety and security**
-  - No secrets in code or repo; never hardcode API keys, tokens, credentials, or
-    connection strings.
+  - No secrets in code or repo; never hardcode API keys, tokens, credentials, or connection strings.
   - Treat all external input as untrusted.
   - Respect allowlisted file access boundaries; reject path traversal and symlink escapes.
 
 - **Pre-commit and validation**
   - Run `pre-commit run --all-files` before every commit.
   - Include all auto-fixes in the same commit as the related change.
-  - Do not push code when pre-commit or required validation checks are failing;
-    fix issues and re-run until the checks pass.
+  - Do not push code when pre-commit or required validation checks are failing; fix issues and re-run until the checks pass.
   - Use the repository's existing validation commands as needed:
     - `npm run lint:md`
     - `pytest tests/ -v --cov --cov-report=term-missing`
