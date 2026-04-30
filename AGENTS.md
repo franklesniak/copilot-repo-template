@@ -1,36 +1,27 @@
+<!-- markdownlint-disable MD013 -->
 # Agent Instructions for OpenAI Codex CLI
 
-**Version:** 1.2.20260421.0
+**Version:** 1.2.20260430.0
 
-This file provides project-specific instructions for OpenAI Codex CLI and compatible
-AI coding agents operating in this repository. These instructions ensure that agents
-follow the same coding standards, safety rules, and workflows that apply to all
-contributors.
+This file provides project-specific instructions for OpenAI Codex CLI and compatible AI coding agents operating in this repository. These instructions ensure that agents follow the same coding standards, safety rules, and workflows that apply to all contributors.
 
 ## Canonical Instructions
 
-The authoritative source of truth for all repository rules is
-**`.github/copilot-instructions.md`** (the repo-wide constitution). All rules
-defined there apply without exception. **Read that file before making any changes.**
+The authoritative source of truth for all repository rules is **`.github/copilot-instructions.md`** (the repo-wide constitution). All rules defined there apply without exception. **Read that file before making any changes.**
 
-This file intentionally keeps only a minimal inline summary of the
-highest-priority shared rules so that agents receive critical guidance
-immediately. The full shared rule set remains in the canonical file above.
+This file intentionally keeps only a minimal inline summary of the highest-priority shared rules so that agents receive critical guidance immediately. The full shared rule set remains in the canonical file above.
 
 ## Essential Repository Summary
 
 - **Safety and security**
-  - No secrets in code or repo; never hardcode API keys, tokens, credentials, or
-    connection strings.
+  - No secrets in code or repo; never hardcode API keys, tokens, credentials, or connection strings.
   - Treat all external input as untrusted.
-  - Respect allowlisted file access boundaries; reject path traversal and symlink
-    escapes.
+  - Respect allowlisted file access boundaries; reject path traversal and symlink escapes.
 
 - **Pre-commit and validation**
   - Run `pre-commit run --all-files` before every commit.
   - Include all auto-fixes in the same commit as the related change.
-  - Do not push code when pre-commit or required validation checks are failing;
-    fix issues and re-run until the checks pass.
+  - Do not push code when pre-commit or required validation checks are failing; fix issues and re-run until the checks pass.
   - Use the repository's existing validation commands as needed:
     - `npm run lint:md`
     - `pytest tests/ -v --cov --cov-report=term-missing`
@@ -40,8 +31,7 @@ immediately. The full shared rule set remains in the canonical file above.
     - `terraform test -verbose`
 
 - **Modular instruction files**
-  - Read the relevant file under `.github/instructions/` before modifying matching
-    files:
+  - Read the relevant file under `.github/instructions/` before modifying matching files:
     - Git attributes: `.github/instructions/gitattributes.instructions.md`
     - Markdown/Docs: `.github/instructions/docs.instructions.md`
     - PowerShell: `.github/instructions/powershell.instructions.md`
@@ -58,6 +48,4 @@ immediately. The full shared rule set remains in the canonical file above.
 
 ---
 
-> This file is part of the `franklesniak/copilot-repo-template` template. Customize
-> or remove agent instruction files for platforms you do not use. See
-> `OPTIONAL_CONFIGURATIONS.md` for details.
+> This file is part of the `franklesniak/copilot-repo-template` template. Customize or remove agent instruction files for platforms you do not use. See `OPTIONAL_CONFIGURATIONS.md` for details.
