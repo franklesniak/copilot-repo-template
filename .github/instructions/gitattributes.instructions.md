@@ -7,7 +7,7 @@ description: "Rules for .gitattributes entries, including line-ending pinning fo
 
 # `.gitattributes` Rules
 
-**Version:** 1.0.20260421.0
+**Version:** 1.0.20260430.0
 
 ## Metadata
 
