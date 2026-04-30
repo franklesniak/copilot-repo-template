@@ -1,7 +1,15 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.2.20260430.0
+**Version:** 1.2.20260430.1
+
+## Metadata
+
+- **Status:** Active
+- **Owner:** Repository Maintainers
+- **Last Updated:** 2026-04-30
+- **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
+- **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
 
 These instructions are authoritative for all changes in this repository.
 
