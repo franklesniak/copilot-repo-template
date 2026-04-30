@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.2.20260428.4
+**Version:** 1.2.20260430.3
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-04-28
+- **Last Updated:** 2026-04-30
 - **Scope:** Defines documentation standards for all Markdown files in this repository, including specs, design docs, runbooks, ADRs, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -61,6 +61,15 @@ For any document longer than ~30 lines or intended as a durable reference (specs
 - **Last Updated:** YYYY-MM-DD
 - **Scope:** What this doc covers (and does not cover)
 - **Related:** Links to related docs and relevant requirement IDs / ADR IDs
+
+Placement rules for the metadata header block:
+
+- The block MUST appear at the document level. It MUST NOT be placed inside fenced code blocks, quoted excerpts, block quotes, or examples.
+- "Top of body" means the first line after any YAML front matter, or line 1 if there is no front matter. "First 30 lines" means lines 1-30 of the body, counting every line (including blank lines and HTML comment directives such as `<!-- markdownlint-disable ... -->`).
+- If a top-level `#` heading appears within the first 30 lines of the body, the block MUST be placed immediately after that heading. A single optional `**Version:** ...` line (with surrounding blank lines) MAY appear between the heading and the block; no other intervening content is permitted.
+- Otherwise, the block MUST be placed immediately after any leading `<!-- markdownlint-disable ... -->` directive at the top of the body, or at the top of the body if no such directive is present.
+- For documents that already use a top-level `## Metadata` section to host the bullet list, that section MUST be the first `##` section after the H1 (and the optional `**Version:** ...` line, if present), and the bullet list MUST appear inside it.
+- This placement is compatible with the convention (see **Markdown Conventions** below) that Markdown files SHOULD include `<!-- markdownlint-disable MD013 -->` immediately after any YAML front matter, or at the very top of the file if there is no front matter.
 
 ## Writing Rules
 
