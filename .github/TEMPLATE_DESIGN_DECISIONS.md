@@ -18,6 +18,17 @@ This document records design decisions made during the creation and maintenance 
 - [Agent Instruction Files](#agent-instruction-files)
   - [Multi-Agent Instruction Files at Repository Root](#design-decision-multi-agent-instruction-files-at-repository-root)
   - [Agent Files as Minimal Entry-Point Summaries (Not Canonical)](#design-decision-agent-files-as-minimal-entry-point-summaries-not-canonical)
+- [Data File Standards (JSON/YAML)](#data-file-standards-jsonyaml)
+  - [Dedicated JSON and YAML Instruction Files](#design-decision-dedicated-json-and-yaml-instruction-files)
+  - [Baseline JSON/YAML Linting Stack](#design-decision-baseline-jsonyaml-linting-stack)
+  - [yamllint truthy.check-keys Default](#design-decision-yamllint-truthycheck-keys-default)
+  - [Prettier Deferral for Data Files](#design-decision-prettier-deferral-for-data-files)
+  - [Schema Location at Repository Root](#design-decision-schema-location-at-repository-root)
+  - [Schema Validation Tiers](#design-decision-schema-validation-tiers)
+  - [JSON5 Exclusion by Default](#design-decision-json5-exclusion-by-default)
+  - [`additionalProperties` Policy](#design-decision-additionalproperties-policy)
+  - [Testing Beyond Linting for JSON/YAML](#design-decision-testing-beyond-linting-for-jsonyaml)
+  - [.gitattributes JSON/YAML LF Pinning](#design-decision-gitattributes-jsonyaml-lf-pinning)
 - [Node.js Package Configuration](#nodejs-package-configuration)
 - [CI Workflow Configuration](#ci-workflow-configuration)
 - [Python Configuration](#python-configuration)
@@ -373,6 +384,251 @@ Agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are minimal entr
 - Pro: Agents that don't follow file references still receive critical rules
 - Con: Rule changes require updating multiple files
 - Con: No automated enforcement that alignment reviews happen after shared-rule changes
+
+---
+
+## Data File Standards (JSON/YAML)
+
+These ten ADRs record the design decisions behind the JSON and YAML authoring guides, the baseline linting stack for data files, the schema-validation policy, and the surrounding tooling and portability trade-offs. They are policy-only prose; the implementations live in `.github/instructions/json.instructions.md`, `.github/instructions/yaml.instructions.md`, `.pre-commit-config.yaml`, `.yamllint.yml`, `.gitattributes`, and (for downstream adopters) the optional `schemas/` directory.
+
+### Design Decision: Dedicated JSON and YAML Instruction Files
+
+The template ships dedicated instruction files for JSON (`.github/instructions/json.instructions.md`) and YAML (`.github/instructions/yaml.instructions.md`) alongside the existing language instruction files for Python, PowerShell, Terraform, and Markdown.
+
+**Rationale:**
+
+1. **Data files are potentially load-bearing contracts.** JSON and YAML are commonly used as configuration files, lockfiles, fixtures, schemas, CI/CD definitions, and policy documents. Even when a project does not currently rely on a given JSON or YAML file as a contract, downstream consumers (CI, release tooling, deployment automation, schema validators) frequently turn data files into de facto contracts over time. Treating them as potentially load-bearing by default is safer than retrofitting rigor after a silent format break.
+
+2. **Authoring rules differ from prose rules.** Markdown, Python, PowerShell, and Terraform guides cover human-authored or executable content. JSON and YAML guides cover structured data where ordering, key naming, comment policy, schema discipline, and quoting rules matter independently of any host language.
+
+3. **Per-format guidance is non-trivial.** JSON forbids comments and trailing commas while JSONC permits both; YAML has a substantially larger surface area (anchors, tags, the YAML 1.1/1.2 truthy delta, multi-document streams). A single combined guide would either bloat or paper over these differences.
+
+4. **Consistency with the existing modular pattern.** The repo-wide constitution already mandates a modular instruction-file layout under `.github/instructions/`. Adding JSON and YAML files extends — rather than reshapes — the established pattern.
+
+**Trade-offs:**
+
+- Pro: Authors and AI agents get format-specific rules without scanning unrelated guides.
+- Pro: Downstream repos can delete either file independently if they truly do not use that format.
+- Con: Two more files to keep aligned when shared rules (e.g., schema policy) change.
+
+**Alternatives considered:**
+
+- **Combined `data.instructions.md`:** Rejected. JSON and YAML differ enough on comments, quoting, and truthy semantics that combining them obscured per-format rules in early drafts.
+- **No dedicated guides; inline rules in language guides:** Rejected. Most JSON/YAML in this template is not co-located with a single host language (workflows, lockfiles, instruction front matter), so language-specific guides cannot carry the rules.
+
+### Design Decision: Baseline JSON/YAML Linting Stack
+
+The default pre-commit stack for JSON and YAML uses `check-json`, `check-yaml`, `yamllint`, and `actionlint`, with `check-jsonschema` reserved as the recommended path for future schema-backed validation.
+
+**Selected hooks and their roles:**
+
+1. **`check-json` (pre-commit-hooks)** — Validates strict JSON syntax. Fast, dependency-free, fails on duplicate keys, trailing commas, and other strict-JSON violations.
+2. **`check-yaml` (pre-commit-hooks)** — Fast YAML parse check. Catches structural errors before slower linters run.
+3. **`yamllint`** — YAML style enforcement (indentation, line length, key ordering rules, truthy values). Configured via `.yamllint.yml`.
+4. **`actionlint`** — GitHub Actions workflow validation, including expression syntax, runner labels, and `shellcheck` integration over `run:` blocks.
+5. **`check-jsonschema` (reserved, opt-in)** — Recommended for future schema-backed validation when schemas are added under `schemas/`. Not wired up in the default config to avoid placeholder hook entries.
+
+**Notable scoping:**
+
+- **`check-json` validates `.json`, not `.jsonc`.** The hook is anchored with `files: \.json$` so JSONC files (which permit comments and trailing commas) are intentionally skipped. Strict-JSON syntax checks would reject any valid JSONC file, producing false positives. Repos that need strict JSONC enforcement should add **JSONC-aware tooling** (e.g., a JSONC parser or a schema validator that understands JSONC) rather than retrofitting `check-json` for files it cannot correctly parse.
+
+**Why `jsonlint` is not added by default:**
+
+- `jsonlint` overlaps with `check-json` for strict JSON syntax and adds a Node-only dependency.
+- `check-json` already catches the high-value failure modes (parse errors, duplicate keys) and is part of the broader `pre-commit-hooks` repo already in use.
+- Adding `jsonlint` would expand the toolchain for marginal benefit and would not validate JSONC either.
+
+**`actionlint` first-run-on-restricted-networks caveat:**
+
+The `actionlint` pre-commit hook builds the `actionlint` binary from source on first install. On networks that block Go module downloads (corporate proxies, air-gapped environments), the first-run install can fail. CI is the shared enforcement environment, so contributors who hit a network restriction locally can rely on CI to enforce the hook. The same caveat is surfaced in `.pre-commit-config.yaml` (inline comment on the `actionlint` repo block) and `CONTRIBUTING.md` so contributors encounter it where they look first. Keep these cross-references in sync if the hook is repinned, replaced, or removed.
+
+**Trade-offs:**
+
+- Pro: Coverage spans strict syntax, style, and Actions-specific semantics with widely-used, well-maintained hooks.
+- Pro: Each hook is independent — downstream repos can disable any one without disturbing the rest.
+- Con: First-run network requirements for `actionlint` can confuse new contributors; mitigated by inline comments and CI as the source of truth.
+
+**Alternatives considered:**
+
+- **`jsonlint` instead of `check-json`:** Rejected for the dependency and overlap reasons above.
+- **`prettier` for JSON/YAML format enforcement:** Rejected as a default; see the Prettier deferral ADR below.
+- **A single mega-linter image:** Rejected. Mega-linter aggregations obscure version pinning, slow first-run installs, and complicate per-hook overrides.
+
+### Design Decision: yamllint truthy.check-keys Default
+
+`yamllint` is configured with `truthy.check-keys: false` in `.yamllint.yml`.
+
+**Rationale:**
+
+- The most common GitHub Actions workflow idiom is the unquoted `on:` key (`on: push`). With `truthy.check-keys: true`, `yamllint` flags `on` as a truthy value, producing false positives on every workflow file.
+- Disabling key checking preserves the idiomatic Actions style without weakening the value-side `truthy` rule, which still flags ambiguous values like `yes`, `no`, `on`, `off` outside of keys.
+
+**Stricter alternative:**
+
+Repos that prefer maximum YAML 1.2 hygiene can:
+
+1. Quote `"on":` (and any other reserved truthy keys) in workflow files, and
+2. Set `truthy.check-keys: true` in `.yamllint.yml`.
+
+This is a deliberate opt-in because it requires editing every workflow file at adoption time. The default favors zero-friction Actions authoring.
+
+**Trade-offs:**
+
+- Pro: Default works out-of-the-box for GitHub Actions, the most common YAML use case in this template.
+- Con: A small class of truly-ambiguous truthy keys (e.g., a literal `yes:` map key) would not be flagged. The risk is low and stylistic — quoting is still recommended in the YAML guide.
+
+### Design Decision: Prettier Deferral for Data Files
+
+Prettier is **not** part of the default JSON/YAML toolchain.
+
+**Rationale:**
+
+1. **Tooling sprawl.** Adopting Prettier for data files expands Node tooling from "Markdown linting only" into "data-file formatting policy." That is a scope increase several adopters will not want, especially non-Node projects.
+2. **Limited semantic value for JSON.** Prettier formats JSON but does not sort keys, which is the highest-value JSON-stability transformation a formatter could provide. Stable key ordering still has to be enforced by hand or via a separate tool.
+3. **Conflicts with `yamllint` for YAML.** Prettier's YAML output differs from idiomatic `yamllint` defaults (line wrapping, flow vs. block style, quoting). Running both without explicit reconciliation produces churn-only diffs.
+4. **JSONC support is partial across tools.** Adopting Prettier as the JSONC formatter forces additional decisions about which tools in the chain understand JSONC.
+
+**Policy:**
+
+- **JSON/JSONC:** Prettier remains **opt-in**. Repos that already use Prettier for Markdown or JavaScript may extend it to JSON/JSONC at their discretion; the JSON instruction guide is compatible with that choice.
+- **YAML:** Prettier is **discouraged-by-default** unless the project explicitly reconciles Prettier's output with `yamllint` rules and pins both tools. Otherwise the two will fight.
+
+**Trade-offs:**
+
+- Pro: Smaller default toolchain; no Node dependency required for non-Node projects.
+- Pro: No `yamllint` ↔ Prettier conflict surface in the default configuration.
+- Con: No automatic data-file reformatting; authors lean on `check-json`/`yamllint` to flag issues rather than auto-fix them.
+
+### Design Decision: Schema Location at Repository Root
+
+Project-owned JSON Schemas live under a top-level `schemas/` directory, not under `.github/schemas/`.
+
+**Rationale:**
+
+1. **Schemas are project assets, not GitHub configuration.** `.github/` is reserved for GitHub-specific configuration (workflows, issue templates, CODEOWNERS, instructions). Schemas describe project data contracts that are consumed by application code, CI tooling, IDEs, and external tools. They belong alongside other project assets at the repository root.
+2. **Discoverability.** A root-level `schemas/` directory is the conventional location IDEs and schema validators look for project schemas.
+3. **Easy opt-out.** Downstream repos that do not use schema-backed data files can delete the entire `schemas/` directory without touching `.github/`.
+
+**Trade-offs:**
+
+- Pro: Clear separation between GitHub configuration and project data contracts.
+- Pro: Aligns with widespread community convention.
+- Con: One more top-level directory in repos that adopt schemas.
+
+**Recommendation:** Repos adopting schema-backed validation should keep `schemas/` at the repository root and reference schemas by relative path from data files (`$schema`) or by configuring `check-jsonschema` in pre-commit.
+
+### Design Decision: Schema Validation Tiers
+
+Schema validation is required (RFC 2119 MUST/SHOULD/MAY) at three tiers based on the role each data file plays.
+
+1. **MUST — Production / load-bearing contracts.** Data files whose shape is consumed by production code, deployment pipelines, public APIs, or release tooling MUST be validated against an explicit schema. Examples: published API request/response payloads, release manifests, policy bundles consumed by enforcement tools, IaC variable contracts.
+2. **SHOULD — Durable fixtures, examples, policy documents, and config contracts.** Data files that survive across releases and are referenced by humans or by non-production tooling SHOULD be schema-validated. Examples: long-lived test fixtures, documented example payloads, governance policy documents, internal config files with a stable shape.
+3. **MAY — Tool-owned simple config.** Files whose shape is owned and validated by the consuming tool itself (e.g., `.markdownlint.jsonc`, `pyproject.toml` sections, `.yamllint.yml` itself) MAY rely on the owning tool's own validation rather than a separately-maintained schema.
+
+**Avoid placeholder schema hooks.** Do not wire `check-jsonschema` (or any other schema validator) into pre-commit until at least one schema actually exists and is referenced. Placeholder hooks produce no-op runs, drift silently, and obscure when real schema enforcement has been adopted.
+
+**Trade-offs:**
+
+- Pro: Tiered policy concentrates rigor where breakage is expensive and avoids over-engineering tool-owned config.
+- Pro: Avoiding placeholder hooks keeps the pre-commit surface honest.
+- Con: Authors must classify each new contract; the JSON/YAML guides provide the rubric.
+
+### Design Decision: JSON5 Exclusion by Default
+
+JSON5 is **not** included in the default toolchain or instruction guidance.
+
+**Rationale:**
+
+1. **Limited ecosystem support.** Many common JSON consumers (the Go standard library `encoding/json`, .NET `System.Text.Json` in default mode, `jq` without flags, `check-json`) do not parse JSON5.
+2. **JSONC already covers the most common use case.** The primary motivation for JSON5 in this codebase's context (comments and trailing commas) is satisfied by JSONC for tool-owned configuration files.
+3. **Avoid format proliferation.** Three tiers of JSON-shaped formats (JSON, JSONC, JSON5) increase author confusion, expand the validator matrix, and create more places where strict-JSON tooling silently skips files.
+
+**Adoption requires an explicit project decision.** A downstream repo that intentionally adopts JSON5 should record that decision in its own design-decisions document, add a JSON5-capable parser and validator, and update the JSON instruction guide accordingly. The default template stays on JSON + JSONC.
+
+**Trade-offs:**
+
+- Pro: Smaller, more interoperable default surface.
+- Con: Repos that already use JSON5 must opt in explicitly rather than inheriting it from the template.
+
+### Design Decision: `additionalProperties` Policy
+
+JSON Schemas owned by this template (and recommended for downstream adopters) use `additionalProperties: false` for closed contracts, with documented exceptions for ecosystem-mirroring schemas.
+
+**Rules:**
+
+1. **Project-owned closed contracts:** Use `additionalProperties: false`. Closing the schema makes typos and drift fail loudly rather than silently being accepted.
+2. **Ecosystem-mirroring schemas:** Open schemas (`additionalProperties: true` or omitted) are allowed when the schema mirrors an external ecosystem that itself permits unknown keys (e.g., extension fields in OpenAPI `x-*`, vendor-specific keys in tool config that the upstream tool intentionally allows). Each open schema MUST include an inline rationale comment or `description` explaining why the schema is open.
+3. **Mixed schemas:** Use `additionalProperties: false` at the closed level and a typed `patternProperties` entry (or a typed sub-object) for the controlled extension surface.
+
+**Rationale:**
+
+- Closed-by-default catches the highest-frequency real-world failure mode: a typoed key silently being ignored.
+- A documented escape hatch prevents the closed-default from misrepresenting genuinely open ecosystems.
+
+**Trade-offs:**
+
+- Pro: Schema becomes a useful drift detector.
+- Con: Authors must update the schema when intentionally adding new keys; this is the intended behavior.
+
+### Design Decision: Testing Beyond Linting for JSON/YAML
+
+Schema validation is the primary correctness strategy for static JSON and YAML. A separate JSON/YAML test framework is **not** added by default.
+
+**Rationale:**
+
+1. **Static data shape is best validated statically.** Schemas catch shape errors deterministically across every file in scope without authoring per-file tests.
+2. **Behavioral correctness belongs to the consumer.** If a JSON or YAML file influences runtime behavior, the test that proves the behavior belongs in the **consuming language's** test framework (pytest for Python, Pester for PowerShell, Terraform Test for Terraform). That keeps the data file under test alongside the code that consumes it.
+3. **Avoid orphan test infrastructure.** A standalone "JSON/YAML test framework" without consumers tends to either duplicate schema validation or drift into ad-hoc behavioral tests in the wrong layer.
+
+**Policy:**
+
+- Use schemas (with the tiered MUST/SHOULD/MAY policy above) for static shape correctness.
+- Use the consumer's existing test framework for behavioral assertions about data files.
+- Do not add a new top-level data-file test framework as part of this template.
+
+**Trade-offs:**
+
+- Pro: Single mental model — schemas for shape, language tests for behavior.
+- Pro: No additional CI surface to maintain.
+- Con: Authors must remember to write consumer-side tests for behaviorally-significant data; the language instruction guides reinforce this.
+
+### Design Decision: .gitattributes JSON/YAML LF Pinning
+
+`.gitattributes` is **left unchanged** when adding JSON/YAML support. The existing policy — pinning LF line endings only inside byte-exact text fixture locations (`tests/**/golden/**`, `tests/**/goldens/**`, `tests/**/snapshots/**`, `tests/**/__snapshots__/**`, `tests/**/fixtures/**`, `testdata/**`) — is retained. There is no blanket `*.json` / `*.yaml` / `*.yml` LF pin.
+
+This decision was recorded in the Issue 3 PR description (PR #423, "Add `.yamllint.yml` and extend pre-commit JSON/YAML hooks") and is transcribed here.
+
+**Rationale:**
+
+1. **Existing policy is intentionally narrow.** The current `.gitattributes` rules target locations where byte-exact comparison (hash equality, signature verification, snapshot diffing) is the actual correctness contract. JSON and YAML files outside those locations do not have a byte-exact contract — their consumers parse them, not hash them.
+2. **Tooling already produces parse-equivalent output across line endings.** `check-json`, `check-yaml`, `yamllint`, `actionlint`, and downstream parsers do not depend on LF endings; CRLF-converted JSON/YAML still validates and still parses identically.
+3. **Avoid forcing CRLF rewrites on Windows checkouts that do not need them.** A blanket `*.json text eol=lf` rule would override `core.autocrlf=true` on Windows hosts even for files that are not part of any byte-exact comparison. The cost would land on every Windows contributor for no contract benefit.
+4. **Byte-exact JSON/YAML fixtures are already covered.** Any JSON or YAML file living under the existing fixture-location patterns is already pinned to LF by directory rule; no extra extension-level rule is required.
+
+**Downstream opt-in guidance:**
+
+Repos that genuinely need blanket LF pinning for JSON/YAML — for example, projects whose release pipeline hashes JSON manifests, projects publishing YAML policy documents whose checksums are signed, or projects with a strict cross-platform diff-noise policy — can opt in by adding lines such as:
+
+```gitattributes
+*.json   text eol=lf
+*.jsonc  text eol=lf
+*.yaml   text eol=lf
+*.yml    text eol=lf
+```
+
+These should be added in the project's own `.gitattributes`, with a brief comment explaining the byte-exact contract that motivates them. The template does not ship these rules so that adopters who do not need them are not silently opted in.
+
+**Trade-offs:**
+
+- Pro: Windows contributors are not forced into LF for JSON/YAML files that have no byte-exact contract.
+- Pro: Existing byte-exact fixture protection is preserved unchanged.
+- Pro: Adopters that need blanket LF can add it deliberately, with rationale documented locally.
+- Con: Cross-repo diffs of JSON/YAML files may include CRLF↔LF noise on heterogeneous platforms; this is mitigated by `core.autocrlf` configuration and by editors that preserve the on-disk EOL.
+
+**Alternatives considered:**
+
+- **Blanket `*.json` / `*.yaml` / `*.yml` LF pin in the template `.gitattributes`:** Rejected because it imposes a byte-exact contract on every adopter regardless of whether they have one. The byte-exact-fixture-focused policy is preserved.
+- **Conditional per-language opt-in via a commented-out block in the template `.gitattributes`:** Rejected for this iteration to avoid adding code that is dormant by default; the downstream-opt-in snippet above plus this ADR provides the same guidance without dormant rules in the file.
 
 ---
 
