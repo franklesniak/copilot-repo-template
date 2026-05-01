@@ -14,8 +14,8 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 - **Status:** Active
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-05-01
-- **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by the paired JSON instruction file `./json.instructions.md` when added; not present at the time this file was authored) or generated YAML artifacts that are owned by another tool's serializer.
-- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md). A paired JSON instruction file (`./json.instructions.md`) is planned as part of the same JSON/YAML rollout; this guide will cross-link to it once it is added.
+- **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files or generated YAML artifacts that are owned by another tool's serializer.
+- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md)
 
 ## Purpose and Scope
 
@@ -137,7 +137,7 @@ Choose the indicator that matches the consumer's expectations. When passing a mu
 
 ## Schema-backed YAML
 
-YAML files that have a published schema **SHOULD** be validated against that schema, using the same MUST/SHOULD/MAY tiers planned for the paired JSON instruction file. Where validators are wired into CI or pre-commit, files **MUST** pass them; where they are not yet wired up, authors **SHOULD** run the appropriate validator locally before committing. Schema-validation tooling itself is out of scope for this guide; this guide describes the policy, and CI/pre-commit integration is owned by the repository's tooling configuration.
+YAML files that have a published schema **SHOULD** be validated against that schema, using MUST/SHOULD/MAY tiers analogous to those used for other structured data formats in this repository. Where validators are wired into CI or pre-commit, files **MUST** pass them; where they are not yet wired up, authors **SHOULD** run the appropriate validator locally before committing. Schema-validation tooling itself is out of scope for this guide; this guide describes the policy, and CI/pre-commit integration is owned by the repository's tooling configuration.
 
 Validation tiers:
 
