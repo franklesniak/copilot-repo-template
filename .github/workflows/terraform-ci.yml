@@ -108,7 +108,7 @@ jobs:
         run: |
           # Find all directories containing .tf files
           TF_DIRS=$(find . -name '*.tf' -exec dirname {} \; | sort -u | tr '\n' ' ')
-          echo "dirs=${TF_DIRS}" >> $GITHUB_OUTPUT
+          echo "dirs=${TF_DIRS}" >> "$GITHUB_OUTPUT"
 
       - name: Terraform Init and Validate
         run: |
@@ -181,9 +181,9 @@ jobs:
         run: |
           # Exclude templates/ directory - those are example files, not runnable tests
           if find . -path './templates' -prune -o -name '*.tftest.hcl' -print | grep -q .; then
-            echo "has_tests=true" >> $GITHUB_OUTPUT
+            echo "has_tests=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has_tests=false" >> $GITHUB_OUTPUT
+            echo "has_tests=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Find Terraform directories with tests
@@ -192,7 +192,7 @@ jobs:
         run: |
           # Find directories containing .tftest.hcl files, excluding templates/
           TEST_DIRS=$(find . -path './templates' -prune -o -name '*.tftest.hcl' -print -exec dirname {} \; | sort -u | tr '\n' ' ')
-          echo "dirs=${TEST_DIRS}" >> $GITHUB_OUTPUT
+          echo "dirs=${TEST_DIRS}" >> "$GITHUB_OUTPUT"
 
       - name: Run Terraform Tests
         if: steps.check-tests.outputs.has_tests == 'true'
