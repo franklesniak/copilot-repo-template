@@ -45,7 +45,7 @@ Line-ending pinning, BOM behavior, end-of-file newline, and trailing whitespace 
 This repository recognizes two JSON dialects: strict JSON and JSONC. Other dialects are out of scope by default.
 
 - Files with the `.json` extension **MUST** be strict JSON as defined by [RFC 8259](https://www.rfc-editor.org/rfc/rfc8259). Strict JSON **MUST NOT** contain comments, trailing commas, unquoted keys, single-quoted strings, or any other non-RFC 8259 syntax.
-- Files with the `.jsonc` extension **MAY** be used **only** when the consuming tool explicitly documents support for JSONC (for example, certain editor configuration files such as `tsconfig.json` consumers and some VS Code settings files). When in doubt, prefer `.json`.
+- Files with the `.jsonc` extension **MAY** be used **only** when the consuming tool explicitly documents support for JSONC (for example, the TypeScript compiler reading `tsconfig.json`, and some VS Code settings files). When in doubt, prefer `.json`.
 - The repository's `check-json` pre-commit hook validates `.json` files only. JSONC is **not** validated by `check-json`. Downstream repositories that need stronger enforcement for `.jsonc` files **SHOULD** add JSONC-aware tooling (for example, a JSONC-aware parser, linter, or schema validator) rather than retrofitting `check-json`.
 - JSON5 is **not** included in this repository's defaults and **MUST NOT** be introduced without an explicit, documented project decision. The `applyTo` glob for this guide intentionally omits `.json5`.
 
@@ -71,7 +71,7 @@ This repository recognizes two JSON dialects: strict JSON and JSONC. Other diale
 
 JSON does not assign semantic meaning to key order, but tools, humans, and diffs do. Treat key order as part of the file's contract.
 
-- Prettier does **not** sort JSON keys. Do not assume any formatter will reorder keys for you.
+- Most formatters, including Prettier, do not sort JSON keys by default. Do not assume any formatter will reorder keys for you.
 - Keys **MUST NOT** be blindly sorted alphabetically across an entire file. Intentional grouping (for example, `name` before `version` in `package.json`, or `$schema` first in a schema-bearing file) **MUST** be preserved.
 - Tool-managed and generated files **MUST NOT** be reordered by hand. This includes, but is not limited to:
   - `package.json` (npm/Yarn/pnpm reorder fields on install per their own rules)
