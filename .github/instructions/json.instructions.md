@@ -15,7 +15,7 @@ description: "JSON authoring standards: strict-by-default, schema-backed, determ
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-05-01
 - **Scope:** Defines authoring standards for JSON and JSONC files in this repository, including configuration, schemas, fixtures, generated metadata, and machine-readable contracts. Covers dialect policy, formatting, key ordering, naming, data modeling, schema usage, comments, security, and generated output.
-- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [YAML Writing Style](./yaml.instructions.md)
+- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md)
 
 ## Purpose and Scope
 
@@ -46,7 +46,7 @@ This repository recognizes two JSON dialects: strict JSON and JSONC. Other diale
 
 - Files with the `.json` extension **MUST** be strict JSON as defined by [RFC 8259](https://www.rfc-editor.org/rfc/rfc8259). Strict JSON **MUST NOT** contain comments, trailing commas, unquoted keys, single-quoted strings, or any other non-RFC 8259 syntax.
 - Files with the `.jsonc` extension **MAY** be used **only** when the consuming tool explicitly documents support for JSONC (for example, the TypeScript compiler reading `tsconfig.json`, and some VS Code settings files). When in doubt, prefer `.json`.
-- The repository's `check-json` pre-commit hook validates `.json` files only. JSONC is **not** validated by `check-json`. Downstream repositories that need stronger enforcement for `.jsonc` files **SHOULD** add JSONC-aware tooling (for example, a JSONC-aware parser, linter, or schema validator) rather than retrofitting `check-json`.
+- If this repository enables the `check-json` pre-commit hook, it validates `.json` files only. JSONC is **not** validated by `check-json`. Downstream repositories that need stronger enforcement for `.jsonc` files **SHOULD** add JSONC-aware tooling (for example, a JSONC-aware parser, linter, or schema validator) rather than retrofitting `check-json`.
 - JSON5 is **not** included in this repository's defaults and **MUST NOT** be introduced without an explicit, documented project decision. The `applyTo` glob for this guide intentionally omits `.json5`.
 
 ## Formatting
@@ -55,7 +55,7 @@ This repository recognizes two JSON dialects: strict JSON and JSONC. Other diale
 - Keys and string values **MUST** be double-quoted. Single quotes and unquoted keys **MUST NOT** be used (this is required by strict JSON and is also the recommended style for JSONC).
 - Trailing commas **MUST NOT** appear in strict JSON. In JSONC files, trailing commas **MAY** be used only when the consuming tool documents support for them; otherwise they **SHOULD** be avoided to ease later conversion to strict JSON.
 - One key-value pair per line is **RECOMMENDED** for objects with more than one entry, to keep diffs reviewable.
-- Files **SHOULD** end with a single newline; line-ending and trailing-whitespace policy is governed by [`.gitattributes` Rules](./gitattributes.instructions.md).
+- Files **MUST** end with a single newline (enforced by the repository's `end-of-file-fixer` pre-commit hook). Line-ending and trailing-whitespace policy is governed by [`.gitattributes` Rules](./gitattributes.instructions.md).
 
 **Example (strict JSON):**
 
@@ -145,4 +145,4 @@ A JSON change is considered done when **all** of the following hold:
 - Strict JSON contains no comments; documentation lives in schemas and sibling docs.
 - No secrets are committed; example values are obviously fake.
 - Generated JSON is reproducible, stably formatted, stably ordered when ordering is non-semantic, and identifies its source or generation command.
-- `check-json` and any project-specific JSON or JSONC validators pass; pre-commit and Markdown checks pass for any associated documentation changes.
+- Any configured JSON or JSONC validators pass; pre-commit and Markdown checks pass for any associated documentation changes.
