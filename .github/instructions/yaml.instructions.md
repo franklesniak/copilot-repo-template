@@ -141,7 +141,7 @@ YAML files that have a published schema **SHOULD** be validated against that sch
 
 Validation tiers:
 
-- **MUST tier** (validate when a validator is available, locally or in CI): GitHub Actions workflows (`.github/workflows/*.yml`); pre-commit configuration (`.pre-commit-config.yaml`); any YAML file whose schema is published and stable and whose consumer requires structural correctness.
+- **MUST tier** (files whose schema validator is wired into CI or pre-commit **MUST** pass it; where the validator is not wired up, authors **SHOULD** run it locally before committing): GitHub Actions workflows (`.github/workflows/*.yml`); pre-commit configuration (`.pre-commit-config.yaml`); any YAML file whose schema is published and stable and whose consumer requires structural correctness.
 - **SHOULD tier**: linter configuration files (for example, `.yamllint`) when a schema is available and a validator is convenient to run.
 - **MAY tier**: optional or experimental configuration formats whose schema may change.
 
@@ -155,7 +155,7 @@ Recommended validators (adopt as needed; this guide does not mandate adoption):
 
 - YAML files **MUST NOT** contain committed secrets (API keys, tokens, passwords, connection strings, private keys). Reference secrets through the consumer's secret-management mechanism (for example, GitHub Actions `secrets.*`, environment variables, external secret stores).
 - GitHub Actions workflows **MUST** declare **least-privilege** `permissions:` blocks at the workflow or job level. Workflows **SHOULD** start from `permissions: {}` (or `contents: read`) and grant additional scopes only where required.
-- YAML loaded by application code **MUST** use a **safe loader**. In Python, this means `yaml.safe_load` (or equivalent), never `yaml.load` with the default `FullLoader` or `UnsafeLoader` on untrusted input. Equivalent safe-loading APIs **MUST** be used in other languages.
+- YAML loaded by application code **MUST** use a **safe loader**. In Python, this means `yaml.safe_load` (or `yaml.load(..., Loader=yaml.SafeLoader)`); authors **MUST NOT** call `yaml.load` with `Loader=yaml.FullLoader` or `Loader=yaml.UnsafeLoader` on untrusted input, and **MUST NOT** call `yaml.load` without an explicit safe `Loader=` argument (calling `yaml.load` without `Loader=` raises a warning in modern PyYAML and historically defaulted to the unsafe full loader). Equivalent safe-loading APIs **MUST** be used in other languages.
 - Custom or unsafe deserialization tags (for example, `!!python/object`, `!!python/object/apply`, `!ruby/object`) **MUST NOT** appear in YAML files in this repository, and the loaders that read those files **MUST NOT** be configured to honor such tags.
 
 ## Definition of Done for YAML Changes
