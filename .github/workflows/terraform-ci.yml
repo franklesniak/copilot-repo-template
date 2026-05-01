@@ -191,7 +191,7 @@ jobs:
         id: find-test-dirs
         run: |
           # Find directories containing .tftest.hcl files, excluding templates/
-          TEST_DIRS=$(find . -path './templates' -prune -o -name '*.tftest.hcl' -print -exec dirname {} \; | sort -u | tr '\n' ' ')
+          TEST_DIRS=$(find . -path './templates' -prune -o -name '*.tftest.hcl' -printf '%h\n' | sort -u | tr '\n' ' ')
           echo "dirs=${TEST_DIRS}" >> "$GITHUB_OUTPUT"
 
       - name: Run Terraform Tests
