@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.2.20260430.1
+**Version:** 1.2.20260501.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-04-30
+- **Last Updated:** 2026-05-01
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -54,12 +54,12 @@ Pre-commit hooks are NOT optional. They enforce:
 3. Review and commit ALL auto-fixes as part of your change
 4. Push to GitHub
 
-**If pre-commit CI fails:**
+**If pre-commit CI fails after a push:**
 
-1. Pull the latest branch
-2. Run pre-commit checks locally
-3. Commit the fixes with message "Apply pre-commit auto-fixes"
-4. Push again
+1. Pull the latest branch.
+2. Run pre-commit checks locally and stage the fixes.
+3. Prefer combining the fixes with your next substantive commit on the same branch rather than landing a standalone formatting-only or lint-only commit (see "What Not to Do" below). For `copilot/**` branches, the auto-fix workflow described under "Auto-Fix Workflow (Safety Net for Copilot Branches)" will normally apply these fixes automatically.
+4. Push again.
 
 **CI is a safety net, not a substitute for local checks.**
 
