@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.4.20260430.3
+**Version:** 1.4.20260430.4
 
 ## Metadata
 
@@ -72,19 +72,19 @@ When a code review comment is received from GitHub Copilot, a human reviewer, or
 
 5. **Score and select.** Apply the rubric to every option. Present the results in a Markdown table. Select the option with the highest total score.
 
-   **Escalation path:** If the rubric cannot produce a clear winner — because the decision depends on owner preferences, project-level policy, or the top options are too close to differentiate objectively — escalate to the PR owner instead of selecting an option. Post a **standalone PR comment** (not a reply to the review thread) containing:
-   - A brief summary of the reviewer's concern and which file/line it applies to
-   - The options and scoring tables
-   - The specific question the owner needs to answer
-   - Instructions: *"Reply to this comment starting with `@claude` followed by your chosen option or direction."*
+    **Escalation path:** If the rubric cannot produce a clear winner — because the decision depends on owner preferences, project-level policy, or the top options are too close to differentiate objectively — escalate to the PR owner instead of selecting an option. Post a **standalone PR comment** (not a reply to the review thread) containing:
+    - A brief summary of the reviewer's concern and which file/line it applies to
+    - The options and scoring tables
+    - The specific question the owner needs to answer
+    - Instructions: *"Reply to this comment starting with `@claude` followed by your chosen option or direction."*
 
-   **PAUSE** processing of this comment until the owner responds. Continue processing other independent review comments in the meantime.
+    **PAUSE** processing of this comment until the owner responds. Continue processing other independent review comments in the meantime.
 
 6. **Post the evaluation.** Reply to the review comment thread with the options table, the scoring table, the selected option, and either a note that implementation will follow in step 7 or, if the fix was already applied, the commit SHA that implements it.
 
 7. **Implement the fix.** Apply the selected option, commit, and push. The goal is for the change to become visible on the PR (i.e., reachable from the PR's head ref). If the agent's current development branch is not the PR head branch, the following rules determine how and when that visibility is achieved:
-   - **Outside an active automated review loop:** Cross-branch integration onto the PR head is a manual owner action. The agent **MUST NOT** push directly to the PR head branch. Instead, the agent **MUST** state in its step-6 reply which branch the commit will be pushed to and whether a merge or cherry-pick will be required to make it visible on the PR.
-   - **During an active automated review loop:** The documented Automated Review Loop provides loop-scoped authorization for the agent to push fix commits directly onto the PR head branch when all of the preconditions in the "Direct PR-head placement during an active review loop" paragraph in Automated Review Loop step 7 are satisfied. See that paragraph for the full set of required conditions, safety constraints, fallback behavior, and how the loop-scoped authorization interacts with generic session-level or harness-injected branch-scoping instructions.
+    - **Outside an active automated review loop:** Cross-branch integration onto the PR head is a manual owner action. The agent **MUST NOT** push directly to the PR head branch. Instead, the agent **MUST** state in its step-6 reply which branch the commit will be pushed to and whether a merge or cherry-pick will be required to make it visible on the PR.
+    - **During an active automated review loop:** The documented Automated Review Loop provides loop-scoped authorization for the agent to push fix commits directly onto the PR head branch when all of the preconditions in the "Direct PR-head placement during an active review loop" paragraph in Automated Review Loop step 7 are satisfied. See that paragraph for the full set of required conditions, safety constraints, fallback behavior, and how the loop-scoped authorization interacts with generic session-level or harness-injected branch-scoping instructions.
 
 8. **Evaluate style guide impact.** Determine whether the relevant language instruction file(s) under `.github/instructions/` should be updated to prevent the same issue in the future. **Read the full applicable style guide(s) before answering** — the recommendation must account for what the guide already covers to avoid duplicating or contradicting existing rules. If an update is warranted, write a prompt in a Markdown code fence (suitable for sending to GitHub Copilot's coding agent) that describes the style guide change. Post the prompt as a reply in the same review comment thread. Do **not** modify the style guide directly.
 
@@ -97,55 +97,62 @@ When a pull request is created or when the owner posts a PR comment containing `
 ### Loop procedure
 
 1. **Request a Copilot code review.** First, record baselines from **both** endpoints (these **MUST** be recorded before requesting the review):
-   - Use `get_reviews` (or equivalent) to record the `submitted_at` timestamp of the most recent review authored by `copilot-pull-request-reviewer[bot]` (or note that no such review exists yet). This is the `get_reviews` baseline for step 2.
-   - Use `get_review_comments` (or equivalent) to record the `created_at` timestamp of the most recent comment authored by `copilot-pull-request-reviewer[bot]` (or note that no such comment exists yet). This is the `get_review_comments` baseline for step 2.
+    - Use `get_reviews` (or equivalent) to record the `submitted_at` timestamp of the most recent review authored by `copilot-pull-request-reviewer[bot]` (or note that no such review exists yet). This is the `get_reviews` baseline for step 2.
+    - Use `get_review_comments` (or equivalent) to record the `created_at` timestamp of the most recent comment authored by `copilot-pull-request-reviewer[bot]` (or note that no such comment exists yet). This is the `get_review_comments` baseline for step 2.
 
-   After recording both baselines, use the `request_copilot_review` tool (or equivalent) to ask GitHub Copilot to review the PR.
+    After recording both baselines, use the `request_copilot_review` tool (or equivalent) to ask GitHub Copilot to review the PR.
 2. **Wait for the review (active polling).** Immediately after requesting the review, begin an active poll loop — do **not** rely solely on webhook delivery, which may be delayed or never arrive. The poll loop **MUST** follow these rules:
-   - **Poll interval.** Wait at least 60 seconds between each poll cycle, including the gap between the baseline fetch in step 1 and the first poll. Each poll cycle calls both `get_reviews` and `get_review_comments` at most once. The exact mechanism used to implement the wait (for example, shell sleep, background task, or equivalent tooling) is left to the agent runtime.
-   - **Detection criterion.** On each poll, use **both** `get_reviews` **and** `get_review_comments` as co-equal detection signals. A new review round is detected when **either** of the following is true:
-     - `get_reviews` returns a new review authored by `copilot-pull-request-reviewer[bot]` with a `submitted_at` timestamp **strictly newer** than the `get_reviews` baseline recorded in step 1.
-     - `get_review_comments` returns new comments authored by `copilot-pull-request-reviewer[bot]` with a `created_at` timestamp **strictly newer** than the `get_review_comments` baseline recorded in step 1.
+    - **Poll interval.** Wait at least 60 seconds between each poll cycle, including the gap between the baseline fetch in step 1 and the first poll. Each poll cycle calls both `get_reviews` and `get_review_comments` at most once. The exact mechanism used to implement the wait (for example, shell sleep, background task, or equivalent tooling) is left to the agent runtime.
+    - **Detection criterion.** On each poll, use **both** `get_reviews` **and** `get_review_comments` as co-equal detection signals. A new review round is detected when **either** of the following is true:
+      - `get_reviews` returns a new review authored by `copilot-pull-request-reviewer[bot]` with a `submitted_at` timestamp **strictly newer** than the `get_reviews` baseline recorded in step 1.
+      - `get_review_comments` returns new comments authored by `copilot-pull-request-reviewer[bot]` with a `created_at` timestamp **strictly newer** than the `get_review_comments` baseline recorded in step 1.
 
-     If no baseline exists (no prior review by the bot), any review or comment by the bot is considered new. A fresh set of Copilot comments newer than the baseline is itself sufficient evidence that the review round has arrived; the agent **MUST** proceed to step 3 without waiting for `get_reviews` to catch up.
-   - **Timeout.** If no new review is detected after **10 consecutive polls** (approximately 10 minutes), **PAUSE** the loop and post a PR comment: `Review loop paused: Copilot review did not arrive after 10 poll attempts (~10 min). Post "@claude resume review loop" to continue.`
-   - **State tracking (recommended).** On each poll, update a visible progress indicator in the session transcript (for example, a todo-list entry such as `"Round N: awaiting Copilot review, poll M/10"`) so that stalls are observable.
-   - **On success.** As soon as a new review is detected, proceed immediately to step 3.
+      If no baseline exists (no prior review by the bot), any review or comment by the bot is considered new. A fresh set of Copilot comments newer than the baseline is itself sufficient evidence that the review round has arrived; the agent **MUST** proceed to step 3 without waiting for `get_reviews` to catch up.
+    - **Timeout.** If no new review is detected after **10 consecutive polls** (approximately 10 minutes), **PAUSE** the loop and post a PR comment: `Review loop paused: Copilot review did not arrive after 10 poll attempts (~10 min). Post "@claude resume review loop" to continue.`
+    - **State tracking (recommended).** On each poll, update a visible progress indicator in the session transcript (for example, a todo-list entry such as `"Round N: awaiting Copilot review, poll M/10"`) so that stalls are observable.
+    - **On success.** As soon as a new review is detected, proceed immediately to step 3.
 3. **Check review coverage.** If the review was detected via `get_reviews` and the review summary body is available, check how many files Copilot reviewed out of the total changed files (e.g., "Copilot reviewed 9 out of 9 changed files"). If Copilot did **not** review all changed files, post a PR comment noting the partial coverage so the PR owner is aware. Example: `Note: Copilot reviewed only 7 out of 9 changed files in round N. Files not reviewed by Copilot may benefit from additional manual or AI-assisted review.` If the review summary is not yet available from `get_reviews` (for example, when the review was detected solely via `get_review_comments`), **skip** the coverage note for this round and proceed. Continue the loop normally regardless of coverage outcome.
 4. **Check for comments.** If the review contains **zero** actionable comments, the code is clean — **PAUSE** and post a PR comment:
-   `Review loop paused: Copilot review returned no comments. Post "@claude resume review loop" to continue.`
+    `Review loop paused: Copilot review returned no comments. Post "@claude resume review loop" to continue.`
 5. **Process each comment.** Follow the "Handling Code Review Comments" protocol above (steps 1-9) for every comment in the review, **where tooling allows**. If the available tooling cannot perform step 9 automatically, you **MUST** still complete steps 1-8 and **MUST** ensure the step 9 completion work is handled before treating the comment as fully processed: remove any temporary `:eyes:` reaction per the protocol and resolve the review thread manually when appropriate.
 6. **Check for style guide recommendations.** If **any** comment produced a style guide update prompt (step 8), **PAUSE** and post a PR comment:
-   `Review loop paused: style guide update(s) recommended — see review thread(s) above. Apply the style guide changes, then post "@claude resume review loop" to continue.`
+    `Review loop paused: style guide update(s) recommended — see review thread(s) above. Apply the style guide changes, then post "@claude resume review loop" to continue.`
 7. **Re-request review.** Before re-requesting, the agent **MUST** verify that the final fix commit(s) for the current round that are intended to land on the PR head are reachable from the PR's head ref. The agent **MUST** record those PR-head fix commit SHA(s) after any merge, rebase, or cherry-pick that changes commit IDs; intermediate authored commit SHA(s) that were superseded by equivalent PR-head commit SHA(s) **MUST NOT** block re-requesting review on their own.
 
-   **Direct PR-head placement during an active review loop.** When the agent's working branch differs from the PR head branch and **all** of the following preconditions are satisfied, the agent **MAY** push the current round's fix commit(s) directly to the PR head branch instead of pausing for manual integration:
-   1. The review loop is actively running (not paused and not in an out-of-loop context).
-   2. The PR head branch is in the **same repository** as the agent's working branch (cross-fork PRs are excluded).
-   3. The push is **non-destructive**: the agent **MUST NOT** force-push or rewrite history on the PR head branch.
-   4. All existing branch protections, required status checks, signing requirements, and CI/CD validation rules on the PR head branch continue to be satisfied.
-   5. The agent retains the fix commit on its own development branch so that every round's changes remain in the development branch history as a per-round ledger.
+    **Direct PR-head placement during an active review loop.** When the agent's working branch differs from the PR head branch and **all** of the following preconditions are satisfied, the agent **MAY** push the current round's fix commit(s) directly to the PR head branch instead of pausing for manual integration:
 
-   **Source of authorization.** The documented Automated Review Loop in this file provides explicit loop-scoped authorization for direct PR-head placement when all five preconditions above are satisfied. No additional per-round or per-session approval from the PR owner is required when those preconditions hold. This loop-scoped authorization qualifies any generic session-level or harness-injected "develop only on branch X" (or equivalently worded) instruction for the duration of the active loop, and only when **all** of the following hold:
-   1. The agent is acting within the documented Automated Review Loop steps,
-   2. All five preconditions above are satisfied,
-   3. The PR head branch is the branch the loop is actively reviewing, and
-   4. No higher-priority platform, organization, repository, branch-protection, or explicit owner instruction forbids the push.
+    1. The review loop is actively running (not paused and not in an out-of-loop context).
+    2. The PR head branch is in the **same repository** as the agent's working branch (cross-fork PRs are excluded).
+    3. The push is **non-destructive**: the agent **MUST NOT** force-push or rewrite history on the PR head branch.
+    4. All existing branch protections, required status checks, signing requirements, and CI/CD validation rules on the PR head branch continue to be satisfied.
+    5. The agent retains the fix commit on its own development branch so that every round's changes remain in the development branch history as a per-round ledger.
 
-   Outside an active loop, or for any work not driven by the documented loop steps, the generic session-level branch-scoping rule continues to apply unchanged and the agent **MUST NOT** push directly to the PR head branch (see "Handling Code Review Comments" step 7, "Outside an active automated review loop").
+    **Source of authorization.** The documented Automated Review Loop in this file provides explicit loop-scoped authorization for direct PR-head placement when all five preconditions above are satisfied. No additional per-round or per-session approval from the PR owner is required when those preconditions hold. This loop-scoped authorization qualifies any generic session-level or harness-injected "develop only on branch X" (or equivalently worded) instruction for the duration of the active loop, and only when **all** of the following hold:
 
-   When direct PR-head placement is used, the agent **MUST** record the resulting PR-head commit SHA(s) for the reachability check below. In the reply posted for **Handling Code Review Comments** step 6, the agent **MUST** state that it intends to place the fix directly on the PR head branch. After the push completes, the agent **MUST** post a follow-up reply confirming that the fix was placed directly on the PR head branch and listing the resulting PR-head commit SHA(s).
+    1. The agent is acting within the documented Automated Review Loop steps,
+    2. All five preconditions above are satisfied,
+    3. The PR head branch is the branch the loop is actively reviewing, and
+    4. No higher-priority platform, organization, repository, branch-protection, or explicit owner instruction forbids the push.
 
-   **Fallback.** If any recorded PR-head fix commit for the current round is not reachable from the PR head, the agent **MUST NOT** re-request the review; instead it **MUST** pause and post a PR comment:
-   `Review loop paused: final fix commit(s) <SHA1>, <SHA2>, ... expected on PR head <pr-head-branch> are not reachable from that head. Merge or cherry-pick the fix onto <pr-head-branch>, record the resulting PR-head SHA(s), then post "@claude resume review loop" to continue.`
-   If the agent intended to use direct PR-head placement during an active review loop but any precondition above was not met, or the direct push failed for any reason, the agent **MUST** treat the fix as not yet placed on the PR head, **MUST** wait for the fix to be merged or cherry-picked onto `<pr-head-branch>`, and **MUST** record the resulting PR-head SHA(s) before re-requesting the review.
-   If all recorded PR-head fix commits are reachable (or no code changes were made in this round), and no style guide updates were recommended, go to step 1. This applies regardless of whether code changes were made — even if all comments were addressed without code changes (e.g., concern noted but no action taken), re-requesting a review allows Copilot to find different issues on a fresh pass.
+    Outside an active loop, or for any work not driven by the documented loop steps, the generic session-level branch-scoping rule continues to apply unchanged and the agent **MUST NOT** push directly to the PR head branch (see "Handling Code Review Comments" step 7, "Outside an active automated review loop").
+
+    When direct PR-head placement is used, the agent **MUST** record the resulting PR-head commit SHA(s) for the reachability check below. In the reply posted for **Handling Code Review Comments** step 6, the agent **MUST** state that it intends to place the fix directly on the PR head branch. After the push completes, the agent **MUST** post a follow-up reply confirming that the fix was placed directly on the PR head branch and listing the resulting PR-head commit SHA(s).
+
+    **Fallback.** If any recorded PR-head fix commit for the current round is not reachable from the PR head, the agent **MUST NOT** re-request the review; instead it **MUST** pause and post a PR comment:
+
+    `Review loop paused: final fix commit(s) <SHA1>, <SHA2>, ... expected on PR head <pr-head-branch> are not reachable from that head. Merge or cherry-pick the fix onto <pr-head-branch>, record the resulting PR-head SHA(s), then post "@claude resume review loop" to continue.`
+
+    If the agent intended to use direct PR-head placement during an active review loop but any precondition above was not met, or the direct push failed for any reason, the agent **MUST** treat the fix as not yet placed on the PR head, **MUST** wait for the fix to be merged or cherry-picked onto `<pr-head-branch>`, and **MUST** record the resulting PR-head SHA(s) before re-requesting the review.
+
+    If all recorded PR-head fix commits are reachable (or no code changes were made in this round), and no style guide updates were recommended, go to step 1. This applies regardless of whether code changes were made — even if all comments were addressed without code changes (e.g., concern noted but no action taken), re-requesting a review allows Copilot to find different issues on a fresh pass.
 
 ### Safety limits
 
 - **Maximum rounds:** 8 review iterations per loop invocation. After the eighth round, **PAUSE** regardless of outcome and post:
+
   `Review loop paused: reached maximum of 8 review rounds. Post "@claude resume review loop" to continue.`
 - **Wall-clock timeout:** 6 hours from loop start. If the timeout is reached, **PAUSE** and post:
+
   `Review loop paused: 6-hour timeout reached. Post "@claude resume review loop" to continue.`
 - **Duplicate detection:** Track comment IDs that have already been processed. Skip any comment whose ID was addressed in a prior round to avoid re-processing.
 - **Active polling required:** Every review-wait cycle **MUST** be driven by the explicit timed poll loop described in step 2. Passive waiting for webhook delivery alone is **not** permitted — the poll loop ensures that pause and timeout behavior is reached deterministically even if webhook delivery does not occur.
