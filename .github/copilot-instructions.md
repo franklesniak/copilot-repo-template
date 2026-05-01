@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.2.20260501.0
+**Version:** 1.3.20260501.0
 
 ## Metadata
 
@@ -63,6 +63,18 @@ Pre-commit hooks are NOT optional. They enforce:
 
 **CI is a safety net, not a substitute for local checks.**
 
+### Data-File Validation
+
+In addition to formatting, linting, trailing-whitespace, and end-of-file fixes, pre-commit also enforces validation for structured data files. Run `pre-commit run --all-files` to execute the full hook set, which includes:
+
+- `check-json` — validates strict `.json` syntax. **Note:** `check-json` does **not** validate `.jsonc`; JSONC (JSON with comments) is allowed only when supported by the consuming tool, and stricter enforcement requires JSONC-aware tooling.
+- `check-yaml` — parse-checks `.yml` / `.yaml` files.
+- `yamllint` — enforces YAML style per `.yamllint.yml`.
+- `actionlint` — lints GitHub Actions workflow files.
+- `check-jsonschema` — validates schema-backed files once schema hooks are added under `schemas/`.
+
+Prettier is **opt-in** and is **not** part of the default data-file toolchain.
+
 ### For GitHub Copilot Coding Agent (Automated PRs)
 
 **⚠️ CRITICAL: You are an automated agent creating PRs. You MUST follow this workflow:**
@@ -119,6 +131,7 @@ For each PR-sized change:
 - Add/adjust tests for new behavior.
   - Python: pytest tests in `tests/`
   - PowerShell: Pester tests in `tests/PowerShell/`
+- For data-file changes (JSON, JSONC, YAML, YAML-based GitHub Actions workflows), run the applicable validation hooks via `pre-commit run --all-files` so that `check-json`, `check-yaml`, `yamllint`, `actionlint`, and (where configured) `check-jsonschema` all pass before committing.
 - Keep changes small and reviewable; avoid "big bang" refactors.
 - Update docs/spec only if behavior is intentionally changed (and note why).
 - Ensure:
@@ -143,6 +156,7 @@ This repository uses modular instruction files covering both language-specific s
 | Scope | Instruction File | Applies To |
 | --- | --- | --- |
 | Git attributes | `.github/instructions/gitattributes.instructions.md` | `**/.gitattributes` |
+| JSON | `.github/instructions/json.instructions.md` | `**/*.json`, `**/*.jsonc` |
 | Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` |
 | PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` |
 | Python | `.github/instructions/python.instructions.md` | `**/*.py` |
