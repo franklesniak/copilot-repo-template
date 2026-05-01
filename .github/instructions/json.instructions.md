@@ -33,7 +33,7 @@ Line-ending pinning, BOM behavior, end-of-file newline, and trailing whitespace 
 - **[All]** **MUST** use 2-space indentation; **MUST NOT** use tabs.
 - **[All]** **MUST NOT** include trailing commas in strict JSON.
 - **[All]** Keys and string values **MUST** be double-quoted.
-- **[All]** **MUST NOT** blindly sort keys; **MUST** preserve intentional grouping and tool-managed ordering (for example, `package.json`, lockfiles, and other generated files).
+- **[All]** **MUST NOT** blindly sort keys; **MUST** preserve intentional grouping and tool-managed ordering (for example, `package.json`, JSON/JSONC lockfiles, and other generated files).
 - **[All]** Strict JSON **MUST NOT** contain comments.
 - **[All]** Production or load-bearing JSON files **MUST** have schema validation; durable fixtures, examples, policy documents, and config contracts **SHOULD** have schema validation.
 - **[All]** **MUST NOT** commit secrets; example values **MUST** be obviously fake.
