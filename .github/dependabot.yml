@@ -6,6 +6,7 @@
 #   - npm (package.json) - Node.js dependencies for dev tooling
 #   - pip (pyproject.toml) - Python dependencies
 #   - GitHub Actions (workflows) - Action version updates
+#   - pre-commit (.pre-commit-config.yaml) - Pre-commit hook updates
 #
 # Update schedule: Weekly (reduces PR noise while maintaining currency)
 #
@@ -57,6 +58,22 @@ updates:
       interval: "weekly"
     groups:
       actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "chore(deps)"
+    open-pull-requests-limit: 10
+
+  # Pre-commit hooks (.pre-commit-config.yaml)
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      pre-commit-minor-patch:
         patterns:
           - "*"
         update-types:
