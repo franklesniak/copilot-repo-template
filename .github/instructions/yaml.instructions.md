@@ -37,13 +37,13 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - **[All]** **SHOULD NOT** use anchors, aliases, merge keys, custom tags, or multi-document files unless required and supported by the consumer.
 - **[All]** **MUST NOT** commit secrets in YAML.
 - **[Actions]** **MUST** apply least-privilege `permissions:` on GitHub Actions workflows.
-- **[Schemas]** Schema-backed YAML **MUST** validate against its declared schema in CI when a validator is available.
+- **[Schemas]** Schema-backed YAML **MUST** pass any schema validator that is wired into CI or pre-commit; where no validator is wired up, authors **SHOULD** run the appropriate validator locally before committing.
 - **[Naming]** YAML filenames **SHOULD** be lowercase kebab-case; GitHub Actions workflows **MUST** use the `.yml` extension; project-owned YAML **MUST** choose `.yml` or `.yaml` and use it consistently.
 
 ## Dialect and Consumer Policy
 
 - Authors **SHOULD** target **YAML 1.2-compatible** values and avoid relying on parser-specific extensions.
-- Authors **MUST** avoid YAML 1.1 ambiguity hazards (most importantly, the YAML 1.1 "truthy" token set: `y`, `Y`, `yes`, `Yes`, `YES`, `n`, `N`, `no`, `No`, `NO`, `on`, `On`, `ON`, `off`, `Off`, `OFF`, `true`, `True`, `TRUE`, `false`, `False`, `FALSE`). Many widely-deployed parsers (including those used by GitHub Actions, `js-yaml` defaults, and some legacy PyYAML configurations) still resolve some or all of these tokens as booleans.
+- Authors **MUST** avoid the YAML 1.1 *non-lowercase-`true`/`false`* truthy tokens that this guide does not permit as booleans (`y`, `Y`, `yes`, `Yes`, `YES`, `n`, `N`, `no`, `No`, `NO`, `on`, `On`, `ON`, `off`, `Off`, `OFF`, `True`, `TRUE`, `False`, `FALSE`); only lowercase `true` and `false` are allowed as booleans (see "Booleans, Nulls, and Numbers"). Many widely-deployed parsers (including those used by GitHub Actions, `js-yaml` defaults, and some legacy PyYAML configurations) still resolve some or all of these YAML 1.1 tokens as booleans, so any string value that would otherwise match one of them **MUST** be quoted.
 - Ecosystem-specific validators (for example, Kubernetes manifest validators, OpenAPI validators, Helm validators, Ansible validators) **SHOULD** be adopted only when the repository actually uses those ecosystems. Generic YAML guidance **MUST NOT** require validators that are irrelevant to the repository's stack.
 
 ## Formatting Rules
@@ -60,7 +60,7 @@ Authors **MUST** quote any scalar that a YAML 1.2 (or YAML 1.1) parser could res
 - Values that match boolean, null, integer, float, hex, octal, binary, or sexagesimal patterns when a string is intended.
 - Values that match RFC 3339 / ISO 8601 timestamp patterns when intended as strings, **unless** the specific parser's behavior is known and tested for that value.
 - Values that match any YAML 1.1 truthy token (see "Dialect and Consumer Policy" above) when a string is intended.
-- Values that begin with YAML special syntax characters (`&`, `*`, `!`, `|`, `>`, `%`, `@`, `` ` ``, `#`, `,`, `[`, `]`, `{`, `}`, `?`, `:` followed by space) where the parser would otherwise interpret them.
+- Values that begin with YAML special syntax characters (`&`, `*`, `!`, `|`, `>`, `%`, `@`, the backtick character, `#`, `,`, `[`, `]`, `{`, `}`, `?`, `:` followed by space) where the parser would otherwise interpret them.
 
 Version pins **MUST** be quoted. Common examples:
 
