@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.2.20260430.3
+**Version:** 1.2.20260501.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-04-30
+- **Last Updated:** 2026-05-01
 - **Scope:** Defines documentation standards for all Markdown files in this repository, including specs, design docs, runbooks, ADRs, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -185,6 +185,8 @@ Runbooks MUST optimize for "2 a.m. usability."
 - **Postmortem Notes:** what to capture for later analysis
 
 All commands in runbooks MUST be copy/paste safe and must not destroy data without an explicit warning.
+
+Placeholder text embedded **inside a fenced shell example** MUST NOT contain shell metacharacters that the target shell would interpret. In fenced `bash` examples, runbook authors MUST NOT embed backticks or `$()` command-substitution syntax inside placeholder text, including inside double-quoted strings, because a user who pastes the command before substituting the placeholder may cause the shell to attempt command substitution instead of producing a clean unresolved-placeholder error. When a placeholder needs to refer to a command name, command output, or another identifier that benefits from monospace formatting, the inline-code reference MUST be kept in the surrounding prose, not inside the placeholder string in the code fence. When practical, runbook authors SHOULD validate shell examples in a safe context with the placeholder still present and confirm they fail as literal unresolved-placeholder errors rather than attempting unintended substitution, expansion, redirection, or command execution.
 
 ## Change Hygiene and "Definition of Done" for Docs
 
