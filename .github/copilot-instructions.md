@@ -56,10 +56,10 @@ Pre-commit hooks are NOT optional. They enforce:
 
 **If pre-commit CI fails after a push:**
 
-1. Pull the latest branch.
-2. Run pre-commit checks locally and stage the fixes.
-3. Prefer combining the fixes with your next substantive commit on the same branch rather than landing a standalone formatting-only or lint-only commit (see "What Not to Do" below). For `copilot/**` branches, the auto-fix workflow described under "Auto-Fix Workflow (Safety Net for Copilot Branches)" will normally apply these fixes automatically.
-4. Push again.
+1. Pull the latest branch
+2. Run pre-commit checks locally and review the fixes
+3. Add the fixes to commit history before pushing again: prefer amending the commit(s) that introduced the failures, or include the fixes in your next substantive commit on the same branch, rather than landing a standalone formatting-only or lint-only commit (see "What Not to Do" below). For `copilot/**` branches, the auto-fix workflow described under "Auto-Fix Workflow (Safety Net for Copilot Branches)" will normally apply these fixes automatically.
+4. Push again (force-push if you amended or rebased earlier commits)
 
 **CI is a safety net, not a substitute for local checks.**
 
