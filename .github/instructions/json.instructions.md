@@ -54,7 +54,7 @@ This repository recognizes two JSON dialects: strict JSON and JSONC. Other diale
 - Indentation **MUST** be 2 spaces per level. Tabs **MUST NOT** be used.
 - Keys and string values **MUST** be double-quoted. Single quotes and unquoted keys **MUST NOT** be used (this is required by strict JSON and is also the recommended style for JSONC).
 - Trailing commas **MUST NOT** appear in strict JSON. In JSONC files, trailing commas **MAY** be used only when the consuming tool documents support for them; otherwise they **SHOULD** be avoided to ease later conversion to strict JSON.
-- One key-value pair per line is **RECOMMENDED** for objects with more than one entry, to keep diffs reviewable.
+- Objects with more than one entry **SHOULD** use one key-value pair per line to keep diffs reviewable.
 - Files **MUST** end with a single newline (enforced by the repository's `end-of-file-fixer` pre-commit hook). Line-ending and trailing-whitespace policy is governed by [`.gitattributes` Rules](./gitattributes.instructions.md).
 
 **Example (strict JSON):**
@@ -75,8 +75,8 @@ JSON does not assign semantic meaning to key order, but tools, humans, and diffs
 - Keys **MUST NOT** be blindly sorted alphabetically across an entire file. Intentional grouping (for example, `name` before `version` in `package.json`, or `$schema` first in a schema-bearing file) **MUST** be preserved.
 - Tool-managed and generated files **MUST NOT** be reordered by hand. This includes, but is not limited to:
   - `package.json` (npm/Yarn/pnpm reorder fields on install per their own rules)
-  - `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`, and other lockfiles
-  - Compiler/build tool manifests where the tool documents an ordering convention
+  - `package-lock.json` and other JSON/JSONC lockfiles or generated manifests
+  - Compiler/build tool JSON/JSONC manifests where the tool documents an ordering convention
 - Generated files **SHOULD** preserve their generator's ordering exactly. If you need a different order, change the generator, not the output.
 - Within a hand-authored object, related keys **SHOULD** be grouped (for example, all identity fields, then all behavior fields, then all metadata fields). New keys **SHOULD** be added next to related keys, not appended at the end "because diffs are smaller."
 
@@ -120,7 +120,7 @@ Schema location and shape:
 ## Security
 
 - Secrets (API keys, tokens, connection strings, passwords, signing keys) **MUST NOT** be committed in any JSON file, including examples, fixtures, and tests.
-- Example values **MUST** be obviously fake (for example, `"REPLACE_ME"`, `"example-token-not-real"`, `"sk-test-0000000000000000"`). Fake values **SHOULD NOT** resemble real credentials closely enough to trigger secret scanners or to mislead a reader into thinking they are real.
+- Example values **MUST** be obviously fake (for example, `"REPLACE_ME"`, `"example-token-not-real"`, `"example-api-key-not-real"`). Fake values **SHOULD NOT** resemble real credentials closely enough to trigger secret scanners or to mislead a reader into thinking they are real.
 - Untrusted JSON (input from network, user, or other untrusted source) **MUST** be parsed using a safe parser and **MUST** be validated against a schema or explicit type checks before its values are used.
 - JSON input **MUST NOT** be evaluated as executable code. In particular, `eval`, `Function`, `exec`, `Invoke-Expression`, and equivalent constructs in any language **MUST NOT** be used to "parse" JSON.
 - JSON consumers **SHOULD** apply size and depth limits to defend against pathological inputs (deeply nested objects, very large arrays, very long strings).
