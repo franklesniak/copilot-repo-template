@@ -153,7 +153,11 @@ jobs:
         # pyproject.toml or mypy.ini in terms of directory scope.
         env:
           MYPY_PATHS: "src/ tests/"
-        run: mypy $MYPY_PATHS
+        # MYPY_PATHS contains space-separated paths that must be word-split
+        # into multiple arguments; intentional unquoted expansion below.
+        run: |
+          # shellcheck disable=SC2086
+          mypy $MYPY_PATHS
         # Set continue-on-error initially; projects can make type checking strict later
         continue-on-error: true
 

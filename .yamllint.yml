@@ -1,0 +1,26 @@
+# yamllint configuration
+#
+# GitHub-Actions-friendly defaults. The truthy.check-keys: false setting is
+# intentional so workflow files can use the idiomatic unquoted GitHub Actions
+# `on:` key without yamllint flagging it as a truthy value.
+#
+# See https://yamllint.readthedocs.io/en/stable/configuration.html
+extends: default
+
+rules:
+  indentation:
+    spaces: 2
+    indent-sequences: true
+  line-length:
+    max: 120
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true
+    level: warning
+  comments-indentation: disable
+  document-start:
+    present: false
+  truthy:
+    allowed-values:
+      - "true"
+      - "false"
+    check-keys: false

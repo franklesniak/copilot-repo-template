@@ -46,7 +46,7 @@ This repository recognizes two JSON dialects: strict JSON and JSONC. Other diale
 
 - Files with the `.json` extension **MUST** be strict JSON as defined by [RFC 8259](https://www.rfc-editor.org/rfc/rfc8259). Strict JSON **MUST NOT** contain comments, trailing commas, unquoted keys, single-quoted strings, or any other non-RFC 8259 syntax.
 - Files with the `.jsonc` extension **MAY** be used **only** when the consuming tool explicitly documents support for JSONC (for example, the TypeScript compiler reading `tsconfig.json`, and some VS Code settings files). When in doubt, prefer `.json`.
-- If this repository enables the `check-json` pre-commit hook, it validates `.json` files only. JSONC is **not** validated by `check-json`. Downstream repositories that need stronger enforcement for `.jsonc` files **SHOULD** add JSONC-aware tooling (for example, a JSONC-aware parser, linter, or schema validator) rather than retrofitting `check-json`.
+- The repository's `check-json` pre-commit hook validates `.json` files only. JSONC is **not** validated by `check-json`. Downstream repositories that need stronger enforcement for `.jsonc` files **SHOULD** add JSONC-aware tooling (for example, a JSONC-aware parser, linter, or schema validator) rather than retrofitting `check-json`.
 - JSON5 is **not** included in this repository's defaults and **MUST NOT** be introduced without an explicit, documented project decision. The `applyTo` glob for this guide intentionally omits `.json5`.
 
 ## Formatting
@@ -145,4 +145,4 @@ A JSON change is considered done when **all** of the following hold:
 - Strict JSON contains no comments; documentation lives in schemas and sibling docs.
 - No secrets are committed; example values are obviously fake.
 - Generated JSON is reproducible, stably formatted, stably ordered when ordering is non-semantic, and identifies its source or generation command.
-- Any configured JSON or JSONC validators pass; pre-commit and Markdown checks pass for any associated documentation changes.
+- `check-json` and any project-specific JSON or JSONC validators pass; pre-commit and Markdown checks pass for any associated documentation changes.
