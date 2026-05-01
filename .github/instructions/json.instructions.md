@@ -15,7 +15,7 @@ description: "JSON authoring standards: strict-by-default, schema-backed, determ
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-05-01
 - **Scope:** Defines authoring standards for JSON and JSONC files in this repository, including configuration, schemas, fixtures, generated metadata, and machine-readable contracts. Covers dialect policy, formatting, key ordering, naming, data modeling, schema usage, comments, security, and generated output.
-- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md)
+- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [YAML Writing Style](./yaml.instructions.md)
 
 ## Purpose and Scope
 
