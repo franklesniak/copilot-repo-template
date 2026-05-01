@@ -7,7 +7,7 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.3.20260501.2
+**Version:** 1.3.20260501.3
 
 ## Metadata
 
@@ -102,7 +102,7 @@ Placement rules for the metadata header block:
 - Avoid trailing whitespace; keep blank lines truly blank.
 - Prefer relative links within the repo (e.g., `docs/spec/requirements.md`).
 - Avoid raw URLs in prose; use descriptive link text when possible.
-- Markdown files in this repository SHOULD include `<!-- markdownlint-disable MD013 -->` immediately after any YAML front matter (or at the very top of the file if there is no front matter), and **before any other content**, including badges, links, the H1 heading, and any prose.
+- Markdown files in this repository SHOULD include `<!-- markdownlint-disable MD013 -->` immediately after any YAML front matter (or at the very top of the file if there is no front matter), and **before any other content**, including badges, links, the H1 heading, and any prose. A single optional blank line MAY appear between the front matter terminator (`---`) and the directive for readability; blank lines are not "content" for this rule.
   - Placement matters: markdownlint's inline `<!-- markdownlint-disable RULE -->` directive only suppresses the rule for content that follows it. Placing the directive after badges or other long lines leaves those lines unprotected when the file is processed with default markdownlint settings outside this repo.
   - This intentionally duplicates the repo-wide `"MD013": false` setting in `.markdownlint.jsonc`.
   - This is a deliberate **portability convention** for cases where a file is read or processed outside this repository, for example:
