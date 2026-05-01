@@ -424,7 +424,7 @@ The default pre-commit stack for JSON and YAML uses `check-json`, `check-yaml`, 
 
 1. **`check-json` (pre-commit-hooks)** — Validates strict JSON syntax. Fast, dependency-free, fails on duplicate keys, trailing commas, and other strict-JSON violations.
 2. **`check-yaml` (pre-commit-hooks)** — Fast YAML parse check. Catches structural errors before slower linters run.
-3. **`yamllint`** — YAML style enforcement (indentation, line length, key ordering rules, truthy values). Configured via `.yamllint.yml`.
+3. **`yamllint`** — YAML style enforcement (indentation, line length, truthy values). Configured via `.yamllint.yml`.
 4. **`actionlint`** — GitHub Actions workflow validation, including expression syntax, runner labels, and `shellcheck` integration over `run:` blocks.
 5. **`check-jsonschema` (reserved, opt-in)** — Recommended for future schema-backed validation when schemas are added under `schemas/`. Not wired up in the default config to avoid placeholder hook entries.
 
