@@ -62,7 +62,7 @@ repos:
 
   # Python linting (remove if not using Python)
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.14.14
+    rev: v0.15.12
     hooks:
       - id: ruff-check
         args: [--fix, --line-length=100]
