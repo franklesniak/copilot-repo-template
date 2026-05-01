@@ -2,6 +2,8 @@
 # Enforces OTBS (One True Brace Style) / K&R formatting
 # Aligns with .github/instructions/powershell.instructions.md
 #
+# Version: 1.0.20260430.0
+#
 # Usage:
 #   Invoke-ScriptAnalyzer -Path .\script.ps1 -Settings .\.github\linting\PSScriptAnalyzerSettings.psd1
 #   Invoke-ScriptAnalyzer -Path .\script.ps1 -Settings .\.github\linting\PSScriptAnalyzerSettings.psd1 -Fix
@@ -52,7 +54,7 @@
             # Multi-line pipeline statements should indent every line following the second only once
             PipelineIndentation = 'IncreaseIndentationForFirstPipeline'
         }
-        PSUseConsistentWhitespace  = @{
+        PSUseConsistentWhitespace = @{
             # Turn the rule on
             Enable = $true
 
