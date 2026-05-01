@@ -14,8 +14,8 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 - **Status:** Active
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-05-01
-- **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (see [JSON Writing Style](./json.instructions.md)) or generated YAML artifacts that are owned by another tool's serializer.
-- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md)
+- **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by the paired JSON instruction file `./json.instructions.md` when added; not present at the time this file was authored) or generated YAML artifacts that are owned by another tool's serializer.
+- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md). A paired JSON instruction file (`./json.instructions.md`) is planned as part of the same JSON/YAML rollout; this guide will cross-link to it once it is added.
 
 ## Purpose and Scope
 
@@ -89,7 +89,7 @@ Quote style guidance:
 
 The GitHub Actions workflow trigger key `on:` is a well-known YAML 1.1 truthy hazard. Under YAML 1.1 resolution rules, the unquoted bare key `on` is parsed as the boolean `true`. GitHub Actions itself parses workflows correctly because it does not rely on YAML 1.1 truthy resolution for keys, but **lint tooling** that is YAML 1.1-aware (notably `yamllint`'s `truthy` rule) will flag the `on:` key as a truthy violation by default.
 
-This repository's default policy is to configure `yamllint` with:
+If `yamllint` is adopted in this repository, the recommended configuration is to disable `truthy.check-keys` so that the idiomatic `on:` key is preserved without exception comments:
 
 ```yaml
 rules:
@@ -97,7 +97,7 @@ rules:
     check-keys: false
 ```
 
-This policy preserves the idiomatic GitHub Actions `on:` key while still flagging YAML 1.1 truthy hazards in **values**. Authors **MAY** alternatively quote the key as `"on":` to satisfy a stricter `truthy.check-keys: true` configuration, but this form is **non-idiomatic** in the GitHub Actions ecosystem and **SHOULD NOT** be adopted unless a downstream policy requires it.
+This recommendation preserves the idiomatic GitHub Actions `on:` key while still flagging YAML 1.1 truthy hazards in **values**. Authors **MAY** alternatively quote the key as `"on":` to satisfy a stricter `truthy.check-keys: true` configuration, but this form is **non-idiomatic** in the GitHub Actions ecosystem and **SHOULD NOT** be adopted unless a downstream policy requires it. At the time this file was authored, this repository does not ship a `yamllint` configuration; the guidance above applies if and when one is added.
 
 ## Conservative YAML Subset
 
@@ -137,16 +137,18 @@ Choose the indicator that matches the consumer's expectations. When passing a mu
 
 ## Schema-backed YAML
 
-YAML files that have a published schema **MUST** be validated against that schema in CI when a validator is available, using the same MUST/SHOULD/MAY tiers applied to JSON in [JSON Writing Style](./json.instructions.md):
+YAML files that have a published schema **SHOULD** be validated against that schema, using the same MUST/SHOULD/MAY tiers planned for the paired JSON instruction file. Where validators are wired into CI or pre-commit, files **MUST** pass them; where they are not yet wired up, authors **SHOULD** run the appropriate validator locally before committing. Schema-validation tooling itself is out of scope for this guide; this guide describes the policy, and CI/pre-commit integration is owned by the repository's tooling configuration.
 
-- **MUST validate** in CI: GitHub Actions workflows (`.github/workflows/*.yml`); pre-commit configuration (`.pre-commit-config.yaml`); any YAML file whose schema is published and stable, and whose consumer requires structural correctness.
-- **SHOULD validate** in CI: linter configuration files (for example, `.yamllint`, `.markdownlint.jsonc` siblings) when a schema is available and the validator integrates cleanly with the existing CI.
-- **MAY validate** in CI: optional or experimental configuration formats whose schema may change.
+Validation tiers:
 
-Recommended validators:
+- **MUST tier** (validate when a validator is available, locally or in CI): GitHub Actions workflows (`.github/workflows/*.yml`); pre-commit configuration (`.pre-commit-config.yaml`); any YAML file whose schema is published and stable and whose consumer requires structural correctness.
+- **SHOULD tier**: linter configuration files (for example, `.yamllint`) when a schema is available and a validator is convenient to run.
+- **MAY tier**: optional or experimental configuration formats whose schema may change.
+
+Recommended validators (adopt as needed; this guide does not mandate adoption):
 
 - **`check-jsonschema`** — generic JSON Schema validation for YAML files. Use for arbitrary schema-backed YAML where no ecosystem-specific validator exists.
-- **`actionlint`** — GitHub Actions workflow linter. **MUST** be used when the repository contains workflow files; it validates schema, expression syntax, shell script blocks, and common workflow misuses.
+- **`actionlint`** — GitHub Actions workflow linter. **SHOULD** be used when the repository contains workflow files; it validates schema, expression syntax, shell script blocks, and common workflow misuses.
 - **Ecosystem-specific validators** — adopt **only** when the repository actually uses the ecosystem (for example, `kubeval`/`kubeconform` for Kubernetes, `helm lint` for Helm charts, `ansible-lint` for Ansible). Generic YAML guidance **MUST NOT** mandate validators for ecosystems the repository does not use.
 
 ## Security
@@ -165,7 +167,7 @@ A YAML change is "done" when **all** of the following are true:
 - All booleans are lowercase `true` / `false`; no `yes`/`no`/`on`/`off` as boolean values.
 - The conservative subset is respected (no anchors, aliases, merge keys, custom tags, multi-document files, or flow style except where necessary and justified).
 - Comments explain **why**, not **what**; behavior is not documented only in comments.
-- The applicable schema validator passes (for example, `actionlint` for workflows, `check-jsonschema` for schema-backed YAML).
-- `yamllint` (or the configured YAML linter) passes under the repository's settings.
+- Any schema validator wired into CI or pre-commit passes (for example, `actionlint` for workflows, `check-jsonschema` for schema-backed YAML); when no such validator is wired up, authors **SHOULD** run the applicable validator locally before committing.
+- If `yamllint` (or another YAML linter) is configured in the repository, it passes under the repository's settings.
 - Pre-commit hooks pass locally and in CI.
 - No secrets are committed; GitHub Actions workflows declare least-privilege `permissions:`.

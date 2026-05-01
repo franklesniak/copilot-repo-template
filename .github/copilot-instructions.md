@@ -147,6 +147,7 @@ This repository uses modular instruction files covering both language-specific s
 | PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` |
 | Python | `.github/instructions/python.instructions.md` | `**/*.py` |
 | Terraform | `.github/instructions/terraform.instructions.md` | `**/*.tf`, `**/*.tfvars`, `**/*.tftest.hcl`, `**/*.tf.json`, `**/*.tftpl`, `**/*.tfbackend` |
+| YAML | `.github/instructions/yaml.instructions.md` | `**/*.yml`, `**/*.yaml` |
 
 **Note:** The PowerShell instructions include comprehensive guidance on Pester testing. The Terraform instructions include comprehensive guidance on Terraform Test framework.
 
