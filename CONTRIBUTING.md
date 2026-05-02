@@ -69,7 +69,7 @@ This repository uses pre-commit for git hooks. Configured hooks include:
 - **Formatting**: Black (Python), trailing whitespace, end-of-file fixer
 - **Linting**: Ruff (Python), markdownlint (Markdown)
 - **Data-file validation**: `check-json` (strict `.json` files only — see note below), `check-yaml`, `yamllint` (configured by `.yamllint.yml`), `actionlint` (GitHub Actions workflows)
-- **Schema validation**: `check-jsonschema` for schema-backed file families where wired up (not enabled by default; see [`schemas/README.md`](schemas/README.md))
+- **Schema validation**: `check-jsonschema` and `check-metaschema` for the template's worked-example schema (`schemas/example-config.schema.json`) and its valid example data under `schemas/examples/example-config/valid/`; downstream repositories MAY add additional `check-jsonschema` hook entries for their own schema-backed file families. See [`schemas/README.md`](schemas/README.md) for the worked example and the canonical downstream removal checklist.
 - **Safety**: Large file detection
 
 > **`check-json` validates strict `.json` only.** It does **not** validate `.jsonc`. JSONC files are allowed only when the consuming tool supports JSONC; downstream repositories that need stricter `.jsonc` enforcement should add **JSONC-aware tooling** rather than retrofitting `check-json`. See [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md) for the full JSON/JSONC dialect policy and [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md) for YAML authoring standards.
