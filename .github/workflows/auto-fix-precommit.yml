@@ -5,17 +5,17 @@
 # created by the agent pass pre-commit CI checks without manual intervention.
 #
 # Hook coverage: This workflow runs the same `pre-commit run --all-files`
-# pipeline as `python-ci.yml`, so it auto-fixes every active hook in
-# `.pre-commit-config.yaml` — including JSON (check-json), YAML (check-yaml,
-# yamllint), GitHub Actions workflows (actionlint), Markdown
-# (markdownlint-cli2), Terraform (terraform_fmt, terraform_validate,
-# terraform_tflint), and general hygiene hooks. Note that hooks like yamllint,
-# actionlint, terraform_validate, and terraform_tflint are validators that do
-# not auto-fix; this workflow runs them but does not enforce their results
-# (the `pre-commit` exit code is intentionally ignored via `|| true` so that
-# auto-fixed files can still be committed). Validator failures are enforced by
-# the `Pre-commit` job in `python-ci.yml`, which runs the same hooks without
-# `|| true`.
+# pipeline as `python-ci.yml`, so it runs every active hook in
+# `.pre-commit-config.yaml` (auto-fixing where the hook supports it) —
+# including JSON (check-json), YAML (check-yaml, yamllint), GitHub Actions
+# workflows (actionlint), Markdown (markdownlint-cli2), Terraform
+# (terraform_fmt, terraform_validate, terraform_tflint), and general hygiene
+# hooks. Note that hooks like yamllint, actionlint, terraform_validate, and
+# terraform_tflint are validators that do not auto-fix; this workflow runs
+# them but does not enforce their results (the `pre-commit` exit code is
+# intentionally ignored via `|| true` so that auto-fixed files can still be
+# committed). Validator failures are enforced by the `Pre-commit` job in
+# `python-ci.yml`, which runs the same hooks without `|| true`.
 #
 # Design considerations:
 # - Only triggers on push to copilot/** branches to avoid interfering with human work
