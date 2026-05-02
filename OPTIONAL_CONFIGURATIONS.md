@@ -1004,13 +1004,23 @@ If you have multiple schema-backed file families, add one hook **per family**, e
 
 ### Testing Valid Examples
 
-Place sample data files that should validate cleanly under `schemas/examples/` (for example, `schemas/examples/project-config.valid.json`). The hook above will validate them automatically because they match the `files:` pattern, provided you place them inside the same family path. If your valid examples live outside the family path, validate them with a dedicated hook or a CI step:
+Sample data files that should validate cleanly can be placed in either of two locations, with different validation consequences:
 
-```bash
-check-jsonschema \
-  --schemafile schemas/project-config.schema.json \
-  schemas/examples/project-config.valid.json
-```
+- **Inside the file family path covered by the family hook** (for example, `config/example.valid.json` for the hook above). The family hook will validate these automatically because they match its `files:` pattern.
+- **Under `schemas/examples/`** (for example, `schemas/examples/project-config.valid.json`). This location is the convention used by `schemas/README.md` and the pytest template referenced below, but it does **not** match the family hook's `files:` pattern, so these examples need a separate validation path. Choose one of:
+
+  - Add a dedicated `check-jsonschema` hook scoped to `schemas/examples/` (for example, `files: ^schemas/examples/project-config\..*\.json$`).
+  - Run `check-jsonschema` directly from a CI step or local script:
+
+    ```bash
+    check-jsonschema \
+      --schemafile schemas/project-config.schema.json \
+      schemas/examples/project-config.valid.json
+    ```
+
+  - Wire the example into the opt-in pytest template described under [Testing Invalid Examples](#testing-invalid-examples) (it exercises both valid and invalid cases).
+
+Whichever placement you choose, valid examples MUST exit with code `0`; a non-zero exit indicates a broken example or a schema regression and MUST be fixed before merging.
 
 ### Testing Invalid Examples
 

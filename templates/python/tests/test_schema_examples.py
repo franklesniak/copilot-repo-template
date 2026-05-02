@@ -17,7 +17,10 @@ How to use:
      ``check-jsonschema`` is not installed.
 
 3. Update ``SCHEMA_CASES`` to point at your real ``(schema, example,
-   expected_to_pass)`` triples under ``schemas/examples/``.
+   expected_to_pass)`` triples under ``schemas/examples/``. Relative
+   paths are resolved against pytest's ``rootpath`` (the directory
+   containing ``pyproject.toml``/``setup.cfg``/``pytest.ini``), so they
+   work regardless of the directory ``pytest`` is invoked from.
 
 Both valid and invalid examples are exercised here:
 
@@ -62,10 +65,25 @@ SCHEMA_CASES: list[tuple[str, str, bool]] = [
     reason="No schema example cases are configured in SCHEMA_CASES",
 )
 @pytest.mark.parametrize(("schema", "example", "expected_to_pass"), SCHEMA_CASES)
-def test_schema_example(schema: str, example: str, expected_to_pass: bool) -> None:
+def test_schema_example(
+    schema: str,
+    example: str,
+    expected_to_pass: bool,
+    pytestconfig: pytest.Config,
+) -> None:
     """Validate one (schema, example) pair against the documented expectation."""
+    # Resolve relative entries in SCHEMA_CASES against pytest's rootdir so the
+    # test does not depend on the current working directory. Absolute paths
+    # are used as-is. See `.github/instructions/python.instructions.md`
+    # (Filesystem and Paths): paths SHOULD be resolved from a clear root
+    # rather than the process CWD.
+    rootpath = Path(pytestconfig.rootpath)
     schema_path = Path(schema)
+    if not schema_path.is_absolute():
+        schema_path = rootpath / schema_path
     example_path = Path(example)
+    if not example_path.is_absolute():
+        example_path = rootpath / example_path
     assert schema_path.is_file(), f"Schema file not found: {schema_path}"
     assert example_path.is_file(), f"Example file not found: {example_path}"
 
