@@ -3,9 +3,11 @@ applyTo: "**/*.py"
 description: "Python coding standards:  portability-first by default, modern-advanced when the stack requires it."
 ---
 
+<!-- markdownlint-disable MD013 -->
+
 # Python Writing Style
 
-**Version:** 1.2.20260502.1
+**Version:** 1.2.20260502.2
 
 ## Metadata
 
@@ -195,8 +197,8 @@ except json.JSONDecodeError as error:
 ## Filesystem and Paths
 
 - **SHOULD** use `pathlib.Path`.
-- **MUST NOT** follow symbolic links during recursive directory discovery in code that processes untrusted, repo-supplied, or otherwise externally influenced fixtures, configuration, or input files. Prefer explicit traversal with `os.walk(directory, followlinks=False)` or `Path.walk(..., follow_symlinks=False)` on Python 3.12+, prune or skip entries where `is_symlink()` is `True`, and verify each yielded path remains under the declared discovery root by comparing resolved paths on the candidate path instance, e.g. `path.resolve().relative_to(base.resolve())` (which raises `ValueError` when `path` is outside `base` — callers **MUST** handle that as a containment failure), or use an equivalent safe boundary check.
-- **SHOULD NOT** use `Path.rglob("*")` or `Path.glob("**/*")` for fixture, config, or input discovery unless the implementation also makes symlink handling and root-containment checks explicit. Prefer the safer `os.walk` / `Path.walk` patterns above for untrusted or externally influenced discovery roots.
+- **MUST NOT** follow symbolic links during recursive directory discovery in code that processes untrusted, repo-supplied, or otherwise externally influenced fixtures, configuration, or input files. Prefer explicit traversal with `os.walk(directory, followlinks=False)` or `base_path.walk(follow_symlinks=False)` on Python 3.12+ (where `base_path` is a concrete `pathlib.Path` instance). Prune or skip entries that are symlinks — for `os.walk`, which yields directory and file *names* as strings, test with `os.path.islink(os.path.join(dirpath, name))` (or, when using `os.scandir`, `entry.is_symlink()` on the `os.DirEntry`); for `pathlib`-based traversal, test with `(base_path / name).is_symlink()`. Verify each yielded path remains under the declared discovery root by comparing resolved paths on the candidate path instance, e.g. `candidate.resolve().relative_to(base_path.resolve())` (which raises `ValueError` when `candidate` is outside `base_path` — callers **MUST** handle that as a containment failure), or use an equivalent safe boundary check.
+- **SHOULD NOT** use `base_path.rglob("*")` or `base_path.glob("**/*")` (where `base_path` is a concrete `pathlib.Path` instance) for fixture, config, or input discovery unless the implementation also makes symlink handling and root-containment checks explicit. Prefer the safer `os.walk` / `pathlib.Path.walk` patterns above for untrusted or externally influenced discovery roots.
 - This guidance implements the repo-wide rule "Refuse path traversal and symlink escapes" in [`.github/copilot-instructions.md`](../copilot-instructions.md) § "Non-negotiable Safety and Security Rules" item 3, "Allowlisted file access only".
 - **SHOULD NOT** rely on current working directory; **SHOULD** resolve paths from a clear root (e.g., repo root or config).
 
