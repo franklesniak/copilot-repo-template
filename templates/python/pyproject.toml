@@ -43,6 +43,12 @@ dev = [
     "ruff>=0.9.0",
     "black>=24.0.0",
     "mypy>=1.8.0",
+    # check-jsonschema is required by tests/test_schema_examples.py
+    # (the starter that mirrors the active test in the template
+    # repository) to validate files under
+    # schemas/examples/<name>/{valid,invalid}/. Remove this line if
+    # your downstream project does not use schema example tests.
+    "check-jsonschema>=0.33.0",
 ]
 
 [tool.black]
