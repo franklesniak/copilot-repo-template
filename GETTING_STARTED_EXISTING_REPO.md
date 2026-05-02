@@ -1260,7 +1260,7 @@ If your repository has any GitHub Actions workflow files (`.github/workflows/*.y
 
 Schemas are opt-in and **should be added gradually**, only for **load-bearing** files (files whose shape is depended on by build, deploy, runtime, release automation, or downstream consumers).
 
-- Copy the `schemas/` directory (including `schemas/README.md`) only if you intend to define real schemas. The template ships `schemas/` as a scaffold; it does not contain real schemas and no schema validation hook is wired into pre-commit by default. If you are not adopting schema-backed validation, you may skip this step entirely.
+- Copy the `schemas/` directory (including `schemas/README.md`) only if you intend to define real schemas. The template ships `schemas/` with one clearly removable worked example (`example-config.schema.json` plus example data under `schemas/examples/example-config/`) wired into pre-commit and `data-ci.yml`. If you are not adopting schema-backed validation, follow the [downstream removal checklist](schemas/README.md#downstream-removal-checklist) in `schemas/README.md` to take the worked example out, or skip copying the directory entirely.
 - When you add a real schema, add **one `check-jsonschema` hook per real schema-backed file family**, scoped to the files that family covers (for example, `^config/.*\.json$`). See [`schemas/README.md`](schemas/README.md) for an illustrative hook example.
 - Do **not** add placeholder hooks for schemas that do not yet exist, and do **not** validate every JSON or YAML file by default. `check-json` and `check-yaml` already cover syntax; `check-jsonschema` is for contract checks against specific file families.
 

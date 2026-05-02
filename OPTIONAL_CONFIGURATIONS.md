@@ -974,7 +974,7 @@ If your project prefers Husky for git hooks:
 
 **Files:** `.pre-commit-config.yaml`, `schemas/`, project test directory (for example, `tests/`)
 
-This template ships `schemas/` as a scaffold for JSON Schemas that describe load-bearing JSON or YAML files (see [`schemas/README.md`](schemas/README.md)). **No schema validation hooks are enabled by default.** Schema validation is opt-in and SHOULD be added per real schema-backed file family.
+This template ships `schemas/` with one clearly removable worked example (see [`schemas/README.md`](schemas/README.md)). **The worked example is the only `check-jsonschema` configuration enabled by default.** Beyond that, schema validation is opt-in and SHOULD be added per real schema-backed file family. If your downstream project does not need the worked example, follow the canonical [downstream removal checklist](schemas/README.md#downstream-removal-checklist) in `schemas/README.md` to remove it.
 
 ### When to Add `check-jsonschema`
 

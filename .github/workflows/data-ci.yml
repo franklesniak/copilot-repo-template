@@ -6,14 +6,19 @@
 # markdownlint.yml).
 #
 # Hooks executed (all from .pre-commit-config.yaml):
-#   - check-json   — strict JSON syntax (.json only; .jsonc excluded)
-#   - check-yaml   — YAML parse check (.yml / .yaml)
-#   - yamllint     — YAML style enforcement per .yamllint.yml
-#   - actionlint   — GitHub Actions workflow linting
-#
-# Once concrete schemas are added under `schemas/` and a `check-jsonschema`
-# hook is enabled in `.pre-commit-config.yaml`, extend this workflow with
-# `pre-commit run check-jsonschema --all-files`.
+#   - check-json        — strict JSON syntax (.json only; .jsonc excluded)
+#   - check-yaml        — YAML parse check (.yml / .yaml)
+#   - yamllint          — YAML style enforcement per .yamllint.yml
+#   - actionlint        — GitHub Actions workflow linting
+#   - check-jsonschema  — JSON Schema validation for the worked-example
+#                         schema and its valid example data files (and any
+#                         additional check-jsonschema hooks downstream
+#                         consumers configure). A single
+#                         `pre-commit run check-jsonschema --all-files`
+#                         invocation runs every hook sharing that ID.
+#                         Self-validation of the schema itself is wired as
+#                         a separate `check-metaschema` hook in
+#                         `.pre-commit-config.yaml`.
 #
 # Design Decisions:
 #
@@ -100,3 +105,14 @@ jobs:
 
       - name: Run actionlint
         run: pre-commit run actionlint --all-files
+
+      - name: Run check-jsonschema
+        # `pre-commit run <hook-id> --all-files` runs all hooks sharing the
+        # given ID, so this single invocation covers every check-jsonschema
+        # hook configured in `.pre-commit-config.yaml`. The companion
+        # `check-metaschema` hook (schema self-validation) is invoked
+        # separately below because it has a distinct hook ID.
+        run: pre-commit run check-jsonschema --all-files
+
+      - name: Run check-metaschema
+        run: pre-commit run check-metaschema --all-files

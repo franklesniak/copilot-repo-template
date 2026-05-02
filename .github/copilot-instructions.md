@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.4.20260502.1
+**Version:** 1.4.20260502.2
 
 ## Metadata
 
@@ -74,7 +74,7 @@ In addition to formatting, linting, trailing-whitespace, and end-of-file fixes, 
 
 Prettier is **opt-in** and is **not** part of the default data-file toolchain.
 
-> **Schema validation (not enabled by default).** `check-jsonschema` is **not** wired into `.pre-commit-config.yaml` today. Per [`schemas/README.md`](../schemas/README.md), `schemas/` is a scaffold and "no schema validation hook is wired into pre-commit by default." Downstream repositories MAY add a `check-jsonschema` hook entry to `.pre-commit-config.yaml` once concrete schemas exist under `schemas/`.
+> **Schema validation (worked example only).** `check-jsonschema` is wired into `.pre-commit-config.yaml` to validate the worked-example schema shipped at `schemas/example-config.schema.json` and its valid example data under `schemas/examples/example-config/valid/`, plus a self-validation hook (`check-metaschema`) for the schema itself. See [`schemas/README.md`](../schemas/README.md) for the worked example, the canonical downstream removal checklist, and future-work candidates. Downstream repositories MAY add additional `check-jsonschema` hook entries for their own schema-backed file families.
 
 ### For GitHub Copilot Coding Agent (Automated PRs)
 

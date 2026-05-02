@@ -197,7 +197,7 @@ JSON, YAML, and GitHub Actions workflow validation runs through pre-commit hooks
 
 Prettier is **opt-in** and is not part of the default data-file toolchain.
 
-> **Schema validation (not enabled by default).** `check-jsonschema` is **not** wired into `.pre-commit-config.yaml` today. Per [`schemas/README.md`](schemas/README.md), `schemas/` is a scaffold and "no schema validation hook is wired into pre-commit by default." Downstream repositories MAY add a `check-jsonschema` hook entry to `.pre-commit-config.yaml` once concrete schemas exist under `schemas/`.
+> **Schema validation (worked example shipped).** `check-jsonschema` is wired into `.pre-commit-config.yaml` to validate the template's worked-example schema (`schemas/example-config.schema.json`) and its valid example data under `schemas/examples/example-config/valid/`, plus a `check-metaschema` self-validation hook for the schema itself. See [`schemas/README.md`](schemas/README.md) for the worked example, the canonical downstream removal checklist, and future-work candidates. Downstream repositories MAY add additional `check-jsonschema` hook entries for their own schema-backed file families.
 
 ```bash
 # Run all pre-commit hooks (includes data-file validators)
@@ -208,6 +208,8 @@ pre-commit run check-json --all-files
 pre-commit run check-yaml --all-files
 pre-commit run yamllint --all-files
 pre-commit run actionlint --all-files
+pre-commit run check-jsonschema --all-files
+pre-commit run check-metaschema --all-files
 ```
 
 #### Terraform Linting

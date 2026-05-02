@@ -7,7 +7,7 @@
 - **Status:** Active
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-05-02
-- **Scope:** Conventions for JSON Schemas that describe load-bearing JSON and YAML files in this repository. Does not define any specific schema; this directory is a scaffold.
+- **Scope:** Conventions for JSON Schemas that describe load-bearing JSON and YAML files in this repository, plus a clearly removable worked example (`example-config.schema.json` with valid and invalid example data) wired into pre-commit and data CI to demonstrate the schema-validation pipeline end to end.
 - **Related:** [JSON Authoring Standards](../.github/instructions/json.instructions.md), [YAML Authoring Standards](../.github/instructions/yaml.instructions.md), [Repository Copilot Instructions](../.github/copilot-instructions.md), [Template Design Decisions — Schema Location at Repository Root](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-location-at-repository-root), [Template Design Decisions — Schema Validation Tiers](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-validation-tiers), [Template Design Decisions — `additionalProperties` Policy](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-additionalproperties-policy), [Template Design Decisions — Testing Beyond Linting for JSON/YAML](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-testing-beyond-linting-for-jsonyaml)
 
 ## Purpose
@@ -56,7 +56,7 @@ Schemas whose root type is `object` SHOULD define:
 
 ## Validation
 
-Schema-backed files SHOULD be validated by pre-commit and CI once real schemas and matching file families exist in this repository. Until then, this directory is a scaffold only and no schema validation hook is wired into pre-commit by default. See the JSON authoring standards for the schema-validation policy and tier guidance.
+Schema-backed files are validated by pre-commit and the dedicated data-file CI workflow ([`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml)). This template ships a worked example (see [Worked Example](#worked-example) below) so the validation pipeline is exercised end to end out of the box. Downstream repositories that do not use schema-backed data files SHOULD remove the worked example using the [Downstream Removal Checklist](#downstream-removal-checklist). See the JSON authoring standards for the schema-validation policy and tier guidance.
 
 ### File-Family Hooks
 
@@ -143,12 +143,54 @@ The same shape applies in PowerShell, Bash, or any CI step: invoke the validator
 
 A reusable, opt-in template version of this pattern lives at [`templates/python/tests/test_schema_examples.py`](../templates/python/tests/test_schema_examples.py). It safely skips when `check-jsonschema` is unavailable so that it does not break environments that have not opted in to schema validation.
 
-## Out of Scope for This Scaffold
+## Worked Example
 
-This `README.md` documents conventions only. It does not introduce:
+This template ships a worked example so the schema-validation pipeline works out of the box. The worked example is **template starter content**, not a production contract for downstream repositories.
 
-- Any actual schema files.
-- Any example data files under `schemas/examples/`.
-- Any pre-commit or CI validation hooks for schema-backed files.
+- Schema: [`example-config.schema.json`](./example-config.schema.json)
+- Valid example data: [`examples/example-config/valid/`](./examples/example-config/valid/)
+  - [`minimal.json`](./examples/example-config/valid/minimal.json) — only the required properties.
+  - [`full.json`](./examples/example-config/valid/full.json) — every optional property exercised.
+- Invalid example data: [`examples/example-config/invalid/`](./examples/example-config/invalid/)
+  - [`missing-required.json`](./examples/example-config/invalid/missing-required.json) — required property omitted.
+  - [`wrong-type.json`](./examples/example-config/invalid/wrong-type.json) — required property has the wrong JSON type.
+  - [`extra-property.json`](./examples/example-config/invalid/extra-property.json) — unknown property rejected by `additionalProperties: false`.
 
-Those will be added in follow-up changes when concrete schema-backed file families are introduced.
+How the worked example is validated:
+
+- The `valid/` example data files are validated by the `Validate example-config valid examples` `check-jsonschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) and by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+- The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate example-config schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+- The `invalid/` example data files are exercised by `tests/test_schema_examples.py` (added in a follow-up unit), which asserts that each invalid example causes `check-jsonschema` to exit non-zero.
+- Invalid example data files MUST NOT be wired into a normal pre-commit hook because `check-jsonschema` would treat their (expected) failure as a hook failure.
+
+### Downstream Removal Checklist
+
+The worked example is intentionally easy to remove. To take it out of a downstream repository:
+
+1. Delete [`schemas/example-config.schema.json`](./example-config.schema.json).
+2. Delete the [`schemas/examples/example-config/`](./examples/example-config/) directory and all of its contents.
+3. Remove the `Validate example-config valid examples` and `Self-validate example-config schema` hooks (and the surrounding `python-jsonschema/check-jsonschema` repo block, if no other hooks from that repo remain) from [`.pre-commit-config.yaml`](../.pre-commit-config.yaml).
+4. Remove or adjust the corresponding test cases in `tests/test_schema_examples.py` if no schemas remain in the downstream repository.
+5. Update any documentation that mentions the example schema, including this `README.md` and any references in [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+
+## Future Work
+
+Candidate load-bearing repository configuration files that could later be schema-validated against [SchemaStore](https://www.schemastore.org/)-published schemas or other stable schema sources include:
+
+- `package.json` — schema available on SchemaStore.
+- Generated package-manager lockfiles — only if a stable schema-backed validation path is useful and does not conflict with the package manager's own validation.
+- `pyproject.toml` — TOML rather than JSON, but conceptually parallel; would require a TOML-aware validator rather than `check-jsonschema`.
+- `.github/dependabot.yml` — schema available on SchemaStore.
+- GitHub Actions workflow files — already covered by `actionlint`, so an additional schema check would primarily be redundant.
+
+Many of these candidates are already covered by `check-jsonschema`'s built-in schema catalog (for example, `vendor.dependabot`, `vendor.github-workflows`). Wiring any of them in is **explicitly out of scope** for the worked example shipped in this directory; downstream repositories MAY adopt them as additional `check-jsonschema` hooks.
+
+## Out of Scope for This Worked Example
+
+This directory ships exactly one worked example schema and its example data so the validation pipeline is observable end to end. It does not introduce:
+
+- Any production schema for this repository's own load-bearing files.
+- Any SchemaStore-backed validation hooks for `package.json`, `dependabot.yml`, or similar files.
+- Any JSONC, JSON5, or TOML schema validation tooling.
+
+Those will be added in follow-up changes when concrete schema-backed file families are introduced or when downstream consumers decide to adopt them.
