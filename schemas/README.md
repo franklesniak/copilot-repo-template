@@ -58,6 +58,30 @@ Schemas whose root type is `object` SHOULD define:
 
 Schema-backed files SHOULD be validated by pre-commit and CI once real schemas and matching file families exist in this repository. Until then, this directory is a scaffold only and no schema validation hook is wired into pre-commit by default. See the JSON authoring standards for the schema-validation policy and tier guidance.
 
+### File-Family Hooks
+
+When real schemas exist, validation SHOULD be wired in per **file family**:
+
+- Add **one `check-jsonschema` hook per real schema-backed file family**, scoped to the files that family covers (for example, `^config/.*\.json$`).
+- **Do not add placeholder hooks** for schemas that do not yet exist. An empty or speculative hook adds noise without enforcing anything.
+- **Do not validate every JSON or YAML file by default.** Generic `check-jsonschema --check-metaschema` style sweeps are out of scope; pre-commit already runs `check-json` and `check-yaml` for syntax. Schema validation is a contract check for specific file families, not a global sweep.
+
+Example hook pattern (illustrative — do not copy verbatim without re-verifying the version):
+
+```yaml
+- repo: https://github.com/python-jsonschema/check-jsonschema
+  rev: 0.33.3
+  hooks:
+    - id: check-jsonschema
+      name: Validate project JSON config
+      files: ^config/.*\.json$
+      args:
+        - --schemafile
+        - schemas/project-config.schema.json
+```
+
+> **Version pinning.** Implementers MUST verify and pin a current upstream version of `check-jsonschema` when enabling the hook, rather than copying the example `rev:` value above. Look up the latest tagged release at the upstream repository ([python-jsonschema/check-jsonschema](https://github.com/python-jsonschema/check-jsonschema)) before adoption, and update the pin via your normal dependency-update process.
+
 ## Examples
 
 Example pairs (a sample data file plus the schema it validates against) MAY live under:
@@ -67,6 +91,57 @@ schemas/examples/
 ```
 
 Examples MUST NOT contain real secrets or credentials. Example values MUST be obviously fake (for example, `"REPLACE_ME"`, `"example-token-not-real"`).
+
+### Testing Valid Examples
+
+Valid examples can be validated directly with `check-jsonschema` from the command line or from a pre-commit hook:
+
+```bash
+check-jsonschema \
+  --schemafile schemas/project-config.schema.json \
+  schemas/examples/project-config.valid.json
+```
+
+A valid example MUST produce exit code `0`. A non-zero exit indicates either a broken example or a schema regression and MUST be fixed before merging.
+
+### Testing Invalid Examples
+
+Invalid examples (intentionally malformed fixtures used to prove the schema rejects bad input) MUST NOT be wired directly into a normal pre-commit hook, because `check-jsonschema` would treat their failure as a hook failure.
+
+Instead, invalid examples SHOULD be exercised by a test or script that asserts validation **fails**. For example, using `pytest` and a subprocess invocation:
+
+```python
+import shutil
+import subprocess
+import pytest
+
+CHECK_JSONSCHEMA = shutil.which("check-jsonschema")
+
+
+@pytest.mark.skipif(
+    CHECK_JSONSCHEMA is None,
+    reason="check-jsonschema is not installed in this environment",
+)
+def test_invalid_example_is_rejected():
+    result = subprocess.run(
+        [
+            CHECK_JSONSCHEMA,
+            "--schemafile",
+            "schemas/project-config.schema.json",
+            "schemas/examples/project-config.invalid.json",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0, (
+        "Invalid example was unexpectedly accepted by the schema; "
+        "either the schema is too permissive or the example is no longer invalid."
+    )
+```
+
+The same shape applies in PowerShell, Bash, or any CI step: invoke the validator on the invalid fixture and assert a non-zero exit.
+
+A reusable, opt-in template version of this pattern lives at [`templates/python/tests/test_schema_examples.py`](../templates/python/tests/test_schema_examples.py). It safely skips when `check-jsonschema` is unavailable so that it does not break environments that have not opted in to schema validation.
 
 ## Out of Scope for This Scaffold
 

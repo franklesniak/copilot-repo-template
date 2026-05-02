@@ -20,6 +20,7 @@ This guide covers optional customizations you can make after completing the init
 - [Pull Request Template Customization](#pull-request-template-customization)
 - [Dependabot Configuration](#dependabot-configuration)
 - [Pre-commit Configuration](#pre-commit-configuration)
+- [Schema Validation Configuration](#schema-validation-configuration)
 - [Markdown Linting Configuration](#markdown-linting-configuration)
   - [Using the cli2-Specific Configuration Format](#using-the-cli2-specific-configuration-format)
 - [Nested Markdown Linting Configuration](#nested-markdown-linting-configuration)
@@ -963,6 +964,89 @@ If your project prefers Husky for git hooks:
    ```
 
 > **Warning:** Pre-commit and Husky both manage `.git/hooks/pre-commit`. Do NOT run `pre-commit install` if using Husky, as the two tools conflict.
+
+---
+
+## Schema Validation Configuration
+
+**Files:** `.pre-commit-config.yaml`, `schemas/`, project test directory (for example, `tests/`)
+
+This template ships `schemas/` as a scaffold for JSON Schemas that describe load-bearing JSON or YAML files (see [`schemas/README.md`](schemas/README.md)). **No schema validation hooks are enabled by default.** Schema validation is opt-in and SHOULD be added per real schema-backed file family.
+
+### When to Add `check-jsonschema`
+
+Add a [`check-jsonschema`](https://github.com/python-jsonschema/check-jsonschema) hook when you have:
+
+1. A real schema under `schemas/` (for example, `schemas/project-config.schema.json`), and
+2. A real, identifiable file family that the schema validates (for example, every `config/*.json` in your project).
+
+Do **not** add `check-jsonschema` hooks for schemas that do not yet exist, and do not configure a generic "validate every JSON/YAML file" hook. Pre-commit already runs `check-json` and `check-yaml` for syntax; `check-jsonschema` is for contract validation against a specific schema.
+
+### Adding a Hook for One File Family
+
+Add one hook per `(schema, file family)` pair to `.pre-commit-config.yaml`:
+
+```yaml
+- repo: https://github.com/python-jsonschema/check-jsonschema
+  rev: 0.33.3
+  hooks:
+    - id: check-jsonschema
+      name: Validate project JSON config
+      files: ^config/.*\.json$
+      args:
+        - --schemafile
+        - schemas/project-config.schema.json
+```
+
+> **Version pinning.** Implementers MUST verify and pin a current upstream version of `check-jsonschema` when enabling the hook, rather than copying the example `rev:` value above. Look up the latest tagged release at the upstream repository before adoption and update the pin via your normal dependency-update process (for example, Dependabot's `pre-commit` ecosystem).
+
+If you have multiple schema-backed file families, add one hook **per family**, each scoped with its own `files:` pattern. Do not combine unrelated families into a single hook.
+
+### Testing Valid Examples
+
+Place sample data files that should validate cleanly under `schemas/examples/` (for example, `schemas/examples/project-config.valid.json`). The hook above will validate them automatically because they match the `files:` pattern, provided you place them inside the same family path. If your valid examples live outside the family path, validate them with a dedicated hook or a CI step:
+
+```bash
+check-jsonschema \
+  --schemafile schemas/project-config.schema.json \
+  schemas/examples/project-config.valid.json
+```
+
+### Testing Invalid Examples
+
+Invalid examples (intentionally malformed fixtures used to prove that the schema rejects bad input) MUST NOT be wired into a normal `check-jsonschema` pre-commit hook, because the validator's non-zero exit would be reported as a hook failure on every run. Instead, write a test or script that **asserts validation fails**.
+
+A reusable, opt-in pytest template lives at [`templates/python/tests/test_schema_examples.py`](templates/python/tests/test_schema_examples.py). To use it:
+
+1. Copy the file into your project's real `tests/` directory.
+2. Update its `SCHEMA_CASES` list with `(schema, example, expected_to_pass)` triples for your real schemas and examples.
+3. Choose how to make `check-jsonschema` available to the test environment (see below).
+
+### Making `check-jsonschema` Available to Tests
+
+The template test safely skips when `check-jsonschema` is not on `PATH`, so the root `tests/` directory in this template does not require the tool to be installed. If you want the test to run unconditionally in your repository, do one of the following:
+
+- **Add it as a dev/test dependency.** For example, in `pyproject.toml`:
+
+  ```toml
+  [project.optional-dependencies]
+  dev = [
+      "pytest",
+      "check-jsonschema",
+  ]
+  ```
+
+  Then install with `pip install -e ".[dev]"` (or your preferred dev-install command) so `check-jsonschema` is on `PATH` for tests.
+
+- **Install it in CI only.** Add an explicit install step (for example, `pip install check-jsonschema`) in the relevant CI workflow before the test step. Local developers without the tool installed will see the test skip rather than fail.
+
+If you remove the `skipif` guard, you MUST ensure `check-jsonschema` is installed in every environment where the test runs; otherwise the test will fail with a `FileNotFoundError`-style error rather than a clear "tool missing" message.
+
+### Defaults Recap
+
+- The template ships **no** active `check-jsonschema` hooks.
+- The template ships **no** active root tests that depend on `check-jsonschema`.
+- The template provides documentation and an opt-in test pattern only; downstream repositories add real hooks and tests when they introduce real schemas.
 
 ---
 
