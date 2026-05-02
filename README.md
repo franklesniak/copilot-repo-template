@@ -67,7 +67,7 @@ For template maintainers, see [TEMPLATE_MAINTENANCE.md](TEMPLATE_MAINTENANCE.md)
 │   └── PSScriptAnalyzerSettings.psd1  # PowerShell linting settings
 ├── scripts/                         # Helper scripts for CI/tooling
 └── workflows/                       # GitHub Actions workflows
-    ├── auto-fix-precommit.yml        # Auto-fixes pre-commit issues on Copilot agent PRs (optional)
+    ├── auto-fix-precommit.yml        # Auto-fix pre-commit on copilot/** pushes (optional)
     ├── check-placeholders.yml       # Verifies OWNER/REPO placeholders are replaced
     ├── data-ci.yml                   # JSON/YAML/Actions data-file linting CI
     ├── markdownlint.yml              # Markdown linting CI (markdownlint)
@@ -111,7 +111,7 @@ GEMINI.md                            # Agent instructions for Gemini Code Assist
 | `.github/dependabot.yml` | Dependabot configuration for automated dependency updates - enabled by default |
 | `.github/instructions/*.md` | Language-specific coding standards applied based on file patterns |
 | `.github/linting/PSScriptAnalyzerSettings.psd1` | PSScriptAnalyzer settings enforcing OTBS formatting for PowerShell |
-| `.github/workflows/auto-fix-precommit.yml` | Automatically commits pre-commit auto-fixes on PRs pushed by the Copilot coding agent (optional - remove if not using the Copilot coding agent) |
+| `.github/workflows/auto-fix-precommit.yml` | Automatically commits pre-commit auto-fixes on pushes to `copilot/**` branches by the Copilot coding agent (optional - remove if not using the Copilot coding agent) |
 | `.github/workflows/check-placeholders.yml` | CI workflow to verify OWNER/REPO and @OWNER placeholders are replaced after cloning |
 | `.github/workflows/data-ci.yml` | Data-file (JSON/YAML/GitHub Actions) linting CI workflow — runs `check-json`, `check-yaml`, `yamllint`, and `actionlint` as a dedicated check that can be required via branch protection |
 | `.github/workflows/markdownlint.yml` | Markdown linting CI workflow (uses [markdownlint](https://github.com/DavidAnson/markdownlint)) |
