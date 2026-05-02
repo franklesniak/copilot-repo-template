@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/schemas/example-config.schema.json",
   "title": "Example Config (template worked example)",
-  "description": "Template example schema shipped by franklesniak/copilot-repo-template to demonstrate JSON Schema Draft 2020-12 conventions, pre-commit validation of valid examples, and pytest validation of invalid examples. This is NOT a production contract for any downstream repository. Downstream consumers SHOULD replace or remove this schema, its example data files under schemas/examples/example-config/, and the associated check-jsonschema hook(s) when adopting the template. See schemas/README.md for the canonical removal checklist.",
+  "description": "Template example schema shipped by franklesniak/copilot-repo-template to demonstrate JSON Schema Draft 2020-12 conventions and pre-commit validation of valid examples. This is NOT a production contract for any downstream repository. Downstream consumers SHOULD replace or remove this schema, its example data files under schemas/examples/example-config/, and the associated check-jsonschema hook(s) when adopting the template. See schemas/README.md for the canonical removal checklist.",
   "type": "object",
   "additionalProperties": false,
   "required": [

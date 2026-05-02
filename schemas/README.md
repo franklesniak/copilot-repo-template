@@ -160,7 +160,7 @@ How the worked example is validated:
 
 - The `valid/` example data files are validated by the `Validate example-config valid examples` `check-jsonschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) and by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
 - The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate example-config schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
-- The `invalid/` example data files are exercised by `tests/test_schema_examples.py` (added in a follow-up unit), which asserts that each invalid example causes `check-jsonschema` to exit non-zero.
+- The `invalid/` example data files are not yet exercised by an in-repo pytest suite; a follow-up unit will add `tests/test_schema_examples.py` to assert that each invalid example causes `check-jsonschema` to exit non-zero. A reusable, opt-in version of that test pattern is already available at [`templates/python/tests/test_schema_examples.py`](../templates/python/tests/test_schema_examples.py) for downstream adopters.
 - Invalid example data files MUST NOT be wired into a normal pre-commit hook because `check-jsonschema` would treat their (expected) failure as a hook failure.
 
 ### Downstream Removal Checklist
@@ -170,7 +170,7 @@ The worked example is intentionally easy to remove. To take it out of a downstre
 1. Delete [`schemas/example-config.schema.json`](./example-config.schema.json).
 2. Delete the [`schemas/examples/example-config/`](./examples/example-config/) directory and all of its contents.
 3. Remove the `Validate example-config valid examples` and `Self-validate example-config schema` hooks (and the surrounding `python-jsonschema/check-jsonschema` repo block, if no other hooks from that repo remain) from [`.pre-commit-config.yaml`](../.pre-commit-config.yaml).
-4. Remove or adjust the corresponding test cases in `tests/test_schema_examples.py` if no schemas remain in the downstream repository.
+4. If you adopted the optional schema-example tests (for example, by copying [`templates/python/tests/test_schema_examples.py`](../templates/python/tests/test_schema_examples.py) into your repository's `tests/` directory), remove or adjust the corresponding test cases there if no schemas remain in the downstream repository.
 5. Update any documentation that mentions the example schema, including this `README.md` and any references in [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
 
 ## Future Work
