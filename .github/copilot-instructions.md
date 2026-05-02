@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.3.20260502.0
+**Version:** 1.4.20260502.0
 
 ## Metadata
 
@@ -114,6 +114,21 @@ This repository includes an auto-fix workflow (`.github/workflows/auto-fix-preco
 - Agents should still try to run pre-commit checks before pushing when possible
 - The workflow only applies to `copilot/**` branches—human branches are not affected
 - Manual intervention may still be required for issues that cannot be auto-fixed
+
+## Repository Self-Containment
+
+All files committed to this repository MUST be interpretable using only the contents of this repository and public references that are clearly linked from it. This applies to, but is not limited to, `README.md`, files under `.github/` including workflows, instructions, and design-decision docs, other top-level `*.md` files, and code comments embedded in committed files.
+
+Do not embed references to:
+
+- Work-stream identifiers, sprint names, milestone labels, or phase numbers that are not defined inside this repository.
+- Ticket, issue, or project IDs that resolve only inside a private or external tracker.
+- Internal team, person, or communication-channel names.
+- Roadmap, design, or planning documents that are not published in this repository or otherwise publicly resolvable from links in this repository.
+
+Where a future-extension hook needs to be described, phrase the condition in repository-observable terms. For example, prefer "Once concrete schemas are added under `schemas/` and a `check-jsonschema` hook is enabled in `.pre-commit-config.yaml`, ..." rather than referencing the work stream that will introduce those changes.
+
+If a needed reference cannot be expressed in repository-observable terms, follow the existing **What Not to Do** guidance and open an issue or add an explicit "Open Question" in the affected file instead of inventing or importing an external reference.
 
 ## Determinism and Correctness Rules
 
