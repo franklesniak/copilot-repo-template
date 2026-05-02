@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.3.20260501.3
+**Version:** 1.4.20260502.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-01
+- **Last Updated:** 2026-05-02
 - **Scope:** Defines documentation standards for all Markdown files in this repository, including specs, design docs, runbooks, ADRs, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -70,6 +70,19 @@ Placement rules for the metadata header block:
 - Otherwise, the block MUST be placed immediately after any leading `<!-- markdownlint-disable ... -->` directive at the top of the body, or at the top of the body if no such directive is present.
 - For documents that already use a top-level `## Metadata` section to host the bullet list, that section MUST be the first `##` section after the H1 (and the optional `**Version:** ...` line, if present), and the bullet list MUST appear inside it.
 - This placement is compatible with the convention (see **Markdown Conventions** below) that Markdown files SHOULD include `<!-- markdownlint-disable MD013 -->` immediately after any YAML front matter, or at the very top of the file if there is no front matter.
+
+### Synchronizing `Last Updated` and `Version` on Content Changes
+
+The fields referenced in this subsection (`Last Updated`, and the optional `Version` line) are defined in the bullet list above; this subsection adds normative synchronization rules for those fields and does not redefine their semantics.
+
+- When a commit modifies the rendered content or documentation meaning of a document that carries the metadata header block, the `Last Updated` field in that document MUST be bumped to the current UTC date in `YYYY-MM-DD` form as part of the same commit.
+- If the document also carries a `**Version:** <major>.<minor>.<YYYYMMDD>.<revision>` line, the embedded `<YYYYMMDD>` segment MUST be updated in the same commit so that it matches the new `Last Updated` value.
+- Revision convention for the `<revision>` segment of `**Version:**`:
+  - When `<YYYYMMDD>` changes in a commit, `<revision>` MUST reset to `0`.
+  - When a further same-day commit modifies the document, `<revision>` MUST increment by `1` (for example, `...20260502.0` → `...20260502.1`).
+  - `<major>` and `<minor>` are out of scope for this synchronization rule and follow the document's own semantic-versioning conventions.
+- Exemption for trivial mechanical changes. The bump MAY be omitted for commits that do not alter rendered content or documentation meaning, including pure file-mode changes, line-ending normalization, end-of-file newline fixes, or trailing-whitespace-only fixes produced by pre-commit hooks. Automated commits made by the auto-fix workflow (`.github/workflows/auto-fix-precommit.yml`) MAY omit the bump when they only apply those mechanical fixes.
+- This rule applies to all documents in the repository that carry the metadata header block, including but not limited to `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md`.
 
 ## Writing Rules
 
