@@ -67,10 +67,13 @@ For template maintainers, see [TEMPLATE_MAINTENANCE.md](TEMPLATE_MAINTENANCE.md)
 │   └── PSScriptAnalyzerSettings.psd1  # PowerShell linting settings
 ├── scripts/                         # Helper scripts for CI/tooling
 └── workflows/                       # GitHub Actions workflows
+    ├── auto-fix-precommit.yml        # Auto-fixes pre-commit issues on Copilot agent PRs (optional)
     ├── check-placeholders.yml       # Verifies OWNER/REPO placeholders are replaced
     ├── data-ci.yml                   # JSON/YAML/Actions data-file linting CI
+    ├── markdownlint.yml              # Markdown linting CI (markdownlint)
     ├── powershell-ci.yml             # PowerShell linting and testing CI (optional)
-    └── python-ci.yml                 # Python linting and testing CI (optional)
+    ├── python-ci.yml                 # Python linting and testing CI (optional)
+    └── terraform-ci.yml              # Terraform format, validate, lint, test, security CI (optional)
 
 src/
 └── copilot_repo_template/           # Example Python package (rename for your project)
@@ -108,10 +111,13 @@ GEMINI.md                            # Agent instructions for Gemini Code Assist
 | `.github/dependabot.yml` | Dependabot configuration for automated dependency updates - enabled by default |
 | `.github/instructions/*.md` | Language-specific coding standards applied based on file patterns |
 | `.github/linting/PSScriptAnalyzerSettings.psd1` | PSScriptAnalyzer settings enforcing OTBS formatting for PowerShell |
+| `.github/workflows/auto-fix-precommit.yml` | Automatically commits pre-commit auto-fixes on PRs pushed by the Copilot coding agent (optional - remove if not using the Copilot coding agent) |
 | `.github/workflows/check-placeholders.yml` | CI workflow to verify OWNER/REPO and @OWNER placeholders are replaced after cloning |
 | `.github/workflows/data-ci.yml` | Data-file (JSON/YAML/GitHub Actions) linting CI workflow — runs `check-json`, `check-yaml`, `yamllint`, and `actionlint` as a dedicated required check |
+| `.github/workflows/markdownlint.yml` | Markdown linting CI workflow (uses [markdownlint](https://github.com/DavidAnson/markdownlint)) |
 | `.github/workflows/powershell-ci.yml` | PowerShell linting and Pester testing CI workflow (optional - remove if not using PowerShell) |
 | `.github/workflows/python-ci.yml` | Python linting and testing CI workflow (optional - remove if not using Python) |
+| `.github/workflows/terraform-ci.yml` | Terraform format, validate, lint, test, and security CI workflow (optional - remove if not using Terraform) |
 | `.markdownlint.jsonc` | Markdown linting rules prioritizing auto-fixable checks |
 | `.yamllint.yml` | YAML linting configuration (2-space indentation, max line length 120 as warning, unquoted GitHub Actions `on:` allowed) |
 | `.pre-commit-config.yaml` | Pre-commit hooks for all projects (multi-language) |
