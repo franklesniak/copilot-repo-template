@@ -901,15 +901,17 @@ args: [--line-length=88]
 
 ### Adding Hooks for Other Languages
 
-**Prettier (JavaScript/TypeScript/CSS/JSON):**
+**Prettier (JavaScript/TypeScript/CSS):**
 
 ```yaml
 - repo: https://github.com/pre-commit/mirrors-prettier
   rev: v3.1.0
   hooks:
     - id: prettier
-      types_or: [javascript, jsx, ts, tsx, css, json, yaml, markdown]
+      types_or: [javascript, jsx, ts, tsx, css, markdown]
 ```
+
+> **JSON/JSONC and YAML are intentionally omitted from `types_or` above.** For JSON/JSONC, see [Prettier for JSON/JSONC (Opt-in)](#prettier-for-jsonjsonc-opt-in), which recommends a `repo: local` hook over `pre-commit/mirrors-prettier` to avoid pinning the Prettier version in two places. Prettier for YAML is discouraged by default in this template; see the YAML subsection of that same section for the reconciliation requirements if a project chooses to adopt it anyway.
 
 **ESLint:**
 
@@ -1145,12 +1147,16 @@ If the project already runs Prettier from `package.json` scripts, a `repo: local
   hooks:
     - id: prettier-json-check
       name: Check JSON and JSONC formatting with Prettier
-      entry: npx prettier --check "**/*.{json,jsonc}" "!node_modules/**"
+      entry: npx --no-install prettier --check "**/*.{json,jsonc}" "!node_modules/**"
       language: system
       pass_filenames: false
 ```
 
-`pass_filenames: false` lets the glob in `entry:` decide which files Prettier inspects, which keeps the hook consistent with the `lint:json:format` script.
+`pass_filenames: false` lets the glob in `entry:` decide which files Prettier inspects, which keeps the hook consistent with the `lint:json:format` script. The `--no-install` flag tells `npx` to fail rather than fetch an unpinned Prettier on demand, so the hook always uses the version recorded in `package.json` / `package-lock.json`.
+
+> **Node availability requirement.** Because this hook shells out to `npx`, every environment that runs `pre-commit` MUST have Node.js installed and the project's npm dependencies installed (typically via `npm ci`). The template's default CI workflows do not install Node, so adopters who add this hook MUST also add a Node setup step (for example, `actions/setup-node` followed by `npm ci`) to any workflow that runs `pre-commit run --all-files`, and ensure the same is true on contributor workstations.
+
+<!-- -->
 
 > **`pre-commit/mirrors-prettier` is not the recommended path.** The `pre-commit/mirrors-prettier` repository pins a Prettier version separately from the project's `package.json`, which creates two sources of truth for the Prettier version. Prefer the `repo: local` hook above so that `package.json`, CI scripts, and the pre-commit hook all use the same Prettier version.
 

@@ -67,7 +67,7 @@ pre-commit autoupdate
 pre-commit run --all-files
 ```
 
-**Frequency:** Monthly or when security advisories are published for hook dependencies.
+**Frequency:** Quarterly (or as needed for major-version refreshes), or sooner when security advisories are published for hook dependencies. Routine minor and patch updates are handled automatically by Dependabot — see [Maintenance Cadence](#maintenance-cadence) above for the full layered cadence.
 
 ### Tools to Track
 
