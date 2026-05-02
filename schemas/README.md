@@ -8,7 +8,7 @@
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-05-01
 - **Scope:** Conventions for JSON Schemas that describe load-bearing JSON and YAML files in this repository. Does not define any specific schema; this directory is a scaffold.
-- **Related:** [JSON Authoring Standards](../.github/instructions/json.instructions.md), [YAML Authoring Standards](../.github/instructions/yaml.instructions.md), [Repository Copilot Instructions](../.github/copilot-instructions.md)
+- **Related:** [JSON Authoring Standards](../.github/instructions/json.instructions.md), [YAML Authoring Standards](../.github/instructions/yaml.instructions.md), [Repository Copilot Instructions](../.github/copilot-instructions.md), [Template Design Decisions — Schema Location at Repository Root](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-location-at-repository-root), [Template Design Decisions — Schema Validation Tiers](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-validation-tiers)
 
 ## Purpose
 
