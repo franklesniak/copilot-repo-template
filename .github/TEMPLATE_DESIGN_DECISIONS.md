@@ -418,7 +418,7 @@ The template ships dedicated instruction files for JSON (`.github/instructions/j
 
 ### Design Decision: Baseline JSON/YAML Linting Stack
 
-The default pre-commit stack for JSON and YAML uses `check-json`, `check-yaml`, `yamllint`, and `actionlint`, with `check-jsonschema` reserved as the recommended path for future schema-backed validation.
+The default pre-commit stack for JSON and YAML uses `check-json`, `check-yaml`, `yamllint`, `actionlint`, and — as of the worked-example schema rollout — `check-jsonschema` plus `check-metaschema` scoped to the worked-example schema (`schemas/example-config.schema.json`).
 
 **Selected hooks and their roles:**
 
@@ -426,7 +426,7 @@ The default pre-commit stack for JSON and YAML uses `check-json`, `check-yaml`, 
 2. **`check-yaml` (pre-commit-hooks)** — Fast YAML parse check. Catches structural errors before slower linters run.
 3. **`yamllint`** — YAML style enforcement (indentation, line length, truthy values). Configured via `.yamllint.yml`.
 4. **`actionlint`** — GitHub Actions workflow validation, including expression syntax, runner labels, and `shellcheck` integration over `run:` blocks.
-5. **`check-jsonschema` (reserved, opt-in)** — Recommended for future schema-backed validation when schemas are added under `schemas/`. Not wired up in the default config to avoid placeholder hook entries.
+5. **`check-jsonschema`** — JSON Schema validation. As of the worked-example schema rollout, this hook is wired by default with two scoped entries: one validates the valid example data files under `schemas/examples/example-config/valid/` against the worked-example schema, and one (`check-metaschema`) self-validates the schema against its declared JSON Schema Draft 2020-12 metaschema. Downstream repositories MAY add additional `check-jsonschema` hook entries for their own schema-backed file families. The "Avoid placeholder schema hooks" rule under the Schema Validation Tiers ADR is still in force: the wiring exists because a real schema and real example data ship in the template, not as a placeholder.
 
 **Notable scoping:**
 
@@ -674,7 +674,7 @@ The repository ships a dedicated `.github/workflows/data-ci.yml` workflow that r
 
 **Distinction from `auto-fix-precommit.yml`:** `data-ci.yml` is a contract enforcement gate that runs on all PRs and pushes. `.github/workflows/auto-fix-precommit.yml` is intentionally NOT a peer of `data-ci.yml`: it is a fix-up workflow scoped to `copilot/**` branches that auto-applies pre-commit fixes and does not enforce results. The two workflows serve different purposes and must not be conflated.
 
-**Future extension:** Once concrete schemas are added under `schemas/` and a `check-jsonschema` hook is enabled in `.pre-commit-config.yaml`, `data-ci.yml` will be extended with `pre-commit run check-jsonschema --all-files`. No schema validation is wired in by default today.
+**Schema validation steps:** As of the worked-example schema rollout, `data-ci.yml` runs dedicated `Run check-jsonschema` and `Run check-metaschema` steps that validate the template's worked-example schema (`schemas/example-config.schema.json`), its valid example data files, and the schema itself against its declared Draft 2020-12 metaschema. The dedicated steps are kept alongside the standard data-file hooks so the schema-validation surface is independently visible in CI logs; `pre-commit run check-jsonschema --all-files` covers any additional `check-jsonschema` hooks downstream consumers add to `.pre-commit-config.yaml`.
 
 ### Design Decision: Non-Blocking Type Checking by Default
 

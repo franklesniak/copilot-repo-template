@@ -194,6 +194,8 @@ JSON, YAML, and GitHub Actions workflow validation runs through pre-commit hooks
 - **`check-yaml`** — `.yml` / `.yaml` parse check.
 - **`yamllint`** — YAML style enforcement per `.yamllint.yml`.
 - **`actionlint`** — GitHub Actions workflow linting.
+- **`check-jsonschema`** — JSON Schema validation, scoped to the worked-example schema's valid example data under `schemas/examples/example-config/valid/`. Downstream repositories MAY add additional `check-jsonschema` hook entries for their own schema-backed file families.
+- **`check-metaschema`** — self-validates the worked-example schema (`schemas/example-config.schema.json`) against its declared JSON Schema Draft 2020-12 metaschema.
 
 Prettier is **opt-in** and is not part of the default data-file toolchain.
 
