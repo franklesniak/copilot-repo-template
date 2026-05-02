@@ -1009,7 +1009,7 @@ Sample data files that should validate cleanly can be placed in either of two lo
 - **Inside the file family path covered by the family hook** (for example, `config/example.valid.json` for the hook above). The family hook will validate these automatically because they match its `files:` pattern.
 - **Under `schemas/examples/`** (for example, `schemas/examples/project-config.valid.json`). This location is the convention used by `schemas/README.md` and the pytest template referenced below, but it does **not** match the family hook's `files:` pattern, so these examples need a separate validation path. Choose one of:
 
-  - Add a dedicated `check-jsonschema` hook scoped to `schemas/examples/` (for example, `files: ^schemas/examples/project-config\..*\.json$`).
+  - Add a dedicated `check-jsonschema` hook scoped to **valid** fixtures under `schemas/examples/` only (for example, `files: ^schemas/examples/project-config\..*\.valid\.json$`). The `\.valid\.json$` anchor is important: it aligns with the `*.valid.json` / `*.invalid.json` naming convention used in `schemas/README.md` § Examples and in `templates/python/tests/test_schema_examples.py`'s `SCHEMA_CASES` placeholders, and it prevents the hook from picking up `*.invalid.json` fixtures (which MUST NOT be wired into a normal `check-jsonschema` hook — see the next subsection).
   - Run `check-jsonschema` directly from a CI step or local script:
 
     ```bash
