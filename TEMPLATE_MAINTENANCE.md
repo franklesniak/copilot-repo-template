@@ -47,6 +47,16 @@ To keep the template current and functional, maintainers **SHOULD** review templ
 
 Pre-commit hooks **SHOULD** be kept up-to-date for security and compatibility.
 
+### Maintenance Cadence
+
+This template uses a layered cadence for pre-commit hook maintenance:
+
+- **Routine (weekly, automated).** [Dependabot](.github/dependabot.yml)'s `pre-commit` ecosystem opens grouped pull requests for minor and patch updates to hooks pinned in `.pre-commit-config.yaml`. These PRs SHOULD be reviewed and merged routinely; CI exercises the updated hooks via `pre-commit run --all-files` in `.github/workflows/python-ci.yml`.
+- **Major-version refreshes (manual).** Maintainers MAY run `pre-commit autoupdate` manually to refresh major versions, or for an explicit quarterly maintenance pass. Major version bumps are not handled by the grouped Dependabot configuration and require an intentional review.
+- **Changelog review.** Before accepting any major hook update (whether from `pre-commit autoupdate` or a Dependabot PR), maintainers MUST review the upstream changelog or release notes for breaking changes. See [Breaking Change Considerations](#breaking-change-considerations) for tool-specific notes.
+- **Validation.** After any update — Dependabot-driven or manual — maintainers MUST run `pre-commit run --all-files` locally and confirm a clean pass.
+- **Commit hygiene.** Hook version bumps and any auto-fixes produced by the updated hooks MUST be committed together in the same change. Do not split formatting churn caused by an updated hook into a separate "fix formatting" commit.
+
 ### Quick Update
 
 ```bash
