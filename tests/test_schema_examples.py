@@ -39,6 +39,7 @@ validation pattern.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -52,6 +53,50 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SCHEMAS_DIR = REPO_ROOT / "schemas"
 EXAMPLES_DIR = SCHEMAS_DIR / "examples"
 SCHEMA_SUFFIX = ".schema.json"
+
+
+def _iter_safe_files(directory: Path) -> list[Path]:
+    """List regular files under ``directory``, refusing symlink escapes.
+
+    Walks ``directory`` with ``os.walk(followlinks=False)`` so that
+    symlinked subdirectories are never traversed, then drops any
+    yielded entry that is itself a symlink. Each remaining path is
+    re-checked with ``Path.resolve()`` and ``Path.relative_to`` to
+    guarantee it is still located inside ``directory``'s resolved
+    location, which protects against bind-mount and other non-symlink
+    forms of path traversal as well.
+
+    The repository constitution requires that file-discovery callers
+    "reject path traversal and symlink escapes"; this helper centralizes
+    that policy for example-fixture discovery so the test suite cannot
+    be coerced into validating files outside the schemas/examples tree
+    by a malicious or accidentally-introduced symlink.
+
+    Args:
+        directory: Directory whose regular-file descendants should be
+            returned. May not exist; if absent, an empty list is
+            returned.
+
+    Returns:
+        A list of regular-file ``Path`` objects below ``directory``,
+        in the order produced by ``os.walk`` (callers that need a
+        deterministic order should sort the result).
+    """
+    if not directory.is_dir():
+        return []
+    base = directory.resolve()
+    discovered: list[Path] = []
+    for current_root, _dir_names, file_names in os.walk(directory, followlinks=False):
+        for file_name in file_names:
+            file_path = Path(current_root) / file_name
+            if file_path.is_symlink():
+                continue
+            try:
+                file_path.resolve().relative_to(base)
+            except (OSError, ValueError):
+                continue
+            discovered.append(file_path)
+    return discovered
 
 
 def _discover_cases() -> list[tuple[Path, Path, bool]]:
@@ -76,7 +121,7 @@ def _discover_cases() -> list[tuple[Path, Path, bool]]:
             kind_dir = schema_examples_dir / kind
             if not kind_dir.is_dir():
                 continue
-            for example_path in sorted(kind_dir.rglob("*")):
+            for example_path in sorted(_iter_safe_files(kind_dir)):
                 if not example_path.is_file():
                     continue
                 cases.append((schema_path, example_path, expected_to_pass))
