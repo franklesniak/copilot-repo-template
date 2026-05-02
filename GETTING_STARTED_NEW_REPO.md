@@ -21,6 +21,7 @@ This guide walks you through creating a brand-new repository using `franklesniak
 - [Creating Optional Labels](#creating-optional-labels)
 - [Installing and Configuring Pre-commit](#installing-and-configuring-pre-commit)
 - [Language-Specific Customization](#language-specific-customization)
+  - [JSON/YAML-Heavy Repositories](#jsonyaml-heavy-repositories)
 - [Updating package.json Metadata](#updating-packagejson-metadata)
 - [Customizing the Pull Request Template](#customizing-the-pull-request-template)
 - [Updating README.md](#updating-readmemd)
@@ -1305,6 +1306,53 @@ Edit `.github/ISSUE_TEMPLATE/bug_report.yml` and `.github/ISSUE_TEMPLATE/feature
 #### Update Pull Request Template
 
 Edit `.github/pull_request_template.md` to remove the "PowerShell-Specific (if applicable)" section.
+
+### JSON/YAML-Heavy Repositories
+
+The template ships with a default JSON/YAML toolchain that already covers most repositories — including JSON-config-only or YAML-heavy projects (for example, Kubernetes manifests, Helm charts, Ansible playbooks, GitHub Actions-only repos). Unlike the Python and PowerShell sections above, you typically do **not** need to add anything new for JSON/YAML; you mostly need to **keep** what is already there and decide how far to take optional schema validation.
+
+> **Do not duplicate full JSON/YAML policy here.** The authoritative authoring rules live in [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md) and [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md). Read those files when authoring JSON or YAML.
+
+#### What to Keep
+
+For any repository that contains JSON or YAML (which is essentially all of them), keep the following:
+
+- `.github/instructions/json.instructions.md` — JSON authoring standards.
+- `.github/instructions/yaml.instructions.md` — YAML authoring standards.
+- `.yamllint.yml` — YAML lint configuration consumed by the `yamllint` pre-commit hook.
+- The default pre-commit hooks for data files in `.pre-commit-config.yaml`:
+  - `check-json` (validates **strict `.json` only** — see below)
+  - `check-yaml`
+  - `yamllint`
+  - `actionlint` (GitHub Actions workflow validation)
+
+If you retain the template's pre-commit workflow (`.github/workflows/python-ci.yml` runs `pre-commit run --all-files`), CI will already enforce these hooks for every push and pull request — you do not need to wire up additional CI for JSON/YAML validation.
+
+#### `check-json` vs. `.jsonc`
+
+- The `check-json` hook validates **strict `.json`** files only. The hook is anchored with `files: \.json$`, so `.jsonc` files are intentionally skipped.
+- `.jsonc` is allowed only when the consuming tool explicitly supports JSONC (for example, the TypeScript compiler reading `tsconfig.json`, or some VS Code settings files).
+- The default pre-commit stack does **not** validate `.jsonc` syntax. Repositories that need stricter enforcement of `.jsonc` files should add **JSONC-aware tooling** (a JSONC-aware parser, linter, or schema validator) rather than retrofitting `check-json`.
+- JSON5 is **not** enabled by default and **must not** be introduced without an explicit, documented project decision.
+
+#### Schemas: Opt-In for Load-Bearing Contracts
+
+The template includes a `schemas/` scaffold at the repository root for JSON Schemas that describe **load-bearing** JSON or YAML files (files whose shape is depended on by build, deploy, runtime, release automation, or downstream consumers).
+
+- Add schemas under root-level `schemas/` only when you have real, load-bearing contracts to describe. Not every JSON or YAML file needs a schema.
+- Add a `check-jsonschema` pre-commit hook **per real schema-backed file family**, scoped to the files that family covers (for example, `^config/.*\.json$`). Do not add placeholder hooks for schemas that do not yet exist.
+- See [`schemas/README.md`](schemas/README.md) for schema conventions (Draft 2020-12, `.schema.json` naming, `additionalProperties: false` for closed contracts) and an illustrative `check-jsonschema` hook configuration.
+- If your project does not use schema-backed data files, you **may** delete the entire `schemas/` directory.
+
+#### Formatting: Prettier and JSON5 Are Not in the Default Toolchain
+
+- **Prettier is opt-in** and is not part of the default pre-commit toolchain. The default stack does not run Prettier on JSON or YAML, and does **not** rely on Prettier (or any other tool) to sort JSON keys. The JSON authoring guide intentionally preserves intentional grouping and tool-managed key order (for example, in `package.json` and lock files).
+- **JSON5 is not enabled by default.** The JSON authoring guide does not target `.json5`.
+- If your project independently adopts Prettier or JSON5, document the decision and ensure the resulting configuration does not conflict with the JSON/YAML authoring guides linked above.
+
+#### Ecosystem Validators
+
+Adopt ecosystem-specific validators (Kubernetes manifest validators, OpenAPI validators, Helm validators, Ansible validators, etc.) only when the repository actually uses those ecosystems. Do not add validators that are not relevant to your stack.
 
 ---
 
