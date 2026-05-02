@@ -1,0 +1,102 @@
+# Data file linting CI Workflow
+#
+# Purpose: Run JSON, YAML, and GitHub Actions workflow validation as a
+# first-class, dedicated CI workflow alongside the other per-language
+# workflows (python-ci.yml, powershell-ci.yml, terraform-ci.yml,
+# markdownlint.yml).
+#
+# Hooks executed (all from .pre-commit-config.yaml):
+#   - check-json   — strict JSON syntax (.json only; .jsonc excluded)
+#   - check-yaml   — YAML parse check (.yml / .yaml)
+#   - yamllint     — YAML style enforcement per .yamllint.yml
+#   - actionlint   — GitHub Actions workflow linting
+#
+# Once concrete schemas are added under `schemas/` and a `check-jsonschema`
+# hook is enabled in `.pre-commit-config.yaml`, extend this workflow with
+# `pre-commit run check-jsonschema --all-files`.
+#
+# Design Decisions:
+#
+# 1. CI Ownership / Relationship to python-ci.yml:
+#    `python-ci.yml` continues to run the full `pre-commit run --all-files`
+#    pipeline as the single canonical aggregate pre-commit gate. This
+#    workflow does NOT replace that — it adds dedicated visibility and a
+#    distinct required-check identity for JSON/YAML/Actions validation so
+#    branch protection rules and contributors can reason about data-file
+#    quality independently of Python CI.
+#
+#    Trade-off: the JSON/YAML/actionlint hooks run in both workflows. This
+#    duplication is intentional and accepted in exchange for clearer
+#    ownership and parity with the other per-language workflows. See the
+#    "Dedicated data-file CI workflow (data-ci.yml)" entry in
+#    `.github/TEMPLATE_DESIGN_DECISIONS.md` for the full rationale.
+#
+# 2. Relationship to auto-fix-precommit.yml:
+#    `.github/workflows/auto-fix-precommit.yml` is intentionally NOT a peer
+#    of this workflow. It is a fix-up workflow scoped to `copilot/**`
+#    branches that auto-applies pre-commit fixes; it is not a contract
+#    enforcement gate. `data-ci.yml` is a contract enforcement gate for all
+#    PRs and pushes.
+#
+# 3. Template Repository Trigger Policy:
+#    This workflow does NOT use path-based filtering. This repository is a
+#    template, and existing per-language workflows (python-ci.yml,
+#    powershell-ci.yml, terraform-ci.yml) intentionally avoid path filters
+#    so the workflow itself is exercised on every change and copied
+#    accurately by downstream consumers. This workflow mirrors that
+#    convention by running on all pushes and pull requests, plus
+#    `workflow_dispatch` to match `python-ci.yml` and `terraform-ci.yml`.
+#
+# 4. Job and Workflow Naming:
+#    The workflow name (`Data file linting`) and job name (`Data file
+#    linting`) are deliberately distinct from `Python CI` / `Pre-commit` so
+#    that branch protection rules can require data-file validation
+#    independently from Python validation.
+
+name: Data file linting
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  data-file-linting:
+    name: Data file linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+          cache: 'pip'
+
+      - name: Cache pre-commit hooks
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Run check-json
+        run: pre-commit run check-json --all-files
+
+      - name: Run check-yaml
+        run: pre-commit run check-yaml --all-files
+
+      - name: Run yamllint
+        run: pre-commit run yamllint --all-files
+
+      - name: Run actionlint
+        run: pre-commit run actionlint --all-files
