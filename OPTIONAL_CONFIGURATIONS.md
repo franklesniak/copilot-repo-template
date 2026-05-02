@@ -1010,7 +1010,7 @@ If you have multiple schema-backed file families, add one hook **per family**, e
 Sample data files that should validate cleanly can be placed in either of two locations, with different validation consequences:
 
 - **Inside the file family path covered by the family hook** (for example, `config/example.valid.json` for the hook above). The family hook will validate these automatically because they match its `files:` pattern.
-- **Under `schemas/examples/`** (for example, `schemas/examples/project-config.valid.json`). This location is the convention used by `schemas/README.md` and the pytest template referenced below, but it does **not** match the family hook's `files:` pattern, so these examples need a separate validation path. Choose one of:
+- **Under `schemas/examples/<schema-name>/{valid,invalid}/`** (for example, `schemas/examples/project-config/valid/minimal.json`). This `schemas/examples/<schema-name>/{valid,invalid}/` layout is the convention used by `schemas/README.md` and the pytest tests referenced below, but it does **not** match the family hook's `files:` pattern, so these examples need a separate validation path. Choose one of:
 
   - Add a dedicated `check-jsonschema` hook scoped to **valid** fixtures under `schemas/examples/` only (for example, `files: ^schemas/examples/project-config/valid/.*\.json$`). Anchor the pattern under the `valid/` directory so the hook does not pick up `invalid/` fixtures (which MUST NOT be wired into a normal `check-jsonschema` hook — see the next subsection). This aligns with the `schemas/examples/<schema-name>/{valid,invalid}/` layout used in `schemas/README.md` § Examples and exercised by both [`tests/test_schema_examples.py`](tests/test_schema_examples.py) and [`templates/python/tests/test_schema_examples.py`](templates/python/tests/test_schema_examples.py).
   - Run `check-jsonschema` directly from a CI step or local script:
@@ -1018,7 +1018,7 @@ Sample data files that should validate cleanly can be placed in either of two lo
     ```bash
     check-jsonschema \
       --schemafile schemas/project-config.schema.json \
-      schemas/examples/project-config.valid.json
+      schemas/examples/project-config/valid/minimal.json
     ```
 
   - Wire the example into the opt-in pytest template described under [Testing Invalid Examples](#testing-invalid-examples) (it exercises both valid and invalid cases).
