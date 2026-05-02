@@ -67,8 +67,14 @@ This installs Node.js dependencies for markdown linting scripts. Git hooks are m
 This repository uses pre-commit for git hooks. Configured hooks include:
 
 - **Formatting**: Black (Python), trailing whitespace, end-of-file fixer
-- **Linting**: Ruff (Python), markdownlint (Markdown), YAML validation
+- **Linting**: Ruff (Python), markdownlint (Markdown)
+- **Data-file validation**: `check-json` (strict `.json` files only — see note below), `check-yaml`, `yamllint` (configured by `.yamllint.yml`), `actionlint` (GitHub Actions workflows)
+- **Schema validation**: `check-jsonschema` for schema-backed file families where wired up (not enabled by default; see [`schemas/README.md`](schemas/README.md))
 - **Safety**: Large file detection
+
+> **`check-json` validates strict `.json` only.** It does **not** validate `.jsonc`. JSONC files are allowed only when the consuming tool supports JSONC; downstream repositories that need stricter `.jsonc` enforcement should add **JSONC-aware tooling** rather than retrofitting `check-json`. See [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md) for the full JSON/JSONC dialect policy and [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md) for YAML authoring standards.
+>
+> **`actionlint` first-run-on-restricted-networks caveat.** The `actionlint` pre-commit hook builds the `actionlint` binary from source on first install, which downloads a Go toolchain. On networks that block Go module downloads (corporate proxies, air-gapped environments), the first-run install can fail. CI is the shared enforcement environment, so contributors who hit a network restriction locally can rely on CI to enforce this hook. The same caveat is documented inline in `.pre-commit-config.yaml` and in `.github/TEMPLATE_DESIGN_DECISIONS.md`.
 
 If you need to bypass hooks temporarily (not recommended):
 
@@ -149,13 +155,20 @@ pre-commit run
 
 Pre-commit hooks are NOT optional. They enforce:
 
-- Code formatting (Black for Python, Prettier/markdownlint for Markdown)
+- Code formatting (Black for Python, markdownlint for Markdown)
 - Linting (Ruff for Python)
 - Trailing whitespace removal
 - End-of-file fixes
-- YAML validation
+- Data-file validation (`check-json` for strict `.json`, `check-yaml`, `yamllint`, `actionlint` for GitHub Actions)
+- Schema validation (`check-jsonschema`) for schema-backed file families where configured
 
-See `.pre-commit-config.yaml` for the complete list of configured hooks.
+> **Network and dialect notes:**
+>
+> - First-run hook setup may require network access (for example, `actionlint` downloads a Go toolchain on first install; see the restricted-networks caveat above).
+> - `check-json` validates strict `.json` files only and does **not** validate `.jsonc`. Use **JSONC-aware tooling** if `.jsonc` files in your project warrant stricter enforcement.
+> - CI runs the same hooks and is the shared enforcement environment; auto-fixes produced by the hooks **must** be committed with the related change (do not push code that fails pre-commit and rely on a follow-up "fix formatting" commit).
+
+See `.pre-commit-config.yaml` for the complete list of configured hooks. See [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md) and [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md) for the JSON and YAML authoring policies that these hooks enforce.
 
 **Workflow:**
 
@@ -168,8 +181,8 @@ See `.pre-commit-config.yaml` for the complete list of configured hooks.
 
 1. Pull the latest branch
 2. Run `pre-commit run --all-files` locally
-3. Commit the fixes with message "Apply pre-commit auto-fixes"
-4. Push again
+3. Integrate the auto-fixes into the commit that introduced the change (for example, `git commit --amend` for the most recent commit, or `git commit --fixup=<sha>` followed by `git rebase -i --autosquash` for an earlier commit). Do **not** create a separate "Apply pre-commit auto-fixes" commit — auto-fixes belong in the same commit as the related change.
+4. Push again (force-push is required when amending or rewriting history on a branch you have already pushed)
 
 **CI is a safety net, not a substitute for local checks.**
 

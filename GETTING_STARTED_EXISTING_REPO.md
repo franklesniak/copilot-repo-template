@@ -53,6 +53,7 @@ This guide walks you through adopting features from `franklesniak/copilot-repo-t
   - [If You Don't Have Pre-commit Configured](#if-you-dont-have-pre-commit-configured)
   - [If You Already Have Pre-commit Configured](#if-you-already-have-pre-commit-configured)
   - [Customizing Hooks](#customizing-hooks)
+- [Adopting JSON/YAML Toolchain](#adopting-jsonyaml-toolchain)
 - [Adopting CI Workflows](#adopting-ci-workflows)
   - [Understanding Workflow Dependencies](#understanding-workflow-dependencies)
   - [Markdown Lint Workflow](#markdown-lint-workflow)
@@ -1212,6 +1213,67 @@ First, fix your PATH configuration or use module invocation:
   python3 -m pre_commit clean
   python3 -m pre_commit install
   ```
+
+---
+
+## Adopting JSON/YAML Toolchain
+
+If you are adopting the template's JSON/YAML support into an existing repository, work through the following steps. Each step is independent — adopt only the pieces you need.
+
+> **Do not duplicate full JSON/YAML policy here.** The authoritative authoring rules live in [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md) and [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md). Link to those files from your own documentation rather than copying their contents.
+
+### 1. Start with the Instruction Files
+
+Copy the JSON and YAML authoring guides into your repository. They are small, self-contained, and apply repository-wide:
+
+- `.github/instructions/json.instructions.md`
+- `.github/instructions/yaml.instructions.md`
+
+If your repository already has equivalents, merge the rules rather than overwriting. Pay particular attention to the dialect policy (strict `.json` vs. `.jsonc`, no JSON5 by default) and the schema-validation tier guidance.
+
+### 2. Add `.yamllint.yml`
+
+Copy `.yamllint.yml` to the repository root. It extends `default`, enforces 2-space indentation, sets the line-length warning at 120 characters, and disables `truthy.check-keys` so unquoted GitHub Actions `on:` keys are accepted.
+
+If you already have a yamllint configuration, reconcile its rules with the YAML authoring guide rather than replacing your file wholesale.
+
+### 3. Add or Merge Pre-commit Hooks
+
+Add the following hooks to your `.pre-commit-config.yaml` (or merge them with your existing configuration) so the JSON/YAML toolchain runs locally and in CI:
+
+- `check-json` — **must** be scoped to strict `.json` files only. Use `files: \.json$` so the hook does **not** run against `.jsonc`.
+- `check-yaml` — basic YAML syntax check.
+- `yamllint` — style and structural checks driven by `.yamllint.yml` (`args: [-c, .yamllint.yml]`).
+- `actionlint` — GitHub Actions workflow linting (only needed if your repository contains workflow files; on networks that block Go module downloads, the hook's first-run install can fail — CI is the shared enforcement environment in that case).
+
+The repository's `.pre-commit-config.yaml` shows the current pinned versions and exact configuration; copy from there rather than retyping.
+
+### 4. Decide Whether `.jsonc` Needs Stricter Tooling
+
+The default pre-commit stack does **not** validate `.jsonc` syntax — `check-json` is intentionally limited to strict `.json`. Inspect the `.jsonc` files in your repository (for example, `.markdownlint.jsonc` or other tool configurations that ship with a `.jsonc` extension) and decide whether they warrant adding **JSONC-aware tooling** (a JSONC-aware parser, linter, or schema validator). If they are small, well-controlled, and consumed by tools that understand JSONC, no extra tooling is required. If `.jsonc` files are load-bearing, adopt JSONC-aware tooling rather than retrofitting `check-json`. The repository's JSON authoring guide reserves JSONC syntax for files that actually use the `.jsonc` extension; `.json` files **MUST** remain strict JSON, so they are out of scope for this step.
+
+### 5. Add `actionlint` for GitHub Actions
+
+If your repository has any GitHub Actions workflow files (`.github/workflows/*.yml`), keep or add the `actionlint` pre-commit hook. It validates workflow syntax, expression usage, and runner labels, and may also run ShellCheck over `run:` blocks when `shellcheck` is available on the contributor's `PATH`. The default pre-commit hook installs only `actionlint` itself, so ShellCheck coverage of `run:` blocks is conditional on a separate local `shellcheck` install.
+
+### 6. Adopt `schemas/` and `check-jsonschema` Gradually
+
+Schemas are opt-in and **should be added gradually**, only for **load-bearing** files (files whose shape is depended on by build, deploy, runtime, release automation, or downstream consumers).
+
+- Copy the `schemas/` directory (including `schemas/README.md`) only if you intend to define real schemas. The template ships `schemas/` as a scaffold; it does not contain real schemas and no schema validation hook is wired into pre-commit by default. If you are not adopting schema-backed validation, you may skip this step entirely.
+- When you add a real schema, add **one `check-jsonschema` hook per real schema-backed file family**, scoped to the files that family covers (for example, `^config/.*\.json$`). See [`schemas/README.md`](schemas/README.md) for an illustrative hook example.
+- Do **not** add placeholder hooks for schemas that do not yet exist, and do **not** validate every JSON or YAML file by default. `check-json` and `check-yaml` already cover syntax; `check-jsonschema` is for contract checks against specific file families.
+
+> **No docs should imply that all JSON/YAML files require schemas.** Schemas are reserved for load-bearing contracts; most fixtures, examples, and ad-hoc configs do not need them.
+
+### 7. Avoid Ecosystem Validators Unless You Use Those Ecosystems
+
+Adopt ecosystem-specific validators (Kubernetes manifest validators, OpenAPI validators, Helm validators, Ansible validators, and so on) **only** when the repository actually uses those ecosystems. Generic YAML guidance does not require validators that are irrelevant to your stack, and adding them creates noise without enforcing anything useful.
+
+### Notes on Formatting
+
+- **Prettier is opt-in** and is not part of the default pre-commit toolchain. The default stack does not use Prettier on JSON or YAML, and it does **not** rely on Prettier (or any other tool) to sort JSON keys. The JSON authoring guide preserves intentional grouping and tool-managed key order.
+- **JSON5 is not enabled by default.** The JSON authoring guide intentionally omits `.json5`. Do not introduce JSON5 without an explicit, documented project decision.
 
 ---
 
