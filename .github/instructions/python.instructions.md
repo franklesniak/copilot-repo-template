@@ -5,13 +5,13 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.1.20260113.0
+**Version:** 1.2.20260502.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-01-13
+- **Last Updated:** 2026-05-02
 - **Scope:** Defines Python coding standards for all Python files in this repository, including modules, scripts, tests, and tooling. Covers style, structure, error handling, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -195,6 +195,9 @@ except json.JSONDecodeError as error:
 ## Filesystem and Paths
 
 - **SHOULD** use `pathlib.Path`.
+- **MUST NOT** follow symbolic links during recursive directory discovery in code that processes untrusted, repo-supplied, or otherwise externally influenced fixtures, configuration, or input files. Prefer explicit traversal with `os.walk(directory, followlinks=False)` or `Path.walk(..., follow_symlinks=False)` on Python 3.12+, prune or skip entries where `is_symlink()` is `True`, and verify each yielded path remains under the declared discovery root by comparing resolved paths with `Path.resolve().relative_to(base.resolve())` or an equivalent safe boundary check.
+- **SHOULD NOT** use `Path.rglob("*")` or `Path.glob("**/*")` for fixture, config, or input discovery unless the implementation also makes symlink handling and root-containment checks explicit. Prefer the safer `os.walk` / `Path.walk` patterns above for untrusted or externally influenced discovery roots.
+- This guidance implements the repo-wide rule "Refuse path traversal and symlink escapes" in [`.github/copilot-instructions.md`](../copilot-instructions.md) § "Non-negotiable Safety and Security Rules" item 3, "Allowlisted file access only".
 - **SHOULD NOT** rely on current working directory; **SHOULD** resolve paths from a clear root (e.g., repo root or config).
 
 ## Tests
