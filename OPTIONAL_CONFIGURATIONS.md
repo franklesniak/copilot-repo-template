@@ -1149,10 +1149,11 @@ If the project already runs Prettier from `package.json` scripts, a `repo: local
       name: Check JSON and JSONC formatting with Prettier
       entry: npx --no-install prettier --check "**/*.{json,jsonc}" "!node_modules/**"
       language: system
+      files: '\.(json|jsonc)$'
       pass_filenames: false
 ```
 
-`pass_filenames: false` lets the glob in `entry:` decide which files Prettier inspects, which keeps the hook consistent with the `lint:json:format` script. The `--no-install` flag tells `npx` to fail rather than fetch an unpinned Prettier on demand, so the hook always uses the version recorded in `package.json` / `package-lock.json`.
+The `files:` regex scopes the hook so pre-commit only invokes it on commits that touch `.json` or `.jsonc` files; without that filter, `pass_filenames: false` would cause the hook to run (and re-scan the repo's JSON/JSONC globs) on every commit. `pass_filenames: false` lets the glob in `entry:` decide which files Prettier inspects, which keeps the hook consistent with the `lint:json:format` script. The `--no-install` flag tells `npx` to fail rather than fetch an unpinned Prettier on demand, so the hook always uses the version recorded in `package.json` / `package-lock.json`.
 
 > **Node availability requirement.** Because this hook shells out to `npx`, every environment that runs `pre-commit` MUST have Node.js installed and the project's npm dependencies installed (typically via `npm ci`). The template's default CI workflows do not install Node, so adopters who add this hook MUST also add a Node setup step (for example, `actions/setup-node` followed by `npm ci`) to any workflow that runs `pre-commit run --all-files`, and ensure the same is true on contributor workstations.
 
