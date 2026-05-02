@@ -20,9 +20,11 @@ Discovery rules:
 - Only regular files under ``valid/`` and ``invalid/`` are exercised;
   directories and other non-file entries are ignored.
 
-Paths are resolved from the repository root (pytest's ``rootpath``)
-rather than the process current working directory, so the test behaves
-the same regardless of where ``pytest`` is invoked from.
+Paths are resolved from the repository root, which is derived from
+this file's known location at ``<repo>/tests/test_schema_examples.py``
+(via ``Path(__file__).resolve().parent.parent``) rather than the
+process current working directory, so the test behaves the same
+regardless of where ``pytest`` is invoked from.
 
 Invalid examples are intentionally NOT wired into a normal
 ``check-jsonschema`` pre-commit hook, because a failing exit code from

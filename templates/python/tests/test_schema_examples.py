@@ -74,23 +74,26 @@ def _find_project_root(start: Path) -> Path:
     """Walk up from ``start`` until a project-root marker is found.
 
     Args:
-        start: A path inside the downstream project (typically this
-            test file's location).
+        start: A directory inside the downstream project (typically
+            the directory containing this test file). Callers MUST
+            pass a directory; file paths should be normalized at the
+            call site (e.g., ``Path(__file__).resolve().parent``) so
+            the first iteration does not check a nonexistent
+            ``<file>/<marker>`` path.
 
     Returns:
         The first ancestor directory containing ``pyproject.toml``,
-        ``setup.cfg``, or ``pytest.ini``. Falls back to ``start``'s
-        parent directory when no marker is found, which keeps the
-        starter usable in unusual layouts without raising at import
-        time.
+        ``setup.cfg``, or ``pytest.ini``. Falls back to ``start``
+        itself when no marker is found, which keeps the starter
+        usable in unusual layouts without raising at import time.
     """
     for candidate in (start, *start.parents):
         if any((candidate / marker).is_file() for marker in _ROOT_MARKERS):
             return candidate
-    return start.parent
+    return start
 
 
-PROJECT_ROOT = _find_project_root(Path(__file__).resolve())
+PROJECT_ROOT = _find_project_root(Path(__file__).resolve().parent)
 SCHEMAS_DIR = PROJECT_ROOT / "schemas"
 EXAMPLES_DIR = SCHEMAS_DIR / "examples"
 
