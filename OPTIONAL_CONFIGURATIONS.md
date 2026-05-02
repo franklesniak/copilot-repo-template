@@ -2499,6 +2499,7 @@ This template repository includes reference Python configuration files and scaff
 - **`pyproject.toml`**: Sample configuration for Python project metadata, dependencies, and tooling (Black, Ruff, mypy, pytest)
 - **`tests/__init__.py`**: Package marker for the test directory
 - **`tests/test_placeholder.py`**: Placeholder test file that demonstrates pytest test structure
+- **`tests/test_schema_examples.py`**: Opt-in pytest template that validates schema example fixtures with `check-jsonschema`. Skips cleanly when the tool is not installed and `SCHEMA_CASES` is empty, so it does not require a new root dependency. See [Schema Validation Configuration](#schema-validation-configuration) for setup.
 - **`README.md`**: Brief overview of the template files with links to external resources
 
 ### How to Use the Template
