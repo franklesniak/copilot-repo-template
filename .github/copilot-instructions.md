@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.3.20260501.0
+**Version:** 1.3.20260502.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-01
+- **Last Updated:** 2026-05-02
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -71,9 +71,10 @@ In addition to formatting, linting, trailing-whitespace, and end-of-file fixes, 
 - `check-yaml` — parse-checks `.yml` / `.yaml` files.
 - `yamllint` — enforces YAML style per `.yamllint.yml`.
 - `actionlint` — lints GitHub Actions workflow files.
-- `check-jsonschema` — validates schema-backed files once schema hooks are added under `schemas/`.
 
 Prettier is **opt-in** and is **not** part of the default data-file toolchain.
+
+> **Schema validation (not enabled by default).** `check-jsonschema` is **not** wired into `.pre-commit-config.yaml` today. Per [`schemas/README.md`](../schemas/README.md), `schemas/` is a scaffold and "no schema validation hook is wired into pre-commit by default." Downstream repositories MAY add a `check-jsonschema` hook entry to `.pre-commit-config.yaml` once concrete schemas exist under `schemas/`.
 
 ### For GitHub Copilot Coding Agent (Automated PRs)
 

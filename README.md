@@ -92,7 +92,7 @@ schemas/                             # JSON Schemas for load-bearing JSON/YAML f
 pyproject.toml                       # Python project configuration
 .markdownlint.jsonc                  # Markdown linting configuration
 .yamllint.yml                        # YAML linting configuration
-.pre-commit-config.yaml              # Pre-commit hooks (Python focused)
+.pre-commit-config.yaml              # Pre-commit hooks (multi-language)
 AGENTS.md                            # Agent instructions for OpenAI Codex CLI
 CLAUDE.md                            # Agent instructions for Claude Code
 GEMINI.md                            # Agent instructions for Gemini Code Assist
@@ -186,9 +186,10 @@ JSON, YAML, and GitHub Actions workflow validation runs through pre-commit hooks
 - **`check-yaml`** — `.yml` / `.yaml` parse check.
 - **`yamllint`** — YAML style enforcement per `.yamllint.yml`.
 - **`actionlint`** — GitHub Actions workflow linting.
-- **`check-jsonschema`** — schema-backed validation against schemas in `schemas/` (add hooks as schemas are introduced).
 
 Prettier is **opt-in** and is not part of the default data-file toolchain.
+
+> **Schema validation (not enabled by default).** `check-jsonschema` is **not** wired into `.pre-commit-config.yaml` today. Per [`schemas/README.md`](schemas/README.md), `schemas/` is a scaffold and "no schema validation hook is wired into pre-commit by default." Downstream repositories MAY add a `check-jsonschema` hook entry to `.pre-commit-config.yaml` once concrete schemas exist under `schemas/`.
 
 ```bash
 # Run all pre-commit hooks (includes data-file validators)
