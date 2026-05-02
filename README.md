@@ -112,7 +112,7 @@ GEMINI.md                            # Agent instructions for Gemini Code Assist
 | `.github/workflows/python-ci.yml` | Python linting and testing CI workflow (optional - remove if not using Python) |
 | `.markdownlint.jsonc` | Markdown linting rules prioritizing auto-fixable checks |
 | `.yamllint.yml` | YAML linting configuration (2-space indentation, max line length 120 as warning, unquoted GitHub Actions `on:` allowed) |
-| `.pre-commit-config.yaml` | Pre-commit hooks for all projects (Python formatting, linting, Markdown, JSON/YAML validation, GitHub Actions linting) |
+| `.pre-commit-config.yaml` | Pre-commit hooks for all projects (multi-language) |
 | `schemas/` | Root-level JSON Schemas (Draft 2020-12) describing load-bearing JSON and YAML files |
 | `AGENTS.md` | Minimal agent entry point instructions for OpenAI Codex CLI and GitHub Copilot coding agent |
 | `CLAUDE.md` | Minimal agent entry point instructions plus Claude-specific workflow guidance |
@@ -126,12 +126,12 @@ GEMINI.md                            # Agent instructions for Gemini Code Assist
 
 | Language | Instruction File | File Pattern | CI Workflow | Description |
 | --- | --- | --- | --- | --- |
-| JSON/JSONC | `.github/instructions/json.instructions.md` | `**/*.json`, `**/*.jsonc` | Pre-commit (`check-json`) | JSON authoring standards (strict, schema-backed, deterministic) |
+| JSON/JSONC | `.github/instructions/json.instructions.md` | `**/*.json`, `**/*.jsonc` | Pre-commit (`check-json` on `.json`; `.jsonc` not validated) | JSON authoring standards (strict, schema-backed, deterministic) |
 | Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` | `.github/workflows/markdownlint.yml` | Documentation writing standards |
 | PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` | `.github/workflows/powershell-ci.yml` | PowerShell coding standards (OTBS, v1.0-v7.x) |
 | Python | `.github/instructions/python.instructions.md` | `**/*.py` | `.github/workflows/python-ci.yml` | Python coding standards (PEP 8, typing) |
 | Terraform | `.github/instructions/terraform.instructions.md` | `**/*.tf`, `**/*.tfvars`, `**/*.tftest.hcl`, etc. | `.github/workflows/terraform-ci.yml` | Terraform coding standards (HCL, modules) |
-| YAML | `.github/instructions/yaml.instructions.md` | `**/*.yml`, `**/*.yaml` | Pre-commit (`check-yaml`, `yamllint`, `actionlint`) | YAML authoring standards (explicit, conservative, schema-backed) |
+| YAML | `.github/instructions/yaml.instructions.md` | `**/*.yml`, `**/*.yaml` | Pre-commit (`check-yaml`, `yamllint`; `actionlint` for workflows only) | YAML authoring standards (explicit, conservative, schema-backed) |
 
 > **JSON note:** `check-json` validates strict `.json` only; it does **not** validate `.jsonc`. JSONC is allowed where the consuming tool supports it, and stricter enforcement requires JSONC-aware tooling.
 >
