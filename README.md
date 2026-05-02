@@ -68,7 +68,8 @@ For template maintainers, see [TEMPLATE_MAINTENANCE.md](TEMPLATE_MAINTENANCE.md)
 ├── scripts/                         # Helper scripts for CI/tooling
 └── workflows/                       # GitHub Actions workflows
     ├── check-placeholders.yml       # Verifies OWNER/REPO placeholders are replaced
-    └── powershell-ci.yml            # PowerShell linting and testing CI (optional)
+    ├── data-ci.yml                   # JSON/YAML/Actions data-file linting CI
+    ├── powershell-ci.yml             # PowerShell linting and testing CI (optional)
     └── python-ci.yml                 # Python linting and testing CI (optional)
 
 src/
@@ -108,6 +109,7 @@ GEMINI.md                            # Agent instructions for Gemini Code Assist
 | `.github/instructions/*.md` | Language-specific coding standards applied based on file patterns |
 | `.github/linting/PSScriptAnalyzerSettings.psd1` | PSScriptAnalyzer settings enforcing OTBS formatting for PowerShell |
 | `.github/workflows/check-placeholders.yml` | CI workflow to verify OWNER/REPO and @OWNER placeholders are replaced after cloning |
+| `.github/workflows/data-ci.yml` | Data-file (JSON/YAML/GitHub Actions) linting CI workflow — runs `check-json`, `check-yaml`, `yamllint`, and `actionlint` as a dedicated required check |
 | `.github/workflows/powershell-ci.yml` | PowerShell linting and Pester testing CI workflow (optional - remove if not using PowerShell) |
 | `.github/workflows/python-ci.yml` | Python linting and testing CI workflow (optional - remove if not using Python) |
 | `.markdownlint.jsonc` | Markdown linting rules prioritizing auto-fixable checks |
@@ -126,12 +128,12 @@ GEMINI.md                            # Agent instructions for Gemini Code Assist
 
 | Language | Instruction File | File Pattern | CI Workflow | Description |
 | --- | --- | --- | --- | --- |
-| JSON/JSONC | `.github/instructions/json.instructions.md` | `**/*.json`, `**/*.jsonc` | Pre-commit (`check-json` on `.json`; `.jsonc` not validated) | JSON authoring standards (strict, schema-backed, deterministic) |
+| JSON/JSONC | `.github/instructions/json.instructions.md` | `**/*.json`, `**/*.jsonc` | `.github/workflows/data-ci.yml` (`check-json` on `.json`; `.jsonc` not validated) | JSON authoring standards (strict, schema-backed, deterministic) |
 | Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` | `.github/workflows/markdownlint.yml` | Documentation writing standards |
 | PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` | `.github/workflows/powershell-ci.yml` | PowerShell coding standards (OTBS, v1.0-v7.x) |
 | Python | `.github/instructions/python.instructions.md` | `**/*.py` | `.github/workflows/python-ci.yml` | Python coding standards (PEP 8, typing) |
 | Terraform | `.github/instructions/terraform.instructions.md` | `**/*.tf`, `**/*.tfvars`, `**/*.tftest.hcl`, etc. | `.github/workflows/terraform-ci.yml` | Terraform coding standards (HCL, modules) |
-| YAML | `.github/instructions/yaml.instructions.md` | `**/*.yml`, `**/*.yaml` | Pre-commit (`check-yaml`, `yamllint`; `actionlint` for workflows only) | YAML authoring standards (explicit, conservative, schema-backed) |
+| YAML | `.github/instructions/yaml.instructions.md` | `**/*.yml`, `**/*.yaml` | `.github/workflows/data-ci.yml` (`check-yaml`, `yamllint`; `actionlint` for workflows only) | YAML authoring standards (explicit, conservative, schema-backed) |
 
 > **JSON note:** `check-json` validates strict `.json` only; it does **not** validate `.jsonc`. JSONC is allowed where the consuming tool supports it, and stricter enforcement requires JSONC-aware tooling.
 >

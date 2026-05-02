@@ -658,6 +658,24 @@ The template ships with minimal package.json configuration (no repository field,
 
 ## CI Workflow Configuration
 
+### Design Decision: Dedicated Data-File CI Workflow (`data-ci.yml`)
+
+The repository ships a dedicated `.github/workflows/data-ci.yml` workflow that runs JSON, YAML, and GitHub Actions workflow validation as a first-class CI gate, alongside `python-ci.yml`, `powershell-ci.yml`, `terraform-ci.yml`, and `markdownlint.yml`.
+
+**Why a dedicated workflow even though `python-ci.yml` already runs every pre-commit hook:**
+
+- `python-ci.yml` runs `pre-commit run --all-files`, which transitively enforces the JSON/YAML/actionlint hooks. That works functionally but makes data-file validation appear incidental to Python CI.
+- A dedicated workflow gives JSON/YAML/Actions validation a distinct required-check identity, clearer ownership, and parity with other per-language workflows. Branch protection rules can require data-file validation independently from Python validation.
+- Template adopters who do not use Python should still see data-file validation as a first-class concern; surfacing it only under Python CI would obscure that.
+
+**CI ownership decision:** `python-ci.yml` continues to run the full `pre-commit run --all-files` pipeline as the single canonical aggregate pre-commit gate. `data-ci.yml` runs the four data-file hooks (`check-json`, `check-yaml`, `yamllint`, `actionlint`) explicitly. The hooks therefore execute in both workflows.
+
+**Trade-off accepted:** The duplication between `python-ci.yml` and `data-ci.yml` is intentional. Splitting responsibility — narrowing `python-ci.yml` to Python-only checks — was rejected because it would change existing CI topology and complicate downstream branch protection migrations for marginal benefit. Visibility and ownership were prioritized over avoiding the duplicated hook execution.
+
+**Distinction from `auto-fix-precommit.yml`:** `data-ci.yml` is a contract enforcement gate that runs on all PRs and pushes. `.github/workflows/auto-fix-precommit.yml` is intentionally NOT a peer of `data-ci.yml`: it is a fix-up workflow scoped to `copilot/**` branches that auto-applies pre-commit fixes and does not enforce results. The two workflows serve different purposes and must not be conflated.
+
+**Future extension:** Once Unit 3 introduces concrete schemas under `schemas/` and a `check-jsonschema` hook in `.pre-commit-config.yaml`, `data-ci.yml` will be extended with `pre-commit run check-jsonschema --all-files`. No schema validation is wired in by default today.
+
 ### Design Decision: Non-Blocking Type Checking by Default
 
 The template uses `continue-on-error: true` for the mypy type checking job. This is a deliberate choice for template portability.
