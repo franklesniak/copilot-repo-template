@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.4.20260502.0
+**Version:** 1.4.20260502.1
 
 ## Metadata
 
@@ -117,11 +117,19 @@ This repository includes an auto-fix workflow (`.github/workflows/auto-fix-preco
 
 ## Repository Self-Containment
 
-All files committed to this repository MUST be interpretable—meaning understandable to a reader without access to private or internal resources—using only the contents of this repository and public references that are clearly linked from it. This rule governs the meaning of documentation, code comments, and embedded references; it does not require the repository to build or run without standard external dependencies declared in its manifests (for example, package, module, or action dependencies pinned in `requirements.txt`, `package.json`, Terraform `required_providers`, or workflow `uses:` entries). It applies to, but is not limited to, `README.md`, files under `.github/` including workflows, instructions, and design-decision docs, other top-level `*.md` files, and code comments embedded in committed files.
+All files committed to this repository MUST be interpretable—meaning understandable to a reader without access to private or internal resources—using only the contents of this repository and public references that are clearly linked from it.
+
+This rule governs the meaning of documentation, code comments, and embedded references. It does not require the repository to build or run without standard external dependencies declared in its manifests (for example, package, module, or action dependencies pinned in `requirements.txt`, `package.json`, Terraform `required_providers`, or workflow `uses:` entries).
+
+It applies to, but is not limited to:
+
+- `README.md` and other top-level `*.md` files.
+- Files under `.github/`, including workflows, instructions, and design-decision docs.
+- Code comments embedded in committed files.
 
 Do not embed references to:
 
-- Work-stream identifiers, sprint names, milestone labels, or phase numbers that are not defined inside this repository.
+- Work stream identifiers, sprint names, milestone labels, or phase numbers that are not defined inside this repository.
 - Ticket, issue, or project IDs that resolve only inside a private or external tracker.
 - Internal team, person, or communication-channel names.
 - Roadmap, design, or planning documents that are not published in this repository or otherwise publicly resolvable from links in this repository.
