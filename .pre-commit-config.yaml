@@ -84,7 +84,7 @@ repos:
   # `schemas/README.md` for the canonical worked-example documentation and
   # downstream-removal checklist.
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.37.1
+    rev: "0.37.1"
     hooks:
       - id: check-jsonschema
         name: Validate example-config valid examples
