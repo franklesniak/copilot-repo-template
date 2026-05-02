@@ -9,7 +9,10 @@ These template files demonstrate how to configure Python tooling to align with t
 ## Files Included
 
 - **`pyproject.toml`**: Sample configuration for Python project metadata, dependencies, and tooling (Black, Ruff, mypy, pytest)
-- **`tests/`**: Sample test directory structure with placeholder test file
+- **`tests/`**: Sample test directory containing:
+  - `__init__.py`: Package marker for the test directory.
+  - `test_placeholder.py`: Placeholder test file that demonstrates pytest test structure.
+  - `test_schema_examples.py`: Opt-in pytest template that validates schema example fixtures with `check-jsonschema`; skips cleanly when the tool is not installed. See the **"Schema Validation Configuration"** section in [`OPTIONAL_CONFIGURATIONS.md`](../../OPTIONAL_CONFIGURATIONS.md#schema-validation-configuration).
 - **`README.md`**: This file
 
 ## How to Use
