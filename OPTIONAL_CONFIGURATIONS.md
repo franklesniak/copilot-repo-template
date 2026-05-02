@@ -21,6 +21,7 @@ This guide covers optional customizations you can make after completing the init
 - [Dependabot Configuration](#dependabot-configuration)
 - [Pre-commit Configuration](#pre-commit-configuration)
 - [Schema Validation Configuration](#schema-validation-configuration)
+- [Prettier for JSON/JSONC (Opt-in)](#prettier-for-jsonjsonc-opt-in)
 - [Markdown Linting Configuration](#markdown-linting-configuration)
   - [Using the cli2-Specific Configuration Format](#using-the-cli2-specific-configuration-format)
 - [Nested Markdown Linting Configuration](#nested-markdown-linting-configuration)
@@ -900,15 +901,17 @@ args: [--line-length=88]
 
 ### Adding Hooks for Other Languages
 
-**Prettier (JavaScript/TypeScript/CSS/JSON):**
+**Prettier (JavaScript/TypeScript/CSS):**
 
 ```yaml
 - repo: https://github.com/pre-commit/mirrors-prettier
   rev: v3.1.0
   hooks:
     - id: prettier
-      types_or: [javascript, jsx, ts, tsx, css, json, yaml, markdown]
+      types_or: [javascript, jsx, ts, tsx, css, markdown]
 ```
+
+> **JSON/JSONC and YAML are intentionally omitted from `types_or` above.** For JSON/JSONC, see [Prettier for JSON/JSONC (Opt-in)](#prettier-for-jsonjsonc-opt-in), which recommends a `repo: local` hook over `pre-commit/mirrors-prettier` to avoid pinning the Prettier version in two places. Prettier for YAML is discouraged by default in this template; see the YAML subsection of that same section for the reconciliation requirements if a project chooses to adopt it anyway.
 
 **ESLint:**
 
@@ -1057,6 +1060,124 @@ If you remove the `skipif` guard, you MUST ensure `check-jsonschema` is installe
 - The template ships **no** active `check-jsonschema` hooks.
 - The template ships **no** active root tests that depend on `check-jsonschema`.
 - The template provides documentation and an opt-in test pattern only; downstream repositories add real hooks and tests when they introduce real schemas.
+
+---
+
+## Prettier for JSON/JSONC (Opt-in)
+
+**Files:** `package.json`, `.prettierrc.json`, `.prettierignore`, `.pre-commit-config.yaml`
+
+[Prettier](https://prettier.io/) is **not** part of the default JSON/YAML toolchain in this template. Prettier MAY be adopted on a per-repository basis to enforce JSON and JSONC formatting beyond what `check-json` validates. **No Prettier configuration, dependency, or hook is added to the repo root by default.** Adoption is an explicit project decision.
+
+> **Background.** The default pre-commit stack uses `check-json` (strict `.json` syntax only), `check-yaml`, `yamllint`, and `actionlint`. See [Schema Validation Configuration](#schema-validation-configuration) for the schema-validation path, and the [Prettier deferral ADR in `.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-prettier-deferral-for-data-files) for the rationale behind keeping Prettier opt-in.
+
+### When to Adopt Prettier for JSON/JSONC
+
+Adopt Prettier for JSON/JSONC when **at least one** of the following is true:
+
+- The project already uses Node tooling for other purposes (for example, `markdownlint-cli2`, JavaScript/TypeScript builds), so adding Prettier does not introduce a new ecosystem.
+- The team wants editor format-on-save consistency across contributors.
+- Many JSON/JSONC files in the project benefit from formatter enforcement (consistent indentation, trailing newline, key spacing) that `check-json` does not provide.
+- The project has many `.jsonc` files and wants formatting enforcement, since `check-json` does not validate `.jsonc`. Prettier is **one option among several pieces of JSONC-aware tooling** that can fill this gap (other options include dedicated JSONC parsers and schema validators that understand JSONC).
+
+### When Not to Adopt Prettier for JSON/JSONC
+
+Do **not** adopt Prettier when:
+
+- Adding Node tooling would create friction (for example, the project is otherwise pure Python, PowerShell, or Terraform with no existing Node dependency).
+- `check-json` syntax validation alone is sufficient for the project's JSON files.
+- The project does not want formatter-controlled diffs on data files (Prettier rewrites files in-place; downstream consumers MUST be comfortable with formatter-driven churn).
+
+### Important Caveat: Prettier Does Not Sort JSON Keys
+
+Prettier formats JSON whitespace, indentation, and line endings, but it **does not** sort object keys. Stable key ordering — often the highest-value JSON-stability property — must still be enforced by hand or by a separate tool. Adopters who care about deterministic key order MUST treat Prettier as a formatting tool only and add a separate key-ordering process if needed.
+
+### Recommended `package.json` Scripts
+
+If Prettier is adopted, add `format:json` and `lint:json:format` scripts to `package.json` so that contributors and CI use the same commands:
+
+```json
+{
+  "scripts": {
+    "format:json": "prettier --write \"**/*.{json,jsonc}\" \"!node_modules/**\"",
+    "lint:json:format": "prettier --check \"**/*.{json,jsonc}\" \"!node_modules/**\""
+  }
+}
+```
+
+The `--check` variant is suitable for CI; the `--write` variant rewrites files in place locally.
+
+### Recommended `.prettierrc.json`
+
+A minimal Prettier configuration that aligns with the template's other formatting defaults (LF line endings, 2-space indent):
+
+```json
+{
+  "printWidth": 120,
+  "tabWidth": 2,
+  "useTabs": false,
+  "endOfLine": "lf",
+  "trailingComma": "none"
+}
+```
+
+`trailingComma: "none"` is required for strict `.json`; for `.jsonc` consumers that accept trailing commas, this setting is still safe (Prettier will simply omit them).
+
+### Recommended `.prettierignore`
+
+Add a `.prettierignore` file that excludes generated files, dependencies, and any directories that should not be reformatted. A typical baseline:
+
+```text
+node_modules/
+package-lock.json
+dist/
+build/
+coverage/
+.venv/
+```
+
+Adopters SHOULD review their repository for additional generated or vendored content (for example, lockfiles, cached schema bundles, fixtures whose formatting is asserted by tests) and add those paths as well.
+
+### Optional Local Pre-commit Hook
+
+If the project already runs Prettier from `package.json` scripts, a `repo: local` pre-commit hook keeps the version under project control rather than pinning a separate Prettier mirror:
+
+```yaml
+- repo: local
+  hooks:
+    - id: prettier-json-check
+      name: Check JSON and JSONC formatting with Prettier
+      entry: npx --no-install prettier --check "**/*.{json,jsonc}" "!node_modules/**"
+      language: system
+      files: '\.(json|jsonc)$'
+      pass_filenames: false
+```
+
+The `files:` regex scopes the hook so pre-commit only invokes it on commits that touch `.json` or `.jsonc` files; without that filter, `pass_filenames: false` would cause the hook to run (and re-scan the repo's JSON/JSONC globs) on every commit. `pass_filenames: false` lets the glob in `entry:` decide which files Prettier inspects, which keeps the hook consistent with the `lint:json:format` script. The `--no-install` flag tells `npx` to fail rather than fetch an unpinned Prettier on demand, so the hook always uses the version recorded in `package.json` / `package-lock.json`.
+
+> **Node availability requirement.** Because this hook shells out to `npx`, every environment that runs `pre-commit` MUST have Node.js installed and the project's npm dependencies installed (typically via `npm ci`). The template's default CI workflows do not install Node, so adopters who add this hook MUST also add a Node setup step (for example, `actions/setup-node` followed by `npm ci`) to any workflow that runs `pre-commit run --all-files`, and ensure the same is true on contributor workstations.
+
+<!-- -->
+
+> **`pre-commit/mirrors-prettier` is not the recommended path.** The `pre-commit/mirrors-prettier` repository pins a Prettier version separately from the project's `package.json`, which creates two sources of truth for the Prettier version. Prefer the `repo: local` hook above so that `package.json`, CI scripts, and the pre-commit hook all use the same Prettier version.
+
+### YAML
+
+Prettier for YAML is **discouraged by default** in this template. Prettier's YAML output diverges from idiomatic `yamllint` defaults (line wrapping, flow vs. block style, quoting), and running both without explicit reconciliation produces churn-only diffs.
+
+If a project chooses to adopt Prettier for YAML anyway, it MUST reconcile `yamllint` and Prettier so they do not fight. At minimum:
+
+- Pin both tools.
+- Adjust `.yamllint.yml` rules (for example, `line-length`, `quoted-strings`, `indentation`) to match Prettier's output, or configure Prettier to match `.yamllint.yml`.
+- Run both tools on a representative sample and confirm a clean pass before enabling either in CI.
+
+### Docker Alternative
+
+Projects that do not want a local Node.js installation MAY run Prettier from a Docker image in CI (for example, the official `node:` images or community-maintained Prettier images). The `package.json` scripts and the `.prettierrc.json` configuration above remain unchanged; only the invocation differs. Local developers can still use `npx prettier` if they have Node available, or rely on CI to enforce formatting.
+
+### Editor Formatter Guidance
+
+The template's `.vscode/settings.json` only prescribes the PowerShell file encoding (see [VS Code PowerShell File Encoding for Non-ASCII Characters](#vs-code-powershell-file-encoding-for-non-ascii-characters)) and does **not** prescribe editor formatters for any language. Editor-formatter guidance for JSON, JSONC, and YAML is therefore intentionally omitted here; downstream consumers who adopt Prettier MAY add `[json]`, `[jsonc]`, and `[yaml]` formatter sections to their own `.vscode/settings.json` at their discretion.
 
 ---
 
