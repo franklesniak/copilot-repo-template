@@ -67,6 +67,35 @@ repos:
       - id: ruff-check
         args: [--fix, --line-length=100]
 
+  # JSON Schema validation
+  #
+  # This template ships a worked-example schema at
+  # `schemas/example-config.schema.json` and example data files under
+  # `schemas/examples/example-config/`. The hooks below validate:
+  #   1. The valid example data files against the example schema.
+  #   2. The example schema itself against its declared JSON Schema
+  #      Draft 2020-12 metaschema (self-validation).
+  #
+  # Invalid example data files under
+  # `schemas/examples/example-config/invalid/` are intentionally NOT wired
+  # into a normal pre-commit hook because they are expected to fail
+  # validation; they are intended to be exercised by tests instead (a
+  # follow-up change is planned to add `tests/test_schema_examples.py`).
+  # See `schemas/README.md` for the canonical worked-example documentation
+  # and downstream-removal checklist.
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: "0.37.1"
+    hooks:
+      - id: check-jsonschema
+        name: Validate example-config valid examples
+        files: ^schemas/examples/example-config/valid/.*\.json$
+        args:
+          - --schemafile
+          - schemas/example-config.schema.json
+      - id: check-metaschema
+        name: Self-validate example-config schema
+        files: ^schemas/example-config\.schema\.json$
+
   # Markdown linting
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     rev: v0.22.1

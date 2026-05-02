@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/schemas/example-config.schema.json",
+  "title": "Example Config (template worked example)",
+  "description": "Template example schema shipped by franklesniak/copilot-repo-template to demonstrate JSON Schema Draft 2020-12 conventions and pre-commit validation of valid examples. This is NOT a production contract for any downstream repository. Downstream consumers SHOULD replace or remove this schema, its example data files under schemas/examples/example-config/, and the associated check-jsonschema hook(s) when adopting the template. See schemas/README.md for the canonical removal checklist.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "enabled"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable identifier for the example configuration. Required and must be a non-empty string."
+    },
+    "enabled": {
+      "type": "boolean",
+      "description": "Whether this example configuration is active. Required."
+    },
+    "description": {
+      "type": "string",
+      "description": "Optional free-form description of what this configuration represents."
+    },
+    "timeoutSeconds": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Optional non-negative integer timeout, expressed in whole seconds."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true,
+      "description": "Optional list of short string tags. Each tag must be a non-empty string and the list must not contain duplicates."
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Optional RFC 3339-compatible date-time string indicating when this configuration was created."
+    }
+  }
+}

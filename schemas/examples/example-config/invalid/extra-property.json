@@ -1,0 +1,5 @@
+{
+  "name": "example-extra-property",
+  "enabled": true,
+  "unexpectedField": "this property is not declared in the schema"
+}

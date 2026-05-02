@@ -1,0 +1,12 @@
+{
+  "name": "example-full",
+  "enabled": true,
+  "description": "Fully populated example configuration used to exercise every optional property in example-config.schema.json. All values are obviously fake template content.",
+  "timeoutSeconds": 30,
+  "tags": [
+    "example",
+    "template",
+    "not-real"
+  ],
+  "createdAt": "2026-05-02T12:34:56Z"
+}
