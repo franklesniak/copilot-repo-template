@@ -1250,11 +1250,11 @@ The repository's `.pre-commit-config.yaml` shows the current pinned versions and
 
 ### 4. Decide Whether `.jsonc` Needs Stricter Tooling
 
-The default pre-commit stack does **not** validate `.jsonc` syntax — `check-json` is intentionally limited to strict `.json`. Inspect the `.jsonc` files in your repository (for example, `tsconfig.json`, VS Code settings, `.markdownlint.jsonc`) and decide whether they warrant adding **JSONC-aware tooling** (a JSONC-aware parser, linter, or schema validator). If they are small, well-controlled, and consumed by tools that understand JSONC, no extra tooling is required. If `.jsonc` files are load-bearing, adopt JSONC-aware tooling rather than retrofitting `check-json`.
+The default pre-commit stack does **not** validate `.jsonc` syntax — `check-json` is intentionally limited to strict `.json`. Inspect the `.jsonc` files in your repository (for example, `.markdownlint.jsonc` or other tool configurations that ship with a `.jsonc` extension) and decide whether they warrant adding **JSONC-aware tooling** (a JSONC-aware parser, linter, or schema validator). If they are small, well-controlled, and consumed by tools that understand JSONC, no extra tooling is required. If `.jsonc` files are load-bearing, adopt JSONC-aware tooling rather than retrofitting `check-json`. The repository's JSON authoring guide reserves JSONC syntax for files that actually use the `.jsonc` extension; `.json` files **MUST** remain strict JSON, so they are out of scope for this step.
 
 ### 5. Add `actionlint` for GitHub Actions
 
-If your repository has any GitHub Actions workflow files (`.github/workflows/*.yml`), keep or add the `actionlint` pre-commit hook. It validates workflow syntax, expression usage, runner labels, and runs `shellcheck` over `run:` blocks.
+If your repository has any GitHub Actions workflow files (`.github/workflows/*.yml`), keep or add the `actionlint` pre-commit hook. It validates workflow syntax, expression usage, and runner labels, and may also run ShellCheck over `run:` blocks when `shellcheck` is available on the contributor's `PATH`. The default pre-commit hook installs only `actionlint` itself, so ShellCheck coverage of `run:` blocks is conditional on a separate local `shellcheck` install.
 
 ### 6. Adopt `schemas/` and `check-jsonschema` Gradually
 

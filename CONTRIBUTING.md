@@ -181,8 +181,8 @@ See `.pre-commit-config.yaml` for the complete list of configured hooks. See [`.
 
 1. Pull the latest branch
 2. Run `pre-commit run --all-files` locally
-3. Commit the fixes with message "Apply pre-commit auto-fixes"
-4. Push again
+3. Integrate the auto-fixes into the commit that introduced the change (for example, `git commit --amend` for the most recent commit, or `git commit --fixup=<sha>` followed by `git rebase -i --autosquash` for an earlier commit). Do **not** create a separate "Apply pre-commit auto-fixes" commit — auto-fixes belong in the same commit as the related change.
+4. Push again (force-push is required when amending or rewriting history on a branch you have already pushed)
 
 **CI is a safety net, not a substitute for local checks.**
 

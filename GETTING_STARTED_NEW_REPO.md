@@ -1331,7 +1331,7 @@ If you retain the template's pre-commit workflow (`.github/workflows/python-ci.y
 #### `check-json` vs. `.jsonc`
 
 - The `check-json` hook validates **strict `.json`** files only. The hook is anchored with `files: \.json$`, so `.jsonc` files are intentionally skipped.
-- `.jsonc` is allowed only when the consuming tool explicitly supports JSONC (for example, the TypeScript compiler reading `tsconfig.json`, or some VS Code settings files).
+- `.jsonc` is allowed only when the consuming tool explicitly supports JSONC (for example, `markdownlint-cli2` reading `.markdownlint.jsonc`, or other tool configurations that ship with a `.jsonc` extension). `.json` files **MUST** remain strict JSON regardless of whether the consuming tool can also accept JSONC.
 - The default pre-commit stack does **not** validate `.jsonc` syntax. Repositories that need stricter enforcement of `.jsonc` files should add **JSONC-aware tooling** (a JSONC-aware parser, linter, or schema validator) rather than retrofitting `check-json`.
 - JSON5 is **not** enabled by default and **must not** be introduced without an explicit, documented project decision.
 
