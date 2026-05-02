@@ -113,7 +113,7 @@ GEMINI.md                            # Agent instructions for Gemini Code Assist
 | `.github/linting/PSScriptAnalyzerSettings.psd1` | PSScriptAnalyzer settings enforcing OTBS formatting for PowerShell |
 | `.github/workflows/auto-fix-precommit.yml` | Automatically commits pre-commit auto-fixes on PRs pushed by the Copilot coding agent (optional - remove if not using the Copilot coding agent) |
 | `.github/workflows/check-placeholders.yml` | CI workflow to verify OWNER/REPO and @OWNER placeholders are replaced after cloning |
-| `.github/workflows/data-ci.yml` | Data-file (JSON/YAML/GitHub Actions) linting CI workflow — runs `check-json`, `check-yaml`, `yamllint`, and `actionlint` as a dedicated required check |
+| `.github/workflows/data-ci.yml` | Data-file (JSON/YAML/GitHub Actions) linting CI workflow — runs `check-json`, `check-yaml`, `yamllint`, and `actionlint` as a dedicated check that can be required via branch protection |
 | `.github/workflows/markdownlint.yml` | Markdown linting CI workflow (uses [markdownlint](https://github.com/DavidAnson/markdownlint)) |
 | `.github/workflows/powershell-ci.yml` | PowerShell linting and Pester testing CI workflow (optional - remove if not using PowerShell) |
 | `.github/workflows/python-ci.yml` | Python linting and testing CI workflow (optional - remove if not using Python) |
