@@ -3,6 +3,21 @@
 # Purpose: Run pre-commit hooks, type checking (mypy), and tests (pytest) for
 # Python code in a single consolidated workflow.
 #
+# Despite the "Python CI" name, the `Pre-commit` job runs the full
+# `pre-commit run --all-files` pipeline and therefore enforces every active
+# hook in `.pre-commit-config.yaml`, including non-Python hooks:
+#   - JSON syntax (check-json, strict .json only)
+#   - YAML syntax and style (check-yaml, yamllint)
+#   - GitHub Actions workflow linting (actionlint)
+#   - Markdown linting (markdownlint-cli2)
+#   - Terraform formatting/validation (terraform_fmt, terraform_validate,
+#     terraform_tflint)
+#   - General hygiene (trailing-whitespace, end-of-file-fixer,
+#     check-added-large-files)
+# This is the single canonical pre-commit enforcement workflow; downstream
+# repos and other workflows should not duplicate `pre-commit run --all-files`
+# as a required check.
+#
 # Design Decisions:
 #
 # 1. Single Workflow with Job Dependencies:
@@ -111,6 +126,10 @@ jobs:
         run: pip install pre-commit
 
       - name: Run pre-commit hooks
+        # Runs every hook in .pre-commit-config.yaml (Python formatters/linters,
+        # JSON/YAML checks, yamllint, actionlint, markdownlint-cli2, Terraform).
+        # Required tools are set up above (Python, Terraform); other hooks
+        # provision their own environments inside pre-commit's hook cache.
         run: pre-commit run --all-files
 
   type-check:
