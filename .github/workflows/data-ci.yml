@@ -11,9 +11,9 @@
 #   - yamllint     — YAML style enforcement per .yamllint.yml
 #   - actionlint   — GitHub Actions workflow linting
 #
-# Once Unit 3 introduces concrete schemas under `schemas/` and a
-# `check-jsonschema` hook in `.pre-commit-config.yaml`, extend this workflow
-# with `pre-commit run check-jsonschema --all-files`.
+# Once concrete schemas are added under `schemas/` and a `check-jsonschema`
+# hook is enabled in `.pre-commit-config.yaml`, extend this workflow with
+# `pre-commit run check-jsonschema --all-files`.
 #
 # Design Decisions:
 #

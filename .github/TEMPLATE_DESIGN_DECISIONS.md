@@ -674,7 +674,7 @@ The repository ships a dedicated `.github/workflows/data-ci.yml` workflow that r
 
 **Distinction from `auto-fix-precommit.yml`:** `data-ci.yml` is a contract enforcement gate that runs on all PRs and pushes. `.github/workflows/auto-fix-precommit.yml` is intentionally NOT a peer of `data-ci.yml`: it is a fix-up workflow scoped to `copilot/**` branches that auto-applies pre-commit fixes and does not enforce results. The two workflows serve different purposes and must not be conflated.
 
-**Future extension:** Once Unit 3 introduces concrete schemas under `schemas/` and a `check-jsonschema` hook in `.pre-commit-config.yaml`, `data-ci.yml` will be extended with `pre-commit run check-jsonschema --all-files`. No schema validation is wired in by default today.
+**Future extension:** Once concrete schemas are added under `schemas/` and a `check-jsonschema` hook is enabled in `.pre-commit-config.yaml`, `data-ci.yml` will be extended with `pre-commit run check-jsonschema --all-files`. No schema validation is wired in by default today.
 
 ### Design Decision: Non-Blocking Type Checking by Default
 
