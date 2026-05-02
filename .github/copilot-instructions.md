@@ -117,7 +117,7 @@ This repository includes an auto-fix workflow (`.github/workflows/auto-fix-preco
 
 ## Repository Self-Containment
 
-All files committed to this repository MUST be interpretable using only the contents of this repository and public references that are clearly linked from it. This applies to, but is not limited to, `README.md`, files under `.github/` including workflows, instructions, and design-decision docs, other top-level `*.md` files, and code comments embedded in committed files.
+All files committed to this repository MUST be interpretable—meaning understandable to a reader without access to private or internal resources—using only the contents of this repository and public references that are clearly linked from it. This rule governs the meaning of documentation, code comments, and embedded references; it does not require the repository to build or run without standard external dependencies declared in its manifests (for example, package, module, or action dependencies pinned in `requirements.txt`, `package.json`, Terraform `required_providers`, or workflow `uses:` entries). It applies to, but is not limited to, `README.md`, files under `.github/` including workflows, instructions, and design-decision docs, other top-level `*.md` files, and code comments embedded in committed files.
 
 Do not embed references to:
 
