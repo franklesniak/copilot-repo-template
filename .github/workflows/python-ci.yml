@@ -127,7 +127,7 @@ jobs:
 
       - name: Run pre-commit hooks
         # Runs every hook in .pre-commit-config.yaml (Python formatters/linters,
-        # JSON/YAML checks, yamllint, actionlint, markdownlint, Terraform).
+        # JSON/YAML checks, yamllint, actionlint, markdownlint-cli2, Terraform).
         # Required tools are set up above (Python, Terraform); other hooks
         # provision their own environments inside pre-commit's hook cache.
         run: pre-commit run --all-files
