@@ -160,7 +160,7 @@ How the worked example is validated:
 
 - The `valid/` example data files are validated by the `Validate example-config valid examples` `check-jsonschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) and by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
 - The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate example-config schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
-- The `invalid/` example data files are not yet exercised by an in-repo pytest suite; a follow-up unit will add `tests/test_schema_examples.py` to assert that each invalid example causes `check-jsonschema` to exit non-zero. A reusable, opt-in version of that test pattern is already available at [`templates/python/tests/test_schema_examples.py`](../templates/python/tests/test_schema_examples.py) for downstream adopters.
+- The `invalid/` example data files are not yet exercised by an in-repo pytest suite; a follow-up change is planned to add `tests/test_schema_examples.py` to assert that each invalid example causes `check-jsonschema` to exit non-zero. A reusable, opt-in version of that test pattern is already available at [`templates/python/tests/test_schema_examples.py`](../templates/python/tests/test_schema_examples.py) for downstream adopters.
 - Invalid example data files MUST NOT be wired into a normal pre-commit hook because `check-jsonschema` would treat their (expected) failure as a hook failure.
 
 ### Downstream Removal Checklist
