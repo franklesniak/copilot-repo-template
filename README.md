@@ -32,8 +32,10 @@ This template includes:
 
 - **GitHub Copilot Instructions:** Comprehensive coding standards that guide AI-assisted development
 - **Multi-Agent Support:** Instruction files for Claude Code, OpenAI Codex CLI, and Gemini Code Assist (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`)
-- **Language-Specific Guidelines:** Modular instruction files for Markdown, PowerShell, and Python
-- **Linting Configurations:** Pre-configured settings for markdownlint and PSScriptAnalyzer
+- **Language-Specific Guidelines:** Modular instruction files for Markdown, PowerShell, Python, Terraform, JSON/JSONC, and YAML
+- **Linting Configurations:** Pre-configured settings for markdownlint, PSScriptAnalyzer, TFLint, and yamllint
+- **Data-File Validation:** Pre-commit hooks for `check-json`, `check-yaml`, `yamllint`, and `actionlint` (GitHub Actions workflows)
+- **JSON Schemas:** Root-level `schemas/` directory convention for schema-backed JSON and YAML files
 - **Pre-commit Hooks:** Automated code quality checks before commits
 
 ### Getting Started
@@ -55,8 +57,12 @@ For template maintainers, see [TEMPLATE_MAINTENANCE.md](TEMPLATE_MAINTENANCE.md)
 ├── dependabot.yml                   # Automated dependency updates configuration
 ├── instructions/                    # Language-specific coding standards
 │   ├── docs.instructions.md         # Markdown/documentation standards
+│   ├── gitattributes.instructions.md # .gitattributes authoring standards
+│   ├── json.instructions.md         # JSON/JSONC authoring standards
 │   ├── powershell.instructions.md   # PowerShell coding standards
-│   └── python.instructions.md       # Python coding standards
+│   ├── python.instructions.md       # Python coding standards
+│   ├── terraform.instructions.md    # Terraform coding standards
+│   └── yaml.instructions.md         # YAML authoring standards
 ├── linting/                         # Linting tool configurations
 │   └── PSScriptAnalyzerSettings.psd1  # PowerShell linting settings
 ├── scripts/                         # Helper scripts for CI/tooling
@@ -81,9 +87,12 @@ templates/                           # Reference templates for project setup
 └── powershell/                      # PowerShell test templates
     └── Example.Tests.ps1            # Comprehensive Pester test example
 
+schemas/                             # JSON Schemas for load-bearing JSON/YAML files (Draft 2020-12)
+
 pyproject.toml                       # Python project configuration
 .markdownlint.jsonc                  # Markdown linting configuration
-.pre-commit-config.yaml              # Pre-commit hooks (Python focused)
+.yamllint.yml                        # YAML linting configuration
+.pre-commit-config.yaml              # Pre-commit hooks (multi-language)
 AGENTS.md                            # Agent instructions for OpenAI Codex CLI
 CLAUDE.md                            # Agent instructions for Claude Code
 GEMINI.md                            # Agent instructions for Gemini Code Assist
@@ -102,7 +111,9 @@ GEMINI.md                            # Agent instructions for Gemini Code Assist
 | `.github/workflows/powershell-ci.yml` | PowerShell linting and Pester testing CI workflow (optional - remove if not using PowerShell) |
 | `.github/workflows/python-ci.yml` | Python linting and testing CI workflow (optional - remove if not using Python) |
 | `.markdownlint.jsonc` | Markdown linting rules prioritizing auto-fixable checks |
-| `.pre-commit-config.yaml` | Pre-commit hooks for all projects (Python formatting, linting, Markdown) |
+| `.yamllint.yml` | YAML linting configuration (2-space indentation, max line length 120 as warning, unquoted GitHub Actions `on:` allowed) |
+| `.pre-commit-config.yaml` | Pre-commit hooks for all projects (multi-language) |
+| `schemas/` | Root-level JSON Schemas (Draft 2020-12) describing load-bearing JSON and YAML files |
 | `AGENTS.md` | Minimal agent entry point instructions for OpenAI Codex CLI and GitHub Copilot coding agent |
 | `CLAUDE.md` | Minimal agent entry point instructions plus Claude-specific workflow guidance |
 | `GEMINI.md` | Minimal agent entry point instructions for Gemini Code Assist and GitHub Copilot coding agent |
@@ -115,10 +126,16 @@ GEMINI.md                            # Agent instructions for Gemini Code Assist
 
 | Language | Instruction File | File Pattern | CI Workflow | Description |
 | --- | --- | --- | --- | --- |
+| JSON/JSONC | `.github/instructions/json.instructions.md` | `**/*.json`, `**/*.jsonc` | Pre-commit (`check-json` on `.json`; `.jsonc` not validated) | JSON authoring standards (strict, schema-backed, deterministic) |
 | Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` | `.github/workflows/markdownlint.yml` | Documentation writing standards |
 | PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` | `.github/workflows/powershell-ci.yml` | PowerShell coding standards (OTBS, v1.0-v7.x) |
 | Python | `.github/instructions/python.instructions.md` | `**/*.py` | `.github/workflows/python-ci.yml` | Python coding standards (PEP 8, typing) |
 | Terraform | `.github/instructions/terraform.instructions.md` | `**/*.tf`, `**/*.tfvars`, `**/*.tftest.hcl`, etc. | `.github/workflows/terraform-ci.yml` | Terraform coding standards (HCL, modules) |
+| YAML | `.github/instructions/yaml.instructions.md` | `**/*.yml`, `**/*.yaml` | Pre-commit (`check-yaml`, `yamllint`; `actionlint` for workflows only) | YAML authoring standards (explicit, conservative, schema-backed) |
+
+> **JSON note:** `check-json` validates strict `.json` only; it does **not** validate `.jsonc`. JSONC is allowed where the consuming tool supports it, and stricter enforcement requires JSONC-aware tooling.
+>
+> **Schemas:** JSON Schemas for load-bearing JSON and YAML files live at the repository root under `schemas/` (not `.github/schemas/`). See [`schemas/README.md`](schemas/README.md) for conventions.
 
 ### Linting Tools
 
@@ -159,6 +176,30 @@ pre-commit run --all-files
 # Run specific hooks
 pre-commit run black --all-files
 pre-commit run ruff-check --all-files
+```
+
+#### JSON, YAML, and GitHub Actions Linting
+
+JSON, YAML, and GitHub Actions workflow validation runs through pre-commit hooks. Configuration: `.pre-commit-config.yaml` (and `.yamllint.yml` for `yamllint`).
+
+- **`check-json`** — strict `.json` syntax validation. Does **not** validate `.jsonc`; use JSONC-aware tooling if you need stricter enforcement for `.jsonc` files.
+- **`check-yaml`** — `.yml` / `.yaml` parse check.
+- **`yamllint`** — YAML style enforcement per `.yamllint.yml`.
+- **`actionlint`** — GitHub Actions workflow linting.
+
+Prettier is **opt-in** and is not part of the default data-file toolchain.
+
+> **Schema validation (not enabled by default).** `check-jsonschema` is **not** wired into `.pre-commit-config.yaml` today. Per [`schemas/README.md`](schemas/README.md), `schemas/` is a scaffold and "no schema validation hook is wired into pre-commit by default." Downstream repositories MAY add a `check-jsonschema` hook entry to `.pre-commit-config.yaml` once concrete schemas exist under `schemas/`.
+
+```bash
+# Run all pre-commit hooks (includes data-file validators)
+pre-commit run --all-files
+
+# Run a specific hook
+pre-commit run check-json --all-files
+pre-commit run check-yaml --all-files
+pre-commit run yamllint --all-files
+pre-commit run actionlint --all-files
 ```
 
 #### Terraform Linting
@@ -239,6 +280,9 @@ See `templates/terraform/Example.tftest.hcl` for a comprehensive Terraform test 
 This repository enforces code quality through:
 
 - **Markdown Linting:** Runs on pre-commit and in CI
+- **JSON/YAML Validation:** `check-json` (strict `.json`), `check-yaml`, and `yamllint` run on pre-commit
+- **GitHub Actions Linting:** `actionlint` runs on pre-commit
+- **JSON Schemas:** Root-level `schemas/` convention for schema-backed JSON/YAML files
 - **GitHub Copilot Instructions:** Guides AI-assisted development
 - **Pre-commit Hooks:** Catches issues before they reach CI
 - **PSScriptAnalyzer:** PowerShell static analysis with OTBS formatting
