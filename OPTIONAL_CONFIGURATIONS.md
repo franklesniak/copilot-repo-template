@@ -1057,9 +1057,9 @@ If you remove the `skipif` guard, you MUST ensure `check-jsonschema` is installe
 
 ### Defaults Recap
 
-- The template ships **no** active `check-jsonschema` hooks.
-- The template ships **no** active root tests that depend on `check-jsonschema`.
-- The template provides documentation and an opt-in test pattern only; downstream repositories add real hooks and tests when they introduce real schemas.
+- The template ships **one** active `check-jsonschema` configuration by default: the worked-example schema (`schemas/example-config.schema.json`) and its valid example data files. A companion `check-metaschema` hook self-validates the schema against its declared JSON Schema Draft 2020-12 metaschema. Downstream repositories MAY add additional `check-jsonschema` hook entries for their own schema-backed file families, and MAY remove the worked example via the canonical [downstream removal checklist](schemas/README.md#downstream-removal-checklist).
+- The template ships **no** active root tests that depend on `check-jsonschema`. The opt-in pytest pattern under `templates/python/tests/test_schema_examples.py` is provided for downstream adoption.
+- Beyond the worked example, schema validation is opt-in; downstream repositories add real hooks and tests when they introduce additional real schemas.
 
 ---
 
