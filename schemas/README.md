@@ -99,7 +99,7 @@ Valid examples can be validated directly with `check-jsonschema` from the comman
 ```bash
 check-jsonschema \
   --schemafile schemas/project-config.schema.json \
-  schemas/examples/project-config.valid.json
+  schemas/examples/project-config/valid/minimal.json
 ```
 
 A valid example MUST produce exit code `0`. A non-zero exit indicates either a broken example or a schema regression and MUST be fixed before merging.
@@ -128,7 +128,7 @@ def test_invalid_example_is_rejected():
             CHECK_JSONSCHEMA,
             "--schemafile",
             "schemas/project-config.schema.json",
-            "schemas/examples/project-config.invalid.json",
+            "schemas/examples/project-config/invalid/missing-required.json",
         ],
         capture_output=True,
         text=True,
