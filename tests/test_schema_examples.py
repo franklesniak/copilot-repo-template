@@ -1,59 +1,40 @@
-"""Starter template: validate schema example files with ``check-jsonschema``.
+"""Validate schema example files with ``check-jsonschema``.
 
-This file is **starter content** that downstream Python projects copy
-into their own ``tests/`` directory. The active, canonical version
-that this starter is derived from lives at
-``tests/test_schema_examples.py`` in the ``copilot-repo-template``
-repository — see that file for the source of truth on discovery,
-invocation, and assertion logic.
+This is the **active, canonical** schema-example test for this
+repository. It auto-discovers schema/example pairs under ``schemas/``
+and verifies that:
 
-The starter and the active test share the same essential pattern:
+- Every file under ``schemas/examples/<schema-name>/valid/`` validates
+  successfully against ``schemas/<schema-name>.schema.json``
+  (``check-jsonschema`` exits ``0``).
+- Every file under ``schemas/examples/<schema-name>/invalid/`` is
+  rejected (``check-jsonschema`` exits non-zero).
 
-- Auto-discover schemas via ``schemas/*.schema.json``.
-- For each schema, derive the example directory by stripping
-  ``.schema.json`` from the file name (``schemas/<name>.schema.json``
-  maps to ``schemas/examples/<name>/``).
-- Recursively walk ``schemas/examples/<name>/valid/`` (must validate)
-  and ``schemas/examples/<name>/invalid/`` (must be rejected).
-- Invoke ``check-jsonschema`` via ``subprocess.run`` with
-  ``check=False``, ``capture_output=True``, ``text=True``.
+Discovery rules:
 
-Intentional differences from the active test:
+- Schemas are found via the glob ``schemas/*.schema.json``.
+- For each schema, the example directory name is derived by removing
+  the trailing ``.schema.json`` from the file name. For example,
+  ``schemas/example-config.schema.json`` maps to
+  ``schemas/examples/example-config/``.
+- Only regular files under ``valid/`` and ``invalid/`` are exercised;
+  directories and other non-file entries are ignored.
 
-- Path resolution: this starter resolves the project root by walking
-  up from this file's location until it finds a ``pyproject.toml``,
-  ``setup.cfg``, or ``pytest.ini`` marker. The active test in the
-  template repository hardcodes its location as
-  ``<repo>/tests/test_schema_examples.py``; downstream projects may
-  place this file at a different depth, so root discovery is dynamic
-  here. See ``.github/instructions/python.instructions.md``
-  (Filesystem and Paths): paths SHOULD be resolved from a clear root
-  rather than the process CWD.
-- The ``check-jsonschema`` skipif guard is retained so the starter
-  remains safe to copy even into projects that have not yet added
-  ``check-jsonschema`` to their dev/test dependencies. Downstream
-  projects SHOULD add ``check-jsonschema`` to their dev/test
-  dependency group (see ``templates/python/pyproject.toml``) so the
-  test always runs.
-
-How to use:
-
-1. Copy this file into your project's real ``tests/`` directory.
-2. Add ``check-jsonschema`` to your project's dev/test dependencies
-   (already declared in ``templates/python/pyproject.toml``).
-3. Place schemas under ``schemas/<name>.schema.json`` and matching
-   examples under ``schemas/examples/<name>/{valid,invalid}/``. No
-   per-case configuration is required — discovery is automatic.
-
-Both valid and invalid examples are exercised here:
-
-- Valid examples MUST validate cleanly (exit code ``0``).
-- Invalid examples MUST be rejected (non-zero exit code).
+Paths are resolved from the repository root, which is derived from
+this file's known location at ``<repo>/tests/test_schema_examples.py``
+(via ``Path(__file__).resolve().parent.parent``) rather than the
+process current working directory, so the test behaves the same
+regardless of where ``pytest`` is invoked from.
 
 Invalid examples are intentionally NOT wired into a normal
 ``check-jsonschema`` pre-commit hook, because a failing exit code from
-the validator would be reported as a hook failure. Use this test (or
-an equivalent script) to prove that the schema actually rejects them.
+the validator would be reported as a hook failure. This test exists in
+part to prove that the schema actually rejects them.
+
+A starter version of this test is available at
+``templates/python/tests/test_schema_examples.py`` for downstream
+consumers of the template; the two files share the same essential
+validation pattern.
 """
 
 from __future__ import annotations
@@ -67,36 +48,11 @@ import pytest
 
 CHECK_JSONSCHEMA = shutil.which("check-jsonschema")
 
-SCHEMA_SUFFIX = ".schema.json"
-_ROOT_MARKERS = ("pyproject.toml", "setup.cfg", "pytest.ini")
-
-
-def _find_project_root(start: Path) -> Path:
-    """Walk up from ``start`` until a project-root marker is found.
-
-    Args:
-        start: A directory inside the downstream project (typically
-            the directory containing this test file). Callers MUST
-            pass a directory; file paths should be normalized at the
-            call site (e.g., ``Path(__file__).resolve().parent``) so
-            the first iteration does not check a nonexistent
-            ``<file>/<marker>`` path.
-
-    Returns:
-        The first ancestor directory containing ``pyproject.toml``,
-        ``setup.cfg``, or ``pytest.ini``. Falls back to ``start``
-        itself when no marker is found, which keeps the starter
-        usable in unusual layouts without raising at import time.
-    """
-    for candidate in (start, *start.parents):
-        if any((candidate / marker).is_file() for marker in _ROOT_MARKERS):
-            return candidate
-    return start
-
-
-PROJECT_ROOT = _find_project_root(Path(__file__).resolve().parent)
-SCHEMAS_DIR = PROJECT_ROOT / "schemas"
+# Repository root, relative to this file: ``<repo>/tests/test_schema_examples.py``.
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SCHEMAS_DIR = REPO_ROOT / "schemas"
 EXAMPLES_DIR = SCHEMAS_DIR / "examples"
+SCHEMA_SUFFIX = ".schema.json"
 
 
 def _is_within_root(candidate: Path, root: Path) -> bool:
@@ -120,10 +76,9 @@ def _is_within_root(candidate: Path, root: Path) -> bool:
     they are caught here and surfaced as a boolean).
 
     This helper does **not** enforce a mount-point or device boundary
-    (``Path.is_symlink()`` does not detect bind mounts). Downstream
-    projects that require that level of isolation should layer an
-    explicit ``os.stat().st_dev`` (or mount-table) check on top of
-    this helper.
+    (``Path.is_symlink()`` does not detect bind mounts). Callers that
+    require that level of isolation should layer an explicit
+    ``os.stat().st_dev`` (or mount-table) check on top of this helper.
 
     Args:
         candidate: Path that the caller wants to use as a discovery
@@ -131,8 +86,9 @@ def _is_within_root(candidate: Path, root: Path) -> bool:
             directory; need not exist (``is_symlink`` is well-defined
             on dangling symlinks).
         root: Trusted ancestor that ``candidate`` must live inside.
-            Typically the downstream-derived ``PROJECT_ROOT`` or
-            ``SCHEMAS_DIR``.
+            Typically a constant such as ``REPO_ROOT`` or
+            ``SCHEMAS_DIR`` derived from ``Path(__file__)`` and
+            therefore not user-controlled.
 
     Returns:
         ``True`` only when ``candidate`` resolves under ``root`` *and*
@@ -165,7 +121,7 @@ def _iter_safe_files(directory: Path, root: Path) -> list[Path]:
     symlink, or if ``directory.resolve()`` escapes ``root.resolve()``.
     Without this pre-walk check, an attacker who controls a path
     component (e.g., a symlink at ``schemas/examples/<schema-name>``
-    pointing outside the project) could coerce the test suite into
+    pointing outside the repository) could coerce the test suite into
     walking and validating files outside ``root`` even though
     ``os.walk(followlinks=False)`` and the per-yielded-path
     boundary check would each, in isolation, appear to "succeed".
@@ -179,31 +135,28 @@ def _iter_safe_files(directory: Path, root: Path) -> list[Path]:
     resolved location, which catches symlink and ``..``-style
     traversals that survive the initial walk-time skip.
 
-    Downstream projects that copy this starter inherit the same
-    policy: example-fixture discovery refuses any symlink-rooted
-    escape (a symlink at any level from ``root`` down to the discovery
-    directory), never follows symlinks during traversal, and never
-    returns files outside the resolved fixture tree, so a malicious
-    or accidentally-introduced symlink at any level of the
-    ``schemas/`` tree cannot coerce the test into validating files
-    outside the project.
+    The repository constitution requires that file-discovery callers
+    "reject path traversal and symlink escapes"; this helper
+    centralizes that policy for example-fixture discovery so the test
+    suite cannot be coerced into validating files outside the
+    schemas/examples tree by a malicious or accidentally-introduced
+    symlink at any level.
 
     This helper does **not** enforce a mount-point or device boundary.
     A bind mount (or any other mount) located *under* ``directory``
     will still expose its target content because ``Path.resolve()``
     returns a path that, from the filesystem's perspective, remains
-    inside ``directory``. Downstream projects that require mount-
-    boundary isolation should layer an explicit
-    ``os.stat().st_dev`` (or mount-table) check on top of this
-    helper.
+    inside ``directory``. Callers that require mount-boundary
+    isolation should layer an explicit ``os.stat().st_dev`` (or
+    mount-table) check on top of this helper.
 
     Args:
         directory: Directory whose regular-file descendants should be
             returned. May not exist; if absent, an empty list is
             returned.
         root: Trusted ancestor of ``directory`` (typically
-            ``PROJECT_ROOT``). Discovery is refused if ``directory``
-            or any ancestor up to ``root`` is a symlink, or if
+            ``REPO_ROOT``). Discovery is refused if ``directory`` or
+            any ancestor up to ``root`` is a symlink, or if
             ``directory`` resolves outside ``root``.
 
     Returns:
@@ -238,23 +191,23 @@ def _discover_cases() -> list[tuple[Path, Path, bool]]:
 
     Returns:
         A list of ``(schema_path, example_path, expected_to_pass)``
-        tuples for every regular file under
-        ``schemas/examples/<name>/valid/`` (expected to pass) and
-        ``schemas/examples/<name>/invalid/`` (expected to fail).
-        Schema files and example directories whose path chain from
-        ``PROJECT_ROOT`` includes a symlink (or that resolve outside
-        ``PROJECT_ROOT``) are rejected via :func:`_is_within_root` so
-        a malicious or accidentally-introduced symlink at any level
+        tuples covering every regular file under
+        ``schemas/examples/<schema-name>/valid/`` (expected to pass)
+        and ``schemas/examples/<schema-name>/invalid/`` (expected to
+        fail). Schema files and example directories whose path chain
+        from ``REPO_ROOT`` includes a symlink (or that resolve outside
+        ``REPO_ROOT``) are rejected via :func:`_is_within_root` so a
+        malicious or accidentally-introduced symlink at any level
         cannot coerce the suite into validating files outside the
-        project. Returns an empty list when no schemas or examples
-        are present so the test suite degrades gracefully rather
+        repository. Returns an empty list if no schemas or examples
+        are present, so the test suite degrades gracefully rather
         than hard-failing on a count assertion.
     """
     cases: list[tuple[Path, Path, bool]] = []
     if not SCHEMAS_DIR.is_dir():
         return cases
     for schema_path in sorted(SCHEMAS_DIR.glob(f"*{SCHEMA_SUFFIX}")):
-        if not _is_within_root(schema_path, PROJECT_ROOT):
+        if not _is_within_root(schema_path, REPO_ROOT):
             continue
         schema_name = schema_path.name[: -len(SCHEMA_SUFFIX)]
         schema_examples_dir = EXAMPLES_DIR / schema_name
@@ -262,7 +215,7 @@ def _discover_cases() -> list[tuple[Path, Path, bool]]:
             kind_dir = schema_examples_dir / kind
             if not kind_dir.is_dir():
                 continue
-            for example_path in sorted(_iter_safe_files(kind_dir, PROJECT_ROOT)):
+            for example_path in sorted(_iter_safe_files(kind_dir, REPO_ROOT)):
                 if not example_path.is_file():
                     continue
                 cases.append((schema_path, example_path, expected_to_pass))
@@ -270,14 +223,15 @@ def _discover_cases() -> list[tuple[Path, Path, bool]]:
 
 
 def _case_id(case: tuple[Path, Path, bool]) -> str:
-    """Build a readable parametrize ID for a discovered case."""
+    """Build a readable parametrize ID for a discovered case.
+
+    The ID identifies both the schema and the example path relative to
+    the repository root, plus the expected outcome, so failing cases
+    are easy to locate from pytest output.
+    """
     schema_path, example_path, expected_to_pass = case
-    try:
-        schema_rel = schema_path.relative_to(PROJECT_ROOT).as_posix()
-        example_rel = example_path.relative_to(PROJECT_ROOT).as_posix()
-    except ValueError:
-        schema_rel = schema_path.as_posix()
-        example_rel = example_path.as_posix()
+    schema_rel = schema_path.relative_to(REPO_ROOT).as_posix()
+    example_rel = example_path.relative_to(REPO_ROOT).as_posix()
     outcome = "valid" if expected_to_pass else "invalid"
     return f"{schema_rel}::{outcome}::{example_rel}"
 
@@ -311,9 +265,9 @@ def test_schema_example(
         example_path: Absolute path to an example file under either
             ``schemas/examples/<schema-name>/valid/`` or
             ``schemas/examples/<schema-name>/invalid/``.
-        expected_to_pass: ``True`` for ``valid/`` examples (must
-            validate cleanly), ``False`` for ``invalid/`` examples
-            (must be rejected).
+        expected_to_pass: ``True`` when the example lives under
+            ``valid/`` (must validate cleanly), ``False`` when it
+            lives under ``invalid/`` (must be rejected).
 
     Raises:
         AssertionError: If a valid example is rejected, or an invalid

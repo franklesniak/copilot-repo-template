@@ -99,7 +99,7 @@ Valid examples can be validated directly with `check-jsonschema` from the comman
 ```bash
 check-jsonschema \
   --schemafile schemas/project-config.schema.json \
-  schemas/examples/project-config.valid.json
+  schemas/examples/project-config/valid/minimal.json
 ```
 
 A valid example MUST produce exit code `0`. A non-zero exit indicates either a broken example or a schema regression and MUST be fixed before merging.
@@ -128,7 +128,7 @@ def test_invalid_example_is_rejected():
             CHECK_JSONSCHEMA,
             "--schemafile",
             "schemas/project-config.schema.json",
-            "schemas/examples/project-config.invalid.json",
+            "schemas/examples/project-config/invalid/missing-required.json",
         ],
         capture_output=True,
         text=True,
@@ -141,7 +141,7 @@ def test_invalid_example_is_rejected():
 
 The same shape applies in PowerShell, Bash, or any CI step: invoke the validator on the invalid fixture and assert a non-zero exit.
 
-A reusable, opt-in template version of this pattern lives at [`templates/python/tests/test_schema_examples.py`](../templates/python/tests/test_schema_examples.py). It safely skips when `check-jsonschema` is unavailable so that it does not break environments that have not opted in to schema validation.
+A starter version of this pattern lives at [`templates/python/tests/test_schema_examples.py`](../templates/python/tests/test_schema_examples.py); the active, canonical version that this repository runs in CI lives at [`tests/test_schema_examples.py`](../tests/test_schema_examples.py). Both auto-discover schema/example pairs under `schemas/`. The starter retains a `skipif` guard so it remains safe to copy into downstream projects that have not yet added `check-jsonschema` to their dev/test dependencies.
 
 ## Worked Example
 
@@ -160,7 +160,7 @@ How the worked example is validated:
 
 - The `valid/` example data files are validated by the `Validate example-config valid examples` `check-jsonschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) and by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
 - The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate example-config schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
-- The `invalid/` example data files are not yet exercised by an in-repo pytest suite; a follow-up change is planned to add `tests/test_schema_examples.py` to assert that each invalid example causes `check-jsonschema` to exit non-zero. A reusable, opt-in version of that test pattern is already available at [`templates/python/tests/test_schema_examples.py`](../templates/python/tests/test_schema_examples.py) for downstream adopters.
+- The `invalid/` example data files are exercised by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py), which uses `check-jsonschema` to assert that each invalid example causes a non-zero exit code (and that each valid example exits cleanly). A starter version of this pattern, with the same discovery and assertion logic but with project-root resolution suitable for downstream repositories, is also available at [`templates/python/tests/test_schema_examples.py`](../templates/python/tests/test_schema_examples.py).
 - Invalid example data files MUST NOT be wired into a normal pre-commit hook because `check-jsonschema` would treat their (expected) failure as a hook failure.
 
 ### Downstream Removal Checklist

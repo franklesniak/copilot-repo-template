@@ -1010,15 +1010,15 @@ If you have multiple schema-backed file families, add one hook **per family**, e
 Sample data files that should validate cleanly can be placed in either of two locations, with different validation consequences:
 
 - **Inside the file family path covered by the family hook** (for example, `config/example.valid.json` for the hook above). The family hook will validate these automatically because they match its `files:` pattern.
-- **Under `schemas/examples/`** (for example, `schemas/examples/project-config.valid.json`). This location is the convention used by `schemas/README.md` and the pytest template referenced below, but it does **not** match the family hook's `files:` pattern, so these examples need a separate validation path. Choose one of:
+- **Under `schemas/examples/<schema-name>/{valid,invalid}/`** (for example, `schemas/examples/project-config/valid/minimal.json`). This `schemas/examples/<schema-name>/{valid,invalid}/` layout is the convention used by `schemas/README.md` and the pytest tests referenced below, but it does **not** match the family hook's `files:` pattern, so these examples need a separate validation path. Choose one of:
 
-  - Add a dedicated `check-jsonschema` hook scoped to **valid** fixtures under `schemas/examples/` only (for example, `files: ^schemas/examples/project-config\..*\.valid\.json$`). The `\.valid\.json$` anchor is important: it aligns with the `*.valid.json` / `*.invalid.json` naming convention used in `schemas/README.md` § Examples and in `templates/python/tests/test_schema_examples.py`'s `SCHEMA_CASES` placeholders, and it prevents the hook from picking up `*.invalid.json` fixtures (which MUST NOT be wired into a normal `check-jsonschema` hook — see the next subsection).
+  - Add a dedicated `check-jsonschema` hook scoped to **valid** fixtures under `schemas/examples/` only (for example, `files: ^schemas/examples/project-config/valid/.*\.json$`). Anchor the pattern under the `valid/` directory so the hook does not pick up `invalid/` fixtures (which MUST NOT be wired into a normal `check-jsonschema` hook — see the next subsection). This aligns with the `schemas/examples/<schema-name>/{valid,invalid}/` layout used in `schemas/README.md` § Examples and exercised by both [`tests/test_schema_examples.py`](tests/test_schema_examples.py) and [`templates/python/tests/test_schema_examples.py`](templates/python/tests/test_schema_examples.py).
   - Run `check-jsonschema` directly from a CI step or local script:
 
     ```bash
     check-jsonschema \
       --schemafile schemas/project-config.schema.json \
-      schemas/examples/project-config.valid.json
+      schemas/examples/project-config/valid/minimal.json
     ```
 
   - Wire the example into the opt-in pytest template described under [Testing Invalid Examples](#testing-invalid-examples) (it exercises both valid and invalid cases).
@@ -1029,15 +1029,15 @@ Whichever placement you choose, valid examples MUST exit with code `0`; a non-ze
 
 Invalid examples (intentionally malformed fixtures used to prove that the schema rejects bad input) MUST NOT be wired into a normal `check-jsonschema` pre-commit hook, because the validator's non-zero exit would be reported as a hook failure on every run. Instead, write a test or script that **asserts validation fails**.
 
-A reusable, opt-in pytest template lives at [`templates/python/tests/test_schema_examples.py`](templates/python/tests/test_schema_examples.py). To use it:
+A starter pytest template lives at [`templates/python/tests/test_schema_examples.py`](templates/python/tests/test_schema_examples.py); the active, canonical version that this repository runs in CI lives at [`tests/test_schema_examples.py`](tests/test_schema_examples.py). Both auto-discover `(schema, example, expected_to_pass)` triples from `schemas/*.schema.json` and `schemas/examples/<schema-name>/{valid,invalid}/`. To use the starter:
 
 1. Copy the file into your project's real `tests/` directory.
-2. Update its `SCHEMA_CASES` list with `(schema, example, expected_to_pass)` triples for your real schemas and examples.
+2. Place schemas under `schemas/<name>.schema.json` and examples under `schemas/examples/<name>/{valid,invalid}/`. Discovery is automatic — no per-case configuration is required.
 3. Choose how to make `check-jsonschema` available to the test environment (see below).
 
 ### Making `check-jsonschema` Available to Tests
 
-The template test safely skips when `check-jsonschema` is not on `PATH`, so the root `tests/` directory in this template does not require the tool to be installed. If you want the test to run unconditionally in your repository, do one of the following:
+The active root test [`tests/test_schema_examples.py`](tests/test_schema_examples.py) requires `check-jsonschema`, which is declared in the root `pyproject.toml` `dev` dependency group and installed by `.github/workflows/python-ci.yml` via `pip install -e ".[dev]"`. The starter under `templates/python/tests/test_schema_examples.py` retains a `skipif` guard so that downstream projects can copy it before adding the dependency. If you want the starter to run unconditionally in your repository, do one of the following:
 
 - **Add it as a dev/test dependency.** For example, in `pyproject.toml`:
 
@@ -1058,7 +1058,7 @@ If you remove the `skipif` guard, you MUST ensure `check-jsonschema` is installe
 ### Defaults Recap
 
 - The template ships **one** active `check-jsonschema` configuration by default: the worked-example schema (`schemas/example-config.schema.json`) and its valid example data files. A companion `check-metaschema` hook self-validates the schema against its declared JSON Schema Draft 2020-12 metaschema. Downstream repositories MAY add additional `check-jsonschema` hook entries for their own schema-backed file families, and MAY remove the worked example via the canonical [downstream removal checklist](schemas/README.md#downstream-removal-checklist).
-- The template ships **no** active root tests that depend on `check-jsonschema`. The opt-in pytest pattern under `templates/python/tests/test_schema_examples.py` is provided for downstream adoption.
+- The template ships an active root test, [`tests/test_schema_examples.py`](tests/test_schema_examples.py), that depends on `check-jsonschema` (declared in the root `pyproject.toml` `dev` group). A starter version with the same essential pattern is provided at `templates/python/tests/test_schema_examples.py` for downstream adoption.
 - Beyond the worked example, schema validation is opt-in; downstream repositories add real hooks and tests when they introduce additional real schemas.
 
 ---
@@ -2620,7 +2620,7 @@ This template repository includes reference Python configuration files and scaff
 - **`pyproject.toml`**: Sample configuration for Python project metadata, dependencies, and tooling (Black, Ruff, mypy, pytest)
 - **`tests/__init__.py`**: Package marker for the test directory
 - **`tests/test_placeholder.py`**: Placeholder test file that demonstrates pytest test structure
-- **`tests/test_schema_examples.py`**: Opt-in pytest template that validates schema example fixtures with `check-jsonschema`. Skips cleanly when the tool is not installed and `SCHEMA_CASES` is empty, so it does not require a new root dependency. See [Schema Validation Configuration](#schema-validation-configuration) for setup.
+- **`tests/test_schema_examples.py`**: Starter pytest module that auto-discovers and validates schema example fixtures under `schemas/examples/<name>/{valid,invalid}/` with `check-jsonschema`. Skips cleanly when the tool is not installed or when no examples are present. Mirrors the active, canonical test at `tests/test_schema_examples.py` in the template repository root. See [Schema Validation Configuration](#schema-validation-configuration) for setup.
 - **`README.md`**: Brief overview of the template files with links to external resources
 
 ### How to Use the Template
