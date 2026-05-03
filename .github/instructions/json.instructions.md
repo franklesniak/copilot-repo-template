@@ -7,7 +7,7 @@ description: "JSON authoring standards: strict-by-default, schema-backed, determ
 
 # JSON Writing Style
 
-**Version:** 1.0.20260503.0
+**Version:** 1.1.20260503.1
 
 ## Metadata
 
@@ -15,7 +15,7 @@ description: "JSON authoring standards: strict-by-default, schema-backed, determ
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-05-03
 - **Scope:** Defines authoring standards for JSON and JSONC files in this repository, including configuration, schemas, fixtures, generated metadata, and machine-readable contracts. Covers dialect policy, formatting, key ordering, naming, data modeling, schema usage, comments, security, and generated output.
-- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [YAML Writing Style](./yaml.instructions.md), [Schemas README](../../schemas/README.md), [Template Design Decision — Dedicated JSON and YAML Instruction Files](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-json-and-yaml-instruction-files), [Template Design Decision — Baseline JSON/YAML Linting Stack](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-baseline-jsonyaml-linting-stack), [Template Design Decision — JSON5 Exclusion by Default](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-json5-exclusion-by-default), [Template Design Decision — `additionalProperties` Policy](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-additionalproperties-policy)
+- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [YAML Writing Style](./yaml.instructions.md), [Schemas README](../../schemas/README.md), [Schema Example Tests (`tests/test_schema_examples.py`)](../../tests/test_schema_examples.py), [Data-File CI Workflow (`data-ci.yml`)](../workflows/data-ci.yml), [Template Design Decision — Dedicated JSON and YAML Instruction Files](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-json-and-yaml-instruction-files), [Template Design Decision — Baseline JSON/YAML Linting Stack](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-baseline-jsonyaml-linting-stack), [Template Design Decision — Dedicated Data-File CI Workflow (`data-ci.yml`)](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-data-file-ci-workflow-data-ciyml), [Template Design Decision — JSON5 Exclusion by Default](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-json5-exclusion-by-default), [Template Design Decision — `additionalProperties` Policy](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-additionalproperties-policy)
 
 ## Purpose and Scope
 
@@ -111,6 +111,16 @@ Schema location and shape:
 - Project-owned **closed** schemas **SHOULD** set `"additionalProperties": false` so that unknown keys are caught early.
 - Ecosystem-mirroring schemas (schemas that describe an external format the project does not own, for example, a third-party config) **MAY** leave additional properties open and **SHOULD** document why in the schema's `description` or in a sibling `README.md`.
 
+Shipped JSON validation tooling in this repository:
+
+- **`check-json`** — strict `.json` syntax validation, wired into [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) with an anchored `\.json$` pattern. JSONC files are intentionally excluded from `check-json`; downstream repositories that need stronger JSONC enforcement **SHOULD** add JSONC-aware tooling rather than retrofitting `check-json`.
+- **`check-jsonschema`** — JSON Schema validation. Wired in today for the worked-example schema (`schemas/example-config.schema.json`) and its valid example data files under `schemas/examples/example-config/valid/`. Add additional file-family-scoped hooks for new schema-backed JSON families as they are introduced.
+- **`check-metaschema`** — self-validates the worked-example schema against its declared JSON Schema Draft 2020-12 metaschema.
+- **Schema example tests** — [`tests/test_schema_examples.py`](../../tests/test_schema_examples.py) auto-discovers schema/example pairs under `schemas/` and asserts that valid examples pass and invalid examples fail. Invalid example fixtures are intentionally **not** wired into a `check-jsonschema` pre-commit hook (the hook would treat their expected failure as a hook failure); they are exercised exclusively through this test module.
+- **Data-file CI** — [`.github/workflows/data-ci.yml`](../workflows/data-ci.yml) re-runs `check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, and `check-metaschema` so JSON and YAML enforcement can be made a required check via branch protection independent of the Python CI job.
+
+See [Schemas README](../../schemas/README.md) for the worked example, the canonical downstream-removal checklist, and the future-work candidates that downstream repositories may opt into.
+
 ## Comments and Documentation
 
 - Strict JSON **MUST NOT** contain comments of any kind, including `//` line comments, `/* ... */` block comments, dummy `"_comment"` keys used as a comment workaround, or trailing-string hacks. JSONC **MAY** contain comments only when the consuming tool documents support for them.
@@ -145,4 +155,4 @@ A JSON change is considered done when **all** of the following hold:
 - Strict JSON contains no comments; documentation lives in schemas and sibling docs.
 - No secrets are committed; example values are obviously fake.
 - Generated JSON is reproducible, stably formatted, stably ordered when ordering is non-semantic, and identifies its source or generation command.
-- `check-json` and any project-specific JSON or JSONC validators pass; pre-commit and Markdown checks pass for any associated documentation changes.
+- `check-json` and any project-specific JSON or JSONC validators pass; `check-jsonschema` and `check-metaschema` pass for any schema-backed file family wired into pre-commit (today, the worked-example schema under `schemas/example-config.schema.json`); [`tests/test_schema_examples.py`](../../tests/test_schema_examples.py) passes after any schema or schema-example change; pre-commit and Markdown checks pass for any associated documentation changes.

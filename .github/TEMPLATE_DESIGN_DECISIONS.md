@@ -668,7 +668,7 @@ The repository ships a dedicated `.github/workflows/data-ci.yml` workflow that r
 - A dedicated workflow gives JSON/YAML/Actions validation a distinct required-check identity, clearer ownership, and parity with other per-language workflows. Branch protection rules can require data-file validation independently from Python validation.
 - Template adopters who do not use Python should still see data-file validation as a first-class concern; surfacing it only under Python CI would obscure that.
 
-**CI ownership decision:** `python-ci.yml` continues to run the full `pre-commit run --all-files` pipeline as the single canonical aggregate pre-commit gate. `data-ci.yml` runs the four data-file hooks (`check-json`, `check-yaml`, `yamllint`, `actionlint`) explicitly. The hooks therefore execute in both workflows.
+**CI ownership decision:** `python-ci.yml` continues to run the full `pre-commit run --all-files` pipeline as the single canonical aggregate pre-commit gate. `data-ci.yml` runs the data-file hooks (`check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, and `check-metaschema`) explicitly. The hooks therefore execute in both workflows.
 
 **Trade-off accepted:** The duplication between `python-ci.yml` and `data-ci.yml` is intentional. Splitting responsibility — narrowing `python-ci.yml` to Python-only checks — was rejected because it would change existing CI topology and complicate downstream branch protection migrations for marginal benefit. Visibility and ownership were prioritized over avoiding the duplicated hook execution.
 

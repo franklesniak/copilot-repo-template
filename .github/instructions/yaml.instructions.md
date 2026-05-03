@@ -7,7 +7,7 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.0.20260503.0
+**Version:** 1.1.20260503.1
 
 ## Metadata
 
@@ -15,7 +15,7 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-05-03
 - **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by [JSON Writing Style](./json.instructions.md)) or generated YAML artifacts that are owned by another tool's serializer.
-- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md), [Schemas README](../../schemas/README.md), [Template Design Decision — Dedicated JSON and YAML Instruction Files](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-json-and-yaml-instruction-files), [Template Design Decision — Baseline JSON/YAML Linting Stack](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-baseline-jsonyaml-linting-stack), [Template Design Decision — yamllint truthy.check-keys Default](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-truthycheck-keys-default), [Template Design Decision — Prettier Deferral for Data Files](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-prettier-deferral-for-data-files)
+- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md), [`.yamllint.yml`](../../.yamllint.yml), [Data-File CI Workflow (`data-ci.yml`)](../workflows/data-ci.yml), [Schemas README](../../schemas/README.md), [Schema Example Tests (`tests/test_schema_examples.py`)](../../tests/test_schema_examples.py), [Template Design Decision — Dedicated JSON and YAML Instruction Files](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-json-and-yaml-instruction-files), [Template Design Decision — Baseline JSON/YAML Linting Stack](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-baseline-jsonyaml-linting-stack), [Template Design Decision — yamllint truthy.check-keys Default](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-truthycheck-keys-default), [Template Design Decision — Dedicated Data-File CI Workflow (`data-ci.yml`)](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-data-file-ci-workflow-data-ciyml), [Template Design Decision — Prettier Deferral for Data Files](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-prettier-deferral-for-data-files)
 
 ## Purpose and Scope
 
@@ -37,14 +37,14 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - **[All]** **SHOULD NOT** use anchors, aliases, merge keys, custom tags, or multi-document files unless required and supported by the consumer.
 - **[All]** **MUST NOT** commit secrets in YAML.
 - **[Actions]** **MUST** apply least-privilege `permissions:` on GitHub Actions workflows.
-- **[Schemas]** Schema-backed YAML **MUST** pass any schema validator that is wired into CI or pre-commit; where no validator is wired up, authors **SHOULD** run the appropriate validator locally before committing.
+- **[Schemas]** Schema-backed YAML **MUST** pass any schema validator wired into pre-commit or CI; where no validator is wired up for a particular file family, authors **SHOULD** run the appropriate validator locally before committing.
 - **[Naming]** YAML filenames **SHOULD** be lowercase kebab-case; GitHub Actions workflows **MUST** use the `.yml` extension; project-owned YAML **MUST** choose `.yml` or `.yaml` and use it consistently.
 
 ## Dialect and Consumer Policy
 
 - Authors **SHOULD** target **YAML 1.2-compatible** values and avoid relying on parser-specific extensions.
 - Authors **MUST** avoid the YAML 1.1 *non-lowercase-`true`/`false`* truthy tokens that this guide does not permit as booleans (`y`, `Y`, `yes`, `Yes`, `YES`, `n`, `N`, `no`, `No`, `NO`, `on`, `On`, `ON`, `off`, `Off`, `OFF`, `True`, `TRUE`, `False`, `FALSE`); only lowercase `true` and `false` are allowed as booleans (see "Booleans, Nulls, and Numbers"). Many widely-deployed parsers (including those used by GitHub Actions, `js-yaml` defaults, and some legacy PyYAML configurations) still resolve some or all of these YAML 1.1 tokens as booleans, so any string value that would otherwise match one of them **MUST** be quoted.
-- Ecosystem-specific validators (for example, Kubernetes manifest validators, OpenAPI validators, Helm validators, Ansible validators) **SHOULD** be adopted only when the repository actually uses those ecosystems. Generic YAML guidance **MUST NOT** require validators that are irrelevant to the repository's stack.
+- Ecosystem-specific validators (for example, Kubernetes manifest validators, OpenAPI validators, Helm validators, Ansible validators) **SHOULD** be adopted only when the repository actually uses those ecosystems. Generic YAML guidance **MUST NOT** require validators that are irrelevant to the repository's stack. The shipped baseline (`check-yaml`, `yamllint`, `actionlint`, and `check-jsonschema` for the worked-example schema) is described in [Schema-backed YAML](#schema-backed-yaml).
 
 ## Formatting Rules
 
@@ -89,7 +89,7 @@ Quote style guidance:
 
 The GitHub Actions workflow trigger key `on:` is a well-known YAML 1.1 truthy hazard. Under YAML 1.1 resolution rules, the unquoted bare key `on` is parsed as the boolean `true`. GitHub Actions itself parses workflows correctly because it does not rely on YAML 1.1 truthy resolution for keys, but **lint tooling** that is YAML 1.1-aware (notably `yamllint`'s `truthy` rule) will flag the `on:` key as a truthy violation by default.
 
-If `yamllint` is adopted in this repository, the recommended configuration is to disable `truthy.check-keys` so that the idiomatic `on:` key is preserved without exception comments:
+This repository ships a [`yamllint` configuration at `.yamllint.yml`](../../.yamllint.yml) that intentionally sets `truthy.check-keys: false` so that the idiomatic GitHub Actions `on:` key is preserved without per-file exception comments:
 
 ```yaml
 rules:
@@ -97,7 +97,7 @@ rules:
     check-keys: false
 ```
 
-This recommendation preserves the idiomatic GitHub Actions `on:` key while still flagging YAML 1.1 truthy hazards in **values**. Authors **MAY** alternatively quote the key as `"on":` to satisfy a stricter `truthy.check-keys: true` configuration, but this form is **non-idiomatic** in the GitHub Actions ecosystem and **SHOULD NOT** be adopted unless a downstream policy requires it. At the time this file was authored, this repository does not ship a `yamllint` configuration; the guidance above applies if and when one is added.
+This configuration preserves the idiomatic GitHub Actions `on:` key while still flagging YAML 1.1 truthy hazards in **values**. Authors **MAY** alternatively quote the key as `"on":` to satisfy a stricter `truthy.check-keys: true` configuration, but this form is **non-idiomatic** in the GitHub Actions ecosystem and **SHOULD NOT** be adopted unless a downstream policy requires it.
 
 ## Conservative YAML Subset
 
@@ -137,19 +137,22 @@ Choose the indicator that matches the consumer's expectations. When passing a mu
 
 ## Schema-backed YAML
 
-YAML files that have a published schema **SHOULD** be validated against that schema, using the same MUST/SHOULD/MAY tiers applied to JSON in [JSON Writing Style](./json.instructions.md). Where validators are wired into CI or pre-commit, files **MUST** pass them; where they are not yet wired up, authors **SHOULD** run the appropriate validator locally before committing. Schema-validation tooling itself is out of scope for this guide; this guide describes the policy, and CI/pre-commit integration is owned by the repository's tooling configuration.
+YAML files that have a published schema **SHOULD** be validated against that schema, using the same MUST/SHOULD/MAY tiers applied to JSON in [JSON Writing Style](./json.instructions.md). This repository wires schema and ecosystem validators into pre-commit and re-runs them in [`.github/workflows/data-ci.yml`](../workflows/data-ci.yml); files covered by those hooks **MUST** pass them. For file families that do not yet have a hook configured, authors **SHOULD** run the appropriate validator locally before committing. The shipped pipeline is described below; CI/pre-commit integration is owned by the repository's tooling configuration rather than by this guide.
 
 Validation tiers:
 
-- **MUST tier** (files whose schema validator is wired into CI or pre-commit **MUST** pass it; where the validator is not wired up, authors **SHOULD** run it locally before committing): GitHub Actions workflows (`.github/workflows/*.yml`); pre-commit configuration (`.pre-commit-config.yaml`); any YAML file whose schema is published and stable and whose consumer requires structural correctness.
-- **SHOULD tier**: linter configuration files (for example, `.yamllint`) when a schema is available and a validator is convenient to run.
+- **MUST tier** (files whose schema validator is wired into pre-commit or CI **MUST** pass it; where the validator is not wired up, authors **SHOULD** run it locally before committing): GitHub Actions workflows (`.github/workflows/*.yml`); pre-commit configuration (`.pre-commit-config.yaml`); any YAML file whose schema is published and stable and whose consumer requires structural correctness.
+- **SHOULD tier**: linter configuration files (for example, `.yamllint.yml`) when a schema is available and a validator is convenient to run.
 - **MAY tier**: optional or experimental configuration formats whose schema may change.
 
-Recommended validators (adopt as needed; this guide does not mandate adoption):
+Shipped validators in this repository (extend as needed for new ecosystems):
 
-- **`check-jsonschema`** — generic JSON Schema validation for YAML files. Use for arbitrary schema-backed YAML where no ecosystem-specific validator exists.
-- **`actionlint`** — GitHub Actions workflow linter. **SHOULD** be used when the repository contains workflow files; it validates schema, expression syntax, shell script blocks, and common workflow misuses.
-- **Ecosystem-specific validators** — adopt **only** when the repository actually uses the ecosystem (for example, `kubeval`/`kubeconform` for Kubernetes, `helm lint` for Helm charts, `ansible-lint` for Ansible). Generic YAML guidance **MUST NOT** mandate validators for ecosystems the repository does not use.
+- **`yamllint`** — YAML style enforcement, configured in [`.yamllint.yml`](../../.yamllint.yml) and run through [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) and [`.github/workflows/data-ci.yml`](../workflows/data-ci.yml).
+- **`check-yaml`** (from `pre-commit/pre-commit-hooks`) — parse-checks YAML files; runs through pre-commit and `data-ci.yml`.
+- **`actionlint`** — GitHub Actions workflow linter; runs through pre-commit and `data-ci.yml` for any workflow file under `.github/workflows/`.
+- **`check-jsonschema`** — generic JSON Schema validation for YAML and JSON files. Used today for the worked-example schema (`schemas/example-config.schema.json`); add file-family-scoped hooks for additional schema-backed YAML as needed.
+
+Additional ecosystem-specific validators (for example, `kubeval`/`kubeconform` for Kubernetes, `helm lint` for Helm charts, `ansible-lint` for Ansible) **SHOULD** be adopted **only** when the repository actually uses the ecosystem. Generic YAML guidance **MUST NOT** mandate validators for ecosystems the repository does not use.
 
 ## Security
 
@@ -167,7 +170,7 @@ A YAML change is "done" when **all** of the following are true:
 - All booleans are lowercase `true` / `false`; no `yes`/`no`/`on`/`off` as boolean values.
 - The conservative subset is respected (no anchors, aliases, merge keys, custom tags, multi-document files, or flow style except where necessary and justified).
 - Comments explain **why**, not **what**; behavior is not documented only in comments.
-- Any schema validator wired into CI or pre-commit passes (for example, `actionlint` for workflows, `check-jsonschema` for schema-backed YAML); when no such validator is wired up, authors **SHOULD** run the applicable validator locally before committing.
-- If `yamllint` (or another YAML linter) is configured in the repository, it passes under the repository's settings.
-- Pre-commit hooks pass locally and in CI.
+- `yamllint` (configured in [`.yamllint.yml`](../../.yamllint.yml)) and `check-yaml` pass under the repository's pre-commit configuration.
+- Any schema or ecosystem validator wired into pre-commit or CI passes for the affected files (for example, `actionlint` for workflow files, `check-jsonschema` for schema-backed YAML covered by an active hook). When no such validator is wired up for the file family being changed, authors **SHOULD** run the applicable validator locally before committing.
+- Pre-commit hooks pass locally (`pre-commit run --all-files`) and in CI, including the dedicated [`.github/workflows/data-ci.yml`](../workflows/data-ci.yml) data-file workflow.
 - No secrets are committed; GitHub Actions workflows declare least-privilege `permissions:`.
