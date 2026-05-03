@@ -36,6 +36,18 @@ body:
   # This template intentionally includes multiple security warnings (top-of-form,
   # checkbox, severity dropdown). This defense-in-depth approach maximizes chance
   # of catching accidental security disclosure. See .github/TEMPLATE_DESIGN_DECISIONS.md for rationale.
+  # NOTE: The Markdown links below use absolute URLs because relative paths
+  # (e.g., `[SECURITY.md](blob/HEAD/SECURITY.md)`) resolve against the
+  # rendering URL `/{owner}/{repo}/issues/new?...` and 404. See the
+  # "Issue and PR templates" carve-out in `.github/instructions/docs.instructions.md`
+  # (and the matching section in `.github/instructions/yaml.instructions.md`).
+  #
+  # CUSTOMIZE: Replace `OWNER/REPO` in both URLs with your actual org/repo.
+  # If you keep `.github/workflows/check-placeholders.yml` (an optional adoption
+  # step), CI will fail until this substitution is made; if you do not adopt
+  # that workflow or you remove it after setup, no CI guardrail catches a
+  # missed substitution and you must verify the replacement manually.
+  # GHES users: Replace `github.com` with your GHES host (e.g., `github.company.com`).
   - type: markdown
     attributes:
       value: |
@@ -43,7 +55,7 @@ body:
         Please fill out the form below to help us investigate and resolve the issue.
 
         ⚠️ **Security Notice:** If you are reporting a security vulnerability, do NOT use this form.
-        Please report security issues privately via the repository's [Security tab](security) or [SECURITY.md](blob/HEAD/SECURITY.md).
+        Please report security issues privately via the repository's [Security tab](https://github.com/OWNER/REPO/security) or [SECURITY.md](https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md).
 
   - type: checkboxes
     id: pre_flight

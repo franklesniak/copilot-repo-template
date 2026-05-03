@@ -547,13 +547,15 @@ This command:
 
 ## Initial Placeholder Replacement
 
-This template uses placeholder values that you **must** replace with your actual repository information. The CI workflow (`check-placeholders.yml`) will fail until you complete these replacements.
+This template uses placeholder values that you **must** replace with your actual repository information. If you keep `.github/workflows/check-placeholders.yml` (an optional adoption step — see *Verify Placeholder Check Workflow* below), CI will fail until you complete these replacements; if you do not adopt that workflow or you remove it after initial setup, no CI guardrail catches a missed substitution and you must verify the replacements manually.
 
 ### Files That Need Placeholders Replaced
 
 | File | Placeholders to Replace |
 | --- | --- |
 | `.github/ISSUE_TEMPLATE/config.yml` | `OWNER/REPO` (appears in URLs twice) |
+| `.github/ISSUE_TEMPLATE/bug_report.yml` | `OWNER/REPO` (appears in two security-notice URLs) |
+| `.github/pull_request_template.md` | `OWNER/REPO` (appears in the contributing-guidelines link) |
 | `.github/CODEOWNERS` | `@OWNER` (appears four times) |
 | `CODE_OF_CONDUCT.md` | `[INSERT CONTACT METHOD]` (enforcement contact for code of conduct violations) |
 | `CONTRIBUTING.md` | `OWNER/REPO` (appears in clone URL and issues URL) |
@@ -572,6 +574,8 @@ This template uses placeholder values that you **must** replace with your actual
 - **`[security contact email]`:** An email address for receiving security vulnerability reports
 - **`window.title` in `.vscode/settings.json`:** The VS Code window title that appears in the title bar when working in this repository. Replace the instruction text with your repository name for easy identification.
 
+> **GHES adopters:** The absolute URLs in `.github/ISSUE_TEMPLATE/config.yml`, `.github/ISSUE_TEMPLATE/bug_report.yml`, `.github/pull_request_template.md`, and `CONTRIBUTING.md` are all `https://github.com/OWNER/REPO`-prefixed (variants include `https://github.com/OWNER/REPO/blob/HEAD/<path>` for file targets, `https://github.com/OWNER/REPO/security` and `https://github.com/OWNER/REPO/issues` for non-file repo targets, and `https://github.com/OWNER/REPO.git` for the clone URL in `CONTRIBUTING.md`). The `github.com` host is the assumed default and is **not** validated by `.github/workflows/check-placeholders.yml`. If your repository is hosted on GitHub Enterprise Server, you **MUST** replace `github.com` with your GHES host (e.g., `github.company.com`) in all four files in addition to substituting `OWNER/REPO`; otherwise the clone, issues, security, and contributing-guidelines links will point off-instance to GitHub.com. The PowerShell, GNU sed, and BSD sed scripts below include opt-in `github.com` → GHES-host replacement blocks (commented out by default) that you can uncomment when adopting the template on GHES.
+
 ### Option A: Find and Replace Commands
 
 #### Windows (PowerShell)
@@ -587,6 +591,12 @@ $SecurityEmail = "security@example.com"
 # Replace OWNER/REPO in config.yml
 (Get-Content ".github/ISSUE_TEMPLATE/config.yml" -Raw -Encoding UTF8).Replace('OWNER/REPO', "$Owner/$Repo") | Set-Content ".github/ISSUE_TEMPLATE/config.yml" -Encoding UTF8
 
+# Replace OWNER/REPO in bug_report.yml
+(Get-Content ".github/ISSUE_TEMPLATE/bug_report.yml" -Raw -Encoding UTF8).Replace('OWNER/REPO', "$Owner/$Repo") | Set-Content ".github/ISSUE_TEMPLATE/bug_report.yml" -Encoding UTF8
+
+# Replace OWNER/REPO in pull_request_template.md
+(Get-Content ".github/pull_request_template.md" -Raw -Encoding UTF8).Replace('OWNER/REPO', "$Owner/$Repo") | Set-Content ".github/pull_request_template.md" -Encoding UTF8
+
 # Replace OWNER/REPO in CONTRIBUTING.md
 (Get-Content "CONTRIBUTING.md" -Raw -Encoding UTF8).Replace('OWNER/REPO', "$Owner/$Repo") | Set-Content "CONTRIBUTING.md" -Encoding UTF8
 
@@ -601,6 +611,14 @@ $SecurityEmail = "security@example.com"
 
 # Replace window.title placeholder in VS Code settings
 (Get-Content ".vscode\settings.json" -Raw -Encoding UTF8).Replace('Go to .vscode/settings.json and make this the name of the repo', $Repo) | Set-Content ".vscode\settings.json" -Encoding UTF8
+
+# GHES adopters: uncomment the following block to also replace `github.com` with your GHES host
+# in the four files that contain absolute https://github.com/OWNER/REPO/... URLs. The host
+# substitution is not validated by check-placeholders.yml, so it MUST be done manually on GHES.
+# $GHESHost = "github.company.com"
+# foreach ($f in @(".github/ISSUE_TEMPLATE/config.yml", ".github/ISSUE_TEMPLATE/bug_report.yml", ".github/pull_request_template.md", "CONTRIBUTING.md")) {
+#     (Get-Content $f -Raw -Encoding UTF8).Replace('https://github.com/', "https://$GHESHost/") | Set-Content $f -Encoding UTF8
+# }
 ```
 
 #### macOS/Linux/FreeBSD (Bash)
@@ -626,6 +644,12 @@ SECURITY_EMAIL="security@example.com"
 # Replace OWNER/REPO in config.yml
 sed -i "s|OWNER/REPO|$OWNER/$REPO|g" .github/ISSUE_TEMPLATE/config.yml
 
+# Replace OWNER/REPO in bug_report.yml
+sed -i "s|OWNER/REPO|$OWNER/$REPO|g" .github/ISSUE_TEMPLATE/bug_report.yml
+
+# Replace OWNER/REPO in pull_request_template.md
+sed -i "s|OWNER/REPO|$OWNER/$REPO|g" .github/pull_request_template.md
+
 # Replace OWNER/REPO in CONTRIBUTING.md
 sed -i "s|OWNER/REPO|$OWNER/$REPO|g" CONTRIBUTING.md
 
@@ -640,6 +664,14 @@ sed -i "s|\[security contact email\]|$SECURITY_EMAIL|g" SECURITY.md
 
 # Replace window.title placeholder in VS Code settings
 sed -i 's|Go to \.vscode/settings\.json and make this the name of the repo|'"$REPO"'|g' .vscode/settings.json
+
+# GHES adopters: uncomment the following block to also replace `github.com` with your GHES host
+# in the four files that contain absolute https://github.com/OWNER/REPO/... URLs. The host
+# substitution is not validated by check-placeholders.yml, so it MUST be done manually on GHES.
+# GHES_HOST="github.company.com"
+# for f in .github/ISSUE_TEMPLATE/config.yml .github/ISSUE_TEMPLATE/bug_report.yml .github/pull_request_template.md CONTRIBUTING.md; do
+#   sed -i "s|https://github.com/|https://$GHES_HOST/|g" "$f"
+# done
 ```
 
 ##### macOS / FreeBSD (BSD sed)
@@ -647,6 +679,12 @@ sed -i 's|Go to \.vscode/settings\.json and make this the name of the repo|'"$RE
 ```bash
 # Replace OWNER/REPO in config.yml
 sed -i '' "s|OWNER/REPO|$OWNER/$REPO|g" .github/ISSUE_TEMPLATE/config.yml
+
+# Replace OWNER/REPO in bug_report.yml
+sed -i '' "s|OWNER/REPO|$OWNER/$REPO|g" .github/ISSUE_TEMPLATE/bug_report.yml
+
+# Replace OWNER/REPO in pull_request_template.md
+sed -i '' "s|OWNER/REPO|$OWNER/$REPO|g" .github/pull_request_template.md
 
 # Replace OWNER/REPO in CONTRIBUTING.md
 sed -i '' "s|OWNER/REPO|$OWNER/$REPO|g" CONTRIBUTING.md
@@ -662,6 +700,14 @@ sed -i '' "s|\[security contact email\]|$SECURITY_EMAIL|g" SECURITY.md
 
 # Replace window.title placeholder in VS Code settings
 sed -i '' 's|Go to \.vscode/settings\.json and make this the name of the repo|'"$REPO"'|g' .vscode/settings.json
+
+# GHES adopters: uncomment the following block to also replace `github.com` with your GHES host
+# in the four files that contain absolute https://github.com/OWNER/REPO/... URLs. The host
+# substitution is not validated by check-placeholders.yml, so it MUST be done manually on GHES.
+# GHES_HOST="github.company.com"
+# for f in .github/ISSUE_TEMPLATE/config.yml .github/ISSUE_TEMPLATE/bug_report.yml .github/pull_request_template.md CONTRIBUTING.md; do
+#   sed -i '' "s|https://github.com/|https://$GHES_HOST/|g" "$f"
+# done
 ```
 
 ##### Windows (Git Bash or WSL)
@@ -674,31 +720,51 @@ If using **Git Bash**, use the Linux (GNU sed) commands above. If using **WSL (W
 
 If you prefer, you can open each file in a text editor and manually find and replace the placeholders:
 
+> **GHES adopters:** In addition to the `OWNER/REPO` substitutions below, also replace `github.com` with your GHES host (e.g., `github.company.com`) in items 1, 2, 3, and 6. The host substitution is not validated by `.github/workflows/check-placeholders.yml`, so it MUST be done manually.
+
 1. **`.github/ISSUE_TEMPLATE/config.yml`:**
    - Find: `OWNER/REPO`
    - Replace with: `your-username/your-repo-name` (appears in two URLs)
+   - **GHES only:** also replace `github.com` with your GHES host (in the same two URLs)
 
-2. **`.github/CODEOWNERS`:**
+2. **`.github/ISSUE_TEMPLATE/bug_report.yml`:**
+   - Find: `OWNER/REPO`
+   - Replace with: `your-username/your-repo-name` (appears in two security-notice URLs: `…/security` and `…/blob/HEAD/SECURITY.md`)
+   - **GHES only:** also replace `github.com` with your GHES host (in the same two URLs)
+
+3. **`.github/pull_request_template.md`:**
+   - Find: `OWNER/REPO`
+   - Replace with: `your-username/your-repo-name` (the live substitution
+     target is the contributing-guidelines link in the file body; the file
+     may also contain plain-text `OWNER/REPO` references inside the
+     top-of-file HTML comment block, which you can replace now or skip
+     because the entire HTML comment block is deleted in the
+     *Delete Template Comment* step under *Customizing the Pull Request
+     Template* later in this guide)
+   - **GHES only:** also replace `github.com` with your GHES host (in the same link)
+
+4. **`.github/CODEOWNERS`:**
    - Find: `@OWNER`
    - Replace with: `@your-username` (appears four times)
 
-3. **`CODE_OF_CONDUCT.md`:**
+5. **`CODE_OF_CONDUCT.md`:**
    - Find: `[INSERT CONTACT METHOD]`
    - Replace with: your contact method for code of conduct reports (e.g., email address)
 
-4. **`CONTRIBUTING.md`:**
+6. **`CONTRIBUTING.md`:**
    - Find: `OWNER/REPO`
    - Replace with: `your-username/your-repo-name` (appears in clone URL and issues link)
+   - **GHES only:** also replace `github.com` with your GHES host (in the same clone URL and issues link)
 
-5. **`SECURITY.md`:**
+7. **`SECURITY.md`:**
    - Find: `[security contact email]`
    - Replace with: your actual security contact email address
 
-6. **`.vscode/settings.json`:**
+8. **`.vscode/settings.json`:**
    - Find: `Go to .vscode/settings.json and make this the name of the repo`
    - Replace with: your repository name (e.g., `my-awesome-project`)
 
-7. **`LICENSE`:**
+9. **`LICENSE`:**
    - Find: `Frank Lesniak`
    - Replace with: your name or organization name (the copyright holder)
    - Optionally update the copyright year to the current year or your project's start year
@@ -1424,12 +1490,33 @@ The pull request template provides a contributor checklist for consistent PR rev
 
 ### Delete Template Comment
 
-Delete the HTML comment at the top of the file (lines 1-4):
+Delete the HTML comment block at the top of the file — the entire `<!-- ... -->`
+block immediately preceding the `## Description` heading. The block contains
+template-user guidance (`LINK STYLE`, `CUSTOMIZE`, GHES host note, and a
+`KNOWN LIMITATION` paragraph explaining the template-repo-only behavior of
+the contributing-guidelines link) that downstream adopters do not need once
+the placeholder substitution has been performed. Identify the block by the
+opening `<!--` (currently the first line of the file, before any other
+content) and the closing `-->` (immediately preceding the `## Description`
+heading) rather than by a fixed line range; both endpoints may shift as the
+template comment is updated, or if other content is later added above the
+block.
+
+Schematic of the block to delete (paragraph headers shown; full prose elided):
 
 ```markdown
 <!--
-Template users: see OPTIONAL_CONFIGURATIONS.md for guidance on tailoring this PR
-template. Delete this comment once the PR template is tailored for your needs.
+(opening paragraph: brief pointer to OPTIONAL_CONFIGURATIONS.md and a
+"delete this comment when tailored" instruction)
+
+LINK STYLE: ...
+
+CUSTOMIZE: ...
+GHES users: ...
+
+KNOWN LIMITATION (template repo only): ...
+
+(rationale paragraph explaining angle-bracket placeholder use)
 -->
 ```
 
@@ -1891,9 +1978,15 @@ The `check-placeholders.yml` workflow verifies that you've replaced all `OWNER/R
 **What the workflow checks:**
 
 - `OWNER/REPO` in `.github/ISSUE_TEMPLATE/config.yml`
+- `OWNER/REPO` in `.github/ISSUE_TEMPLATE/bug_report.yml`
+- `OWNER/REPO` in `.github/pull_request_template.md`
 - `OWNER/REPO` in `CONTRIBUTING.md`
 - `@OWNER` in `.github/CODEOWNERS`
 - `[security contact email]` in `SECURITY.md`
+- `TODO: Replace` markers in `SECURITY.md`
+- `OWNER/REPO` in any URL inside `SECURITY.md` (Option C direct-link variant)
+- `[INSERT CONTACT METHOD]` in `CODE_OF_CONDUCT.md`
+- `https://github.com/OWNER/REPO` URLs anywhere under `.github/` (recursive scan), excluding instructional/historical files (`.github/instructions/**`, `.github/copilot-instructions.md`, `.github/TEMPLATE_DESIGN_DECISIONS.md`)
 
 **After all placeholders are replaced:**
 

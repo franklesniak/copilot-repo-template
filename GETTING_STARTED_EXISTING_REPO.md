@@ -524,7 +524,11 @@ If your repository doesn't have issue templates, adopt the full set:
    url: https://github.com/your-username/your-repo/blob/HEAD/CONTRIBUTING.md
    ```
 
-3. **Review and customize each template** (see [Customizing Area Dropdowns](#customizing-area-dropdowns))
+3. **Update `bug_report.yml`:** Replace `OWNER/REPO` placeholders in the security-notice URLs (the Security tab and `SECURITY.md` links). Both URLs use the same `https://github.com/OWNER/REPO/...` form as `config.yml`. If you also adopt and keep `.github/workflows/check-placeholders.yml` (an optional adoption step), CI will fail until this substitution is made; if you do not adopt that workflow or you remove it after initial setup, no CI guardrail catches a missed substitution and you must verify the replacement manually.
+
+   **GHES adopters:** In both `config.yml` and `bug_report.yml`, also replace `github.com` with your GHES host (e.g., `github.company.com`). The host substitution is not validated by `.github/workflows/check-placeholders.yml`, but inline YAML comments above the affected blocks (in both files) note the requirement.
+
+4. **Review and customize each template** (see [Customizing Area Dropdowns](#customizing-area-dropdowns))
 
 ### Partial Adoption (If You Have Existing Templates)
 
@@ -533,6 +537,7 @@ If you already have issue templates:
 1. Compare the template files with your existing templates
 2. Copy specific templates you want to add (e.g., just `documentation_issue.yml`)
 3. If you have a `config.yml`, merge the `contact_links` sections
+4. **If you adopt `bug_report.yml`** (in whole or in part), remember to replace `OWNER/REPO` in the security-notice URLs — and, on GHES, the `github.com` host as well.
 
 ### Customizing Area Dropdowns
 
@@ -628,13 +633,13 @@ Review these sections and modify as needed:
 
 **Contributing guidelines link:**
 
-The template uses a relative link that works for most repositories:
+The template uses an absolute URL with the `OWNER/REPO` placeholder for the contributing guidelines link in the PR template:
 
 ```markdown
-[contributing guidelines](../blob/HEAD/CONTRIBUTING.md)
+[contributing guidelines](https://github.com/OWNER/REPO/blob/HEAD/CONTRIBUTING.md)
 ```
 
-If your CONTRIBUTING.md is in a different location, update this link.
+Replace `OWNER/REPO` with your actual organization and repository name. If you also adopt and keep `.github/workflows/check-placeholders.yml` (an optional adoption step), CI will fail until this substitution is made; if you do not adopt that workflow or you remove it after initial setup, no CI guardrail catches a missed substitution and you must verify the replacement manually. If your CONTRIBUTING.md is in a different location, update the path inside the URL accordingly. **GHES adopters** must additionally replace `github.com` with their GHES host (e.g., `github.company.com`); the host substitution is not validated by `.github/workflows/check-placeholders.yml` even when that workflow is kept. Absolute URLs are required in `.github/ISSUE_TEMPLATE/*.yml` and `.github/pull_request_template.md`; see the **Issue and PR templates** carve-out in `.github/instructions/docs.instructions.md` and the [Pull Request Template Customization](OPTIONAL_CONFIGURATIONS.md#contributing-guidelines-link) section in `OPTIONAL_CONFIGURATIONS.md`.
 
 ### Merging with Existing PR Template
 

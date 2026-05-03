@@ -1,6 +1,67 @@
 <!--
 Template users: see OPTIONAL_CONFIGURATIONS.md for guidance on tailoring this PR
 template. Delete this comment once the PR template is tailored for your needs.
+
+LINK STYLE: Markdown links to repo-internal files in this template MUST use
+absolute `https://github.com/<OWNER>/<REPO>/blob/HEAD/<path>` URLs (with the
+angle-bracket placeholders replaced by your actual values). Relative forms
+(e.g., `../blob/HEAD/<file>`) are unreliable across non-GitHub.com
+renderers, GitHub Mobile, and email notifications. See the
+"Issue and PR templates" carve-out in `.github/instructions/docs.instructions.md`.
+
+CUSTOMIZE: Replace `OWNER/REPO` below with your actual org/repo.
+If you keep `.github/workflows/check-placeholders.yml` (an optional
+adoption step), CI will fail until this substitution is made; if you
+do not adopt that workflow or you remove it after setup, no CI
+guardrail catches a missed substitution and you must verify the
+replacement manually.
+GHES users: Replace `github.com` with your GHES host (e.g., `github.company.com`).
+
+KNOWN LIMITATION (template repo only): The contributing-guidelines link
+below contains the literal `OWNER/REPO` placeholder in its URL rather than
+substituted values, so it resolves to a non-existent target on `github.com`
+when rendered on PRs against the template repository
+(`franklesniak/copilot-repo-template`). The `OWNER/REPO` placeholder on
+the checklist link is intentionally not substituted in the template repo —
+that substitution is the responsibility of downstream adopters cloning
+this template. The reason the unsubstituted placeholder is allowed to
+persist here (rather than being rejected by CI) is that
+`.github/workflows/check-placeholders.yml` is gated off in the template repo
+itself (`if: github.repository != 'franklesniak/copilot-repo-template'`);
+downstream adopters who keep `.github/workflows/check-placeholders.yml`
+(an optional adoption step) do not have that gate and so have their
+substitution enforced by CI before merge. Downstream adopters who do not
+adopt that workflow, or who remove it after initial setup, have no CI
+guardrail and must verify the substitution manually. This is an accepted
+trade-off: downstream adopters who keep the placeholder workflow get a
+working absolute link after running the placeholder substitution, which
+is the dominant audience. Contributors to the template
+repo itself can navigate to `CONTRIBUTING.md` via the file tree.
+
+The illustrative URL in this comment uses the angle-bracket placeholder form
+`<OWNER>/<REPO>` so that the only absolute `github.com` URL in this file
+that contains the literal `OWNER/REPO` placeholder is the live
+contributing-guidelines link below — that live link is the substitution
+target described in the placeholder table in `GETTING_STARTED_NEW_REPO.md`,
+and the only hit reported by section [6] of
+`.github/workflows/check-placeholders.yml` (which greps for the literal
+`OWNER/REPO`-bearing absolute `github.com` URL form; see the workflow for
+the exact pattern). The literal `OWNER/REPO` placeholder also
+appears as plain text in the `CUSTOMIZE`, `KNOWN LIMITATION`, and rationale
+paragraphs above; those occurrences are not absolute `github.com` URLs and
+are not flagged by section [6]. The file-wide `OWNER/REPO` substitution
+scripts under *Initial Placeholder Replacement* in
+`GETTING_STARTED_NEW_REPO.md` (PowerShell `.Replace`, GNU `sed -i`, and
+BSD `sed -i ''`) will rewrite those plain-text references too, but that is
+harmless because adopters delete this entire HTML comment block per the
+*Delete Template Comment* step under *Customizing the Pull Request Template*
+in the same guide. See the "Issue and PR templates" carve-out in
+`.github/instructions/docs.instructions.md` for the broader rule against
+shipping live placeholder URLs disguised as comments. That rule and section
+[6]'s grep both target the literal `OWNER/REPO`-bearing URL form (which is
+why the live checklist link below is detected and customized); the
+angle-bracket documentation form used in this comment block is intentionally
+outside the scope of that rule and CI check.
 -->
 
 ## Description
@@ -24,7 +85,7 @@ template. Delete this comment once the PR template is tailored for your needs.
 
 ### General
 
-- [ ] I have read the [contributing guidelines](../blob/HEAD/CONTRIBUTING.md)
+- [ ] I have read the [contributing guidelines](https://github.com/OWNER/REPO/blob/HEAD/CONTRIBUTING.md)
 - [ ] My code follows the coding standards in `.github/instructions/`
 - [ ] My changes follow `.github/copilot-instructions.md` and any applicable `.github/instructions/*`
 - [ ] I have performed a self-review of my own code

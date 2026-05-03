@@ -55,6 +55,8 @@ This file is placed in `.github/` because it is GitHub-specific configuration gu
 
 ### Design Decision: Contributing Guidelines Link
 
+> **Status: Superseded** (2026-05-03). This decision has been replaced by the **Issue and PR templates** carve-out in [`.github/instructions/docs.instructions.md`](instructions/docs.instructions.md), which requires absolute `https://github.com/OWNER/REPO/...` URLs in `.github/ISSUE_TEMPLATE/*.yml` and `.github/pull_request_template.md` — `https://github.com/OWNER/REPO/blob/HEAD/<path>` for repo-internal **file** targets and `https://github.com/OWNER/REPO/<other-path>` for non-file targets such as `/security`, `/discussions`, or `/issues`. The original rationale (zero-friction adoption via relative links) was weakened once `.github/workflows/check-placeholders.yml` began enforcing `OWNER/REPO` replacement automatically, and the relative-link pattern is fragile across non-GitHub.com renderers, GitHub Mobile, and email notifications. The historical content is preserved below for context.
+
 The PR template uses a relative link for contributing guidelines:
 
 ```md
@@ -80,6 +82,8 @@ If you need the link to work in PR drafts, GHES, or external contexts, replace w
 `https://github.com/<owner>/<repo>/blob/HEAD/CONTRIBUTING.md` (remembering to replace `<owner>/<repo>` with your actual org/repo name).
 
 ### Design Decision: Link Strategy in PR Template
+
+> **Status: Superseded** (2026-05-03). This decision has been replaced by the **Issue and PR templates** carve-out in [`.github/instructions/docs.instructions.md`](instructions/docs.instructions.md). The current rule is that Markdown links to repo-internal files inside `.github/ISSUE_TEMPLATE/*.yml` and `.github/pull_request_template.md` MUST use absolute `https://github.com/OWNER/REPO/blob/HEAD/<path>` URLs; relative forms such as `../blob/HEAD/<file>` and `blob/HEAD/<file>` MUST NOT be used in those files. The historical content is preserved below for context.
 
 The PR template uses relative links for repository files (e.g., `../blob/HEAD/CONTRIBUTING.md`) rather than absolute URLs with `OWNER/REPO` placeholders.
 
@@ -1028,6 +1032,8 @@ Templates use `snake_case` for all field IDs (e.g., `steps_to_reproduce`, `opera
 ### bug_report.yml
 
 #### Security Notice URL Strategy
+
+> **Status: Superseded** (2026-05-03). This decision has been replaced by the **Issue and PR templates** carve-out in [`.github/instructions/docs.instructions.md`](instructions/docs.instructions.md). The relative links described below were not actually working: `[Security tab](security)` resolved to `/{owner}/{repo}/issues/security` (404), and `[SECURITY.md](blob/HEAD/SECURITY.md)` resolved to `/{owner}/{repo}/issues/blob/HEAD/SECURITY.md` (404), because issue-form `value:` blocks render at `/{owner}/{repo}/issues/new?...`. The current `bug_report.yml` uses absolute `https://github.com/OWNER/REPO/security` and `https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md` URLs; the `OWNER/REPO` substitution is enforced by `.github/workflows/check-placeholders.yml` **only when that workflow is adopted and kept** (it is an optional adoption step that downstream repositories MAY skip or remove after initial setup, in which case no CI guardrail catches a missed substitution and adopters must verify it manually). The historical content is preserved below for context.
 
 The security notice uses relative links that work automatically after cloning:
 
