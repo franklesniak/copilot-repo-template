@@ -7,7 +7,7 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.4.20260503.0
+**Version:** 1.4.20260503.1
 
 ## Metadata
 
@@ -111,6 +111,7 @@ To make these links robust across non-GitHub.com renderers, GitHub Mobile, email
 - Relative paths such as `../blob/HEAD/<file>`, `blob/HEAD/<file>`, `./<file>`, or bare relative refs such as `(security)` **MUST NOT** be used in issue-form `value:` Markdown blocks or in `contact_links` URLs.
 - Use `blob/HEAD` rather than `blob/main` so the URL works regardless of the repository's default branch name.
 - The `github.com` host is the assumed default; **GHES adopters MUST replace `github.com` with their GHES host** (e.g., `github.company.com`). The host substitution is not enforced by CI today (the placeholder workflow only validates `OWNER/REPO`), so each affected file SHOULD include a brief inline YAML comment reminding adopters of the host substitution, mirroring the convention already used in `.github/ISSUE_TEMPLATE/config.yml`.
+- The literal `https://github.com/OWNER/REPO/...` example URL is permitted to appear in didactic prose inside the style-guide files under `.github/instructions/**`; section [6] of `.github/workflows/check-placeholders.yml` skips those files specifically so adopters are not forced to edit instructional prose to satisfy placeholder CI. Any other YAML file under `.github/` that contains the literal `https://github.com/OWNER/REPO` substring is treated as a live template placeholder and **MUST** be customized by adopters.
 
 This rule is mirrored in [`.github/instructions/docs.instructions.md`](./docs.instructions.md) (which governs `.github/pull_request_template.md` and applies to `**/*.md`). The two instruction files are intentionally self-contained: each restates the rule rather than relying on the other so that downstream repositories may remove either file independently without losing the guidance.
 

@@ -554,6 +554,8 @@ This template uses placeholder values that you **must** replace with your actual
 | File | Placeholders to Replace |
 | --- | --- |
 | `.github/ISSUE_TEMPLATE/config.yml` | `OWNER/REPO` (appears in URLs twice) |
+| `.github/ISSUE_TEMPLATE/bug_report.yml` | `OWNER/REPO` (appears in two security-notice URLs) |
+| `.github/pull_request_template.md` | `OWNER/REPO` (appears in the contributing-guidelines link) |
 | `.github/CODEOWNERS` | `@OWNER` (appears four times) |
 | `CODE_OF_CONDUCT.md` | `[INSERT CONTACT METHOD]` (enforcement contact for code of conduct violations) |
 | `CONTRIBUTING.md` | `OWNER/REPO` (appears in clone URL and issues URL) |
@@ -586,6 +588,12 @@ $SecurityEmail = "security@example.com"
 
 # Replace OWNER/REPO in config.yml
 (Get-Content ".github/ISSUE_TEMPLATE/config.yml" -Raw -Encoding UTF8).Replace('OWNER/REPO', "$Owner/$Repo") | Set-Content ".github/ISSUE_TEMPLATE/config.yml" -Encoding UTF8
+
+# Replace OWNER/REPO in bug_report.yml
+(Get-Content ".github/ISSUE_TEMPLATE/bug_report.yml" -Raw -Encoding UTF8).Replace('OWNER/REPO', "$Owner/$Repo") | Set-Content ".github/ISSUE_TEMPLATE/bug_report.yml" -Encoding UTF8
+
+# Replace OWNER/REPO in pull_request_template.md
+(Get-Content ".github/pull_request_template.md" -Raw -Encoding UTF8).Replace('OWNER/REPO', "$Owner/$Repo") | Set-Content ".github/pull_request_template.md" -Encoding UTF8
 
 # Replace OWNER/REPO in CONTRIBUTING.md
 (Get-Content "CONTRIBUTING.md" -Raw -Encoding UTF8).Replace('OWNER/REPO', "$Owner/$Repo") | Set-Content "CONTRIBUTING.md" -Encoding UTF8
@@ -626,6 +634,12 @@ SECURITY_EMAIL="security@example.com"
 # Replace OWNER/REPO in config.yml
 sed -i "s|OWNER/REPO|$OWNER/$REPO|g" .github/ISSUE_TEMPLATE/config.yml
 
+# Replace OWNER/REPO in bug_report.yml
+sed -i "s|OWNER/REPO|$OWNER/$REPO|g" .github/ISSUE_TEMPLATE/bug_report.yml
+
+# Replace OWNER/REPO in pull_request_template.md
+sed -i "s|OWNER/REPO|$OWNER/$REPO|g" .github/pull_request_template.md
+
 # Replace OWNER/REPO in CONTRIBUTING.md
 sed -i "s|OWNER/REPO|$OWNER/$REPO|g" CONTRIBUTING.md
 
@@ -647,6 +661,12 @@ sed -i 's|Go to \.vscode/settings\.json and make this the name of the repo|'"$RE
 ```bash
 # Replace OWNER/REPO in config.yml
 sed -i '' "s|OWNER/REPO|$OWNER/$REPO|g" .github/ISSUE_TEMPLATE/config.yml
+
+# Replace OWNER/REPO in bug_report.yml
+sed -i '' "s|OWNER/REPO|$OWNER/$REPO|g" .github/ISSUE_TEMPLATE/bug_report.yml
+
+# Replace OWNER/REPO in pull_request_template.md
+sed -i '' "s|OWNER/REPO|$OWNER/$REPO|g" .github/pull_request_template.md
 
 # Replace OWNER/REPO in CONTRIBUTING.md
 sed -i '' "s|OWNER/REPO|$OWNER/$REPO|g" CONTRIBUTING.md
@@ -678,27 +698,35 @@ If you prefer, you can open each file in a text editor and manually find and rep
    - Find: `OWNER/REPO`
    - Replace with: `your-username/your-repo-name` (appears in two URLs)
 
-2. **`.github/CODEOWNERS`:**
+2. **`.github/ISSUE_TEMPLATE/bug_report.yml`:**
+   - Find: `OWNER/REPO`
+   - Replace with: `your-username/your-repo-name` (appears in two security-notice URLs: `…/security` and `…/blob/HEAD/SECURITY.md`)
+
+3. **`.github/pull_request_template.md`:**
+   - Find: `OWNER/REPO`
+   - Replace with: `your-username/your-repo-name` (appears in the contributing-guidelines link)
+
+4. **`.github/CODEOWNERS`:**
    - Find: `@OWNER`
    - Replace with: `@your-username` (appears four times)
 
-3. **`CODE_OF_CONDUCT.md`:**
+5. **`CODE_OF_CONDUCT.md`:**
    - Find: `[INSERT CONTACT METHOD]`
    - Replace with: your contact method for code of conduct reports (e.g., email address)
 
-4. **`CONTRIBUTING.md`:**
+6. **`CONTRIBUTING.md`:**
    - Find: `OWNER/REPO`
    - Replace with: `your-username/your-repo-name` (appears in clone URL and issues link)
 
-5. **`SECURITY.md`:**
+7. **`SECURITY.md`:**
    - Find: `[security contact email]`
    - Replace with: your actual security contact email address
 
-6. **`.vscode/settings.json`:**
+8. **`.vscode/settings.json`:**
    - Find: `Go to .vscode/settings.json and make this the name of the repo`
    - Replace with: your repository name (e.g., `my-awesome-project`)
 
-7. **`LICENSE`:**
+9. **`LICENSE`:**
    - Find: `Frank Lesniak`
    - Replace with: your name or organization name (the copyright holder)
    - Optionally update the copyright year to the current year or your project's start year
@@ -1891,6 +1919,8 @@ The `check-placeholders.yml` workflow verifies that you've replaced all `OWNER/R
 **What the workflow checks:**
 
 - `OWNER/REPO` in `.github/ISSUE_TEMPLATE/config.yml`
+- `OWNER/REPO` in `.github/ISSUE_TEMPLATE/bug_report.yml`
+- `OWNER/REPO` in `.github/pull_request_template.md`
 - `OWNER/REPO` in `CONTRIBUTING.md`
 - `@OWNER` in `.github/CODEOWNERS`
 - `[security contact email]` in `SECURITY.md`

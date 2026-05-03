@@ -253,12 +253,32 @@ jobs:
           # that might be added to new files in the future.
           # Note: Some files may be checked in earlier sections as well; this is
           # intentional to ensure comprehensive coverage with the full URL pattern.
-          # Exclude this workflow file itself to avoid self-referential matches.
+          # Exclude this workflow file itself, plus instructional and historical
+          # files (style guides under .github/instructions/, the canonical
+          # constitution at .github/copilot-instructions.md, and the design-
+          # decision record at .github/TEMPLATE_DESIGN_DECISIONS.md), where the
+          # literal URL appears as didactic example text rather than as a live
+          # template placeholder.
           while IFS= read -r -d '' file; do
             # Skip this workflow file to avoid self-referential matches
             if [ "$file" = ".github/workflows/check-placeholders.yml" ]; then
               continue
             fi
+
+            # Skip purely instructional or historical files where the literal
+            # `https://github.com/OWNER/REPO` substring appears as didactic
+            # example text (style guides describing the required URL pattern,
+            # and design-decision records preserving historical rationale)
+            # rather than as a live template placeholder that adopters must
+            # replace. These files do not produce broken links for end users.
+            # Note: in shell `case` patterns, `*` matches any string including
+            # `/`, so `.github/instructions/*` covers files at any depth under
+            # that directory.
+            case "$file" in
+              .github/instructions/*|.github/TEMPLATE_DESIGN_DECISIONS.md|.github/copilot-instructions.md)
+                continue
+                ;;
+            esac
 
             # Determine file type for comment filtering
             case "$file" in

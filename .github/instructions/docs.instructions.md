@@ -7,7 +7,7 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.5.20260503.1
+**Version:** 1.5.20260503.2
 
 ## Metadata
 
@@ -136,6 +136,7 @@ This is an explicit carve-out from the "Prefer relative links" rule above. Issue
 - Relative paths such as `../blob/HEAD/<file>`, `blob/HEAD/<file>`, `./<file>`, or bare relative refs such as `(security)` **MUST NOT** be used in those files. Rationale: in issue-form `value:` blocks rendered at `/{owner}/{repo}/issues/new?...`, a link like `[SECURITY.md](blob/HEAD/SECURITY.md)` resolves to `/{owner}/{repo}/issues/blob/HEAD/SECURITY.md` (404), and `[Security tab](security)` resolves to `/{owner}/{repo}/issues/security` (404).
 - Use `blob/HEAD` rather than `blob/main` so the URL works regardless of the repository's default branch name.
 - This rule applies only to the files listed above. Tree-rendered Markdown such as `README.md`, `CONTRIBUTING.md`, and files under `docs/**` continue to follow the default "prefer relative links" guidance.
+- The literal `https://github.com/OWNER/REPO/...` example URL is permitted to appear in didactic prose inside style-guide and design-decision files (`.github/instructions/**`, `.github/copilot-instructions.md`, and `.github/TEMPLATE_DESIGN_DECISIONS.md`); section [6] of `.github/workflows/check-placeholders.yml` skips those files specifically so that adopters are not forced to edit instructional/historical prose to satisfy placeholder CI. Any other file under `.github/` that contains the literal `https://github.com/OWNER/REPO` substring is treated as a live template placeholder and **MUST** be customized by adopters.
 - The rule for issue-form YAML files (`.github/ISSUE_TEMPLATE/*.yml`) is mirrored in [`.github/instructions/yaml.instructions.md`](./yaml.instructions.md) so that contributors editing those YAML files receive the same guidance. The two instruction files are intentionally self-contained: each may be removed independently in downstream repositories that do not need it, and each restates the rule rather than relying on the other.
 
 ## ADR Standards

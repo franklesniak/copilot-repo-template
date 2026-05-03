@@ -3,8 +3,9 @@ Template users: see OPTIONAL_CONFIGURATIONS.md for guidance on tailoring this PR
 template. Delete this comment once the PR template is tailored for your needs.
 
 LINK STYLE: Markdown links to repo-internal files in this template MUST use
-absolute `https://github.com/OWNER/REPO/blob/HEAD/<path>` URLs. Relative
-forms (e.g., `../blob/HEAD/<file>`) are unreliable across non-GitHub.com
+absolute `https://github.com/<OWNER>/<REPO>/blob/HEAD/<path>` URLs (with the
+angle-bracket placeholders replaced by your actual values). Relative forms
+(e.g., `../blob/HEAD/<file>`) are unreliable across non-GitHub.com
 renderers, GitHub Mobile, and email notifications. See the
 "Issue and PR templates" carve-out in `.github/instructions/docs.instructions.md`.
 
