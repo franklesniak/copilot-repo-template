@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.4.20260503.0
+**Version:** 1.4.20260503.1
 
 ## Metadata
 
@@ -81,7 +81,8 @@ Prettier is **opt-in** and is **not** part of the default data-file toolchain.
 > - The schema file under `schemas/<name>.schema.json`.
 > - Valid example fixtures under `schemas/examples/<name>/valid/`.
 > - Invalid example fixtures under `schemas/examples/<name>/invalid/`.
-> - The pre-commit hook scope in `.pre-commit-config.yaml` (and `.github/workflows/data-ci.yml` if the file family changes).
+> - The pre-commit hook scope in `.pre-commit-config.yaml`.
+> - `.github/workflows/data-ci.yml` only when **adding or removing a hook ID** (for example, introducing a new `check-yaml-custom` hook). Changes to an **existing** hook's `files:` regex (including `check-jsonschema` scope changes) are picked up automatically, because each `data-ci.yml` step invokes hooks by ID via `pre-commit run <hook-id> --all-files`.
 > - Any documentation that references the schema (for example, `schemas/README.md`, `README.md`, `OPTIONAL_CONFIGURATIONS.md`).
 
 ### For GitHub Copilot Coding Agent (Automated PRs)
