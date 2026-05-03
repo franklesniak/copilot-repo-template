@@ -14,20 +14,30 @@ CUSTOMIZE: Replace `OWNER/REPO` below with your actual org/repo
 GHES users: Replace `github.com` with your GHES host (e.g., `github.company.com`).
 
 KNOWN LIMITATION (template repo only): The contributing-guidelines link
-below resolves to a non-existent `https://github.com/OWNER/REPO/blob/HEAD/CONTRIBUTING.md`
-URL when rendered on PRs against the template repository
-(`franklesniak/copilot-repo-template`), because the `OWNER/REPO` placeholder
-is intentionally not substituted in the template repo — that substitution is
-the responsibility of downstream adopters cloning this template. The reason
-the unsubstituted placeholder is allowed to persist here (rather than being
-rejected by CI) is that `.github/workflows/check-placeholders.yml` is gated
-off in the template repo itself
-(`if: github.repository != 'franklesniak/copilot-repo-template'`); downstream
-adopters do not have that gate and so have their substitution enforced by CI
-before merge. This is an accepted trade-off: downstream adopters get a working
-absolute link after running the placeholder substitution, which is the dominant
-audience. Contributors to the template repo itself can navigate to
-`CONTRIBUTING.md` via the file tree.
+below resolves to a non-existent
+`https://github.com/<OWNER>/<REPO>/blob/HEAD/CONTRIBUTING.md` URL (with
+`<OWNER>/<REPO>` left literal) when rendered on PRs against the template
+repository (`franklesniak/copilot-repo-template`), because the `OWNER/REPO`
+placeholder on the checklist link is intentionally not substituted in the
+template repo — that substitution is the responsibility of downstream adopters
+cloning this template. The reason the unsubstituted placeholder is allowed to
+persist there (rather than being rejected by CI) is that
+`.github/workflows/check-placeholders.yml` is gated off in the template repo
+itself (`if: github.repository != 'franklesniak/copilot-repo-template'`);
+downstream adopters do not have that gate and so have their substitution
+enforced by CI before merge. This is an accepted trade-off: downstream
+adopters get a working absolute link after running the placeholder
+substitution, which is the dominant audience. Contributors to the template
+repo itself can navigate to `CONTRIBUTING.md` via the file tree.
+
+The illustrative URL in this comment uses the angle-bracket placeholder form
+`<OWNER>/<REPO>` so that the literal `OWNER/REPO` substring only appears
+once in this file (on the checklist link below) and section [6] of
+`.github/workflows/check-placeholders.yml` reports a single substitution
+target per the placeholder table in `GETTING_STARTED_NEW_REPO.md`. See the
+"Issue and PR templates" carve-out in `.github/instructions/docs.instructions.md`
+for the broader rule against shipping live
+`https://github.com/<OWNER>/<REPO>/...` URLs disguised as comments.
 -->
 
 ## Description
