@@ -42,8 +42,11 @@ body:
   # "Issue and PR templates" carve-out in `.github/instructions/docs.instructions.md`
   # (and the matching section in `.github/instructions/yaml.instructions.md`).
   #
-  # CUSTOMIZE: Replace `OWNER/REPO` in both URLs with your actual org/repo
-  # (enforced by `.github/workflows/check-placeholders.yml`).
+  # CUSTOMIZE: Replace `OWNER/REPO` in both URLs with your actual org/repo.
+  # If you keep `.github/workflows/check-placeholders.yml` (an optional adoption
+  # step), CI will fail until this substitution is made; if you do not adopt
+  # that workflow or you remove it after setup, no CI guardrail catches a
+  # missed substitution and you must verify the replacement manually.
   # GHES users: Replace `github.com` with your GHES host (e.g., `github.company.com`).
   - type: markdown
     attributes:

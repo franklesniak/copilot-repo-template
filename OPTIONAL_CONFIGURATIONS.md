@@ -761,7 +761,7 @@ The default PR template uses an absolute URL for the contributing guidelines lin
 [contributing guidelines](https://github.com/OWNER/REPO/blob/HEAD/CONTRIBUTING.md)
 ```
 
-`OWNER/REPO` follows this template's placeholder convention and is enforced by `.github/workflows/check-placeholders.yml`. Replace `OWNER/REPO` with your actual organization and repository name as part of template adoption.
+`OWNER/REPO` follows this template's placeholder convention. Replace `OWNER/REPO` with your actual organization and repository name as part of template adoption. If you keep `.github/workflows/check-placeholders.yml` (an optional adoption step), CI will fail until this substitution is made; if you do not adopt that workflow or you remove it after initial setup, no CI guardrail catches a missed substitution and you must verify the replacement manually.
 
 **GHES adopters:** The `github.com` host is the assumed default and is **not** validated by `.github/workflows/check-placeholders.yml`. If your repository is hosted on GitHub Enterprise Server, you **MUST** also replace `github.com` with your GHES host (e.g., `github.company.com`); otherwise the link will point off-instance to GitHub.com.
 
