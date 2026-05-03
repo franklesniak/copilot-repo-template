@@ -763,6 +763,8 @@ The default PR template uses an absolute URL for the contributing guidelines lin
 
 `OWNER/REPO` follows this template's placeholder convention and is enforced by `.github/workflows/check-placeholders.yml`. Replace `OWNER/REPO` with your actual organization and repository name as part of template adoption.
 
+**GHES adopters:** The `github.com` host is the assumed default and is **not** validated by `.github/workflows/check-placeholders.yml`. If your repository is hosted on GitHub Enterprise Server, you **MUST** also replace `github.com` with your GHES host (e.g., `github.company.com`); otherwise the link will point off-instance to GitHub.com.
+
 This is the canonical link form for files under `.github/` (issue forms and the PR template); see the **Issue and PR templates** carve-out in `.github/instructions/docs.instructions.md` for the full rule. Relative forms such as `../blob/HEAD/CONTRIBUTING.md` or `blob/HEAD/CONTRIBUTING.md` MUST NOT be used in `.github/ISSUE_TEMPLATE/*.yml` or `.github/pull_request_template.md`, because they either 404 in issue-form `value:` blocks or render unreliably across non-GitHub.com renderers, GitHub Mobile, and email notifications.
 
 **If your CONTRIBUTING.md is in a different location** (e.g., `docs/CONTRIBUTING.md`), update the path inside the absolute URL accordingly:

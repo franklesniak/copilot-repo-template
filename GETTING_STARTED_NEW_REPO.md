@@ -574,6 +574,8 @@ This template uses placeholder values that you **must** replace with your actual
 - **`[security contact email]`:** An email address for receiving security vulnerability reports
 - **`window.title` in `.vscode/settings.json`:** The VS Code window title that appears in the title bar when working in this repository. Replace the instruction text with your repository name for easy identification.
 
+> **GHES adopters:** The absolute URLs in `.github/ISSUE_TEMPLATE/config.yml`, `.github/ISSUE_TEMPLATE/bug_report.yml`, and `.github/pull_request_template.md` use `https://github.com/OWNER/REPO/...`. The `github.com` host is the assumed default and is **not** validated by `.github/workflows/check-placeholders.yml`. If your repository is hosted on GitHub Enterprise Server, you **MUST** replace `github.com` with your GHES host (e.g., `github.company.com`) in all three files in addition to substituting `OWNER/REPO`; otherwise the links will point off-instance to GitHub.com. The PowerShell, GNU sed, and BSD sed scripts below include opt-in `github.com` → GHES-host replacement blocks (commented out by default) that you can uncomment when adopting the template on GHES.
+
 ### Option A: Find and Replace Commands
 
 #### Windows (PowerShell)
@@ -609,6 +611,14 @@ $SecurityEmail = "security@example.com"
 
 # Replace window.title placeholder in VS Code settings
 (Get-Content ".vscode\settings.json" -Raw -Encoding UTF8).Replace('Go to .vscode/settings.json and make this the name of the repo', $Repo) | Set-Content ".vscode\settings.json" -Encoding UTF8
+
+# GHES adopters: uncomment the following block to also replace `github.com` with your GHES host
+# in the three files that contain absolute https://github.com/OWNER/REPO/... URLs. The host
+# substitution is not validated by check-placeholders.yml, so it MUST be done manually on GHES.
+# $GHESHost = "github.company.com"
+# foreach ($f in @(".github/ISSUE_TEMPLATE/config.yml", ".github/ISSUE_TEMPLATE/bug_report.yml", ".github/pull_request_template.md")) {
+#     (Get-Content $f -Raw -Encoding UTF8).Replace('https://github.com/', "https://$GHESHost/") | Set-Content $f -Encoding UTF8
+# }
 ```
 
 #### macOS/Linux/FreeBSD (Bash)
@@ -654,6 +664,14 @@ sed -i "s|\[security contact email\]|$SECURITY_EMAIL|g" SECURITY.md
 
 # Replace window.title placeholder in VS Code settings
 sed -i 's|Go to \.vscode/settings\.json and make this the name of the repo|'"$REPO"'|g' .vscode/settings.json
+
+# GHES adopters: uncomment the following block to also replace `github.com` with your GHES host
+# in the three files that contain absolute https://github.com/OWNER/REPO/... URLs. The host
+# substitution is not validated by check-placeholders.yml, so it MUST be done manually on GHES.
+# GHES_HOST="github.company.com"
+# for f in .github/ISSUE_TEMPLATE/config.yml .github/ISSUE_TEMPLATE/bug_report.yml .github/pull_request_template.md; do
+#   sed -i "s|https://github.com/|https://$GHES_HOST/|g" "$f"
+# done
 ```
 
 ##### macOS / FreeBSD (BSD sed)
@@ -682,6 +700,14 @@ sed -i '' "s|\[security contact email\]|$SECURITY_EMAIL|g" SECURITY.md
 
 # Replace window.title placeholder in VS Code settings
 sed -i '' 's|Go to \.vscode/settings\.json and make this the name of the repo|'"$REPO"'|g' .vscode/settings.json
+
+# GHES adopters: uncomment the following block to also replace `github.com` with your GHES host
+# in the three files that contain absolute https://github.com/OWNER/REPO/... URLs. The host
+# substitution is not validated by check-placeholders.yml, so it MUST be done manually on GHES.
+# GHES_HOST="github.company.com"
+# for f in .github/ISSUE_TEMPLATE/config.yml .github/ISSUE_TEMPLATE/bug_report.yml .github/pull_request_template.md; do
+#   sed -i '' "s|https://github.com/|https://$GHES_HOST/|g" "$f"
+# done
 ```
 
 ##### Windows (Git Bash or WSL)
@@ -694,17 +720,22 @@ If using **Git Bash**, use the Linux (GNU sed) commands above. If using **WSL (W
 
 If you prefer, you can open each file in a text editor and manually find and replace the placeholders:
 
+> **GHES adopters:** In addition to the `OWNER/REPO` substitutions below, also replace `github.com` with your GHES host (e.g., `github.company.com`) in items 1, 2, and 3. The host substitution is not validated by `.github/workflows/check-placeholders.yml`, so it MUST be done manually.
+
 1. **`.github/ISSUE_TEMPLATE/config.yml`:**
    - Find: `OWNER/REPO`
    - Replace with: `your-username/your-repo-name` (appears in two URLs)
+   - **GHES only:** also replace `github.com` with your GHES host (in the same two URLs)
 
 2. **`.github/ISSUE_TEMPLATE/bug_report.yml`:**
    - Find: `OWNER/REPO`
    - Replace with: `your-username/your-repo-name` (appears in two security-notice URLs: `…/security` and `…/blob/HEAD/SECURITY.md`)
+   - **GHES only:** also replace `github.com` with your GHES host (in the same two URLs)
 
 3. **`.github/pull_request_template.md`:**
    - Find: `OWNER/REPO`
    - Replace with: `your-username/your-repo-name` (appears in the contributing-guidelines link)
+   - **GHES only:** also replace `github.com` with your GHES host (in the same link)
 
 4. **`.github/CODEOWNERS`:**
    - Find: `@OWNER`
