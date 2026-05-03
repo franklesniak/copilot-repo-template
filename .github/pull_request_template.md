@@ -31,13 +31,22 @@ substitution, which is the dominant audience. Contributors to the template
 repo itself can navigate to `CONTRIBUTING.md` via the file tree.
 
 The illustrative URL in this comment uses the angle-bracket placeholder form
-`<OWNER>/<REPO>` so that the literal `OWNER/REPO` substring only appears
-once in this file (on the checklist link below) and section [6] of
-`.github/workflows/check-placeholders.yml` reports a single substitution
-target per the placeholder table in `GETTING_STARTED_NEW_REPO.md`. See the
-"Issue and PR templates" carve-out in `.github/instructions/docs.instructions.md`
-for the broader rule against shipping live
-`https://github.com/<OWNER>/<REPO>/...` URLs disguised as comments.
+`<OWNER>/<REPO>` so that the only absolute `github.com` URL in this file
+that contains the literal `OWNER/REPO` placeholder is the live
+contributing-guidelines link below — matching the single substitution target
+described in the placeholder table in `GETTING_STARTED_NEW_REPO.md` and
+reported by section [6] of `.github/workflows/check-placeholders.yml`.
+(The literal `OWNER/REPO` placeholder also appears as plain text in the
+`CUSTOMIZE` and `KNOWN LIMITATION` paragraphs above. Those occurrences are
+not part of an absolute `github.com` URL and so are not matched by section
+[6]'s URL-prefix grep; they are descriptive references to the placeholder
+itself, not live template URLs.) See the "Issue and PR templates" carve-out
+in `.github/instructions/docs.instructions.md` for the broader rule against
+shipping live placeholder URLs disguised as comments. That rule and section
+[6]'s grep both target the literal `OWNER/REPO`-bearing URL form (which is
+why the live checklist link below is detected and customized); the
+angle-bracket documentation form used in this comment block is intentionally
+outside the scope of that rule and CI check.
 -->
 
 ## Description
