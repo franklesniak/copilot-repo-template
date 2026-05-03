@@ -9,8 +9,12 @@ angle-bracket placeholders replaced by your actual values). Relative forms
 renderers, GitHub Mobile, and email notifications. See the
 "Issue and PR templates" carve-out in `.github/instructions/docs.instructions.md`.
 
-CUSTOMIZE: Replace `OWNER/REPO` below with your actual org/repo
-(enforced by `.github/workflows/check-placeholders.yml`).
+CUSTOMIZE: Replace `OWNER/REPO` below with your actual org/repo.
+If you keep `.github/workflows/check-placeholders.yml` (an optional
+adoption step), CI will fail until this substitution is made; if you
+do not adopt that workflow or you remove it after setup, no CI
+guardrail catches a missed substitution and you must verify the
+replacement manually.
 GHES users: Replace `github.com` with your GHES host (e.g., `github.company.com`).
 
 KNOWN LIMITATION (template repo only): The contributing-guidelines link
@@ -24,10 +28,14 @@ this template. The reason the unsubstituted placeholder is allowed to
 persist here (rather than being rejected by CI) is that
 `.github/workflows/check-placeholders.yml` is gated off in the template repo
 itself (`if: github.repository != 'franklesniak/copilot-repo-template'`);
-downstream adopters do not have that gate and so have their substitution
-enforced by CI before merge. This is an accepted trade-off: downstream
-adopters get a working absolute link after running the placeholder
-substitution, which is the dominant audience. Contributors to the template
+downstream adopters who keep `.github/workflows/check-placeholders.yml`
+(an optional adoption step) do not have that gate and so have their
+substitution enforced by CI before merge. Downstream adopters who do not
+adopt that workflow, or who remove it after initial setup, have no CI
+guardrail and must verify the substitution manually. This is an accepted
+trade-off: downstream adopters who keep the placeholder workflow get a
+working absolute link after running the placeholder substitution, which
+is the dominant audience. Contributors to the template
 repo itself can navigate to `CONTRIBUTING.md` via the file tree.
 
 The illustrative URL in this comment uses the angle-bracket placeholder form
