@@ -15,6 +15,7 @@ This document records design decisions made during the creation and maintenance 
   - [Current Provider Versions in Terraform Examples](#design-decision-current-provider-versions-in-terraform-examples)
   - [Terraform Instructions Document Length Strategy](#design-decision-terraform-instructions-document-length-strategy)
   - [Instruction Files Scope (Code Authoring, Not CI/CD)](#design-decision-instruction-files-scope-code-authoring-not-cicd)
+  - [Terraform Registry Reference URLs Use /latest/](#design-decision-terraform-registry-reference-urls-use-latest)
 - [Agent Instruction Files](#agent-instruction-files)
   - [Multi-Agent Instruction Files at Repository Root](#design-decision-multi-agent-instruction-files-at-repository-root)
   - [Agent Files as Minimal Entry-Point Summaries (Not Canonical)](#design-decision-agent-files-as-minimal-entry-point-summaries-not-canonical)
@@ -332,6 +333,48 @@ Instruction files in `.github/instructions/` are scoped to **code authoring stan
 - `.github/workflows/` — Workflow files with inline comments explaining design choices
 - `.github/TEMPLATE_DESIGN_DECISIONS.md` — The "CI Workflow Configuration" section documents CI/CD design decisions
 - `README.md` — High-level overview of available workflows and their purposes
+
+### Design Decision: Terraform Registry Reference URLs Use /latest/
+
+Terraform Registry reference URLs that appear in **comments** in `.tf`, `.tftest.hcl`, `.tfvars`, `.tfbackend`, `.tftpl`, and other Terraform-related files **MUST** use the `latest` path segment instead of a pinned provider or module version. The same convention applies to Terraform Registry navigation links used in instructional Markdown under this repository (for example, in `TEMPLATE_MAINTENANCE.md` or files under `docs/`).
+
+The shape of the rule is:
+
+- Provider documentation URLs use `https://registry.terraform.io/providers/<namespace>/<name>/latest/docs/...`.
+- Module documentation URLs use `https://registry.terraform.io/modules/<namespace>/<name>/<provider>/latest`.
+- Pinned examples such as `/azurerm/4.67.0/` or `/random/3.8.1/` **MUST NOT** appear in documentation-comment URLs except as clearly labeled non-compliant examples that exist to document this rule.
+
+The full normative rule, including compliant and non-compliant examples, lives in [`.github/instructions/terraform.instructions.md`](instructions/terraform.instructions.md) under "Terraform Registry Documentation URLs". This ADR records *why* the template adopts that rule; the instruction file remains the single source of truth for *what* the rule says.
+
+**Rationale:**
+
+1. **Registry URLs in comments are navigation aids, not version pins.** Provider and module versions that actually drive `terraform init`, `terraform plan`, and `terraform apply` are governed by `required_providers` blocks in `terraform.tf` / `versions.tf`, by module `source` and `version` arguments, and by `.terraform.lock.hcl`. Those files are the authoritative version sources. Comment URLs only help a reader (or an AI assistant) jump to relevant Registry documentation while reading the code.
+
+2. **Dependency automation does not rewrite arbitrary comment text.** Tools such as Dependabot, Renovate, and equivalent automation update version constraints and lockfile entries when newer provider or module versions become available. They do not parse Markdown prose or arbitrary `.tf` comments to find embedded Registry URLs. A pinned URL such as `/providers/hashicorp/azurerm/4.67.0/docs/...` therefore stays at `4.67.0` in the comment even after the provider constraint and lockfile have moved on.
+
+3. **Pinned URLs in comments drift silently.** Once the executable configuration moves past the version embedded in a comment URL, the comment points at outdated documentation. Readers can be sent to deprecated argument descriptions, removed resources, or release-note pages that no longer reflect the configuration's actual behavior. Because nothing in CI mechanically reconciles comment URLs against the lockfile, the drift is invisible until a human notices it.
+
+4. **`latest` matches the navigation-aid intent.** Linking to `/latest/docs/...` always resolves to the current Registry documentation for the provider or module, which is what a reader navigating from a comment generally wants. If a reader needs documentation that matches a specific pinned version, they can navigate from `.terraform.lock.hcl` directly; comment URLs do not need to duplicate that capability.
+
+**Trade-offs:**
+
+- Readers who want documentation pinned to the exact version recorded in `.terraform.lock.hcl` need to take an extra step (look up the lockfile entry and adjust the URL by hand). The alternative — pinning every comment URL — was rejected because the silent-drift cost outweighs the convenience for that minority case.
+- Clearly labeled non-compliant examples in the Terraform instruction file intentionally include pinned URLs so the rule itself can be illustrated. Tooling that enforces this rule in the future must distinguish those documentation examples from real violations.
+
+**Scope boundary:**
+
+This ADR governs only documentation-comment URLs and Markdown navigation links to the Terraform Registry. It does **not** change:
+
+- Provider version constraints in `required_providers` blocks.
+- Module `source` addresses or `version` arguments.
+- Entries in `.terraform.lock.hcl`.
+- Any other intentionally pinned executable configuration.
+
+Those remain governed by their existing rules and by the relevant maintenance guidance in [`TEMPLATE_MAINTENANCE.md`](../TEMPLATE_MAINTENANCE.md).
+
+**Enforcement:**
+
+This template intentionally does not ship a pre-commit hook or custom lint rule for this convention at the time the decision was recorded. Adding mechanical enforcement would require carefully distinguishing real violations from the clearly labeled non-compliant examples in the Terraform instruction file (and any future similar examples in Markdown), and would need to handle both provider and module URL shapes. If enforcement is added later, it will be designed in a separate, dedicated change rather than rolled into the documentation/design-decision update that introduced this ADR.
 
 ---
 
