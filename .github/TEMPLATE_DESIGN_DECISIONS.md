@@ -22,6 +22,7 @@ This document records design decisions made during the creation and maintenance 
   - [Dedicated JSON and YAML Instruction Files](#design-decision-dedicated-json-and-yaml-instruction-files)
   - [Baseline JSON/YAML Linting Stack](#design-decision-baseline-jsonyaml-linting-stack)
   - [yamllint truthy.check-keys Default](#design-decision-yamllint-truthycheck-keys-default)
+  - [yamllint line-length Warning Level Default](#design-decision-yamllint-line-length-warning-level-default)
   - [Prettier Deferral for Data Files](#design-decision-prettier-deferral-for-data-files)
   - [Schema Location at Repository Root](#design-decision-schema-location-at-repository-root)
   - [Schema Validation Tiers](#design-decision-schema-validation-tiers)
@@ -476,6 +477,32 @@ This is a deliberate opt-in because it requires editing every workflow file at a
 
 - Pro: Default works out-of-the-box for GitHub Actions, the most common YAML use case in this template.
 - Con: A small class of truly-ambiguous truthy keys (e.g., a literal `yes:` map key) would not be flagged. The risk is low and stylistic — quoting is still recommended in the YAML guide.
+
+### Design Decision: yamllint line-length Warning Level Default
+
+`yamllint` is configured with `line-length.level: warning` in `.yamllint.yml`, even though the rest of the rule baseline aligned with the full template recommendation uses default (error) severity.
+
+**Rationale:**
+
+- A large fraction of long YAML lines in this template are **non-breakable user-facing content**: URLs in `.github/ISSUE_TEMPLATE/config.yml`, descriptive prose in issue-form `body:` blocks, and `echo`/`gh` shell commands inside workflow `run:` blocks that print PR comments or summary lines. Forcing these into multi-line continuations either harms readability (URLs, single sentences of UI copy) or changes the literal output that downstream users see (PR comment bodies).
+- `yamllint`'s `line-length` rule already enables `allow-non-breakable-words` and `allow-non-breakable-inline-mappings`, but these only suppress lines whose overflow is a single non-breakable token. Comment-prefixed URLs and prose with embedded spaces still trip the rule.
+- Treating line length as a warning preserves the signal (long lines still surface in `yamllint` output and CI annotations) without blocking PRs on cosmetic wraps that would not improve the underlying file.
+- All other style violations (indentation, trailing whitespace, end-of-file newline, truthy values, brace/bracket spacing, comment formatting, empty-line counts) remain at default severity and **do** fail CI. Line length is the single intentional softening.
+
+**Stricter alternative:**
+
+Repos that want every long line to fail can either:
+
+1. Remove the `level: warning` line from `.yamllint.yml` to inherit `yamllint`'s default error severity, and reformat any offending YAML files; or
+2. Raise `line-length.max` if 120 columns is the friction point rather than the severity.
+
+Adopting alternative 1 requires reformatting issue templates and workflow `run:` blocks at adoption time, which is the friction this default is meant to avoid.
+
+**Trade-offs:**
+
+- Pro: Default keeps idiomatic GitHub Actions workflows and issue-form prose readable without per-file `# yamllint disable-line: line-length` exceptions.
+- Pro: Keeps line-length signal visible in CI annotations without blocking PRs on cosmetic wraps.
+- Con: Long lines do not gate merges; reviewers must rely on the warning surface to notice problematic cases. Mitigated by the fact that every other style rule still fails the build.
 
 ### Design Decision: Prettier Deferral for Data Files
 
