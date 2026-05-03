@@ -1955,6 +1955,10 @@ The `check-placeholders.yml` workflow verifies that you've replaced all `OWNER/R
 - `OWNER/REPO` in `CONTRIBUTING.md`
 - `@OWNER` in `.github/CODEOWNERS`
 - `[security contact email]` in `SECURITY.md`
+- `TODO: Replace` markers in `SECURITY.md`
+- `OWNER/REPO` in any URL inside `SECURITY.md` (Option C direct-link variant)
+- `[INSERT CONTACT METHOD]` in `CODE_OF_CONDUCT.md`
+- `https://github.com/OWNER/REPO` URLs anywhere under `.github/` (recursive scan), excluding instructional/historical files (`.github/instructions/**`, `.github/copilot-instructions.md`, `.github/TEMPLATE_DESIGN_DECISIONS.md`)
 
 **After all placeholders are replaced:**
 
