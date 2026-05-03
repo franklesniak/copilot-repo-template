@@ -734,7 +734,13 @@ If you prefer, you can open each file in a text editor and manually find and rep
 
 3. **`.github/pull_request_template.md`:**
    - Find: `OWNER/REPO`
-   - Replace with: `your-username/your-repo-name` (appears in the contributing-guidelines link)
+   - Replace with: `your-username/your-repo-name` (the live substitution
+     target is the contributing-guidelines link in the file body; the file
+     may also contain plain-text `OWNER/REPO` references inside the
+     top-of-file HTML comment block, which you can replace now or skip
+     because the entire HTML comment block is deleted in the
+     *Delete Template Comment* step under *Customizing the Pull Request
+     Template* later in this guide)
    - **GHES only:** also replace `github.com` with your GHES host (in the same link)
 
 4. **`.github/CODEOWNERS`:**
@@ -1484,12 +1490,33 @@ The pull request template provides a contributor checklist for consistent PR rev
 
 ### Delete Template Comment
 
-Delete the HTML comment at the top of the file (lines 1-4):
+Delete the HTML comment block at the top of the file — the entire `<!-- ... -->`
+block immediately preceding the `## Description` heading. The block contains
+template-user guidance (`LINK STYLE`, `CUSTOMIZE`, GHES host note, and a
+`KNOWN LIMITATION` paragraph explaining the template-repo-only behavior of
+the contributing-guidelines link) that downstream adopters do not need once
+the placeholder substitution has been performed. Identify the block by the
+opening `<!--` (currently the first line of the file, before any other
+content) and the closing `-->` (immediately preceding the `## Description`
+heading) rather than by a fixed line range; both endpoints may shift as the
+template comment is updated, or if other content is later added above the
+block.
+
+Schematic of the block to delete (paragraph headers shown; full prose elided):
 
 ```markdown
 <!--
-Template users: see OPTIONAL_CONFIGURATIONS.md for guidance on tailoring this PR
-template. Delete this comment once the PR template is tailored for your needs.
+(opening paragraph: brief pointer to OPTIONAL_CONFIGURATIONS.md and a
+"delete this comment when tailored" instruction)
+
+LINK STYLE: ...
+
+CUSTOMIZE: ...
+GHES users: ...
+
+KNOWN LIMITATION (template repo only): ...
+
+(rationale paragraph explaining angle-bracket placeholder use)
 -->
 ```
 
