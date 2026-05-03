@@ -7,7 +7,7 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.4.20260503.2
+**Version:** 1.4.20260503.3
 
 ## Metadata
 
@@ -39,7 +39,7 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - **[Actions]** **MUST** apply least-privilege `permissions:` on GitHub Actions workflows.
 - **[Schemas]** Schema-backed YAML **MUST** pass any schema validator wired into pre-commit or CI; where no validator is wired up for a particular file family, authors **SHOULD** run the appropriate validator locally before committing.
 - **[Naming]** YAML filenames **SHOULD** be lowercase kebab-case; GitHub Actions workflows **MUST** use the `.yml` extension; project-owned YAML **MUST** choose `.yml` or `.yaml` and use it consistently.
-- **[IssueForms]** In `.github/ISSUE_TEMPLATE/*.yml`, Markdown links and `contact_links` URLs that point to repo-internal targets **MUST** use absolute `https://github.com/OWNER/REPO/...` URLs (with `blob/HEAD` for file links); relative paths **MUST NOT** be used (they 404 because issue forms render at `/{owner}/{repo}/issues/new?...`).
+- **[IssueForms]** In `.github/ISSUE_TEMPLATE/*.yml`, repo-internal targets in both issue-form `value:` Markdown links (e.g., `bug_report.yml`) and `config.yml` `contact_links` `url:` fields **MUST** use absolute `https://github.com/OWNER/REPO/...` URLs (with `blob/HEAD` for file links); relative paths **MUST NOT** be used. The two file types fail for different reasons: `value:` Markdown blocks render at `/{owner}/{repo}/issues/new?...` so relative paths resolve against that URL and 404, while `contact_links` `url:` fields are not Markdown at all — GitHub validates them as absolute URLs at form-load time and rejects relative values outright.
 
 ## Dialect and Consumer Policy
 
