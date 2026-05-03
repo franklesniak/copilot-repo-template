@@ -5,7 +5,7 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 2.2.20260412.0
+**Version:** 2.3.20260503.0
 
 ## Keywords
 
@@ -165,6 +165,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 - **[Module]** Modules **MUST** have a `README.md` with usage examples
 - **[All]** Inline comments **SHOULD** explain "why," not "what"
 - **[All]** TODO comments **SHOULD** include username and context
+- **[All]** Terraform Registry reference URLs in comments **MUST** use the `latest` path segment, not a pinned provider or module version
 - **[All]** Error messages in validation blocks **SHOULD** be actionable and reference valid options or acceptable ranges
 
 ### Code Authoring Guidelines (Quick Reference)
@@ -3858,6 +3859,50 @@ Use standardized TODO format:
 # TODO(username): Migrate to new VPC module after v2.0 release
 # TODO(team-name): Add support for IPv6 when available
 ```
+
+### Terraform Registry Documentation URLs
+
+Terraform Registry reference URLs embedded in comments in `.tf`, `.tftest.hcl`, `.tfvars`, `.tfbackend`, `.tftpl`, and other Terraform-related files that support comments **MUST** use the `latest` path segment, not a pinned provider or module version.
+
+- Provider documentation URLs **MUST** use `latest` as the version segment immediately after `/providers/<namespace>/<name>/` (for example, `https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_account`). Any path, query string, or fragment after the `latest` segment is permitted.
+- Module documentation URLs **MUST** use `latest` as the version segment immediately after `/modules/<namespace>/<name>/<provider>/` (for example, `https://registry.terraform.io/modules/terraform-aws-modules/vpc/aws/latest`). Any path (such as `/submodules/...`), query string, or fragment after the `latest` segment is permitted.
+- Pinned Terraform Registry documentation URLs (for example, `/azurerm/4.67.0/` or `/random/3.8.1/`) **MUST NOT** appear in comments, except in clearly labeled non-compliant examples that document this rule.
+
+This rule applies **only** to documentation/navigation comments. It **MUST NOT** affect provider constraints, module `source` addresses, module `version` arguments, `.terraform.lock.hcl`, selected module `source` references, or any other intentionally pinned executable configuration.
+
+**Compliant:**
+
+```hcl
+# See https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/resources/storage_account
+resource "azurerm_storage_account" "main" {
+  # ...
+}
+
+# Module reference: https://registry.terraform.io/modules/terraform-aws-modules/vpc/aws/latest
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "~> 5.0"
+  # ...
+}
+```
+
+**Non-compliant:**
+
+```hcl
+# See https://registry.terraform.io/providers/hashicorp/azurerm/4.67.0/docs/resources/storage_account
+resource "azurerm_storage_account" "main" {
+  # ...
+}
+
+# Module reference: https://registry.terraform.io/modules/terraform-aws-modules/vpc/aws/5.21.0
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "~> 5.0"
+  # ...
+}
+```
+
+<!-- RATIONALE: terraform-registry-documentation-urls -->
 
 ### Error Message Best Practices
 
