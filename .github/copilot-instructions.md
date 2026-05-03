@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.4.20260503.3
+**Version:** 1.4.20260503.4
 
 ## Metadata
 
@@ -141,7 +141,7 @@ For the rationale, see the **Workflow Version Pinning and Dependabot Coherence**
 - Repeated `uses:` references to the same action across jobs and steps are acceptable when each occurrence is a normal Dependabot-managed `uses:` reference. Dependabot updates each `uses:` line directly.
 - Do **NOT** store an action version in a workflow-level `env:` variable, comment, cache key, file path, shell literal, manually constructed image tag, or any other secondary location as a mirror of a `uses:` version. The `uses:` line **MUST** be the only authoritative source for the action version because Dependabot rewrites `uses:` references and will leave unrelated literals stale.
 - Do **NOT** copy a Dependabot-managed action version into secondary workflow locations that Dependabot will not reliably rewrite (for example, cache keys, file paths, shell commands, manually constructed image tags, or comments presented as authoritative version state).
-- If secondary workflow behavior needs to change when a `uses:` version changes, derive that behavior from a stable source that naturally changes with the workflow or tool configuration. Prefer cache keys based on `hashFiles('.github/workflows/*.yml')` or the relevant tool configuration file (for example, `hashFiles('.pre-commit-config.yaml')`) instead of embedding the same literal version string in multiple places.
+- If secondary workflow behavior needs to change when a `uses:` version changes, derive that behavior from a stable source that naturally changes with the workflow or tool configuration. Prefer cache keys scoped to the specific configuration file that governs the cached artifact — for example, `hashFiles('.pre-commit-config.yaml')` for pre-commit caches, `hashFiles('.tflint.hcl')` for TFLint plugin caches, or `hashFiles('**/.terraform.lock.hcl')` for Terraform provider caches, mirroring the pattern already used in this repository's workflows. Avoid broad wildcard patterns such as `hashFiles('.github/workflows/*.yml')` for cache keys: any unrelated workflow edit would invalidate every job's cache. The goal is to track the configuration that actually drives the cached content, not the workflow definition that consumes it.
 
 ### Tool versions passed as action inputs or shell arguments
 
