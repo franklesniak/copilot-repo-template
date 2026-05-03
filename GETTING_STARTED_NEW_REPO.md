@@ -547,7 +547,7 @@ This command:
 
 ## Initial Placeholder Replacement
 
-This template uses placeholder values that you **must** replace with your actual repository information. The CI workflow (`check-placeholders.yml`) will fail until you complete these replacements.
+This template uses placeholder values that you **must** replace with your actual repository information. If you keep `.github/workflows/check-placeholders.yml` (an optional adoption step — see *Verify Placeholder Check Workflow* below), CI will fail until you complete these replacements; if you do not adopt that workflow or you remove it after initial setup, no CI guardrail catches a missed substitution and you must verify the replacements manually.
 
 ### Files That Need Placeholders Replaced
 
