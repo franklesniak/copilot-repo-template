@@ -33,15 +33,22 @@ repo itself can navigate to `CONTRIBUTING.md` via the file tree.
 The illustrative URL in this comment uses the angle-bracket placeholder form
 `<OWNER>/<REPO>` so that the only absolute `github.com` URL in this file
 that contains the literal `OWNER/REPO` placeholder is the live
-contributing-guidelines link below — matching the single substitution target
-described in the placeholder table in `GETTING_STARTED_NEW_REPO.md` and
-reported by section [6] of `.github/workflows/check-placeholders.yml`.
-(The literal `OWNER/REPO` placeholder also appears as plain text in the
-`CUSTOMIZE` and `KNOWN LIMITATION` paragraphs above. Those occurrences are
-not part of an absolute `github.com` URL and so are not matched by section
-[6]'s URL-prefix grep; they are descriptive references to the placeholder
-itself, not live template URLs.) See the "Issue and PR templates" carve-out
-in `.github/instructions/docs.instructions.md` for the broader rule against
+contributing-guidelines link below — that live link is the substitution
+target described in the placeholder table in `GETTING_STARTED_NEW_REPO.md`,
+and the only hit reported by section [6] of
+`.github/workflows/check-placeholders.yml` (which greps for the literal
+`OWNER/REPO`-bearing absolute `github.com` URL form; see the workflow for
+the exact pattern). The literal `OWNER/REPO` placeholder also
+appears as plain text in the `CUSTOMIZE`, `KNOWN LIMITATION`, and rationale
+paragraphs above; those occurrences are not absolute `github.com` URLs and
+are not flagged by section [6]. The file-wide `OWNER/REPO` substitution
+scripts under *Initial Placeholder Replacement* in
+`GETTING_STARTED_NEW_REPO.md` (PowerShell `.Replace`, GNU `sed -i`, and
+BSD `sed -i ''`) will rewrite those plain-text references too, but that is
+harmless because adopters delete this entire HTML comment block per the
+*Delete Template Comment* step under *Customizing the Pull Request Template*
+in the same guide. See the "Issue and PR templates" carve-out in
+`.github/instructions/docs.instructions.md` for the broader rule against
 shipping live placeholder URLs disguised as comments. That rule and section
 [6]'s grep both target the literal `OWNER/REPO`-bearing URL form (which is
 why the live checklist link below is detected and customized); the

@@ -1489,11 +1489,12 @@ block immediately preceding the `## Description` heading. The block contains
 template-user guidance (`LINK STYLE`, `CUSTOMIZE`, GHES host note, and a
 `KNOWN LIMITATION` paragraph explaining the template-repo-only behavior of
 the contributing-guidelines link) that downstream adopters do not need once
-the placeholder substitution has been performed. The block currently spans
-the lines from `<!--` at line 1 through `-->` immediately before the
-`## Description` heading; the exact closing line number may shift as the
-template comment is updated, so identify the block by the opening and closing
-markers rather than by a fixed line range.
+the placeholder substitution has been performed. Identify the block by the
+opening `<!--` (currently the first line of the file, before any other
+content) and the closing `-->` (immediately preceding the `## Description`
+heading) rather than by a fixed line range; both endpoints may shift as the
+template comment is updated, or if other content is later added above the
+block.
 
 Schematic of the block to delete (paragraph headers shown; full prose elided):
 
