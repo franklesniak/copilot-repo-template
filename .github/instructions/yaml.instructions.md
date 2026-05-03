@@ -7,7 +7,7 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.2.20260503.0
+**Version:** 1.2.20260503.2
 
 ## Metadata
 
