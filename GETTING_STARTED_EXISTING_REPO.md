@@ -1497,6 +1497,13 @@ python_functions = ["test_*"]
 2. Read the top-of-file comment in `.github/workflows/data-ci.yml` for how it differs from `.github/workflows/auto-fix-precommit.yml` (the auto-fix workflow only runs on `copilot/**` branches and commits fixes; the data CI workflow enforces the hooks on every push and PR without committing).
 3. The workflow runs automatically on push and pull requests; no per-file configuration is required as long as the pre-commit hooks themselves are scoped correctly.
 
+**Caveat — `check-jsonschema` and `check-metaschema` steps run unconditionally.** `data-ci.yml` invokes `pre-commit run check-jsonschema --all-files` and `pre-commit run check-metaschema --all-files` as dedicated steps. If you adopt `data-ci.yml` but do **not** keep both hook IDs configured in `.pre-commit-config.yaml`, those steps will fail with `pre-commit: No hook with id ...`. Two safe paths forward:
+
+1. **Keep schema validation:** retain (or repurpose) the `check-jsonschema` and `check-metaschema` hooks in `.pre-commit-config.yaml`, and provide your own schema(s) and example fixture(s) at `schemas/<name>.schema.json` plus `schemas/examples/<name>/{valid,invalid}/`.
+2. **Drop schema validation entirely:** remove the `check-jsonschema` and `check-metaschema` steps from `data-ci.yml` (and the corresponding hooks from `.pre-commit-config.yaml`) so the workflow does not invoke missing hook IDs. See [`schemas/README.md`](schemas/README.md) for the canonical removal checklist for the worked example.
+
+`check-json`, `check-yaml`, `yamllint`, and `actionlint` are repository-agnostic and remain useful even without a worked-example schema, so the corresponding `data-ci.yml` steps can be kept regardless of which path above you take.
+
 ### Merging with Existing CI
 
 If you already have CI workflows:

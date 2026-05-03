@@ -257,6 +257,8 @@ pytest tests/test_schema_examples.py -v
 
 The schema-example contract test ([`tests/test_schema_examples.py`](tests/test_schema_examples.py)) auto-discovers `schemas/*.schema.json` and the matching `schemas/examples/<name>/{valid,invalid}/` fixtures and asserts that valid fixtures pass and invalid fixtures fail. A starter version is also available at [`templates/python/tests/test_schema_examples.py`](templates/python/tests/test_schema_examples.py) for downstream adoption.
 
+> **Prerequisite — `check-jsonschema` must be on PATH.** This test shells out to the `check-jsonschema` CLI and uses `@pytest.mark.skipif(shutil.which("check-jsonschema") is None, ...)` to skip every parametrized case when the binary is not available. **A skipped test is not a passing test:** if `check-jsonschema` is missing, pytest still exits `0`, but no schema validation actually ran. Install it via `pip install check-jsonschema` (or by installing the repo's pre-commit environment with `pre-commit install --install-hooks`) before relying on this test as evidence that schemas are valid. Confirm the test reports collected cases (e.g., `N passed`) rather than `N skipped` to know it actually ran.
+
 #### PowerShell Tests
 
 PowerShell tests use Pester 5.x.
