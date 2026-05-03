@@ -340,8 +340,8 @@ Terraform Registry reference URLs that appear in **comments** in `.tf`, `.tftest
 
 The shape of the rule is:
 
-- Provider documentation URLs use `https://registry.terraform.io/providers/<namespace>/<name>/latest/docs/...`.
-- Module documentation URLs use `https://registry.terraform.io/modules/<namespace>/<name>/<provider>/latest`.
+- Provider URLs use `latest` immediately after `/providers/<namespace>/<name>/`, with any trailing path, query string, or fragment, or none — for example, `https://registry.terraform.io/providers/hashicorp/aws/latest` or `.../latest/docs/resources/...`.
+- Module URLs use `latest` immediately after `/modules/<namespace>/<name>/<provider>/`, with any trailing path, query string, or fragment, or none — for example, `https://registry.terraform.io/modules/terraform-aws-modules/vpc/aws/latest` or `.../latest/submodules/...`.
 - Pinned examples such as `/azurerm/4.67.0/` or `/random/3.8.1/` **MUST NOT** appear in either Terraform-file documentation comments or instructional Markdown under this template, except as clearly labeled non-compliant examples that exist to document this rule.
 
 For Terraform-file comments, the full normative rule (with compliant and non-compliant examples) lives in [`.github/instructions/terraform.instructions.md`](instructions/terraform.instructions.md) under "Terraform Registry Documentation URLs"; that file is loaded automatically when an agent edits a Terraform file. For instructional Markdown, this ADR is the binding statement until the convention is mirrored into `docs.instructions.md` or a separate `applyTo`-scoped instruction file. This ADR records *why* the template adopts the rule and how it spans Terraform comments and Markdown today; the Terraform instruction file remains the single source of truth for *what* the rule says inside Terraform files.
