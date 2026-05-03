@@ -69,21 +69,62 @@ repos:
 
   # JSON Schema validation
   #
-  # This template ships a worked-example schema at
-  # `schemas/example-config.schema.json` and example data files under
-  # `schemas/examples/example-config/`. The hooks below validate:
-  #   1. The valid example data files against the example schema.
-  #   2. The example schema itself against its declared JSON Schema
-  #      Draft 2020-12 metaschema (self-validation).
+  # The hooks below cover three distinct categories:
   #
-  # Invalid example data files under
-  # `schemas/examples/example-config/invalid/` are intentionally NOT wired
-  # into a normal pre-commit hook because they are expected to fail
-  # validation. They are exercised by `tests/test_schema_examples.py`,
-  # which auto-discovers schema/example pairs and asserts that valid
-  # examples pass and invalid examples fail.
-  # See `schemas/README.md` for the canonical worked-example documentation
-  # and downstream-removal checklist.
+  #   A. Worked-example schema validation
+  #      Validates the valid example data files under
+  #      `schemas/examples/example-config/valid/` against the worked-example
+  #      schema at `schemas/example-config.schema.json`. See
+  #      `schemas/README.md` for the canonical worked-example documentation
+  #      and downstream-removal checklist.
+  #
+  #      Invalid example data files under
+  #      `schemas/examples/example-config/invalid/` are intentionally NOT
+  #      wired into a normal pre-commit hook because they are expected to
+  #      fail validation. They are exercised by
+  #      `tests/test_schema_examples.py`, which auto-discovers
+  #      schema/example pairs and asserts that valid examples pass and
+  #      invalid examples fail.
+  #
+  #   B. Schema self-validation
+  #      Validates the worked-example schema itself against its declared
+  #      JSON Schema Draft 2020-12 metaschema using `check-metaschema`.
+  #
+  #   C. Real load-bearing repository configuration validation
+  #      Validates real, load-bearing configuration files against built-in
+  #      vendor schemas shipped with `check-jsonschema`. Built-in schemas
+  #      do not require network access at hook runtime; they are bundled
+  #      in the `check-jsonschema` package itself.
+  #
+  #      Currently wired:
+  #        - `.github/dependabot.yml` against `vendor.dependabot`.
+  #
+  #      Evaluated but NOT currently wired (no verified built-in schema
+  #      available in the pinned `check-jsonschema` version below; the
+  #      `--builtin-schema` catalog reported by `check-jsonschema --help`
+  #      does not include the candidate names noted here):
+  #        - `.pre-commit-config.yaml` — no `vendor.pre-commit-config`
+  #          builtin schema is shipped. pre-commit itself enforces the
+  #          file's structure when it loads its configuration, so an
+  #          additional schema check would have minimal marginal value
+  #          even if one became available.
+  #        - `package.json` — no `vendor.package` (or equivalent) builtin
+  #          schema is shipped. npm validates this file when it parses
+  #          dependency manifests, so it is not unguarded.
+  #        - `.markdownlint.jsonc` — no `vendor.markdownlint` builtin
+  #          schema is shipped. The file is intentionally JSONC (it
+  #          contains comments); it MUST NOT be converted to strict JSON
+  #          merely to satisfy a validator. markdownlint's own config
+  #          loader remains the enforcement mechanism for this file.
+  #        - `.yamllint.yml` — no `vendor.yamllint` builtin schema is
+  #          shipped. The file MUST NOT be weakened to satisfy an
+  #          incomplete external schema; yamllint itself enforces its
+  #          configuration shape when it loads `.yamllint.yml`.
+  #
+  #      If a future `check-jsonschema` release adds builtin schemas for
+  #      any of the above, add a narrowly scoped hook with an anchored
+  #      `files:` pattern at that time. Do not vendor third-party
+  #      schemas into this repository to fill the gap.
   - repo: https://github.com/python-jsonschema/check-jsonschema
     rev: "0.37.1"
     hooks:
@@ -93,6 +134,13 @@ repos:
         args:
           - --schemafile
           - schemas/example-config.schema.json
+      - id: check-jsonschema
+        alias: validate-dependabot-config
+        name: Validate Dependabot configuration
+        files: ^\.github/dependabot\.yml$
+        args:
+          - --builtin-schema
+          - vendor.dependabot
       - id: check-metaschema
         name: Self-validate example-config schema
         files: ^schemas/example-config\.schema\.json$

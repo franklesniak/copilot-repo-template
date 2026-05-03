@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-02
+- **Last Updated:** 2026-05-03
 - **Scope:** Conventions for JSON Schemas that describe load-bearing JSON and YAML files in this repository, plus a clearly removable worked example (`example-config.schema.json` with valid and invalid example data) wired into pre-commit and data CI to demonstrate the schema-validation pipeline end to end.
 - **Related:** [JSON Authoring Standards](../.github/instructions/json.instructions.md), [YAML Authoring Standards](../.github/instructions/yaml.instructions.md), [Repository Copilot Instructions](../.github/copilot-instructions.md), [Template Design Decisions — Schema Location at Repository Root](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-location-at-repository-root), [Template Design Decisions — Schema Validation Tiers](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-validation-tiers), [Template Design Decisions — `additionalProperties` Policy](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-additionalproperties-policy), [Template Design Decisions — Testing Beyond Linting for JSON/YAML](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-testing-beyond-linting-for-jsonyaml)
 
@@ -177,20 +177,22 @@ The worked example is intentionally easy to remove. To take it out of a downstre
 
 Candidate load-bearing repository configuration files that could later be schema-validated against [SchemaStore](https://www.schemastore.org/)-published schemas or other stable schema sources include:
 
-- `package.json` — schema available on SchemaStore.
+- `package.json` — schema available on SchemaStore. Not currently shipped as a `check-jsonschema` `--builtin-schema`; would require pinning an external schema URL or a future builtin.
 - Generated package-manager lockfiles — only if a stable schema-backed validation path is useful and does not conflict with the package manager's own validation.
 - `pyproject.toml` — TOML rather than JSON, but conceptually parallel; would require a TOML-aware validator rather than `check-jsonschema`.
-- `.github/dependabot.yml` — schema available on SchemaStore.
+- `.pre-commit-config.yaml` — not currently shipped as a `check-jsonschema` `--builtin-schema`. pre-commit itself validates the file's structure when it loads its configuration.
+- `.markdownlint.jsonc` — intentionally JSONC (contains comments). MUST NOT be converted to strict JSON merely to satisfy a validator. markdownlint's own config loader remains the enforcement mechanism for this file.
+- `.yamllint.yml` — not currently shipped as a `check-jsonschema` `--builtin-schema`. MUST NOT be weakened to satisfy an incomplete external schema; yamllint itself enforces its configuration shape when it loads `.yamllint.yml`.
 - GitHub Actions workflow files — already covered by `actionlint`, so an additional schema check would primarily be redundant.
 
-Many of these candidates are already covered by `check-jsonschema`'s built-in schema catalog (for example, `vendor.dependabot`, `vendor.github-workflows`). Wiring any of them in is **explicitly out of scope** for the worked example shipped in this directory; downstream repositories MAY adopt them as additional `check-jsonschema` hooks.
+`.github/dependabot.yml` is already wired in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) against the bundled `vendor.dependabot` schema. Other candidates above are out of scope until a verified, mature builtin schema (or an explicitly pinned stable schema source) becomes available; downstream repositories MAY adopt them as additional `check-jsonschema` hooks at their discretion.
 
 ## Out of Scope for This Worked Example
 
 This directory ships exactly one worked example schema and its example data so the validation pipeline is observable end to end. It does not introduce:
 
 - Any production schema for this repository's own load-bearing files.
-- Any SchemaStore-backed validation hooks for `package.json`, `dependabot.yml`, or similar files.
+- Additional SchemaStore-backed validation hooks beyond the wired `vendor.dependabot` validation of `.github/dependabot.yml` (which lives in `.pre-commit-config.yaml`, not in this directory).
 - Any JSONC, JSON5, or TOML schema validation tooling.
 
 Those will be added in follow-up changes when concrete schema-backed file families are introduced or when downstream consumers decide to adopt them.
