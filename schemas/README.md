@@ -8,7 +8,7 @@
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-05-03
 - **Scope:** Conventions for JSON Schemas that describe load-bearing JSON and YAML files in this repository, plus a clearly removable worked example (`example-config.schema.json` with valid and invalid example data) wired into pre-commit and data CI to demonstrate the schema-validation pipeline end to end.
-- **Related:** [JSON Authoring Standards](../.github/instructions/json.instructions.md), [YAML Authoring Standards](../.github/instructions/yaml.instructions.md), [Repository Copilot Instructions](../.github/copilot-instructions.md), [Template Design Decisions — Schema Location at Repository Root](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-location-at-repository-root), [Template Design Decisions — Schema Validation Tiers](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-validation-tiers), [Template Design Decisions — `additionalProperties` Policy](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-additionalproperties-policy), [Template Design Decisions — Testing Beyond Linting for JSON/YAML](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-testing-beyond-linting-for-jsonyaml)
+- **Related:** [JSON Authoring Standards](../.github/instructions/json.instructions.md), [YAML Authoring Standards](../.github/instructions/yaml.instructions.md), [Repository Copilot Instructions](../.github/copilot-instructions.md), [Template Design Decisions — Schema Location at Repository Root](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-location-at-repository-root), [Template Design Decisions — Schema Validation Tiers](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-validation-tiers), [Template Design Decisions — Built-in Schema Validation for Real Load-Bearing Configuration Files](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files), [Template Design Decisions — `additionalProperties` Policy](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-additionalproperties-policy), [Template Design Decisions — Testing Beyond Linting for JSON/YAML](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-testing-beyond-linting-for-jsonyaml)
 
 ## Purpose
 
@@ -57,6 +57,35 @@ Schemas whose root type is `object` SHOULD define:
 ## Validation
 
 Schema-backed files are validated by pre-commit and the dedicated data-file CI workflow ([`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml)). This template ships a worked example (see [Worked Example](#worked-example) below) so the validation pipeline is exercised end to end out of the box. Downstream repositories that do not use schema-backed data files SHOULD remove the worked example using the [Downstream Removal Checklist](#downstream-removal-checklist). See the JSON authoring standards for the schema-validation policy and tier guidance.
+
+### Schema Categories
+
+This repository distinguishes two schema categories. The distinction matters for where schemas live, how they are tested, and how they are wired into pre-commit and CI.
+
+1. **Project-owned schemas.**
+   - Stored under `schemas/` in this repository.
+   - MAY include valid and invalid example fixtures under `schemas/examples/<schema-name>/{valid,invalid}/`.
+   - Tested by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py), which auto-discovers schema/example pairs and asserts that valid examples pass and invalid examples fail.
+   - Wired into pre-commit by adding a `check-jsonschema` hook that points at the schema with `--schemafile schemas/<name>.schema.json` and an anchored `files:` pattern matching the file family the schema covers.
+   - The [Worked Example](#worked-example) below is the canonical illustration of this category.
+
+2. **External built-in schemas.**
+   - Referenced through `check-jsonschema --builtin-schema vendor.<name>` against schemas that ship inside the pinned `check-jsonschema` release.
+   - **Not vendored** into this repository. Schema content tracks `check-jsonschema` upstream releases and is updated through the Dependabot `pre-commit` ecosystem.
+   - Used for selected real, load-bearing repository configuration files where the external schema is mature and validation is low-noise.
+   - See the [Built-in Schema Validation for Real Load-Bearing Configuration Files](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files) ADR for the policy, the full list of selected files, and the explicit "Evaluated but deferred" negative-space record.
+
+The two categories are complementary. A downstream repository MAY use either, both, or neither.
+
+### Real Repository Configuration Files Validated Through Built-in Schemas
+
+The following real, load-bearing repository configuration files are validated by default through `check-jsonschema --builtin-schema ...` hooks in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml):
+
+| File | Built-in schema identifier |
+| --- | --- |
+| [`.github/dependabot.yml`](../.github/dependabot.yml) | `vendor.dependabot` |
+
+If a downstream repository deletes one of these files, it **MUST** also remove the corresponding `check-jsonschema` hook (and any matching `data-ci.yml` step) per the [downstream removal guidance in the ADR](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files).
 
 ### File-Family Hooks
 
@@ -175,7 +204,7 @@ The worked example is intentionally easy to remove. To take it out of a downstre
 
 ## Future Work
 
-Candidate load-bearing repository configuration files that could later be schema-validated against [SchemaStore](https://www.schemastore.org/)-published schemas or other stable schema sources include:
+Candidate load-bearing repository configuration files that could later be schema-validated against [SchemaStore](https://www.schemastore.org/)-published schemas, `check-jsonschema` built-in schemas, or other stable schema sources include:
 
 - `package.json` — schema available on SchemaStore. Not currently shipped as a `check-jsonschema` `--builtin-schema`; would require pinning an external schema URL or a future builtin.
 - Generated package-manager lockfiles — only if a stable schema-backed validation path is useful and does not conflict with the package manager's own validation.
@@ -185,7 +214,7 @@ Candidate load-bearing repository configuration files that could later be schema
 - `.yamllint.yml` — not currently shipped as a `check-jsonschema` `--builtin-schema`. MUST NOT be weakened to satisfy an incomplete external schema; yamllint itself enforces its configuration shape when it loads `.yamllint.yml`.
 - GitHub Actions workflow files — already covered by `actionlint`, so an additional schema check would primarily be redundant.
 
-`.github/dependabot.yml` is already wired in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) against the bundled `vendor.dependabot` schema. Other candidates above are out of scope until a verified, mature builtin schema (or an explicitly pinned stable schema source) becomes available; downstream repositories MAY adopt them as additional `check-jsonschema` hooks at their discretion.
+`.github/dependabot.yml` is already validated by default; see the [Real Repository Configuration Files Validated Through Built-in Schemas](#real-repository-configuration-files-validated-through-built-in-schemas) section above. The candidates above remain out of scope until a verified, mature builtin schema (or an explicitly pinned stable schema source) becomes available; downstream repositories MAY adopt them as additional `check-jsonschema` hooks at their discretion. See the [Built-in Schema Validation for Real Load-Bearing Configuration Files](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files) ADR for the durable "Evaluated but deferred" record covering each candidate.
 
 ## Out of Scope for This Worked Example
 

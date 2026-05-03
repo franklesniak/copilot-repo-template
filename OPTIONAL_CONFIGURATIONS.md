@@ -1062,9 +1062,15 @@ If you remove the `skipif` guard, you MUST ensure `check-jsonschema` is installe
 
 ### Defaults Recap
 
-- The template ships **one** active `check-jsonschema` configuration by default: the worked-example schema (`schemas/example-config.schema.json`) and its valid example data files. A companion `check-metaschema` hook self-validates the schema against its declared JSON Schema Draft 2020-12 metaschema. Downstream repositories MAY add additional `check-jsonschema` hook entries for their own schema-backed file families, and MAY remove the worked example via the canonical [downstream removal checklist](schemas/README.md#downstream-removal-checklist).
+- The template ships **two** active `check-jsonschema` configurations by default:
+  1. The worked-example schema (`schemas/example-config.schema.json`) and its valid example data files. A companion `check-metaschema` hook self-validates the schema against its declared JSON Schema Draft 2020-12 metaschema.
+  2. A `check-jsonschema --builtin-schema vendor.dependabot` hook that validates `.github/dependabot.yml` against the Dependabot built-in schema bundled with `check-jsonschema`. See the [Built-in Schema Validation for Real Load-Bearing Configuration Files](.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files) ADR for the policy, the explicit "Evaluated but deferred" negative-space record, and the downstream removal guidance.
+
+  Downstream repositories MAY add additional `check-jsonschema` hook entries (project-owned `--schemafile` hooks for their own schema-backed file families, or additional `--builtin-schema` hooks for tool-owned configuration files), and MAY remove the worked example via the canonical [downstream removal checklist](schemas/README.md#downstream-removal-checklist). Hooks for files that a downstream repository deletes **MUST** be removed alongside the file.
 - The template ships an active root test, [`tests/test_schema_examples.py`](tests/test_schema_examples.py), that depends on `check-jsonschema` (declared in the root `pyproject.toml` `dev` group). A starter version with the same essential pattern is provided at `templates/python/tests/test_schema_examples.py` for downstream adoption.
-- Beyond the worked example, schema validation is opt-in; downstream repositories add real hooks and tests when they introduce additional real schemas.
+- Beyond the worked example and the wired built-in schema hooks, schema validation is opt-in; downstream repositories add real hooks and tests when they introduce additional real schemas, or when they want to enable additional `--builtin-schema` coverage.
+- Project-owned schemas SHOULD continue to live under `schemas/`. Built-in schemas referenced via `--builtin-schema` are **not** vendored into `schemas/`; their content tracks `check-jsonschema` releases.
+- JSONC, JSON5, ecosystem-specific YAML validators, and broader SchemaStore / catalog coverage remain opt-in unless a downstream repository explicitly ships them. See the dedicated subsections below for adoption guidance.
 
 ---
 
@@ -1238,16 +1244,15 @@ Adopters MAY add these as additional pre-commit hooks (or as separate CI jobs) w
 
 ## Future SchemaStore Validation for Repository Configuration Files
 
-**Status:** Future work — not enabled by default.
+**Status:** Mixed — `.github/dependabot.yml` is validated by default (see [Schema Validation Configuration](#schema-validation-configuration) and the [Built-in Schema Validation for Real Load-Bearing Configuration Files ADR](.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files)). Other candidates remain future work and are not enabled by default.
 
-Several common repository configuration files have public schemas published on [SchemaStore](https://www.schemastore.org/) or maintained by their respective ecosystems. Wiring schema validation for any of them is **explicitly out of scope** for the worked example shipped under `schemas/`; it requires an explicit downstream project decision.
+Several common repository configuration files have public schemas published on [SchemaStore](https://www.schemastore.org/) or maintained by their respective ecosystems. Wiring schema validation for any of the **deferred** candidates below is out of scope for the worked example shipped under `schemas/` and requires an explicit downstream project decision.
 
-Candidate files (cross-referenced from the [Future Work section in `schemas/README.md`](schemas/README.md#future-work)):
+Candidate files (cross-referenced from the [Future Work section in `schemas/README.md`](schemas/README.md#future-work) and the [Built-in Schema Validation for Real Load-Bearing Configuration Files ADR](.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files)):
 
 - **`package.json`** — schema available on SchemaStore. A downstream project MAY add a `check-jsonschema` hook scoped to `^package\.json$` that points at the SchemaStore-published schema (for example, via `check-jsonschema`'s built-in `vendor.package-json` schema selector if available). Useful when `package.json` carries non-trivial metadata that should be validated beyond basic JSON syntax.
 - **Generated package-manager lockfiles** (for example, `package-lock.json`, `yarn.lock` in JSON form, `composer.lock`) — schema validation MAY be useful, but only if it does **not** conflict with the package manager's own validation. Most package managers already validate their lockfiles internally; an additional schema check is justified only when a stable schema-backed validation path adds value the package manager does not already provide.
-- **`.github/dependabot.yml`** — schema available on SchemaStore. A downstream project MAY add a `check-jsonschema` hook scoped to `^\.github/dependabot\.yml$` that points at the SchemaStore-published Dependabot schema. Note that Dependabot itself enforces its schema at evaluation time, so this is primarily a fast local feedback loop.
-- **GitHub Actions workflow files** — already covered by `actionlint`. An additional `check-jsonschema` hook against the SchemaStore Actions schema would be **redundant** with `actionlint` and is **not recommended**.
+- **GitHub Actions workflow files** — already covered by `actionlint`. An additional `check-jsonschema` hook against the SchemaStore Actions schema would be **redundant** with `actionlint` and is **not recommended**. See the "Evaluated but deferred" subsection of the [Built-in Schema Validation ADR](.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files) for the durable rationale.
 
 For all of the above, follow the schema-validation guidance in [Schema Validation Configuration](#schema-validation-configuration): add **one `check-jsonschema` hook per real schema-backed file family**, scoped to the files that family covers, and keep the default toolchain free of placeholder hooks. See the [Future Work section in `schemas/README.md`](schemas/README.md#future-work) for additional context and avoid restating that future-work note here.
 

@@ -26,6 +26,7 @@ This document records design decisions made during the creation and maintenance 
   - [Prettier Deferral for Data Files](#design-decision-prettier-deferral-for-data-files)
   - [Schema Location at Repository Root](#design-decision-schema-location-at-repository-root)
   - [Schema Validation Tiers](#design-decision-schema-validation-tiers)
+  - [Built-in Schema Validation for Real Load-Bearing Configuration Files](#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files)
   - [JSON5 Exclusion by Default](#design-decision-json5-exclusion-by-default)
   - [`additionalProperties` Policy](#design-decision-additionalproperties-policy)
   - [Testing Beyond Linting for JSON/YAML](#design-decision-testing-beyond-linting-for-jsonyaml)
@@ -559,6 +560,74 @@ Schema validation is required (RFC 2119 MUST/SHOULD/MAY) at three tiers based on
 - Pro: Tiered policy concentrates rigor where breakage is expensive and avoids over-engineering tool-owned config.
 - Pro: Avoiding placeholder hooks keeps the pre-commit surface honest.
 - Con: Authors must classify each new contract; the JSON/YAML guides provide the rubric.
+
+### Design Decision: Built-in Schema Validation for Real Load-Bearing Configuration Files
+
+This template wires `check-jsonschema --builtin-schema ...` validation for selected real, load-bearing repository configuration files, in addition to the worked-example schema-validation pattern under `schemas/`.
+
+**Context:**
+
+- The repository already ships a worked-example schema under `schemas/` ([`example-config.schema.json`](../schemas/example-config.schema.json)) whose primary purpose is to prove the schema-validation pipeline end to end.
+- Real repository configuration files such as Dependabot, pre-commit, package metadata, markdownlint, and yamllint can also be load-bearing: they drive automation, dependency updates, formatting, or hook execution, and a malformed value can silently break those tools.
+- The [Schema Validation Tiers](#design-decision-schema-validation-tiers) ADR requires (MUST) or recommends (SHOULD) schema validation for automation-driving files when validation is practical and low-noise.
+- `check-jsonschema` ships a curated set of built-in vendor schemas (`--builtin-schema vendor.<name>`) that do not require network access at hook runtime and that track upstream schema changes through pinned `check-jsonschema` releases (kept current via the Dependabot `pre-commit` ecosystem).
+
+**Decision:**
+
+1. **Use `check-jsonschema --builtin-schema ...` for selected real load-bearing configuration files** when a mature, low-noise built-in schema exists in the pinned `check-jsonschema` release.
+2. **Keep project-owned schemas under root-level `schemas/`.** Built-in schemas are not vendored into `schemas/`.
+3. **Do not vendor third-party schemas into `schemas/`** unless a strong reason emerges (for example, an upstream schema that is unmaintained but still needed). The default path is "use the built-in schema" or "rely on the owning tool's own validation."
+4. **Keep GitHub Actions workflow validation with [`actionlint`](https://github.com/rhysd/actionlint), not a redundant generic schema hook.** `actionlint` understands Actions-specific semantics (expression syntax, runner labels, shell-script linting via shellcheck) that a generic JSON Schema check would miss.
+
+**Selected files (currently wired):**
+
+| File | Built-in schema identifier | Hook in `.pre-commit-config.yaml` |
+| --- | --- | --- |
+| `.github/dependabot.yml` | `vendor.dependabot` | `validate-dependabot-config` alias on the `check-jsonschema` hook |
+
+**Evaluated but deferred:**
+
+The following candidates were evaluated and intentionally **not** wired in this iteration. This subsection is the durable negative-space record: each entry exists so future authors do not re-litigate the same decision without new evidence.
+
+- **GitHub Actions workflow files (`.github/workflows/*.yml`).** Already validated by `actionlint` (pinned in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) and re-run by [`.github/workflows/data-ci.yml`](./workflows/data-ci.yml)). Adding a generic JSON Schema hook against the SchemaStore Actions schema would be **redundant** with `actionlint` and would not catch the Actions-specific issues `actionlint` is designed for. Decision: rely on `actionlint`.
+- **`.pre-commit-config.yaml`.** The pinned `check-jsonschema` release does not ship a `vendor.pre-commit-config` (or equivalent) built-in schema. pre-commit itself validates the file's structure when it loads its configuration, so a separate schema check would have minimal marginal value even if one became available. Decision: rely on pre-commit's own configuration loader.
+- **`package.json`.** The pinned `check-jsonschema` release does not ship a `vendor.package` (or equivalent) built-in schema. npm validates this file when it parses dependency manifests, so it is not unguarded. Decision: rely on the package manager's own validation; revisit if a stable built-in schema is added upstream.
+- **`.markdownlint.jsonc`.** The pinned `check-jsonschema` release does not ship a `vendor.markdownlint` built-in schema. The file is intentionally JSONC (it contains comments) and **MUST NOT** be converted to strict JSON merely to satisfy a validator. markdownlint's own configuration loader remains the enforcement mechanism for this file. Decision: rely on markdownlint's own validation.
+- **`.yamllint.yml`.** The pinned `check-jsonschema` release does not ship a `vendor.yamllint` built-in schema. The file **MUST NOT** be weakened to satisfy an incomplete external schema; yamllint itself enforces its configuration shape when it loads `.yamllint.yml`. Decision: rely on yamllint's own validation.
+
+If a future `check-jsonschema` release adds a mature built-in schema for any of the deferred candidates, add a narrowly scoped hook with an anchored `files:` pattern at that time. Do not vendor third-party schemas into this repository to fill the gap.
+
+**Alternatives considered:**
+
+- **Vendor external schemas under `schemas/external/`.** Rejected as the default. Vendoring couples the repository to a specific snapshot of an external contract and shifts maintenance burden onto template maintainers (re-syncing on every upstream change). Built-in schemas shipped with a pinned `check-jsonschema` release achieve the same effect with a single dependency-update touchpoint.
+- **Leave real load-bearing repository configuration files without schema validation.** Rejected for files where a mature built-in schema exists and validation is low-noise. The Schema Validation Tiers ADR already classifies these as SHOULD-validate when practical; not wiring an available, low-cost validator would be inconsistent with that policy.
+- **Validate every JSON/YAML file generically.** Rejected. The [Schema Validation Tiers](#design-decision-schema-validation-tiers) ADR explicitly forbids generic "validate every JSON/YAML file" sweeps. Schema validation is a contract check for specific file families, not a global sweep; `check-json` and `check-yaml` already cover syntax.
+- **Add redundant schema validation for GitHub Actions workflows on top of `actionlint`.** Rejected. `actionlint` is the authoritative validator for Actions workflow files; adding a generic JSON Schema check would duplicate effort, increase noise, and miss Actions-specific issues.
+
+**Consequences:**
+
+- Stronger parity between JSON/YAML and other first-class file types: load-bearing configuration is checked by a real validator, not just by syntax-only `check-json` / `check-yaml`.
+- Built-in schema names and the schemas they reference track `check-jsonschema` releases. Schema updates arrive through the normal `check-jsonschema` release cycle rather than through hand-vendored snapshots.
+- Dependabot `pre-commit` ecosystem updates help keep schema support current; reviewers SHOULD treat `check-jsonschema` bumps as schema-content changes, not just dependency hygiene.
+- Downstream adopters who delete a validated file family **MUST** also remove the corresponding `check-jsonschema` hook (and any matching `data-ci.yml` step), per the removal guidance below.
+- External schemas can be stricter, looser, or differently timed than the consuming tool's actual behavior. Hooks that produce noisy or misleading failures **SHOULD** be evaluated carefully and either narrowed in scope or removed.
+
+**Downstream removal guidance:**
+
+To remove built-in schema validation for a single file family in a downstream repository:
+
+1. Delete or stop using the validated file (for example, remove `.github/dependabot.yml`).
+2. Remove the corresponding `check-jsonschema` hook entry (or its `alias:`) from [`.pre-commit-config.yaml`](../.pre-commit-config.yaml).
+3. If the granular `data-ci.yml` step list explicitly invokes the hook by ID or alias, remove the corresponding step from [`.github/workflows/data-ci.yml`](./workflows/data-ci.yml). Steps that invoke a hook by ID continue to work for any remaining files; only remove the step if the entire hook is being retired.
+4. Update documentation that lists the active schema-validated files, including the table in this ADR, [`schemas/README.md`](../schemas/README.md), and [`OPTIONAL_CONFIGURATIONS.md`](../OPTIONAL_CONFIGURATIONS.md).
+
+**Trade-offs:**
+
+- Pro: Real load-bearing configuration files get cheap, fast schema feedback locally and in CI.
+- Pro: Built-in schemas avoid vendoring and avoid runtime network access.
+- Pro: The "Evaluated but deferred" subsection makes the negative space durable, so future authors do not silently re-add or re-evaluate already-rejected candidates without new evidence.
+- Con: Built-in schema coverage tracks `check-jsonschema` release cadence rather than upstream-vendor cadence; new vendor schema fields may take a release cycle to be reflected.
+- Con: External schemas can disagree with the consuming tool's actual behavior; noisy hooks must be evaluated carefully.
 
 ### Design Decision: JSON5 Exclusion by Default
 
