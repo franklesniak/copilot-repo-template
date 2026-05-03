@@ -230,6 +230,8 @@ The Terraform instructions file uses the newest stable major versions in provide
    - [AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest)
    - [Azure Provider](https://registry.terraform.io/providers/hashicorp/azurerm/latest)
    - [GCP Provider](https://registry.terraform.io/providers/hashicorp/google/latest)
+
+   > **Note:** Terraform Registry navigation links — including the provider links above — **MUST** use the `latest` path segment, not a pinned provider or module version. See the **Terraform Registry Reference URLs Use /latest/** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md) for the scope (Terraform-file comments and instructional Markdown), rationale, and authoritative version sources; the canonical, agent-loadable rule for Terraform-file comments lives in [`.github/instructions/terraform.instructions.md`](.github/instructions/terraform.instructions.md).
 2. Identify current stable major versions for each provider
 3. If a new major version is now the recommended stable release, update the following files:
    - `.github/instructions/terraform.instructions.md` (version constraint examples throughout)
