@@ -336,19 +336,19 @@ Instruction files in `.github/instructions/` are scoped to **code authoring stan
 
 ### Design Decision: Terraform Registry Reference URLs Use /latest/
 
-Terraform Registry reference URLs that appear in **comments** in `.tf`, `.tftest.hcl`, `.tfvars`, `.tfbackend`, `.tftpl`, and other Terraform-related files **MUST** use the `latest` path segment instead of a pinned provider or module version. The same convention applies to Terraform Registry navigation links used in instructional Markdown under this repository (for example, in `TEMPLATE_MAINTENANCE.md` or files under `docs/`).
+Terraform Registry reference URLs that appear in **comments** in `.tf`, `.tftest.hcl`, `.tfvars`, `.tfbackend`, `.tftpl`, and other Terraform-related files **MUST** use the `latest` path segment instead of a pinned provider or module version. By template convention, instructional Markdown under this repository (for example, in `TEMPLATE_MAINTENANCE.md` or files under `docs/`) also uses `/latest/` for the same reasons. The *normative* rule applies only to Terraform-file comments because the canonical instruction file (`terraform.instructions.md`) is scoped to Terraform extensions via its `applyTo` frontmatter; the Markdown-side convention is descriptive of current practice and is not yet codified in `docs.instructions.md`.
 
 The shape of the rule is:
 
 - Provider documentation URLs use `https://registry.terraform.io/providers/<namespace>/<name>/latest/docs/...`.
 - Module documentation URLs use `https://registry.terraform.io/modules/<namespace>/<name>/<provider>/latest`.
-- Pinned examples such as `/azurerm/4.67.0/` or `/random/3.8.1/` **MUST NOT** appear in documentation-comment URLs except as clearly labeled non-compliant examples that exist to document this rule.
+- Pinned examples such as `/azurerm/4.67.0/` or `/random/3.8.1/` **MUST NOT** appear in either Terraform-file documentation comments or instructional Markdown under this template, except as clearly labeled non-compliant examples that exist to document this rule.
 
 The full normative rule, including compliant and non-compliant examples, lives in [`.github/instructions/terraform.instructions.md`](instructions/terraform.instructions.md) under "Terraform Registry Documentation URLs". This ADR records *why* the template adopts that rule; the instruction file remains the single source of truth for *what* the rule says.
 
 **Rationale:**
 
-1. **Registry URLs in comments are navigation aids, not version pins.** Provider and module versions that actually drive `terraform init`, `terraform plan`, and `terraform apply` are governed by `required_providers` blocks in `terraform.tf` / `versions.tf`, by module `source` and `version` arguments, and by `.terraform.lock.hcl`. Those files are the authoritative version sources. Comment URLs only help a reader (or an AI assistant) jump to relevant Registry documentation while reading the code.
+1. **Registry URLs in comments are navigation aids, not version pins.** The provider and module versions that actually drive `terraform init`, `terraform plan`, and `terraform apply` are governed by `required_providers` blocks in `terraform.tf` / `versions.tf` and by `.terraform.lock.hcl` for *providers*, and by module `source` and `version` arguments for *modules* (`.terraform.lock.hcl` does not record module versions). Those files are the authoritative version sources. Comment URLs only help a reader (or an AI assistant) jump to relevant Registry documentation while reading the code.
 
 2. **Dependency automation does not rewrite arbitrary comment text.** Tools such as Dependabot, Renovate, and equivalent automation update version constraints and lockfile entries when newer provider or module versions become available. They do not parse Markdown prose or arbitrary `.tf` comments to find embedded Registry URLs. A pinned URL such as `/providers/hashicorp/azurerm/4.67.0/docs/...` therefore stays at `4.67.0` in the comment even after the provider constraint and lockfile have moved on.
 
@@ -358,7 +358,7 @@ The full normative rule, including compliant and non-compliant examples, lives i
 
 **Trade-offs:**
 
-- Readers who want documentation pinned to the exact version recorded in `.terraform.lock.hcl` need to take an extra step (look up the lockfile entry and adjust the URL by hand). The alternative — pinning every comment URL — was rejected because the silent-drift cost outweighs the convenience for that minority case.
+- Readers who want documentation pinned to the exact version recorded in `.terraform.lock.hcl` (for providers) or in module `source` / `version` arguments (for modules) need to take an extra step (look up the lockfile or module block entry and adjust the URL by hand). The alternative — pinning every comment URL — was rejected because the silent-drift cost outweighs the convenience for that minority case.
 - Clearly labeled non-compliant examples in the Terraform instruction file intentionally include pinned URLs so the rule itself can be illustrated. Tooling that enforces this rule in the future must distinguish those documentation examples from real violations.
 
 **Scope boundary:**
