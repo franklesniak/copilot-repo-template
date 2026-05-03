@@ -628,13 +628,13 @@ Review these sections and modify as needed:
 
 **Contributing guidelines link:**
 
-The template uses a relative link that works for most repositories:
+The template uses an absolute URL with the `OWNER/REPO` placeholder for the contributing guidelines link in the PR template:
 
 ```markdown
-[contributing guidelines](../blob/HEAD/CONTRIBUTING.md)
+[contributing guidelines](https://github.com/OWNER/REPO/blob/HEAD/CONTRIBUTING.md)
 ```
 
-If your CONTRIBUTING.md is in a different location, update this link.
+Replace `OWNER/REPO` with your actual organization and repository name (this is enforced by `.github/workflows/check-placeholders.yml`). If your CONTRIBUTING.md is in a different location, update the path inside the URL accordingly. Absolute URLs are required in `.github/ISSUE_TEMPLATE/*.yml` and `.github/pull_request_template.md`; see the **Issue and PR templates** carve-out in `.github/instructions/docs.instructions.md` and the [Pull Request Template Customization](OPTIONAL_CONFIGURATIONS.md#contributing-guidelines-link) section in `OPTIONAL_CONFIGURATIONS.md`.
 
 ### Merging with Existing PR Template
 

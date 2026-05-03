@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.4.20260502.1
+**Version:** 1.5.20260503.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-02
+- **Last Updated:** 2026-05-03
 - **Scope:** Defines documentation standards for all Markdown files in this repository, including specs, design docs, runbooks, ADRs, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -113,7 +113,7 @@ The fields referenced in this subsection (`Last Updated`, and the optional `Vers
 
 - Use fenced code blocks with language tags.
 - Avoid trailing whitespace; keep blank lines truly blank.
-- Prefer relative links within the repo (e.g., `docs/spec/requirements.md`).
+- Prefer relative links within the repo (e.g., `docs/spec/requirements.md`). **Exception:** Markdown links inside `.github/ISSUE_TEMPLATE/*.yml` (including `config.yml`) and `.github/pull_request_template.md` MUST use absolute `https://github.com/OWNER/REPO/blob/HEAD/<path>` URLs (see **Issue and PR templates** below).
 - Avoid raw URLs in prose; use descriptive link text when possible.
 - Markdown files in this repository SHOULD include `<!-- markdownlint-disable MD013 -->` immediately after any YAML front matter (or at the very top of the file if there is no front matter), and **before any other content**, including badges, links, the H1 heading, and any prose. A single optional blank line MAY appear between the front matter terminator (`---`) and the directive for readability; blank lines are not "content" for this rule.
   - Placement matters: markdownlint's inline `<!-- markdownlint-disable RULE -->` directive only suppresses the rule for content that follows it. Placing the directive after badges or other long lines leaves those lines unprotected when the file is processed with default markdownlint settings outside this repo.
@@ -126,6 +126,16 @@ The fields referenced in this subsection (`Last Updated`, and the optional `Vers
   - Per-file `<!-- markdownlint-disable RULE -->` directives MUST NOT contradict the configuration in `.markdownlint.jsonc`; their purpose is portability, not local override.
   - When a contributor wants an additional rule disabled, update `.markdownlint.jsonc` first. Per-file directives are only for mirroring repo-wide configuration where default enforcement would harm portability.
 - Code-fence info strings MUST contain only a single language tag (e.g., `powershell`, `text`, `json`, `bash`). Do NOT embed file paths, URLs, or other metadata in the info string (for example, `powershell name=src/Foo.ps1 url=https://...#L1-L9` is not allowed). To cite the source of a code excerpt, place a line of the form ``Source: [`relative/path` (lines <start>-<end>)](relative/path#L<start>-L<end>).`` in prose immediately above the fence (for example, ``Source: [`src/Foo.ps1` (lines 1-9)](src/Foo.ps1#L1-L9).``). This keeps the language tag standard, preserves syntax highlighting across Markdown renderers, and reinforces the existing rule to avoid raw URLs in prose.
+
+#### Issue and PR templates
+
+This is an explicit carve-out from the "Prefer relative links" rule above. Issue forms (`.github/ISSUE_TEMPLATE/*.yml`, including `config.yml`) and the PR template (`.github/pull_request_template.md`) are not rendered from their own file paths — they are rendered into issue forms at `/{owner}/{repo}/issues/new?...` and PR bodies at `/{owner}/{repo}/pull/<n>`. Relative paths therefore resolve against the rendering URL, not the source file path, and are unreliable across renderers, GitHub Mobile, email notifications, and copied/quoted content.
+
+- Markdown links inside `.github/ISSUE_TEMPLATE/*.yml` (including `config.yml`) and `.github/pull_request_template.md` that point to repo-internal files (for example, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `README.md`) **MUST** use full absolute URLs of the form `https://github.com/OWNER/REPO/blob/HEAD/<path>`. The `OWNER/REPO` placeholder follows this template's placeholder convention (see the comment block at the top of `CONTRIBUTING.md`) and is enforced by `.github/workflows/check-placeholders.yml`.
+- Repo-internal references that are not file paths (for example, the GitHub Security tab) **MUST** likewise use absolute URLs, such as `https://github.com/OWNER/REPO/security`.
+- Relative paths such as `../blob/HEAD/<file>`, `blob/HEAD/<file>`, `./<file>`, or bare relative refs such as `(security)` **MUST NOT** be used in those files. Rationale: in issue-form `value:` blocks rendered at `/{owner}/{repo}/issues/new?...`, a link like `[SECURITY.md](blob/HEAD/SECURITY.md)` resolves to `/{owner}/{repo}/issues/blob/HEAD/SECURITY.md` (404), and `[Security tab](security)` resolves to `/{owner}/{repo}/issues/security` (404).
+- Use `blob/HEAD` rather than `blob/main` so the URL works regardless of the repository's default branch name.
+- This rule applies only to the files listed above. Tree-rendered Markdown such as `README.md`, `CONTRIBUTING.md`, and files under `docs/**` continue to follow the default "prefer relative links" guidance.
 
 ## ADR Standards
 

@@ -24,7 +24,7 @@ template. Delete this comment once the PR template is tailored for your needs.
 
 ### General
 
-- [ ] I have read the [contributing guidelines](../blob/HEAD/CONTRIBUTING.md)
+- [ ] I have read the [contributing guidelines](https://github.com/OWNER/REPO/blob/HEAD/CONTRIBUTING.md)
 - [ ] My code follows the coding standards in `.github/instructions/`
 - [ ] My changes follow `.github/copilot-instructions.md` and any applicable `.github/instructions/*`
 - [ ] I have performed a self-review of my own code

@@ -43,7 +43,7 @@ body:
         Please fill out the form below to help us investigate and resolve the issue.
 
         ⚠️ **Security Notice:** If you are reporting a security vulnerability, do NOT use this form.
-        Please report security issues privately via the repository's [Security tab](security) or [SECURITY.md](blob/HEAD/SECURITY.md).
+        Please report security issues privately via the repository's [Security tab](https://github.com/OWNER/REPO/security) or [SECURITY.md](https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md).
 
   - type: checkboxes
     id: pre_flight
