@@ -34,7 +34,7 @@ This template includes:
 - **Multi-Agent Support:** Instruction files for Claude Code, OpenAI Codex CLI, and Gemini Code Assist (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`)
 - **Language-Specific Guidelines:** Modular instruction files for Markdown, PowerShell, Python, Terraform, JSON/JSONC, and YAML
 - **Linting Configurations:** Pre-configured settings for markdownlint, PSScriptAnalyzer, TFLint, and yamllint
-- **Data-File Validation:** Pre-commit hooks for `check-json`, `check-yaml`, `yamllint`, `actionlint` (GitHub Actions workflows), `check-jsonschema` (worked-example schema data and selected real load-bearing configuration files validated against built-in vendor schemas), and `check-metaschema` (project-owned schema self-validation)
+- **Data-File Validation:** Pre-commit hooks for `check-json`, `check-yaml`, `yamllint`, `actionlint` (GitHub Actions workflows), `check-jsonschema` (validates the worked-example schema's valid example data under `schemas/examples/example-config/valid/`, plus selected real load-bearing configuration files against built-in vendor schemas), and `check-metaschema` (project-owned schema self-validation)
 - **JSON Schemas:** Root-level `schemas/` directory convention for schema-backed JSON and YAML files
 - **Pre-commit Hooks:** Automated code quality checks before commits
 
