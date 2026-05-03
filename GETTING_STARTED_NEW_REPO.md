@@ -1319,12 +1319,14 @@ For any repository that contains JSON or YAML (which is essentially all of them)
 
 - `.github/instructions/json.instructions.md` — JSON authoring standards.
 - `.github/instructions/yaml.instructions.md` — YAML authoring standards.
-- `.yamllint.yml` — YAML lint configuration consumed by the `yamllint` pre-commit hook.
+- `.yamllint.yml` — YAML lint configuration consumed by the `yamllint` pre-commit hook (extends `default`, enforces 2-space indentation, sets the line-length warning at 120 characters, and disables `truthy.check-keys` so unquoted GitHub Actions `on:` keys are accepted; see the inline comment and the [yamllint truthy.check-keys ADR in `.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-truthycheck-keys-default) for the rationale).
+- `.github/workflows/data-ci.yml` — the dedicated data-file CI workflow that re-runs `check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, and `check-metaschema` so JSON/YAML/Actions enforcement can be required via branch protection independent of the Python CI job. See the top-of-file comment in `.github/workflows/data-ci.yml` for how it differs from `auto-fix-precommit.yml`.
 - The default pre-commit hooks for data files in `.pre-commit-config.yaml`:
   - `check-json` (validates **strict `.json` only** — see below)
   - `check-yaml`
   - `yamllint`
   - `actionlint` (GitHub Actions workflow validation)
+  - `check-jsonschema` and `check-metaschema` (worked-example schema validation; see [Schemas: Worked Example Plus Opt-In for Load-Bearing Contracts](#schemas-worked-example-plus-opt-in-for-load-bearing-contracts))
 
 If you retain the template's pre-commit workflow (`.github/workflows/python-ci.yml` runs `pre-commit run --all-files`), CI will already enforce these hooks for every push and pull request — you do not need to wire up additional CI for JSON/YAML validation.
 
@@ -1335,19 +1337,27 @@ If you retain the template's pre-commit workflow (`.github/workflows/python-ci.y
 - The default pre-commit stack does **not** validate `.jsonc` syntax. Repositories that need stricter enforcement of `.jsonc` files should add **JSONC-aware tooling** (a JSONC-aware parser, linter, or schema validator) rather than retrofitting `check-json`.
 - JSON5 is **not** enabled by default and **must not** be introduced without an explicit, documented project decision.
 
-#### Schemas: Opt-In for Load-Bearing Contracts
+#### Schemas: Worked Example Plus Opt-In for Load-Bearing Contracts
 
-The template includes a `schemas/` scaffold at the repository root for JSON Schemas that describe **load-bearing** JSON or YAML files (files whose shape is depended on by build, deploy, runtime, release automation, or downstream consumers).
+The template ships a `schemas/` directory at the repository root for JSON Schemas that describe **load-bearing** JSON or YAML files (files whose shape is depended on by build, deploy, runtime, release automation, or downstream consumers). It is **not** scaffold-only: a worked example schema (`schemas/example-config.schema.json`), valid and invalid example fixtures under `schemas/examples/example-config/`, two pre-commit hooks (`check-jsonschema` for valid examples, `check-metaschema` for the schema itself), and a pytest contract at [`tests/test_schema_examples.py`](tests/test_schema_examples.py) ship enabled by default so the validation pipeline is exercised end to end out of the box.
 
-- Add schemas under root-level `schemas/` only when you have real, load-bearing contracts to describe. Not every JSON or YAML file needs a schema.
-- Add a `check-jsonschema` pre-commit hook **per real schema-backed file family**, scoped to the files that family covers (for example, `^config/.*\.json$`). Do not add placeholder hooks for schemas that do not yet exist.
-- See [`schemas/README.md`](schemas/README.md) for schema conventions (Draft 2020-12, `.schema.json` naming, `additionalProperties: false` for closed contracts) and an illustrative `check-jsonschema` hook configuration.
-- If your project does not use schema-backed data files, you **may** delete the entire `schemas/` directory.
+How schema-backed validation works in this repo:
+
+- `check-jsonschema` runs against `schemas/examples/example-config/valid/` to confirm valid examples pass.
+- `check-metaschema` self-validates `schemas/example-config.schema.json` against its declared JSON Schema Draft 2020-12 metaschema.
+- `tests/test_schema_examples.py` auto-discovers `schemas/*.schema.json` and the matching `schemas/examples/<name>/{valid,invalid}/` fixtures and asserts that **valid** fixtures exit with code `0` and **invalid** fixtures exit non-zero. Run it with `pytest tests/test_schema_examples.py -v` after any schema or fixture change.
+- The dedicated [`.github/workflows/data-ci.yml`](.github/workflows/data-ci.yml) workflow re-runs the same data-file hooks so JSON/YAML/Actions enforcement can be required via branch protection.
+
+To **adapt the worked example** for your own contract, follow the schema authoring conventions in [`schemas/README.md`](schemas/README.md) (Draft 2020-12, `.schema.json` naming, `additionalProperties: false` for closed contracts, `schemas/examples/<name>/{valid,invalid}/` layout) rather than restating those conventions here.
+
+To **add a new schema-backed file family**, add **one `check-jsonschema` hook per real schema-backed file family**, scoped to the files that family covers (for example, `^config/.*\.json$`). Do not add placeholder hooks for schemas that do not yet exist, and do not validate every JSON or YAML file by default. See [`schemas/README.md`](schemas/README.md) for an illustrative hook configuration.
+
+To **remove the worked example** in a downstream repository (or to remove `schemas/` entirely if no schema-backed files are needed), follow the canonical [downstream removal checklist](schemas/README.md#downstream-removal-checklist) in `schemas/README.md` rather than improvising the steps here.
 
 #### Formatting: Prettier and JSON5 Are Not in the Default Toolchain
 
-- **Prettier is opt-in** and is not part of the default pre-commit toolchain. The default stack does not run Prettier on JSON or YAML, and does **not** rely on Prettier (or any other tool) to sort JSON keys. The JSON authoring guide intentionally preserves intentional grouping and tool-managed key order (for example, in `package.json` and lock files).
-- **JSON5 is not enabled by default.** The JSON authoring guide does not target `.json5`.
+- **Prettier is opt-in** and is not part of the default pre-commit toolchain. The default stack does not run Prettier on JSON or YAML, and does **not** rely on Prettier (or any other tool) to sort JSON keys. The JSON authoring guide intentionally preserves intentional grouping and tool-managed key order (for example, in `package.json` and lock files). See the [Prettier deferral ADR in `.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-prettier-deferral-for-data-files) for the full rationale, and [Prettier for JSON/JSONC (Opt-in)](OPTIONAL_CONFIGURATIONS.md#prettier-for-jsonjsonc-opt-in) in `OPTIONAL_CONFIGURATIONS.md` for adoption guidance.
+- **JSON5 is not enabled by default.** The JSON authoring guide does not target `.json5`. See the [JSON5 exclusion ADR in `.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-json5-exclusion-by-default) for the rationale.
 - If your project independently adopts Prettier or JSON5, document the decision and ensure the resulting configuration does not conflict with the JSON/YAML authoring guides linked above.
 
 #### Ecosystem Validators

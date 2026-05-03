@@ -250,7 +250,14 @@ pytest tests/ -v --cov --cov-report=term-missing
 
 # Run a specific test file
 pytest tests/test_example.py -v
+
+# Run the schema-example contract test (validates schemas/examples/<schema>/{valid,invalid}/ fixtures)
+pytest tests/test_schema_examples.py -v
 ```
+
+The schema-example contract test ([`tests/test_schema_examples.py`](tests/test_schema_examples.py)) auto-discovers `schemas/*.schema.json` and the matching `schemas/examples/<name>/{valid,invalid}/` fixtures and asserts that valid fixtures pass and invalid fixtures fail. A starter version is also available at [`templates/python/tests/test_schema_examples.py`](templates/python/tests/test_schema_examples.py) for downstream adoption.
+
+> **Prerequisite — `check-jsonschema` must be on PATH.** This test shells out to the `check-jsonschema` CLI and uses `@pytest.mark.skipif(shutil.which("check-jsonschema") is None, ...)` to skip every parametrized case when the binary is not available. **A skipped test is not a passing test:** if `check-jsonschema` is missing, pytest still exits `0`, but no schema validation actually ran. Install it via `pip install -e ".[dev]"` (which pulls in `check-jsonschema` along with the other dev dependencies — see the `[project.optional-dependencies] dev` table in [`pyproject.toml`](pyproject.toml)) or `pip install check-jsonschema` if you only need this one tool; either path puts the binary on PATH so `shutil.which` finds it. **`pre-commit install --install-hooks` does NOT** add `check-jsonschema` to PATH — pre-commit installs hook dependencies into its own isolated per-hook environments under `~/.cache/pre-commit/`, which satisfies the pre-commit hook but not the `shutil.which` lookup this pytest test performs. To validate schemas through the pre-commit toolchain instead of through this pytest test, run `pre-commit run check-jsonschema --all-files`. Confirm the test reports collected cases (e.g., `N passed`) rather than `N skipped` to know it actually ran.
 
 #### PowerShell Tests
 

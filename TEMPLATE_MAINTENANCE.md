@@ -10,6 +10,7 @@ This guide is for **maintainers of the `franklesniak/copilot-repo-template` repo
 
 - [Recommended Review Cadence](#recommended-review-cadence)
 - [Updating Pre-commit Hook Versions](#updating-pre-commit-hook-versions)
+- [Reviewing the Worked-Example Schema and Data CI Workflow](#reviewing-the-worked-example-schema-and-data-ci-workflow)
 - [Reviewing Python Version Requirements](#reviewing-python-version-requirements)
 - [Reviewing Terraform Version Requirements](#reviewing-terraform-version-requirements)
 - [Reviewing Terraform Provider Versions](#reviewing-terraform-provider-versions)
@@ -75,11 +76,14 @@ The following pre-commit hooks are configured in this template. Check their repo
 
 | Tool | Repository | Purpose |
 | --- | --- | --- |
-| pre-commit-hooks | <https://github.com/pre-commit/pre-commit-hooks> | General file checks (trailing whitespace, YAML validation, etc.) |
+| pre-commit-hooks | <https://github.com/pre-commit/pre-commit-hooks> | General file checks (trailing whitespace, JSON validation via `check-json`, YAML parsing via `check-yaml`, etc.) |
 | Black | <https://github.com/psf/black> | Python code formatting |
 | Ruff | <https://github.com/astral-sh/ruff-pre-commit> | Python linting and formatting |
 | markdownlint-cli2 | <https://github.com/DavidAnson/markdownlint-cli2> | Markdown linting |
 | pre-commit-terraform | <https://github.com/antonbabenko/pre-commit-terraform> | Terraform formatting, validation, and linting |
+| yamllint | <https://github.com/adrienverge/yamllint> | YAML style enforcement (driven by `.yamllint.yml`) |
+| actionlint | <https://github.com/rhysd/actionlint> | GitHub Actions workflow linting |
+| check-jsonschema | <https://github.com/python-jsonschema/check-jsonschema> | JSON Schema validation (worked-example schema and any downstream-added schema-backed file families); also provides the `check-metaschema` hook |
 
 ### Files Requiring Manual Updates
 
@@ -143,6 +147,33 @@ When updating to new major versions, check the release notes for breaking change
 - **Ruff:** Frequently adds new rules that may flag previously-passing code. Review [Ruff changelog](https://github.com/astral-sh/ruff/blob/main/CHANGELOG.md). New rules are typically disabled by default, but rule behavior changes can affect existing configurations.
 
 - **pre-commit-terraform:** May change hook IDs, arguments, or tool dependencies. Review [pre-commit-terraform releases](https://github.com/antonbabenko/pre-commit-terraform/releases). Ensure any referenced external tools (terraform, tflint, etc.) remain compatible.
+
+- **yamllint:** New rules or default tightening can flag previously-passing YAML. Review [yamllint releases](https://github.com/adrienverge/yamllint/releases). The repository's `.yamllint.yml` carries a documented `truthy.check-keys: false` exception; verify that exception still applies after major updates.
+
+- **actionlint:** Adds new checks as GitHub Actions evolves. Review [actionlint releases](https://github.com/rhysd/actionlint/releases). The hook builds the binary from a Go toolchain on first run; major version bumps may change ShellCheck integration or runner-label awareness.
+
+- **check-jsonschema:** Validator behavior, JSON Schema draft support, and bundled schema catalog versions can change. Review [check-jsonschema releases](https://github.com/python-jsonschema/check-jsonschema/releases). After bumping, re-run `pytest tests/test_schema_examples.py -v` to confirm the worked-example `valid/` and `invalid/` fixtures still produce the expected pass/fail outcomes.
+
+---
+
+## Reviewing the Worked-Example Schema and Data CI Workflow
+
+The template ships a worked-example JSON Schema (`schemas/example-config.schema.json`), valid and invalid example fixtures under `schemas/examples/example-config/`, the schema-example pytest contract at `tests/test_schema_examples.py`, and the dedicated [`.github/workflows/data-ci.yml`](.github/workflows/data-ci.yml) workflow. These need periodic review to stay aligned with current JSON Schema and pre-commit hook versions.
+
+**When to review:** Quarterly, or whenever `check-jsonschema`, `pre-commit-hooks`, `yamllint`, or `actionlint` have a major version bump.
+
+**What to check:**
+
+1. The worked-example schema's declared `$schema` draft URI is still appropriate (the template uses JSON Schema Draft 2020-12).
+2. The worked-example fixtures still demonstrate the contract clearly — at minimum, `valid/minimal.json`, `valid/full.json`, `invalid/missing-required.json`, `invalid/wrong-type.json`, and `invalid/extra-property.json` should each still illustrate a distinct schema behavior.
+3. `pytest tests/test_schema_examples.py -v` still passes (every `valid/` fixture exits `0`; every `invalid/` fixture exits non-zero).
+4. The `.github/workflows/data-ci.yml` workflow continues to invoke `check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, and `check-metaschema`, and its top-of-file comment still accurately describes how it differs from `auto-fix-precommit.yml`.
+5. The canonical [downstream removal checklist](schemas/README.md#downstream-removal-checklist) in `schemas/README.md` still matches the actual files and hook IDs that ship with the worked example.
+
+**When to update:**
+
+- If a hook ID, hook scope, or schema file moves, update the schema, the fixtures, the pre-commit config, the data CI workflow, and the canonical removal checklist together in the same change.
+- Do not duplicate the removal-checklist steps elsewhere; keep `schemas/README.md` as the single source of truth and link to it from any other documentation that mentions removal.
 
 ---
 

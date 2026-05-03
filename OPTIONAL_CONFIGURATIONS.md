@@ -22,6 +22,11 @@ This guide covers optional customizations you can make after completing the init
 - [Pre-commit Configuration](#pre-commit-configuration)
 - [Schema Validation Configuration](#schema-validation-configuration)
 - [Prettier for JSON/JSONC (Opt-in)](#prettier-for-jsonjsonc-opt-in)
+- [JSONC Validation (Opt-in)](#jsonc-validation-opt-in)
+- [JSON5 Support (Opt-in)](#json5-support-opt-in)
+- [Ecosystem-Specific YAML Validators (Opt-in)](#ecosystem-specific-yaml-validators-opt-in)
+- [Future SchemaStore Validation for Repository Configuration Files](#future-schemastore-validation-for-repository-configuration-files)
+- [Removing the Worked Example Schema](#removing-the-worked-example-schema)
 - [Markdown Linting Configuration](#markdown-linting-configuration)
   - [Using the cli2-Specific Configuration Format](#using-the-cli2-specific-configuration-format)
 - [Nested Markdown Linting Configuration](#nested-markdown-linting-configuration)
@@ -1178,6 +1183,83 @@ Projects that do not want a local Node.js installation MAY run Prettier from a D
 ### Editor Formatter Guidance
 
 The template's `.vscode/settings.json` only prescribes the PowerShell file encoding (see [VS Code PowerShell File Encoding for Non-ASCII Characters](#vs-code-powershell-file-encoding-for-non-ascii-characters)) and does **not** prescribe editor formatters for any language. Editor-formatter guidance for JSON, JSONC, and YAML is therefore intentionally omitted here; downstream consumers who adopt Prettier MAY add `[json]`, `[jsonc]`, and `[yaml]` formatter sections to their own `.vscode/settings.json` at their discretion.
+
+---
+
+## JSONC Validation (Opt-in)
+
+**Files:** `.pre-commit-config.yaml`, JSONC-aware tooling of your choice
+
+The default `check-json` pre-commit hook is anchored with `files: \.json$`, so it deliberately does **not** validate `.jsonc` files. JSONC (JSON with comments) is a superset that strict JSON parsers reject, so `check-json` would mis-flag every JSONC file with comments or trailing commas as a syntax error.
+
+**Recommendation:** Repositories with load-bearing JSONC files (for example, configuration that downstream tools read with a JSONC-aware parser) SHOULD adopt **JSONC-aware tooling** rather than retrofitting `check-json` to accept JSONC. Candidate approaches include:
+
+- A JSONC-aware parser invoked from a `repo: local` pre-commit hook (for example, a small Python or Node.js script that uses a JSONC parser library).
+- A JSONC-aware schema validator if the JSONC files are also schema-backed.
+- Prettier with a JSONC parser (see [Prettier for JSON/JSONC (Opt-in)](#prettier-for-jsonjsonc-opt-in)) for formatting only — Prettier does not enforce strict syntax in the same way `check-json` does.
+
+**Why the default `check-json` regex is anchored.** The anchored regex is intentional and reflects an explicit design decision: `.json` and `.jsonc` are different dialects with different parsers, and validating both with the same strict-JSON tool would produce false positives on every JSONC comment or trailing comma. Retrofitting `check-json` is therefore **not** the recommended path; add separate JSONC-aware tooling instead.
+
+---
+
+## JSON5 Support (Opt-in)
+
+**Files:** `.pre-commit-config.yaml`, JSON5-aware tooling of your choice
+
+JSON5 is **not** enabled by default in this template. The JSON authoring guide ([`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md)) intentionally omits `.json5`, and no pre-commit hook validates JSON5 syntax out of the box.
+
+**Recommendation:** Adopting JSON5 SHOULD be an explicit, documented project decision rather than an implicit drift from JSON. If a downstream project adopts JSON5:
+
+- Document the decision (which directories, which consumers, why JSON5 over strict JSON or JSONC).
+- Add a JSON5-aware parser or validator (for example, a `repo: local` hook that uses a JSON5 parser library).
+- Confirm that all consumers of the JSON5 files actually support JSON5 syntax — many tools that accept "loose JSON" only accept JSONC, not full JSON5.
+
+See the [JSON5 exclusion ADR in `.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-json5-exclusion-by-default) for the rationale behind keeping JSON5 out of the default toolchain.
+
+---
+
+## Ecosystem-Specific YAML Validators (Opt-in)
+
+**Files:** `.pre-commit-config.yaml`, `.github/workflows/*.yml`, ecosystem-specific configuration files
+
+The default YAML toolchain (`check-yaml`, `yamllint`, `actionlint`) covers syntax, style, and GitHub Actions workflow correctness. Ecosystem-specific validators add semantic checks for particular YAML dialects and SHOULD be adopted **only when the repository actually uses those ecosystems** — adding a validator for a stack the project does not use creates noise without enforcing anything useful.
+
+| Ecosystem | Recommended Validator | Notes |
+| --- | --- | --- |
+| Kubernetes manifests | [`kubeconform`](https://github.com/yannh/kubeconform) (or equivalent, e.g. `kubeval`, `kubectl --dry-run`) | Validates manifest schemas against the relevant Kubernetes API version. |
+| OpenAPI / AsyncAPI | [`spectral`](https://github.com/stoplightio/spectral) | Lints API contracts against built-in or custom rulesets. |
+| AWS CloudFormation | [`cfn-lint`](https://github.com/aws-cloudformation/cfn-lint) | Validates CloudFormation templates against AWS resource specifications. |
+| Ansible playbooks/roles | [`ansible-lint`](https://github.com/ansible/ansible-lint) | Enforces Ansible best practices and detects common errors. |
+| Helm charts | [`helm lint`](https://helm.sh/docs/helm/helm_lint/) (and optionally `kubeconform` post-render) | Validates chart structure and renders templates for further validation. |
+
+Adopters MAY add these as additional pre-commit hooks (or as separate CI jobs) when their repository contains the relevant file types. Do **not** add them speculatively.
+
+---
+
+## Future SchemaStore Validation for Repository Configuration Files
+
+**Status:** Future work — not enabled by default.
+
+Several common repository configuration files have public schemas published on [SchemaStore](https://www.schemastore.org/) or maintained by their respective ecosystems. Wiring schema validation for any of them is **explicitly out of scope** for the worked example shipped under `schemas/`; it requires an explicit downstream project decision.
+
+Candidate files (cross-referenced from the [Future Work section in `schemas/README.md`](schemas/README.md#future-work)):
+
+- **`package.json`** — schema available on SchemaStore. A downstream project MAY add a `check-jsonschema` hook scoped to `^package\.json$` that points at the SchemaStore-published schema (for example, via `check-jsonschema`'s built-in `vendor.package-json` schema selector if available). Useful when `package.json` carries non-trivial metadata that should be validated beyond basic JSON syntax.
+- **Generated package-manager lockfiles** (for example, `package-lock.json`, `yarn.lock` in JSON form, `composer.lock`) — schema validation MAY be useful, but only if it does **not** conflict with the package manager's own validation. Most package managers already validate their lockfiles internally; an additional schema check is justified only when a stable schema-backed validation path adds value the package manager does not already provide.
+- **`.github/dependabot.yml`** — schema available on SchemaStore. A downstream project MAY add a `check-jsonschema` hook scoped to `^\.github/dependabot\.yml$` that points at the SchemaStore-published Dependabot schema. Note that Dependabot itself enforces its schema at evaluation time, so this is primarily a fast local feedback loop.
+- **GitHub Actions workflow files** — already covered by `actionlint`. An additional `check-jsonschema` hook against the SchemaStore Actions schema would be **redundant** with `actionlint` and is **not recommended**.
+
+For all of the above, follow the schema-validation guidance in [Schema Validation Configuration](#schema-validation-configuration): add **one `check-jsonschema` hook per real schema-backed file family**, scoped to the files that family covers, and keep the default toolchain free of placeholder hooks. See the [Future Work section in `schemas/README.md`](schemas/README.md#future-work) for additional context and avoid restating that future-work note here.
+
+---
+
+## Removing the Worked Example Schema
+
+**Files:** `schemas/`, `.pre-commit-config.yaml`, `tests/test_schema_examples.py`, `.github/workflows/data-ci.yml`, related documentation
+
+The template ships a worked-example schema (`schemas/example-config.schema.json`), valid and invalid example fixtures under `schemas/examples/example-config/`, two pre-commit hooks (`check-jsonschema` for valid examples, `check-metaschema` for the schema itself), and the schema-example pytest contract at [`tests/test_schema_examples.py`](tests/test_schema_examples.py). The worked example is intentionally easy to remove for downstream repositories that do not use schema-backed validation.
+
+**To remove the worked example, follow the canonical [Downstream Removal Checklist](schemas/README.md#downstream-removal-checklist) in `schemas/README.md`.** That checklist is the single source of truth for the exact files, hooks, and references to remove; do not improvise the steps from memory and do not duplicate the checklist here.
 
 ---
 

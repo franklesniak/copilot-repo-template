@@ -188,13 +188,30 @@ See `.pre-commit-config.yaml` for the complete list of configured hooks. See [`.
 
 ### Language-Specific Guidelines
 
-This repository includes comprehensive coding standards for multiple languages:
+This repository includes comprehensive coding standards for multiple languages and data file formats:
 
 - **Python:** `.github/instructions/python.instructions.md`
 - **PowerShell:** `.github/instructions/powershell.instructions.md`
+- **Terraform:** `.github/instructions/terraform.instructions.md`
 - **Markdown/Documentation:** `.github/instructions/docs.instructions.md`
+- **JSON/JSONC:** `.github/instructions/json.instructions.md`
+- **YAML:** `.github/instructions/yaml.instructions.md`
+- **Git attributes:** `.github/instructions/gitattributes.instructions.md`
 
-These standards are enforced by GitHub Copilot and should be followed for all contributions.
+These standards apply to all contributions and are enforced by the repository's pre-commit hooks and CI workflows. AI coding agents (such as GitHub Copilot, Claude Code, Codex, and Gemini) are configured to read these instruction files when generating or editing code, but enforcement of the standards on every commit comes from the tooling listed above, not from any individual agent.
+
+### Data-File and Schema Validation
+
+JSON, YAML, and GitHub Actions workflow files are first-class file types in this template. Contributor expectations:
+
+- Run `pre-commit run --all-files` before opening a PR.
+- JSON files **must** pass `check-json` (strict `.json` only — `.jsonc` is intentionally not validated; see the dialect note above).
+- YAML files **must** pass `check-yaml` and `yamllint` (configured by `.yamllint.yml`).
+- GitHub Actions workflow files **must** pass `actionlint`.
+- Schema-backed files **must** pass `check-jsonschema` (and the schema itself **must** pass `check-metaschema` where wired).
+- The schema example contracts under `schemas/examples/<schema>/{valid,invalid}/` are tested by [`tests/test_schema_examples.py`](tests/test_schema_examples.py); when changing a schema or its example fixtures, run `pytest tests/test_schema_examples.py -v` to confirm the contract still holds.
+
+See [`schemas/README.md`](schemas/README.md) for schema conventions and the canonical downstream removal checklist for the worked example.
 
 ### CI Workflows
 
@@ -203,11 +220,12 @@ This repository includes several GitHub Actions workflows that run automatically
 | Workflow | File | Purpose |
 | --- | --- | --- |
 | Python CI | `.github/workflows/python-ci.yml` | Runs pre-commit, mypy (type checking), and pytest on Python files |
-| Auto-fix Pre-commit | `.github/workflows/auto-fix-precommit.yml` | Automatically commits pre-commit fixes on PRs (optional) |
+| Auto-fix Pre-commit | `.github/workflows/auto-fix-precommit.yml` | Automatically commits pre-commit auto-fixes on pushes to `copilot/**` branches authored by `copilot-swe-agent[bot]` (optional) |
 | Markdown Lint | `.github/workflows/markdownlint.yml` | Validates markdown formatting |
 | PowerShell CI | `.github/workflows/powershell-ci.yml` | Runs PSScriptAnalyzer on PowerShell files |
+| Data CI | `.github/workflows/data-ci.yml` | Runs `check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, and `check-metaschema` against JSON/YAML/GitHub Actions data files |
 
-The **Auto-fix Pre-commit** workflow is particularly useful for AI-assisted development (e.g., GitHub Copilot Coding Agent) as it automatically commits formatting fixes to PR branches.
+The **Auto-fix Pre-commit** workflow is scoped specifically to the GitHub Copilot Coding Agent: it triggers only on pushes to `copilot/**` branches authored by `copilot-swe-agent[bot]`, and automatically commits any pre-commit auto-fixes back onto that branch. Human-authored PRs and PRs on non-`copilot/**` branches are not affected; their authors must run `pre-commit run --all-files` locally and integrate the fixes themselves before pushing.
 
 ## Making Changes
 
