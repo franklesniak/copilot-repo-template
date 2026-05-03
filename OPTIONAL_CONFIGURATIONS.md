@@ -864,6 +864,42 @@ commit-message:
   prefix: "fix(deps)"      # If you treat dependency updates as fixes
 ```
 
+### Consolidating Multiple Directories That Share an Ecosystem
+
+This template repository's own `.github/dependabot.yml` does not currently exercise this pattern: every active entry uses `directory: "/"`. The guidance below is forward-looking advice for downstream adopters whose repositories contain multiple directories that share a single dependency ecosystem (for example, several Terraform stages, sibling npm workspaces, or multiple Python packages) and that are intended to stay aligned under the same dependency-update policy.
+
+**Rules:**
+
+- When multiple directories share the same dependency ecosystem and are intended to use the same dependency-update policy, they **SHOULD** be configured under a single Dependabot update entry using the `directories:` plural form rather than one update entry per directory. Consolidating these directories under a single entry helps reduce redundant dependency-update PRs and keeps related directories aligned on the same dependency versions.
+- The single multi-directory entry **SHOULD** define `groups:` for routine minor and patch updates so related updates are consolidated according to the configured grouping policy. The exact PR shape Dependabot produces depends on the configured group patterns and update types; adopters **SHOULD NOT** assume Dependabot will always create exactly one PR per dependency.
+- Each directory **SHOULD** be listed explicitly in `directories:` when the tracked set is small and intentional, so maintainers can see at a glance which directories are included and which are intentionally excluded.
+- Glob patterns **MAY** be used when the directory set is genuinely open-ended, but adopters **SHOULD** weigh the trade-off: glob patterns are less explicit than an enumerated list and can be harder to audit when reviewing why a particular directory is or is not covered.
+- Directories that do not contain a manifest or configuration file for the ecosystem **MUST** be omitted from `directories:`. If the omission could be surprising to a future maintainer (for example, a sibling directory that looks like it should match but intentionally does not), a YAML comment **SHOULD** explain why the path is excluded so the directory is not added back by mistake.
+
+**Hypothetical downstream repository example.** The directory paths shown below (`/infra/stage-a`, `/infra/stage-b`, `/infra/stage-c`, `/infra/bootstrap`) are illustrative only and do not correspond to paths in this template repository; substitute the actual directories from your own project.
+
+```yaml
+# Hypothetical downstream repository example.
+- package-ecosystem: "terraform"
+  directories:
+    - "/infra/stage-a"
+    - "/infra/stage-b"
+    - "/infra/stage-c"
+    # /infra/bootstrap omitted: contains helper scripts only, no Terraform configuration.
+  schedule:
+    interval: "weekly"
+  groups:
+    terraform-minor-patch:
+      patterns:
+        - "*"
+      update-types:
+        - "minor"
+        - "patch"
+  commit-message:
+    prefix: "chore(deps)"
+  open-pull-requests-limit: 10
+```
+
 ---
 
 ## Pre-commit Configuration
