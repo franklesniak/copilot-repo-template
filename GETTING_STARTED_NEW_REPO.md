@@ -1484,12 +1484,32 @@ The pull request template provides a contributor checklist for consistent PR rev
 
 ### Delete Template Comment
 
-Delete the HTML comment at the top of the file (lines 1-4):
+Delete the HTML comment block at the top of the file — the entire `<!-- ... -->`
+block immediately preceding the `## Description` heading. The block contains
+template-user guidance (`LINK STYLE`, `CUSTOMIZE`, GHES host note, and a
+`KNOWN LIMITATION` paragraph explaining the template-repo-only behavior of
+the contributing-guidelines link) that downstream adopters do not need once
+the placeholder substitution has been performed. The block currently spans
+the lines from `<!--` at line 1 through `-->` immediately before the
+`## Description` heading; the exact closing line number may shift as the
+template comment is updated, so identify the block by the opening and closing
+markers rather than by a fixed line range.
+
+Schematic of the block to delete (paragraph headers shown; full prose elided):
 
 ```markdown
 <!--
 Template users: see OPTIONAL_CONFIGURATIONS.md for guidance on tailoring this PR
 template. Delete this comment once the PR template is tailored for your needs.
+
+LINK STYLE: ...
+
+CUSTOMIZE: ...
+GHES users: ...
+
+KNOWN LIMITATION (template repo only): ...
+
+(rationale paragraph explaining angle-bracket placeholder use)
 -->
 ```
 
