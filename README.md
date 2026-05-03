@@ -250,7 +250,12 @@ pytest tests/ -v --cov --cov-report=term-missing
 
 # Run a specific test file
 pytest tests/test_example.py -v
+
+# Run the schema-example contract test (validates schemas/examples/<schema>/{valid,invalid}/ fixtures)
+pytest tests/test_schema_examples.py -v
 ```
+
+The schema-example contract test ([`tests/test_schema_examples.py`](tests/test_schema_examples.py)) auto-discovers `schemas/*.schema.json` and the matching `schemas/examples/<name>/{valid,invalid}/` fixtures and asserts that valid fixtures pass and invalid fixtures fail. A starter version is also available at [`templates/python/tests/test_schema_examples.py`](templates/python/tests/test_schema_examples.py) for downstream adoption.
 
 #### PowerShell Tests
 

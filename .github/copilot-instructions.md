@@ -74,7 +74,15 @@ In addition to formatting, linting, trailing-whitespace, and end-of-file fixes, 
 
 Prettier is **opt-in** and is **not** part of the default data-file toolchain.
 
-> **Schema validation (worked example only).** `check-jsonschema` is wired into `.pre-commit-config.yaml` to validate the worked-example schema shipped at `schemas/example-config.schema.json` and its valid example data under `schemas/examples/example-config/valid/`, plus a self-validation hook (`check-metaschema`) for the schema itself. See [`schemas/README.md`](../schemas/README.md) for the worked example, the canonical downstream removal checklist, and future-work candidates. Downstream repositories MAY add additional `check-jsonschema` hook entries for their own schema-backed file families.
+> **Schema validation (worked example only).** `check-jsonschema` is wired into `.pre-commit-config.yaml` to validate the worked-example schema shipped at `schemas/example-config.schema.json` and its valid example data under `schemas/examples/example-config/valid/`, plus a self-validation hook (`check-metaschema`) for the schema itself. The dedicated [`.github/workflows/data-ci.yml`](workflows/data-ci.yml) workflow re-runs the same data-file hooks (`check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, `check-metaschema`) so JSON/YAML/Actions enforcement can be made a required check via branch protection independent of the Python CI job. The contract that valid examples pass and invalid examples fail is exercised by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py); run `pytest tests/test_schema_examples.py -v` after any schema or fixture change. See [`schemas/README.md`](../schemas/README.md) for the worked example, the canonical downstream removal checklist, and future-work candidates. Downstream repositories MAY add additional `check-jsonschema` hook entries for their own schema-backed file families.
+>
+> **When schema contracts change**, agents updating any schema **MUST** keep the following in sync in the same change:
+>
+> - The schema file under `schemas/<name>.schema.json`.
+> - Valid example fixtures under `schemas/examples/<name>/valid/`.
+> - Invalid example fixtures under `schemas/examples/<name>/invalid/`.
+> - The pre-commit hook scope in `.pre-commit-config.yaml` (and `.github/workflows/data-ci.yml` if the file family changes).
+> - Any documentation that references the schema (for example, `schemas/README.md`, `README.md`, `OPTIONAL_CONFIGURATIONS.md`).
 
 ### For GitHub Copilot Coding Agent (Automated PRs)
 

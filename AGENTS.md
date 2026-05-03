@@ -33,10 +33,12 @@ This file intentionally keeps only a minimal inline summary of the highest-prior
   - Use the repository's existing validation commands as needed:
     - `npm run lint:md`
     - `pytest tests/ -v --cov --cov-report=term-missing`
+    - `pytest tests/test_schema_examples.py -v` (after any schema or schema-example change)
     - `Invoke-Pester -Path tests/ -Output Detailed`
     - `terraform fmt -check -recursive`
     - `tflint --recursive`
     - `terraform test -verbose`
+  - The `pre-commit run --all-files` command exercises the data-file hooks (`check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, `check-metaschema`); the dedicated [`.github/workflows/data-ci.yml`](.github/workflows/data-ci.yml) workflow re-runs these so JSON/YAML/Actions enforcement can be required via branch protection.
 
 - **Modular instruction files**
   - Read the relevant file under `.github/instructions/` before modifying matching files:
