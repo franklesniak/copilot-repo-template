@@ -7,7 +7,7 @@ description: "JSON authoring standards: strict-by-default, schema-backed, determ
 
 # JSON Writing Style
 
-**Version:** 1.2.20260503.0
+**Version:** 1.2.20260503.2
 
 ## Metadata
 
