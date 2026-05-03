@@ -336,7 +336,7 @@ Instruction files in `.github/instructions/` are scoped to **code authoring stan
 
 ### Design Decision: Terraform Registry Reference URLs Use /latest/
 
-Terraform Registry reference URLs that appear in **comments** in `.tf`, `.tftest.hcl`, `.tfvars`, `.tfbackend`, `.tftpl`, and other Terraform-related files **MUST** use the `latest` path segment instead of a pinned provider or module version. By template convention, instructional Markdown under this repository (for example, in `TEMPLATE_MAINTENANCE.md` or files under `docs/`) also uses `/latest/` for the same reasons. The *normative* rule applies only to Terraform-file comments because the canonical instruction file (`terraform.instructions.md`) is scoped to Terraform extensions via its `applyTo` frontmatter; the Markdown-side convention is descriptive of current practice and is not yet codified in `docs.instructions.md`.
+Terraform Registry reference URLs that appear in **comments** in `.tf`, `.tftest.hcl`, `.tfvars`, `.tfbackend`, `.tftpl`, and other Terraform-related files **MUST** use the `latest` path segment instead of a pinned provider or module version. The same `/latest/` requirement applies to any Terraform Registry navigation links in instructional Markdown under this template (currently those in [`TEMPLATE_MAINTENANCE.md`](../TEMPLATE_MAINTENANCE.md); the same convention would apply to any future Registry links in other Markdown documentation under this template, including under `docs/`). The Markdown half of the rule is binding via this ADR rather than via an `applyTo`-scoped instruction file: the canonical instruction file [`terraform.instructions.md`](instructions/terraform.instructions.md) is scoped to Terraform extensions only, and the convention has not yet been mirrored into `docs.instructions.md` (which governs `**/*.md`). An agent editing a pure Markdown file will therefore only see this rule via the ADR.
 
 The shape of the rule is:
 
@@ -344,7 +344,7 @@ The shape of the rule is:
 - Module documentation URLs use `https://registry.terraform.io/modules/<namespace>/<name>/<provider>/latest`.
 - Pinned examples such as `/azurerm/4.67.0/` or `/random/3.8.1/` **MUST NOT** appear in either Terraform-file documentation comments or instructional Markdown under this template, except as clearly labeled non-compliant examples that exist to document this rule.
 
-The full normative rule, including compliant and non-compliant examples, lives in [`.github/instructions/terraform.instructions.md`](instructions/terraform.instructions.md) under "Terraform Registry Documentation URLs". This ADR records *why* the template adopts that rule; the instruction file remains the single source of truth for *what* the rule says.
+For Terraform-file comments, the full normative rule (with compliant and non-compliant examples) lives in [`.github/instructions/terraform.instructions.md`](instructions/terraform.instructions.md) under "Terraform Registry Documentation URLs"; that file is loaded automatically when an agent edits a Terraform file. For instructional Markdown, this ADR is the binding statement until the convention is mirrored into `docs.instructions.md` or a separate `applyTo`-scoped instruction file. This ADR records *why* the template adopts the rule and how it spans Terraform comments and Markdown today; the Terraform instruction file remains the single source of truth for *what* the rule says inside Terraform files.
 
 **Rationale:**
 
