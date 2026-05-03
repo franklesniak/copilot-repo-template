@@ -13,15 +13,21 @@ CUSTOMIZE: Replace `OWNER/REPO` below with your actual org/repo
 (enforced by `.github/workflows/check-placeholders.yml`).
 GHES users: Replace `github.com` with your GHES host (e.g., `github.company.com`).
 
-KNOWN LIMITATION (template repo only): `.github/workflows/check-placeholders.yml`
-is gated off in `franklesniak/copilot-repo-template` itself
-(`if: github.repository != 'franklesniak/copilot-repo-template'`), so the
-contributing-guidelines link below resolves to a non-existent
-`https://github.com/OWNER/REPO/blob/HEAD/CONTRIBUTING.md` URL when rendered on
-PRs against the template repository. This is an accepted trade-off: downstream
-adopters get a working absolute link after running the placeholder substitution,
-which is the dominant audience. Contributors to the template repo itself can
-navigate to `CONTRIBUTING.md` via the file tree.
+KNOWN LIMITATION (template repo only): The contributing-guidelines link
+below resolves to a non-existent `https://github.com/OWNER/REPO/blob/HEAD/CONTRIBUTING.md`
+URL when rendered on PRs against the template repository
+(`franklesniak/copilot-repo-template`), because the `OWNER/REPO` placeholder
+is intentionally not substituted in the template repo — that substitution is
+the responsibility of downstream adopters cloning this template. The reason
+the unsubstituted placeholder is allowed to persist here (rather than being
+rejected by CI) is that `.github/workflows/check-placeholders.yml` is gated
+off in the template repo itself
+(`if: github.repository != 'franklesniak/copilot-repo-template'`); downstream
+adopters do not have that gate and so have their substitution enforced by CI
+before merge. This is an accepted trade-off: downstream adopters get a working
+absolute link after running the placeholder substitution, which is the dominant
+audience. Contributors to the template repo itself can navigate to
+`CONTRIBUTING.md` via the file tree.
 -->
 
 ## Description
