@@ -12,6 +12,16 @@ renderers, GitHub Mobile, and email notifications. See the
 CUSTOMIZE: Replace `OWNER/REPO` below with your actual org/repo
 (enforced by `.github/workflows/check-placeholders.yml`).
 GHES users: Replace `github.com` with your GHES host (e.g., `github.company.com`).
+
+KNOWN LIMITATION (template repo only): `.github/workflows/check-placeholders.yml`
+is gated off in `franklesniak/copilot-repo-template` itself
+(`if: github.repository != 'franklesniak/copilot-repo-template'`), so the
+contributing-guidelines link below resolves to a non-existent
+`https://github.com/OWNER/REPO/blob/HEAD/CONTRIBUTING.md` URL when rendered on
+PRs against the template repository. This is an accepted trade-off: downstream
+adopters get a working absolute link after running the placeholder substitution,
+which is the dominant audience. Contributors to the template repo itself can
+navigate to `CONTRIBUTING.md` via the file tree.
 -->
 
 ## Description
