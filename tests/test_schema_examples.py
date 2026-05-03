@@ -62,15 +62,23 @@ def _iter_safe_files(directory: Path) -> list[Path]:
     symlinked subdirectories are never traversed, then drops any
     yielded entry that is itself a symlink. Each remaining path is
     re-checked with ``Path.resolve()`` and ``Path.relative_to`` to
-    guarantee it is still located inside ``directory``'s resolved
-    location, which protects against bind-mount and other non-symlink
-    forms of path traversal as well.
+    guarantee its fully-resolved path string still lives inside
+    ``directory``'s resolved location, which catches symlink and
+    ``..``-style traversals that survive the initial walk-time skip.
 
     The repository constitution requires that file-discovery callers
     "reject path traversal and symlink escapes"; this helper centralizes
     that policy for example-fixture discovery so the test suite cannot
     be coerced into validating files outside the schemas/examples tree
     by a malicious or accidentally-introduced symlink.
+
+    This helper does **not** enforce a mount-point or device boundary.
+    A bind mount (or any other mount) located *under* ``directory``
+    will still expose its target content because ``Path.resolve()``
+    returns a path that, from the filesystem's perspective, remains
+    inside ``directory``. Callers that require mount-boundary
+    isolation should layer an explicit ``os.stat().st_dev`` (or
+    mount-table) check on top of this helper.
 
     Args:
         directory: Directory whose regular-file descendants should be
