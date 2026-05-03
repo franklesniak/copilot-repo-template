@@ -36,6 +36,15 @@ body:
   # This template intentionally includes multiple security warnings (top-of-form,
   # checkbox, severity dropdown). This defense-in-depth approach maximizes chance
   # of catching accidental security disclosure. See .github/TEMPLATE_DESIGN_DECISIONS.md for rationale.
+  # NOTE: The Markdown links below use absolute URLs because relative paths
+  # (e.g., `[SECURITY.md](blob/HEAD/SECURITY.md)`) resolve against the
+  # rendering URL `/{owner}/{repo}/issues/new?...` and 404. See the
+  # "Issue and PR templates" carve-out in `.github/instructions/docs.instructions.md`
+  # (and the matching section in `.github/instructions/yaml.instructions.md`).
+  #
+  # CUSTOMIZE: Replace `OWNER/REPO` in both URLs with your actual org/repo
+  # (enforced by `.github/workflows/check-placeholders.yml`).
+  # GHES users: Replace `github.com` with your GHES host (e.g., `github.company.com`).
   - type: markdown
     attributes:
       value: |

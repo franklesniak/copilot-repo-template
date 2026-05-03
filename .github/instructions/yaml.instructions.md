@@ -7,7 +7,7 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.3.20260503.3
+**Version:** 1.4.20260503.0
 
 ## Metadata
 
@@ -39,6 +39,7 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - **[Actions]** **MUST** apply least-privilege `permissions:` on GitHub Actions workflows.
 - **[Schemas]** Schema-backed YAML **MUST** pass any schema validator wired into pre-commit or CI; where no validator is wired up for a particular file family, authors **SHOULD** run the appropriate validator locally before committing.
 - **[Naming]** YAML filenames **SHOULD** be lowercase kebab-case; GitHub Actions workflows **MUST** use the `.yml` extension; project-owned YAML **MUST** choose `.yml` or `.yaml` and use it consistently.
+- **[IssueForms]** In `.github/ISSUE_TEMPLATE/*.yml`, Markdown links and `contact_links` URLs that point to repo-internal targets **MUST** use absolute `https://github.com/OWNER/REPO/...` URLs (with `blob/HEAD` for file links); relative paths **MUST NOT** be used (they 404 because issue forms render at `/{owner}/{repo}/issues/new?...`).
 
 ## Dialect and Consumer Policy
 
@@ -98,6 +99,20 @@ rules:
 ```
 
 This configuration preserves the idiomatic GitHub Actions `on:` key while still flagging YAML 1.1 truthy hazards in **values**. Authors **MAY** alternatively quote the key as `"on":` to satisfy a stricter `truthy.check-keys: true` configuration, but this form is **non-idiomatic** in the GitHub Actions ecosystem and **SHOULD NOT** be adopted unless a downstream policy requires it.
+
+## Issue-form Markdown Links in `.github/ISSUE_TEMPLATE/*.yml`
+
+GitHub issue forms render their `value:` Markdown blocks at the URL `/{owner}/{repo}/issues/new?...`, **not** at the source-file path. As a result, relative links inside those blocks resolve against the rendering URL and frequently produce 404s. For example, `[SECURITY.md](blob/HEAD/SECURITY.md)` resolves to `/{owner}/{repo}/issues/blob/HEAD/SECURITY.md` (404), and `[Security tab](security)` resolves to `/{owner}/{repo}/issues/security` (404). The same hazard applies to `contact_links` URLs in `.github/ISSUE_TEMPLATE/config.yml`, which GitHub itself rejects when given a relative path.
+
+To make these links robust across non-GitHub.com renderers, GitHub Mobile, email notifications, and copied/quoted content, the following rules apply to all files matching `.github/ISSUE_TEMPLATE/*.yml` (including `config.yml`):
+
+- Markdown links to repo-internal files (for example, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `README.md`) **MUST** use full absolute URLs of the form `https://github.com/OWNER/REPO/blob/HEAD/<path>`. The `OWNER/REPO` placeholder follows this template's placeholder convention (see the comment block at the top of `CONTRIBUTING.md`) and is enforced by `.github/workflows/check-placeholders.yml`.
+- Repo-internal references that are not file paths (for example, the GitHub Security tab) **MUST** likewise use absolute URLs, such as `https://github.com/OWNER/REPO/security`.
+- Relative paths such as `../blob/HEAD/<file>`, `blob/HEAD/<file>`, `./<file>`, or bare relative refs such as `(security)` **MUST NOT** be used in issue-form `value:` Markdown blocks or in `contact_links` URLs.
+- Use `blob/HEAD` rather than `blob/main` so the URL works regardless of the repository's default branch name.
+- The `github.com` host is the assumed default; **GHES adopters MUST replace `github.com` with their GHES host** (e.g., `github.company.com`). The host substitution is not enforced by CI today (the placeholder workflow only validates `OWNER/REPO`), so each affected file SHOULD include a brief inline YAML comment reminding adopters of the host substitution, mirroring the convention already used in `.github/ISSUE_TEMPLATE/config.yml`.
+
+This rule is mirrored in [`.github/instructions/docs.instructions.md`](./docs.instructions.md) (which governs `.github/pull_request_template.md` and applies to `**/*.md`). The two instruction files are intentionally self-contained: each restates the rule rather than relying on the other so that downstream repositories may remove either file independently without losing the guidance.
 
 ## Conservative YAML Subset
 

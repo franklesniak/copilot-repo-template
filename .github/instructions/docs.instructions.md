@@ -7,7 +7,7 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.5.20260503.0
+**Version:** 1.5.20260503.1
 
 ## Metadata
 
@@ -131,11 +131,12 @@ The fields referenced in this subsection (`Last Updated`, and the optional `Vers
 
 This is an explicit carve-out from the "Prefer relative links" rule above. Issue forms (`.github/ISSUE_TEMPLATE/*.yml`, including `config.yml`) and the PR template (`.github/pull_request_template.md`) are not rendered from their own file paths — they are rendered into issue forms at `/{owner}/{repo}/issues/new?...` and PR bodies at `/{owner}/{repo}/pull/<n>`. Relative paths therefore resolve against the rendering URL, not the source file path, and are unreliable across renderers, GitHub Mobile, email notifications, and copied/quoted content.
 
-- Markdown links inside `.github/ISSUE_TEMPLATE/*.yml` (including `config.yml`) and `.github/pull_request_template.md` that point to repo-internal files (for example, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `README.md`) **MUST** use full absolute URLs of the form `https://github.com/OWNER/REPO/blob/HEAD/<path>`. The `OWNER/REPO` placeholder follows this template's placeholder convention (see the comment block at the top of `CONTRIBUTING.md`) and is enforced by `.github/workflows/check-placeholders.yml`.
-- Repo-internal references that are not file paths (for example, the GitHub Security tab) **MUST** likewise use absolute URLs, such as `https://github.com/OWNER/REPO/security`.
+- Markdown links inside `.github/ISSUE_TEMPLATE/*.yml` (including `config.yml`) and `.github/pull_request_template.md` that point to repo-internal files (for example, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `README.md`) **MUST** use full absolute URLs of the form `https://github.com/OWNER/REPO/blob/HEAD/<path>`. The `OWNER/REPO` placeholder follows this template's placeholder convention (see the comment block at the top of `CONTRIBUTING.md`) and is enforced by `.github/workflows/check-placeholders.yml`. The `github.com` host is the assumed default; **GHES adopters MUST replace `github.com` with their GHES host** (e.g., `github.company.com`). The host substitution is not enforced by CI today (the placeholder workflow only validates `OWNER/REPO`), so each affected file SHOULD include a brief inline comment reminding adopters of the host substitution, mirroring the convention already used in `.github/ISSUE_TEMPLATE/config.yml`.
+- Repo-internal references that are not file paths (for example, the GitHub Security tab) **MUST** likewise use absolute URLs, such as `https://github.com/OWNER/REPO/security`. The same `github.com` host assumption applies.
 - Relative paths such as `../blob/HEAD/<file>`, `blob/HEAD/<file>`, `./<file>`, or bare relative refs such as `(security)` **MUST NOT** be used in those files. Rationale: in issue-form `value:` blocks rendered at `/{owner}/{repo}/issues/new?...`, a link like `[SECURITY.md](blob/HEAD/SECURITY.md)` resolves to `/{owner}/{repo}/issues/blob/HEAD/SECURITY.md` (404), and `[Security tab](security)` resolves to `/{owner}/{repo}/issues/security` (404).
 - Use `blob/HEAD` rather than `blob/main` so the URL works regardless of the repository's default branch name.
 - This rule applies only to the files listed above. Tree-rendered Markdown such as `README.md`, `CONTRIBUTING.md`, and files under `docs/**` continue to follow the default "prefer relative links" guidance.
+- The rule for issue-form YAML files (`.github/ISSUE_TEMPLATE/*.yml`) is mirrored in [`.github/instructions/yaml.instructions.md`](./yaml.instructions.md) so that contributors editing those YAML files receive the same guidance. The two instruction files are intentionally self-contained: each may be removed independently in downstream repositories that do not need it, and each restates the rule rather than relying on the other.
 
 ## ADR Standards
 
