@@ -227,6 +227,17 @@ This repository includes several GitHub Actions workflows that run automatically
 
 The **Auto-fix Pre-commit** workflow is scoped specifically to the GitHub Copilot Coding Agent: it triggers only on pushes to `copilot/**` branches authored by `copilot-swe-agent[bot]`, and automatically commits any pre-commit auto-fixes back onto that branch. Human-authored PRs and PRs on non-`copilot/**` branches are not affected; their authors must run `pre-commit run --all-files` locally and integrate the fixes themselves before pushing.
 
+### Workflow Version Pinning
+
+When editing files under `.github/workflows/`, follow the [**Workflow Version Pinning**](.github/copilot-instructions.md#workflow-version-pinning) rule in the repo-wide constitution. In short:
+
+- Keep third-party action versions directly in `uses:` lines (for example, `actions/checkout@v6`) so Dependabot can update them.
+- Do **not** mirror a `uses:` version into a workflow-level `env:` variable, comment, cache key, file path, or shell literal — Dependabot will not rewrite those mirrors, and they will silently drift.
+- For tool versions that Dependabot does not manage (for example, `terraform_version` or `tflint_version` passed to setup actions), a workflow-level `env:` value is a fine single source of truth across multiple steps.
+- If a Dependabot-managed dependency genuinely cannot be expressed without duplication, add a narrowly scoped `.github/dependabot.yml` `ignore:` entry with a YAML comment explaining why.
+
+See the deep link above for the full rule, including the wrapper-action vs. installed-tool distinction and concrete examples from this repository.
+
 ## Making Changes
 
 ### 1. Create a Branch

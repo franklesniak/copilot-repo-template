@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.4.20260503.2
+**Version:** 1.4.20260503.4
 
 ## Metadata
 
@@ -128,6 +128,50 @@ This repository includes an auto-fix workflow (`.github/workflows/auto-fix-preco
 - Agents should still try to run pre-commit checks before pushing when possible
 - The workflow only applies to `copilot/**` branches—human branches are not affected
 - Manual intervention may still be required for issues that cannot be auto-fixed
+
+## Workflow Version Pinning
+
+GitHub Actions workflow files in this repository (`.github/workflows/*.yml`) reference both **action versions** (in `uses:` lines) and **tool versions** (passed to actions or shell commands as inputs or arguments). The two categories have different update mechanisms and different rules. Conflating them — or mirroring an action version into a secondary location that Dependabot does not rewrite — produces partial updates where the declared action version moves but related literals silently drift to the old version. The rules below prevent that drift.
+
+For the rationale, see the **Workflow Version Pinning and Dependabot Coherence** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](TEMPLATE_DESIGN_DECISIONS.md).
+
+### Action versions in `uses:` references
+
+- Third-party action versions **MUST** remain directly visible in `uses:` references (for example, `actions/checkout@v6`, `hashicorp/setup-terraform@v4`) so Dependabot's `github-actions` ecosystem can update them.
+- Repeated `uses:` references to the same action across jobs and steps are acceptable when each occurrence is a normal Dependabot-managed `uses:` reference. Dependabot updates each `uses:` line directly.
+- Do **NOT** store an action version in a workflow-level `env:` variable, comment, cache key, file path, shell literal, manually constructed image tag, or any other secondary location as a mirror of a `uses:` version. The `uses:` line **MUST** be the only authoritative source for the action version because Dependabot rewrites `uses:` references and will leave unrelated literals stale.
+- Do **NOT** copy a Dependabot-managed action version into secondary workflow locations that Dependabot will not reliably rewrite (for example, cache keys, file paths, shell commands, manually constructed image tags, or comments presented as authoritative version state).
+- If secondary workflow behavior needs to change when a `uses:` version changes, derive that behavior from a stable source that naturally changes with the workflow or tool configuration. Prefer cache keys scoped to the specific configuration file that governs the cached artifact — for example, `hashFiles('.pre-commit-config.yaml')` for pre-commit caches, `hashFiles('.tflint.hcl')` for TFLint plugin caches, or `hashFiles('**/.terraform.lock.hcl')` for Terraform provider caches, mirroring the pattern already used in this repository's workflows. Avoid broad wildcard patterns such as `hashFiles('.github/workflows/*.yml')` for cache keys: any unrelated workflow edit would invalidate every job's cache. The goal is to track the configuration that actually drives the cached content, not the workflow definition that consumes it.
+
+### Tool versions passed as action inputs or shell arguments
+
+Tool versions that are not managed by Dependabot — for example, `terraform_version: "1.14.4"` passed to `hashicorp/setup-terraform@v4`, or `tflint_version: v0.51.1` passed to `terraform-linters/setup-tflint@v6` — **SHOULD** still avoid unnecessary duplication. If the same tool version is required in multiple workflow jobs or steps, prefer a single source of truth where GitHub Actions supports one, such as a workflow-level `env:` value for the CLI/tool version.
+
+### Asymmetry: workflow-level `env:` for action versions vs. tool versions
+
+The two categories are **not** symmetric, and the difference is the entire point of this rule:
+
+- **Action versions** (`uses:`): a workflow-level `env:` mirror is **forbidden**. Dependabot will not rewrite the `env:` value, so it would silently desynchronize from the actual `uses:` reference. The `uses:` line is the only authoritative source.
+- **Tool versions** (action inputs, shell args): a workflow-level `env:` value is **encouraged** as the single source of truth. Dependabot does not manage these versions, so there is no desync risk; one `env:` value can serve as the source of truth across multiple steps.
+
+### Distinguishing wrapper actions from the tools they install
+
+Action wrapper versions and the tool versions they install are **separate pins** that travel through different channels:
+
+- `hashicorp/setup-terraform@v4` is the setup action version (managed by Dependabot via `uses:`).
+- `terraform_version: "1.14.4"` is the Terraform CLI version installed by that setup action (not managed by Dependabot; manually maintained).
+
+Both pins exist in the same workflow step, but they update on different cadences and through different mechanisms. Do not conflate them.
+
+### When a Dependabot-managed dependency cannot be expressed without duplication
+
+If a Dependabot-managed dependency genuinely cannot be represented only through Dependabot-managed declarations, and Dependabot would otherwise produce partial updates, add an appropriate `.github/dependabot.yml` `ignore:` entry with a YAML comment explaining why the dependency is intentionally not auto-updated. Use this escape hatch sparingly: it disables automation for that dependency, so it should be applied only when the partial-update problem cannot be solved by removing the duplication or by deriving secondary behavior from a stable source.
+
+### Concrete examples in this repository
+
+- Pinned action majors such as `actions/checkout@v6`, `actions/setup-python@v6`, `actions/cache@v5`, and `actions/setup-node@v6` appear repeatedly in workflow `uses:` lines. These are acceptable because each occurrence is a normal Dependabot-managed `uses:` reference.
+- `terraform_version: "1.14.4"` appears in multiple jobs in [`.github/workflows/terraform-ci.yml`](workflows/terraform-ci.yml). This is a Terraform CLI version (not the `hashicorp/setup-terraform` action version), so it is **not** a Dependabot `uses:` desynchronization case. It is a useful candidate for a future single source of truth (such as a workflow-level `env:` value) if duplication grows; refactoring existing workflows to that shape is out of scope for this rule.
+- `tflint_version: v0.51.1` is passed to `terraform-linters/setup-tflint@v6`. This is a tool-version pin distinct from the setup action version; the same dual-pin model applies.
 
 ## Repository Self-Containment
 
