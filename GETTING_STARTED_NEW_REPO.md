@@ -1500,8 +1500,8 @@ Schematic of the block to delete (paragraph headers shown; full prose elided):
 
 ```markdown
 <!--
-Template users: see OPTIONAL_CONFIGURATIONS.md for guidance on tailoring this PR
-template. Delete this comment once the PR template is tailored for your needs.
+(opening paragraph: brief pointer to OPTIONAL_CONFIGURATIONS.md and a
+"delete this comment when tailored" instruction)
 
 LINK STYLE: ...
 
