@@ -76,7 +76,7 @@ The following pre-commit hooks are configured in this template. Check their repo
 
 | Tool | Repository | Purpose |
 | --- | --- | --- |
-| pre-commit-hooks | <https://github.com/pre-commit/pre-commit-hooks> | General file checks (trailing whitespace, YAML validation, JSON validation via `check-json`/`check-yaml`, etc.) |
+| pre-commit-hooks | <https://github.com/pre-commit/pre-commit-hooks> | General file checks (trailing whitespace, JSON validation via `check-json`, YAML parsing via `check-yaml`, etc.) |
 | Black | <https://github.com/psf/black> | Python code formatting |
 | Ruff | <https://github.com/astral-sh/ruff-pre-commit> | Python linting and formatting |
 | markdownlint-cli2 | <https://github.com/DavidAnson/markdownlint-cli2> | Markdown linting |
