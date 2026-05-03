@@ -10,12 +10,25 @@
 #   - check-yaml        — YAML parse check (.yml / .yaml)
 #   - yamllint          — YAML style enforcement per .yamllint.yml
 #   - actionlint        — GitHub Actions workflow linting
-#   - check-jsonschema  — JSON Schema validation for the worked-example
-#                         schema and its valid example data files (and any
-#                         additional check-jsonschema hooks downstream
-#                         consumers configure). A single
+#   - check-jsonschema  — JSON Schema validation. This single
 #                         `pre-commit run check-jsonschema --all-files`
-#                         invocation runs every hook sharing that ID.
+#                         invocation runs every hook sharing the
+#                         `check-jsonschema` ID, including:
+#                           * the worked-example schema validation
+#                             (`schemas/examples/example-config/valid/`),
+#                           * real load-bearing repository config
+#                             validation against built-in vendor schemas
+#                             shipped with `check-jsonschema` (currently
+#                             `.github/dependabot.yml` against
+#                             `vendor.dependabot`), and
+#                           * any additional `check-jsonschema` hooks
+#                             downstream consumers configure.
+#                         The aggregate-step (Option B) strategy is used
+#                         here rather than one CI step per hook alias
+#                         (Option A); individual hooks are still
+#                         independently runnable locally via
+#                         `pre-commit run <alias> --all-files` (for
+#                         example, `validate-dependabot-config`).
 #                         Self-validation of the schema itself is wired as
 #                         a separate `check-metaschema` hook in
 #                         `.pre-commit-config.yaml`.
@@ -109,7 +122,10 @@ jobs:
       - name: Run check-jsonschema
         # `pre-commit run <hook-id> --all-files` runs all hooks sharing the
         # given ID, so this single invocation covers every check-jsonschema
-        # hook configured in `.pre-commit-config.yaml`. The companion
+        # hook configured in `.pre-commit-config.yaml`, including the
+        # worked-example schema validation and the real load-bearing
+        # repository config validation (currently `.github/dependabot.yml`
+        # against the bundled `vendor.dependabot` schema). The companion
         # `check-metaschema` hook (schema self-validation) is invoked
         # separately below because it has a distinct hook ID.
         run: pre-commit run check-jsonschema --all-files
