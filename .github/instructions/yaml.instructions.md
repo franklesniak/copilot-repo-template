@@ -7,7 +7,7 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.3.20260503.3
+**Version:** 1.3.20260503.4
 
 ## Metadata
 
@@ -44,7 +44,7 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 
 - Authors **SHOULD** target **YAML 1.2-compatible** values and avoid relying on parser-specific extensions.
 - Authors **MUST** avoid the YAML 1.1 *non-lowercase-`true`/`false`* truthy tokens that this guide does not permit as booleans (`y`, `Y`, `yes`, `Yes`, `YES`, `n`, `N`, `no`, `No`, `NO`, `on`, `On`, `ON`, `off`, `Off`, `OFF`, `True`, `TRUE`, `False`, `FALSE`); only lowercase `true` and `false` are allowed as booleans (see "Booleans, Nulls, and Numbers"). Many widely-deployed parsers (including those used by GitHub Actions, `js-yaml` defaults, and some legacy PyYAML configurations) still resolve some or all of these YAML 1.1 tokens as booleans, so any string value that would otherwise match one of them **MUST** be quoted.
-- Ecosystem-specific validators (for example, Kubernetes manifest validators, OpenAPI validators, Helm validators, Ansible validators) **SHOULD** be adopted only when the repository actually uses those ecosystems. Generic YAML guidance **MUST NOT** require validators that are irrelevant to the repository's stack. The shipped baseline (`check-yaml`, `yamllint`, `actionlint`, and `check-jsonschema` for the worked-example schema) is described in [Schema-backed YAML](#schema-backed-yaml).
+- Ecosystem-specific validators (for example, Kubernetes manifest validators, OpenAPI validators, Helm validators, Ansible validators) **SHOULD** be adopted only when the repository actually uses those ecosystems. Generic YAML guidance **MUST NOT** require validators that are irrelevant to the repository's stack. The shipped baseline (`check-yaml`, `yamllint`, `actionlint`, and `check-jsonschema` for the worked-example schema and selected real load-bearing configuration files validated against built-in vendor schemas) is described in [Schema-backed YAML](#schema-backed-yaml).
 
 ## Formatting Rules
 
@@ -150,7 +150,7 @@ Shipped validators in this repository (extend as needed for new ecosystems):
 - **`yamllint`** — YAML style enforcement, configured in [`.yamllint.yml`](../../.yamllint.yml) and run through [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) and [`.github/workflows/data-ci.yml`](../workflows/data-ci.yml).
 - **`check-yaml`** (from `pre-commit/pre-commit-hooks`) — parse-checks YAML files; runs through pre-commit and `data-ci.yml`.
 - **`actionlint`** — GitHub Actions workflow linter; runs through pre-commit and `data-ci.yml` for any workflow file under `.github/workflows/`.
-- **`check-jsonschema`** — generic JSON Schema validation for YAML and JSON files. Used today for the worked-example schema (`schemas/example-config.schema.json`); add file-family-scoped hooks for additional schema-backed YAML as needed.
+- **`check-jsonschema`** — generic JSON Schema validation for YAML and JSON files. Used today for (a) the worked-example schema (`schemas/example-config.schema.json`) and its valid example data, and (b) selected real load-bearing repository configuration files (for example, `.github/dependabot.yml`) validated against built-in vendor schemas shipped with `check-jsonschema`. See [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) for the authoritative list of active hooks. Add file-family-scoped hooks (project-owned `--schemafile` or additional `--builtin-schema` hooks) for additional schema-backed YAML as needed.
 
 Additional ecosystem-specific validators (for example, `kubeval`/`kubeconform` for Kubernetes, `helm lint` for Helm charts, `ansible-lint` for Ansible) **SHOULD** be adopted **only** when the repository actually uses the ecosystem. Generic YAML guidance **MUST NOT** mandate validators for ecosystems the repository does not use.
 

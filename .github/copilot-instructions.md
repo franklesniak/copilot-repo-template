@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.4.20260503.1
+**Version:** 1.4.20260503.2
 
 ## Metadata
 
@@ -65,16 +65,20 @@ Pre-commit hooks are NOT optional. They enforce:
 
 ### Data-File Validation
 
-In addition to formatting, linting, trailing-whitespace, and end-of-file fixes, pre-commit also enforces validation for structured data files. Run `pre-commit run --all-files` to execute the full hook set, which includes:
+In addition to formatting, linting, trailing-whitespace, and end-of-file fixes, pre-commit also enforces validation for structured data files. Run `pre-commit run --all-files` to execute the full hook set. The data-file checks currently include:
 
 - `check-json` — validates strict `.json` syntax. **Note:** `check-json` does **not** validate `.jsonc`; JSONC (JSON with comments) is allowed only when supported by the consuming tool, and stricter enforcement requires JSONC-aware tooling.
 - `check-yaml` — parse-checks `.yml` / `.yaml` files.
 - `yamllint` — enforces YAML style per `.yamllint.yml`.
 - `actionlint` — lints GitHub Actions workflow files.
+- `check-jsonschema` — JSON Schema validation. Validates: (a) the worked-example schema's valid example data under `schemas/examples/example-config/valid/` against `schemas/example-config.schema.json`; (b) selected real load-bearing repository configuration files (for example, `.github/dependabot.yml`) against built-in vendor schemas shipped with `check-jsonschema`; and (c) any future project-owned schema-backed file families that downstream maintainers wire up in `.pre-commit-config.yaml`.
+- `check-metaschema` — self-validates project-owned schemas (currently `schemas/example-config.schema.json`) against their declared JSON Schema metaschema, where configured in `.pre-commit-config.yaml`.
 
-Prettier is **opt-in** and is **not** part of the default data-file toolchain.
+`.pre-commit-config.yaml` is the authoritative list of active hooks. Do **not** rely on a hardcoded total hook count when describing the validation model; consult `.pre-commit-config.yaml` directly to see which hooks are wired up. For the policy and rationale behind which real load-bearing configuration files receive built-in schema validation, see the **Built-in Schema Validation for Real Load-Bearing Configuration Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](TEMPLATE_DESIGN_DECISIONS.md).
 
-> **Schema validation (worked example only).** `check-jsonschema` is wired into `.pre-commit-config.yaml` to validate the worked-example schema shipped at `schemas/example-config.schema.json` and its valid example data under `schemas/examples/example-config/valid/`, plus a self-validation hook (`check-metaschema`) for the schema itself. The dedicated [`.github/workflows/data-ci.yml`](workflows/data-ci.yml) workflow re-runs the same data-file hooks (`check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, `check-metaschema`) so JSON/YAML/Actions enforcement can be made a required check via branch protection independent of the Python CI job. The contract that valid examples pass and invalid examples fail is exercised by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py); run `pytest tests/test_schema_examples.py -v` after any schema or fixture change. See [`schemas/README.md`](../schemas/README.md) for the worked example, the canonical downstream removal checklist, and future-work candidates. Downstream repositories MAY add additional `check-jsonschema` hook entries for their own schema-backed file families.
+Prettier is **opt-in** and is **not** part of the default data-file toolchain. (This framing has been re-verified against the built-in schema validation ADR and remains correct.)
+
+> **Schema example tests.** The contract that valid example fixtures pass and invalid example fixtures fail is exercised by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py). Run `pytest tests/test_schema_examples.py -v` after any schema or schema-example change. The dedicated [`.github/workflows/data-ci.yml`](workflows/data-ci.yml) workflow re-runs the data-file hooks (`check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, `check-metaschema`) so JSON/YAML/Actions enforcement can be made a required check via branch protection independent of the Python CI job. See [`schemas/README.md`](../schemas/README.md) for the worked example, the canonical downstream removal checklist, and future-work candidates. Downstream repositories MAY add additional `check-jsonschema` hook entries for their own schema-backed file families.
 >
 > **When schema contracts change**, agents updating any schema **MUST** keep the following in sync in the same change:
 >
@@ -82,8 +86,9 @@ Prettier is **opt-in** and is **not** part of the default data-file toolchain.
 > - Valid example fixtures under `schemas/examples/<name>/valid/`.
 > - Invalid example fixtures under `schemas/examples/<name>/invalid/`.
 > - The pre-commit hook scope in `.pre-commit-config.yaml`.
-> - `.github/workflows/data-ci.yml` only when **adding or removing a hook ID** (for example, introducing a new `check-yaml-custom` hook). Changes to an **existing** hook's `files:` regex (including `check-jsonschema` scope changes) are picked up automatically, because each `data-ci.yml` step invokes hooks by ID via `pre-commit run <hook-id> --all-files`.
-> - Any documentation that references the schema (for example, `schemas/README.md`, `README.md`, `OPTIONAL_CONFIGURATIONS.md`).
+> - `.github/workflows/data-ci.yml` only when **adding or removing a hook ID** (for example, introducing a new `check-yaml-custom` hook), or when adding, removing, or renaming an explicit CI step or hook alias that the workflow invokes by name. Changes to an **existing** hook's `files:` regex (including `check-jsonschema` scope changes) are picked up automatically, because each `data-ci.yml` step invokes hooks by ID via `pre-commit run <hook-id> --all-files`.
+> - The **Built-in Schema Validation for Real Load-Bearing Configuration Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](TEMPLATE_DESIGN_DECISIONS.md) when **adding or removing** a default validated real load-bearing configuration file (for example, when wiring or unwiring a new built-in vendor schema).
+> - Any documentation that references the schema or the validation policy (for example, `schemas/README.md`, `README.md`, `CONTRIBUTING.md`, and `OPTIONAL_CONFIGURATIONS.md`).
 
 ### For GitHub Copilot Coding Agent (Automated PRs)
 

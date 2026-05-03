@@ -34,7 +34,7 @@ This template includes:
 - **Multi-Agent Support:** Instruction files for Claude Code, OpenAI Codex CLI, and Gemini Code Assist (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`)
 - **Language-Specific Guidelines:** Modular instruction files for Markdown, PowerShell, Python, Terraform, JSON/JSONC, and YAML
 - **Linting Configurations:** Pre-configured settings for markdownlint, PSScriptAnalyzer, TFLint, and yamllint
-- **Data-File Validation:** Pre-commit hooks for `check-json`, `check-yaml`, `yamllint`, and `actionlint` (GitHub Actions workflows)
+- **Data-File Validation:** Pre-commit hooks for `check-json`, `check-yaml`, `yamllint`, `actionlint` (GitHub Actions workflows), `check-jsonschema` (validates the worked-example schema's valid example data under `schemas/examples/example-config/valid/`, plus selected real load-bearing configuration files against built-in vendor schemas), and `check-metaschema` (project-owned schema self-validation)
 - **JSON Schemas:** Root-level `schemas/` directory convention for schema-backed JSON and YAML files
 - **Pre-commit Hooks:** Automated code quality checks before commits
 
@@ -113,7 +113,7 @@ GEMINI.md                            # Agent instructions for Gemini Code Assist
 | `.github/linting/PSScriptAnalyzerSettings.psd1` | PSScriptAnalyzer settings enforcing OTBS formatting for PowerShell |
 | `.github/workflows/auto-fix-precommit.yml` | Automatically commits pre-commit auto-fixes on pushes to `copilot/**` branches by the Copilot coding agent (optional - remove if not using the Copilot coding agent) |
 | `.github/workflows/check-placeholders.yml` | CI workflow to verify OWNER/REPO and @OWNER placeholders are replaced after cloning |
-| `.github/workflows/data-ci.yml` | Data-file (JSON/YAML/GitHub Actions) linting CI workflow — runs `check-json`, `check-yaml`, `yamllint`, and `actionlint` as a dedicated check that can be required via branch protection |
+| `.github/workflows/data-ci.yml` | Data-file (JSON/YAML/GitHub Actions) linting CI workflow — runs `check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, and `check-metaschema` as a dedicated check that can be required via branch protection |
 | `.github/workflows/markdownlint.yml` | Markdown linting CI workflow (uses [markdownlint](https://github.com/DavidAnson/markdownlint)) |
 | `.github/workflows/powershell-ci.yml` | PowerShell linting and Pester testing CI workflow (optional - remove if not using PowerShell) |
 | `.github/workflows/python-ci.yml` | Python linting and testing CI workflow (optional - remove if not using Python) |
@@ -301,6 +301,7 @@ This repository enforces code quality through:
 - **Markdown Linting:** Runs on pre-commit and in CI
 - **JSON/YAML Validation:** `check-json` (strict `.json`), `check-yaml`, and `yamllint` run on pre-commit
 - **GitHub Actions Linting:** `actionlint` runs on pre-commit
+- **Schema Validation:** `check-jsonschema` validates the worked-example schema's example data and selected real load-bearing configuration files (e.g., `.github/dependabot.yml`) against built-in vendor schemas; `check-metaschema` self-validates project-owned schemas. See [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md) (Built-in Schema Validation ADR) for the policy
 - **JSON Schemas:** Root-level `schemas/` convention for schema-backed JSON/YAML files
 - **GitHub Copilot Instructions:** Guides AI-assisted development
 - **Pre-commit Hooks:** Catches issues before they reach CI
