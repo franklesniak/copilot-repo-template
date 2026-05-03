@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.5.20260503.1
+**Version:** 1.5.20260503.2
 
 ## Metadata
 
@@ -38,7 +38,7 @@ This file intentionally keeps only a minimal inline summary of the highest-prior
     - `terraform fmt -check -recursive`
     - `tflint --recursive`
     - `terraform test -verbose`
-  - The `pre-commit run --all-files` command exercises the data-file hooks configured in [`.pre-commit-config.yaml`](.pre-commit-config.yaml) (the authoritative list of active hooks), covering categories such as strict JSON syntax (`check-json`), YAML parsing (`check-yaml`) and style (`yamllint`), GitHub Actions linting (`actionlint`), JSON Schema validation (`check-jsonschema`), and schema self-validation (`check-metaschema`). The dedicated [`.github/workflows/data-ci.yml`](.github/workflows/data-ci.yml) workflow re-runs these so JSON/YAML/Actions enforcement can be required via branch protection. Run `pytest tests/test_schema_examples.py -v` after any schema or schema-example change.
+  - The `pre-commit run --all-files` command exercises the data-file hooks configured in [`.pre-commit-config.yaml`](.pre-commit-config.yaml) (the authoritative list of active hooks), covering categories such as strict JSON syntax (`check-json`), YAML parsing (`check-yaml`) and style (`yamllint`), GitHub Actions linting (`actionlint`), JSON Schema validation (`check-jsonschema`), and schema self-validation (`check-metaschema`). The dedicated [`.github/workflows/data-ci.yml`](.github/workflows/data-ci.yml) workflow re-runs these so JSON/YAML/Actions enforcement can be required via branch protection.
   - JSON, YAML, and schema authoring guidance lives in:
     - [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md)
     - [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md)
