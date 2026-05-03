@@ -734,7 +734,13 @@ If you prefer, you can open each file in a text editor and manually find and rep
 
 3. **`.github/pull_request_template.md`:**
    - Find: `OWNER/REPO`
-   - Replace with: `your-username/your-repo-name` (appears in the contributing-guidelines link)
+   - Replace with: `your-username/your-repo-name` (the live substitution
+     target is the contributing-guidelines link in the file body; the file
+     may also contain plain-text `OWNER/REPO` references inside the
+     top-of-file HTML comment block, which you can replace now or skip
+     because the entire HTML comment block is deleted in the
+     *Delete Template Comment* step under *Customizing the Pull Request
+     Template* later in this guide)
    - **GHES only:** also replace `github.com` with your GHES host (in the same link)
 
 4. **`.github/CODEOWNERS`:**

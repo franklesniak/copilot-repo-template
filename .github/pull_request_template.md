@@ -14,14 +14,14 @@ CUSTOMIZE: Replace `OWNER/REPO` below with your actual org/repo
 GHES users: Replace `github.com` with your GHES host (e.g., `github.company.com`).
 
 KNOWN LIMITATION (template repo only): The contributing-guidelines link
-below resolves to a non-existent
-`https://github.com/<OWNER>/<REPO>/blob/HEAD/CONTRIBUTING.md` URL (with
-`<OWNER>/<REPO>` left literal) when rendered on PRs against the template
-repository (`franklesniak/copilot-repo-template`), because the `OWNER/REPO`
-placeholder on the checklist link is intentionally not substituted in the
-template repo — that substitution is the responsibility of downstream adopters
-cloning this template. The reason the unsubstituted placeholder is allowed to
-persist there (rather than being rejected by CI) is that
+below contains the literal `OWNER/REPO` placeholder in its URL rather than
+substituted values, so it resolves to a non-existent target on `github.com`
+when rendered on PRs against the template repository
+(`franklesniak/copilot-repo-template`). The `OWNER/REPO` placeholder on
+the checklist link is intentionally not substituted in the template repo —
+that substitution is the responsibility of downstream adopters cloning
+this template. The reason the unsubstituted placeholder is allowed to
+persist here (rather than being rejected by CI) is that
 `.github/workflows/check-placeholders.yml` is gated off in the template repo
 itself (`if: github.repository != 'franklesniak/copilot-repo-template'`);
 downstream adopters do not have that gate and so have their substitution
