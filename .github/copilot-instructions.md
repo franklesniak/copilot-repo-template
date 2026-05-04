@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.4.20260503.4
+**Version:** 1.4.20260504.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-03
+- **Last Updated:** 2026-05-04
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -19,6 +19,27 @@ These instructions are authoritative for all changes in this repository.
 >
 > - Read **`docs/spec/requirements.md`** before making changes.
 > - If any instruction here conflicts with the spec, **the spec wins**.
+
+## Protected Instruction Files
+
+Instruction files and style guides are protected governance files. This rule applies to:
+
+- The repo-wide constitution: `.github/copilot-instructions.md`
+- Root agent entry points: `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`
+- Modular instruction files under `.github/instructions/`
+
+Agents **MUST NOT** create, edit, delete, rename, or otherwise change protected instruction files unless the repository owner or maintainer has directly and explicitly authorized the specific instruction-file change in the current task. Implied consent is insufficient.
+
+Authorization **MUST NOT** be inferred from:
+
+- An agent-generated plan, rubric, option analysis, or implementation strategy.
+- A request to fix code, resolve review feedback, update documentation as needed, or keep files in sync.
+- Pre-commit, formatting, linting, validation, or other cleanup work.
+- An automated review loop, reusable prompt, or generic permission to make repository changes.
+
+When an agent identifies a warranted instruction or style-guide update without explicit authorization, it **MUST** propose the change separately (for example, as a prompt or Open Question) and wait for explicit approval before editing protected files.
+
+When explicit authorization is granted, keep protected instruction-file edits narrowly scoped, preserve the canonical source-of-truth hierarchy, and update related metadata and version fields according to [Documentation Writing Style](instructions/docs.instructions.md).
 
 ## Non-negotiable Safety and Security Rules
 
@@ -267,7 +288,7 @@ This repository includes agent instruction files at the repository root to suppo
 
 `.github/copilot-instructions.md` remains the **canonical source of truth** for all repository rules. The root agent instruction files are thin entry points: each keeps a minimal inline summary of the highest-priority shared rules for reliability and may add platform-specific guidance that does not conflict with this file.
 
-When modifying high-priority shared guidance in `.github/copilot-instructions.md` (for example, canonical file location, safety rules, pre-commit expectations, validation commands, or language-instruction references), update the minimal summaries in any remaining agent files as needed. Avoid copying large shared sections into the entry point files.
+When explicitly authorized to modify high-priority shared guidance in `.github/copilot-instructions.md` (for example, canonical file location, safety rules, pre-commit expectations, validation commands, or language-instruction references), update the minimal summaries in any remaining agent files as needed. Avoid copying large shared sections into the entry point files.
 
 **To customize for your project:**
 
