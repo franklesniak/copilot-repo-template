@@ -93,7 +93,7 @@ This template repository includes several features you can adopt individually or
 | **Linting Configurations** | Pre-configured settings for markdownlint and PSScriptAnalyzer |
 | **Dependabot** | Automated dependency update monitoring |
 | **CODEOWNERS** | Automatic reviewer assignment for pull requests |
-| **Multi-Agent Support** | Instruction files for Claude Code, OpenAI Codex CLI, and Gemini Code Assist |
+| **Multi-Agent Support** | Instruction files for Cursor Agent, Hermes Agent, Claude Code, OpenAI Codex CLI, and Gemini Code Assist |
 
 ---
 
@@ -194,7 +194,7 @@ Use this matrix to decide which features to adopt based on complexity and depend
 | PowerShell CI Workflow | `.github/workflows/powershell-ci.yml` | PowerShell, Pester | Medium |
 | PSScriptAnalyzer Config | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell | Low |
 | Python CI Workflow | `.github/workflows/python-ci.yml` | Python project structure | High |
-| Agent Instruction Files | `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` | Adopt `.github/copilot-instructions.md` first | Low |
+| Agent Instruction Files | `.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` | Adopt `.github/copilot-instructions.md` first | Low |
 
 ### Recommended Adoption Order
 
@@ -786,10 +786,12 @@ If your project uses languages not covered by the template (JavaScript, TypeScri
 
 ### Agent Instruction Files (Multi-Platform Support)
 
-The template includes three agent instruction files at the repository root to support multi-platform AI coding agents:
+The template includes agent instruction files to support multi-platform AI coding agents:
 
 | File | Target Agent(s) |
 | --- | --- |
+| `.cursor/rules/repository-instructions.mdc` | Cursor Agent |
+| `.hermes.md` | Hermes Agent |
 | `CLAUDE.md` | Claude Code, GitHub Copilot coding agent |
 | `AGENTS.md` | OpenAI Codex CLI, GitHub Copilot coding agent |
 | `GEMINI.md` | Gemini Code Assist, GitHub Copilot coding agent |

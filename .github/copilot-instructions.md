@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.4.20260504.0
+**Version:** 1.4.20260508.1
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-04
+- **Last Updated:** 2026-05-08
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -25,7 +25,8 @@ These instructions are authoritative for all changes in this repository.
 Instruction files and style guides are protected governance files. This rule applies to:
 
 - The repo-wide constitution: `.github/copilot-instructions.md`
-- Root agent entry points: `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`
+- Root agent entry points: `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`
+- Cursor project rules under `.cursor/rules/`
 - Modular instruction files under `.github/instructions/`
 
 Agents **MUST NOT** create, edit, delete, rename, or otherwise change protected instruction files unless the repository owner or maintainer has directly and explicitly authorized the specific instruction-file change in the current task. Implied consent is insufficient.
@@ -278,15 +279,17 @@ This repository uses modular instruction files covering both language-specific s
 
 ## Agent Instruction Files
 
-This repository includes agent instruction files at the repository root to support multi-platform AI coding agents:
+This repository includes agent instruction files at the repository root and under platform-specific rule directories to support multi-platform AI coding agents:
 
 | File | Target Agent(s) |
 | --- | --- |
+| `.cursor/rules/repository-instructions.mdc` | Cursor Agent |
+| `.hermes.md` | Hermes Agent |
 | `CLAUDE.md` | Claude Code, GitHub Copilot coding agent |
 | `AGENTS.md` | OpenAI Codex CLI, GitHub Copilot coding agent |
 | `GEMINI.md` | Gemini Code Assist, GitHub Copilot coding agent |
 
-`.github/copilot-instructions.md` remains the **canonical source of truth** for all repository rules. The root agent instruction files are thin entry points: each keeps a minimal inline summary of the highest-priority shared rules for reliability and may add platform-specific guidance that does not conflict with this file.
+`.github/copilot-instructions.md` remains the **canonical source of truth** for all repository rules. The agent instruction files are thin entry points: each keeps a minimal inline summary of the highest-priority shared rules for reliability and may add platform-specific guidance that does not conflict with this file.
 
 When explicitly authorized to modify high-priority shared guidance in `.github/copilot-instructions.md` (for example, canonical file location, safety rules, pre-commit expectations, validation commands, or language-instruction references), update the minimal summaries in any remaining agent files as needed. Avoid copying large shared sections into the entry point files.
 

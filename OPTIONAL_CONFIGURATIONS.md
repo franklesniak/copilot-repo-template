@@ -2322,19 +2322,21 @@ When customizing the Pre-commit or Testing sections, you may also need to update
 
 ## Customizing Agent Instruction Files
 
-**Files:** `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`
+**Files:** `.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`
 
-The template includes three agent instruction files at the repository root. `.github/copilot-instructions.md` remains the canonical source of truth, while these files act as thin entry points that keep a minimal inline summary of the highest-priority shared rules plus any platform-specific guidance. Each file targets a specific AI coding platform:
+The template includes agent instruction files at the repository root and under platform-specific rule directories. `.github/copilot-instructions.md` remains the canonical source of truth, while these files act as thin entry points that keep a minimal inline summary of the highest-priority shared rules plus any platform-specific guidance. Each file targets a specific AI coding platform:
 
 | File | Target Agent(s) |
 | --- | --- |
+| `.cursor/rules/repository-instructions.mdc` | Cursor Agent |
+| `.hermes.md` | Hermes Agent |
 | `CLAUDE.md` | Claude Code, GitHub Copilot coding agent |
 | `AGENTS.md` | OpenAI Codex CLI, GitHub Copilot coding agent |
 | `GEMINI.md` | Gemini Code Assist, GitHub Copilot coding agent |
 
 ### Removing Unneeded Files
 
-Delete agent files for platforms you do not use. For example, if your team does not use Claude Code, delete `CLAUDE.md`. If your team does not use OpenAI Codex CLI, delete `AGENTS.md`. Removing unused files reduces maintenance burden without affecting other platforms.
+Delete agent files for platforms you do not use. For example, if your team does not use Cursor Agent, delete `.cursor/rules/repository-instructions.mdc`. If your team does not use Hermes Agent, delete `.hermes.md`. If your team does not use Claude Code, delete `CLAUDE.md`. If your team does not use OpenAI Codex CLI, delete `AGENTS.md`. Removing unused files reduces maintenance burden without affecting other platforms.
 
 ### Keeping Minimal Summaries Aligned
 
