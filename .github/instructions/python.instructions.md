@@ -7,7 +7,7 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.3.20260508.0
+**Version:** 1.3.20260508.1
 
 ## Metadata
 
@@ -290,15 +290,47 @@ def add_version_header(response):
     return response
 ```
 
+### Keep the Version Module Side-Effect-Free
+
+The module referenced by `attr = "<package>.__version__"` **SHOULD** be importable without successfully resolving every transitive dependency of the package. Modern setuptools (>= 61) reads simple `__version__ = "X.Y.Z"` assignments via static AST parsing without importing the module, but several real-world conditions still cause the attribute to be resolved by import: older setuptools versions, assignments more complex than a string literal, and tooling other than setuptools that resolves `attr =` references. When that import is required and `__init__.py` performs side-effectful imports — for example, `from .core import Foo` that pulls in an optional or unbuilt dependency — the build fails.
+
+For non-trivial packages, the defensive pattern is to declare `__version__` in a minimal, dependency-free module (commonly `src/<package>/_version.py` or `src/<package>/__about__.py`) and re-export it from `__init__.py`:
+
+```python
+# src/your_project/_version.py
+__version__ = "1.2.3"
+```
+
+```python
+# src/your_project/__init__.py
+from ._version import __version__
+```
+
+```toml
+# pyproject.toml
+[project]
+name = "your-project"
+dynamic = ["version"]
+
+[tool.setuptools.dynamic]
+version = { attr = "your_project._version.__version__" }
+```
+
+This keeps the version literal in a single dependency-free module regardless of what `__init__.py` imports at runtime, and it works identically whether the build resolves `attr =` via static parsing or via import.
+
 ### Other Build Backends
 
-If a different build backend is used, the same single-source-of-truth principle **MUST** be preserved using that backend's equivalent mechanism. Common patterns include:
+If a different build backend is used, the same single-source-of-truth principle **MUST** be preserved using that backend's equivalent mechanism.
 
-- **Hatchling:** `[tool.hatch.version] path = "src/<package>/__init__.py"` to read `__version__` from the package.
-- **Flit:** When `version` is omitted from `[project]`, Flit reads `__version__` from the package's top-level module automatically.
-- **Poetry:** Use a single source (for example, a `_version.py` module imported by `__init__.py`, combined with a tool such as `poetry-dynamic-versioning`); **MUST NOT** maintain a separate hard-coded literal in `pyproject.toml` alongside an independent literal in code.
+> **PEP 621 requirement:** `version` **MUST** be either statically set in `[project]` or explicitly listed in `[project] dynamic`. Backend-specific configuration (such as `[tool.hatch.version]` or `[tool.flit.module]`) is in addition to the `dynamic = ["version"]` declaration in `[project]`, not a replacement for it. Omitting both produces invalid PEP 621 metadata and causes build failures even when the backend would otherwise pick up the literal from the package source.
 
-The specific mechanism is out of scope for this guide; what matters is that exactly one literal exists.
+Common patterns:
+
+- **Hatchling:** Declare `dynamic = ["version"]` in `[project]` and configure `[tool.hatch.version] path = "src/<package>/__init__.py"`. Hatchling then reads `__version__` from the package at build time.
+- **Flit:** Declare `dynamic = ["version"]` in `[project]`. Flit then reads `__version__` from the package's top-level module automatically.
+- **Poetry:** Use a single source (for example, a `_version.py` module imported by `__init__.py`, combined with a tool such as `poetry-dynamic-versioning`). Under PEP 621-compliant Poetry metadata (Poetry 2.0+), declare `dynamic = ["version"]` in `[project]`. **MUST NOT** maintain a separate hard-coded literal in `pyproject.toml` alongside an independent literal in code.
+
+The specific mechanism is out of scope for this guide; what matters is that exactly one literal exists and that `[project]` declares `version` either statically or as dynamic.
 
 ### Drift Detection
 
