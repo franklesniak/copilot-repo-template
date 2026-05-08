@@ -31,7 +31,7 @@ To keep the template current and functional, maintainers **SHOULD** review templ
 - [ ] Review and update Terraform version in CI workflows
 - [ ] Review instruction files for accuracy and relevance
 - [ ] Verify all CI workflows still pass with latest dependency versions
-- [ ] Verify agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) remain aligned with `.github/copilot-instructions.md`
+- [ ] Verify agent instruction files (`.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) remain aligned with `.github/copilot-instructions.md`
 - [ ] Review and address any open issues or feedback
 
 **Annual Review:**
@@ -285,7 +285,7 @@ The instruction files in `.github/instructions/` include version numbers in the 
 
 ## Reviewing Agent Instruction Files
 
-Agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are thin entry points that **MUST** stay aligned with `.github/copilot-instructions.md`. The canonical file holds the full shared rule set; the root agent files keep only a minimal inline summary of the highest-priority shared rules plus any platform-specific guidance.
+Agent instruction files (`.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are thin entry points that **MUST** stay aligned with `.github/copilot-instructions.md`. The canonical file holds the full shared rule set; the agent files keep only a minimal inline summary of the highest-priority shared rules plus any platform-specific guidance.
 
 **What to check during review:**
 
@@ -301,7 +301,7 @@ Agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are thin entry p
 # If copilot-instructions.md was modified more recently than agent files,
 # manually verify the minimal summaries and any platform-specific sections
 git log --oneline -5 .github/copilot-instructions.md
-git log --oneline -5 CLAUDE.md AGENTS.md GEMINI.md
+git log --oneline -5 .cursor/rules/repository-instructions.mdc .hermes.md CLAUDE.md AGENTS.md GEMINI.md
 ```
 
 **When to update:** Whenever high-priority shared guidance in `.github/copilot-instructions.md` changes, whenever platform-specific guidance changes, or when new agent platforms emerge that require their own convention files.

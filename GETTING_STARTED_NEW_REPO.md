@@ -48,7 +48,7 @@ This template repository includes:
 - **Issue Templates:** Structured templates for bug reports, feature requests, and documentation issues
 - **Pull Request Template:** Checklist-based template for consistent PR reviews
 - **CI Workflows:** GitHub Actions workflows for linting, testing, and validation
-- **Multi-Agent Support:** Instruction files for Claude Code, OpenAI Codex CLI, and Gemini Code Assist
+- **Multi-Agent Support:** Instruction files for Cursor Agent, Hermes Agent, Claude Code, OpenAI Codex CLI, and Gemini Code Assist
 
 ### Repo Layout Examples
 
@@ -1784,8 +1784,10 @@ Review the files in `.github/instructions/` and remove or modify any that don't 
 
 ### Reviewing Agent Instruction Files
 
-The template includes three agent instruction files at the repository root for multi-platform AI coding agent support:
+The template includes agent instruction files for multi-platform AI coding agent support:
 
+- `.cursor/rules/repository-instructions.mdc` — Cursor Agent project rule
+- `.hermes.md` — Hermes Agent
 - `CLAUDE.md` — Claude Code, GitHub Copilot coding agent
 - `AGENTS.md` — OpenAI Codex CLI, GitHub Copilot coding agent
 - `GEMINI.md` — Gemini Code Assist, GitHub Copilot coding agent
@@ -1794,7 +1796,7 @@ These files are thin entry points for their respective AI coding platforms. `.gi
 
 **To customize for your project:**
 
-1. **Remove unneeded files** — Delete agent files for platforms you do not use (e.g., if not using Claude Code, delete `CLAUDE.md`)
+1. **Remove unneeded files** — Delete agent files for platforms you do not use (e.g., if not using Cursor Agent, delete `.cursor/rules/repository-instructions.mdc`; if not using Hermes Agent, delete `.hermes.md`; if not using Claude Code, delete `CLAUDE.md`)
 2. **Keep remaining files** — Keep all agent files for platforms you want to support, or accept that agents on those platforms receive no project-specific instructions
 3. **Keep minimal summaries aligned** — If you modified high-priority shared guidance in `.github/copilot-instructions.md` (for example, safety rules, pre-commit requirements, validation commands, language instruction references, or canonical-file guidance), update any remaining agent files so their minimal summaries stay accurate
 

@@ -31,7 +31,7 @@ This is a template repository providing best-practice GitHub Copilot instruction
 This template includes:
 
 - **GitHub Copilot Instructions:** Comprehensive coding standards that guide AI-assisted development
-- **Multi-Agent Support:** Instruction files for Claude Code, OpenAI Codex CLI, and Gemini Code Assist (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`)
+- **Multi-Agent Support:** Instruction files for Cursor Agent, Hermes Agent, Claude Code, OpenAI Codex CLI, and Gemini Code Assist (`.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`)
 - **Language-Specific Guidelines:** Modular instruction files for Markdown, PowerShell, Python, Terraform, JSON/JSONC, and YAML
 - **Linting Configurations:** Pre-configured settings for markdownlint, PSScriptAnalyzer, TFLint, and yamllint
 - **Data-File Validation:** Pre-commit hooks for `check-json`, `check-yaml`, `yamllint`, `actionlint` (GitHub Actions workflows), `check-jsonschema` (validates the worked-example schema's valid example data under `schemas/examples/example-config/valid/`, plus selected real load-bearing configuration files against built-in vendor schemas), and `check-metaschema` (project-owned schema self-validation)
@@ -97,6 +97,8 @@ pyproject.toml                       # Python project configuration
 .markdownlint.jsonc                  # Markdown linting configuration
 .yamllint.yml                        # YAML linting configuration
 .pre-commit-config.yaml              # Pre-commit hooks (multi-language)
+.cursor/rules/repository-instructions.mdc  # Agent instructions for Cursor Agent
+.hermes.md                           # Agent instructions for Hermes Agent
 AGENTS.md                            # Agent instructions for OpenAI Codex CLI
 CLAUDE.md                            # Agent instructions for Claude Code
 GEMINI.md                            # Agent instructions for Gemini Code Assist
@@ -122,6 +124,8 @@ GEMINI.md                            # Agent instructions for Gemini Code Assist
 | `.yamllint.yml` | YAML linting configuration (2-space indentation, max line length 120 as warning, unquoted GitHub Actions `on:` allowed) |
 | `.pre-commit-config.yaml` | Pre-commit hooks for all projects (multi-language) |
 | `schemas/` | Root-level JSON Schemas (Draft 2020-12) describing load-bearing JSON and YAML files |
+| `.cursor/rules/repository-instructions.mdc` | Minimal Cursor project rule instructions for Cursor Agent |
+| `.hermes.md` | Minimal agent entry point instructions for Hermes Agent |
 | `AGENTS.md` | Minimal agent entry point instructions for OpenAI Codex CLI and GitHub Copilot coding agent |
 | `CLAUDE.md` | Minimal agent entry point instructions plus Claude-specific workflow guidance |
 | `GEMINI.md` | Minimal agent entry point instructions for Gemini Code Assist and GitHub Copilot coding agent |

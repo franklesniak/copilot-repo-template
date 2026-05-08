@@ -1,23 +1,26 @@
-<!-- markdownlint-disable MD013 -->
-# Agent Instructions for Gemini Code Assist
+---
+description: Repository-wide instructions for Cursor Agent in this template.
+alwaysApply: true
+---
+# Agent Instructions for Cursor Agent
 
-**Version:** 1.3.20260508.0
+**Version:** 1.0.20260508.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-05-08
-- **Scope:** Agent-specific entry point for Gemini Code Assist and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
-- **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
+- **Scope:** Agent-specific project rule for Cursor Agent and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
+- **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md), [Documentation Writing Style](../../.github/instructions/docs.instructions.md)
 
-This file provides project-specific instructions for Gemini Code Assist and compatible AI coding agents operating in this repository. These instructions ensure that agents follow the same coding standards, safety rules, and workflows that apply to all contributors.
+This file provides project-specific instructions for Cursor Agent and compatible AI coding agents operating in this repository. These instructions ensure that agents follow the same coding standards, safety rules, and workflows that apply to all contributors.
 
 ## Canonical Instructions
 
 The authoritative source of truth for all repository rules is **`.github/copilot-instructions.md`** (the repo-wide constitution). All rules defined there apply without exception. **Read that file before making any changes.**
 
-This file intentionally keeps only a minimal inline summary of the highest-priority shared rules so that agents receive critical guidance immediately. The full shared rule set remains in the canonical file above.
+This file intentionally keeps only a minimal inline summary of the highest-priority shared rules so that Cursor receives critical guidance immediately. The full shared rule set remains in the canonical file above.
 
 ## Protected Instruction Files
 
@@ -44,12 +47,12 @@ If a style-guide update appears warranted but has not been explicitly authorized
     - `terraform fmt -check -recursive`
     - `tflint --recursive`
     - `terraform test -verbose`
-  - The `pre-commit run --all-files` command exercises the data-file hooks configured in [`.pre-commit-config.yaml`](.pre-commit-config.yaml) (the authoritative list of active hooks), covering categories such as strict JSON syntax (`check-json`), YAML parsing (`check-yaml`) and style (`yamllint`), GitHub Actions linting (`actionlint`), JSON Schema validation (`check-jsonschema`), and schema self-validation (`check-metaschema`). The dedicated [`.github/workflows/data-ci.yml`](.github/workflows/data-ci.yml) workflow re-runs these so JSON/YAML/Actions enforcement can be required via branch protection.
+  - The `pre-commit run --all-files` command exercises the data-file hooks configured in [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) (the authoritative list of active hooks), covering categories such as strict JSON syntax (`check-json`), YAML parsing (`check-yaml`) and style (`yamllint`), GitHub Actions linting (`actionlint`), JSON Schema validation (`check-jsonschema`), and schema self-validation (`check-metaschema`). The dedicated [`.github/workflows/data-ci.yml`](../../.github/workflows/data-ci.yml) workflow re-runs these so JSON/YAML/Actions enforcement can be required via branch protection.
   - JSON, YAML, and schema authoring guidance lives in:
-    - [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md)
-    - [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md)
-    - [`schemas/README.md`](schemas/README.md)
-    - the **Built-in Schema Validation for Real Load-Bearing Configuration Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md)
+    - [`.github/instructions/json.instructions.md`](../../.github/instructions/json.instructions.md)
+    - [`.github/instructions/yaml.instructions.md`](../../.github/instructions/yaml.instructions.md)
+    - [`schemas/README.md`](../../schemas/README.md)
+    - the **Built-in Schema Validation for Real Load-Bearing Configuration Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](../../.github/TEMPLATE_DESIGN_DECISIONS.md)
 
 - **Modular instruction files**
   - Read the relevant file under `.github/instructions/` before modifying matching files:
