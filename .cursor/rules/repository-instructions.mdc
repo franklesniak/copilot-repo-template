@@ -1,6 +1,5 @@
 ---
 description: Repository-wide instructions for Cursor Agent in this template.
-globs:
 alwaysApply: true
 ---
 # Agent Instructions for Cursor Agent

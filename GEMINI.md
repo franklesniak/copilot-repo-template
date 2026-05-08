@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Gemini Code Assist
 
-**Version:** 1.3.20260508.1
+**Version:** 1.3.20260508.0
 
 ## Metadata
 

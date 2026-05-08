@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.5.20260508.1
+**Version:** 1.5.20260508.0
 
 ## Metadata
 
