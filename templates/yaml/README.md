@@ -2,14 +2,6 @@
 
 # YAML Template Files
 
-## Metadata
-
-- **Status:** Active
-- **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-09
-- **Scope:** Starter YAML linting configurations and a starter YAML config example shipped under `templates/yaml/` for downstream consumers to copy into their own repositories. Covers the lenient and strict yamllint configurations and a starter YAML config that demonstrates the conservative YAML subset documented in `.github/instructions/yaml.instructions.md`. Does not cover the active YAML linting configuration `.yamllint.yml` at the repository root.
-- **Related:** [YAML Authoring Standards](../../.github/instructions/yaml.instructions.md), [Active root `.yamllint.yml`](../../.yamllint.yml), [Template Design Decisions — yamllint truthy.check-keys Default](../../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-truthycheck-keys-default), [Template Design Decisions — yamllint line-length Warning Level Default](../../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-line-length-warning-level-default), [JSON/YAML Starter Content (Opt-in) in `OPTIONAL_CONFIGURATIONS.md`](../../OPTIONAL_CONFIGURATIONS.md#jsonyaml-starter-content-opt-in), [Repository Copilot Instructions](../../.github/copilot-instructions.md)
-
 This directory contains starter YAML linting configurations and a small starter config example for downstream consumers that want to adopt the template's YAML toolchain.
 
 ## Purpose
