@@ -732,13 +732,13 @@ Add checklist sections for your project's technology stack:
 
 The default PR template includes a `### Data-File-Specific (if applicable)` section that prompts contributors to verify the data-file definition-of-done items documented in [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md), [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md), and the **Data-File Validation** subsection of [`.github/copilot-instructions.md`](.github/copilot-instructions.md). The default checklist covers the baseline pre-commit hooks (`check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, `check-metaschema`), schema-fixture parity, the schema example tests under `tests/test_schema_examples.py`, GitHub Actions workflow linting, `check-jsonschema` hook bookkeeping, and a normative no-secrets/no-PII rule.
 
-The no-secrets/no-PII bullet is normative and **MUST NOT** be removed. The other bullets **MAY** be customized as described below.
+The no-secrets/no-PII bullet in this section is a high-visibility, data-file-specific reminder of the broader **No secrets in code or repo** rule from [`.github/copilot-instructions.md`](.github/copilot-instructions.md). That broader rule is *separately* enforced by the General checklist, which carries an explicit no-secrets/no-PII bullet and also references `.github/copilot-instructions.md`. The data-file-specific bullet **MUST NOT** be unchecked when this section is present, and removing the entire section is acceptable only because the broader rule continues to apply via the General checklist. The other bullets in this section **MAY** be customized as described below.
 
 #### Removing the Section Entirely
 
 Most repositories will not need to remove this section, because GitHub Actions workflows alone are YAML and the section's pre-commit and `actionlint` bullets apply to any repository that ships at least one workflow file. **Removal is appropriate only for repositories that commit no JSON, no YAML (including no GitHub Actions workflows), and no schema files at all.**
 
-If your repository genuinely commits no JSON or YAML files of any kind, delete the entire `### Data-File-Specific (if applicable)` block (heading, HTML comment, and all checklist items) from `.github/pull_request_template.md`.
+If your repository genuinely commits no JSON or YAML files of any kind, delete the entire `### Data-File-Specific (if applicable)` block (heading, HTML comment, and all checklist items) from `.github/pull_request_template.md`. The repo-wide no-secrets/no-PII rule remains in force after removal because the General checklist carries its own no-secrets/no-PII bullet and also references `.github/copilot-instructions.md`. If you have customized the General checklist in a way that drops or weakens that bullet, you **MUST** restore an equivalent no-secrets/no-PII checklist item to the General section (or another retained section) before removing the Data-File-Specific section.
 
 #### Tightening the "if applicable" Language
 
@@ -794,7 +794,7 @@ These bullets are **opt-in**: do **not** add them unless your repository actuall
 - [ ] If a Helm chart under `charts/` (or your repository's chart directory) was modified, `helm lint` passes
 ```
 
-These ecosystem validators are intentionally **not** part of the default `.pre-commit-config.yaml` shipped with this template; see the **Non-goals** section in the issue tracker and the [Ecosystem-Specific YAML Validators (Opt-in)](#ecosystem-specific-yaml-validators-opt-in) section in this guide for the rationale and adoption guidance.
+These ecosystem validators are intentionally **not** part of the default `.pre-commit-config.yaml` shipped with this template; see the [Ecosystem-Specific YAML Validators (Opt-in)](#ecosystem-specific-yaml-validators-opt-in) section in this guide for the rationale and adoption guidance.
 
 ### Customizing Type of Change Options
 
