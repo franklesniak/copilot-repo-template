@@ -88,7 +88,7 @@ If you want the starter content under this directory to be validated locally bef
 
 ## Additional Resources
 
-- [JSON Schema Draft 2020-12 specification](https://json-schema.org/draft/2020-12/schema)
+- [JSON Schema specification](https://json-schema.org/specification) — canonical entry point that lists Draft 2020-12 and other published drafts
 - [JSON Schema documentation](https://json-schema.org/)
 - [`check-jsonschema` documentation](https://check-jsonschema.readthedocs.io/)
 - [`.github/instructions/json.instructions.md`](../../.github/instructions/json.instructions.md) — JSON authoring standards
