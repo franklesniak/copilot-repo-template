@@ -128,7 +128,7 @@ outside the scope of that rule and CI check.
 - [ ] If a schema under `schemas/` was modified, the matching `schemas/examples/<schema-name>/{valid,invalid}/` fixtures were updated in the same commit
 - [ ] If a schema under `schemas/` was modified, `pytest tests/test_schema_examples.py -v` still passes
 - [ ] If a GitHub Actions workflow was modified, `actionlint` passes (run via `pre-commit run actionlint --all-files`)
-- [ ] If a `check-jsonschema` hook was added, removed, or renamed, `.github/workflows/data-ci.yml`, `.github/copilot-instructions.md`, and related docs were reviewed and updated where needed
+- [ ] If a `check-jsonschema` hook was added, removed, or renamed, `.github/workflows/data-ci.yml` and related documentation were reviewed and updated where needed; any updates to protected instruction files (e.g., `.github/copilot-instructions.md`) were coordinated with maintainers per the protected-instruction-files rule
 - [ ] No secrets, real PII, or production credentials appear in any committed JSON/YAML file or fixture
 
 ## Additional Notes
