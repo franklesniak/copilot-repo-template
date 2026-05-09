@@ -18,6 +18,7 @@ This guide covers optional customizations you can make after completing the init
 - [Security Configuration](#security-configuration)
 - [Code of Conduct Configuration](#code-of-conduct-configuration)
 - [Pull Request Template Customization](#pull-request-template-customization)
+  - [Adjusting the Data-File-Specific Pull Request Checklist](#adjusting-the-data-file-specific-pull-request-checklist)
 - [Dependabot Configuration](#dependabot-configuration)
 - [Pre-commit Configuration](#pre-commit-configuration)
 - [Schema Validation Configuration](#schema-validation-configuration)
@@ -726,6 +727,74 @@ Add checklist sections for your project's technology stack:
 - [ ] Checkstyle passes
 - [ ] No compiler warnings
 ```
+
+### Adjusting the Data-File-Specific Pull Request Checklist
+
+The default PR template includes a `### Data-File-Specific (if applicable)` section that prompts contributors to verify the data-file definition-of-done items documented in [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md), [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md), and the **Data-File Validation** subsection of [`.github/copilot-instructions.md`](.github/copilot-instructions.md). The default checklist covers the baseline pre-commit hooks (`check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, `check-metaschema`), schema-fixture parity, the schema example tests under `tests/test_schema_examples.py`, GitHub Actions workflow linting, `check-jsonschema` hook bookkeeping, and a normative no-secrets/no-PII rule.
+
+The no-secrets/no-PII bullet is normative and **MUST NOT** be removed. The other bullets **MAY** be customized as described below.
+
+#### Removing the Section Entirely
+
+Most repositories will not need to remove this section, because GitHub Actions workflows alone are YAML and the section's pre-commit and `actionlint` bullets apply to any repository that ships at least one workflow file. **Removal is appropriate only for repositories that commit no JSON, no YAML (including no GitHub Actions workflows), and no schema files at all.**
+
+If your repository genuinely commits no JSON or YAML files of any kind, delete the entire `### Data-File-Specific (if applicable)` block (heading, HTML comment, and all checklist items) from `.github/pull_request_template.md`.
+
+#### Tightening the "if applicable" Language
+
+For repositories where data files are central to the project (for example, schema-driven configuration repositories, GitHub Actions monorepos, infrastructure-as-data repositories, or repositories with a large `schemas/` tree), replace the conditional heading and HTML comment with direct language. Change:
+
+```markdown
+### Data-File-Specific (if applicable)
+
+<!-- Delete this section if your project does not commit JSON, YAML, GitHub Actions workflows, or schema files. Note that GitHub Actions workflows alone are YAML, so this section will apply to most repositories. -->
+```
+
+To:
+
+```markdown
+### Data-File Verification
+```
+
+You **MAY** also remove the leading conditional qualifiers on individual bullets (for example, the ``If a schema under `schemas/` was modified`` and `If a GitHub Actions workflow was modified` prefixes) when those file families are always in scope for changes in your repository.
+
+#### Adding Downstream Ecosystem-Specific Checklist Bullets
+
+When your repository commits ecosystem-specific data files and you have opted into the matching validator (see [Ecosystem-Specific YAML Validators (Opt-in)](#ecosystem-specific-yaml-validators-opt-in)), append additional checklist bullets so contributors are prompted to run the ecosystem validator before opening a PR.
+
+These bullets are **opt-in**: do **not** add them unless your repository actually commits files of that type **and** has wired up the corresponding validator (in `.pre-commit-config.yaml`, CI, or both). Adding ecosystem bullets without the matching tooling produces noise and false confidence.
+
+**Kubernetes manifests (`kubeconform`):**
+
+```markdown
+- [ ] If a Kubernetes manifest under `manifests/` (or your repository's manifest directory) was modified, `kubeconform` passes
+```
+
+**OpenAPI specifications (`spectral`):**
+
+```markdown
+- [ ] If an OpenAPI specification was modified, `spectral lint` passes against the project's ruleset
+```
+
+**CloudFormation templates (`cfn-lint`):**
+
+```markdown
+- [ ] If a CloudFormation template was modified, `cfn-lint` passes
+```
+
+**Ansible playbooks/roles (`ansible-lint`):**
+
+```markdown
+- [ ] If an Ansible playbook or role was modified, `ansible-lint` passes
+```
+
+**Helm charts (`helm lint`):**
+
+```markdown
+- [ ] If a Helm chart under `charts/` (or your repository's chart directory) was modified, `helm lint` passes
+```
+
+These ecosystem validators are intentionally **not** part of the default `.pre-commit-config.yaml` shipped with this template; see the **Non-goals** section in the issue tracker and the [Ecosystem-Specific YAML Validators (Opt-in)](#ecosystem-specific-yaml-validators-opt-in) section in this guide for the rationale and adoption guidance.
 
 ### Customizing Type of Change Options
 
