@@ -747,7 +747,7 @@ For repositories where data files are central to the project (for example, schem
 ```markdown
 ### Data-File-Specific (if applicable)
 
-<!-- Delete this section if your project does not commit JSON, YAML, GitHub Actions workflows, or schema files. Note that GitHub Actions workflows alone are YAML, so this section will apply to most repositories. -->
+<!-- Delete this section if your project does not commit JSON, YAML, GitHub Actions workflows, or schema files. Note that GitHub Actions workflows alone are YAML, so this section will apply to most repositories. The repo-wide no-secrets/no-PII rule is retained in the General checklist regardless of whether this section is removed. -->
 ```
 
 To:
