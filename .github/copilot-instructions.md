@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.5.20260509.2
+**Version:** 1.5.20260509.3
 
 ## Metadata
 
@@ -308,7 +308,7 @@ This repository includes linting and validation tool configurations that align w
 | markdownlint | `.markdownlint.jsonc` | Markdown linting |
 | TFLint | `.tflint.hcl` | Terraform linting |
 | yamllint | `.yamllint.yml` | YAML style enforcement |
-| JSON Schema / `check-jsonschema` | `schemas/` and `.pre-commit-config.yaml` | Schema contracts and hook wiring for load-bearing JSON/YAML |
+| JSON Schema / `check-jsonschema` | `schemas/` and `.pre-commit-config.yaml` | Schema-driven validation: project-owned schemas under `schemas/` (the worked example today; future schema-backed file families) plus built-in vendor-schema checks of selected real load-bearing JSON/YAML config files (for example, `.github/dependabot.yml`) wired in `.pre-commit-config.yaml` |
 
 ### Running Linters
 
