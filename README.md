@@ -87,9 +87,13 @@ tests/                               # Test directory
     └── Placeholder.Tests.ps1
 
 templates/                           # Reference templates for project setup
+├── json/                            # JSON Schema starter content (Draft 2020-12)
+├── markdown/                        # Markdown linting configuration variants
+├── powershell/                      # PowerShell test templates
+│   └── Example.Tests.ps1            # Comprehensive Pester test example
 ├── python/                          # Python project templates
-└── powershell/                      # PowerShell test templates
-    └── Example.Tests.ps1            # Comprehensive Pester test example
+├── terraform/                       # Terraform test templates
+└── yaml/                            # yamllint starter configurations and starter YAML
 
 schemas/                             # JSON Schemas for load-bearing JSON/YAML files (Draft 2020-12)
 
@@ -132,7 +136,9 @@ GEMINI.md                            # Agent instructions for Gemini Code Assist
 | `pyproject.toml` | Python project configuration with dev dependencies |
 | `src/copilot_repo_template/` | Example Python package - rename for your project |
 | `tests/` | Test directory with pytest tests (Python) and Pester tests (PowerShell) |
+| `templates/json/` | JSON Schema starter content (Draft 2020-12) and example fixtures for downstream consumers to copy into their own `schemas/` directory and adapt — starter content, not active contracts while under `templates/` |
 | `templates/powershell/Example.Tests.ps1` | Comprehensive Pester test template with examples |
+| `templates/yaml/` | `yamllint` starter configurations (lenient and strict) and a starter YAML config example for downstream consumers to copy into their own repositories — starter content, not active configurations while under `templates/` |
 
 ### Language Support
 
