@@ -5,7 +5,12 @@
 # in `.github/instructions/yaml.instructions.md`: 2-space indentation,
 # lowercase booleans, quoted version pins, quoted YAML 1.1 truthy-looking
 # strings, and short block scalars. It is starter content (not an active
-# config); it is not loaded by any tool in this repository.
+# config); it is not consumed as a runtime or application configuration
+# by any tool in this repository. (The repository's `check-yaml` and
+# `yamllint` pre-commit hooks do still parse and lint this file as YAML
+# like every other YAML file in the tree; the carve-out is about whether
+# the file drives a tool's runtime behavior, not about whether it is
+# validated as YAML.)
 #
 # All values are obviously fake. Do not commit real secrets, tokens, or
 # credentials when adapting this file in a downstream repository.

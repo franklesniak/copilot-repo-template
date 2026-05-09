@@ -14,7 +14,7 @@ This directory contains starter YAML linting configurations and a small starter 
 
 ## Purpose
 
-These template files demonstrate how to configure `yamllint` and how to author a minimal human-readable YAML file that aligns with the YAML authoring standards defined in [`.github/instructions/yaml.instructions.md`](../../.github/instructions/yaml.instructions.md). They are copy-and-adapt material, not enforced repository contracts: while these files remain under `templates/`, they are not loaded by any tool. The active YAML linting configuration for this template repository is `.yamllint.yml` at the repository root, which mirrors `templates/yaml/yamllint.lenient.yml`.
+These template files demonstrate how to configure `yamllint` and how to author a minimal human-readable YAML file that aligns with the YAML authoring standards defined in [`.github/instructions/yaml.instructions.md`](../../.github/instructions/yaml.instructions.md). They are copy-and-adapt material, not enforced repository contracts: while these files remain under `templates/`, **none of them is loaded as the active `.yamllint.yml` and their settings are not applied as the linting policy for the rest of the repository**. The active YAML linting configuration for this template repository is `.yamllint.yml` at the repository root, which mirrors `templates/yaml/yamllint.lenient.yml`. The starter YAML files themselves are still parsed for syntax by the repository's `check-yaml` pre-commit hook and linted by `yamllint` against the active root configuration, like every other YAML file in the tree; the carve-out is about *which configuration is active*, not about whether these files are validated as YAML at all.
 
 ## Files Included
 
@@ -91,7 +91,7 @@ Ecosystem-specific YAML validators (for example, `kubeconform` for Kubernetes ma
 
 ## Starter Content, Not an Active Contract
 
-The files under `templates/yaml/` are **starter content**. They are not loaded by `yamllint`, `check-yaml`, or `check-jsonschema` as active configurations or contracts. The active YAML linting configuration for this template repository is `.yamllint.yml` at the repository root.
+The files under `templates/yaml/` are **starter content**. They are not loaded by `yamllint` as the active linting configuration, and they are not consumed as application or runtime configurations or as `check-jsonschema` schema contracts. The repository's `check-yaml` and `yamllint` pre-commit hooks do still parse and lint the starter YAML files for syntax and style like every other YAML file in the tree; the carve-out is about whether the starter files drive a tool's runtime behavior, not about whether they are validated as YAML at all. The active YAML linting configuration for this template repository is `.yamllint.yml` at the repository root.
 
 ## Additional Resources
 

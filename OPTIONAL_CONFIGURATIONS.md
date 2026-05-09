@@ -1113,7 +1113,7 @@ This template ships starter content under `templates/json/` and `templates/yaml/
 - The active `check-metaschema` hook is anchored to `^schemas/example-config\.schema\.json$`.
 - The active root test [`tests/test_schema_examples.py`](tests/test_schema_examples.py) discovers schemas only under `schemas/`, not under `templates/**`.
 
-**Do not broaden these scopes to cover `templates/**`.** The starter content is meant to be lifted into a downstream repository's `schemas/` and `.yamllint.yml`, not validated in place.
+**Do not broaden these scopes to cover `templates/**`.** The starter content is meant to be lifted into a downstream repository's `schemas/` and `.yamllint.yml`, not exercised as an active schema contract or active linting configuration in place. The starter files are still parsed by the repository's `check-json`, `check-yaml`, and `yamllint` pre-commit hooks like every other JSON/YAML file in the tree; the carve-out is specifically about schema validation (`check-jsonschema`/`check-metaschema`), the schema-example pytest contract, and "active configuration" roles, not about basic JSON/YAML parsing or style enforcement.
 
 The two starter directories are described in detail in their own READMEs:
 
