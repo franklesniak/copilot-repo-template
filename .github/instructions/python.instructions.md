@@ -7,13 +7,13 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.2.20260503.4
+**Version:** 1.3.20260508.1
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-03
+- **Last Updated:** 2026-05-08
 - **Scope:** Defines Python coding standards for all Python files in this repository, including modules, scripts, tests, and tooling. Covers style, structure, error handling, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -64,6 +64,15 @@ This baseline is not dogma.  When external constraints require modern Python (e.
 - **[Modern]** Type hints are expected broadly; **MUST** run static checking (e.g., mypy/pyright) in CI.
 - **[All]** Tests **MUST** exist for non-trivial logic; **SHOULD** use `pytest` unless repo standard differs.
 - **[All]** **SHOULD** use Black for formatting and Ruff for linting (configured via `pyproject.toml` and pre-commit hooks).
+
+### Package Versioning
+
+- **[All]** Packages and applications that expose a version **MUST** maintain a single source of truth for that version and **MUST NOT** duplicate hard-coded version literals across multiple files (for example, repeating the same `"X.Y.Z"` string in `pyproject.toml`, `__init__.py`, and runtime code).
+- **[All]** For setuptools-based packages in this template, the preferred pattern is to declare the version once in `src/<package>/__init__.py` as `__version__ = "X.Y.Z"` and **SHOULD** reference it from:
+  - `pyproject.toml` via dynamic versioning (`dynamic = ["version"]` plus `[tool.setuptools.dynamic] version = { attr = "<package>.__version__" }`).
+  - application/runtime metadata by importing `__version__` rather than hard-coding a literal (for example, FastAPI version metadata, a CLI `--version` flag, or HTTP response headers).
+- **[All]** If a different build backend or project structure is used, the same single-source-of-truth principle **MUST** still apply, using the backend's equivalent mechanism.
+- **[All]** Tests or CI **SHOULD** verify that the packaged/resolved version and the runtime `__version__` remain aligned to prevent drift.
 
 ## Baseline vs Modern-Advanced Mode
 
@@ -217,6 +226,199 @@ except json.JSONDecodeError as error:
 - **SHOULD** prefer clarity first; optimize only when needed and measured.
 - **SHOULD** avoid quadratic algorithms in obvious hot paths (parsers, matchers, large loops).
 - **MUST** validate untrusted input at boundaries; **MUST NOT** use `eval`.
+
+## Package Versioning
+
+Packages and applications that expose a version (in package metadata, in CLI `--version` output, in HTTP response headers, in framework metadata such as a FastAPI `version=` field, etc.) **MUST** maintain a **single source of truth** for that version. The same version literal **MUST NOT** be hard-coded independently in `pyproject.toml`, in `__init__.py`, in runtime code, or in any other surface; bumping the version **MUST** require editing exactly one location.
+
+This rule applies regardless of build backend or project structure. When the build backend or layout differs from the preferred pattern below, the same single-source-of-truth principle **MUST** still apply, using the backend's equivalent mechanism.
+
+### Preferred Pattern (Setuptools)
+
+For setuptools-based packages — the default for projects derived from this template — declare the version exactly once in the package's `__init__.py`:
+
+```python
+# src/<package>/__init__.py
+__version__ = "1.2.3"
+```
+
+Reference it from `pyproject.toml` via setuptools' dynamic versioning so the wheel/sdist metadata is derived from the same literal at build time:
+
+```toml
+# pyproject.toml
+[project]
+name = "your-project"
+dynamic = ["version"]
+# ... other fields ...
+
+[tool.setuptools.dynamic]
+version = { attr = "your_project.__version__" }
+```
+
+Reference it from runtime/application metadata by importing `__version__` rather than repeating the literal. The same import pattern applies to FastAPI's `version=` metadata, a CLI `--version` flag, HTTP response headers, and any other surface that exposes a version:
+
+```python
+# src/your_project/app.py -- FastAPI version metadata
+from fastapi import FastAPI
+
+from your_project import __version__
+
+app = FastAPI(title="Your Project", version=__version__)
+```
+
+```python
+# src/your_project/cli.py -- CLI --version flag
+import argparse
+
+from your_project import __version__
+
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--version",
+    action="version",
+    version=f"%(prog)s {__version__}",
+)
+```
+
+```python
+# src/your_project/middleware.py -- HTTP response header
+from your_project import __version__
+
+
+def add_version_header(response):
+    response.headers["X-Service-Version"] = __version__
+    return response
+```
+
+### Keep the Version Module Side-Effect-Free
+
+The module referenced by `attr = "<package>.__version__"` **SHOULD** be importable without successfully resolving every transitive dependency of the package. Modern setuptools (>= 61) reads simple `__version__ = "X.Y.Z"` assignments via static AST parsing without importing the module, but several real-world conditions still cause the attribute to be resolved by import: older setuptools versions, assignments more complex than a string literal, and tooling other than setuptools that resolves `attr =` references. When that import is required and `__init__.py` performs side-effectful imports — for example, `from .core import Foo` that pulls in an optional or unbuilt dependency — the build fails.
+
+For non-trivial packages, the defensive pattern is to declare `__version__` in a minimal, dependency-free module (commonly `src/<package>/_version.py` or `src/<package>/__about__.py`) and re-export it from `__init__.py`:
+
+```python
+# src/your_project/_version.py
+__version__ = "1.2.3"
+```
+
+```python
+# src/your_project/__init__.py
+from ._version import __version__
+```
+
+```toml
+# pyproject.toml
+[project]
+name = "your-project"
+dynamic = ["version"]
+
+[tool.setuptools.dynamic]
+version = { attr = "your_project._version.__version__" }
+```
+
+This keeps the version literal in a single dependency-free module regardless of what `__init__.py` imports at runtime, and it works identically whether the build resolves `attr =` via static parsing or via import.
+
+### Other Build Backends
+
+If a different build backend is used, the same single-source-of-truth principle **MUST** be preserved using that backend's equivalent mechanism.
+
+> **PEP 621 requirement:** `version` **MUST** be either statically set in `[project]` or explicitly listed in `[project] dynamic`. Backend-specific configuration (such as `[tool.hatch.version]` or `[tool.flit.module]`) is in addition to the `dynamic = ["version"]` declaration in `[project]`, not a replacement for it. Omitting both produces invalid PEP 621 metadata and causes build failures even when the backend would otherwise pick up the literal from the package source.
+
+Common patterns:
+
+- **Hatchling:** Declare `dynamic = ["version"]` in `[project]` and configure `[tool.hatch.version] path = "src/<package>/__init__.py"`. Hatchling then reads `__version__` from the package at build time.
+- **Flit:** Declare `dynamic = ["version"]` in `[project]`. Flit then reads `__version__` from the package's top-level module automatically.
+- **Poetry:** Use a single source (for example, a `_version.py` module imported by `__init__.py`, combined with a tool such as `poetry-dynamic-versioning`). Under PEP 621-compliant Poetry metadata (Poetry 2.0+), declare `dynamic = ["version"]` in `[project]`. **MUST NOT** maintain a separate hard-coded literal in `pyproject.toml` alongside an independent literal in code.
+
+The specific mechanism is out of scope for this guide; what matters is that exactly one literal exists and that `[project]` declares `version` either statically or as dynamic.
+
+### Drift Detection
+
+Tests or CI **SHOULD** verify that the packaged/resolved version (as reported by `importlib.metadata.version("<distribution-name>")`) and the runtime `__version__` remain aligned, so that a misconfigured build or accidentally re-introduced literal is caught before release:
+
+```python
+# tests/test_version.py
+from importlib.metadata import version
+
+import your_project
+
+
+def test_runtime_version_matches_package_metadata() -> None:
+    """The runtime __version__ must match the installed package's metadata."""
+    assert your_project.__version__ == version("your-project")
+```
+
+### Compliant Example
+
+The version literal lives in exactly one place. Every other surface derives from it:
+
+```python
+# src/your_project/__init__.py
+__version__ = "1.2.3"
+```
+
+```toml
+# pyproject.toml
+[project]
+name = "your-project"
+dynamic = ["version"]
+
+[tool.setuptools.dynamic]
+version = { attr = "your_project.__version__" }
+```
+
+```python
+# src/your_project/app.py
+from fastapi import FastAPI
+
+from your_project import __version__
+
+app = FastAPI(title="Your Project", version=__version__)
+```
+
+Bumping `__version__` in `__init__.py` automatically propagates to:
+
+- the wheel/sdist metadata produced by `python -m build`,
+- the runtime `your_project.__version__` attribute,
+- the FastAPI metadata exposed at `/openapi.json`, and
+- any other surface that imports `__version__`.
+
+### Non-compliant Example
+
+The same version literal `"1.2.3"` is duplicated independently across multiple files. Bumping the version requires editing every file, and forgetting any one of them produces silent drift between the wheel metadata, the runtime attribute, and the externally visible surfaces:
+
+```toml
+# pyproject.toml -- duplicates the literal
+[project]
+name = "your-project"
+version = "1.2.3"
+```
+
+```python
+# src/your_project/__init__.py -- duplicates the literal
+__version__ = "1.2.3"
+```
+
+```python
+# src/your_project/app.py -- duplicates the literal
+from fastapi import FastAPI
+
+app = FastAPI(title="Your Project", version="1.2.3")
+```
+
+```python
+# src/your_project/cli.py -- duplicates the literal
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "--version",
+    action="version",
+    version="%(prog)s 1.2.3",
+)
+```
+
+This pattern **MUST NOT** be used. Once the version is bumped in one file but missed in another, the package's externally visible version no longer matches its packaged metadata, and the drift typically surfaces only after a release.
 
 ## "Done" Definition for Python Changes
 
