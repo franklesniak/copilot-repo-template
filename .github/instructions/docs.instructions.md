@@ -7,7 +7,7 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.5.20260509.0
+**Version:** 1.5.20260509.1
 
 ## Metadata
 
@@ -25,7 +25,7 @@ Documentation in this repository is treated as a **first-class engineering artif
 - A **design record** (how it works, constraints, trade-offs, failure modes)
 - A **maintenance tool** (how to safely change and operate it without regressions)
 
-This file governs all Markdown documentation (including `README.md`, `docs/**`, ADRs, runbooks, and release notes).
+This file governs all Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) documentation in this repository, including `README.md`, `docs/**`, ADRs, runbooks, release notes, instruction files under `.github/instructions/`, and Cursor project rules under `.cursor/rules/`.
 
 ## Core Principles
 
