@@ -88,6 +88,7 @@ outside the scope of that rule and CI check.
 - [ ] I have read the [contributing guidelines](https://github.com/OWNER/REPO/blob/HEAD/CONTRIBUTING.md)
 - [ ] My code follows the coding standards in `.github/instructions/`
 - [ ] My changes follow `.github/copilot-instructions.md` and any applicable `.github/instructions/*`
+- [ ] No secrets, real PII, or production credentials appear in any committed file
 - [ ] I have performed a self-review of my own code
 - [ ] I have commented my code where necessary, particularly in hard-to-understand areas
 - [ ] I have made corresponding changes to the documentation
@@ -118,6 +119,17 @@ outside the scope of that rule and CI check.
 - [ ] PSScriptAnalyzer passes locally (`Invoke-ScriptAnalyzer -Path . -Settings .github/linting/PSScriptAnalyzerSettings.psd1`)
 - [ ] Pester tests pass locally (`Invoke-Pester -Path tests/ -Output Detailed`)
 - [ ] PowerShell formatting follows repository standards (OTBS, consistent line endings)
+
+### Data-File-Specific (if applicable)
+
+<!-- Delete this section if your project does not commit JSON, YAML, GitHub Actions workflows, or schema files. Note that GitHub Actions workflows alone are YAML, so this section will apply to most repositories. The General checklist retains its own no-secrets/PII/credentials bullet regardless of whether this section is removed. -->
+
+- [ ] `pre-commit run --all-files` passes (in particular `check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, and `check-metaschema`)
+- [ ] If a schema under `schemas/` was modified, the matching `schemas/examples/<schema-name>/{valid,invalid}/` fixtures were updated in the same commit
+- [ ] If a schema under `schemas/` was modified, `pytest tests/test_schema_examples.py -v` still passes
+- [ ] If a GitHub Actions workflow was modified, `actionlint` passes (run via `pre-commit run actionlint --all-files`)
+- [ ] If a `check-jsonschema` hook was added, removed, or renamed, `.github/workflows/data-ci.yml` and related documentation were reviewed and updated where needed; any updates to protected instruction files (e.g., `.github/copilot-instructions.md`) were coordinated with maintainers per the protected-instruction-files rule
+- [ ] No secrets, real PII, or production credentials appear in any committed JSON/YAML file or fixture
 
 ## Additional Notes
 

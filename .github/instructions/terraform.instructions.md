@@ -3,9 +3,18 @@ applyTo: "**/*.tf,**/*.tfvars,**/*.tftest.hcl,**/*.tf.json,**/*.tftpl,**/*.tfbac
 description: "Terraform coding standards: secure, modular, and well-documented infrastructure as code."
 ---
 
+<!-- markdownlint-disable MD013 -->
+
 # Terraform Writing Style
 
-**Version:** 2.3.20260503.0
+**Version:** 2.3.20260509.0
+
+## Metadata
+
+- **Status:** Active
+- **Owner:** Repository Maintainers
+- **Last Updated:** 2026-05-09
+- **Scope:** Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in this repository — style, formatting, naming, file organization, variable and output design, resource configuration, module design, state management, cross-stack data sharing, provider management, security, testing, and documentation.
 
 ## Keywords
 
