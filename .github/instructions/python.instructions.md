@@ -7,7 +7,7 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.4.20260509.0
+**Version:** 1.5.20260509.0
 
 ## Metadata
 
@@ -63,6 +63,7 @@ This baseline is not dogma.  When external constraints require modern Python (e.
 - **[Baseline]** **MAY** use type hints opportunistically for public APIs and complex structures.
 - **[Modern]** Type hints are expected broadly; **MUST** run static checking (e.g., mypy/pyright) in CI.
 - **[All]** Tests **MUST** exist for non-trivial logic; **SHOULD** use `pytest` unless repo standard differs.
+- **[All]** Tests **SHOULD** prefer public seams over monkeypatching private internals.
 - **[All]** **SHOULD** use Black for formatting and Ruff for linting (configured via `pyproject.toml` and pre-commit hooks).
 
 ### Package Versioning
@@ -220,6 +221,9 @@ except json.JSONDecodeError as error:
 - Non-trivial logic **MUST** have tests.
 - Tests **MUST** be deterministic and **MUST NOT** depend on network unless explicitly marked/integration-only.
 - **SHOULD** use table-driven tests for parsing/validation logic.
+- Tests **SHOULD NOT** read from or monkeypatch private (single-underscore-prefixed) attributes or methods of production classes.
+- When a test needs to substitute collaborators or inject fixtures that production code would normally build internally, production code **SHOULD** expose a narrow public seam (for example, a keyword-only `__init__` parameter or another explicit injection point) rather than relying on tests to monkeypatch private internals.
+- Production call sites **SHOULD** use the default behavior of that seam unless an override is intentionally required.
 
 ## Performance and Safety
 
