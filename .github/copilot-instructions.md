@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.5.20260509.0
+**Version:** 1.5.20260509.1
 
 ## Metadata
 
@@ -342,7 +342,7 @@ pre-commit run check-jsonschema --all-files
 pre-commit run check-metaschema --all-files
 ```
 
-Prettier is **opt-in** and is **not** part of the default data-file toolchain. See the **Data-File Validation** subsection above and the **Prettier Deferral for Data Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](TEMPLATE_DESIGN_DECISIONS.md) for the rationale.
+Prettier is **opt-in** and is **not** part of the default data-file toolchain. The canonical statement lives in the **Data-File Validation** subsection above; if the two ever appear to diverge, treat the canonical statement as authoritative. For the rationale, see the **Prettier Deferral for Data Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](TEMPLATE_DESIGN_DECISIONS.md).
 
 ## Testing Tools
 
@@ -381,4 +381,4 @@ terraform test -verbose
 pytest tests/test_schema_examples.py -v
 ```
 
-`tests/test_schema_examples.py` shells out to the `check-jsonschema` CLI from `PATH`. If `check-jsonschema` is not installed in the test environment, the parametrized cases are skipped by design (a skipped test is not a passing test — pytest still exits `0`, but no schema validation actually ran). Install it via `pip install -e ".[dev]"` or `pip install check-jsonschema` so the binary is on `PATH`. To validate schemas through the pre-commit toolchain instead, run `pre-commit run check-jsonschema --all-files`. See [`README.md`](../README.md) for the full prerequisite note.
+`tests/test_schema_examples.py` shells out to the `check-jsonschema` CLI from `PATH`. If `check-jsonschema` is not installed in the test environment, the parametrized cases are skipped by design (a skipped test is not a passing test — pytest still exits `0`, but no schema validation actually ran). Install it via `pip install -e ".[dev]"` or `pip install check-jsonschema` so the binary is on `PATH`. To validate schemas through the pre-commit toolchain instead, run `pre-commit run check-jsonschema --all-files` for example-fixture validation against schemas and `pre-commit run check-metaschema --all-files` for project-owned schema self-validation; `pre-commit run --all-files` exercises both at once. See [`README.md`](../README.md) for the full prerequisite note.
