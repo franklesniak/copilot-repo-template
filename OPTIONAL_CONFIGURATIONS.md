@@ -1140,7 +1140,7 @@ To adopt the starter schema in a downstream repository:
 
 `templates/yaml/` ships:
 
-- `templates/yaml/yamllint.lenient.yml` — verbatim copy of the active repository-root `.yamllint.yml` (`truthy.check-keys: false`, `comments-indentation: disable`, `line-length.level: warning`).
+- `templates/yaml/yamllint.lenient.yml` — mirrors the active repository-root `.yamllint.yml` rule settings (`truthy.check-keys: false`, `comments-indentation: disable`, `line-length.level: warning`). The `rules:` block is byte-identical to the active root configuration; only the leading comment block differs (it documents the file's role as starter content rather than the active config).
 - `templates/yaml/yamllint.strict.yml` — stricter alternative with `truthy.check-keys: true` and `line-length` at default error severity. Documented by the **yamllint truthy.check-keys Default** and **yamllint line-length Warning Level Default** ADRs in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md). Adopting the strict variant requires quoting `"on":` in every GitHub Actions workflow file under `.github/workflows/*.yml`.
 - `templates/yaml/starter-config.yaml` — minimal human-authored YAML config example demonstrating 2-space indentation, lowercase booleans, quoted version pins, quoted YAML 1.1 truthy-looking strings, and a short block scalar.
 

@@ -6,8 +6,9 @@
 # existing file) when you want the template's current YAML linting defaults
 # verbatim.
 #
-# Defaults preserved here (see ../README.md for the choose-between-lenient-and-strict
-# guidance and `.github/TEMPLATE_DESIGN_DECISIONS.md` for the rationale ADRs):
+# Defaults preserved here (see README.md in this directory for the
+# choose-between-lenient-and-strict guidance and
+# `.github/TEMPLATE_DESIGN_DECISIONS.md` for the rationale ADRs):
 #
 #   - truthy.check-keys: false
 #       Preserves the idiomatic GitHub Actions `on:` key without per-file

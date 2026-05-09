@@ -1,4 +1,14 @@
+<!-- markdownlint-disable MD013 -->
+
 # JSON Template Files
+
+## Metadata
+
+- **Status:** Active
+- **Owner:** Repository Maintainers
+- **Last Updated:** 2026-05-09
+- **Scope:** Starter JSON Schema content and example fixtures shipped under `templates/json/` for downstream consumers to copy into their own `schemas/` directories and adapt. Covers the starter schema (`starter.schema.json`), the smallest valid and invalid example fixtures, and the recommended adoption workflow. Does not cover the active worked example under `schemas/`, which is documented in [`schemas/README.md`](../../schemas/README.md).
+- **Related:** [JSON Authoring Standards](../../.github/instructions/json.instructions.md), [Schemas README](../../schemas/README.md), [JSON/YAML Starter Content (Opt-in) in `OPTIONAL_CONFIGURATIONS.md`](../../OPTIONAL_CONFIGURATIONS.md#jsonyaml-starter-content-opt-in), [Repository Copilot Instructions](../../.github/copilot-instructions.md)
 
 This directory contains starter JSON Schema content and example fixtures for downstream consumers that want to add schema-backed JSON contracts to their repositories.
 

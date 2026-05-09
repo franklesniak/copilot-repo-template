@@ -1,4 +1,14 @@
+<!-- markdownlint-disable MD013 -->
+
 # YAML Template Files
+
+## Metadata
+
+- **Status:** Active
+- **Owner:** Repository Maintainers
+- **Last Updated:** 2026-05-09
+- **Scope:** Starter YAML linting configurations and a starter YAML config example shipped under `templates/yaml/` for downstream consumers to copy into their own repositories. Covers the lenient and strict yamllint configurations and a starter YAML config that demonstrates the conservative YAML subset documented in `.github/instructions/yaml.instructions.md`. Does not cover the active YAML linting configuration `.yamllint.yml` at the repository root.
+- **Related:** [YAML Authoring Standards](../../.github/instructions/yaml.instructions.md), [Active root `.yamllint.yml`](../../.yamllint.yml), [Template Design Decisions — yamllint truthy.check-keys Default](../../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-truthycheck-keys-default), [Template Design Decisions — yamllint line-length Warning Level Default](../../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-line-length-warning-level-default), [JSON/YAML Starter Content (Opt-in) in `OPTIONAL_CONFIGURATIONS.md`](../../OPTIONAL_CONFIGURATIONS.md#jsonyaml-starter-content-opt-in), [Repository Copilot Instructions](../../.github/copilot-instructions.md)
 
 This directory contains starter YAML linting configurations and a small starter config example for downstream consumers that want to adopt the template's YAML toolchain.
 
@@ -8,7 +18,7 @@ These template files demonstrate how to configure `yamllint` and how to author a
 
 ## Files Included
 
-- **`yamllint.lenient.yml`**: Verbatim copy of the active repository-root `.yamllint.yml`. Use this when you want the template's current defaults (`truthy.check-keys: false`, `comments-indentation: disable`, `line-length.level: warning`).
+- **`yamllint.lenient.yml`**: Mirrors the active repository-root `.yamllint.yml` rule settings. The `rules:` block is byte-identical to the active root configuration; only the leading comment block differs (it documents the file's role as starter content rather than the active config). Use this when you want the template's current defaults (`truthy.check-keys: false`, `comments-indentation: disable`, `line-length.level: warning`).
 - **`yamllint.strict.yml`**: Stricter alternative with `truthy.check-keys: true` and `line-length` at default error severity. Adopting it requires quoting `"on":` in every GitHub Actions workflow file. Documented by the **yamllint truthy.check-keys Default** and **yamllint line-length Warning Level Default** ADRs in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](../../.github/TEMPLATE_DESIGN_DECISIONS.md).
 - **`starter-config.yaml`**: Minimal human-authored YAML config example that demonstrates 2-space indentation, lowercase `true` / `false`, quoted version pins (for example, `"3.13"`, `"1.0"`), quoted YAML 1.1 truthy-looking strings (`"no"`, `"on"`) when they are intended as strings, and a short block scalar.
 - **`README.md`**: This file.
