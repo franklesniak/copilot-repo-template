@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.4.20260508.0
+**Version:** 1.5.20260509.3
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-08
+- **Last Updated:** 2026-05-09
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -275,7 +275,7 @@ This repository uses modular instruction files covering both language-specific s
 - Add new instruction files for additional languages or cross-cutting rules as needed
 - Update this table to reflect the instruction files present in your project
 
-> **Terraform note:** If your project does not use Terraform, remove the Terraform instruction file (`.github/instructions/terraform.instructions.md`), remove the Terraform row from the table above, and remove Terraform-related entries from the Linting Configurations and Testing Tools sections below.
+> **Terraform note:** If your project does not use Terraform, remove the Terraform instruction file (`.github/instructions/terraform.instructions.md`), remove the Terraform row from the table above, and remove Terraform-related entries from the Linting and Validation Configurations and Testing Tools sections below.
 
 ## Agent Instruction Files
 
@@ -298,15 +298,17 @@ When explicitly authorized to modify high-priority shared guidance in `.github/c
 - Remove agent files for platforms you do not use
 - Keep the remaining agent files limited to minimal inline summaries plus any necessary platform-specific guidance
 
-## Linting Configurations
+## Linting and Validation Configurations
 
-This repository includes linting tool configurations that align with the coding standards:
+This repository includes linting and validation tool configurations that align with the coding standards. The table below covers both linter configuration files and schema-validation contracts; `schemas/` is a schema-contract directory consumed by validation tooling, not a linter configuration file.
 
-| Tool | Configuration File | Purpose |
+| Tool / Validator | Configuration / Contract | Purpose |
 | --- | --- | --- |
 | PSScriptAnalyzer | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell formatting/linting (OTBS style) |
 | markdownlint | `.markdownlint.jsonc` | Markdown linting |
 | TFLint | `.tflint.hcl` | Terraform linting |
+| yamllint | `.yamllint.yml` | YAML style enforcement |
+| JSON Schema / `check-jsonschema` | `schemas/` and `.pre-commit-config.yaml` | Schema-driven validation: project-owned schemas under `schemas/` (the worked example today; future schema-backed file families) plus built-in vendor-schema checks of selected real load-bearing JSON/YAML config files (for example, `.github/dependabot.yml`) wired in `.pre-commit-config.yaml` |
 
 ### Running Linters
 
@@ -329,15 +331,29 @@ terraform fmt -check -recursive
 tflint --recursive
 ```
 
+**JSON, YAML, and GitHub Actions:**
+
+```bash
+pre-commit run check-json --all-files
+pre-commit run check-yaml --all-files
+pre-commit run yamllint --all-files
+pre-commit run actionlint --all-files
+pre-commit run check-jsonschema --all-files
+pre-commit run check-metaschema --all-files
+```
+
+Prettier is **opt-in** and is **not** part of the default data-file toolchain. The canonical statement lives in the **Data-File Validation** subsection above; if the two ever appear to diverge, treat the canonical statement as authoritative. For the rationale, see the **Prettier Deferral for Data Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](TEMPLATE_DESIGN_DECISIONS.md).
+
 ## Testing Tools
 
-This repository includes testing infrastructure for Python, PowerShell, and Terraform:
+This repository includes testing infrastructure for Python, PowerShell, Terraform, and JSON Schema example fixtures:
 
-| Language | Framework | Configuration | Test Location |
+| Language / Contract | Framework | Configuration | Test Location |
 | --- | --- | --- | --- |
 | Python | pytest | `pyproject.toml` (`[tool.pytest.ini_options]`) | `tests/` |
 | PowerShell | Pester 5.x | Inline in `.github/workflows/powershell-ci.yml` | `tests/PowerShell/` |
 | Terraform | Terraform Test (requires Terraform 1.6+) | Built-in | `modules/*/tests/` or `tests/` |
+| JSON Schema (Draft 2020-12) example fixtures | `check-jsonschema` + pytest | `schemas/` + `tests/test_schema_examples.py` | `schemas/examples/<name>/{valid,invalid}/` |
 
 ### Running Tests
 
@@ -358,3 +374,11 @@ Invoke-Pester -Path tests/ -Output Detailed
 ```bash
 terraform test -verbose
 ```
+
+**JSON Schema example fixtures:**
+
+```bash
+pytest tests/test_schema_examples.py -v
+```
+
+`tests/test_schema_examples.py` shells out to the `check-jsonschema` CLI from `PATH`. If `check-jsonschema` is not installed in the test environment, the parametrized cases are skipped by design (a skipped test is not a passing test — pytest still exits `0`, but no schema validation actually ran). Install it via `pip install -e ".[dev]"` or `pip install check-jsonschema` so the binary is on `PATH`. To validate schemas through the pre-commit toolchain instead, run `pre-commit run check-jsonschema --all-files` for example-fixture validation against schemas and `pre-commit run check-metaschema --all-files` for project-owned schema self-validation; `pre-commit run --all-files` exercises both at once. See [`README.md`](../README.md) for the full prerequisite note.
