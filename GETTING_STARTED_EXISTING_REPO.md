@@ -90,7 +90,8 @@ This template repository includes several features you can adopt individually or
 | **PR Template** | Checklist-based template for consistent pull request reviews |
 | **CI Workflows** | GitHub Actions workflows for linting, testing, and validation |
 | **Pre-commit Hooks** | Automated code quality checks before commits |
-| **Linting Configurations** | Pre-configured settings for markdownlint and PSScriptAnalyzer |
+| **Linting Configurations** | Pre-configured settings for markdownlint, PSScriptAnalyzer, TFLint, and yamllint |
+| **Data-File Validation** | JSON, YAML, GitHub Actions, and JSON Schema example validation through pre-commit and `data-ci.yml` |
 | **Dependabot** | Automated dependency update monitoring |
 | **CODEOWNERS** | Automatic reviewer assignment for pull requests |
 | **Multi-Agent Support** | Instruction files for Cursor Agent, Hermes Agent, Claude Code, OpenAI Codex CLI, and Gemini Code Assist |
@@ -1229,6 +1230,45 @@ If you are adopting the template's JSON/YAML support into an existing repository
 
 > **Do not duplicate full JSON/YAML policy here.** The authoritative authoring rules live in [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md) and [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md). Link to those files from your own documentation rather than copying their contents.
 
+### Default Template Behavior
+
+The template already ships JSON and YAML as first-class supported formats:
+
+- `.github/instructions/json.instructions.md` and `.github/instructions/yaml.instructions.md` define the authoring rules.
+- `.yamllint.yml` configures the default YAML style policy.
+- `.pre-commit-config.yaml` wires `check-json`, `check-yaml`, `yamllint`, `actionlint`, the worked-example `check-jsonschema` hook, and `check-metaschema`.
+- `.github/workflows/data-ci.yml` re-runs those data-file hooks as a dedicated CI check.
+- `schemas/` contains a removable worked example (`schemas/example-config.schema.json` and `schemas/examples/example-config/`) plus `schemas/README.md`.
+- `tests/test_schema_examples.py` verifies valid and invalid schema-example fixtures when the schema example is retained.
+- `templates/json/` and `templates/yaml/` provide starter content for downstream repositories to copy and adapt.
+
+### Optional Downstream Adoption
+
+For an existing repository, adopt only the pieces that match your stack:
+
+- Copy the JSON and YAML instruction files when the repository contains those formats.
+- Copy `.yamllint.yml` when you want the template's default YAML style policy.
+- Add or merge the data-file pre-commit hooks that apply to your files.
+- Optionally copy `schemas/` when you want schema-backed contract examples.
+- Alternatively, start from `templates/json/` and `templates/yaml/` when you want starter files without copying the template's worked example verbatim.
+- Optionally copy `.github/workflows/data-ci.yml` when you want JSON/YAML/Actions validation as its own CI check.
+- Optionally copy `tests/test_schema_examples.py` if you adopt schema-example contract testing.
+- Optionally adopt the stricter `templates/yaml/yamllint.strict.yml` configuration if your repository wants a stricter YAML policy than the template default.
+
+### Removal and De-scope Paths
+
+If you already copied the JSON/YAML stack into an existing repository and later decide to remove part of it, keep the removals consistent:
+
+- To remove JSON-specific guidance, delete `.github/instructions/json.instructions.md` and `templates/json/`, then remove the `check-json` hook only after confirming no strict `.json` files remain.
+- To remove the worked schema example, delete `schemas/example-config.schema.json`, `schemas/examples/example-config/`, and `tests/test_schema_examples.py` if no schema examples remain; also remove the worked-example `check-jsonschema` and `check-metaschema` hooks from `.pre-commit-config.yaml`.
+- To remove YAML-specific guidance, delete `.github/instructions/yaml.instructions.md`, `templates/yaml/`, and `.yamllint.yml`; remove `check-yaml`, `yamllint`, and `actionlint` from `.pre-commit-config.yaml` only if no YAML files or GitHub Actions workflows remain.
+- To remove dedicated data-file CI, delete `.github/workflows/data-ci.yml` or remove only the steps whose hook IDs no longer exist.
+- Keeping `.github/workflows/*.yml` while removing YAML validation is contradictory because GitHub Actions workflows are YAML. Flag and resolve that contradiction during adoption rather than leaving workflows without YAML guidance.
+
+### Downstream-only Ecosystem Validators
+
+Validators for ecosystems such as Kubernetes, OpenAPI, Helm, and Ansible are downstream-only choices. Add them only when the repository actually uses that ecosystem; they are not part of the template's default JSON/YAML toolchain.
+
 ### 1. Start with the Instruction Files
 
 Copy the JSON and YAML authoring guides into your repository. They are small, self-contained, and apply repository-wide:
@@ -1244,6 +1284,8 @@ Copy `.yamllint.yml` to the repository root. It extends `default`, enforces 2-sp
 
 If you already have a yamllint configuration, reconcile its rules with the YAML authoring guide rather than replacing your file wholesale.
 
+If your repository wants a stricter policy, compare the default file with `templates/yaml/yamllint.strict.yml` and adopt the stricter settings intentionally.
+
 ### 3. Add or Merge Pre-commit Hooks
 
 Add the following hooks to your `.pre-commit-config.yaml` (or merge them with your existing configuration) so the JSON/YAML toolchain runs locally and in CI:
@@ -1252,6 +1294,8 @@ Add the following hooks to your `.pre-commit-config.yaml` (or merge them with yo
 - `check-yaml` — basic YAML syntax check.
 - `yamllint` — style and structural checks driven by `.yamllint.yml` (`args: [-c, .yamllint.yml]`).
 - `actionlint` — GitHub Actions workflow linting (only needed if your repository contains workflow files; on networks that block Go module downloads, the hook's first-run install can fail — CI is the shared enforcement environment in that case).
+- `check-jsonschema` — JSON Schema validation for the worked example and any real schema-backed file families you adopt.
+- `check-metaschema` — schema self-validation for project-owned schemas that declare a supported JSON Schema metaschema.
 
 The repository's `.pre-commit-config.yaml` shows the current pinned versions and exact configuration; copy from there rather than retyping.
 
@@ -1268,6 +1312,7 @@ If your repository has any GitHub Actions workflow files (`.github/workflows/*.y
 Schemas are opt-in and **should be added gradually**, only for **load-bearing** files (files whose shape is depended on by build, deploy, runtime, release automation, or downstream consumers).
 
 - Copy the `schemas/` directory (including `schemas/README.md`) only if you intend to define real schemas. The template ships `schemas/` with one clearly removable worked example (`example-config.schema.json` plus example data under `schemas/examples/example-config/`) wired into pre-commit and `data-ci.yml`. If you are not adopting schema-backed validation, follow the [downstream removal checklist](schemas/README.md#downstream-removal-checklist) in `schemas/README.md` to take the worked example out, or skip copying the directory entirely.
+- If you want starter content instead of the active worked example, copy from `templates/json/` and adapt the files into your own `schemas/` directory.
 - When you add a real schema, add **one `check-jsonschema` hook per real schema-backed file family**, scoped to the files that family covers (for example, `^config/.*\.json$`). See [`schemas/README.md`](schemas/README.md) for an illustrative hook example.
 - Do **not** add placeholder hooks for schemas that do not yet exist, and do **not** validate every JSON or YAML file by default. `check-json` and `check-yaml` already cover syntax; `check-jsonschema` is for contract checks against specific file families.
 

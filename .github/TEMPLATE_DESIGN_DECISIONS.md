@@ -30,6 +30,7 @@ This document records design decisions made during the creation and maintenance 
   - [Multi-Agent Instruction Files at Repository Root](#design-decision-multi-agent-instruction-files-at-repository-root)
   - [Agent Files as Minimal Entry-Point Summaries (Not Canonical)](#design-decision-agent-files-as-minimal-entry-point-summaries-not-canonical)
 - [Data File Standards (JSON/YAML)](#data-file-standards-jsonyaml)
+  - [Parity Status](#parity-status)
   - [Dedicated JSON and YAML Instruction Files](#design-decision-dedicated-json-and-yaml-instruction-files)
   - [Baseline JSON/YAML Linting Stack](#design-decision-baseline-jsonyaml-linting-stack)
   - [yamllint truthy.check-keys Default](#design-decision-yamllint-truthycheck-keys-default)
@@ -452,6 +453,18 @@ Agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are minimal entr
 ## Data File Standards (JSON/YAML)
 
 These ten ADRs record the design decisions behind the JSON and YAML authoring guides, the baseline linting stack for data files, the schema-validation policy, and the surrounding tooling and portability trade-offs. They are policy-only prose; the implementations live in `.github/instructions/json.instructions.md`, `.github/instructions/yaml.instructions.md`, `.pre-commit-config.yaml`, `.yamllint.yml`, `.gitattributes`, and (for downstream adopters) the optional `schemas/` directory.
+
+### Parity Status
+
+As of 2026-05-09, JSON and YAML are treated as equal citizens with the other first-class supported file types in this template. Parity is enforced across these cross-cutting surfaces:
+
+- Canonical instructions.
+- Template starter content.
+- PR checklist.
+- Getting-started guidance.
+- README references.
+- Pre-commit and CI validation.
+- Schema-example testing.
 
 ### Design Decision: Dedicated JSON and YAML Instruction Files
 
