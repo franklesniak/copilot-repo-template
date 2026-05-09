@@ -21,6 +21,7 @@ This guide covers optional customizations you can make after completing the init
 - [Dependabot Configuration](#dependabot-configuration)
 - [Pre-commit Configuration](#pre-commit-configuration)
 - [Schema Validation Configuration](#schema-validation-configuration)
+- [JSON/YAML Starter Content (Opt-in)](#jsonyaml-starter-content-opt-in)
 - [Prettier for JSON/JSONC (Opt-in)](#prettier-for-jsonjsonc-opt-in)
 - [JSONC Validation (Opt-in)](#jsonc-validation-opt-in)
 - [JSON5 Support (Opt-in)](#json5-support-opt-in)
@@ -1099,6 +1100,117 @@ If you remove the `skipif` guard, you MUST ensure `check-jsonschema` is installe
 - Beyond the worked example and the wired built-in schema hooks, schema validation is opt-in; downstream repositories add real hooks and tests when they introduce additional real schemas, or when they want to enable additional `--builtin-schema` coverage.
 - Project-owned schemas SHOULD continue to live under `schemas/`. Built-in schemas referenced via `--builtin-schema` are **not** vendored into `schemas/`; their content tracks `check-jsonschema` releases.
 - JSONC, JSON5, ecosystem-specific YAML validators, and broader SchemaStore / catalog coverage remain opt-in unless a downstream repository explicitly ships them. See the dedicated subsections below for adoption guidance.
+
+---
+
+## JSON/YAML Starter Content (Opt-in)
+
+**Files:** `templates/json/`, `templates/yaml/`, `schemas/`, `.yamllint.yml`, `.pre-commit-config.yaml`
+
+This template ships starter content under `templates/json/` and `templates/yaml/` that downstream consumers MAY copy and adapt to add schema-backed JSON contracts and YAML linting to their own repositories. The starter content is intentionally outside the active hook and test scopes:
+
+- The active `Validate example-config valid examples` `check-jsonschema` hook in [`.pre-commit-config.yaml`](.pre-commit-config.yaml) is anchored to `^schemas/examples/example-config/valid/.*\.json$`.
+- The active `check-metaschema` hook is anchored to `^schemas/example-config\.schema\.json$`.
+- The active root test [`tests/test_schema_examples.py`](tests/test_schema_examples.py) discovers schemas only under `schemas/`, not under `templates/**`.
+
+**Do not broaden these scopes to cover `templates/**`.** The starter content is meant to be lifted into a downstream repository's `schemas/` and `.yamllint.yml`, not exercised as an active schema contract or active linting configuration in place. The starter files are still parsed by the repository's `check-json`, `check-yaml`, and `yamllint` pre-commit hooks like every other JSON/YAML file in the tree; the carve-out is specifically about schema validation (`check-jsonschema`/`check-metaschema`), the schema-example pytest contract, and "active configuration" roles, not about basic JSON/YAML parsing or style enforcement.
+
+The two starter directories are described in detail in their own READMEs:
+
+- [`templates/json/README.md`](templates/json/README.md)
+- [`templates/yaml/README.md`](templates/yaml/README.md)
+
+### Adopting the JSON Starter Schema and Examples
+
+`templates/json/` ships:
+
+- `templates/json/starter.schema.json` — minimal JSON Schema Draft 2020-12 starter with `$schema`, `$id`, `title`, `description`, `type: "object"`, `additionalProperties: false`, `required`, and `properties`.
+- `templates/json/examples/starter/valid/minimal.json` — smallest valid instance.
+- `templates/json/examples/starter/invalid/missing-required.json` — smallest invalid instance (omits a required property; rejected by the starter schema).
+
+To adopt the starter schema in a downstream repository:
+
+1. Copy `templates/json/starter.schema.json` to `schemas/<your-name>.schema.json` and rename it to match your file family (for example, `schemas/feature-flags.schema.json`).
+2. Update `$id`, `title`, `description`, `properties`, `required`, and `additionalProperties` to reflect the real shape of your file family.
+3. Copy `templates/json/examples/starter/valid/` to `schemas/examples/<your-name>/valid/` and `templates/json/examples/starter/invalid/` to `schemas/examples/<your-name>/invalid/`.
+4. Add a scoped `check-jsonschema` pre-commit hook for the copied schema, following the pattern in [Schema Validation Configuration](#schema-validation-configuration). Anchor the hook's `files:` regex to the **valid** fixtures under the copied path (for example, `^schemas/examples/<your-name>/valid/.*\.json$`); do **not** wire invalid fixtures into a normal `check-jsonschema` hook.
+5. Optionally, copy [`templates/python/tests/test_schema_examples.py`](templates/python/tests/test_schema_examples.py) into your project's `tests/` directory so that invalid fixtures are exercised by a test that asserts validation fails.
+
+### Adopting the YAML Starter Configurations
+
+`templates/yaml/` ships:
+
+- `templates/yaml/yamllint.lenient.yml` — mirrors the active repository-root `.yamllint.yml` rule settings (`truthy.check-keys: false`, `comments-indentation: disable`, `line-length.level: warning`). The `rules:` block is byte-identical to the active root configuration; only the leading comment block differs (it documents the file's role as starter content rather than the active config).
+- `templates/yaml/yamllint.strict.yml` — stricter alternative with `truthy.check-keys: true` and `line-length` at default error severity. Documented by the **yamllint truthy.check-keys Default** and **yamllint line-length Warning Level Default** ADRs in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md). Adopting the strict variant requires quoting `"on":` in every GitHub Actions workflow file under `.github/workflows/*.yml`.
+- `templates/yaml/starter-config.yaml` — minimal human-authored YAML config example demonstrating 2-space indentation, lowercase booleans, quoted version pins, quoted YAML 1.1 truthy-looking strings, and a short block scalar.
+
+To adopt one of the yamllint configurations in a downstream repository, copy it to the repository root (overwriting any existing file):
+
+```bash
+# Use the template defaults verbatim:
+cp templates/yaml/yamllint.lenient.yml .yamllint.yml
+
+# Or adopt the stricter alternative (quote "on": in workflow files first):
+cp templates/yaml/yamllint.strict.yml .yamllint.yml
+```
+
+If the downstream repository does not already have a `yamllint` pre-commit hook wired up, add one to `.pre-commit-config.yaml`. The hook example from `templates/yaml/README.md`:
+
+```yaml
+- repo: https://github.com/adrienverge/yamllint
+  rev: v1.38.0
+  hooks:
+    - id: yamllint
+      args: [-c, .yamllint.yml]
+```
+
+> **Version pinning.** Pin a current upstream release of [`yamllint`](https://github.com/adrienverge/yamllint) rather than copying the example `rev:` value above. Update the pin via your normal dependency-update process.
+
+### Adding a Scoped `check-jsonschema` Hook for Schema-Backed YAML
+
+If a downstream repository has a schema-backed YAML file family (for example, an application configuration file with a published JSON Schema), add a scoped `check-jsonschema` hook for that family. This snippet is **optional** and is intended only when there is a concrete schema-backed YAML file family to validate; do not adopt it speculatively.
+
+```yaml
+- repo: https://github.com/python-jsonschema/check-jsonschema
+  rev: 0.33.3
+  hooks:
+    - id: check-jsonschema
+      name: Validate <your-name> YAML config
+      files: ^config/.*\.ya?ml$
+      args:
+        - --schemafile
+        - schemas/<your-name>.schema.json
+```
+
+> **Version pinning.** Pin a current upstream release of [`check-jsonschema`](https://github.com/python-jsonschema/check-jsonschema) rather than copying the example `rev:` value above.
+
+### Cross-References to Other Optional Sections
+
+- **Prettier for JSON/JSONC.** Prettier remains **opt-in** for JSON and JSONC; see [Prettier for JSON/JSONC (Opt-in)](#prettier-for-jsonjsonc-opt-in) for the adoption criteria and the important caveat that Prettier does not sort JSON keys.
+- **Prettier for YAML.** Prettier for YAML is **discouraged by default** in this template unless the downstream repository explicitly reconciles Prettier's output with `yamllint` rules. See the YAML subsection of [Prettier for JSON/JSONC (Opt-in)](#prettier-for-jsonjsonc-opt-in).
+- **Ecosystem-specific YAML validators.** Validators such as `kubeconform`, `spectral`, `cfn-lint`, `ansible-lint`, and `helm lint` remain **opt-in** and SHOULD be adopted only when the downstream repository actually contains the relevant ecosystem. See [Ecosystem-Specific YAML Validators (Opt-in)](#ecosystem-specific-yaml-validators-opt-in).
+- **JSONC validation.** `.jsonc` files are deliberately not covered by `check-json`; see [JSONC Validation (Opt-in)](#jsonc-validation-opt-in) for the recommended JSONC-aware tooling options.
+
+### Verifying the Starter Files Locally
+
+You can verify the starter JSON content directly with `check-jsonschema` from the command line at any time without pre-commit:
+
+```bash
+# Should exit 0 (valid against the starter schema):
+check-jsonschema \
+  --schemafile templates/json/starter.schema.json \
+  templates/json/examples/starter/valid/minimal.json
+
+# Should exit non-zero (invalid against the starter schema):
+check-jsonschema \
+  --schemafile templates/json/starter.schema.json \
+  templates/json/examples/starter/invalid/missing-required.json
+
+# Self-validate the starter schema against its declared metaschema:
+check-jsonschema --check-metaschema templates/json/starter.schema.json
+```
+
+Run these checks against the **copied** schema and fixtures in your downstream repository (with paths updated accordingly) before wiring the new schema into pre-commit.
 
 ---
 
