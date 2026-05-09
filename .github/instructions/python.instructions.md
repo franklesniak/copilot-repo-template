@@ -7,13 +7,13 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.3.20260508.1
+**Version:** 1.4.20260509.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-08
+- **Last Updated:** 2026-05-09
 - **Scope:** Defines Python coding standards for all Python files in this repository, including modules, scripts, tests, and tooling. Covers style, structure, error handling, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -226,6 +226,7 @@ except json.JSONDecodeError as error:
 - **SHOULD** prefer clarity first; optimize only when needed and measured.
 - **SHOULD** avoid quadratic algorithms in obvious hot paths (parsers, matchers, large loops).
 - **MUST** validate untrusted input at boundaries; **MUST NOT** use `eval`.
+- **MUST** escape serialized output appropriately for its output context before embedding it into markup, templates, or generated documents. For example, `json.dumps()` output embedded in an inline HTML `<script>` block **MUST** escape `</` sequences (for example, `<\/`) so user-controlled data cannot terminate the script tag and enable XSS. Use framework-provided escaping utilities when available.
 
 ## Package Versioning
 
