@@ -1,4 +1,14 @@
+<!-- markdownlint-disable MD013 -->
+
 # Template Design Decisions
+
+## Metadata
+
+- **Status:** Active
+- **Owner:** Repository Maintainers
+- **Last Updated:** 2026-05-09
+- **Scope:** Durable design-decision record for this repository template, including rationale for GitHub configuration, instruction files, validation policy, template structure, maintenance conventions, and the documentation-tier inventory below.
+- **Related:** [Repository Copilot Instructions](copilot-instructions.md), [Documentation Writing Style](instructions/docs.instructions.md)
 
 This document records design decisions made during the creation and maintenance of `franklesniak/copilot-repo-template`. It serves as institutional memory to prevent re-litigation of settled decisions during code review.
 
@@ -43,6 +53,7 @@ This document records design decisions made during the creation and maintenance 
 - [CODEOWNERS Configuration](#codeowners-configuration)
 - [Issue Template Design Decisions](#issue-template-design-decisions)
 - [Branch Ruleset Setup](#branch-ruleset-setup)
+- [Documentation Tier Inventory](#documentation-tier-inventory)
 
 ---
 
@@ -1432,6 +1443,55 @@ For a multi-language project (Python + PowerShell):
 - Markdown Lint
 - Lint (PSScriptAnalyzer)
 - PowerShell Tests (Pester)
+
+---
+
+## Documentation Tier Inventory
+
+The documentation-tier policy itself lives in [`.github/instructions/docs.instructions.md`](instructions/docs.instructions.md) and is intentionally expressed in categorical, content-based terms with path patterns rather than as a list of specific shipped filenames. This section captures **this template repository's current file-by-file classification** under that policy. Downstream consumers of this template should treat this section as template-state to maintain, prune, replace, or extend as their own file set diverges from the template.
+
+### Tier 1 (Metadata Block Present)
+
+The following files currently shipped by this template are Tier 1 under the policy:
+
+- `.github/copilot-instructions.md`
+- Files matching `.github/instructions/*.instructions.md`
+- Root agent entry-point files: `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.hermes.md`
+- `.cursor/rules/repository-instructions.mdc`
+- `.github/TEMPLATE_DESIGN_DECISIONS.md` (newly added in this PR)
+- `docs/PR_REVIEW_PROMPTS.md`
+- `docs/terraform/TERRAFORM_LINTING_GUIDE.md`
+- `docs/terraform/TERRAFORM_TESTING_GUIDE.md`
+- `docs/terraform/TERRAFORM_COPILOT_INSTRUCTIONS_GUIDE.md`
+- `schemas/README.md`
+
+### Tier 2 (No Metadata Block)
+
+The following files currently shipped by this template are Tier 2 under the policy:
+
+- `README.md`
+- `CONTRIBUTING.md`
+- `CODE_OF_CONDUCT.md`
+- `SECURITY.md`
+- `OPTIONAL_CONFIGURATIONS.md`
+- `GETTING_STARTED_NEW_REPO.md`
+- `GETTING_STARTED_EXISTING_REPO.md`
+- `TEMPLATE_MAINTENANCE.md`
+- `COPILOT_CHAT_PROMPTS.md`
+- `.github/pull_request_template.md`
+- `templates/json/README.md` (metadata removed in this PR)
+- `templates/yaml/README.md` (metadata removed in this PR)
+
+### Rationale for In-PR Mismatch Fixes
+
+Two categories of files were updated in the same PR that introduced the tiered policy, to align this template's shipped state with the policy's content-based classification:
+
+- **`.github/TEMPLATE_DESIGN_DECISIONS.md` gains a metadata block.** This file is a durable ADR-style design-decision record. Its content meets the Tier 1 content criteria (governance and durable design rationale), so it carries the Tier 1 metadata header block.
+- **`templates/json/README.md` and `templates/yaml/README.md` lose their metadata blocks.** These files are starter-content READMEs intended for downstream copy/paste. Their content is end-user-oriented (adoption guidance, copy/adapt instructions), so under the precedence rule and the starter-content clarification in the policy they are Tier 2 by default and do not carry a metadata header block without a concrete consumer for the metadata.
+
+### Maintenance Note
+
+Future files added to this template should be classified by the categorical policy in [`.github/instructions/docs.instructions.md`](instructions/docs.instructions.md). Record an entry in this inventory only when it remains useful to maintainers; the inventory is template-state to maintain, prune, replace, or extend, not a registry that has to track every file in the repository.
 
 ---
 

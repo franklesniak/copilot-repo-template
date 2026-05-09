@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.5.20260509.3
+**Version:** 1.5.20260509.4
 
 ## Metadata
 
@@ -261,7 +261,7 @@ This repository uses modular instruction files covering both language-specific s
 | --- | --- | --- |
 | Git attributes | `.github/instructions/gitattributes.instructions.md` | `**/.gitattributes` |
 | JSON | `.github/instructions/json.instructions.md` | `**/*.json`, `**/*.jsonc` |
-| Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` |
+| Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md`, `**/*.mdc` |
 | PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` |
 | Python | `.github/instructions/python.instructions.md` | `**/*.py` |
 | Terraform | `.github/instructions/terraform.instructions.md` | `**/*.tf`, `**/*.tfvars`, `**/*.tftest.hcl`, `**/*.tf.json`, `**/*.tftpl`, `**/*.tfbackend` |

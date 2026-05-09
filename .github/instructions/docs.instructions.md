@@ -1,5 +1,5 @@
 ---
-applyTo: "**/*.md"
+applyTo: "**/*.md,**/*.mdc"
 description: "Documentation standards:  contract-first, traceable, drift-resistant Markdown."
 ---
 
@@ -7,14 +7,14 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.5.20260503.7
+**Version:** 1.5.20260509.1
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-03
-- **Scope:** Defines documentation standards for all Markdown files in this repository, including specs, design docs, runbooks, ADRs, and developer documentation. Does not cover code comments or inline documentation in source files.
+- **Last Updated:** 2026-05-09
+- **Scope:** Defines documentation standards for Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) files in this repository, including specs, design docs, runbooks, ADRs, instruction files, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
 ## Purpose and Scope
@@ -25,7 +25,7 @@ Documentation in this repository is treated as a **first-class engineering artif
 - A **design record** (how it works, constraints, trade-offs, failure modes)
 - A **maintenance tool** (how to safely change and operate it without regressions)
 
-This file governs all Markdown documentation (including `README.md`, `docs/**`, ADRs, runbooks, and release notes).
+This file governs all Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) documentation in this repository, including `README.md`, `docs/**`, ADRs, runbooks, release notes, instruction files under `.github/instructions/`, and Cursor project rules under `.cursor/rules/`.
 
 ## Core Principles
 
@@ -52,17 +52,54 @@ Projects SHOULD define a canonical specification document (e.g., `docs/spec/requ
 
 > **Customize for your project:** The location and structure of your canonical specification is project-specific. Common patterns include `docs/spec/requirements.md`, `docs/SPEC.md`, or similar. Choose a location that fits your project's documentation organization and update this guidance accordingly.
 
-## Required Header Block for Non-Trivial Docs
+## Metadata Header Block Policy (Tiered by Audience)
 
-For any document longer than ~30 lines or intended as a durable reference (specs, designs, runbooks, ADRs), include this header near the top:
+This repository classifies documents into two tiers based on their primary audience and content type. The tier determines whether a visible metadata header block is required.
 
-- **Status:** Draft | Active | Deprecated
-- **Owner:** Person or team
-- **Last Updated:** YYYY-MM-DD
-- **Scope:** What this doc covers (and does not cover)
-- **Related:** Links to related docs and relevant requirement IDs / ADR IDs
+### Tier 1 — Required
 
-Placement rules for the metadata header block:
+The metadata header block is **REQUIRED** for documents whose primary purpose is governance, specification, instruction, process, runbook, or ADR-style design rationale. Tier 1 covers, for example:
+
+- Repository-level instruction files such as `.github/copilot-instructions.md` and files matching `.github/instructions/*.instructions.md`.
+- Root agent entry-point files such as `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.hermes.md`, and future equivalents.
+- Cursor project rules matching `.cursor/rules/*.mdc`.
+- ADR-style or formal design-decision records, regardless of where they live (`.github/`, `docs/`, or another documented ADR/design-decision location).
+- Process and operational documents intended as durable repository policy, such as review guides, linting guides, testing guides, and release runbooks.
+- READMEs whose content is itself authoritative repository policy, for example schema-policy READMEs, as opposed to reader-facing onboarding or starter content.
+- Future project specifications, formal design docs, process docs, and runbooks.
+
+The Tier 1 metadata header block consists of these fields:
+
+- **Status:** Draft | Active | Deprecated **(REQUIRED)**
+- **Owner:** Person or team **(REQUIRED)**
+- **Last Updated:** YYYY-MM-DD **(REQUIRED)**
+- **Scope:** What this doc covers (and does not cover) **(REQUIRED)**
+- **Related:** Links to related docs and relevant requirement IDs / ADR IDs **(RECOMMENDED)**
+
+`Status`, `Owner`, `Last Updated`, and `Scope` MUST be present in every Tier 1 document. `Related` SHOULD be included when useful related documents, requirement IDs, ADR IDs, or policy references exist. It MAY be omitted when no meaningful related target exists. Authors MUST NOT invent placeholder or low-value links solely to populate the field.
+
+### Tier 2 — Not Required
+
+The metadata header block is **NOT REQUIRED** for documents whose primary purpose is end-user onboarding, customization, community health, or shipping starter content for downstream consumers. Tier 2 documents SHOULD NOT add the metadata header block without a concrete consumer for the metadata. Tier 2 covers, for example:
+
+- Top-level community-health files such as `README.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `SECURITY.md`.
+- End-user onboarding, configuration, customization, and prompt/cookbook guides intended for repository consumers, whether downstream of a template or direct users of this repository.
+- PR and issue templates such as `.github/pull_request_template.md` and files under `.github/ISSUE_TEMPLATE/`.
+- Starter-content READMEs intended for downstream copy/paste, such as those matching `templates/**/README.md`, unless the README's content itself meets the Tier 1 content criteria above.
+
+> **Precedence: Tier 1 wins on content.** Content classification is primary; file location and filename are secondary. A file is Tier 1 when its content is governance, specification, instruction, ADR-style, runbook, or process documentation, even when it lives under `docs/**`, `templates/**`, or is named `README.md`. Conversely, location alone does not promote a file to Tier 1 if the content is purely end-user-oriented. When location and content disagree, the audit must record the chosen tier and rationale in prose.
+>
+> Subdirectory READMEs that document files shipped for downstream copy/paste, for example `templates/**/README.md`, are Tier 2 by default; promote to Tier 1 only when the README's content itself meets the Tier 1 content criteria above, not by virtue of file length or being a long-lived document.
+>
+> Audits must cover both `.md` and `.mdc` files and must traverse hidden directories such as `.github/` and `.cursor/`. Use `rg --files --hidden -g '*.md' -g '*.mdc'` or an equivalent command so Tier 1 files are not skipped.
+
+Length and durability MAY inform classification when a new document does not obviously fit either tier, but length alone does not require the metadata header block. A long Tier 2 onboarding guide remains Tier 2; a short ADR remains Tier 1.
+
+### Tier 2 Front-Matter Guidance (Optional)
+
+Tier 2 documents MAY adopt YAML front matter later if a real tool consumes it, such as a docs site, a sync tool, or a search index. Do not introduce front matter without a concrete consumer. If adopted, fields such as `last-updated` SHOULD be generated from repository history (for example, from `git log`) where practical rather than maintained by hand.
+
+### Placement Rules for the Tier 1 Metadata Header Block
 
 - The block MUST appear at the document level. It MUST NOT be placed inside fenced code blocks, quoted excerpts, block quotes, or examples.
 - "Top of body" means the first line after any YAML front matter, or line 1 if there is no front matter. "First 30 lines" means lines 1-30 of the body, counting every line (including blank lines and HTML comment directives such as `<!-- markdownlint-disable ... -->`).
@@ -73,7 +110,7 @@ Placement rules for the metadata header block:
 
 ### Synchronizing `Last Updated` and `Version` on Content Changes
 
-The fields referenced in this subsection (`Last Updated`, and the optional `Version` line) are defined in the bullet list above; this subsection adds normative synchronization rules for those fields and does not redefine their semantics.
+This subsection applies to Tier 1 documents and to any other document that intentionally carries the metadata header block. The fields referenced in this subsection (`Last Updated`, and the optional `Version` line) are defined in the Tier 1 bullet list above; this subsection adds normative synchronization rules for those fields and does not redefine their semantics.
 
 - When a commit modifies the rendered content or documentation meaning of a document that carries the metadata header block, the `Last Updated` field in that document MUST be bumped to the current UTC date in `YYYY-MM-DD` form as part of the same commit.
 - If the document also carries a `**Version:** <major>.<minor>.<YYYYMMDD>.<revision>` line, the embedded `<YYYYMMDD>` segment MUST be updated in the same commit so that it matches the new `Last Updated` value.
@@ -82,7 +119,7 @@ The fields referenced in this subsection (`Last Updated`, and the optional `Vers
   - When a further same-day commit modifies the document, `<revision>` MUST increment by `1` (for example, `...20260502.0` → `...20260502.1`).
   - `<major>` and `<minor>` are out of scope for this synchronization rule and follow the document's own semantic-versioning conventions.
 - Exemption for trivial mechanical changes. The bump MAY be omitted for commits that do not alter rendered content or documentation meaning, including pure file-mode changes, line-ending normalization, end-of-file newline fixes, or trailing-whitespace-only fixes produced by pre-commit hooks. The trailing-whitespace exemption MUST NOT be applied when the change removes or alters a Markdown hard line break (two or more trailing spaces, or a trailing backslash, immediately before a newline), because such whitespace is rendering-significant; in that case the change alters rendered content and the bump is required. Automated commits made by the auto-fix workflow (`.github/workflows/auto-fix-precommit.yml`) MAY omit the bump when they only apply those mechanical fixes, subject to the same hard-line-break carve-out.
-- This rule applies to all documents in the repository that carry the metadata header block, including but not limited to `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, `CLAUDE.md`, `AGENTS.md`, and `GEMINI.md`.
+- This rule applies to all documents in the repository that carry the metadata header block, including but not limited to `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.hermes.md`, and `.cursor/rules/*.mdc`.
 
 ## Writing Rules
 
