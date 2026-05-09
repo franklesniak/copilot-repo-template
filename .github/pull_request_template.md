@@ -88,7 +88,7 @@ outside the scope of that rule and CI check.
 - [ ] I have read the [contributing guidelines](https://github.com/OWNER/REPO/blob/HEAD/CONTRIBUTING.md)
 - [ ] My code follows the coding standards in `.github/instructions/`
 - [ ] My changes follow `.github/copilot-instructions.md` and any applicable `.github/instructions/*`
-- [ ] No secrets, real PII, or production credentials appear in any committed file (per `.github/copilot-instructions.md`)
+- [ ] No secrets, real PII, or production credentials appear in any committed file
 - [ ] I have performed a self-review of my own code
 - [ ] I have commented my code where necessary, particularly in hard-to-understand areas
 - [ ] I have made corresponding changes to the documentation
@@ -122,7 +122,7 @@ outside the scope of that rule and CI check.
 
 ### Data-File-Specific (if applicable)
 
-<!-- Delete this section if your project does not commit JSON, YAML, GitHub Actions workflows, or schema files. Note that GitHub Actions workflows alone are YAML, so this section will apply to most repositories. The repo-wide no-secrets/no-PII rule is retained in the General checklist regardless of whether this section is removed. -->
+<!-- Delete this section if your project does not commit JSON, YAML, GitHub Actions workflows, or schema files. Note that GitHub Actions workflows alone are YAML, so this section will apply to most repositories. The General checklist retains its own no-secrets/PII/credentials bullet regardless of whether this section is removed. -->
 
 - [ ] `pre-commit run --all-files` passes (in particular `check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, and `check-metaschema`)
 - [ ] If a schema under `schemas/` was modified, the matching `schemas/examples/<schema-name>/{valid,invalid}/` fixtures were updated in the same commit
