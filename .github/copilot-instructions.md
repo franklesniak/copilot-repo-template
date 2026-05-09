@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.5.20260509.1
+**Version:** 1.5.20260509.2
 
 ## Metadata
 
@@ -275,7 +275,7 @@ This repository uses modular instruction files covering both language-specific s
 - Add new instruction files for additional languages or cross-cutting rules as needed
 - Update this table to reflect the instruction files present in your project
 
-> **Terraform note:** If your project does not use Terraform, remove the Terraform instruction file (`.github/instructions/terraform.instructions.md`), remove the Terraform row from the table above, and remove Terraform-related entries from the Linting Configurations and Testing Tools sections below.
+> **Terraform note:** If your project does not use Terraform, remove the Terraform instruction file (`.github/instructions/terraform.instructions.md`), remove the Terraform row from the table above, and remove Terraform-related entries from the Linting and Validation Configurations and Testing Tools sections below.
 
 ## Agent Instruction Files
 
