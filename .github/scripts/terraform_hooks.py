@@ -15,7 +15,6 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TERRAFORM_INSTALL_URL = "https://developer.hashicorp.com/terraform/install"
 TFLINT_INSTALL_URL = "https://github.com/terraform-linters/tflint#installation"
@@ -133,7 +132,9 @@ def is_terraform_format_target(path: Path, root: Path) -> bool:
 
 def find_terraform_directories(root: Path) -> list[Path]:
     """Find directories containing Terraform `.tf` configuration files."""
-    return sorted({path.parent for path in find_files(root, lambda path: path.name.endswith(".tf"))})
+    return sorted(
+        {path.parent for path in find_files(root, lambda path: path.name.endswith(".tf"))}
+    )
 
 
 def run_terraform_format(
