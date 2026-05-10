@@ -34,6 +34,10 @@ repos:
       # add JSONC-aware tooling rather than retrofitting check-json.
       - id: check-json
         files: \.json$
+      # check-toml validates TOML syntax. Its built-in `types: [toml]`
+      # already restricts the hook to *.toml, so no `files:` argument is
+      # needed (and no anchored-pattern treatment like check-json above).
+      - id: check-toml
       - id: check-added-large-files
 
   # YAML linting

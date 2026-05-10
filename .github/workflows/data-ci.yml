@@ -7,6 +7,8 @@
 #
 # Hooks executed (all from .pre-commit-config.yaml):
 #   - check-json        — strict JSON syntax (.json only; .jsonc excluded)
+#   - check-toml        — TOML syntax (any *.toml; covers .codex/config.toml
+#                         and any other TOML file added downstream)
 #   - check-yaml        — YAML parse check (.yml / .yaml)
 #   - yamllint          — YAML style enforcement per .yamllint.yml
 #   - actionlint        — GitHub Actions workflow linting
@@ -109,6 +111,9 @@ jobs:
 
       - name: Run check-json
         run: pre-commit run check-json --all-files
+
+      - name: Run check-toml
+        run: pre-commit run check-toml --all-files
 
       - name: Run check-yaml
         run: pre-commit run check-yaml --all-files

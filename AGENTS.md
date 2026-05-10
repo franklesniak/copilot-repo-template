@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for OpenAI Codex CLI
 
-**Version:** 1.3.20260508.0
+**Version:** 1.4.20260510.2
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-08
+- **Last Updated:** 2026-05-10
 - **Scope:** Agent-specific entry point for OpenAI Codex CLI and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
 
@@ -68,6 +68,98 @@ If a style-guide update appears warranted but has not been explicitly authorized
   - Add new major dependencies without clear justification.
   - Invent behavior when requirements are ambiguous; use an explicit Open Question.
   - Create separate formatting-only or lint-only commits.
+
+## GitHub Plugin Usage
+
+Codex can use the OpenAI-curated GitHub plugin (`github@openai-curated`) in this repository when the user has installed and authorized it. The plugin is the preferred mechanism for any operation that touches remote GitHub state.
+
+- **Prefer the GitHub plugin** for GitHub Issues, pull requests, PR comments, review comments, labels, reactions, PR creation, branch management on GitHub, and any other read or write against remote GitHub state.
+- **`gh` is an optional fallback**, not a prerequisite. Codex MUST NOT treat the absence of the `gh` CLI as a blocker when the GitHub plugin can satisfy the same operation. If both are available, use the GitHub plugin first and fall back to `gh` only when the plugin lacks a needed capability.
+- **Local `git` remains appropriate** for local working-tree operations: inspecting diffs (`git diff`, `git log`, `git status`), creating branches, staging, committing, and pushing. Use the GitHub plugin for the corresponding remote-side actions (creating PRs, posting comments, reading review state).
+- **Before declaring any GitHub operation impossible**, Codex MUST first check whether the GitHub plugin exposes a tool that can perform it. Only after the plugin and any documented fallback have both been ruled out should Codex report the operation as unavailable.
+
+The `.codex/config.toml` file at the repository root declares `[plugins."github@openai-curated"] enabled = true` so that trusted Codex checkouts can opt the plugin in by default. Enabling the plugin in this file does not, by itself, grant GitHub authorization: actual access still depends on the GitHub app/connector installation, the Codex account performing the operation, and the repository's permissions.
+
+## PR Review Workflow (Codex-adapted)
+
+This workflow adapts the Claude-targeted process documented in `CLAUDE.md` for Codex's capabilities and runtime limitations. Use it when responding to review feedback on a pull request. All GitHub-side reads and writes in the steps below SHOULD go through the GitHub plugin first; fall back to `gh`, GraphQL, or manual owner action only when the plugin does not expose the needed capability (see **Fallbacks for unsupported plugin capabilities** below).
+
+### Runtime limitations to keep in mind
+
+- **No autonomous wake-up.** Codex has no equivalent of `subscribe_pr_activity`. Codex MUST NOT promise webhook-driven wake-up, background polling, or scheduled review responses. The workflow runs only when the user explicitly starts or resumes it inside an active Codex session.
+- **`@codex` mention convention.** A PR comment beginning with `@codex` MAY be used as a convention to signal that a comment is intended for Codex, but this works **only** when the user's runtime is configured to route the comment into an active Codex session (for example, when the user pastes the comment into Codex). It is not an autonomous trigger and Codex MUST NOT promise that posting `@codex` will, by itself, cause Codex to act.
+- **Tooling-dependent steps.** Where the GitHub plugin (and any documented fallback) does not expose the capability used by a step, document the absence in the relevant reply and continue. Do not block the workflow on missing tooling.
+
+### Handling each review comment
+
+For each code review comment received from GitHub Copilot, a human reviewer, or any other reviewer, follow these steps:
+
+1. **Signal processing (conditional).** If the GitHub plugin (or a documented fallback) supports adding emoji reactions to review comments, add an `eyes` (👀) reaction when work begins on the comment and remove it when the comment is fully processed (after step 9, or after the early-exit path in step 2). The reaction's `content` value is the literal string `eyes` as used by the GitHub Reactions API, not the Markdown shortcode `:eyes:`. If reaction tooling is not available in the current runtime, skip this step silently.
+
+2. **Validate the concern.** Determine whether the reviewer's feedback identifies a genuine gap, bug, style violation, or improvement opportunity. If the concern is not valid, post a reply explaining why through the GitHub plugin (or fallback), skip steps 3-8, and continue to step 9.
+
+3. **List options.** Enumerate all reasonable ways to resolve the problem or address the feedback.
+
+4. **Build an evaluation rubric.** Define 4-6 scoring criteria relevant to the concern (for example: style guide compliance, performance, code simplicity, PII safety, PowerShell 5.1 compatibility). Score each criterion on a 1-5 scale.
+
+5. **Score and select.** Apply the rubric to every option and present the results in a Markdown table. Select the option with the highest total score.
+
+    **Escalation path.** If the rubric cannot produce a clear winner — because the decision depends on owner preferences, project-level policy, or the top options are too close to differentiate objectively — escalate to the PR owner instead of selecting an option. Post a **standalone PR comment** (not a reply to the review thread) through the GitHub plugin containing:
+
+    - A brief summary of the reviewer's concern and which file/line it applies to
+    - The options and scoring tables
+    - The specific question the owner needs to answer
+    - Instructions: *"Reply to this PR comment with your chosen option or direction, then bring the reply back to your active Codex session so Codex can act on it. Posting `@codex` in the reply only routes the comment to Codex when the user's runtime is configured to forward it."*
+
+    **PAUSE** processing of this comment until the owner responds. Continue processing other independent review comments in the meantime.
+
+6. **Post the evaluation.** Reply to the review comment thread with the options table, the scoring table, the selected option, and either a note that implementation will follow in step 7 or, if the fix was already applied, the commit SHA that implements it. Post the reply through the GitHub plugin; fall back to `gh` only if the plugin reply tool is unavailable.
+
+7. **Implement the fix.** Apply the selected option locally, commit, and push to the agent's working branch using local `git`. To make the fix visible on the PR (i.e., reachable from the PR's head ref), choose the appropriate placement strategy:
+
+    - **Default — push to the working branch only.** Cross-branch integration onto the PR head is a manual owner action. State in the step-6 reply which branch the commit will be pushed to and whether a merge or cherry-pick will be required to make it visible on the PR head.
+    - **Direct PR-head push (only with explicit user authorization).** Codex MAY push directly to the PR head branch only when **all** of the following hold:
+        1. The user has **explicitly authorized** direct PR-head pushes for this specific PR within the current Codex session. Implied consent is not enough; do not infer authorization from a general "address the review" instruction.
+        2. The PR head branch is in the **same repository** as the agent's working branch (cross-fork PRs are excluded).
+        3. The push is **non-destructive**: no force-push and no history rewrite on the PR head branch.
+        4. All branch protections, required status checks, signing requirements, and CI/CD validation rules on the PR head branch continue to be satisfied.
+
+      When direct PR-head placement is used, record the resulting PR-head commit SHA(s) and post a follow-up reply confirming the placement and listing those SHA(s). If any of the four conditions above is not met, fall back to the default behavior.
+
+8. **Evaluate style guide impact.** Determine whether the relevant language instruction file(s) under `.github/instructions/` should be updated to prevent the same issue in the future. **Read the full applicable style guide(s) before answering** so the recommendation accounts for what the guide already covers and does not duplicate or contradict existing rules. If an update is warranted, write a prompt in a Markdown code fence (suitable for sending to GitHub Copilot's coding agent) that describes the style-guide change, and post it as a reply in the same review thread through the GitHub plugin. Do **not** modify the style guide directly: instruction files under `.github/instructions/`, files under `.cursor/rules/`, `.github/copilot-instructions.md`, and the root agent instruction files (`.hermes.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`) are protected and require explicit owner authorization to change.
+
+9. **Resolve or leave open.** If **no** style guide update was recommended in step 8, resolve the review comment thread when tooling permits (for example, the GitHub plugin's thread-resolution capability, a `gh api graphql` call against the `resolveReviewThread` mutation, or manual owner action). If a style guide update **was** recommended, leave the thread **open** so the owner can act on the prompt before it is dismissed. If thread-resolution tooling is not available in the current runtime, leave a brief note in the reply that the thread should be resolved manually and continue.
+
+### Optional user-initiated review cycle
+
+When the PR owner explicitly asks Codex to drive multiple review rounds inside an active session (for example, *"run the review cycle on PR #N"*), Codex MAY iterate on the following loop. The loop runs only while the Codex session is active; it MUST NOT be presented as autonomous.
+
+1. **Request a Copilot code review** through the GitHub plugin if it exposes that capability. If not, fall back to `gh pr edit --add-reviewer github-copilot[bot]` (or the equivalent `gh api` call), or ask the user to request the review manually.
+2. **Wait for the review.** Codex cannot wake up on webhooks. Either keep the session active and poll the PR's review state through the GitHub plugin (or `gh pr view --json reviews,comments`) at a reasonable cadence, or ask the user to notify Codex when the review arrives.
+3. **Process each comment** using the per-comment workflow above. Skip any comment whose ID was already processed in an earlier round of this cycle.
+4. **Re-request review** only after the round's fix commits are reachable from the PR head. If a fix commit lives only on the agent's working branch (not on the PR head), state that in the round's summary reply and pause until the owner integrates it, unless the explicit-authorization conditions in step 7 above for direct PR-head placement are satisfied.
+
+### Safety limits for the optional review cycle
+
+When the optional review cycle is used, retain these finite safety limits:
+
+- **Maximum rounds:** 8 review iterations per cycle invocation. After the eighth round, PAUSE and ask the user to confirm whether to continue.
+- **Wall-clock timeout:** 6 hours from cycle start. If the timeout is reached, PAUSE and ask the user to confirm whether to continue.
+- **Duplicate-comment skipping:** Track comment IDs already processed in earlier rounds and skip them on subsequent rounds.
+
+### Fallbacks for unsupported plugin capabilities
+
+When a workflow step depends on a capability the GitHub plugin does not currently expose, use the following fallbacks and document the chosen fallback in the relevant reply or PR comment:
+
+| Capability | Primary | Fallback |
+| --- | --- | --- |
+| Request a Copilot code review | GitHub plugin | `gh pr edit --add-reviewer github-copilot[bot]`, `gh api`, or ask the owner to request the review manually |
+| Resolve a review thread | GitHub plugin | `gh api graphql` against the `resolveReviewThread` mutation, or ask the owner to resolve the thread manually |
+| Add a reaction on a review comment | GitHub plugin | `gh api -X POST /repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions -f content=eyes`, or skip silently if neither path is available |
+| Remove a reaction on a review comment | GitHub plugin | First list the comment's reactions via `gh api /repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions` and find the reaction whose `content` matches the one to remove (e.g. `eyes`) and whose `user.login` is the agent's own identity; then delete by reaction id via `gh api -X DELETE /repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions/{reaction_id}`. Skip silently if neither path is available |
+| Post a reply to a review comment thread | GitHub plugin | `gh api` against `/repos/{owner}/{repo}/pulls/{pr}/comments/{comment_id}/replies`, or post a standalone PR comment that quotes the original review comment |
+
+If the primary capability and all listed fallbacks are unavailable in the current runtime, skip the step, note the limitation in the relevant reply, and continue rather than failing the workflow.
 
 ---
 
