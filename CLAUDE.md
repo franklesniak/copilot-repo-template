@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.5.20260508.0
+**Version:** 1.5.20260510.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-08
+- **Last Updated:** 2026-05-10
 - **Scope:** Agent-specific entry point for Claude Code and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
 
@@ -151,13 +151,15 @@ When a pull request is created or when the owner posts a PR comment containing `
 
     Outside an active loop, or for any work not driven by the documented loop steps, the generic session-level branch-scoping rule continues to apply unchanged and the agent **MUST NOT** push directly to the PR head branch (see "Handling Code Review Comments" step 7, "Outside an active automated review loop").
 
+    **Push mechanism.** When all five direct PR-head placement preconditions above are satisfied, the agent **SHOULD** first attempt direct `git push` to the PR head branch. If the direct `git push` fails for a local transport, credential, sandbox proxy, or network reason — and the failure is **not** a legitimate GitHub policy rejection such as branch protection, required signing, restricted pushes, or another higher-priority policy constraint — the agent **SHOULD** then attempt equivalent placement through an available GitHub MCP/API-backed file-write tool before treating placement as failed. Example GitHub MCP/API file-write capabilities include `push_files` for multi-file changes and `create_or_update_file` for single-file changes; equivalent tool names are acceptable because MCP tool namespaces vary by runtime. The GitHub MCP/API path is an alternate placement mechanism, **not** a bypass: it **MAY** be used only when it can create a non-destructive PR-head commit and only when GitHub accepts the update under the same applicable repository permissions, branch protections, signing requirements, and policy constraints. When the GitHub MCP/API path is used instead of `git push`, the agent **MUST** record the resulting PR-head commit SHA(s) returned by the tool for the same reachability check used by the direct-push path, and **MUST** make the audit trail explicit in the **Handling Code Review Comments** step 6 reply or follow-up reply by stating that GitHub MCP/API file-write placement was used and by listing both the development-branch SHA(s), when different, and the resulting PR-head SHA(s). The audit trail **SHOULD** also include a brief one-line note describing the underlying local `git push` failure when that information is readily available (for example, the HTTP status code or a short error class such as "sandbox proxy 403" or "transient network timeout"), so future debugging can correlate the placement mechanism with the original failure. Only after **both** direct `git push` and the available GitHub MCP/API file-write path fail or are unavailable does the documented manual-integration fallback below apply.
+
     When direct PR-head placement is used, the agent **MUST** record the resulting PR-head commit SHA(s) for the reachability check below. In the reply posted for **Handling Code Review Comments** step 6, the agent **MUST** state that it intends to place the fix directly on the PR head branch. After the push completes, the agent **MUST** post a follow-up reply confirming that the fix was placed directly on the PR head branch and listing the resulting PR-head commit SHA(s).
 
     **Fallback.** If any recorded PR-head fix commit for the current round is not reachable from the PR head, the agent **MUST NOT** re-request the review; instead it **MUST** pause and post a PR comment:
 
     `Review loop paused: final fix commit(s) <SHA1>, <SHA2>, ... expected on PR head <pr-head-branch> are not reachable from that head. Merge or cherry-pick the fix onto <pr-head-branch>, record the resulting PR-head SHA(s), then post "@claude resume review loop" to continue.`
 
-    If the agent intended to use direct PR-head placement during an active review loop but any precondition above was not met, or the direct push failed for any reason, the agent **MUST** treat the fix as not yet placed on the PR head, **MUST** wait for the fix to be merged or cherry-picked onto `<pr-head-branch>`, and **MUST** record the resulting PR-head SHA(s) before re-requesting the review.
+    If the agent intended to use direct PR-head placement during an active review loop but any precondition above was not met, the agent **MUST** treat the fix as not yet placed on the PR head, **MUST** wait for the fix to be merged or cherry-picked onto `<pr-head-branch>`, and **MUST** record the resulting PR-head SHA(s) before re-requesting the review. A local `git push` failure for a non-policy local transport, credential, sandbox proxy, or network reason does **not** by itself require pausing for manual merge or cherry-pick: the agent **MUST** first attempt the available GitHub MCP/API file-write path described in **Push mechanism** above. Only when **both** the direct `git push` and the available GitHub MCP/API file-write path fail, are unavailable, or are disallowed by a legitimate GitHub policy constraint (such as branch protection, required signing, or restricted pushes) does the agent treat the fix as not yet placed on the PR head and pause for manual integration per this fallback.
 
     If all recorded PR-head fix commits are reachable (or no code changes were made in this round), and no style guide updates were recommended, go to step 1. This applies regardless of whether code changes were made — even if all comments were addressed without code changes (e.g., concern noted but no action taken), re-requesting a review allows Copilot to find different issues on a fresh pass.
 
