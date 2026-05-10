@@ -156,11 +156,27 @@ repos:
       - id: markdownlint-cli2
 
   # Terraform formatting and validation (remove if not using Terraform)
-  - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.105.0
+  #
+  # These repo-local Python wrappers avoid POSIX shell assumptions so the
+  # hooks run consistently from native Windows / PowerShell, WSL/Linux, and
+  # macOS.
+  - repo: local
     hooks:
-      - id: terraform_fmt
-      - id: terraform_validate
-      - id: terraform_tflint
-        args:
-          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
+      - id: terraform-fmt
+        name: Terraform fmt
+        entry: python .github/scripts/terraform_hooks.py fmt
+        language: python
+        pass_filenames: false
+        files: '(^|/)([^/]+\.(tf|tfvars|tftest\.hcl|tf\.json)$|templates/terraform/)'
+      - id: terraform-validate
+        name: Terraform validate
+        entry: python .github/scripts/terraform_hooks.py validate
+        language: python
+        pass_filenames: false
+        files: '(^|/)[^/]+\.tf$'
+      - id: terraform-tflint
+        name: Terraform validate with tflint
+        entry: python .github/scripts/terraform_hooks.py tflint
+        language: python
+        pass_filenames: false
+        files: '(^|/)([^/]+\.tf|\.tflint\.hcl)$'

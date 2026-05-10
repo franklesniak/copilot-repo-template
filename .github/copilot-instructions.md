@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.5.20260509.4
+**Version:** 1.5.20260510.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-09
+- **Last Updated:** 2026-05-10
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -327,8 +327,9 @@ Invoke-ScriptAnalyzer -Path .\script.ps1 -Settings .\.github\linting\PSScriptAna
 **Terraform:**
 
 ```bash
-terraform fmt -check -recursive
-tflint --recursive
+terraform fmt -check -recursive -diff
+tflint --init
+tflint --recursive --config "$(pwd)/.tflint.hcl"
 ```
 
 **JSON, YAML, and GitHub Actions:**

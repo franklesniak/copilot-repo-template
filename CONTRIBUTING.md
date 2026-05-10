@@ -70,11 +70,14 @@ This repository uses pre-commit for git hooks. Configured hooks include:
 - **Linting**: Ruff (Python), markdownlint (Markdown)
 - **Data-file validation**: `check-json` (strict `.json` files only — see note below), `check-yaml`, `yamllint` (configured by `.yamllint.yml`), `actionlint` (GitHub Actions workflows)
 - **Schema validation**: `check-jsonschema` and `check-metaschema` for the template's worked-example schema (`schemas/example-config.schema.json`) and its valid example data under `schemas/examples/example-config/valid/`; downstream repositories MAY add additional `check-jsonschema` hook entries for their own schema-backed file families. See [`schemas/README.md`](schemas/README.md) for the worked example and the canonical downstream removal checklist.
+- **Terraform validation**: repo-local Python hooks run `terraform fmt -check -recursive -diff`, directory-based `terraform init -backend=false` plus `terraform validate`, and `tflint --init` plus recursive TFLint with `.tflint.hcl`.
 - **Safety**: Large file detection
 
 > **`check-json` validates strict `.json` only.** It does **not** validate `.jsonc`. JSONC files are allowed only when the consuming tool supports JSONC; downstream repositories that need stricter `.jsonc` enforcement should add **JSONC-aware tooling** rather than retrofitting `check-json`. See [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md) for the full JSON/JSONC dialect policy and [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md) for YAML authoring standards.
 >
 > **`actionlint` first-run-on-restricted-networks caveat.** The `actionlint` pre-commit hook builds the `actionlint` binary from source on first install, which downloads a Go toolchain. On networks that block Go module downloads (corporate proxies, air-gapped environments), the first-run install can fail. CI is the shared enforcement environment, so contributors who hit a network restriction locally can rely on CI to enforce this hook. The same caveat is documented inline in `.pre-commit-config.yaml` and in `.github/TEMPLATE_DESIGN_DECISIONS.md`.
+>
+> **Terraform tool prerequisite.** The Terraform hooks are repo-local Python wrappers and do not require Bash. They do require HashiCorp Terraform (`terraform`) when Terraform format or validation targets are present, and TFLint (`tflint`) when Terraform lint targets are present. Install Terraform from [HashiCorp's official install guide](https://developer.hashicorp.com/terraform/install) and TFLint from the [TFLint installation guide](https://github.com/terraform-linters/tflint#installation), then restart your shell so both executables are on PATH. On Windows, native PowerShell is supported; download the Windows binaries and add them to PATH, or use Chocolatey (`choco install terraform` and `choco install tflint`) if your organization uses it.
 
 If you need to bypass hooks temporarily (not recommended):
 
@@ -90,6 +93,28 @@ Run markdown linting manually:
 npm run lint:md           # Lint all markdown files
 npm run lint:md:nested    # Lint nested markdown blocks in docs
 ```
+
+### Terraform Validation
+
+Run the Terraform pre-commit hooks manually when changing Terraform files or `.tflint.hcl`:
+
+**Windows PowerShell:**
+
+```powershell
+python -m pre_commit run terraform-fmt --all-files
+python -m pre_commit run terraform-validate --all-files
+python -m pre_commit run terraform-tflint --all-files
+```
+
+**Git Bash, WSL/Linux, macOS, and other POSIX-style shells:**
+
+```bash
+pre-commit run terraform-fmt --all-files
+pre-commit run terraform-validate --all-files
+pre-commit run terraform-tflint --all-files
+```
+
+The hooks mirror Terraform CI: format checks run from the repository root, validation runs only in directories containing `.tf` files, and TFLint uses the repository-root `.tflint.hcl` path.
 
 ### 3. Install Python (if working with Python code)
 
@@ -157,6 +182,7 @@ Pre-commit hooks are NOT optional. They enforce:
 
 - Code formatting (Black for Python, markdownlint for Markdown)
 - Linting (Ruff for Python)
+- Terraform formatting, validation, and TFLint checks when Terraform files are present
 - Trailing whitespace removal
 - End-of-file fixes
 - Data-file validation (`check-json` for strict `.json`, `check-yaml`, `yamllint`, `actionlint` for GitHub Actions)
