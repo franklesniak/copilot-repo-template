@@ -17,12 +17,23 @@ fi
 TERRAFORM_VERSION="1.14.4"
 INSTALL_DIR="/usr/local/bin"
 
-if command -v terraform >/dev/null 2>&1; then
-  current="$(terraform version -json 2>/dev/null \
+# Ensure the binary we install below resolves first for the rest of the
+# session, even if a different `terraform` exists earlier on the base
+# image's PATH. CLAUDE_ENV_FILE persists exports across hook invocations
+# and subsequent shells; guard against duplicate entries on re-runs.
+if [ -n "${CLAUDE_ENV_FILE:-}" ] \
+  && ! grep -Fq "export PATH=\"${INSTALL_DIR}:" "$CLAUDE_ENV_FILE" 2>/dev/null; then
+  echo "export PATH=\"${INSTALL_DIR}:\$PATH\"" >> "$CLAUDE_ENV_FILE"
+fi
+
+# Idempotency: check the install location specifically so a stale or
+# differently-versioned terraform earlier on PATH cannot mask us.
+if [ -x "$INSTALL_DIR/terraform" ]; then
+  current="$("$INSTALL_DIR/terraform" version -json 2>/dev/null \
     | python3 -c "import json, sys; print(json.load(sys.stdin)['terraform_version'])" 2>/dev/null \
     || true)"
   if [ "$current" = "$TERRAFORM_VERSION" ]; then
-    echo "Terraform ${TERRAFORM_VERSION} already installed at $(command -v terraform)"
+    echo "Terraform ${TERRAFORM_VERSION} already installed at ${INSTALL_DIR}/terraform"
     exit 0
   fi
 fi
@@ -34,13 +45,32 @@ case "$(uname -m)" in
 esac
 
 tf_os="$(uname -s | tr '[:upper:]' '[:lower:]')"
-url="https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_${tf_os}_${tf_arch}.zip"
+archive="terraform_${TERRAFORM_VERSION}_${tf_os}_${tf_arch}.zip"
+base="https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}"
 
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
-echo "Downloading Terraform ${TERRAFORM_VERSION} (${tf_os}/${tf_arch}) from ${url}"
-curl -fsSL --retry 3 --retry-delay 2 "$url" -o "$tmpdir/terraform.zip"
-unzip -q "$tmpdir/terraform.zip" -d "$tmpdir"
+echo "Downloading ${archive} from ${base}"
+curl -fsSL --retry 3 --retry-delay 2 "${base}/${archive}" -o "$tmpdir/${archive}"
+curl -fsSL --retry 3 --retry-delay 2 \
+  "${base}/terraform_${TERRAFORM_VERSION}_SHA256SUMS" -o "$tmpdir/SHA256SUMS"
+
+# Verify the downloaded archive against the official SHA256SUMS file before
+# placing the binary on PATH, to catch corrupted downloads and reduce
+# supply-chain risk from a tampered CDN/proxy path.
+expected_hash="$(awk -v f="${archive}" '$2 == f {print $1}' "$tmpdir/SHA256SUMS")"
+if [ -z "$expected_hash" ]; then
+  echo "No SHA256 entry for ${archive} in SHA256SUMS; refusing to install" >&2
+  exit 1
+fi
+actual_hash="$(sha256sum "$tmpdir/${archive}" | awk '{print $1}')"
+if [ "$expected_hash" != "$actual_hash" ]; then
+  echo "SHA256 mismatch for ${archive}: expected ${expected_hash}, got ${actual_hash}" >&2
+  exit 1
+fi
+echo "SHA256 verified for ${archive}"
+
+unzip -q "$tmpdir/${archive}" -d "$tmpdir"
 install -m 0755 "$tmpdir/terraform" "$INSTALL_DIR/terraform"
-echo "Installed $(terraform version | head -n1) to $INSTALL_DIR/terraform"
+echo "Installed $("$INSTALL_DIR/terraform" version | head -n1) to ${INSTALL_DIR}/terraform"
