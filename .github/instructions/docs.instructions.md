@@ -7,7 +7,7 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.5.20260510.0
+**Version:** 1.5.20260510.1
 
 ## Metadata
 
@@ -169,7 +169,7 @@ This subsection applies to Tier 1 documents and to any other document that inten
 - **Scope.** Applies to fenced `bash`/`sh` shell-command examples in this repository's Markdown documentation that a reader is expected to copy and run on a Unix-like target environment (Linux, macOS, FreeBSD, WSL, or Git Bash on Windows). Applies to fenced `text` examples only when the surrounding prose clearly presents the block as copyable shell commands or a shell session, not when the block is command output, logs, diagnostics, or plain text. Native PowerShell examples are out of scope and SHOULD use a `powershell` fence. Examples that surrounding prose explicitly labels as GNU-only, BSD-only, Bash-only, PowerShell-only, or otherwise platform-specific are allowed.
 - **Rules.**
   - For alternation in `grep`, MUST use extended regex (`grep -E "P1|P2|P3"`) or multiple `-e` patterns (`grep -e P1 -e P2 -e P3`). MUST NOT use basic-regex `\|` alternation, which is a GNU extension and is not reliably supported in BSD `grep` (the macOS default).
-  - For in-place edits with `sed`, prefer piping output to a temporary file and renaming it, or explicitly state in surrounding prose that the example uses GNU `sed -i` semantics. BSD `sed -i` requires a backup-suffix argument (for example, `sed -i ''`) that GNU `sed` does not, so the same flag spelling is not portable across both.
+  - For in-place edits with `sed`, prefer the attached non-empty backup-suffix form (for example, `sed -i.bak 'SCRIPT' FILE`), which works on both GNU and BSD `sed` and produces a `.bak` backup file that surrounding prose SHOULD note so readers know to keep, delete, or `.gitignore` it. Alternatives are to pipe `sed` output to a temporary file and rename it over the original (which can drop file permissions, ownership, or extended attributes), or to explicitly state in surrounding prose that the example uses GNU `sed -i` semantics (where the suffix is optional and, when supplied, must be attached with no space) or BSD `sed -i ''` semantics (where an empty suffix is supplied as a separate argument so no backup is written; GNU `sed` would misparse the `''` as the script). The bare `sed -i` form (no suffix) and the separate-argument `sed -i ''` form are not portable across both.
   - Avoid Bash-specific syntax (`[[ ... ]]`, `(( ... ))`, `<<<` here-strings, `mapfile`/`readarray`, process substitution `<(...)`) in examples that should also run under `sh`, `dash`, or other POSIX-style shells. When Bash-specific syntax is required, the code fence MUST be `bash` (not `sh`) and surrounding prose MUST note the Bash dependency.
   - When a command is intentionally GNU-only, BSD-only, Bash-only, PowerShell-only, or otherwise platform-specific, surrounding prose MUST explicitly label it so readers know which `grep`/`sed`/shell variant is required.
 
