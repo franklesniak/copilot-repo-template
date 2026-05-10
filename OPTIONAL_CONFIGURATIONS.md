@@ -2610,9 +2610,9 @@ This preserves the configuration as a discoverable record that the project consi
 
 The plugin identifier `github@openai-curated` follows OpenAI's curated-plugin naming convention (`<plugin-name>@openai-curated`). If OpenAI renames the curated GitHub plugin in a future Codex release, update the quoted key in `.codex/config.toml` to match the new identifier; a typo in the plugin name is a silent no-op rather than an error, so the file would otherwise stop having any effect without a visible warning.
 
-### Pre-commit validation
+### Pre-commit and CI validation
 
-The `check-toml` hook in `.pre-commit-config.yaml` (from `pre-commit/pre-commit-hooks`) validates the syntax of `.codex/config.toml` (and any other `*.toml` file in the repository) on every `pre-commit run --all-files`. If you remove `.codex/config.toml` and the repository contains no other TOML files you want validated, you may also remove the `check-toml` hook from `.pre-commit-config.yaml`; otherwise, leave it in place so future TOML additions are automatically validated.
+The `check-toml` hook in `.pre-commit-config.yaml` (from `pre-commit/pre-commit-hooks`) validates the syntax of `.codex/config.toml` (and any other `*.toml` file in the repository) on every `pre-commit run --all-files`. The dedicated `.github/workflows/data-ci.yml` workflow also invokes `pre-commit run check-toml --all-files` as a step alongside `check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, and `check-metaschema`, so TOML syntax is enforced as a first-class CI check that can be required via branch protection independently of the broader Python CI pipeline. If you remove `.codex/config.toml` and the repository contains no other TOML files you want validated, you may also remove both the `check-toml` hook from `.pre-commit-config.yaml` and the matching `Run check-toml` step from `.github/workflows/data-ci.yml`; otherwise, leave them in place so future TOML additions are automatically validated.
 
 ---
 
