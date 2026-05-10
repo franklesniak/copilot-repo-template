@@ -42,8 +42,9 @@ This guide walks you through creating a brand-new repository using `franklesniak
 This template repository includes:
 
 - **GitHub Copilot Instructions:** Comprehensive coding standards that guide AI-assisted development
-- **Language-Specific Guidelines:** Modular instruction files for Markdown, PowerShell, Python, and Terraform
-- **Linting Configurations:** Pre-configured settings for markdownlint and PSScriptAnalyzer
+- **Language-Specific Guidelines:** Modular instruction files for Markdown, PowerShell, Python, Terraform, JSON/JSONC, and YAML
+- **Linting Configurations:** Pre-configured settings for markdownlint, PSScriptAnalyzer, TFLint, and yamllint
+- **Data-File Validation:** Pre-commit and CI coverage for JSON, YAML, GitHub Actions workflows, and the worked JSON Schema example
 - **Pre-commit Hooks:** Automated code quality checks before commits
 - **Issue Templates:** Structured templates for bug reports, feature requests, and documentation issues
 - **Pull Request Template:** Checklist-based template for consistent PR reviews
@@ -1108,7 +1109,7 @@ markdownlint-cli2.............................................Passed
 
 ## Language-Specific Customization
 
-This template includes support for Python, PowerShell, Terraform, and Markdown/documentation. You should remove support for languages you don't need and configure the ones you do use.
+This template includes support for Python, PowerShell, Terraform, JSON/JSONC, YAML, and Markdown/documentation. You should remove support for languages or formats you don't need and configure the ones you do use.
 
 ### Decision Point: Which Languages Do You Need?
 
@@ -1116,7 +1117,126 @@ Review your project requirements and decide which languages you'll be using:
 
 - **Python:** Server-side code, scripts, data processing, APIs
 - **PowerShell:** Windows automation, cross-platform scripting, DevOps tasks
+- **Terraform:** Infrastructure as Code, modules, cloud resources
+- **JSON/JSONC:** Machine-readable configuration, schemas, fixtures, tool settings
+- **YAML:** Human-authored configuration, GitHub Actions workflows, pre-commit configuration
 - **Markdown:** Documentation (always needed)
+
+> **YAML adoption warning:** Keeping `.github/workflows/*.yml` while deleting the YAML instruction, linting, and validation stack is contradictory. GitHub Actions workflows are YAML files. If you remove YAML support, flag the contradiction during adoption and either keep the YAML stack or remove/replace every YAML-based workflow and configuration file.
+
+### Language and Format Checklist
+
+Use this checklist before the detailed Python and PowerShell sections below.
+
+#### Python
+
+Set up Python if you use it:
+
+- Read `.github/instructions/python.instructions.md` before editing `*.py` files.
+- Keep `.github/workflows/python-ci.yml` for Python linting, type checking, and tests.
+- Keep `src/`, `tests/test_example.py`, `tests/__init__.py`, `pyproject.toml`, and `templates/python/` until you replace the example package and tests with your project code.
+
+Remove Python if you do not use it:
+
+- Delete `src/`.
+- Delete `tests/test_example.py` and `tests/__init__.py`.
+- Delete `pyproject.toml` if no other tooling in your project depends on it.
+- Delete `.github/workflows/python-ci.yml`.
+- Delete `.github/instructions/python.instructions.md`.
+- Delete `templates/python/`.
+- Remove the `black` and `ruff-check` hooks from `.pre-commit-config.yaml`.
+
+#### PowerShell
+
+Set up PowerShell if you use it:
+
+- Read `.github/instructions/powershell.instructions.md` before editing `*.ps1` files.
+- Keep `.github/workflows/powershell-ci.yml` for PSScriptAnalyzer and Pester CI.
+- Keep `.github/linting/PSScriptAnalyzerSettings.psd1`, `tests/PowerShell/`, and `templates/powershell/` if you want the shipped linting and test examples.
+
+Remove PowerShell if you do not use it:
+
+- Delete `.github/workflows/powershell-ci.yml`.
+- Delete `.github/instructions/powershell.instructions.md`.
+- Delete `.github/linting/`.
+- Delete `tests/PowerShell/`.
+- Delete `templates/powershell/`.
+
+#### Terraform
+
+Set up Terraform if you use it:
+
+- Read `.github/instructions/terraform.instructions.md` before editing Terraform files.
+- Keep `.github/workflows/terraform-ci.yml` for Terraform format, validation, linting, tests, and security checks.
+- Keep `.tflint.hcl` and `templates/terraform/` until you replace the starter examples with project-specific Terraform tests or modules.
+- Keep the `terraform_fmt`, `terraform_validate`, and `terraform_tflint` hooks in `.pre-commit-config.yaml`.
+
+Remove Terraform if you do not use it:
+
+- Delete `.github/workflows/terraform-ci.yml`.
+- Delete `.github/instructions/terraform.instructions.md`.
+- Delete `.tflint.hcl`.
+- Delete `templates/terraform/`.
+- Remove the `terraform_fmt`, `terraform_validate`, and `terraform_tflint` hooks from `.pre-commit-config.yaml`.
+- Remove Terraform-specific rows from `.github/copilot-instructions.md`, `README.md`, and any project docs you keep.
+
+#### JSON/JSONC
+
+Set up JSON/JSONC if you use it:
+
+- Read `.github/instructions/json.instructions.md` before editing `*.json` or `*.jsonc` files.
+- Keep `templates/json/` as starter content for downstream JSON Schema examples.
+- Keep `schemas/example-config.schema.json` and `schemas/examples/example-config/` if you want the worked schema example.
+- Keep the `check-json` hook for strict `.json` syntax validation.
+- Keep the worked-example `check-jsonschema` hook and `check-metaschema` hook if the worked schema example remains.
+- Keep `tests/test_schema_examples.py` if schema examples remain.
+- Keep `.github/workflows/data-ci.yml` if you want dedicated JSON/YAML/Actions validation in CI.
+
+Remove JSON/JSONC if you truly do not use it:
+
+- Delete `.github/instructions/json.instructions.md`.
+- Delete `templates/json/`.
+- Delete `schemas/example-config.schema.json` and `schemas/examples/example-config/` if no schema examples remain.
+- Delete `tests/test_schema_examples.py` if no schema examples remain.
+- Remove the `check-json` hook from `.pre-commit-config.yaml` only after confirming no strict `.json` files remain.
+- Remove only the worked-example `check-jsonschema` hook entry (`Validate example-config valid examples`) and the `check-metaschema` hook from `.pre-commit-config.yaml` if the worked schema example is removed. Keep any other `check-jsonschema` hook entries that validate non-example files against built-in vendor schemas (for example, the `validate-dependabot-config` entry that validates `.github/dependabot.yml` against `vendor.dependabot`).
+- In `.github/workflows/data-ci.yml`, remove the `Run check-metaschema` step when the worked example is removed. Keep the `Run check-jsonschema` step as long as any `check-jsonschema` hook entry remains in `.pre-commit-config.yaml` (a single `pre-commit run check-jsonschema --all-files` invocation runs every remaining hook with that ID, including the Dependabot validation). Remove that step (or delete `data-ci.yml` entirely) only when no `check-jsonschema` hooks remain and no dedicated data-file CI is wanted.
+
+#### YAML
+
+Set up YAML if you use it:
+
+- Read `.github/instructions/yaml.instructions.md` before editing `*.yml` or `*.yaml` files.
+- Keep `templates/yaml/` as starter content for yamllint configuration variants and starter YAML.
+- Keep `.yamllint.yml` for the repository's `yamllint` configuration.
+- Keep the `check-yaml`, `yamllint`, and `actionlint` hooks in `.pre-commit-config.yaml`.
+- Keep `.github/workflows/data-ci.yml` if you want dedicated JSON/YAML/Actions validation in CI.
+
+Remove YAML only if you remove every YAML-dependent surface:
+
+- Delete `.github/instructions/yaml.instructions.md`.
+- Delete `templates/yaml/`.
+- Delete `.yamllint.yml`.
+- Delete `.github/workflows/data-ci.yml` if no dedicated data-file CI remains.
+- Remove the `check-yaml`, `yamllint`, and `actionlint` hooks from `.pre-commit-config.yaml`.
+- Delete or replace `.github/workflows/*.yml` and other YAML configuration files; otherwise keep the YAML stack.
+
+#### Markdown/Docs
+
+Set up Markdown if you use it:
+
+- Read `.github/instructions/docs.instructions.md` before editing Markdown files.
+- Keep `.github/workflows/markdownlint.yml` for Markdown linting CI.
+- Keep `.markdownlint.jsonc`, the Markdown linting scripts in `package.json`, and `templates/markdown/`.
+
+Remove Markdown only if your repository deliberately has no Markdown docs:
+
+- Delete `.github/instructions/docs.instructions.md`.
+- Delete `.github/workflows/markdownlint.yml`.
+- Delete `.markdownlint.jsonc`.
+- Delete `templates/markdown/`.
+- Remove Markdown linting scripts and dependencies from `package.json`.
+- Delete or replace Markdown files such as `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, and the getting-started guides if you do not keep them.
 
 ### If Using Python
 
@@ -1259,13 +1379,13 @@ Edit `.pre-commit-config.yaml` to remove Python-specific hooks. Delete or commen
 ```yaml
 # Remove or comment out these sections:
 #  - repo: https://github.com/psf/black
-#    rev: 26.1.0
+#    rev: 26.3.1
 #    hooks:
 #      - id: black
 #        args: [--line-length=100]
 #
 #  - repo: https://github.com/astral-sh/ruff-pre-commit
-#    rev: v0.14.14
+#    rev: v0.15.12
 #    hooks:
 #      - id: ruff-check
 #        args: [--fix, --line-length=100]
@@ -1720,7 +1840,7 @@ If you don't have a specification document yet, you can simplify this section or
 
 ### Updating the Modular Instructions Table
 
-If you removed Python or PowerShell support, update the modular instructions table to reflect your project's languages and cross-cutting rules:
+If you removed language or data-format support, update the modular instructions table to reflect your project's languages, data formats, and cross-cutting rules:
 
 ```markdown
 ## Modular Instructions
@@ -1737,7 +1857,7 @@ Remove rows for languages you're not using.
 
 ### Updating Linting and Testing Tables
 
-If you removed Python or PowerShell support, also update the **Linting Configurations** and **Testing Tools** tables in `.github/copilot-instructions.md`.
+If you removed Python, PowerShell, Terraform, JSON, YAML, or Markdown support, also update the **Linting Configurations** and **Testing Tools** tables in `.github/copilot-instructions.md`.
 
 **Linting Configurations table** — Remove the PSScriptAnalyzer row if you removed PowerShell:
 
@@ -1778,9 +1898,12 @@ If you removed both Python and PowerShell, remove the entire Testing Tools secti
 Review the files in `.github/instructions/` and remove or modify any that don't apply to your project:
 
 - `docs.instructions.md` - Documentation standards (keep for all projects)
+- `gitattributes.instructions.md` - `.gitattributes` standards (keep if you retain `.gitattributes`)
+- `json.instructions.md` - JSON/JSONC standards (remove only if you truly have no JSON/JSONC files)
 - `powershell.instructions.md` - PowerShell standards (remove if not using PowerShell)
 - `python.instructions.md` - Python standards (remove if not using Python)
 - `terraform.instructions.md` - Terraform/IaC standards (remove if not using Terraform)
+- `yaml.instructions.md` - YAML standards (keep if you retain GitHub Actions workflows or other YAML files)
 
 ### Reviewing Agent Instruction Files
 
@@ -1907,16 +2030,25 @@ pre-commit run --all-files
 Trim Trailing Whitespace......................................Passed
 Fix End of Files..............................................Passed
 Check Yaml....................................................Passed
+Check JSON....................................................Passed
 Check for added large files...................................Passed
+yamllint......................................................Passed
+actionlint....................................................Passed
 black.........................................................Passed
 ruff..........................................................Passed
+Validate example-config valid examples........................Passed
+Validate Dependabot configuration.............................Passed
+Self-validate example-config schema...........................Passed
 markdownlint-cli2.............................................Passed
 ```
 
 **Troubleshooting common failures:**
 
 - **Trailing whitespace / End of file:** These are auto-fixed. Re-run pre-commit and it should pass.
+- **JSON errors:** Check strict `.json` syntax; `.jsonc` is intentionally outside `check-json`.
 - **YAML errors:** Check for syntax errors in `.yml` files.
+- **Schema errors:** Run `pytest tests/test_schema_examples.py -v` after schema or schema-example changes, or `pre-commit run check-jsonschema --all-files` and `pre-commit run check-metaschema --all-files` to isolate hook failures.
+- **GitHub Actions errors:** `actionlint` reports workflow syntax, expression, and runner-label issues.
 - **Markdown errors:** Run `npm run lint:md` to see specific issues.
 - **Black/Ruff errors:** These may auto-fix. Re-run pre-commit. For persistent issues, check the specific error messages.
 
@@ -1932,6 +2064,12 @@ pytest tests/ -v
 
 ```powershell
 Invoke-Pester -Path tests/ -Output Detailed
+```
+
+**JSON Schema example fixtures:**
+
+```bash
+pytest tests/test_schema_examples.py -v
 ```
 
 ### Commit and Push
