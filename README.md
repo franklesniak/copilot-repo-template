@@ -236,7 +236,7 @@ Configuration: `.tflint.hcl`
 
 ```bash
 # Format check
-terraform fmt -check -recursive -diff
+terraform fmt -check -recursive
 
 # Format fix
 terraform fmt -recursive
@@ -245,8 +245,7 @@ terraform fmt -recursive
 terraform init -backend=false && terraform validate
 
 # Lint
-tflint --init
-tflint --recursive --config "$(pwd)/.tflint.hcl"
+tflint --init && tflint --recursive
 ```
 
 ### Testing

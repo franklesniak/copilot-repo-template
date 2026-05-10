@@ -80,7 +80,7 @@ The following pre-commit hooks are configured in this template. Check their repo
 | Black | <https://github.com/psf/black> | Python code formatting |
 | Ruff | <https://github.com/astral-sh/ruff-pre-commit> | Python linting and formatting |
 | markdownlint-cli2 | <https://github.com/DavidAnson/markdownlint-cli2> | Markdown linting |
-| Repo-local Terraform hooks | `.github/scripts/terraform_hooks.py` | Cross-platform Terraform formatting, validation, and linting wrappers |
+| pre-commit-terraform | <https://github.com/antonbabenko/pre-commit-terraform> | Terraform formatting, validation, and linting |
 | yamllint | <https://github.com/adrienverge/yamllint> | YAML style enforcement (driven by `.yamllint.yml`) |
 | actionlint | <https://github.com/rhysd/actionlint> | GitHub Actions workflow linting |
 | check-jsonschema | <https://github.com/python-jsonschema/check-jsonschema> | JSON Schema validation (worked-example schema and any downstream-added schema-backed file families); also provides the `check-metaschema` hook |
@@ -103,13 +103,13 @@ After running `pre-commit autoupdate`, manually update version references in doc
 - `GETTING_STARTED_NEW_REPO.md` (commented example in pre-commit config)
 - `GETTING_STARTED_EXISTING_REPO.md` (Python pre-commit examples)
 
-#### Repo-local Terraform Hooks
+#### pre-commit-terraform (Terraform hooks)
 
-- `.pre-commit-config.yaml` (local hook IDs and file scopes)
-- `.github/scripts/terraform_hooks.py` (wrapper behavior and subprocess command construction)
-- `tests/test_terraform_hooks.py` (unit coverage for wrapper behavior)
-- `.github/workflows/python-ci.yml` and `.github/workflows/auto-fix-precommit.yml` (Terraform and TFLint setup for aggregate pre-commit runs)
-- Contributor documentation that explains Terraform local validation (`README.md`, `CONTRIBUTING.md`, and the getting-started guides)
+- `.pre-commit-config.yaml` (updated by `pre-commit autoupdate`)
+- `.github/instructions/terraform.instructions.md` (pre-commit configuration examples)
+- `docs/terraform/TERRAFORM_LINTING_GUIDE.md` (pre-commit configuration examples)
+- `docs/terraform/TERRAFORM_COPILOT_INSTRUCTIONS_GUIDE.md` (pre-commit configuration examples)
+- `docs/terraform/TERRAFORM_TESTING_GUIDE.md` (pre-commit configuration examples)
 
 #### Other Hooks (no documentation references)
 
@@ -129,10 +129,8 @@ grep -rn "rev:.*26\.1\.0" --include="*.md" --include="*.yaml" .
 # Check for Ruff version references (update the version number as appropriate)
 grep -rn "rev:.*v0\.14\.14" --include="*.md" --include="*.yaml" .
 
-# Check for repo-local Terraform hook references.
-# `-E` enables extended regex so the alternation works on both GNU and BSD
-# (macOS) grep; basic-regex `\|` is a GNU extension and is not portable.
-grep -rEn "terraform-fmt|terraform-validate|terraform-tflint" --include="*.md" --include="*.yaml" --include="*.yml" .
+# Check for pre-commit-terraform version references (update the version number as appropriate)
+grep -rn "rev:.*v1\.105\.0" --include="*.md" --include="*.yaml" .
 
 # Generic search for any rev: patterns with version numbers
 grep -rn "rev:.*v\?[0-9]\+\.[0-9]\+\.[0-9]\+" --include="*.md" --include="*.yaml" .
@@ -148,7 +146,7 @@ When updating to new major versions, check the release notes for breaking change
 
 - **Ruff:** Frequently adds new rules that may flag previously-passing code. Review [Ruff changelog](https://github.com/astral-sh/ruff/blob/main/CHANGELOG.md). New rules are typically disabled by default, but rule behavior changes can affect existing configurations.
 
-- **Repo-local Terraform hooks:** Changes to `.github/scripts/terraform_hooks.py` may change hook IDs, command arguments, file scopes, or required external tools. Keep wrapper tests, `.pre-commit-config.yaml`, aggregate pre-commit workflows, and contributor documentation aligned.
+- **pre-commit-terraform:** May change hook IDs, arguments, or tool dependencies. Review [pre-commit-terraform releases](https://github.com/antonbabenko/pre-commit-terraform/releases). Ensure any referenced external tools (terraform, tflint, etc.) remain compatible.
 
 - **yamllint:** New rules or default tightening can flag previously-passing YAML. Review [yamllint releases](https://github.com/adrienverge/yamllint/releases). The repository's `.yamllint.yml` carries a documented `truthy.check-keys: false` exception; verify that exception still applies after major updates.
 
@@ -214,7 +212,7 @@ This template uses a pinned Terraform version in CI workflows for reproducibilit
 
 **Version considerations:**
 
-- **Pre-commit workflows:** Use the latest stable Terraform version for repo-local pre-commit hooks (`terraform-fmt`, `terraform-validate`, `terraform-tflint`)
+- **Pre-commit workflows:** Use the latest stable version for pre-commit hooks (terraform_fmt, terraform_validate, terraform_tflint)
 - **Terraform CI tests:** The test framework requires Terraform 1.6.0+ and mock_provider requires 1.7.0+. The latest stable version satisfies both requirements.
 - **Documentation:** After updating, verify that examples in documentation under `docs/terraform/` remain accurate. Note that these are illustrative examples and do not need to be updated unless the version syntax changes.
 
