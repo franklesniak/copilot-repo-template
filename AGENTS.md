@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for OpenAI Codex CLI
 
-**Version:** 1.4.20260510.1
+**Version:** 1.4.20260510.2
 
 ## Metadata
 
@@ -155,7 +155,8 @@ When a workflow step depends on a capability the GitHub plugin does not currentl
 | --- | --- | --- |
 | Request a Copilot code review | GitHub plugin | `gh pr edit --add-reviewer github-copilot[bot]`, `gh api`, or ask the owner to request the review manually |
 | Resolve a review thread | GitHub plugin | `gh api graphql` against the `resolveReviewThread` mutation, or ask the owner to resolve the thread manually |
-| Add or remove a reaction on a review comment | GitHub plugin | `gh api` against `/repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions`, or skip silently if neither path is available |
+| Add a reaction on a review comment | GitHub plugin | `gh api -X POST /repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions -f content=eyes`, or skip silently if neither path is available |
+| Remove a reaction on a review comment | GitHub plugin | First list the comment's reactions via `gh api /repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions` and find the reaction whose `content` matches the one to remove (e.g. `eyes`) and whose `user.login` is the agent's own identity; then delete by reaction id via `gh api -X DELETE /repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions/{reaction_id}`. Skip silently if neither path is available |
 | Post a reply to a review comment thread | GitHub plugin | `gh api` against `/repos/{owner}/{repo}/pulls/{pr}/comments/{comment_id}/replies`, or post a standalone PR comment that quotes the original review comment |
 
 If the primary capability and all listed fallbacks are unavailable in the current runtime, skip the step, note the limitation in the relevant reply, and continue rather than failing the workflow.
