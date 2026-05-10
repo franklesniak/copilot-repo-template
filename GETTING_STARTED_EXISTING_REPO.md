@@ -1236,7 +1236,7 @@ The template already ships JSON and YAML as first-class supported formats:
 
 - `.github/instructions/json.instructions.md` and `.github/instructions/yaml.instructions.md` define the authoring rules.
 - `.yamllint.yml` configures the default YAML style policy.
-- `.pre-commit-config.yaml` wires `check-json`, `check-yaml`, `yamllint`, `actionlint`, the worked-example `check-jsonschema` hook, and `check-metaschema`.
+- `.pre-commit-config.yaml` wires `check-json`, `check-yaml`, `yamllint`, `actionlint`, two `check-jsonschema` hook entries (the worked-example `Validate example-config valid examples` hook plus the `validate-dependabot-config` hook that validates `.github/dependabot.yml` against `vendor.dependabot`), and `check-metaschema`.
 - `.github/workflows/data-ci.yml` re-runs those data-file hooks as a dedicated CI check.
 - `schemas/` contains a removable worked example (`schemas/example-config.schema.json` and `schemas/examples/example-config/`) plus `schemas/README.md`.
 - `tests/test_schema_examples.py` verifies valid and invalid schema-example fixtures when the schema example is retained.
