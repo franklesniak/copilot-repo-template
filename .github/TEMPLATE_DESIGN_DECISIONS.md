@@ -21,7 +21,6 @@ This document records design decisions made during the creation and maintenance 
 - [File Placement](#file-placement)
 - [Pull Request Template](#pull-request-template)
 - [Pre-commit and Git Hooks](#pre-commit-and-git-hooks)
-  - [Cross-Platform Local Terraform Pre-Commit Wrappers](#design-decision-cross-platform-local-terraform-pre-commit-wrappers)
 - [Coding Standards and Instructions](#coding-standards-and-instructions)
   - [Current Provider Versions in Terraform Examples](#design-decision-current-provider-versions-in-terraform-examples)
   - [Terraform Instructions Document Length Strategy](#design-decision-terraform-instructions-document-length-strategy)
@@ -188,41 +187,6 @@ If you prefer Husky for git hooks:
 3. Add `"prepare": "husky"` to `package.json` scripts
 4. Create `.husky/pre-commit` with your hook commands
 5. Do NOT run `pre-commit install` (the two tools conflict)
-
-### Design Decision: Cross-Platform Local Terraform Pre-Commit Wrappers
-
-The template uses repo-local Python wrappers for active Terraform pre-commit hooks instead of `antonbabenko/pre-commit-terraform` shell hooks.
-
-**Decision:**
-
-- `.pre-commit-config.yaml` defines `repo: local` hooks named `terraform-fmt`, `terraform-validate`, and `terraform-tflint`.
-- The hooks call `.github/scripts/terraform_hooks.py`, which invokes Terraform and TFLint through `subprocess.run(..., shell=False)`.
-- Executable discovery uses `shutil.which` and fails with actionable installation guidance when required tools are missing.
-- HashiCorp Terraform (`terraform`) is required; the template does not add an OpenTofu fallback.
-- TFLint (`tflint`) is required when Terraform lint targets are present.
-
-**Rationale:**
-
-1. **Native Windows support is required.** POSIX shell hook scripts can fail before Terraform runs when native Windows paths are routed through the wrong Bash implementation. Python avoids that path-translation layer and works from PowerShell, Git Bash, WSL/Linux, macOS, and Linux.
-
-2. **Python is already in the local validation path.** Pre-commit itself and multiple existing hooks already require Python. A small stdlib-only wrapper reuses that dependency class rather than adding PowerShell, container, or additional runtime requirements.
-
-3. **Local behavior mirrors CI.** The format hook runs `terraform fmt -check -recursive -diff` from the repository root. Validation discovers directories containing `.tf` files and runs `terraform init -backend=false` followed by `terraform validate`. TFLint runs `tflint --init` and `tflint --recursive --config <repo-root>/.tflint.hcl`.
-
-4. **Missing tools fail clearly.** When matching Terraform targets exist and `terraform` or `tflint` is absent from PATH, the wrapper reports the missing executable and points to installation guidance instead of surfacing Bash/path-loss errors.
-
-**Alternatives considered:**
-
-- **Continue using `pre-commit-terraform`.** Rejected because its active hooks are POSIX shell scripts and do not provide reliable native Windows / PowerShell execution in this repository's observed environment.
-- **PowerShell wrappers.** Rejected because PowerShell is not a universal dependency for macOS/Linux contributors and would create a second shell-specific path.
-- **Container-based hooks.** Rejected because requiring Docker or another container runtime would add substantial local setup burden for a template repository.
-- **Documentation-only workaround.** Rejected because asking Windows users to reorder Bash implementations does not provide deterministic local validation.
-
-**Consequences:**
-
-- `pre-commit autoupdate` no longer updates Terraform hook behavior because the hooks are local. Maintainers must review `.github/scripts/terraform_hooks.py`, `tests/test_terraform_hooks.py`, `.pre-commit-config.yaml`, and aggregate pre-commit workflows together when Terraform validation behavior changes.
-- CI workflows that run aggregate pre-commit must install both Terraform and TFLint so downstream repositories with `.tf` files can run the same hooks.
-- The downstream copy of `.github/instructions/terraform.instructions.md` remains sourced from `franklesniak/TerraformStyleGuide` and is not modified directly for this policy. If generalized style-guide wording is desired, file it upstream.
 
 ---
 
