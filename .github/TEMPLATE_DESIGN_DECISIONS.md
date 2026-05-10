@@ -763,41 +763,41 @@ Schema validation is the primary correctness strategy for static JSON and YAML. 
 
 ### Design Decision: .gitattributes JSON/YAML LF Pinning
 
-`.gitattributes` is **left unchanged** when adding JSON/YAML support. The existing policy — pinning LF line endings only inside byte-exact text fixture locations (`tests/**/golden/**`, `tests/**/goldens/**`, `tests/**/snapshots/**`, `tests/**/__snapshots__/**`, `tests/**/fixtures/**`, `testdata/**`) — is retained. There is no blanket `*.json` / `*.yaml` / `*.yml` LF pin.
+`.gitattributes` now pins YAML files (`*.yml` and `*.yaml`) to LF because this template's `yamllint` configuration enforces Unix newlines. The existing byte-exact fixture policy remains in place for fixture locations (`tests/**/golden/**`, `tests/**/goldens/**`, `tests/**/snapshots/**`, `tests/**/__snapshots__/**`, `tests/**/fixtures/**`, `testdata/**`). JSON remains intentionally unpinned because the configured JSON validators do not enforce a newline style.
 
-This decision was recorded in the Issue 3 PR description (PR #423, "Add `.yamllint.yml` and extend pre-commit JSON/YAML hooks") and is transcribed here.
+This decision reverses the YAML portion of the Issue 3 PR description (PR #423, "Add `.yamllint.yml` and extend pre-commit JSON/YAML hooks"), which incorrectly assumed `yamllint` did not depend on LF endings. The JSON portion of that decision is retained.
 
 **Rationale:**
 
-1. **Existing policy is intentionally narrow.** The current `.gitattributes` rules target locations where byte-exact comparison (hash equality, signature verification, snapshot diffing) is the actual correctness contract. JSON and YAML files outside those locations do not have a byte-exact contract — their consumers parse them, not hash them.
-2. **Tooling already produces parse-equivalent output across line endings.** `check-json`, `check-yaml`, `yamllint`, `actionlint`, and downstream parsers do not depend on LF endings; CRLF-converted JSON/YAML still validates and still parses identically.
-3. **Avoid forcing CRLF rewrites on Windows checkouts that do not need them.** A blanket `*.json text eol=lf` rule would override `core.autocrlf=true` on Windows hosts even for files that are not part of any byte-exact comparison. The cost would land on every Windows contributor for no contract benefit.
-4. **Byte-exact JSON/YAML fixtures are already covered.** Any JSON or YAML file living under the existing fixture-location patterns is already pinned to LF by directory rule; no extra extension-level rule is required.
+1. **YAML has a linter-enforced LF contract.** `.yamllint.yml` extends `default`, which enables `new-lines: type: unix`. On Windows checkouts where `core.autocrlf=true` rewrites repository YAML files to CRLF, `yamllint` fails with `wrong new line character: expected \n (new-lines)`. Standard validation therefore depends on LF working-tree bytes for YAML.
+2. **Git attributes are the durable checkout-level fix.** `*.yml text eol=lf` and `*.yaml text eol=lf` override host-level checkout conversion and make `pre-commit run --all-files` behave the same on Windows as on LF-native checkouts.
+3. **JSON remains intentionally unpinned.** `check-json` and `check-jsonschema` parse JSON without enforcing a newline style. JSON files that are not byte-exact fixtures still have no repository-level LF contract, so the previous narrow policy remains correct for `*.json`.
+4. **Byte-exact fixture protection is unchanged.** Any JSON or YAML file living under the existing fixture-location patterns is already pinned to LF by directory rule. The YAML extension-level rule covers the linter contract for all YAML files, while the fixture-location rules continue to cover byte-exact artifacts of any text format.
+5. **Binary overrides still win.** The YAML rules are placed before the existing binary override block so later `binary` patterns continue to declassify binary files per attribute.
 
 **Downstream opt-in guidance:**
 
-Repos that genuinely need blanket LF pinning for JSON/YAML — for example, projects whose release pipeline hashes JSON manifests, projects publishing YAML policy documents whose checksums are signed, or projects with a strict cross-platform diff-noise policy — can opt in by adding lines such as:
+Repos that genuinely need blanket LF pinning for JSON or JSONC — for example, projects whose release pipeline hashes JSON manifests, or projects with a strict cross-platform diff-noise policy — can opt in by adding lines such as:
 
 ```gitattributes
-*.json   text eol=lf
-*.jsonc  text eol=lf
-*.yaml   text eol=lf
-*.yml    text eol=lf
+*.json  text eol=lf
+*.jsonc text eol=lf
 ```
 
-These should be added in the project's own `.gitattributes`, with a brief comment explaining the byte-exact contract that motivates them. The template does not ship these rules so that adopters who do not need them are not silently opted in.
+These should be added in the project's own `.gitattributes`, with a brief comment explaining the byte-exact or tool-enforced contract that motivates them. The template does not ship JSON rules so that adopters who do not need them are not silently opted in.
 
 **Trade-offs:**
 
-- Pro: Windows contributors are not forced into LF for JSON/YAML files that have no byte-exact contract.
+- Pro: `yamllint` and `pre-commit run --all-files` no longer fail on Windows checkouts solely because YAML files materialized as CRLF.
 - Pro: Existing byte-exact fixture protection is preserved unchanged.
-- Pro: Adopters that need blanket LF can add it deliberately, with rationale documented locally.
-- Con: Cross-repo diffs of JSON/YAML files may include CRLF↔LF noise on heterogeneous platforms; this is mitigated by `core.autocrlf` configuration and by editors that preserve the on-disk EOL.
+- Pro: JSON remains governed by the narrower policy because its configured validators do not enforce LF.
+- Con: Windows contributors now get LF working-tree bytes for YAML files even when their global Git configuration would otherwise materialize CRLF.
 
 **Alternatives considered:**
 
-- **Blanket `*.json` / `*.yaml` / `*.yml` LF pin in the template `.gitattributes`:** Rejected because it imposes a byte-exact contract on every adopter regardless of whether they have one. The byte-exact-fixture-focused policy is preserved.
-- **Conditional per-language opt-in via a commented-out block in the template `.gitattributes`:** Rejected for this iteration to avoid adding code that is dormant by default; the downstream-opt-in snippet above plus this ADR provides the same guidance without dormant rules in the file.
+- **Leave YAML unpinned:** Rejected because the repo's configured `yamllint` rule makes LF a validation contract, so CRLF-converted YAML fails standard local validation.
+- **Pin JSON alongside YAML:** Rejected because `check-json` and `check-jsonschema` do not enforce newline style. JSON can remain under the narrower byte-exact-fixture policy until a concrete validator or byte-exact contract requires more.
+- **Relax or disable `yamllint`'s `new-lines` rule:** Rejected because the repository already standardizes YAML formatting through `yamllint`; aligning checkout behavior with the configured rule is less surprising than weakening the rule.
 
 ---
 

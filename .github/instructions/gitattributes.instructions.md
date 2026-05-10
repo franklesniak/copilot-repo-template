@@ -1,31 +1,32 @@
 ---
 applyTo: "**/.gitattributes"
-description: "Rules for .gitattributes entries, including line-ending pinning for byte-exact text artifacts."
+description: "Rules for .gitattributes entries, including line-ending pinning for byte-exact text artifacts and linter-enforced LF files."
 ---
 
 <!-- markdownlint-disable MD013 -->
 
 # `.gitattributes` Rules
 
-**Version:** 1.0.20260430.0
+**Version:** 1.1.20260510.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-04-21
-- **Scope:** Applies to any `.gitattributes` file in repositories that adopt these instructions, independent of programming language. Governs how committed text artifacts are protected against platform-dependent checkout rewriting.
+- **Last Updated:** 2026-05-10
+- **Scope:** Applies to any `.gitattributes` file in repositories that adopt these instructions, independent of programming language. Governs how committed text artifacts and linter-enforced LF file families are protected against platform-dependent checkout rewriting.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
 ## Purpose and Scope
 
-This file defines the normative rule for entries in `.gitattributes` that protect byte-exact text artifacts from platform-dependent line-ending rewriting. It applies to every `.gitattributes` file in any repository that adopts these instructions, regardless of the programming languages used in the repository.
+This file defines the normative rule for entries in `.gitattributes` that protect byte-exact text artifacts and linter-enforced LF file families from platform-dependent line-ending rewriting. It applies to every `.gitattributes` file in any repository that adopts these instructions, regardless of the programming languages used in the repository.
 
 > **Note:** This document uses [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) keywords (**MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, **MAY**) to indicate requirement levels.
 
 ## Quick Reference Checklist
 
 - **[All]** Any committed text file whose identity is its exact byte sequence **MUST** be pinned to LF in `.gitattributes` using a path pattern as specific as practical. See [Rule: Pin Byte-Exact Text Artifacts to LF](#rule-pin-byte-exact-text-artifacts-to-lf).
+- **[All]** Any committed text file family whose repository-enforced linter or validator requires LF line endings **MUST** be pinned to LF in `.gitattributes`. See [Rule: Pin Linter-Enforced LF File Families to LF](#rule-pin-linter-enforced-lf-file-families-to-lf).
 
 ## Rule: Pin Byte-Exact Text Artifacts to LF
 
@@ -48,9 +49,22 @@ tests/**/golden/*.json text eol=lf
 
 A blanket rule such as `* text=auto` **MUST NOT** be treated as a substitute for per-path `eol=lf` pinning. `text=auto` lets Git auto-detect text files and normalize to LF in the repository, but it does **not** force LF on Windows checkouts when `core.autocrlf=true` is in effect: Git still applies the working-tree line-ending conversion configured on the host and can rewrite LF to CRLF on checkout. Only explicit `eol=lf` on an artifact path guarantees that the bytes in the working tree match the bytes in the repository on every platform.
 
+## Rule: Pin Linter-Enforced LF File Families to LF
+
+Any committed text file family whose repository-enforced linter or validator requires LF line endings **MUST** be pinned to LF line endings in `.gitattributes` using a pattern as specific as practical to the affected file family. The rule applies even when the file's semantic consumer parses line endings equivalently, because the linter or validator has made the working-tree newline style part of the repository contract.
+
+**Example:** This template configures `yamllint` through `.yamllint.yml`, and the default `new-lines: type: unix` rule rejects CRLF YAML files. Therefore the template pins all YAML files to LF:
+
+```gitattributes
+*.yml  text eol=lf
+*.yaml text eol=lf
+```
+
+This rule does not imply that every parsed data format must be pinned by extension. File families whose configured tools parse or validate independently of line-ending style **SHOULD NOT** be LF-pinned solely for symmetry with another format.
+
 ## Defaults Shipped by This Template
 
-This template ships a repo-root `.gitattributes` file with LF-pinning defaults for common byte-exact fixture locations:
+This template ships a repo-root `.gitattributes` file with LF-pinning defaults for common byte-exact fixture locations and linter-enforced LF file families:
 
 - `tests/**/golden/**`
 - `tests/**/goldens/**`
@@ -58,8 +72,10 @@ This template ships a repo-root `.gitattributes` file with LF-pinning defaults f
 - `tests/**/__snapshots__/**`
 - `tests/**/fixtures/**`
 - `testdata/**`
+- `*.yml`
+- `*.yaml`
 
-These paths are assumed to contain **text** fixtures. To keep the defaults safe when binary assets are committed under the same directories (for example, `.png` screenshots under `__snapshots__/`), the shipped `.gitattributes` also declassifies a curated list of common binary extensions (images, documents and archives, compiled artifacts, audio and video, fonts) using the `binary` macro so that Git does not apply line-ending conversion to them.
+The fixture paths are assumed to contain **text** fixtures. To keep the defaults safe when binary assets are committed under the same directories (for example, `.png` screenshots under `__snapshots__/`), the shipped `.gitattributes` also declassifies a curated list of common binary extensions (images, documents and archives, compiled artifacts, audio and video, fonts) using the `binary` macro so that Git does not apply line-ending conversion to them.
 
 Downstream adopters **MUST** extend these entries whenever they introduce a new byte-exact fixture location that is not already covered (for example, a project-specific `expected/` directory, a `golden_files/` tree, or signed payloads under a custom path). New entries **SHOULD** follow the "as narrow as practical" guidance above. Existing template entries **SHOULD NOT** be removed unless the maintainer has confirmed that no byte-exact comparison exists in the repository that depends on those paths.
 
@@ -90,3 +106,5 @@ These language-specific concerns are out of scope for this instructions file; th
 Git's end-of-line handling is configurable per host. On Windows, the common default `core.autocrlf=true` rewrites LF to CRLF on checkout and CRLF to LF on commit. For a source file this is usually harmless; for a fixture whose identity is its exact byte sequence (for example, a file hashed into a test oracle), this silent rewriting breaks byte-exact comparisons — hash equality, signature verification, and snapshot diffs will fail on Windows even though the committed bytes are correct.
 
 Per-path `eol=lf` pinning in `.gitattributes` is the durable Git-layer fix because it overrides `core.autocrlf` and any other host-level configuration for the specified paths. Producer-side normalization alone is insufficient: even if a generator writes LF bytes and a comparator reads in binary mode, a Windows checkout with `core.autocrlf=true` will still present CRLF bytes on disk, and any tool that reads the on-disk file (including hashing pipelines that are not explicitly reading in binary mode) will observe the rewritten bytes. Pinning the path to `eol=lf` is what guarantees that the bytes written to the working tree match the bytes stored in the repository, independent of host configuration.
+
+The same Git-layer guarantee is required when a repository-enforced linter or validator makes LF line endings part of the contract. YAML in this template is the worked example: `yamllint` rejects CRLF YAML through the `new-lines` rule, so leaving YAML subject to host checkout conversion makes standard validation fail on Windows even though the parsed YAML data is unchanged. Pinning `*.yml` and `*.yaml` to `eol=lf` aligns the working tree with the configured validation contract.
