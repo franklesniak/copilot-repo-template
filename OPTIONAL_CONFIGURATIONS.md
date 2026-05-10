@@ -39,6 +39,7 @@ This guide covers optional customizations you can make after completing the init
 - [Copilot Terraform Instructions Configuration](#copilot-terraform-instructions-configuration)
 - [Copilot Main Instructions Configuration](#copilot-main-instructions-configuration)
 - [Customizing Agent Instruction Files](#customizing-agent-instruction-files)
+- [Codex Plugin Configuration](#codex-plugin-configuration)
 - [CI Workflow Configuration](#ci-workflow-configuration)
 - [Auto-fix Pre-commit Workflow Configuration](#auto-fix-pre-commit-workflow-configuration)
 - [Placeholder Check Workflow Configuration](#placeholder-check-workflow-configuration)
@@ -2570,6 +2571,48 @@ When high-priority shared guidance changes in `.github/copilot-instructions.md`,
 ### Adding Platform-Specific Notes
 
 If an agent has unique behavioral requirements (e.g., different command syntax, specific tool limitations, or platform-specific workarounds), add agent-specific sections to the appropriate file. Platform-specific notes should supplement, not contradict, the canonical rules in `.github/copilot-instructions.md`.
+
+---
+
+## Codex Plugin Configuration
+
+**File:** `.codex/config.toml`
+
+The template includes a project-scoped Codex configuration file at `.codex/config.toml` that opts trusted Codex checkouts of this repository into the OpenAI-curated GitHub plugin (`github@openai-curated`). When the plugin is enabled and authorized, Codex prefers it for GitHub operations such as reading issues and pull requests, posting PR and review comments, managing labels and reactions, and creating pull requests, instead of treating the absence of the `gh` CLI as a blocker. See the **GitHub Plugin Usage** and **PR Review Workflow (Codex-adapted)** sections in `AGENTS.md` for the full Codex workflow that depends on this plugin.
+
+### What enabling the plugin does and does not grant
+
+Enabling the plugin in `.codex/config.toml` only opts the plugin in for trusted Codex checkouts that read this configuration. It does **not**, by itself:
+
+- install the GitHub app or connector for the Codex account performing the operation,
+- grant access to any specific repository or organization,
+- bypass any branch protection, required status check, or signing requirement, or
+- change the permissions of the GitHub identity Codex uses at runtime.
+
+Actual GitHub access still depends on the GitHub app/connector installation, the Codex account performing the operation, and the repository's permissions. Treat `.codex/config.toml` as an opt-in switch, not a credential.
+
+### Removing the file
+
+If your team does not use OpenAI Codex CLI, you can safely delete `.codex/config.toml` (and the empty `.codex/` directory it lives in). Removing the file does not affect any other agent or platform; the file is consumed only by Codex. If you also delete the `AGENTS.md` agent instruction file (see **Customizing Agent Instruction Files** above), removing `.codex/config.toml` keeps the repository's Codex-facing surface area aligned with what your team actually uses.
+
+### Keeping the file but disabling the plugin
+
+If you keep `AGENTS.md` and `.codex/config.toml` but want to disable the GitHub plugin for this checkout (for example, while testing a different GitHub integration), set `enabled = false` instead of removing the file:
+
+```toml
+[plugins."github@openai-curated"]
+enabled = false
+```
+
+This preserves the configuration as a discoverable record that the project considered the plugin and chose to disable it, rather than leaving readers to guess from the absence of a config file.
+
+### Verifying the plugin name
+
+The plugin identifier `github@openai-curated` follows OpenAI's curated-plugin naming convention (`<plugin-name>@openai-curated`). If OpenAI renames the curated GitHub plugin in a future Codex release, update the quoted key in `.codex/config.toml` to match the new identifier; a typo in the plugin name is a silent no-op rather than an error, so the file would otherwise stop having any effect without a visible warning.
+
+### Pre-commit validation
+
+The `check-toml` hook in `.pre-commit-config.yaml` (from `pre-commit/pre-commit-hooks`) validates the syntax of `.codex/config.toml` (and any other `*.toml` file in the repository) on every `pre-commit run --all-files`. If you remove `.codex/config.toml` and the repository contains no other TOML files you want validated, you may also remove the `check-toml` hook from `.pre-commit-config.yaml`; otherwise, leave it in place so future TOML additions are automatically validated.
 
 ---
 
