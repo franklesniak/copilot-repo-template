@@ -31,6 +31,11 @@ tests/**/__snapshots__/**     text eol=lf
 tests/**/fixtures/**          text eol=lf
 testdata/**                   text eol=lf
 
+# YAML files: pin LF so yamllint's `new-lines: type: unix` rule
+# passes on Windows checkouts regardless of `core.autocrlf`.
+*.yml                         text eol=lf
+*.yaml                        text eol=lf
+
 # Binary overrides: prevent the broad rules above (or any default
 # text-detection) from treating these common binary file types as text.
 # The `binary` macro expands to `-text -diff`.
