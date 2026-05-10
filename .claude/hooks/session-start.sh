@@ -45,8 +45,30 @@ case "$(uname -m)" in
 esac
 
 tf_os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+case "$tf_os" in
+  linux|darwin) ;;
+  *) echo "Unsupported OS: ${tf_os} (supported: linux, darwin)" >&2; exit 1 ;;
+esac
+
 archive="terraform_${TERRAFORM_VERSION}_${tf_os}_${tf_arch}.zip"
 base="https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}"
+
+# Portable SHA-256 digest helper. Prefers GNU coreutils `sha256sum`
+# (default on Linux), falls back to BSD-style `shasum -a 256` (default on
+# macOS) and finally `openssl dgst -sha256` so verification works across
+# every uname -s value the OS allowlist above accepts.
+compute_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  elif command -v openssl >/dev/null 2>&1; then
+    openssl dgst -sha256 "$1" | awk '{print $NF}'
+  else
+    echo "No SHA-256 utility available (need sha256sum, shasum, or openssl)" >&2
+    return 1
+  fi
+}
 
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
@@ -64,7 +86,7 @@ if [ -z "$expected_hash" ]; then
   echo "No SHA256 entry for ${archive} in SHA256SUMS; refusing to install" >&2
   exit 1
 fi
-actual_hash="$(sha256sum "$tmpdir/${archive}" | awk '{print $1}')"
+actual_hash="$(compute_sha256 "$tmpdir/${archive}")"
 if [ "$expected_hash" != "$actual_hash" ]; then
   echo "SHA256 mismatch for ${archive}: expected ${expected_hash}, got ${actual_hash}" >&2
   exit 1
