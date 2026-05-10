@@ -10,7 +10,6 @@ from typing import Any
 
 import pytest
 
-
 HOOK_PATH = Path(__file__).resolve().parents[1] / ".github" / "scripts" / "terraform_hooks.py"
 HOOK_SPEC = importlib.util.spec_from_file_location("terraform_hooks", HOOK_PATH)
 if HOOK_SPEC is None or HOOK_SPEC.loader is None:
