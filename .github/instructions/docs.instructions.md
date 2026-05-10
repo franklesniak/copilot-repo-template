@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.5.20260509.1
+**Version:** 1.5.20260510.1
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-09
+- **Last Updated:** 2026-05-10
 - **Scope:** Defines documentation standards for Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) files in this repository, including specs, design docs, runbooks, ADRs, instruction files, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -163,6 +163,17 @@ This subsection applies to Tier 1 documents and to any other document that inten
   - Per-file `<!-- markdownlint-disable RULE -->` directives MUST NOT contradict the configuration in `.markdownlint.jsonc`; their purpose is portability, not local override.
   - When a contributor wants an additional rule disabled, update `.markdownlint.jsonc` first. Per-file directives are only for mirroring repo-wide configuration where default enforcement would harm portability.
 - Code-fence info strings MUST contain only a single language tag (e.g., `powershell`, `text`, `json`, `bash`). Do NOT embed file paths, URLs, or other metadata in the info string (for example, `powershell name=src/Foo.ps1 url=https://...#L1-L9` is not allowed). To cite the source of a code excerpt, place a line of the form ``Source: [`relative/path` (lines <start>-<end>)](relative/path#L<start>-L<end>).`` in prose immediately above the fence (for example, ``Source: [`src/Foo.ps1` (lines 1-9)](src/Foo.ps1#L1-L9).``). This keeps the language tag standard, preserves syntax highlighting across Markdown renderers, and reinforces the existing rule to avoid raw URLs in prose.
+
+#### Shell command portability
+
+- **Scope.** Applies to fenced `bash`/`sh` shell-command examples in this repository's Markdown documentation that a reader is expected to copy and run on a Unix-like target environment (Linux, macOS, FreeBSD, WSL, or Git Bash on Windows). Applies to fenced `text` examples only when the surrounding prose clearly presents the block as copyable shell commands or a shell session, not when the block is command output, logs, diagnostics, or plain text. Native PowerShell examples are out of scope and SHOULD use a `powershell` fence. Examples that surrounding prose explicitly labels as GNU-only, BSD-only, Bash-only, PowerShell-only, or otherwise platform-specific are allowed.
+- **Rules.**
+  - For alternation in `grep`, MUST use extended regex (`grep -E "P1|P2|P3"`) or multiple `-e` patterns (`grep -e P1 -e P2 -e P3`). MUST NOT use basic-regex `\|` alternation, which is a GNU extension and is not reliably supported in BSD `grep` (the macOS default).
+  - For in-place edits with `sed`, prefer the attached non-empty backup-suffix form (for example, `sed -i.bak 'SCRIPT' FILE`), which works on both GNU and BSD `sed` and produces a `.bak` backup file that surrounding prose SHOULD note so readers know to keep, delete, or `.gitignore` it. Alternatives are to pipe `sed` output to a temporary file and rename it over the original (which can drop file permissions, ownership, or extended attributes), or to explicitly state in surrounding prose that the example uses GNU `sed -i` semantics (where the suffix is optional and, when supplied, must be attached with no space) or BSD `sed -i ''` semantics (where an empty suffix is supplied as a separate argument so no backup is written; GNU `sed` would misparse the `''` as the script). The bare `sed -i` form (no suffix) and the separate-argument `sed -i ''` form are not portable across both.
+  - Avoid Bash-specific syntax (`[[ ... ]]`, `(( ... ))`, `<<<` here-strings, `mapfile`/`readarray`, process substitution `<(...)`) in examples that should also run under `sh`, `dash`, or other POSIX-style shells. When Bash-specific syntax is required, the code fence MUST be `bash` (not `sh`) and surrounding prose MUST note the Bash dependency.
+  - When a command is intentionally GNU-only, BSD-only, Bash-only, PowerShell-only, or otherwise platform-specific, surrounding prose MUST explicitly label it so readers know which `grep`/`sed`/shell variant is required.
+
+This template ships maintainer-facing scripts, onboarding steps, and verification commands intended for cross-platform use. macOS and BSD-family defaults for `grep` and `sed` differ from GNU tools, so a command that works on a Linux CI runner can fail on a maintainer's macOS workstation.
 
 #### Issue and PR templates
 
