@@ -1199,8 +1199,8 @@ Remove JSON/JSONC if you truly do not use it:
 - Delete `schemas/example-config.schema.json` and `schemas/examples/example-config/` if no schema examples remain.
 - Delete `tests/test_schema_examples.py` if no schema examples remain.
 - Remove the `check-json` hook from `.pre-commit-config.yaml` only after confirming no strict `.json` files remain.
-- Remove the worked-example `check-jsonschema` and `check-metaschema` hooks from `.pre-commit-config.yaml` if the worked schema example is removed.
-- Remove the corresponding `check-jsonschema` and `check-metaschema` steps from `.github/workflows/data-ci.yml`, or delete `data-ci.yml` if no dedicated data-file CI remains.
+- Remove only the worked-example `check-jsonschema` hook entry (`Validate example-config valid examples`) and the `check-metaschema` hook from `.pre-commit-config.yaml` if the worked schema example is removed. Keep any other `check-jsonschema` hook entries that validate non-example files against built-in vendor schemas (for example, the `validate-dependabot-config` entry that validates `.github/dependabot.yml` against `vendor.dependabot`).
+- In `.github/workflows/data-ci.yml`, remove the `Run check-metaschema` step when the worked example is removed. Keep the `Run check-jsonschema` step as long as any `check-jsonschema` hook entry remains in `.pre-commit-config.yaml` (a single `pre-commit run check-jsonschema --all-files` invocation runs every remaining hook with that ID, including the Dependabot validation). Remove that step (or delete `data-ci.yml` entirely) only when no `check-jsonschema` hooks remain and no dedicated data-file CI is wanted.
 
 #### YAML
 
