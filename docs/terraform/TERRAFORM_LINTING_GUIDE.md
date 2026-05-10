@@ -1,12 +1,12 @@
 # Terraform Linting Implementation Guide
 
-**Version:** 1.0.20260124.0
+**Version:** 1.0.20260510.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-01-24
+- **Last Updated:** 2026-05-10
 - **Scope:** This document provides comprehensive guidance for implementing Terraform linting in CI for the `franklesniak/copilot-repo-template` repository. It covers tool selection, workflow design, configuration, pre-commit integration, and best practices. This is a **guidance-only** document—it does not modify workflows or configurations directly.
 - **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md), [Terraform Instructions](../../.github/instructions/terraform.instructions.md)
 
@@ -1049,7 +1049,7 @@ For organization-specific rules, consider:
 
 ## Pre-commit Integration
 
-This repository already has Terraform hooks configured in `.pre-commit-config.yaml`. This section documents the configuration and local workflow.
+This repository already has Terraform hooks configured in `.pre-commit-config.yaml`. The active hooks are repo-local Python wrappers rather than POSIX shell hooks, so local validation works from native Windows / PowerShell, WSL/Linux, macOS, and Linux without depending on Bash path translation.
 
 ### Recommended Hooks
 
@@ -1057,17 +1057,16 @@ The following hooks are **RECOMMENDED** and are currently configured:
 
 | Hook | Purpose | Auto-fix |
 | --- | --- | --- |
-| `terraform_fmt` | Format checking | Yes |
-| `terraform_validate` | Syntax validation | No |
-| `terraform_tflint` | Linting | No |
+| `terraform-fmt` | Format checking | No; reports diffs |
+| `terraform-validate` | Syntax validation | No |
+| `terraform-tflint` | Linting | No |
 
 #### Additional Optional Hooks
 
-| Hook | Purpose | When to Use |
+| Tool | Purpose | When to Use |
 | --- | --- | --- |
-| `terraform_docs` | Auto-generate documentation | When maintaining module READMEs |
-| `terraform_tfsec` | Security scanning | When security scanning in pre-commit is required |
-| `terraform_checkov` | Compliance scanning | When compliance checks are required |
+| `terraform-docs` | Auto-generate documentation | When maintaining module READMEs |
+| Trivy / Checkov | Security or compliance scanning | When security scanning in pre-commit is required |
 
 ---
 
@@ -1077,39 +1076,43 @@ The repository's current configuration:
 
 ```yaml
 # Terraform formatting and validation (remove if not using Terraform)
-- repo: https://github.com/antonbabenko/pre-commit-terraform
-  rev: v1.105.0  # Pin to specific version
+- repo: local
   hooks:
-    - id: terraform_fmt
-    - id: terraform_validate
-    - id: terraform_tflint
-      args:
-        - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
+    - id: terraform-fmt
+      name: Terraform fmt
+      entry: python .github/scripts/terraform_hooks.py fmt
+      language: python
+      pass_filenames: false
+      files: '(^|/)([^/]+\.(tf|tfvars|tftest\.hcl|tf\.json)$|templates/terraform/)'
+    - id: terraform-validate
+      name: Terraform validate
+      entry: python .github/scripts/terraform_hooks.py validate
+      language: python
+      pass_filenames: false
+      files: '(^|/)[^/]+\.tf$'
+    - id: terraform-tflint
+      name: Terraform validate with tflint
+      entry: python .github/scripts/terraform_hooks.py tflint
+      language: python
+      pass_filenames: false
+      files: '(^|/)([^/]+\.tf|\.tflint\.hcl)$'
 ```
 
-**Official Documentation:** [pre-commit-terraform](https://github.com/antonbabenko/pre-commit-terraform)
+The hook wrapper lives at `.github/scripts/terraform_hooks.py` and invokes subprocesses with `shell=False`.
 
 #### Hook Ordering
 
 Hooks execute in the order listed. The recommended order is:
 
-1. `terraform_fmt` — Fix formatting first
-2. `terraform_validate` — Validate syntax
-3. `terraform_tflint` — Lint for best practices
+1. `terraform-fmt` — Report formatting diffs first
+2. `terraform-validate` — Validate syntax
+3. `terraform-tflint` — Lint for best practices
 
 This order ensures that formatting is fixed before validation, and validation passes before linting.
 
 #### Adding terraform-docs Hook
 
-To add automatic documentation generation:
-
-```yaml
-- id: terraform_docs
-  args:
-    - --hook-config=--path-to-file=README.md
-    - --hook-config=--add-to-existing-file=true
-    - --hook-config=--create-file-if-not-exist=true
-```
+To add automatic documentation generation, add a dedicated `terraform-docs` hook or CI step and pin a current upstream release at adoption time. Do not overload the repo-local validation wrapper with documentation generation behavior.
 
 ---
 
@@ -1120,6 +1123,10 @@ To add automatic documentation generation:
 ```bash
 # Install pre-commit globally
 pip install pre-commit
+
+# Install Terraform and TFLint so the repo-local hooks can find them on PATH
+terraform version
+tflint --version
 
 # Install hooks in repository
 pre-commit install
@@ -1132,11 +1139,20 @@ pre-commit install
 pre-commit run --all-files
 
 # Run specific hook
-pre-commit run terraform_fmt --all-files
-pre-commit run terraform_tflint --all-files
+pre-commit run terraform-fmt --all-files
+pre-commit run terraform-validate --all-files
+pre-commit run terraform-tflint --all-files
 
 # Run on staged files only
 pre-commit run
+```
+
+On Windows with a pip-installed pre-commit, use module invocation from PowerShell:
+
+```powershell
+python -m pre_commit run terraform-fmt --all-files
+python -m pre_commit run terraform-validate --all-files
+python -m pre_commit run terraform-tflint --all-files
 ```
 
 #### Updating Hook Versions
@@ -1149,6 +1165,8 @@ pre-commit autoupdate
 git diff .pre-commit-config.yaml
 ```
 
+`pre-commit autoupdate` does not update `repo: local` hook behavior. Review `.github/scripts/terraform_hooks.py`, `tests/test_terraform_hooks.py`, and the CI setup steps when Terraform or TFLint command requirements change.
+
 ---
 
 ### Troubleshooting Pre-commit Hooks
@@ -1157,8 +1175,11 @@ git diff .pre-commit-config.yaml
 
 | Issue | Cause | Solution |
 | --- | --- | --- |
-| `terraform_validate` fails | Terraform not initialized | Run `terraform init -backend=false` in each directory |
-| `terraform_tflint` fails | TFLint plugins not initialized | Run `tflint --init` |
+| `terraform-fmt` reports diffs | Files are not formatted | Run `terraform fmt -recursive`, review the diff, then re-run the hook |
+| `terraform-validate` fails | Terraform init or validation failed | Run the hook with `--verbose`, then fix the reported directory |
+| `terraform-tflint` fails | TFLint plugin initialization or linting failed | Run `tflint --init`, then `tflint --recursive --config "$(pwd)/.tflint.hcl"` |
+| Missing `terraform` | HashiCorp Terraform is not on PATH | Install Terraform from HashiCorp's install guide and restart your shell |
+| Missing `tflint` | TFLint is not on PATH | Install TFLint and restart your shell |
 | Hook times out | Large repository | Increase timeout with `--hook-timeout` |
 | Hook skipped | No matching files | Verify file patterns in hook config |
 
@@ -1166,7 +1187,7 @@ git diff .pre-commit-config.yaml
 
 ```bash
 # Run with verbose output
-pre-commit run --verbose terraform_tflint --all-files
+pre-commit run --verbose terraform-tflint --all-files
 
 # Show hook configuration
 pre-commit show-config
@@ -1402,7 +1423,7 @@ The repository's `auto-fix-precommit.yml` workflow could be extended to support 
 
 #### Potential Auto-fix Addition
 
-The existing auto-fix workflow runs `pre-commit run --all-files`, which includes `terraform_fmt`. No additional configuration is needed for format auto-fixes.
+The existing auto-fix workflow runs `pre-commit run --all-files`, which includes `terraform-fmt`. The repo-local format hook reports diffs but does not rewrite files; developers should run `terraform fmt -recursive`, review the result, and include the formatting update in the same change.
 
 For repositories where TFLint can auto-fix issues, consider:
 
@@ -1526,10 +1547,10 @@ Using `latest` is **NOT** acceptable for:
 
 ### TFLint Version Pinning
 
-The current configuration uses `latest`:
+Avoid `latest` for reproducible CI runs:
 
 ```yaml
-- uses: terraform-linters/setup-tflint@v4
+- uses: terraform-linters/setup-tflint@v6
   with:
     tflint_version: latest
 ```
@@ -1537,25 +1558,29 @@ The current configuration uses `latest`:
 **Recommendation:** Pin to specific version for reproducibility:
 
 ```yaml
-- uses: terraform-linters/setup-tflint@v4
+- uses: terraform-linters/setup-tflint@v6
   with:
     tflint_version: v0.51.1
 ```
 
-### Pre-commit Hook Version Pinning
+### Repo-local Pre-commit Hook Maintenance
 
-The repository follows best practice by pinning pre-commit hook versions:
+The Terraform pre-commit hooks are `repo: local` wrappers, so there is no external pre-commit hook revision to pin:
 
 ```yaml
-- repo: https://github.com/antonbabenko/pre-commit-terraform
-  rev: v1.105.0  # Pinned version
+- repo: local
+  hooks:
+    - id: terraform-fmt
+    - id: terraform-validate
+    - id: terraform-tflint
 ```
 
-**MUST** pin versions in pre-commit configuration for:
+Maintain reproducible behavior by keeping these surfaces aligned:
 
-- Reproducible behavior
-- Controlled updates
-- CI consistency
+- The wrapper implementation in `.github/scripts/terraform_hooks.py`
+- The local hook entries and file scopes in `.pre-commit-config.yaml`
+- The wrapper tests in `tests/test_terraform_hooks.py`
+- Terraform and TFLint setup steps in aggregate pre-commit workflows
 
 ---
 
@@ -1632,7 +1657,6 @@ This guide **SHOULD** be updated when:
 | TFLint | <https://github.com/terraform-linters/tflint> |
 | setup-terraform Action | <https://github.com/hashicorp/setup-terraform> |
 | setup-tflint Action | <https://github.com/terraform-linters/setup-tflint> |
-| pre-commit-terraform | <https://github.com/antonbabenko/pre-commit-terraform> |
 | Checkov | <https://www.checkov.io/> |
 | tfsec | <https://github.com/aquasecurity/tfsec> |
 | Terrascan | <https://github.com/tenable/terrascan> |
