@@ -251,13 +251,13 @@ When updating provider versions in terraform.instructions.md, search for the ver
 
 ```bash
 # Search for AWS provider version references
-grep -n "~> 5\.0\|~> 6\.0" .github/instructions/terraform.instructions.md
+grep -nE "~> 5\.0|~> 6\.0" .github/instructions/terraform.instructions.md
 
 # Search for Azure provider version references
-grep -n "~> 3\.0\|~> 4\.0" .github/instructions/terraform.instructions.md
+grep -nE "~> 3\.0|~> 4\.0" .github/instructions/terraform.instructions.md
 
 # Search for GCP provider version references
-grep -n "~> 6\.0\|~> 7\.0" .github/instructions/terraform.instructions.md
+grep -nE "~> 6\.0|~> 7\.0" .github/instructions/terraform.instructions.md
 ```
 
 Update all occurrences to the new major version constraint (e.g., `~> 6.0` to `~> 7.0`).
