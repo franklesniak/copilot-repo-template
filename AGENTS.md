@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for OpenAI Codex CLI
 
-**Version:** 1.4.20260510.0
+**Version:** 1.4.20260510.1
 
 ## Metadata
 
@@ -94,7 +94,7 @@ This workflow adapts the Claude-targeted process documented in `CLAUDE.md` for C
 
 For each code review comment received from GitHub Copilot, a human reviewer, or any other reviewer, follow these steps:
 
-1. **Signal processing (conditional).** If the GitHub plugin (or a documented fallback) supports adding emoji reactions to review comments, add a `:eyes:` reaction when work begins on the comment and remove it when the comment is fully processed (after step 9, or after the early-exit path in step 2). If reaction tooling is not available in the current runtime, skip this step silently.
+1. **Signal processing (conditional).** If the GitHub plugin (or a documented fallback) supports adding emoji reactions to review comments, add an `eyes` (👀) reaction when work begins on the comment and remove it when the comment is fully processed (after step 9, or after the early-exit path in step 2). The reaction's `content` value is the literal string `eyes` as used by the GitHub Reactions API, not the Markdown shortcode `:eyes:`. If reaction tooling is not available in the current runtime, skip this step silently.
 
 2. **Validate the concern.** Determine whether the reviewer's feedback identifies a genuine gap, bug, style violation, or improvement opportunity. If the concern is not valid, post a reply explaining why through the GitHub plugin (or fallback), skip steps 3-8, and continue to step 9.
 
