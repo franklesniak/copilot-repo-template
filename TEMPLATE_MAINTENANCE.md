@@ -129,8 +129,10 @@ grep -rn "rev:.*26\.1\.0" --include="*.md" --include="*.yaml" .
 # Check for Ruff version references (update the version number as appropriate)
 grep -rn "rev:.*v0\.14\.14" --include="*.md" --include="*.yaml" .
 
-# Check for repo-local Terraform hook references
-grep -rn "terraform-fmt\|terraform-validate\|terraform-tflint" --include="*.md" --include="*.yaml" --include="*.yml" .
+# Check for repo-local Terraform hook references.
+# `-E` enables extended regex so the alternation works on both GNU and BSD
+# (macOS) grep; basic-regex `\|` is a GNU extension and is not portable.
+grep -rEn "terraform-fmt|terraform-validate|terraform-tflint" --include="*.md" --include="*.yaml" --include="*.yml" .
 
 # Generic search for any rev: patterns with version numbers
 grep -rn "rev:.*v\?[0-9]\+\.[0-9]\+\.[0-9]\+" --include="*.md" --include="*.yaml" .
