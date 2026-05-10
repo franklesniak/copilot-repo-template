@@ -27,10 +27,13 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ] \
 fi
 
 # Idempotency: check the install location specifically so a stale or
-# differently-versioned terraform earlier on PATH cannot mask us.
+# differently-versioned terraform earlier on PATH cannot mask us. Parse
+# the plain-text first line of `terraform version` (e.g. "Terraform
+# v1.14.4") with awk so the check does not depend on python3, jq, or
+# any other interpreter that may be absent from the base image.
 if [ -x "$INSTALL_DIR/terraform" ]; then
-  current="$("$INSTALL_DIR/terraform" version -json 2>/dev/null \
-    | python3 -c "import json, sys; print(json.load(sys.stdin)['terraform_version'])" 2>/dev/null \
+  current="$("$INSTALL_DIR/terraform" version 2>/dev/null \
+    | awk 'NR==1 {sub(/^v/, "", $2); print $2; exit}' \
     || true)"
   if [ "$current" = "$TERRAFORM_VERSION" ]; then
     echo "Terraform ${TERRAFORM_VERSION} already installed at ${INSTALL_DIR}/terraform"
@@ -78,9 +81,13 @@ curl -fsSL --retry 3 --retry-delay 2 "${base}/${archive}" -o "$tmpdir/${archive}
 curl -fsSL --retry 3 --retry-delay 2 \
   "${base}/terraform_${TERRAFORM_VERSION}_SHA256SUMS" -o "$tmpdir/SHA256SUMS"
 
-# Verify the downloaded archive against the official SHA256SUMS file before
-# placing the binary on PATH, to catch corrupted downloads and reduce
-# supply-chain risk from a tampered CDN/proxy path.
+# Verify the downloaded archive against the official SHA256SUMS file
+# before placing the binary on PATH. This catches corrupted downloads
+# and partial tampering (e.g. a proxy that rewrites only the archive
+# but leaves the SHA256SUMS file alone), but does not by itself defend
+# against a full CDN compromise that serves matching tampered archive
+# + SHA256SUMS; full tamper resistance would require GPG-verifying
+# SHA256SUMS.sig with HashiCorp's public key.
 expected_hash="$(awk -v f="${archive}" '$2 == f {print $1}' "$tmpdir/SHA256SUMS")"
 if [ -z "$expected_hash" ]; then
   echo "No SHA256 entry for ${archive} in SHA256SUMS; refusing to install" >&2
