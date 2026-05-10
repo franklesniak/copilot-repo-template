@@ -7,13 +7,13 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.4.20260503.5
+**Version:** 1.4.20260510.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-03
+- **Last Updated:** 2026-05-10
 - **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by [JSON Writing Style](./json.instructions.md)) or generated YAML artifacts that are owned by another tool's serializer.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md), [`.yamllint.yml`](../../.yamllint.yml), [Data-File CI Workflow (`data-ci.yml`)](../workflows/data-ci.yml), [Schemas README](../../schemas/README.md), [Schema Example Tests (`tests/test_schema_examples.py`)](../../tests/test_schema_examples.py), [Template Design Decision — Dedicated JSON and YAML Instruction Files](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-json-and-yaml-instruction-files), [Template Design Decision — Baseline JSON/YAML Linting Stack](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-baseline-jsonyaml-linting-stack), [Template Design Decision — yamllint truthy.check-keys Default](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-truthycheck-keys-default), [Template Design Decision — yamllint line-length Warning Level Default](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-line-length-warning-level-default), [Template Design Decision — Dedicated Data-File CI Workflow (`data-ci.yml`)](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-data-file-ci-workflow-data-ciyml), [Template Design Decision — Prettier Deferral for Data Files](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-prettier-deferral-for-data-files), [Template Design Decision — Built-in Schema Validation for Real Load-Bearing Configuration Files](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files)
 
@@ -37,6 +37,7 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - **[All]** **SHOULD NOT** use anchors, aliases, merge keys, custom tags, or multi-document files unless required and supported by the consumer.
 - **[All]** **MUST NOT** commit secrets in YAML.
 - **[Actions]** **MUST** apply least-privilege `permissions:` on GitHub Actions workflows.
+- **[Actions]** Documentation/navigation comments above `uses:` lines **MUST** use versionless upstream URLs; the `uses:` line remains the authoritative action version.
 - **[Schemas]** Schema-backed YAML **MUST** pass any schema validator wired into pre-commit or CI; where no validator is wired up for a particular file family, authors **SHOULD** run the appropriate validator locally before committing.
 - **[Naming]** YAML filenames **SHOULD** be lowercase kebab-case; GitHub Actions workflows **MUST** use the `.yml` extension; project-owned YAML **MUST** choose `.yml` or `.yaml` and use it consistently.
 - **[IssueForms]** In `.github/ISSUE_TEMPLATE/*.yml`, repo-internal targets in both issue-form `value:` Markdown links (e.g., `bug_report.yml`) and `config.yml` `contact_links` `url:` fields **MUST** use absolute `https://github.com/OWNER/REPO/...` URLs (with `blob/HEAD` for file links); relative paths **MUST NOT** be used. The two file types fail for different reasons: `value:` Markdown blocks render at `/{owner}/{repo}/issues/new?...` so relative paths resolve against that URL and 404, while `contact_links` `url:` fields are not Markdown at all — GitHub validates them as absolute URLs at form-load time and rejects relative values outright.
@@ -99,6 +100,44 @@ rules:
 ```
 
 This configuration preserves the idiomatic GitHub Actions `on:` key while still flagging YAML 1.1 truthy hazards in **values**. Authors **MAY** alternatively quote the key as `"on":` to satisfy a stricter `truthy.check-keys: true` configuration, but this form is **non-idiomatic** in the GitHub Actions ecosystem and **SHOULD NOT** be adopted unless a downstream policy requires it.
+
+## GitHub Actions Documentation Comment URLs
+
+Comments of the form `# see: https://github.com/<owner>/<repo>/...` (or equivalent navigation-aid comments) placed above a `uses:` line in any GitHub Actions workflow file under `.github/workflows/` **MUST** use a versionless URL. Prefer `https://github.com/<owner>/<repo>/releases/latest` when the action publishes GitHub Releases; otherwise use another versionless upstream project, documentation, or changelog URL, such as the action's README on the default branch (`https://github.com/<owner>/<repo>#readme`) or the upstream project's documentation site.
+
+These comment URLs **MUST NOT** embed a specific tag, version branch, or version such as `/releases/tag/v6.0.2`, `/tree/v3`, or `/blob/v1.2.3/...`, unless the comment is intentionally documenting a specific historical release.
+
+The authoritative action version is the `uses: <owner>/<repo>@<ref>` line itself and, where applicable, the SHA pin. Documentation URLs in comments are navigation aids and **SHOULD** point readers to current upstream release or project information.
+
+If a comment must reference a specific historical release, for example a changelog note documenting a breaking change, the comment **MUST** state that intent explicitly so it is obvious the URL is intentionally pinned and should not be auto-updated.
+
+This rule applies to all workflow files under `.github/workflows/` and to any other YAML location where `# see:` comments document an action version.
+
+This rule applies only to documentation/navigation comments. It **MUST NOT** affect the `uses:` line itself, action input values, SHA pins, version pins, or any other intentionally pinned executable configuration.
+
+Pinned documentation URLs go stale because Dependabot updates `uses:` references but does not rewrite arbitrary adjacent comment text.
+
+**Compliant:**
+
+```yaml
+# See: https://github.com/actions/checkout/releases/latest
+- uses: actions/checkout@v6
+
+# Documentation: https://github.com/actions/setup-python#readme
+- uses: actions/setup-python@v6
+```
+
+**Non-compliant:**
+
+```yaml
+# See: https://github.com/actions/checkout/releases/tag/v6.0.2
+- uses: actions/checkout@v6
+
+# Documentation: https://github.com/actions/setup-python/tree/v6
+- uses: actions/setup-python@v6
+```
+
+<!-- RATIONALE: github-actions-documentation-comment-urls -->
 
 ## Issue-form Markdown Links in `.github/ISSUE_TEMPLATE/*.yml`
 
