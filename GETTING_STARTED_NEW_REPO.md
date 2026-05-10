@@ -147,7 +147,23 @@ Node.js is required for markdown linting scripts.
 2. Run the installer and accept the defaults
 3. When prompted about "Automatically install the necessary tools," you can uncheck this option (not required for this template)
 
-#### 4. Verify Your Installations
+#### 4. Install Terraform and TFLint (if keeping Terraform support)
+
+Terraform support is optional, but the template ships Terraform validation by default. If you keep `.github/workflows/terraform-ci.yml`, `.tflint.hcl`, or the Terraform pre-commit hooks, install both HashiCorp Terraform and TFLint on PATH.
+
+**Terraform options for Windows:**
+
+- Download the Windows binary from [HashiCorp's Terraform install guide](https://developer.hashicorp.com/terraform/install), place `terraform.exe` in a stable tools directory, and add that directory to PATH.
+- If your organization uses Chocolatey, run `choco install terraform`.
+
+**TFLint options for Windows:**
+
+- Download the Windows binary from the [TFLint installation guide](https://github.com/terraform-linters/tflint#installation), place `tflint.exe` in a stable tools directory, and add that directory to PATH.
+- If your organization uses Chocolatey, run `choco install tflint`.
+
+Restart PowerShell after changing PATH.
+
+#### 5. Verify Your Installations
 
 Open **PowerShell** (search for "PowerShell" in the Start menu) and run these commands:
 
@@ -166,6 +182,10 @@ node --version
 
 # Check npm version (comes with Node.js)
 npm --version
+
+# Optional Terraform tools, required if keeping Terraform support
+terraform version
+tflint --version
 ```
 
 You should see version numbers for each command. If any command shows an error, revisit the installation steps for that tool.
@@ -240,7 +260,19 @@ brew install node
 2. Run the installer package
 3. Follow the prompts to complete installation
 
-#### 5. Verify Your Installations
+#### 5. Install Terraform and TFLint (if keeping Terraform support)
+
+Terraform support is optional, but the template ships Terraform validation by default. If you keep `.github/workflows/terraform-ci.yml`, `.tflint.hcl`, or the Terraform pre-commit hooks, install both HashiCorp Terraform and TFLint on PATH.
+
+```bash
+brew tap hashicorp/tap
+brew install hashicorp/tap/terraform
+brew install tflint
+```
+
+You can also use the official Terraform and TFLint binary downloads if Homebrew is not available.
+
+#### 6. Verify Your Installations
 
 Open **Terminal** and run these commands:
 
@@ -259,6 +291,10 @@ node --version
 
 # Check npm version
 npm --version
+
+# Optional Terraform tools, required if keeping Terraform support
+terraform version
+tflint --version
 ```
 
 You should see version numbers for each command.
@@ -356,6 +392,13 @@ node --version
 npm --version
 ```
 
+#### Install Terraform and TFLint (if keeping Terraform support)
+
+Terraform support is optional, but the template ships Terraform validation by default. If you keep `.github/workflows/terraform-ci.yml`, `.tflint.hcl`, or the Terraform pre-commit hooks, install both HashiCorp Terraform and TFLint on PATH.
+
+- Install Terraform using the package or binary instructions for your distribution in [HashiCorp's Terraform install guide](https://developer.hashicorp.com/terraform/install).
+- Install TFLint using the Linux install script or release binary from the [TFLint installation guide](https://github.com/terraform-linters/tflint#installation).
+
 #### Verify Your Installations
 
 Open a terminal and run these commands:
@@ -375,6 +418,10 @@ node --version
 
 # Check npm version
 npm --version
+
+# Optional Terraform tools, required if keeping Terraform support
+terraform version
+tflint --version
 ```
 
 You should see version numbers for each command.
@@ -1169,7 +1216,8 @@ Set up Terraform if you use it:
 - Read `.github/instructions/terraform.instructions.md` before editing Terraform files.
 - Keep `.github/workflows/terraform-ci.yml` for Terraform format, validation, linting, tests, and security checks.
 - Keep `.tflint.hcl` and `templates/terraform/` until you replace the starter examples with project-specific Terraform tests or modules.
-- Keep the `terraform_fmt`, `terraform_validate`, and `terraform_tflint` hooks in `.pre-commit-config.yaml`.
+- Keep the `terraform-fmt`, `terraform-validate`, and `terraform-tflint` repo-local Python hooks in `.pre-commit-config.yaml`.
+- Install HashiCorp Terraform (`terraform`) and TFLint (`tflint`) on developer machines and CI runners that execute Terraform validation.
 
 Remove Terraform if you do not use it:
 
@@ -1177,7 +1225,8 @@ Remove Terraform if you do not use it:
 - Delete `.github/instructions/terraform.instructions.md`.
 - Delete `.tflint.hcl`.
 - Delete `templates/terraform/`.
-- Remove the `terraform_fmt`, `terraform_validate`, and `terraform_tflint` hooks from `.pre-commit-config.yaml`.
+- Remove the `terraform-fmt`, `terraform-validate`, and `terraform-tflint` hooks from `.pre-commit-config.yaml`.
+- Delete `.github/scripts/terraform_hooks.py` if no remaining pre-commit hook or workflow uses it.
 - Remove Terraform-specific rows from `.github/copilot-instructions.md`, `README.md`, and any project docs you keep.
 
 #### JSON/JSONC
@@ -2040,6 +2089,9 @@ Validate example-config valid examples........................Passed
 Validate Dependabot configuration.............................Passed
 Self-validate example-config schema...........................Passed
 markdownlint-cli2.............................................Passed
+Terraform fmt.................................................Passed
+Terraform validate........................(no files to check)Skipped
+Terraform validate with tflint...............................Passed
 ```
 
 **Troubleshooting common failures:**
@@ -2051,6 +2103,29 @@ markdownlint-cli2.............................................Passed
 - **GitHub Actions errors:** `actionlint` reports workflow syntax, expression, and runner-label issues.
 - **Markdown errors:** Run `npm run lint:md` to see specific issues.
 - **Black/Ruff errors:** These may auto-fix. Re-run pre-commit. For persistent issues, check the specific error messages.
+- **Terraform errors:** Install `terraform` and `tflint`, then re-run the Terraform hooks. The hooks are Python wrappers and support native Windows PowerShell, Git Bash, WSL/Linux, and macOS.
+
+### Run Terraform Validation Locally (If Applicable)
+
+Use the pre-commit hooks for the local path that matches CI behavior.
+
+**Windows PowerShell:**
+
+```powershell
+python -m pre_commit run terraform-fmt --all-files
+python -m pre_commit run terraform-validate --all-files
+python -m pre_commit run terraform-tflint --all-files
+```
+
+**Git Bash, WSL/Linux, macOS, and other POSIX-style shells:**
+
+```bash
+pre-commit run terraform-fmt --all-files
+pre-commit run terraform-validate --all-files
+pre-commit run terraform-tflint --all-files
+```
+
+The hooks run `terraform fmt -check -recursive -diff` from the repository root, validate each directory containing `.tf` files with `terraform init -backend=false` followed by `terraform validate`, and run `tflint --init` followed by recursive TFLint with the repository-root `.tflint.hcl` config.
 
 ### Run Tests (If Applicable)
 

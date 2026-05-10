@@ -9,9 +9,9 @@
 # `.pre-commit-config.yaml` (auto-fixing where the hook supports it) —
 # including JSON (check-json), YAML (check-yaml, yamllint), GitHub Actions
 # workflows (actionlint), Markdown (markdownlint-cli2), Terraform
-# (terraform_fmt, terraform_validate, terraform_tflint), and general hygiene
-# hooks. Note that hooks like yamllint, actionlint, terraform_validate, and
-# terraform_tflint are validators that do not auto-fix; this workflow runs
+# (terraform-fmt, terraform-validate, terraform-tflint), and general hygiene
+# hooks. Note that hooks like yamllint, actionlint, terraform-validate, and
+# terraform-tflint are validators that do not auto-fix; this workflow runs
 # them but does not enforce their results (the `pre-commit` exit code is
 # intentionally ignored via `|| true` so that auto-fixed files can still be
 # committed). Validator failures are enforced by the `Pre-commit` job in
@@ -64,15 +64,20 @@ jobs:
         with:
           python-version: "3.x"
 
-      # Install Terraform for pre-commit-terraform hooks (terraform_fmt, etc.)
-      # This is required because the pre-commit config includes Terraform hooks
-      # that need the Terraform binary to be available.
+      # Install Terraform for repo-local Terraform pre-commit hooks.
       # Version Policy: Use the latest stable Terraform version for pre-commit.
       # Review and update quarterly per TEMPLATE_MAINTENANCE.md.
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.14.4"
+
+      # Install TFLint for the repo-local terraform-tflint pre-commit hook.
+      # Keep this aligned with .github/workflows/terraform-ci.yml.
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: "v0.51.1"
 
       - name: Install pre-commit
         run: pip install pre-commit

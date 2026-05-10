@@ -10,8 +10,8 @@
 #   - YAML syntax and style (check-yaml, yamllint)
 #   - GitHub Actions workflow linting (actionlint)
 #   - Markdown linting (markdownlint-cli2)
-#   - Terraform formatting/validation (terraform_fmt, terraform_validate,
-#     terraform_tflint)
+#   - Terraform formatting/validation (terraform-fmt, terraform-validate,
+#     terraform-tflint)
 #   - General hygiene (trailing-whitespace, end-of-file-fixer,
 #     check-added-large-files)
 # This is the single canonical pre-commit enforcement workflow; downstream
@@ -106,15 +106,20 @@ jobs:
           python-version: '3.x'
           cache: 'pip'
 
-      # Install Terraform for pre-commit-terraform hooks (terraform_fmt, etc.)
-      # This is required because the pre-commit config includes Terraform hooks
-      # that need the Terraform binary to be available.
+      # Install Terraform for repo-local Terraform pre-commit hooks.
       # Version Policy: Use the latest stable Terraform version for pre-commit.
       # Review and update quarterly per TEMPLATE_MAINTENANCE.md.
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "1.14.4"
+
+      # Install TFLint for the repo-local terraform-tflint pre-commit hook.
+      # Keep this aligned with .github/workflows/terraform-ci.yml.
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: "v0.51.1"
 
       - name: Cache pre-commit hooks
         uses: actions/cache@v5
@@ -128,7 +133,7 @@ jobs:
       - name: Run pre-commit hooks
         # Runs every hook in .pre-commit-config.yaml (Python formatters/linters,
         # JSON/YAML checks, yamllint, actionlint, markdownlint-cli2, Terraform).
-        # Required tools are set up above (Python, Terraform); other hooks
+        # Required tools are set up above (Python, Terraform, TFLint); other hooks
         # provision their own environments inside pre-commit's hook cache.
         run: pre-commit run --all-files
 
