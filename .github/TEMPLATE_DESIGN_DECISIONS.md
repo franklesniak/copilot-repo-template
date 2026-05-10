@@ -456,7 +456,7 @@ These ten ADRs record the design decisions behind the JSON and YAML authoring gu
 
 ### Parity Status
 
-As of 2026-05-09, JSON and YAML are treated as equal citizens with the other first-class supported file types in this template. Parity is enforced across these cross-cutting surfaces:
+JSON and YAML are treated as equal citizens with the other first-class supported file types in this template (see the **Last Updated** date in the metadata block above for when this status was last reviewed). Parity is enforced across these cross-cutting surfaces:
 
 - Canonical instructions.
 - Template starter content.
