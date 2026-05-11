@@ -10,7 +10,7 @@ If you discover a security vulnerability in this project, please report it priva
 
 > **Note:** Private vulnerability reporting via GitHub Security Advisories is **only available for public repositories**. If this repository is private, please use the email option below, or wait until the repository is made public to use this feature.
 >
-> **Maintainers:** After enabling private vulnerability reporting, prefer the direct reporting URL `https://github.com/<owner>/<repo>/security/advisories/new` in repository docs and issue-template contact links.
+> **Maintainers:** After enabling private vulnerability reporting, prefer the direct reporting URL `https://github.com/OWNER/REPO/security/advisories/new` in repository docs and issue-template contact links.
 
 1. Navigate to the **Security** tab of this repository
 2. Click **Report a vulnerability**

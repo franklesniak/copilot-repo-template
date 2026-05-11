@@ -841,7 +841,7 @@ If you prefer not to use email, you can:
 
 1. Remove the email section entirely from `SECURITY.md`
 2. Enable private vulnerability reporting for a public repository
-3. Prefer the direct private reporting URL, `https://github.com/<owner>/<repo>/security/advisories/new`, once the feature is enabled
+3. Prefer the direct private reporting URL, `https://github.com/OWNER/REPO/security/advisories/new`, once the feature is enabled
 4. Keep only the GitHub Security Advisories option (see [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md) for details)
 
 ---

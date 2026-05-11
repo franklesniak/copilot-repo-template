@@ -487,7 +487,7 @@ The security policy tells users how to report security vulnerabilities.
    - Copy `SECURITY.md` from the template to your repository root
    - Replace `[security contact email]` with your email address
    - Or remove the email option and use only GitHub Security Advisories (for public repositories)
-   - If private vulnerability reporting is enabled, prefer the direct reporting URL `https://github.com/<owner>/<repo>/security/advisories/new`
+   - If private vulnerability reporting is enabled, prefer the direct reporting URL `https://github.com/OWNER/REPO/security/advisories/new`
 
 2. **If you already have a SECURITY.md file:**
    - Review the template's structure for ideas
