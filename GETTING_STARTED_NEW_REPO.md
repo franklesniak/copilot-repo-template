@@ -2125,7 +2125,7 @@ pre-commit run terraform-validate --all-files
 pre-commit run terraform-tflint --all-files
 ```
 
-The hooks run `terraform fmt -check -recursive -diff` from the repository root, validate each directory containing `.tf` files with `terraform init -backend=false` followed by `terraform validate`, and run `tflint --init` followed by recursive TFLint with the repository-root `.tflint.hcl` config.
+The hooks run `terraform fmt -check -recursive -diff` from the repository root, validate each directory containing `.tf` or `.tf.json` files with `terraform init -backend=false` followed by `terraform validate`, and run `tflint --init` followed by recursive TFLint with the repository-root `.tflint.hcl` config.
 
 ### Run Tests (If Applicable)
 
