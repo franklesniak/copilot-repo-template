@@ -7,13 +7,13 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 2.3.20260509.0
+**Version:** 2.4.20260511.1
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-09
+- **Last Updated:** 2026-05-11
 - **Scope:** Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in this repository — style, formatting, naming, file organization, variable and output design, resource configuration, module design, state management, cross-stack data sharing, provider management, security, testing, and documentation.
 
 ## Keywords
@@ -81,6 +81,7 @@ This checklist provides a quick reference for both human developers and LLMs (li
 ### Continuous Validation (Quick Reference)
 
 - **[All]** `check` blocks **MAY** be used for continuous validation
+- **[All]** Terraform pre-commit hooks **SHOULD** avoid shell assumptions for native Windows/PowerShell contributors
 
 ### Resource Configuration (Quick Reference)
 
@@ -244,7 +245,7 @@ terraform fmt -check -recursive
 terraform fmt -recursive
 ```
 
-**Pre-commit integration:**
+**Pre-commit integration (for repositories that support POSIX-compatible shell hook execution):**
 
 ```yaml
 - repo: https://github.com/antonbabenko/pre-commit-terraform
@@ -3438,7 +3439,9 @@ Security scanning tools **SHOULD** be integrated into the development workflow.
 
 > **Note:** `tfsec` has been absorbed into Aqua Security's `trivy` and is now in maintenance mode. New projects **SHOULD** use `trivy` for Terraform security scanning. Existing workflows using `tfsec` will continue to work but **SHOULD** plan migration to `trivy`.
 
-#### Pre-commit Integration Example
+#### Pre-commit Integration Example (POSIX-compatible Shell)
+
+This example assumes the repository supports POSIX-compatible shell hook execution. Use cross-platform repo-local wrappers when native Windows/PowerShell contributors must run hooks without Git Bash or WSL assumptions.
 
 ```yaml
 - repo: https://github.com/antonbabenko/pre-commit-terraform
@@ -3988,6 +3991,16 @@ Pre-commit hooks for Terraform **SHOULD** include:
 3. `tflint` — Linting
 4. Security scanning (optional but recommended)
 
+### Cross-platform Hook Execution
+
+Terraform pre-commit configuration **SHOULD** be cross-platform when the repository supports native Windows/PowerShell contributors. Do not assume POSIX shell hook execution unless the repository explicitly requires Git Bash, WSL, macOS, or Linux for local validation.
+
+For cross-platform Terraform pre-commit validation, prefer repo-local hooks or wrappers in a runtime already required by the repository's validation stack, such as Python when pre-commit is already in use. Wrappers **SHOULD** invoke Terraform and related tools with shell execution disabled, **SHOULD** resolve executables through `PATH`, and **SHOULD** fail with clear installation guidance when required tools such as `terraform` or `tflint` are missing.
+
+When using third-party Terraform pre-commit hook collections that rely on shell scripts, document the supported Windows shell environment explicitly, including any Git Bash or WSL assumptions.
+
+<!-- RATIONALE: cross-platform-terraform-pre-commit-hooks -->
+
 ### Workflow
 
 1. Make Terraform changes
@@ -4000,6 +4013,8 @@ Pre-commit hooks for Terraform **SHOULD** include:
 **CI is a safety net, not a substitute for local checks.**
 
 ### Pre-commit Configuration
+
+This example uses `antonbabenko/pre-commit-terraform` and is suitable when a POSIX-compatible shell environment is supported for local validation.
 
 ```yaml
 # .pre-commit-config.yaml (Terraform section)
