@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.5.20260510.1
+**Version:** 1.5.20260511.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-10
+- **Last Updated:** 2026-05-11
 - **Scope:** Defines documentation standards for Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) files in this repository, including specs, design docs, runbooks, ADRs, instruction files, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -286,6 +286,18 @@ Before merging, verify:
 - No contradictions across docs
 - Examples still match actual behavior
 - Open questions are either resolved or explicitly tracked
+
+### Mirrored Excerpts and Full-File Consistency Audits
+
+**Background.** Mirrored excerpts that drift from their source are a recurring source of documentation inconsistency, and partial fixes that touch only reviewer-flagged lines can leave parallel copies of the same excerpt inconsistent and force repeat review rounds for the same root cause.
+
+1. **Mirrored excerpt policy.** When a Markdown document includes a literal excerpt, whether inline or fenced, that mirrors a real load-bearing file in the repository (for example, `.pre-commit-config.yaml`, a JSON schema, a workflow YAML, or a script), the excerpt **MUST** either:
+   - Be a verbatim copy of the corresponding source-of-truth lines for the included literal content, without paraphrasing or selectively rewriting copied literals; if the excerpt is intentionally partial, the surrounding prose must make that scope clear and must not imply the excerpt is the complete file or complete configuration, **OR**
+   - Be replaced with a one-line pointer to the real file (for example, `See [.pre-commit-config.yaml](../../.pre-commit-config.yaml)`) with no inline copy of the excerpt content.
+
+   When the verbatim-copy path is taken for a fenced or multi-line excerpt, authors SHOULD use the file's existing `Source:` citation convention from the `Markdown Conventions` section to anchor the excerpt to its source-of-truth file with a line-range link.
+
+2. **Full-file audit on consistency fixes.** When fixing a code/doc consistency issue in a mirrored excerpt that was flagged on specific lines, the fix **MUST** audit the entire mirrored excerpt block and the affected Markdown file's other excerpts of the same source-of-truth file for all literal occurrences of the old pattern, not just the lines explicitly mentioned by the reviewer. The fix is not complete until every literal in every mirrored excerpt of the affected source-of-truth file within that Markdown file matches the source of truth.
 
 ## Prohibited Patterns
 
