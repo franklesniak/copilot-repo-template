@@ -1297,7 +1297,7 @@ Every workflow file **SHOULD** include a comprehensive header comment explaining
 
 When a repository contains multiple Terraform configurations (monorepo pattern):
 
-1. **Discovery approach:** Find all directories containing `.tf` files
+1. **Discovery approach:** Find all directories containing `.tf` or `.tf.json` files
 2. **Iterate over directories:** Run init/validate in each
 3. **Parallel execution:** Use matrix strategy for large repos
 
@@ -1307,8 +1307,8 @@ When a repository contains multiple Terraform configurations (monorepo pattern):
 - name: Find Terraform Directories
   id: find-tf-dirs
   run: |
-    # Find all directories containing .tf files
-    TF_DIRS=$(find . -name '*.tf' -exec dirname {} \; | sort -u | tr '\n' ' ')
+    # Find all directories containing .tf or .tf.json files
+    TF_DIRS=$(find . \( -name '*.tf' -o -name '*.tf.json' \) -exec dirname {} \; | sort -u | tr '\n' ' ')
     echo "dirs=${TF_DIRS}" >> $GITHUB_OUTPUT
 
 - name: Validate Each Directory
