@@ -114,7 +114,7 @@ pre-commit run terraform-validate --all-files
 pre-commit run terraform-tflint --all-files
 ```
 
-The hooks mirror Terraform CI: format checks run from the repository root, validation runs only in directories containing `.tf` files, and TFLint uses the repository-root `.tflint.hcl` path.
+The hooks mirror Terraform CI: format checks run from the repository root, validation runs only in directories containing `.tf` or `.tf.json` files, and TFLint uses the repository-root `.tflint.hcl` path.
 
 ### 3. Install Python (if working with Python code)
 

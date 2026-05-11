@@ -62,7 +62,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.x"
+          python-version: "3.13"
 
       # Install Terraform for repo-local Terraform pre-commit hooks.
       # Version Policy: Use the latest stable Terraform version for pre-commit.

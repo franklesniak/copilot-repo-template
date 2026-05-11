@@ -194,11 +194,14 @@ def run_terraform_validate(
     resolve: ExecutableResolver = resolve_executable,
     runner: CommandRunner = run_subprocess,
 ) -> int:
-    """Run `terraform init -backend=false` and `terraform validate` per `.tf` directory."""
+    """Run `terraform init -backend=false` and `terraform validate` per `.tf` or `.tf.json` directory."""
     root = root.resolve()
     terraform_directories = find_terraform_directories(root)
     if not terraform_directories:
-        print("No Terraform directories containing .tf files found; skipping terraform validate.")
+        print(
+            "No Terraform directories containing .tf or .tf.json files found; "
+            "skipping terraform validate."
+        )
         return 0
 
     terraform = require_executable("terraform", resolve)
@@ -222,7 +225,7 @@ def run_tflint(
     root = root.resolve()
     terraform_directories = find_terraform_directories(root)
     if not terraform_directories:
-        print("No Terraform directories containing .tf files found; skipping TFLint.")
+        print("No Terraform directories containing .tf or .tf.json files found; skipping TFLint.")
         return 0
 
     tflint = require_executable("tflint", resolve)
