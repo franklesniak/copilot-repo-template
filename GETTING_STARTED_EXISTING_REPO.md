@@ -18,6 +18,7 @@ This guide walks you through adopting features from `franklesniak/copilot-repo-t
   - [Tools Needed](#tools-needed)
 - [Planning Your Adoption](#planning-your-adoption)
   - [Feature Decision Matrix](#feature-decision-matrix)
+  - [Stack Selection Cleanup Checklist](#stack-selection-cleanup-checklist)
   - [Recommended Adoption Order](#recommended-adoption-order)
   - [Repo Layout Examples](#repo-layout-examples)
 - [Getting the Template Files](#getting-the-template-files)
@@ -39,6 +40,7 @@ This guide walks you through adopting features from `franklesniak/copilot-repo-t
   - [Customization Needed](#customization-needed)
   - [Merging with Existing PR Template](#merging-with-existing-pr-template)
 - [Adopting GitHub Copilot Instructions](#adopting-github-copilot-instructions)
+  - [Protected-File Adoption Step](#protected-file-adoption-step)
   - [Main Instructions File](#main-instructions-file)
   - [Modular Instructions](#modular-instructions)
   - [Merging with Existing Copilot Instructions](#merging-with-existing-copilot-instructions)
@@ -50,12 +52,14 @@ This guide walks you through adopting features from `franklesniak/copilot-repo-t
   - [Copying the Configuration](#copying-the-configuration)
   - [Testing Markdown Linting](#testing-markdown-linting)
 - [Adopting Pre-commit Hooks](#adopting-pre-commit-hooks)
+  - [Local Validation Prerequisites](#local-validation-prerequisites)
   - [If You Don't Have Pre-commit Configured](#if-you-dont-have-pre-commit-configured)
   - [If You Already Have Pre-commit Configured](#if-you-already-have-pre-commit-configured)
   - [Customizing Hooks](#customizing-hooks)
 - [Adopting JSON/YAML Toolchain](#adopting-jsonyaml-toolchain)
 - [Adopting CI Workflows](#adopting-ci-workflows)
   - [Understanding Workflow Dependencies](#understanding-workflow-dependencies)
+  - [Pre-commit-Only CI Without Python Project CI](#pre-commit-only-ci-without-python-project-ci)
   - [Markdown Lint Workflow](#markdown-lint-workflow)
   - [Auto-fix Pre-commit Workflow](#auto-fix-pre-commit-workflow)
   - [Placeholder Check Workflow](#placeholder-check-workflow)
@@ -135,6 +139,8 @@ The tools you need depend on which features you plan to adopt:
 | Python CI Workflow | Python |
 | PowerShell CI Workflow | PowerShell |
 
+> **Python runtime note:** Python can remain a development-tool runtime even when your repository does not contain Python project source. Keep Python available anywhere you run `pre-commit`, `check-jsonschema`, `check-metaschema`, or repo-local Python hooks. Removing `.github/workflows/python-ci.yml`, `src/`, or Python tests does not by itself remove Python from validation tooling.
+
 **Verify your installations:**
 
 **Windows (PowerShell):**
@@ -196,6 +202,52 @@ Use this matrix to decide which features to adopt based on complexity and depend
 | PSScriptAnalyzer Config | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell | Low |
 | Python CI Workflow | `.github/workflows/python-ci.yml` | Python project structure | High |
 | Agent Instruction Files | `.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` | Adopt `.github/copilot-instructions.md` first | Low |
+
+### Stack Selection Cleanup Checklist
+
+Use this checklist when adopting only part of the template's language/tooling stack. Remove files as a set so CI, pre-commit hooks, Dependabot, and agent instructions do not keep pointing at deleted tools.
+
+#### Python Project/Source Stack
+
+Keep these only when the repository has Python project source, Python tests, or Python packaging metadata:
+
+- `pyproject.toml`
+- `src/` or other Python package/source directories
+- Python tests such as `tests/test_example.py` and `tests/__init__.py`
+- `templates/python/`
+- Black and Ruff hooks in `.pre-commit-config.yaml`
+- `.github/workflows/python-ci.yml`
+- The `pip` ecosystem in `.github/dependabot.yml`
+- `.github/instructions/python.instructions.md`
+- Python validation references in `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `README.md`, `CONTRIBUTING.md`, and PR/issue templates
+
+If you remove Python source but keep `pre-commit`, `check-jsonschema`, `check-metaschema`, or repo-local hook wrappers, keep Python installed as development tooling and make that distinction explicit in your docs and CI names.
+
+#### Terraform/HCL Stack
+
+Keep these only when the repository contains Terraform or HCL infrastructure code:
+
+- `.tflint.hcl`
+- Terraform examples, modules, templates, and tests, including `templates/terraform/`
+- `.github/workflows/terraform-ci.yml`
+- Terraform hooks in `.pre-commit-config.yaml`: `terraform-fmt`, `terraform-validate`, and `terraform-tflint`
+- `.github/scripts/terraform_hooks.py` if any remaining hook or workflow uses it
+- Terraform docs and validation commands
+- Any Terraform Dependabot ecosystem added downstream
+- `.github/instructions/terraform.instructions.md`
+- Terraform validation references in `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `README.md`, and `CONTRIBUTING.md`
+
+#### PowerShell Stack
+
+Keep these only when the repository contains PowerShell scripts or Pester tests:
+
+- `.github/workflows/powershell-ci.yml`
+- `.github/linting/PSScriptAnalyzerSettings.psd1`
+- `tests/PowerShell/`
+- `templates/powershell/`
+- `.github/instructions/powershell.instructions.md`
+- The "PowerShell-Specific (if applicable)" checklist in `.github/pull_request_template.md`
+- PowerShell validation references in `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `README.md`, and `CONTRIBUTING.md`
 
 ### Recommended Adoption Order
 
@@ -435,12 +487,13 @@ The security policy tells users how to report security vulnerabilities.
    - Copy `SECURITY.md` from the template to your repository root
    - Replace `[security contact email]` with your email address
    - Or remove the email option and use only GitHub Security Advisories (for public repositories)
+   - If private vulnerability reporting is enabled, prefer the direct reporting URL `https://github.com/<owner>/<repo>/security/advisories/new`
 
 2. **If you already have a SECURITY.md file:**
    - Review the template's structure for ideas
    - Consider adding sections you may be missing (response timeline, disclosure policy)
 
-> **Note:** Private vulnerability reporting via GitHub Security Advisories is only available for **public repositories**. If your repository is private, you must provide an email contact in SECURITY.md. Use a dedicated security email (e.g., `security@your-domain.com`) rather than a personal email when possible.
+> **Note:** Private vulnerability reporting via GitHub Security Advisories is only available for **public repositories**. If your repository is private, you must provide an email contact in SECURITY.md. Use a dedicated security email (e.g., `security@your-domain.com`) rather than a personal email when possible, and do not use a `users.noreply.github.com` address as a real security intake channel.
 
 ### LICENSE File
 
@@ -472,6 +525,7 @@ The code of conduct defines community standards and expectations for behavior.
 1. **If you don't have a CODE_OF_CONDUCT.md file:**
    - Copy `CODE_OF_CONDUCT.md` from the template to your repository root
    - Replace `[INSERT CONTACT METHOD]` with an email address, form URL, or other contact method for reporting violations
+   - You may use wording such as "contact the repository owners using the contact links on their GitHub profiles" for general conduct contact, but do not use a `users.noreply.github.com` address as the intake channel
 
 2. **If you already have a CODE_OF_CONDUCT.md file:**
    - Review the template's structure for ideas
@@ -673,6 +727,18 @@ If you already have a PR template:
 ## Adopting GitHub Copilot Instructions
 
 GitHub Copilot Instructions guide AI-assisted development by providing project-specific coding standards and rules. The template includes both a main instructions file and language-specific instruction files.
+
+### Protected-File Adoption Step
+
+The template treats `.github/copilot-instructions.md`, `.github/instructions/**`, `.cursor/rules/**`, and root agent instruction files such as `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` as protected governance files. When adopting into an existing repository:
+
+1. Perform non-protected cleanup first, including unused workflows, source examples, tests, templates, and lint configuration.
+2. Record the protected-file changes still needed after stack selection.
+3. Obtain explicit maintainer authorization for those protected-file edits.
+4. Update `.github/copilot-instructions.md`, remaining root agent files, and relevant `.github/instructions/*.instructions.md` files so they match the stacks and tools actually retained.
+5. Remove references to deleted tools, workflows, hooks, and validation commands.
+6. Bump `Last Updated` and `Version` metadata where those fields exist.
+7. Avoid ephemeral implementation-stage language in durable governance docs.
 
 ### Main Instructions File
 
@@ -925,6 +991,15 @@ Pre-commit hooks run automated checks before each commit, catching issues early 
 - Python installed (3.13+)
 - pre-commit installed (see installation steps below; pipx/Homebrew installs make `pre-commit` available via PATH, pip installs require module invocation)
 - HashiCorp Terraform and TFLint installed if you keep the Terraform hooks
+
+### Local Validation Prerequisites
+
+Before running adopted validation commands:
+
+- Run `npm install` or `npm ci` before npm-backed Markdown checks such as `npm run lint:md:nested`.
+- Install `pre-commit` in the active Python environment before running `pre-commit run --all-files`, or use the `python -m pre_commit` / `python3 -m pre_commit` form documented below.
+- Treat `pre-commit install` as a local developer action. Automation should usually run `pre-commit run --all-files` directly unless the workflow explicitly needs Git hooks installed.
+- Keep Python available for Python-based development tooling such as `pre-commit`, `check-jsonschema`, `check-metaschema`, and repo-local hook wrappers, even if you do not adopt Python project CI.
 
 > **Why pipx is recommended:**
 >
@@ -1356,6 +1431,12 @@ Before adopting workflows, understand their requirements:
 | `powershell-ci.yml` | PowerShell scripts, Pester tests | PowerShell |
 | `data-ci.yml` | `.pre-commit-config.yaml`, `.yamllint.yml` (and, for schema validation, `schemas/`) | Python (for `pre-commit`) |
 
+### Pre-commit-Only CI Without Python Project CI
+
+If your repository removes Python project source but keeps Python-based pre-commit hooks, do not interpret that as removing Python from CI entirely. Use a narrow hygiene workflow that installs Python only to run `pre-commit`, `check-jsonschema`, `check-metaschema`, or other Python-based hooks.
+
+Name and comment the workflow so it is clearly repository hygiene tooling, not Python application validation. For example, a workflow named "Repository Hygiene" can run `actions/setup-python`, install `pre-commit`, and execute `pre-commit run --all-files` without running pytest, mypy, or package installation for Python source.
+
 ### Markdown Lint Workflow
 
 **Location:** `.github/workflows/markdownlint.yml`
@@ -1405,9 +1486,11 @@ Before adopting workflows, understand their requirements:
 
 1. **If you copied templates with placeholders:** The workflow will catch any unreplaced placeholders and fail CI until you fix them
 
-2. **After all placeholders are replaced:** You have two options:
-   - **Keep the workflow** — It serves as a safety net for any future template updates or additions
-   - **Remove the workflow** — Delete `.github/workflows/check-placeholders.yml` if you no longer need placeholder checking
+2. **After all placeholders are replaced:** Treat the workflow as transitional and choose one valid end state:
+   - **Keep the workflow** while `OWNER/REPO`, `@OWNER`, `[security contact email]`, or similar template placeholders are still being replaced, or when future template syncs may add placeholder-bearing files
+   - **Remove the workflow** once the repository is initialized and placeholders have been replaced with concrete downstream values
+
+If you remove the workflow, also drop or de-emphasize documentation that implies it still exists, do not reintroduce live `OWNER/REPO` placeholders, and prefer concrete downstream repository URLs in issue templates, PR templates, and community-health docs.
 
 **What the workflow checks:**
 

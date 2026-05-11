@@ -121,7 +121,13 @@ The `config.yml` file includes a security contact link that points to `/security
   about: Report security issues privately (do not open a public issue). Private vulnerability reporting is only available for public repositories.
 ```
 
-After enabling private vulnerability reporting in your repository, you can optionally update this URL to provide a more direct path to the vulnerability reporting form.
+After enabling private vulnerability reporting in your repository, prefer the direct vulnerability reporting form:
+
+```yaml
+- name: 🔒 Security Vulnerabilities
+  url: https://github.com/OWNER/REPO/security/advisories/new
+  about: Report security issues privately (do not open a public issue). Private vulnerability reporting is only available for public repositories.
+```
 
 > **Important:** Private vulnerability reporting is only available for **public repositories**. If your repository is private, security reporters must use email contact as specified in your `SECURITY.md` file.
 >
@@ -545,6 +551,8 @@ url: https://github.com/OWNER/REPO/security
 url: https://github.com/OWNER/REPO/security/advisories/new
 ```
 
+Update `SECURITY.md` at the same time so it names private vulnerability reporting as the preferred path when the feature is enabled. If you keep an email fallback, use a monitored project or organization address. Do not use a `users.noreply.github.com` address as a real security contact channel.
+
 ### Customizing Supported Versions
 
 The default `SECURITY.md` includes a minimal supported versions table:
@@ -608,6 +616,9 @@ To report a possible violation, contact us via: conduct@your-project.org
 - **Email address:** Simple, widely understood, but requires email monitoring
 - **Web form:** Provides structured reporting, can integrate with issue tracking
 - **Multiple channels:** List several options (email, form, direct message to maintainers)
+- **Repository owner profile links:** Suitable for small projects when the repository owners have monitored contact links on their GitHub profiles
+
+Do not use a `users.noreply.github.com` address as a code-of-conduct contact. It is suitable for commit attribution privacy, not for receiving sensitive community reports.
 
 #### Response Timeline Commitments
 
@@ -976,6 +987,12 @@ This template repository's own `.github/dependabot.yml` does not currently exerc
 ## Pre-commit Configuration
 
 **File:** `.pre-commit-config.yaml`
+
+### Python Runtime Without Python Project Source
+
+Removing Python source files does not automatically remove Python from the repository's development tooling. The template uses Python to run `pre-commit`, `check-jsonschema`, `check-metaschema`, and repo-local hooks such as the Terraform wrappers.
+
+If your downstream repository removes `src/`, Python tests, `pyproject.toml`, and `.github/workflows/python-ci.yml` but keeps `.pre-commit-config.yaml`, keep Python available on developer machines and CI runners that execute pre-commit. Remove only the Python project hooks (`black` and `ruff-check`) unless you are also removing pre-commit and every Python-based hook.
 
 ### Adjusting Line Length
 
@@ -2382,6 +2399,17 @@ The file includes a "Scope Exceptions & Deviations from Standards" section at th
 
 The main `.github/copilot-instructions.md` file provides repository-wide instructions that GitHub Copilot applies when generating or editing code. It includes sections on pre-commit discipline, testing tools, and other project-wide standards. These sections should be customized to match your project's actual tools and workflows.
 
+### Protected Instruction-File Cleanup
+
+The template protects `.github/copilot-instructions.md`, `.github/instructions/**`, `.cursor/rules/**`, and root agent files such as `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`. During stack selection:
+
+1. Complete non-protected cleanup first, such as unused workflows, examples, templates, and lint configuration.
+2. Record the protected-file changes needed to remove references to deleted tools or stacks.
+3. Get explicit maintainer authorization for those protected-file edits.
+4. Update `.github/copilot-instructions.md`, remaining root agent files, and relevant `.github/instructions/*.instructions.md` files.
+5. Bump `Last Updated` and `Version` metadata where those fields exist.
+6. Avoid temporary migration wording in governance docs that downstream maintainers will keep.
+
 ### Customizing the Pre-commit Discipline Section
 
 The Pre-commit Discipline section (near the top of `.github/copilot-instructions.md`) tells Copilot how to run pre-commit checks, what commands to use, and how to handle CI failures. This ensures Copilot generates code that follows your project's code quality workflow.
@@ -2618,6 +2646,12 @@ The `check-toml` hook in `.pre-commit-config.yaml` (from `pre-commit/pre-commit-
 
 ## CI Workflow Configuration
 
+### Pre-commit-Only CI After Removing Python Source
+
+Removing Python project CI does not mean removing Python from CI entirely. If your repository keeps `.pre-commit-config.yaml`, `check-jsonschema`, `check-metaschema`, or other Python-based hooks, keep a narrow aggregate workflow that installs Python solely to run repository hygiene checks.
+
+Use a workflow name and comments that make the purpose explicit, for example "Repository Hygiene" rather than "Python CI". That workflow may use `actions/setup-python`, install `pre-commit`, and run `pre-commit run --all-files`, while omitting Python application steps such as `pip install -e ".[dev]"`, mypy, pytest, or coverage unless the repository still has Python source to validate.
+
 **File:** `.github/workflows/python-ci.yml`
 
 ### Enabling Codecov Integration
@@ -2751,7 +2785,7 @@ Keep this workflow if:
 
 If you don't use GitHub Copilot Coding Agent or prefer to manually commit pre-commit fixes, you can safely remove this workflow.
 
-> **Note:** Removing this workflow is safe—the standard `python-ci.yml` workflow will still run pre-commit checks and report any issues that need to be fixed.
+> **Note:** Removing this workflow is safe if another workflow still reports pre-commit failures. If you removed Python project CI but kept pre-commit hooks, keep or add a pre-commit-only repository hygiene workflow as described in [Pre-commit-Only CI After Removing Python Source](#pre-commit-only-ci-after-removing-python-source).
 
 **Steps to remove:**
 
@@ -2773,7 +2807,7 @@ rm -f .github/workflows/auto-fix-precommit.yml
 
 **File:** `.github/workflows/check-placeholders.yml`
 
-The placeholder check workflow verifies that template placeholders (`OWNER/REPO`, `@OWNER`, `[security contact email]`) have been replaced. It runs automatically in all repositories created from the template.
+The placeholder check workflow verifies that template placeholders (`OWNER/REPO`, `@OWNER`, `[security contact email]`) have been replaced. Treat it as transitional adoption tooling, not a permanent requirement for every downstream repository.
 
 ### Understanding the Workflow
 
@@ -2792,13 +2826,14 @@ This means the workflow:
 
 Keep this workflow if you:
 
+- Are still replacing `OWNER/REPO`, `@OWNER`, `[security contact email]`, or similar template placeholders
 - Plan to make future updates from the template that might introduce new placeholder files
 - Want a safety net to catch accidental placeholder remnants
 - Have contributors who might add files with placeholder patterns
 
 ### Removing This Workflow
 
-If you have replaced all placeholders and don't anticipate needing this check:
+If the repository is initialized, all placeholders have been replaced with concrete downstream values, and you do not anticipate needing this check, remove the workflow:
 
 **Windows (PowerShell):**
 
@@ -2811,6 +2846,8 @@ Remove-Item -Force ".github\workflows\check-placeholders.yml"
 ```bash
 rm -f .github/workflows/check-placeholders.yml
 ```
+
+After removal, update any docs that imply the workflow still exists, do not reintroduce live `OWNER/REPO` placeholders, and prefer concrete downstream repository URLs in issue templates, PR templates, and community-health docs. The placeholder workflow can no longer catch drift once it is removed.
 
 ### Adding Custom Placeholder Patterns
 
