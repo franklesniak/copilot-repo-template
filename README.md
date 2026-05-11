@@ -168,7 +168,7 @@ Configuration: `.markdownlint.jsonc`
 npm run lint:md
 
 # Auto-fix issues
-npx markdownlint-cli2 "**/*.md" "#node_modules" --fix
+npx markdownlint-cli2 "**/*.md" "#node_modules" "#.pytest_cache" --fix
 ```
 
 #### PowerShell Linting (PSScriptAnalyzer)
@@ -236,7 +236,7 @@ Configuration: `.tflint.hcl`
 
 ```bash
 # Format check
-terraform fmt -check -recursive
+terraform fmt -check -recursive -diff
 
 # Format fix
 terraform fmt -recursive
@@ -245,7 +245,8 @@ terraform fmt -recursive
 terraform init -backend=false && terraform validate
 
 # Lint
-tflint --init && tflint --recursive
+tflint --init
+tflint --recursive --config "$(pwd)/.tflint.hcl"
 ```
 
 ### Testing

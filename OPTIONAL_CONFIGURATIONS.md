@@ -1607,7 +1607,7 @@ npm run lint:md:nested
 node .github/scripts/lint-nested-markdown.js file1.md file2.md
 ```
 
-When file arguments are provided, only those files are linted (useful for pre-commit hooks). When no arguments are provided, all `.md` files are scanned via glob (excluding `node_modules`).
+When file arguments are provided, only those files are linted (useful for pre-commit hooks). When no arguments are provided, all `.md` files are scanned via glob (excluding `node_modules` and `.pytest_cache`).
 
 ### Automatic Rule Adjustments
 
@@ -1670,7 +1670,7 @@ If you decide you don't need nested markdown linting, you can remove this option
    ```json
    {
      "scripts": {
-       "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\"",
+       "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.pytest_cache\"",
        "lint:md:nested": "node .github/scripts/lint-nested-markdown.js",  ← Delete this line
        ...
      }

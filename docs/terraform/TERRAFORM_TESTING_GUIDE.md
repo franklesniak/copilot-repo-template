@@ -1,12 +1,12 @@
 # Terraform Unit Testing Implementation Guide
 
-**Version:** 1.0.20260124.0
+**Version:** 1.0.20260510.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-01-24
+- **Last Updated:** 2026-05-10
 - **Scope:** This document provides comprehensive guidance for implementing Terraform unit testing in CI for the `franklesniak/copilot-repo-template` repository. It serves two purposes: (1) CI/Infrastructure Implementation Guide for setting up Terraform testing in GitHub Actions, and (2) Content Specification for what testing guidance should be embedded in `terraform.instructions.md`. This is a **guidance-only** document—it does not modify workflows or configurations directly.
 - **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md), [Terraform Instructions](../../.github/instructions/terraform.instructions.md), [Terraform Linting Guide](./TERRAFORM_LINTING_GUIDE.md)
 
@@ -1539,16 +1539,14 @@ run "outputs_instance_id" {
 
 ### Pre-commit Hooks for Test Validation
 
-Consider adding test-related pre-commit hooks:
+The repository's `terraform-fmt` hook already includes `templates/terraform/**` and `.tftest.hcl` files, so Terraform test examples are covered by format checks. The `terraform-validate` hook intentionally discovers directories containing `.tf` configuration files and does not treat a lone `.tftest.hcl` file as a validation target.
 
 ```yaml
-# .pre-commit-config.yaml additions (recommendations only)
-- repo: https://github.com/antonbabenko/pre-commit-terraform
-  rev: v1.105.0
+# .pre-commit-config.yaml excerpt
+- repo: local
   hooks:
-    # Existing hooks...
-    - id: terraform_validate
-      # Validates test files as part of validation
+    - id: terraform-fmt
+    - id: terraform-validate
 ```
 
 **Note:** `terraform fmt` already handles `.tftest.hcl` files. No additional hooks are required for test file formatting.

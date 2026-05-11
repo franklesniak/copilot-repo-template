@@ -4,7 +4,7 @@
   "description": "Template repository with Copilot instructions and code quality tooling",
   "private": true,
   "scripts": {
-    "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\"",
+    "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.pytest_cache\"",
     "lint:md:nested": "node .github/scripts/lint-nested-markdown.js"
   },
   "keywords": [

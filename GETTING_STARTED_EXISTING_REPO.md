@@ -131,7 +131,7 @@ The tools you need depend on which features you plan to adopt:
 | Issue Templates, PR Template, CODEOWNERS, Dependabot | None (GitHub web interface only) |
 | Copilot Instructions | None |
 | Markdown Linting | Node.js |
-| Pre-commit Hooks | Python, pre-commit |
+| Pre-commit Hooks | Python, pre-commit; Terraform and TFLint if retaining Terraform hooks |
 | Python CI Workflow | Python |
 | PowerShell CI Workflow | PowerShell |
 
@@ -144,7 +144,7 @@ The tools you need depend on which features you plan to adopt:
 git --version
 
 # Check Python version (if adopting Python features or pre-commit)
-# Python 3.9+ is required for pre-commit hooks and CI workflows
+# Python 3.13+ is required by this template's pre-commit hooks and CI workflows
 python --version
 
 # Check pip version (if adopting Python features or pre-commit)
@@ -161,7 +161,7 @@ node --version
 git --version
 
 # Check Python version (if adopting Python features or pre-commit)
-# Python 3.9+ is required for pre-commit hooks and CI workflows
+# Python 3.13+ is required by this template's pre-commit hooks and CI workflows
 python3 --version
 
 # Check pip version (if adopting Python features or pre-commit)
@@ -191,7 +191,7 @@ Use this matrix to decide which features to adopt based on complexity and depend
 | Security Policy | `SECURITY.md` | None | Low |
 | VS Code Settings | `.vscode/settings.json` | None | Low |
 | Markdown Linting | `.markdownlint.jsonc`, `package.json`, npm scripts | Node.js | Medium |
-| Pre-commit Hooks | `.pre-commit-config.yaml` | Python, pre-commit | Medium |
+| Pre-commit Hooks | `.pre-commit-config.yaml`, `.github/scripts/terraform_hooks.py` if retaining Terraform hooks | Python, pre-commit; Terraform and TFLint for Terraform hooks | Medium |
 | PowerShell CI Workflow | `.github/workflows/powershell-ci.yml` | PowerShell, Pester | Medium |
 | PSScriptAnalyzer Config | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell | Low |
 | Python CI Workflow | `.github/workflows/python-ci.yml` | Python project structure | High |
@@ -854,7 +854,7 @@ If your project already has a `package.json`:
    ```json
    {
      "scripts": {
-       "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\"",
+       "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.pytest_cache\"",
        "lint:md:nested": "node .github/scripts/lint-nested-markdown.js"
      }
    }
@@ -866,7 +866,7 @@ If your project already has a `package.json`:
    {
      "devDependencies": {
        "markdownlint": "^0.40.0",
-       "markdownlint-cli2": "^0.20.0"
+       "markdownlint-cli2": "^0.22.1"
      }
    }
    ```
@@ -907,7 +907,7 @@ If many errors appear, you have three options:
 1. **Fix the files** — Run with `--fix` to auto-correct:
 
    ```bash
-   npx markdownlint-cli2 "**/*.md" "#node_modules" --fix
+   npx markdownlint-cli2 "**/*.md" "#node_modules" "#.pytest_cache" --fix
    ```
 
 2. **Adjust rules** — Modify `.markdownlint.jsonc` to match your project's existing style
@@ -922,8 +922,9 @@ Pre-commit hooks run automated checks before each commit, catching issues early 
 
 **Prerequisites:**
 
-- Python installed (3.9+)
+- Python installed (3.13+)
 - pre-commit installed (see installation steps below; pipx/Homebrew installs make `pre-commit` available via PATH, pip installs require module invocation)
+- HashiCorp Terraform and TFLint installed if you keep the Terraform hooks
 
 > **Why pipx is recommended:**
 >
@@ -1041,7 +1042,9 @@ If your project doesn't have a `.pre-commit-config.yaml`:
 
 1. Copy `.pre-commit-config.yaml` to your repository root
 
-2. Review the hooks and remove those for languages you don't use:
+2. If you keep the Terraform hooks, also copy `.github/scripts/terraform_hooks.py`
+
+3. Review the hooks and remove those for languages you don't use:
 
    ```yaml
    # Remove this section if not using Python
@@ -1059,7 +1062,7 @@ If your project doesn't have a `.pre-commit-config.yaml`:
          args: [--fix, --line-length=100]
    ```
 
-3. Install the hooks:
+4. Install the hooks:
 
    **If you installed with pipx (Windows):**
 
@@ -1085,7 +1088,7 @@ If your project doesn't have a `.pre-commit-config.yaml`:
    python3 -m pre_commit install
    ```
 
-4. Run all hooks to verify:
+5. Run all hooks to verify:
 
    **If you installed with pipx or Homebrew:**
 
@@ -1125,6 +1128,13 @@ If your project already uses pre-commit:
 
    **Markdown hooks:**
    - `markdownlint-cli2`
+
+   **Terraform hooks:**
+   - `terraform-fmt`
+   - `terraform-validate`
+   - `terraform-tflint`
+
+   If you add the Terraform hooks, copy `.github/scripts/terraform_hooks.py` too.
 
 3. Update hook versions if the template has newer ones
 
@@ -1841,7 +1851,7 @@ Instead, update your existing README to document any new development requirement
 ### Prerequisites
 
 - Node.js 20+ (for markdown linting)
-- Python 3.9+ (for pre-commit hooks)
+- Python 3.13+ (for pre-commit hooks)
 - PowerShell (for PSScriptAnalyzer)
 
 ### Setup
@@ -1924,6 +1934,29 @@ Consider informing collaborators about:
 
 If you are adopting this template into an existing Terraform repository, follow this step-by-step checklist to ensure a smooth migration:
 
+### Tooling Prerequisites
+
+Install both HashiCorp Terraform (`terraform`) and TFLint (`tflint`) before running the template's local Terraform hooks. The hooks are repo-local Python wrappers, so native Windows PowerShell, Git Bash, WSL/Linux, and macOS all use the same implementation and do not require POSIX shell hook scripts.
+
+**Windows PowerShell:**
+
+- Terraform: download the Windows binary from [HashiCorp's Terraform install guide](https://developer.hashicorp.com/terraform/install), place `terraform.exe` in a stable tools directory, and add that directory to PATH. If your organization uses Chocolatey, `choco install terraform` is also supported.
+- TFLint: download the Windows binary from the [TFLint installation guide](https://github.com/terraform-linters/tflint#installation), place `tflint.exe` in a stable tools directory, and add that directory to PATH. If your organization uses Chocolatey, `choco install tflint` is also supported.
+- Restart PowerShell and verify with `terraform version` and `tflint --version`.
+
+**macOS:**
+
+```bash
+brew tap hashicorp/tap
+brew install hashicorp/tap/terraform
+brew install tflint
+```
+
+**Linux, FreeBSD, and WSL:**
+
+- Install Terraform using the package or binary instructions for your distribution in [HashiCorp's Terraform install guide](https://developer.hashicorp.com/terraform/install).
+- Install TFLint using the Linux install script or release binary from the [TFLint installation guide](https://github.com/terraform-linters/tflint#installation).
+
 ### Pre-Migration Checklist
 
 - [ ] **Baseline current state:** Run `terraform plan` and save the output. This gives you a baseline to verify no unintended changes occur after migration.
@@ -1964,10 +1997,33 @@ If you are adopting this template into an existing Terraform repository, follow 
 - [ ] **Run `tflint`:** Use the template's `.tflint.hcl` configuration to lint your code:
 
   ```bash
-  tflint --recursive
+  tflint --init
+  tflint --recursive --config "$(pwd)/.tflint.hcl"
   ```
 
 - [ ] **Fix any issues:** Address formatting, validation, and linting errors before proceeding.
+
+### Local Pre-commit Terraform Hooks
+
+After copying `.pre-commit-config.yaml` and `.github/scripts/terraform_hooks.py`, verify the repo-local Terraform hooks:
+
+**Windows PowerShell:**
+
+```powershell
+python -m pre_commit run terraform-fmt --all-files
+python -m pre_commit run terraform-validate --all-files
+python -m pre_commit run terraform-tflint --all-files
+```
+
+**Git Bash, WSL/Linux, macOS, and other POSIX-style shells:**
+
+```bash
+pre-commit run terraform-fmt --all-files
+pre-commit run terraform-validate --all-files
+pre-commit run terraform-tflint --all-files
+```
+
+These hooks mirror Terraform CI: format checks run from the repository root, validation runs only in directories containing `.tf` or `.tf.json` files, and TFLint receives an absolute path to the repository-root `.tflint.hcl` file.
 
 ### Refactoring Checklist
 
