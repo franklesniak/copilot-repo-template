@@ -7,7 +7,7 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.5.20260511.1
+**Version:** 1.5.20260511.2
 
 ## Metadata
 
@@ -292,7 +292,7 @@ Before merging, verify:
 **Background.** Mirrored excerpts that drift from their source are a recurring source of documentation inconsistency, and partial fixes that touch only reviewer-flagged lines can leave parallel copies of the same excerpt inconsistent and force repeat review rounds for the same root cause.
 
 1. **Mirrored excerpt policy.** When a Markdown document includes a literal excerpt, whether inline or fenced, that mirrors a real load-bearing file in the repository (for example, `.pre-commit-config.yaml`, a JSON schema, a workflow YAML, or a script), the excerpt **MUST** either:
-   - Be a verbatim copy of the corresponding source-of-truth lines for the included literal content, without paraphrasing or selectively rewriting copied literals; if the excerpt is intentionally partial, the surrounding prose must make that scope clear and must not imply the excerpt is the complete file or complete configuration, **OR**
+   - Be a verbatim copy of the corresponding source-of-truth lines for the included literal content, without paraphrasing or selectively rewriting copied literals; if the excerpt is intentionally partial, the surrounding prose **MUST** make that scope clear and **MUST NOT** imply the excerpt is the complete file or complete configuration, **OR**
    - Be replaced with a one-line pointer to the real file (for example, `See [.pre-commit-config.yaml](../../.pre-commit-config.yaml)` from a citing document under `.github/instructions/`; adjust the relative path so it resolves from the citing document's own location) with no inline copy of the excerpt content.
 
    When the verbatim-copy path is taken for a fenced or multi-line excerpt, authors SHOULD use the file's existing `Source:` citation convention from the `Markdown Conventions` section to anchor the excerpt to its source-of-truth file with a line-range link.
