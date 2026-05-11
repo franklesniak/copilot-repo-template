@@ -135,6 +135,26 @@ def test_missing_tflint_message_is_actionable_when_tf_files_exist(tmp_path: Path
     assert terraform_hooks.TFLINT_INSTALL_URL in message
 
 
+def test_missing_tflint_config_raises_actionable_error(tmp_path: Path) -> None:
+    """A missing `.tflint.hcl` raises MissingConfigurationError with actionable guidance."""
+    write_file(tmp_path / "main.tf", 'resource "terraform_data" "example" {}\n')
+
+    def fail_runner(command: list[str], cwd: Path) -> int:
+        raise AssertionError(f"TFLint should not be invoked when config is missing: {command!r}")
+
+    with pytest.raises(terraform_hooks.MissingConfigurationError) as error:
+        terraform_hooks.run_tflint(
+            root=tmp_path,
+            resolve=lambda name: f"{name}-bin",
+            runner=fail_runner,
+        )
+
+    message = str(error.value)
+    assert ".tflint.hcl" in message
+    assert "remove the `terraform-tflint` hook" in message
+    assert terraform_hooks.TFLINT_CONFIG_REFERENCE_URL in message
+
+
 def test_subprocess_runner_disables_shell(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """The subprocess boundary must not invoke a shell."""
     recorded: dict[str, Any] = {}

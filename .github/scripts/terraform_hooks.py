@@ -18,6 +18,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TERRAFORM_INSTALL_URL = "https://developer.hashicorp.com/terraform/install"
 TFLINT_INSTALL_URL = "https://github.com/terraform-linters/tflint#installation"
+TFLINT_CONFIG_REFERENCE_URL = (
+    "https://github.com/terraform-linters/tflint/blob/master/docs/user-guide/config.md"
+)
+TFLINT_CONFIG_FILENAME = ".tflint.hcl"
 SKIPPED_DIRECTORY_NAMES = {".git", ".terraform", "__pycache__", "node_modules"}
 
 ExecutableResolver = Callable[[str], str | None]
@@ -26,6 +30,10 @@ CommandRunner = Callable[[Sequence[str], Path], int]
 
 class MissingExecutableError(RuntimeError):
     """Raised when a required Terraform validation executable is unavailable."""
+
+
+class MissingConfigurationError(RuntimeError):
+    """Raised when a required Terraform validation configuration file is missing."""
 
 
 def resolve_executable(name: str) -> str:
@@ -42,6 +50,20 @@ def require_executable(name: str, resolve: ExecutableResolver) -> str:
     if executable is None:
         raise MissingExecutableError(build_missing_executable_message(name))
     return executable
+
+
+def build_missing_tflint_config_message(config_path: Path) -> str:
+    """Build actionable guidance for a missing TFLint configuration file."""
+    return "\n".join(
+        [
+            f"Required TFLint configuration file `{config_path.name}` was not found at {config_path}.",
+            (
+                f"Either restore `{TFLINT_CONFIG_FILENAME}` at the repository root, or remove the "
+                "`terraform-tflint` hook from `.pre-commit-config.yaml` if TFLint is no longer needed."
+            ),
+            f"TFLint configuration reference: {TFLINT_CONFIG_REFERENCE_URL}",
+        ]
+    )
 
 
 def build_missing_executable_message(name: str) -> str:
@@ -190,11 +212,15 @@ def run_tflint(
         return 0
 
     tflint = require_executable("tflint", resolve)
+
+    config_path = root / TFLINT_CONFIG_FILENAME
+    if not config_path.is_file():
+        raise MissingConfigurationError(build_missing_tflint_config_message(config_path))
+
     init_result = runner([tflint, "--init"], root)
     if init_result != 0:
         return init_result
 
-    config_path = root / ".tflint.hcl"
     return runner([tflint, "--recursive", "--config", str(config_path)], root)
 
 
@@ -220,7 +246,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         return hook_functions[args.hook]()
-    except MissingExecutableError as error:
+    except (MissingExecutableError, MissingConfigurationError) as error:
         print(error, file=sys.stderr)
         return 1
 
