@@ -116,6 +116,11 @@ jobs:
         with:
           terraform_version: "1.14.4"
 
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: "v0.51.1"
+
       - name: Cache pre-commit hooks
         uses: actions/cache@v5
         with:
@@ -128,7 +133,7 @@ jobs:
       - name: Run pre-commit hooks
         # Runs every hook in .pre-commit-config.yaml (Python formatters/linters,
         # JSON/YAML checks, yamllint, actionlint, markdownlint-cli2, Terraform).
-        # Required tools are set up above (Python, Terraform); other hooks
+        # Required tools are set up above (Python, Terraform, TFLint); other hooks
         # provision their own environments inside pre-commit's hook cache.
         run: pre-commit run --all-files
 
