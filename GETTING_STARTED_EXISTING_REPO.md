@@ -144,7 +144,7 @@ The tools you need depend on which features you plan to adopt:
 git --version
 
 # Check Python version (if adopting Python features or pre-commit)
-# Python 3.9+ is required for pre-commit hooks and CI workflows
+# Python 3.13+ is required by this template's pre-commit hooks and CI workflows
 python --version
 
 # Check pip version (if adopting Python features or pre-commit)
@@ -161,7 +161,7 @@ node --version
 git --version
 
 # Check Python version (if adopting Python features or pre-commit)
-# Python 3.9+ is required for pre-commit hooks and CI workflows
+# Python 3.13+ is required by this template's pre-commit hooks and CI workflows
 python3 --version
 
 # Check pip version (if adopting Python features or pre-commit)
@@ -922,7 +922,7 @@ Pre-commit hooks run automated checks before each commit, catching issues early 
 
 **Prerequisites:**
 
-- Python installed (3.9+)
+- Python installed (3.13+)
 - pre-commit installed (see installation steps below; pipx/Homebrew installs make `pre-commit` available via PATH, pip installs require module invocation)
 - HashiCorp Terraform and TFLint installed if you keep the Terraform hooks
 
@@ -1851,7 +1851,7 @@ Instead, update your existing README to document any new development requirement
 ### Prerequisites
 
 - Node.js 20+ (for markdown linting)
-- Python 3.9+ (for pre-commit hooks)
+- Python 3.13+ (for pre-commit hooks)
 - PowerShell (for PSScriptAnalyzer)
 
 ### Setup
