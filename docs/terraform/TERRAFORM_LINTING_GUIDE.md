@@ -1,12 +1,12 @@
 # Terraform Linting Implementation Guide
 
-**Version:** 1.0.20260510.0
+**Version:** 1.0.20260511.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-10
+- **Last Updated:** 2026-05-11
 - **Scope:** This document provides comprehensive guidance for implementing Terraform linting in CI for the `franklesniak/copilot-repo-template` repository. It covers tool selection, workflow design, configuration, pre-commit integration, and best practices. This is a **guidance-only** document—it does not modify workflows or configurations directly.
 - **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md), [Terraform Instructions](../../.github/instructions/terraform.instructions.md)
 
@@ -1091,13 +1091,13 @@ The repository's current configuration:
       entry: python .github/scripts/terraform_hooks.py validate
       language: python
       pass_filenames: false
-      files: '(^|/)[^/]+\.tf$'
+      files: '(^|/)[^/]+\.tf(\.json)?$'
     - id: terraform-tflint
       name: Terraform validate with tflint
       entry: python .github/scripts/terraform_hooks.py tflint
       language: python
       pass_filenames: false
-      files: '(^|/)([^/]+\.tf|\.tflint\.hcl)$'
+      files: '(^|/)([^/]+\.tf(\.json)?|\.tflint\.hcl)$'
 ```
 
 The hook wrapper lives at `.github/scripts/terraform_hooks.py` and invokes subprocesses with `shell=False`.
