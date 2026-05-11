@@ -2,6 +2,14 @@
 
 # Cross-platform Terraform pre-commit guidance for native Windows users
 
+## Metadata
+
+- **Status:** Draft
+- **Owner:** Repository Maintainers
+- **Last Updated:** 2026-05-11
+- **Scope:** Draft of an upstream issue body to be filed at `franklesniak/TerraformStyleGuide` proposing generalized guidance for cross-platform Terraform pre-commit hook execution on native Windows / PowerShell, Git Bash, WSL/Linux, macOS, and Linux. This file is a transient artifact intended to be removed from this repository once the upstream issue is filed; it does not document active repository policy.
+- **Related:** [Template Design Decisions](.github/TEMPLATE_DESIGN_DECISIONS.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
+
 ## Summary
 
 Downstream repository `franklesniak/copilot-repo-template` replaced its active Terraform pre-commit hooks with repo-local Python wrappers so local Terraform validation works from native Windows / PowerShell, Git Bash, WSL/Linux, macOS, and Linux without relying on POSIX shell hook scripts.
