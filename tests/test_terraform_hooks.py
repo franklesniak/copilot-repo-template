@@ -135,6 +135,16 @@ def test_missing_tflint_message_is_actionable_when_tf_files_exist(tmp_path: Path
     assert terraform_hooks.TFLINT_INSTALL_URL in message
 
 
+def test_find_terraform_directories_discovers_tf_json_only_modules(tmp_path: Path) -> None:
+    """Directories containing only `.tf.json` configuration are discovered."""
+    json_only_dir = tmp_path / "modules" / "json_only"
+    write_file(json_only_dir / "main.tf.json", '{"resource": {}}\n')
+
+    discovered = terraform_hooks.find_terraform_directories(tmp_path)
+
+    assert discovered == [json_only_dir.resolve()]
+
+
 def test_find_files_skips_python_tool_cache_directories(tmp_path: Path) -> None:
     """Python tool caches (.pytest_cache, .mypy_cache, .ruff_cache) must not be traversed."""
     write_file(

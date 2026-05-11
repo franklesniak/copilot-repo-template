@@ -161,9 +161,15 @@ def is_terraform_format_target(path: Path, root: Path) -> bool:
 
 
 def find_terraform_directories(root: Path) -> list[Path]:
-    """Find directories containing Terraform `.tf` configuration files."""
+    """Find directories containing Terraform `.tf` or `.tf.json` configuration files."""
     return sorted(
-        {path.parent for path in find_files(root, lambda path: path.name.endswith(".tf"))}
+        {
+            path.parent
+            for path in find_files(
+                root,
+                lambda path: path.name.endswith(".tf") or path.name.endswith(".tf.json"),
+            )
+        }
     )
 
 

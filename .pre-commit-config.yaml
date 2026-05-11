@@ -173,10 +173,10 @@ repos:
         entry: python .github/scripts/terraform_hooks.py validate
         language: python
         pass_filenames: false
-        files: '(^|/)[^/]+\.tf$'
+        files: '(^|/)[^/]+\.tf(\.json)?$'
       - id: terraform-tflint
         name: Terraform validate with tflint
         entry: python .github/scripts/terraform_hooks.py tflint
         language: python
         pass_filenames: false
-        files: '(^|/)([^/]+\.tf|\.tflint\.hcl)$'
+        files: '(^|/)([^/]+\.tf(\.json)?|\.tflint\.hcl)$'
