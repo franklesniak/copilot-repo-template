@@ -12,7 +12,7 @@ This guide is for **maintainers of the `franklesniak/copilot-repo-template` repo
 - [Updating Pre-commit Hook Versions](#updating-pre-commit-hook-versions)
 - [Reviewing the Worked-Example Schema and Data CI Workflow](#reviewing-the-worked-example-schema-and-data-ci-workflow)
 - [Reviewing Python Version Requirements](#reviewing-python-version-requirements)
-- [Reviewing Terraform Version Requirements](#reviewing-terraform-version-requirements)
+- [Reviewing Terraform and TFLint Version Requirements](#reviewing-terraform-and-tflint-version-requirements)
 - [Reviewing Terraform Provider Versions](#reviewing-terraform-provider-versions)
 - [Reviewing Instruction File Versions](#reviewing-instruction-file-versions)
 - [Reviewing Agent Instruction Files](#reviewing-agent-instruction-files)
@@ -28,7 +28,7 @@ To keep the template current and functional, maintainers **SHOULD** review templ
 
 - [ ] Review and update pre-commit hook versions
 - [ ] Check for updates to GitHub Actions used in workflows
-- [ ] Review and update Terraform version in CI workflows
+- [ ] Review and update Terraform and TFLint versions in CI workflows
 - [ ] Review instruction files for accuracy and relevance
 - [ ] Verify all CI workflows still pass with latest dependency versions
 - [ ] Verify agent instruction files (`.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) remain aligned with `.github/copilot-instructions.md`
@@ -197,25 +197,27 @@ This template requires Python versions that are currently receiving bugfix updat
 
 ---
 
-## Reviewing Terraform Version Requirements
+## Reviewing Terraform and TFLint Version Requirements
 
-This template uses a pinned Terraform version in CI workflows for reproducibility and pre-commit hook execution.
+This template uses pinned Terraform and TFLint versions in CI workflows for reproducibility and pre-commit hook execution.
 
-**When to review:** Quarterly, or when a new stable Terraform release is available.
+**When to review:** Quarterly, or when a new stable Terraform or TFLint release is available.
 
 **What to check:**
 
 1. Visit the [Terraform Releases](https://releases.hashicorp.com/terraform/) page or the [Terraform GitHub Releases](https://github.com/hashicorp/terraform/releases)
-2. Identify the latest stable release (avoid alpha, beta, or RC versions)
-3. Update the Terraform version in the following workflow files:
-   - `.github/workflows/terraform-ci.yml` (format, validate, and test jobs)
+2. Visit the [TFLint Releases](https://github.com/terraform-linters/tflint/releases) page
+3. Identify the latest stable releases (avoid alpha, beta, or RC versions)
+4. Update the Terraform and TFLint versions in the following workflow files:
+   - `.github/workflows/terraform-ci.yml` (format, validate, lint, and test jobs)
    - `.github/workflows/python-ci.yml` (pre-commit job)
    - `.github/workflows/auto-fix-precommit.yml` (auto-fix job)
 
 **Version considerations:**
 
-- **Pre-commit workflows:** Use the latest stable Terraform version for repo-local pre-commit hooks (`terraform-fmt`, `terraform-validate`, `terraform-tflint`)
+- **Pre-commit workflows:** Use the latest stable Terraform and TFLint versions for repo-local pre-commit hooks (`terraform-fmt`, `terraform-validate`, `terraform-tflint`)
 - **Terraform CI tests:** The test framework requires Terraform 1.6.0+ and mock_provider requires 1.7.0+. The latest stable version satisfies both requirements.
+- **TFLint consistency:** Keep `tflint_version` aligned across Terraform CI and aggregate pre-commit workflows so local, CI, and auto-fix runs evaluate Terraform linting with the same tool version.
 - **Documentation:** After updating, verify that examples in documentation under `docs/terraform/` remain accurate. Note that these are illustrative examples and do not need to be updated unless the version syntax changes.
 
 ---

@@ -854,7 +854,7 @@ If your project already has a `package.json`:
    ```json
    {
      "scripts": {
-       "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\"",
+       "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.pytest_cache\"",
        "lint:md:nested": "node .github/scripts/lint-nested-markdown.js"
      }
    }
@@ -866,7 +866,7 @@ If your project already has a `package.json`:
    {
      "devDependencies": {
        "markdownlint": "^0.40.0",
-       "markdownlint-cli2": "^0.20.0"
+       "markdownlint-cli2": "^0.22.1"
      }
    }
    ```
@@ -907,7 +907,7 @@ If many errors appear, you have three options:
 1. **Fix the files** — Run with `--fix` to auto-correct:
 
    ```bash
-   npx markdownlint-cli2 "**/*.md" "#node_modules" --fix
+   npx markdownlint-cli2 "**/*.md" "#node_modules" "#.pytest_cache" --fix
    ```
 
 2. **Adjust rules** — Modify `.markdownlint.jsonc` to match your project's existing style

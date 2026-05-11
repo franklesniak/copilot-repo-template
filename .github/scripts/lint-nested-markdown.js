@@ -12,7 +12,8 @@
  *   Lint specific files:  node .github/scripts/lint-nested-markdown.js file1.md file2.md
  *
  * When file arguments are provided, only those files are linted (useful for pre-commit hooks).
- * When no arguments are provided, all .md files are scanned via glob (excluding node_modules).
+ * When no arguments are provided, all .md files are scanned via glob
+ * (excluding node_modules and .pytest_cache).
  * Both absolute and relative paths are supported; relative paths are resolved from cwd.
  */
 
@@ -256,9 +257,14 @@ async function main() {
             files = validFiles;
             console.log(`Linting ${files.length} specified file(s)\n`);
         } else {
-            // Find all markdown files (excluding node_modules)
+            // Find all markdown files (excluding generated/dependency directories)
             files = await glob('**/*.md', {
-                ignore: ['node_modules/**', '**/node_modules/**'],
+                ignore: [
+                    'node_modules/**',
+                    '**/node_modules/**',
+                    '.pytest_cache/**',
+                    '**/.pytest_cache/**'
+                ],
                 cwd: REPO_ROOT,
                 absolute: true
             });

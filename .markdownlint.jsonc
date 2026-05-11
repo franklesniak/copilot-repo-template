@@ -16,7 +16,7 @@
   // Rules that cannot be auto-fixed are disabled to avoid noise in CI.
   //
   // Run with: npm run lint:md
-  // Fix with: npx markdownlint-cli2 "**/*.md" "#node_modules" --fix
+  // Fix with: npx markdownlint-cli2 "**/*.md" "#node_modules" "#.pytest_cache" --fix
 
   // Enable all rules by default
   "default": true,
