@@ -22,7 +22,15 @@ TFLINT_CONFIG_REFERENCE_URL = (
     "https://github.com/terraform-linters/tflint/blob/master/docs/user-guide/config.md"
 )
 TFLINT_CONFIG_FILENAME = ".tflint.hcl"
-SKIPPED_DIRECTORY_NAMES = {".git", ".terraform", "__pycache__", "node_modules"}
+SKIPPED_DIRECTORY_NAMES = {
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".terraform",
+    "__pycache__",
+    "node_modules",
+}
 
 ExecutableResolver = Callable[[str], str | None]
 CommandRunner = Callable[[Sequence[str], Path], int]

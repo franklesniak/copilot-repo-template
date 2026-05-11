@@ -135,6 +135,20 @@ def test_missing_tflint_message_is_actionable_when_tf_files_exist(tmp_path: Path
     assert terraform_hooks.TFLINT_INSTALL_URL in message
 
 
+def test_find_files_skips_python_tool_cache_directories(tmp_path: Path) -> None:
+    """Python tool caches (.pytest_cache, .mypy_cache, .ruff_cache) must not be traversed."""
+    write_file(
+        tmp_path / "modules" / "example" / "main.tf", 'resource "terraform_data" "example" {}\n'
+    )
+    write_file(tmp_path / ".pytest_cache" / "should-not-discover.tf", "// pytest cache\n")
+    write_file(tmp_path / ".mypy_cache" / "should-not-discover.tf", "// mypy cache\n")
+    write_file(tmp_path / ".ruff_cache" / "should-not-discover.tf", "// ruff cache\n")
+
+    discovered = terraform_hooks.find_terraform_directories(tmp_path)
+
+    assert discovered == [(tmp_path / "modules" / "example").resolve()]
+
+
 def test_missing_tflint_config_raises_actionable_error(tmp_path: Path) -> None:
     """A missing `.tflint.hcl` raises MissingConfigurationError with actionable guidance."""
     write_file(tmp_path / "main.tf", 'resource "terraform_data" "example" {}\n')
