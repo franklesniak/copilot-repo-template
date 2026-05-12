@@ -7,13 +7,13 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.4.20260510.0
+**Version:** 1.4.20260512.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-10
+- **Last Updated:** 2026-05-12
 - **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by [JSON Writing Style](./json.instructions.md)) or generated YAML artifacts that are owned by another tool's serializer.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md), [`.yamllint.yml`](../../.yamllint.yml), [Data-File CI Workflow (`data-ci.yml`)](../workflows/data-ci.yml), [Schemas README](../../schemas/README.md), [Schema Example Tests (`tests/test_schema_examples.py`)](../../tests/test_schema_examples.py), [Template Design Decision — Dedicated JSON and YAML Instruction Files](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-json-and-yaml-instruction-files), [Template Design Decision — Baseline JSON/YAML Linting Stack](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-baseline-jsonyaml-linting-stack), [Template Design Decision — yamllint truthy.check-keys Default](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-truthycheck-keys-default), [Template Design Decision — yamllint line-length Warning Level Default](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-line-length-warning-level-default), [Template Design Decision — Dedicated Data-File CI Workflow (`data-ci.yml`)](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-data-file-ci-workflow-data-ciyml), [Template Design Decision — Prettier Deferral for Data Files](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-prettier-deferral-for-data-files), [Template Design Decision — Built-in Schema Validation for Real Load-Bearing Configuration Files](../TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files)
 
@@ -114,6 +114,8 @@ If a comment must reference a specific historical release, for example a changel
 This rule applies to all workflow files under `.github/workflows/` and to any other YAML location where `# see:` comments document an action version.
 
 This rule applies only to documentation/navigation comments. It **MUST NOT** affect the `uses:` line itself, action input values, SHA pins, version pins, or any other intentionally pinned executable configuration.
+
+The `<owner>/<repo>` placeholder used throughout this section is **metasyntactic** — it stands for any upstream GitHub Actions repository (for example, `actions/checkout`, `peter-evans/create-pull-request`). It is **not** a template-adopter substitution placeholder, and it is distinct from the literal `OWNER/REPO` adopter-substitution convention covered by [`.github/instructions/docs.instructions.md`](./docs.instructions.md). Authors **MUST NOT** rewrite metasyntactic `<owner>/<repo>` references in workflow comments to `OWNER/REPO`, and adopters **MUST NOT** substitute their repository name into these metasyntactic references.
 
 Pinned documentation URLs go stale because Dependabot updates `uses:` references but does not rewrite arbitrary adjacent comment text.
 
