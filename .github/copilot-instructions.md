@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.5.20260510.0
+**Version:** 1.5.20260511.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-10
+- **Last Updated:** 2026-05-11
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -41,6 +41,17 @@ Authorization **MUST NOT** be inferred from:
 When an agent identifies a warranted instruction or style-guide update without explicit authorization, it **MUST** propose the change separately (for example, as a prompt or Open Question) and wait for explicit approval before editing protected files.
 
 When explicit authorization is granted, keep protected instruction-file edits narrowly scoped, preserve the canonical source-of-truth hierarchy, and update related metadata and version fields according to [Documentation Writing Style](instructions/docs.instructions.md).
+
+### Template Adoption and Stack Selection
+
+Downstream repositories that keep only part of this template's language or tooling stack often need to update protected instruction files after deleting non-protected files. Use this order:
+
+1. Perform non-protected cleanup first, such as deleting unused workflows, example source, tests, templates, and lint configuration.
+2. Record the protected-file edits needed to remove references to deleted tools, workflows, hooks, validation commands, and language stacks.
+3. Obtain explicit maintainer authorization for the protected-file edits.
+4. Update `.github/copilot-instructions.md`, remaining root agent files, and relevant `.github/instructions/*.instructions.md` files so they match the stacks retained by the downstream repository.
+5. Bump `Last Updated` and `Version` metadata where those fields exist.
+6. Avoid ephemeral implementation-stage language in durable governance docs.
 
 ## Non-negotiable Safety and Security Rules
 

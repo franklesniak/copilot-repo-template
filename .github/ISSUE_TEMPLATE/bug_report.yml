@@ -42,7 +42,7 @@ body:
   # "Issue and PR templates" carve-out in `.github/instructions/docs.instructions.md`
   # (and the matching section in `.github/instructions/yaml.instructions.md`).
   #
-  # CUSTOMIZE: Replace `OWNER/REPO` in both URLs with your actual org/repo.
+  # CUSTOMIZE: Replace `OWNER/REPO` in all security URLs with your actual org/repo.
   # If you keep `.github/workflows/check-placeholders.yml` (an optional adoption
   # step), CI will fail until this substitution is made; if you do not adopt
   # that workflow or you remove it after setup, no CI guardrail catches a
@@ -55,7 +55,10 @@ body:
         Please fill out the form below to help us investigate and resolve the issue.
 
         ⚠️ **Security Notice:** If you are reporting a security vulnerability, do NOT use this form.
-        Please report security issues privately via the repository's [Security tab](https://github.com/OWNER/REPO/security) or [SECURITY.md](https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md).
+        Please report security issues privately via the repository's
+        [private vulnerability reporting form](https://github.com/OWNER/REPO/security/advisories/new)
+        if enabled, the [Security tab](https://github.com/OWNER/REPO/security), or
+        [SECURITY.md](https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md).
 
   - type: checkboxes
     id: pre_flight
@@ -345,7 +348,9 @@ body:
       description: >-
         Select the severity level that best describes the impact from your perspective.
         Note: This is your self-assessment; maintainers may adjust during triage.
-        ⚠️ For security vulnerabilities, do NOT use this form—report privately via the Security tab or SECURITY.md
+        ⚠️ For security vulnerabilities, do NOT use this form. Report privately
+        via the private vulnerability reporting form if enabled, the Security tab,
+        or SECURITY.md.
       options:
         - Critical (system crash, data loss)
         - High (major feature broken, no workaround)

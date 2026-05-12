@@ -45,9 +45,10 @@ contact_links:
   # - Option C: blob/HEAD/SECURITY.md - Always works if the file exists; communicates policy
   #   but is not a submission endpoint.
   #
-  # Recommended: Keep /security as the default. After enabling private vulnerability
-  # reporting in your repository (public repos only), you can optionally change to
-  # /security/advisories/new.
+  # Recommended: Keep /security as the transitional default while setting up the
+  # repository. After enabling private vulnerability reporting (public repos
+  # only), prefer /security/advisories/new so reporters land directly on the
+  # private reporting form.
   #
   # TO ENABLE PRIVATE VULNERABILITY REPORTING (PUBLIC REPOSITORIES ONLY):
   # 1. Go to Settings → Security → Private vulnerability reporting

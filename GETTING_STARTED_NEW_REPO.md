@@ -28,8 +28,10 @@ This guide walks you through creating a brand-new repository using `franklesniak
 - [Customizing CONTRIBUTING.md](#customizing-contributingmd)
 - [Customizing CODE_OF_CONDUCT.md](#customizing-code_of_conductmd)
 - [Updating Copilot Instructions](#updating-copilot-instructions)
+  - [Protected-File Adoption Step](#protected-file-adoption-step)
 - [Additional Configuration (Optional)](#additional-configuration-optional)
 - [Validation and Testing](#validation-and-testing)
+  - [Confirm Local Validation Prerequisites](#confirm-local-validation-prerequisites)
 - [Cleanup](#cleanup)
 - [Troubleshooting](#troubleshooting)
 - [Development Workflow](#development-workflow)
@@ -833,11 +835,14 @@ The `[security contact email]` placeholder in `SECURITY.md` should be replaced w
 - Is actively monitored
 - Can receive sensitive security reports
 - Is not publicly visible (unlike GitHub issues)
+- Is not a `users.noreply.github.com` address, because those addresses are not reliable monitored intake channels
 
 If you prefer not to use email, you can:
 
 1. Remove the email section entirely from `SECURITY.md`
-2. Keep only the GitHub Security Advisories option (see [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md) for details)
+2. Enable private vulnerability reporting for a public repository
+3. Prefer the direct private reporting URL, `https://github.com/OWNER/REPO/security/advisories/new`, once the feature is enabled
+4. Keep only the GitHub Security Advisories option (see [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md) for details)
 
 ---
 
@@ -1170,6 +1175,8 @@ Review your project requirements and decide which languages you'll be using:
 - **Markdown:** Documentation (always needed)
 
 > **YAML adoption warning:** Keeping `.github/workflows/*.yml` while deleting the YAML instruction, linting, and validation stack is contradictory. GitHub Actions workflows are YAML files. If you remove YAML support, flag the contradiction during adoption and either keep the YAML stack or remove/replace every YAML-based workflow and configuration file.
+>
+> **Python runtime note:** Removing Python as project source code does not always remove Python as a development-tool runtime. Keep Python available anywhere you run `pre-commit`, `check-jsonschema`, `check-metaschema`, or repo-local Python hooks, even if you delete `src/`, Python tests, and `.github/workflows/python-ci.yml`.
 
 ### Language and Format Checklist
 
@@ -1192,6 +1199,9 @@ Remove Python if you do not use it:
 - Delete `.github/instructions/python.instructions.md`.
 - Delete `templates/python/`.
 - Remove the `black` and `ruff-check` hooks from `.pre-commit-config.yaml`.
+- Remove the `pip` ecosystem from `.github/dependabot.yml` if `pyproject.toml` is gone and no Python dependency manifest remains.
+- Remove Python validation references from `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `README.md`, `CONTRIBUTING.md`, and the PR template after the protected-file cleanup step below is authorized.
+- Keep Python installed for development tooling if you still run `pre-commit`, `check-jsonschema`, `check-metaschema`, or repo-local hooks.
 
 #### PowerShell
 
@@ -1208,6 +1218,8 @@ Remove PowerShell if you do not use it:
 - Delete `.github/linting/`.
 - Delete `tests/PowerShell/`.
 - Delete `templates/powershell/`.
+- Remove the "PowerShell-Specific (if applicable)" checklist from `.github/pull_request_template.md`.
+- Remove PowerShell validation references from `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `README.md`, and `CONTRIBUTING.md` after the protected-file cleanup step below is authorized.
 
 #### Terraform
 
@@ -1227,7 +1239,8 @@ Remove Terraform if you do not use it:
 - Delete `templates/terraform/`.
 - Remove the `terraform-fmt`, `terraform-validate`, and `terraform-tflint` hooks from `.pre-commit-config.yaml`.
 - Delete `.github/scripts/terraform_hooks.py` if no remaining pre-commit hook or workflow uses it.
-- Remove Terraform-specific rows from `.github/copilot-instructions.md`, `README.md`, and any project docs you keep.
+- Remove any Terraform Dependabot ecosystem you added downstream.
+- Remove Terraform-specific docs, examples, validation commands, and table rows from `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `README.md`, `CONTRIBUTING.md`, and any project docs you keep after the protected-file cleanup step below is authorized.
 
 #### JSON/JSONC
 
@@ -1840,8 +1853,11 @@ The `[INSERT CONTACT METHOD]` placeholder in `CODE_OF_CONDUCT.md` should be repl
 - An email address (e.g., `conduct@example.com`)
 - A link to a reporting form
 - Instructions to contact specific maintainers via direct message
+- Instructions to contact the repository owners using the contact links on their GitHub profiles
 
 If you used the same email for both `CODE_OF_CONDUCT.md` and `SECURITY.md` during the [Initial Placeholder Replacement](#initial-placeholder-replacement) step, consider whether you want a separate contact method for code of conduct issues versus security vulnerabilities.
+
+Do not use a `users.noreply.github.com` address as the conduct contact. It is suitable for commit attribution privacy, not for receiving sensitive community reports.
 
 ### About the Contributor Covenant
 
@@ -1873,6 +1889,17 @@ See [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md#code-of-conduct-conf
 ## Updating Copilot Instructions
 
 The `.github/copilot-instructions.md` file contains repository-wide coding standards that guide GitHub Copilot's code generation. You should customize this for your project.
+
+### Protected-File Adoption Step
+
+The template protects `.github/copilot-instructions.md`, files under `.github/instructions/`, `.cursor/rules/`, and root agent files such as `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`. Stack selection usually requires legitimate updates to those files, but make those updates deliberately:
+
+1. Perform non-protected cleanup first, such as deleting unused workflows, templates, source files, and lint configuration.
+2. Record the protected-file edits that remain, including removed tool references, changed validation commands, and language-table updates.
+3. Obtain explicit maintainer authorization for the protected-file cleanup.
+4. Update `.github/copilot-instructions.md`, any remaining root agent files, and relevant `.github/instructions/*.instructions.md` files so they no longer reference deleted tools or stacks.
+5. Bump `Last Updated` and `Version` metadata in protected files that carry those fields.
+6. Use durable adoption language. Avoid temporary implementation notes such as "for this migration" in governance docs that downstream maintainers will keep.
 
 ### Customizing the Source of Truth Section
 
@@ -2067,6 +2094,15 @@ For detailed guidance on branch ruleset setup, see the "Branch Ruleset Setup" se
 
 Before committing your changes, validate that everything is configured correctly.
 
+### Confirm Local Validation Prerequisites
+
+Before running validation commands, confirm the tool runtime for each check is installed:
+
+- Run `npm install` or `npm ci` before `npm run lint:md`, `npm run lint:md:nested`, or other npm-backed Markdown lint commands.
+- Install `pre-commit` in the active Python environment, or use `python -m pre_commit` / `python3 -m pre_commit` if the `pre-commit` executable is not on `PATH`.
+- Treat `pre-commit install` as a local developer setup step. Automation should usually run `pre-commit run --all-files` directly unless your workflow explicitly needs to install Git hooks.
+- Keep Python available for Python-based hooks such as `check-jsonschema`, `check-metaschema`, and repo-local hook wrappers, even if your repository has no Python project source.
+
 ### Run Pre-commit on All Files
 
 ```bash
@@ -2205,10 +2241,12 @@ The `check-placeholders.yml` workflow verifies that you've replaced all `OWNER/R
 
 **After all placeholders are replaced:**
 
-Once you've replaced all placeholders and the workflow passes, you have two options:
+Treat `.github/workflows/check-placeholders.yml` as a transitional adoption workflow. Once you've replaced all placeholders and the workflow passes, you have two valid options:
 
-- **Keep the workflow** — It serves as a safety net for any future template updates or additions
-- **Remove the workflow** — Delete `.github/workflows/check-placeholders.yml` if you no longer need placeholder checking
+- **Keep the workflow** while `OWNER/REPO`, `@OWNER`, `[security contact email]`, or similar template placeholders are still being replaced, or if you expect future template syncs to reintroduce placeholder-bearing files.
+- **Remove the workflow** after the repository is initialized and all placeholders have been replaced with concrete downstream values.
+
+If you remove the workflow, also drop or de-emphasize docs that imply it still exists, do not reintroduce live `OWNER/REPO` placeholders, and prefer concrete downstream repository URLs in issue templates, PR templates, and community-health docs.
 
 See [Placeholder Check Workflow Configuration](OPTIONAL_CONFIGURATIONS.md#placeholder-check-workflow-configuration) for more details on customizing this workflow.
 
