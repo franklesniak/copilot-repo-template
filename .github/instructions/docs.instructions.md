@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.5.20260511.2
+**Version:** 1.5.20260512.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-11
+- **Last Updated:** 2026-05-12
 - **Scope:** Defines documentation standards for Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) files in this repository, including specs, design docs, runbooks, ADRs, instruction files, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -192,6 +192,22 @@ For the issue-form `value:` and PR-template cases, relative forms are additional
 - This rule applies only to the files listed above. Tree-rendered Markdown such as `README.md`, `CONTRIBUTING.md`, and files under `docs/**` continue to follow the default "prefer relative links" guidance.
 - The literal `https://github.com/OWNER/REPO/...` example URL is permitted to appear in didactic prose inside style-guide and design-decision files (`.github/instructions/**`, `.github/copilot-instructions.md`, and `.github/TEMPLATE_DESIGN_DECISIONS.md`); section [6] of `.github/workflows/check-placeholders.yml` skips those files specifically so that adopters are not forced to edit instructional/historical prose to satisfy placeholder CI. Section [6] also skips the workflow file itself (`.github/workflows/check-placeholders.yml`) to avoid self-referential matches against the literal URL embedded in its own grep patterns. The recursive scan in section [6] only enumerates `*.md`, `*.yml`, and `*.yaml` files (`find .github -type f \( -name "*.yml" -o -name "*.yaml" -o -name "*.md" \)`); other file types under `.github/` (for example, `.github/CODEOWNERS` or scripts) are not scanned by section [6] and are covered, where applicable, by other dedicated phases of the workflow rather than the recursive URL scan. Any other Markdown or YAML file under `.github/` (i.e., not `.github/instructions/**`, not `.github/copilot-instructions.md`, not `.github/TEMPLATE_DESIGN_DECISIONS.md`, and not `.github/workflows/check-placeholders.yml`) that contains the literal `https://github.com/OWNER/REPO` substring outside a single-line HTML comment (in Markdown) or a YAML comment line (in YAML) is treated as a live template placeholder and **MUST** be customized by adopters. (Section [6] of the placeholder workflow filters single-line HTML comments in Markdown and YAML comment lines in YAML before matching, so a single-line HTML comment such as `<!-- https://github.com/OWNER/REPO/... -->` will not by itself cause CI to fail; authors **SHOULD NOT** rely on that filter to ship live template URLs disguised as comments.)
 - The rule for issue-form YAML files (`.github/ISSUE_TEMPLATE/*.yml`) is mirrored in [`.github/instructions/yaml.instructions.md`](./yaml.instructions.md) so that contributors editing those YAML files receive the same guidance. The two instruction files are intentionally self-contained: each may be removed independently in downstream repositories that do not need it, and each restates the rule rather than relying on the other.
+
+#### Adopter-substitution `OWNER/REPO` placeholders in Markdown documentation
+
+When maintaining this repository as a template, Markdown files that intentionally ship with unresolved `https://github.com/...` URLs for adopters to customize **MUST** use the literal `OWNER/REPO` placeholder convention. Common shapes include `https://github.com/OWNER/REPO.git`, `https://github.com/OWNER/REPO/issues`, `https://github.com/OWNER/REPO/security`, and `https://github.com/OWNER/REPO/blob/HEAD/<path>`. Authors **MUST NOT** introduce alternative live-substitution styles such as `<owner>/<repo>`, `<OWNER>/<REPO>`, or `your-org/your-repo` for those unresolved template placeholders.
+
+This convention applies most visibly in template scaffolding files that ship with this repository — community-health files (`SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `README.md`), adoption guides (`GETTING_STARTED_NEW_REPO.md`, `GETTING_STARTED_EXISTING_REPO.md`, `OPTIONAL_CONFIGURATIONS.md`, `COPILOT_CHAT_PROMPTS.md`), and any other repository-root Markdown that ships placeholder URLs for downstream substitution. A single literal placeholder form keeps the bulk find-and-replace scripts in `GETTING_STARTED_NEW_REPO.md` reliable and keeps the optional `.github/workflows/check-placeholders.yml` workflow's coverage predictable.
+
+Downstream repositories that have adopted this template **SHOULD** replace `OWNER/REPO` with their real owner/repository name, or remove the placeholder-bearing content if it no longer applies. This is a template-placeholder convention, not a requirement that ordinary downstream documentation keep `OWNER/REPO` placeholders in its finished docs.
+
+This is a placeholder-convention rule only. It does not require converting normal tree-rendered Markdown links to absolute GitHub URLs; repo-internal links in tree-rendered Markdown should continue to prefer relative links unless an existing carve-out (such as the **Issue and PR templates** subsection above) or a concrete rendering requirement makes an absolute URL necessary.
+
+**Scope clarifications:**
+
+- Didactic example text inside style-guide and design-decision files (`.github/instructions/**`, `.github/copilot-instructions.md`, `.github/TEMPLATE_DESIGN_DECISIONS.md`) **MAY** use alternative placeholder forms when describing the convention rather than creating a live substitution target.
+- Generic GitHub Actions references in `uses:` lines and the adjacent navigation-aid comments under `.github/workflows/` (covered by [`.github/instructions/yaml.instructions.md`](./yaml.instructions.md)) use `<owner>/<repo>` as a metasyntactic placeholder for arbitrary upstream action repositories (e.g., `actions/checkout`) and are **not** template-adopter substitutions; they are unaffected by this rule.
+- Illustrative post-substitution examples in adoption-guide prose, such as `your-org/your-repo`, `your-username/your-repo`, or `YOUR-USERNAME/your-repo-name`, are values a reader might type **after** substitution and are not live unresolved template placeholders; they are unaffected by this rule.
 
 ## ADR Standards
 
