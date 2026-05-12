@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.0.20260512.2
+**Version:** 1.0.20260512.3
 
 ## Metadata
 
@@ -393,7 +393,7 @@ Use `MERGE`, not `TAKE`, when upstream content is useful but the downstream iden
 After applying upstream content, search for unresolved template placeholders and replace them with downstream values or remove the placeholder-bearing content.
 
 ```bash
-git grep -E "OWNER/REPO|copilot-repo-template|franklesniak/copilot-repo-template"
+git grep "OWNER/REPO"
 ```
 
 Common placeholder shapes include:
@@ -402,6 +402,8 @@ Common placeholder shapes include:
 - `https://github.com/OWNER/REPO`
 - `https://github.com/OWNER/REPO.git`
 - `https://github.com/OWNER/REPO/blob/HEAD/PATH`
+
+References to the upstream template repository itself (for example, `franklesniak/copilot-repo-template` in `.template-sync.yml` under `source_repo`, in the Step 2 `git remote add template` example, or in adopted documentation that intentionally links to the upstream template) are not template placeholders and are out of scope for Step 11. Review and decide on those references under Step 10 (Preserve Local Identity) so that legitimate retentions are not rewritten and any deliberate rebranding remains an explicit decision.
 
 Do not replace didactic examples that intentionally explain the placeholder convention unless the downstream repository has removed the associated placeholder-check workflow and no longer wants the convention documented.
 
