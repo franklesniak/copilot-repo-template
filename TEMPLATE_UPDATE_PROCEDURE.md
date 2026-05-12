@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.0.20260512.1
+**Version:** 1.0.20260512.2
 
 ## Metadata
 
@@ -412,9 +412,9 @@ Run validation appropriate to the included modules and files changed. Full templ
 | Module | Example validation |
 | --- | --- |
 | `baseline` | `pre-commit run --all-files` |
-| `agent-instructions` | `npm run lint:md` and any repo-specific instruction checks |
+| `agent-instructions` | `npm run lint:md`, `npm run lint:md:nested`, and any repo-specific instruction checks |
 | `github-templates` | `pre-commit run check-yaml --all-files`, `pre-commit run actionlint --all-files`, and template rendering review |
-| `markdown` | `npm run lint:md` |
+| `markdown` | `npm run lint:md`, `npm run lint:md:nested` |
 | `powershell` | `Invoke-Pester -Path tests/ -Output Detailed` |
 | `json` | `pre-commit run check-json --all-files` |
 | `yaml` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run actionlint --all-files` |
