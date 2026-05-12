@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.0.20260512.0
+**Version:** 1.0.20260512.1
 
 ## Metadata
 
@@ -207,7 +207,7 @@ Apply the most specific matching row. If multiple rows match, use the union of t
 | `.github/instructions/python.instructions.md` | `python`, `agent-instructions` |
 | `.github/instructions/terraform.instructions.md` | `terraform`, `agent-instructions` |
 | `.github/instructions/yaml.instructions.md` | `yaml`, `agent-instructions` |
-| `.github/instructions/*.instructions.md` not otherwise listed | `agent-instructions`; surface as `UNMAPPED` for owner module assignment |
+| `.github/instructions/*.instructions.md` not otherwise listed | `agent-instructions`; surface for owner to confirm or add additional module mappings |
 | `.cursor/rules/**` | `agent-instructions` |
 | `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` | `agent-instructions` |
 | `COPILOT_CHAT_PROMPTS.md`, `docs/PR_REVIEW_PROMPTS.md` | `agent-instructions`, `markdown` |
@@ -393,7 +393,7 @@ Use `MERGE`, not `TAKE`, when upstream content is useful but the downstream iden
 After applying upstream content, search for unresolved template placeholders and replace them with downstream values or remove the placeholder-bearing content.
 
 ```bash
-rg "OWNER/REPO|copilot-repo-template|franklesniak/copilot-repo-template"
+git grep -E "OWNER/REPO|copilot-repo-template|franklesniak/copilot-repo-template"
 ```
 
 Common placeholder shapes include:
