@@ -53,6 +53,7 @@ This guide covers optional customizations you can make after completing the init
 - [License Customization](#license-customization)
 - [VS Code PowerShell File Encoding for Non-ASCII Characters](#vs-code-powershell-file-encoding-for-non-ascii-characters)
 - [Ongoing Maintenance](#ongoing-maintenance)
+  - [Reviewing Upstream Template Changes](#reviewing-upstream-template-changes)
   - [Updating Pre-commit Hooks](#updating-pre-commit-hooks)
   - [Reviewing Python Version Requirements](#reviewing-python-version-requirements)
 
@@ -3692,6 +3693,10 @@ Relying on "ANSI" or locale-specific encodings (for example, Windows-1252 or Shi
 ## Ongoing Maintenance
 
 These are periodic maintenance tasks for repositories created from the template.
+
+### Reviewing Upstream Template Changes
+
+Repositories created from this template should review later template changes as a selective sync, not as a raw merge. Use the [Downstream Template Update Procedure](TEMPLATE_UPDATE_PROCEDURE.md) to add a `template` remote, identify the upstream range, filter changes by adopted modules, handle protected instruction files, and record the latest reviewed template commit.
 
 ### Updating Pre-commit Hooks
 
