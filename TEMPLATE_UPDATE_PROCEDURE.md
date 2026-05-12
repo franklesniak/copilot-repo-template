@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.0.20260512.3
+**Version:** 1.0.20260512.4
 
 ## Metadata
 
@@ -58,9 +58,9 @@ Independent substeps, such as inspecting unrelated candidate files or collecting
 Start from the downstream repository's normal integration branch, then create a branch dedicated to the sync.
 
 ```bash
-git switch main
-git pull --ff-only
-git switch -c template-sync/YYYYMMDD
+git checkout main
+git pull --ff-only origin main
+git checkout -b template-sync/YYYYMMDD
 ```
 
 Use the downstream repository's actual default branch name if it is not `main`.
@@ -363,10 +363,11 @@ If authorization is absent, leave the protected file unchanged and record the ca
 Example:
 
 ```yaml
-deferred_protected_candidates:
-  - path: .github/copilot-instructions.md
-    source_commit: 2222bbb
-    reason: "Updates stack-selection guidance; awaiting owner authorization."
+template_sync:
+  deferred_protected_candidates:
+    - path: .github/copilot-instructions.md
+      source_commit: 2222bbb
+      reason: "Updates stack-selection guidance; awaiting owner authorization."
 ```
 
 Leave the PR thread or sync question open when the owner still needs to act on the protected-file candidate.
