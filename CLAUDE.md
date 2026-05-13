@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.5.20260513.3
+**Version:** 1.5.20260513.4
 
 ## Metadata
 
@@ -127,7 +127,7 @@ When a pull request is created or when the owner posts a PR comment containing `
       1. Send `Authorization: Bearer $GH_TOKEN` or the equivalent authenticated header for the target API, without logging or exposing the token.
       2. Check the HTTP status code, for example with `curl --fail-with-body` or `-w '%{http_code}'`, and treat any non-2xx response as a hard error, not as a "no event" reading.
       3. Type-check the parsed response, for example `isinstance(data, list)` for endpoints documented to return a list, and raise on type mismatch.
-      4. Emit a distinguishable error event line on failure, for example `error http=403 cycle=N`, so the agent can observe the failure. Bare `|| echo "0"` and equivalent constructs that silently coerce parse, transport, or authentication failures into a "no event" sentinel are forbidden.
+      4. Emit a distinguishable error event line on failure, for example `error http=403 cycle=K` (where `K` is the cycle-attempt counter introduced in **Poller liveness** below, **not** the `Round N` round counter or the `M/10` confirmed-successful counter), so the agent can observe the failure. Bare `|| echo "0"` and equivalent constructs that silently coerce parse, transport, or authentication failures into a "no event" sentinel are forbidden.
     - **Detection criterion.** On each poll, use **both** `get_reviews` **and** `get_review_comments` as co-equal detection signals. A new review round is detected when **either** of the following is true:
       - `get_reviews` returns a new review authored by `copilot-pull-request-reviewer[bot]` with a `submitted_at` timestamp **strictly newer** than the `get_reviews` baseline recorded in step 1.
       - `get_review_comments` returns new comments authored by `copilot-pull-request-reviewer[bot]` with a `created_at` timestamp **strictly newer** than the `get_review_comments` baseline recorded in step 1.
