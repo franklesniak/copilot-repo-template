@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.0.20260513.1
+**Version:** 1.0.20260513.2
 
 ## Metadata
 
@@ -22,7 +22,7 @@ Use this procedure when a downstream repository wants to review new changes from
 - **Module:** A unit in the taxonomy defined by this procedure, such as `markdown`, `powershell`, or `terraform`. Procedure logic operates on modules.
 - **Stack:** Informal shorthand for a related grouping of modules. For example, a "PowerShell stack" may mean `powershell`, `markdown`, `yaml`, and `agent-instructions`, depending on what the downstream repository adopted. Stack is acceptable in prose, but sync decisions MUST be recorded in module terms.
 - **Downstream sync marker:** The `.template-sync.yml` file at the downstream repository root. Under `template_sync`, it records the upstream template repository, the newest upstream template commit that has been reviewed, the modules the downstream repository has adopted, local override rules, and deferred protected-file candidates.
-- **Reviewed range:** The upstream template commit range being inspected for one sync. The range base is `template_sync.last_reviewed_template_commit` from the downstream sync marker when the marker exists, or an owner-chosen first-time seed when the marker does not yet exist. The range head is `template/main` unless the owner explicitly chooses a different upstream branch or tag.
+- **Reviewed range:** The upstream template commit range being inspected for one sync. The range base is `template_sync.last_reviewed_template_commit` from the downstream sync marker when the marker exists and that field is present and non-empty, or an owner-chosen first-time seed when the marker is absent or when the marker exists but that field is missing or empty. The range head is `template/main` unless the owner explicitly chooses a different upstream branch or tag.
 - **Included module:** A module listed in the downstream sync marker under `template_sync.included_modules`.
 - **Unadopted-module activity:** Upstream activity in a known taxonomy module that is not listed in `included_modules`.
 - **Unknown module:** A module name introduced by a newer upstream procedure or future manifest that the downstream marker does not recognize. Unknown modules MUST be surfaced for explicit owner decision.
@@ -111,7 +111,7 @@ The `-M` flag is required so upstream renames appear as renames, such as `R100 o
 
 Record both endpoints in the sync working notes:
 
-- **Range base:** `template_sync.last_reviewed_template_commit` from `.template-sync.yml`, or the owner-chosen first-time seed when the marker is absent.
+- **Range base:** `template_sync.last_reviewed_template_commit` from `.template-sync.yml` when the marker exists and that field is present and non-empty, or the owner-chosen first-time seed when the marker is absent or when that field is missing or empty.
 - **Range head:** the current `template/main` commit SHA
 
 Get the range head explicitly:
