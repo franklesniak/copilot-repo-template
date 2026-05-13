@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.5.20260513.0
+**Version:** 1.5.20260513.1
 
 ## Metadata
 
@@ -133,7 +133,7 @@ When a pull request is created or when the owner posts a PR comment containing `
       - `get_review_comments` returns new comments authored by `copilot-pull-request-reviewer[bot]` with a `created_at` timestamp **strictly newer** than the `get_review_comments` baseline recorded in step 1.
 
       If no baseline exists (no prior review by the bot), any review or comment by the bot is considered new. A fresh set of Copilot comments newer than the baseline is itself sufficient evidence that the review round has arrived; the agent **MUST** proceed to step 3 without waiting for `get_reviews` to catch up.
-    - **Co-equal detection preserved.** When one detection source (`get_reviews` or `get_review_comments`, or equivalent authenticated sources) returns a successful new-event signal and the other source fails, the agent **MAY** proceed on the strength of the successful signal alone. The co-equal detection-source contract remains unchanged; only the failure-handling semantics are clarified.
+    - **Co-equal detection preserved.** When one detection source (`get_reviews` or `get_review_comments`, or equivalent authenticated sources) returns a successful new-event signal and the other source fails, the agent **MAY** proceed on the strength of the successful signal alone. By contrast, when one source returns a successful no-new-event signal and the other source fails, the cycle is **indeterminate**: the agent **MUST** treat it as a failed cycle (not a confirmed-successful no-review poll), **MUST NOT** advance the 10-poll timeout counter under **Failed cycles do not consume the timeout** below, and **MUST** apply the retry-or-pause behavior under **Retry or pause on polling failure** below. A cycle qualifies as a **confirmed-successful no-review poll** only when **both** detection sources were queried and parsed successfully and **both** returned no new events. The co-equal detection-source contract remains unchanged; only the failure-handling semantics are clarified.
     - **Timeout.** If no new review is detected after **10 consecutive confirmed-successful polls** (approximately 10 minutes) that each successfully queried and parsed the detection sources, **PAUSE** the loop and post a PR comment: `Review loop paused: Copilot review did not arrive after 10 successful poll attempts (~10 min). Post "@claude resume review loop" to continue.`
     - **State tracking (recommended).** On each successful no-review poll, update a visible progress indicator in the session transcript (for example, a todo-list entry such as `"Round N: awaiting Copilot review, successful poll M/10"`) so that stalls are observable. Failed cycles use the visible failure lines described under **Safety limits** instead of advancing `M`.
     - **On success.** As soon as a new review is detected, proceed immediately to step 3.
