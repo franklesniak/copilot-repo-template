@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.0.20260513.0
+**Version:** 1.0.20260513.1
 
 ## Metadata
 
@@ -120,7 +120,7 @@ Get the range head explicitly:
 git rev-parse template/main
 ```
 
-If the range base is no longer reachable from upstream `main`, stop and ask the owner to choose a new seed. Reasonable re-seed choices include the original template adoption commit, a tagged template release that predates the downstream repository's first commit, or an owner-approved commit chosen after inspecting repository history. Do not silently reset the marker to `template/main`.
+If the range base is no longer reachable from `template/main`, stop and ask the owner to choose a new seed. Reasonable re-seed choices include the original template adoption commit, a tagged template release that predates the downstream repository's first commit, or an owner-approved commit chosen after inspecting repository history. Do not silently reset the marker to `template/main`.
 
 ## Step 5: Initialize or Update the Sync Marker
 
