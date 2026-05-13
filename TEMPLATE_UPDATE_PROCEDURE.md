@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.0.20260513.2
+**Version:** 1.0.20260513.3
 
 ## Metadata
 
@@ -452,7 +452,7 @@ The sync PR summary SHOULD include:
 
 - upstream template commit range reviewed
 - included modules
-- excluded-module activity summarized by module
+- unadopted-module activity summarized by module
 - unknown modules or unmapped paths surfaced for owner decision
 - files adopted unchanged
 - files manually merged
@@ -472,7 +472,7 @@ Example summary skeleton:
 
 **Upstream range reviewed:** `1111aaa..2222bbb`
 **Included modules:** baseline, agent-instructions, github-templates, markdown, powershell
-**Excluded-module activity:** terraform (`.github/workflows/terraform-ci.yml`)
+**Unadopted-module activity:** terraform (`.github/workflows/terraform-ci.yml`)
 **Unknown modules or unmapped paths:** none
 **Files adopted unchanged:** `templates/markdown/README.md`
 **Files manually merged:** `.github/workflows/powershell-ci.yml`, `.github/pull_request_template.md`
@@ -534,7 +534,7 @@ R100    docs/intro.md   docs/getting-started.md
 | `.github/instructions/powershell.instructions.md` | `powershell`, `agent-instructions` | yes |
 | `.github/pull_request_template.md` | `github-templates`, `markdown` | yes |
 | `templates/markdown/README.md` | `markdown` | yes |
-| `.github/workflows/terraform-ci.yml` | `terraform`, `yaml` | no for `terraform`; summarize as excluded-module activity because `yaml` is not independently adopted in this scenario |
+| `.github/workflows/terraform-ci.yml` | `terraform`, `yaml` | no for `terraform`; summarize as unadopted-module activity because `yaml` is not independently adopted in this scenario |
 | `docs/intro.md` to `docs/getting-started.md` | `markdown` | yes |
 
 There are no unknown modules or unmapped paths in this example.
@@ -550,7 +550,7 @@ There are no unknown modules or unmapped paths in this example.
 | `templates/markdown/README.md` | `TAKE` | No local customization. |
 | `docs/intro.md` to `docs/getting-started.md` | `TAKE` | Adopt upstream rename. |
 
-Excluded-module activity:
+Unadopted-module activity:
 
 | Module | Upstream activity | Disposition |
 | --- | --- | --- |
@@ -609,7 +609,7 @@ Invoke-Pester -Path tests/ -Output Detailed
 ```markdown
 **Upstream range reviewed:** `1111aaa..2222bbb`
 **Included modules:** baseline, agent-instructions, github-templates, markdown, powershell
-**Excluded-module activity:** terraform (`.github/workflows/terraform-ci.yml`)
+**Unadopted-module activity:** terraform (`.github/workflows/terraform-ci.yml`)
 **Unknown modules or unmapped paths:** none
 **Files adopted unchanged:** `templates/markdown/README.md`, `docs/getting-started.md` renamed from `docs/intro.md`
 **Files manually merged:** `.github/workflows/powershell-ci.yml`, `.github/pull_request_template.md`
