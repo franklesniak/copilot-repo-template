@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.0.20260512.4
+**Version:** 1.0.20260513.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-12
+- **Last Updated:** 2026-05-13
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes. Does not define automation contracts for a future manifest or sync tool.
 - **Related:** [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -21,10 +21,14 @@ Use this procedure when a downstream repository wants to review new changes from
 
 - **Module:** A unit in the taxonomy defined by this procedure, such as `markdown`, `powershell`, or `terraform`. Procedure logic operates on modules.
 - **Stack:** Informal shorthand for a related grouping of modules. For example, a "PowerShell stack" may mean `powershell`, `markdown`, `yaml`, and `agent-instructions`, depending on what the downstream repository adopted. Stack is acceptable in prose, but sync decisions MUST be recorded in module terms.
-- **Included module:** A module listed in `.template-sync.yml` under `template_sync.included_modules`.
+- **Downstream sync marker:** The `.template-sync.yml` file at the downstream repository root. Under `template_sync`, it records the upstream template repository, the newest upstream template commit that has been reviewed, the modules the downstream repository has adopted, local override rules, and deferred protected-file candidates.
+- **Reviewed range:** The upstream template commit range being inspected for one sync. The range base is `template_sync.last_reviewed_template_commit` from the downstream sync marker when the marker exists, or an owner-chosen first-time seed when the marker does not yet exist. The range head is `template/main` unless the owner explicitly chooses a different upstream branch or tag.
+- **Included module:** A module listed in the downstream sync marker under `template_sync.included_modules`.
 - **Unadopted-module activity:** Upstream activity in a known taxonomy module that is not listed in `included_modules`.
 - **Unknown module:** A module name introduced by a newer upstream procedure or future manifest that the downstream marker does not recognize. Unknown modules MUST be surfaced for explicit owner decision.
 - **Protected file:** A governance or instruction file that requires explicit owner authorization before editing.
+- **Sync working notes:** Temporary notes maintained while applying this procedure. They MAY be a scratch document, a draft PR body, or another local checklist, but they are not the final sync PR summary. They MUST capture range endpoints, owner-chosen seeds, unmapped paths, per-file decisions, protected-file dispositions, validation results, and open questions as those facts are discovered. Step 14 turns these working notes into the final sync PR summary.
+- **Sync PR summary:** The final owner-facing PR description created in Step 14 from the sync working notes. It is the durable review artifact for the sync PR.
 
 ## Safety Rules
 
@@ -91,17 +95,23 @@ Do not merge, rebase, or pull from `template/main` at this step.
 
 ## Step 4: Identify the Reviewed Range
 
-Use the downstream sync marker's `last_reviewed_template_commit` as the range base. Use `template/main` as the range head unless the owner explicitly chooses a different upstream branch or tag.
+Read `.template-sync.yml` at the downstream repository root before calculating the reviewed range. When the marker exists, use `template_sync.last_reviewed_template_commit` as the range base. Use `template/main` as the range head unless the owner explicitly chooses a different upstream branch or tag.
+
+For first-time syncs where `.template-sync.yml` does not exist yet, choose the range base before running the diff. If the marker exists but `template_sync.last_reviewed_template_commit` is missing or empty, treat the range base as unset and use the same owner-chosen seed process.
+
+- Use the upstream template commit the downstream repository was originally created from when known.
+- If the original commit is unknown, ask the owner to choose a reasonable proxy, such as a tagged template release before the downstream repository's first commit or another owner-approved commit chosen after inspecting repository history.
+- Record the chosen seed and rationale in the sync working notes, then initialize the marker in Step 5 and include the rationale in the final sync PR summary.
 
 ```bash
-git diff --name-status -M LAST_REVIEWED_TEMPLATE_COMMIT..template/main
+git diff --name-status -M RANGE_BASE..template/main
 ```
 
 The `-M` flag is required so upstream renames appear as renames, such as `R100 old/path new/path`, instead of unrelated add/delete pairs.
 
-Record both endpoints in the sync notes:
+Record both endpoints in the sync working notes:
 
-- **Range base:** `LAST_REVIEWED_TEMPLATE_COMMIT`
+- **Range base:** `template_sync.last_reviewed_template_commit` from `.template-sync.yml`, or the owner-chosen first-time seed when the marker is absent.
 - **Range head:** the current `template/main` commit SHA
 
 Get the range head explicitly:
@@ -110,17 +120,13 @@ Get the range head explicitly:
 git rev-parse template/main
 ```
 
-If `last_reviewed_template_commit` is no longer reachable from upstream `main`, stop and ask the owner to choose a new seed. Reasonable re-seed choices include the original template adoption commit, a tagged template release that predates the downstream repository's first commit, or an owner-approved commit chosen after inspecting repository history. Do not silently reset the marker to `template/main`.
+If the range base is no longer reachable from upstream `main`, stop and ask the owner to choose a new seed. Reasonable re-seed choices include the original template adoption commit, a tagged template release that predates the downstream repository's first commit, or an owner-approved commit chosen after inspecting repository history. Do not silently reset the marker to `template/main`.
 
 ## Step 5: Initialize or Update the Sync Marker
 
 Downstream repositories SHOULD keep a `.template-sync.yml` marker at the repository root. The marker distinguishes reviewed upstream changes from adopted upstream changes. Selective syncs may intentionally skip upstream files, so the preferred field is `last_reviewed_template_commit`, not `last_adopted_template_commit`.
 
-First-time use by repositories that predate this marker requires an owner-chosen seed:
-
-- Use the upstream template commit the repository was originally created from when known.
-- If the original commit is unknown, choose a reasonable proxy, such as a tagged template release before the downstream repository's first commit.
-- Record the rationale in the sync PR summary.
+If Step 4 used a first-time seed because the marker was missing or incomplete, initialize `.template-sync.yml` in this step. Set `last_reviewed_template_commit` to the Step 4 range base until Step 13 advances it to the reviewed range head. Carry the seed rationale from the sync working notes into the final sync PR summary.
 
 Example marker:
 
@@ -236,7 +242,7 @@ Apply the most specific matching row. If multiple rows match, use the union of t
 | `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE` | `baseline`, `markdown` |
 | `.gitignore`, `.gitattributes`, `.editorconfig`, `.vscode/**` | `baseline` |
 
-If a changed upstream path does not match the table, classify it as `UNMAPPED` in the sync notes and ask the owner to assign a module before deciding whether to include it.
+If a changed upstream path does not match the table, classify it as `UNMAPPED` in the sync working notes and ask the owner to assign a module before deciding whether to include it.
 
 ### Filtering Rules
 
@@ -440,11 +446,14 @@ Do not set `last_reviewed_template_commit` to a commit that was not actually rev
 
 ## Step 14: Open the Sync PR
 
+The final sync PR summary is assembled from the sync working notes after decisions and validation are complete. The working notes can remain a scratch artifact; the PR summary is the durable owner-facing record attached to the sync PR.
+
 The sync PR summary SHOULD include:
 
 - upstream template commit range reviewed
 - included modules
 - excluded-module activity summarized by module
+- unknown modules or unmapped paths surfaced for owner decision
 - files adopted unchanged
 - files manually merged
 - files skipped
@@ -486,7 +495,7 @@ This example is illustrative. A downstream repository adopts `baseline`, `agent-
 
 ### Scenario State
 
-- Downstream marker `last_reviewed_template_commit`: `1111aaa`
+- Downstream sync marker at `.template-sync.yml`: `template_sync.last_reviewed_template_commit` is `1111aaa`
 - Upstream `template/main` head: `2222bbb`
 - Local customization: `.github/workflows/powershell-ci.yml` uses a self-hosted runner block.
 - Local customization: `.github/pull_request_template.md` includes project-specific checklist items.
@@ -498,6 +507,11 @@ This example is illustrative. A downstream repository adopts `baseline`, `agent-
 git fetch template
 git diff --name-status -M 1111aaa..template/main
 ```
+
+The sync working notes start with the reviewed range endpoints:
+
+- **Range base:** `1111aaa`
+- **Range head:** `2222bbb`
 
 Hypothetical output:
 
