@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.5.20260511.3
+**Version:** 1.5.20260513.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-11
+- **Last Updated:** 2026-05-13
 - **Scope:** Agent-specific entry point for Claude Code and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
 
@@ -121,14 +121,21 @@ When a pull request is created or when the owner posts a PR comment containing `
 
     After recording both baselines, use the `request_copilot_review` tool (or equivalent) to ask GitHub Copilot to review the PR.
 2. **Wait for the review (active polling).** Immediately after requesting the review, begin an active poll loop — do **not** rely solely on webhook delivery, which may be delayed or never arrive. The poll loop **MUST** follow these rules:
-    - **Poll interval.** Wait at least 60 seconds between each poll cycle, including the gap between the baseline fetch in step 1 and the first poll. Each poll cycle calls both `get_reviews` and `get_review_comments` at most once. The exact mechanism used to implement the wait (for example, shell sleep, background task, or equivalent tooling) is left to the agent runtime.
+    - **Poll interval.** Wait at least 60 seconds between each poll cycle, including the gap between the baseline fetch in step 1 and the first poll. Each primary poll observation calls both `get_reviews` and `get_review_comments` at most once; bounded retry or replacement observations for failed cycles are governed by the poller-liveness requirements under **Safety limits**. The exact mechanism used to implement the wait (for example, shell sleep, background task, or equivalent tooling) is left to the agent runtime.
+    - **Poll mechanism.** The poll cycle **MUST** use authenticated structured GitHub tooling for detection, via `get_reviews` and `get_review_comments` or equivalent authenticated sources that expose request, tool, authentication, rate-limit, and parse failures distinctly. Examples include GitHub MCP server tools, `gh api`, or equivalent authenticated clients with explicit failure reporting. When a shell-based timing mechanism, such as a Claude Code Monitor heartbeat, is used for cycle timing, use the **tick-plus-MCP pattern**: the timing mechanism emits a heartbeat at the chosen poll interval (at least 60 seconds) with no detection logic of its own, and after each tick the agent performs detection via authenticated structured tooling. Unauthenticated HTTP requests against `api.github.com` or any equivalent external endpoint **MUST NOT** be used as the detection mechanism for the poll cycle.
+    - **Ad-hoc HTTP fallback contract.** If, and only if, authenticated structured GitHub tooling is genuinely unavailable in the session, an ad-hoc HTTP poller, such as raw `curl` or a custom script, **MAY** be used as a fallback. In that case, the fallback **MUST**:
+      1. Send `Authorization: Bearer $GH_TOKEN` or the equivalent authenticated header for the target API, without logging or exposing the token.
+      2. Check the HTTP status code, for example with `curl --fail-with-body` or `-w '%{http_code}'`, and treat any non-2xx response as a hard error, not as a "no event" reading.
+      3. Type-check the parsed response, for example `isinstance(data, list)` for endpoints documented to return a list, and raise on type mismatch.
+      4. Emit a distinguishable error event line on failure, for example `error http=403 cycle=N`, so the agent can observe the failure. Bare `|| echo "0"` and equivalent constructs that silently coerce parse, transport, or authentication failures into a "no event" sentinel are forbidden.
     - **Detection criterion.** On each poll, use **both** `get_reviews` **and** `get_review_comments` as co-equal detection signals. A new review round is detected when **either** of the following is true:
       - `get_reviews` returns a new review authored by `copilot-pull-request-reviewer[bot]` with a `submitted_at` timestamp **strictly newer** than the `get_reviews` baseline recorded in step 1.
       - `get_review_comments` returns new comments authored by `copilot-pull-request-reviewer[bot]` with a `created_at` timestamp **strictly newer** than the `get_review_comments` baseline recorded in step 1.
 
       If no baseline exists (no prior review by the bot), any review or comment by the bot is considered new. A fresh set of Copilot comments newer than the baseline is itself sufficient evidence that the review round has arrived; the agent **MUST** proceed to step 3 without waiting for `get_reviews` to catch up.
-    - **Timeout.** If no new review is detected after **10 consecutive polls** (approximately 10 minutes), **PAUSE** the loop and post a PR comment: `Review loop paused: Copilot review did not arrive after 10 poll attempts (~10 min). Post "@claude resume review loop" to continue.`
-    - **State tracking (recommended).** On each poll, update a visible progress indicator in the session transcript (for example, a todo-list entry such as `"Round N: awaiting Copilot review, poll M/10"`) so that stalls are observable.
+    - **Co-equal detection preserved.** When one detection source (`get_reviews` or `get_review_comments`, or equivalent authenticated sources) returns a successful new-event signal and the other source fails, the agent **MAY** proceed on the strength of the successful signal alone. The co-equal detection-source contract remains unchanged; only the failure-handling semantics are clarified.
+    - **Timeout.** If no new review is detected after **10 consecutive confirmed-successful polls** (approximately 10 minutes) that each successfully queried and parsed the detection sources, **PAUSE** the loop and post a PR comment: `Review loop paused: Copilot review did not arrive after 10 successful poll attempts (~10 min). Post "@claude resume review loop" to continue.`
+    - **State tracking (recommended).** On each successful no-review poll, update a visible progress indicator in the session transcript (for example, a todo-list entry such as `"Round N: awaiting Copilot review, successful poll M/10"`) so that stalls are observable. Failed cycles use the visible failure lines described under **Safety limits** instead of advancing `M`.
     - **On success.** As soon as a new review is detected, proceed immediately to step 3.
 3. **Check review coverage.** If the review was detected via `get_reviews` and the review summary body is available, check how many files Copilot reviewed out of the total changed files (e.g., "Copilot reviewed 9 out of 9 changed files"). If Copilot did **not** review all changed files, post a PR comment noting the partial coverage so the PR owner is aware. Example: `Note: Copilot reviewed only 7 out of 9 changed files in round N. Files not reviewed by Copilot may benefit from additional manual or AI-assisted review.` If the review summary is not yet available from `get_reviews` (for example, when the review was detected solely via `get_review_comments`), **skip** the coverage note for this round and proceed. Continue the loop normally regardless of coverage outcome.
 4. **Check for comments.** If the review contains **zero** actionable comments, the code is clean — **PAUSE** and post a PR comment:
@@ -181,6 +188,9 @@ When a pull request is created or when the owner posts a PR comment containing `
   `Review loop paused: 6-hour timeout reached. Post "@claude resume review loop" to continue.`
 - **Duplicate detection:** Track comment IDs that have already been processed. Skip any comment whose ID was addressed in a prior round to avoid re-processing.
 - **Active polling required:** Every review-wait cycle **MUST** be driven by the explicit timed poll loop described in step 2. Passive waiting for webhook delivery alone is **not** permitted — the poll loop ensures that pause and timeout behavior is reached deterministically even if webhook delivery does not occur.
+  - **Poller liveness.** The poll loop **MUST** distinguish "successfully observed no new event" from "could not determine event state," and **MUST** surface the latter as a visible, self-describing failure in the session transcript, for example `poll 2/10 failed: reviews endpoint returned HTTP 403`, rather than as a "no event" reading. Parser exceptions, tool errors, non-2xx responses, authentication failures, rate-limit responses, and unexpected response shapes **MUST NOT** be suppressed into fallback values such as `0` or `[]` unless those values are explicitly logged as an error path and the cycle is **not** counted as a successful no-review poll.
+  - **Failed cycles do not consume the timeout.** The 10-poll timeout counter **MUST** advance only on confirmed-successful poll cycles that found no new review. A poll cycle that fails due to parse, transport, authentication, rate-limit, tool error, or unexpected response shape **MUST NOT** consume one of the 10 timeout attempts.
+  - **Retry or pause on polling failure.** When a poll cycle fails, the agent **MUST** make a bounded attempt to retry or replace the observation through authenticated structured tooling when such tooling is available. If neither retry nor replacement yields a successful observation, the loop **MUST** trigger a separate polling-failure pause event with a self-describing message, for example `Review loop paused: poll cycle is failing (last error: HTTP 403 rate-limit). Switch to authenticated structured GitHub tooling or fix the poller, then post "@claude resume review loop" to continue.`
 
 ### Resuming a paused loop
 
