@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.0.20260513.4
+**Version:** 1.0.20260513.5
 
 ## Metadata
 
@@ -104,7 +104,7 @@ For first-time syncs where `.template-sync.yml` does not exist yet, choose the r
 - Record the chosen seed and rationale in the sync working notes, then initialize the marker in Step 5 and include the rationale in the final sync PR summary.
 
 ```bash
-git diff --name-status -M RANGE_BASE..template/main
+git diff --name-status -M RANGE_BASE..RANGE_HEAD
 ```
 
 The `-M` flag is required so upstream renames appear as renames, such as `R100 old/path new/path`, instead of unrelated add/delete pairs.
@@ -112,15 +112,15 @@ The `-M` flag is required so upstream renames appear as renames, such as `R100 o
 Record both endpoints in the sync working notes:
 
 - **Range base:** `template_sync.last_reviewed_template_commit` from `.template-sync.yml` when the marker exists and that field is present and non-empty, or the owner-chosen first-time seed when the marker is absent or when that field is missing or empty.
-- **Range head:** the current `template/main` commit SHA
+- **Range head:** the current commit SHA of `template/main`, or of the owner-chosen upstream branch or tag when applicable
 
 Get the range head explicitly:
 
 ```bash
-git rev-parse template/main
+git rev-parse RANGE_HEAD
 ```
 
-If the range base is no longer reachable from `template/main`, stop and ask the owner to choose a new seed. Reasonable re-seed choices include the original template adoption commit, a tagged template release that predates the downstream repository's first commit, or an owner-approved commit chosen after inspecting repository history. Do not silently reset the marker to `template/main`.
+If the range base is no longer reachable from the range head, stop and ask the owner to choose a new seed. Reasonable re-seed choices include the original template adoption commit, a tagged template release that predates the downstream repository's first commit, or an owner-approved commit chosen after inspecting repository history. Do not silently reset the marker to the range head.
 
 ## Step 5: Initialize or Update the Sync Marker
 
