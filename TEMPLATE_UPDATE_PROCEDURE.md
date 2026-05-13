@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.0.20260513.3
+**Version:** 1.0.20260513.4
 
 ## Metadata
 
@@ -124,9 +124,9 @@ If the range base is no longer reachable from `template/main`, stop and ask the 
 
 ## Step 5: Initialize or Update the Sync Marker
 
-Downstream repositories SHOULD keep a `.template-sync.yml` marker at the repository root. The marker distinguishes reviewed upstream changes from adopted upstream changes. Selective syncs may intentionally skip upstream files, so the preferred field is `last_reviewed_template_commit`, not `last_adopted_template_commit`.
+Downstream repositories SHOULD keep a `.template-sync.yml` marker at the repository root. The marker distinguishes reviewed upstream changes from adopted upstream changes. Selective syncs may intentionally skip upstream files, so the preferred field under `template_sync` is `last_reviewed_template_commit`, not `last_adopted_template_commit`.
 
-If Step 4 used a first-time seed because the marker was missing or incomplete, initialize `.template-sync.yml` in this step. Set `last_reviewed_template_commit` to the Step 4 range base until Step 13 advances it to the reviewed range head. Carry the seed rationale from the sync working notes into the final sync PR summary.
+If Step 4 used a first-time seed because the marker was missing or incomplete, initialize `.template-sync.yml` in this step. Set `template_sync.last_reviewed_template_commit` to the Step 4 range base until Step 13 advances it to the reviewed range head. Carry the seed rationale from the sync working notes into the final sync PR summary.
 
 Example marker:
 
@@ -437,12 +437,12 @@ Run `pre-commit run --all-files` before committing when the downstream repositor
 
 After all decisions are recorded and validation is complete, update `.template-sync.yml`:
 
-- Set `last_reviewed_template_commit` to the upstream range head that was reviewed.
+- Set `template_sync.last_reviewed_template_commit` to the upstream range head that was reviewed.
 - Keep `included_modules` current.
 - Add, update, or remove `local_overrides` only when the owner made that adoption decision.
 - Add or refresh `deferred_protected_candidates` for unresolved protected-file changes.
 
-Do not set `last_reviewed_template_commit` to a commit that was not actually reviewed through the taxonomy and per-file process.
+Do not set `template_sync.last_reviewed_template_commit` to a commit that was not actually reviewed through the taxonomy and per-file process.
 
 ## Step 14: Open the Sync PR
 
