@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.0.20260514.1
+**Version:** 1.0.20260514.2
 
 ## Metadata
 
@@ -142,7 +142,7 @@ For example, if the owner is using the default upstream branch, replace `RANGE_H
 git rev-parse 'template/main^{commit}'
 ```
 
-The `^{commit}` suffix peels the reference to its underlying commit. This matters when the range head is an annotated tag: a plain `git rev-parse` on an annotated tag prints the tag object's SHA instead of the commit SHA. For branches and lightweight tags the suffix is harmless and still prints the commit SHA. The single quotes keep the `^{commit}` suffix literal so no shell treats `^`, `{`, or `}` as special.
+The `^{commit}` suffix peels the reference to its underlying commit. This matters when the range head is an annotated tag: a plain `git rev-parse` on an annotated tag prints the tag object's SHA instead of the commit SHA. For branches and lightweight tags the suffix is harmless and still prints the commit SHA. The single quotes keep the `^{commit}` suffix as literal text, so the shell does not interpret `^`, `{`, or `}`.
 
 ### Check That the Base Is Reachable
 
