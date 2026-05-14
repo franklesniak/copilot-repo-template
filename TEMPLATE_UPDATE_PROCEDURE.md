@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.0.20260514.0
+**Version:** 1.0.20260514.1
 
 ## Metadata
 
@@ -133,18 +133,40 @@ Use `template/main` as the range head unless the owner explicitly chooses a diff
 Get the range head explicitly:
 
 ```bash
-git rev-parse RANGE_HEAD
+git rev-parse 'RANGE_HEAD^{commit}'
 ```
 
 For example, if the owner is using the default upstream branch, replace `RANGE_HEAD` with `template/main`:
 
 ```bash
-git rev-parse template/main
+git rev-parse 'template/main^{commit}'
 ```
+
+The `^{commit}` suffix peels the reference to its underlying commit. This matters when the range head is an annotated tag: a plain `git rev-parse` on an annotated tag prints the tag object's SHA instead of the commit SHA. For branches and lightweight tags the suffix is harmless and still prints the commit SHA. The single quotes keep the `^{commit}` suffix literal so no shell treats `^`, `{`, or `}` as special.
+
+### Check That the Base Is Reachable
+
+After choosing the range base and range head, confirm that the range base is still in the history that leads to the range head. In beginner terms, "reachable from the range head" means Git can start at `RANGE_HEAD`, walk backward through parent commits, and eventually find `RANGE_BASE`. If Git cannot find the base this way, the two endpoints do not describe a normal forward span of upstream template history.
+
+Check reachability:
+
+```bash
+git merge-base --is-ancestor RANGE_BASE RANGE_HEAD
+```
+
+For example:
+
+```bash
+git merge-base --is-ancestor abc1234 template/main
+```
+
+Git may print no output when this command succeeds. A successful exit, exit code `0`, means the range base is reachable from the range head and the reviewed range is coherent. A non-zero exit means the base is not reachable from the head. In that case, stop and ask the owner to choose a new seed before running or trusting the diff.
+
+Reasonable re-seed choices include the original template adoption commit, a tagged template release that predates the downstream repository's first commit, or an owner-approved commit chosen after inspecting repository history. Do not silently reset the marker to the range head.
 
 ### Run the Diff
 
-After choosing both endpoints, replace `RANGE_BASE` and `RANGE_HEAD` with the actual values and list the upstream paths changed in that range:
+After choosing both endpoints and confirming the base is reachable, replace `RANGE_BASE` and `RANGE_HEAD` with the actual values and list the upstream paths changed in that range:
 
 ```bash
 git diff --name-status -M RANGE_BASE..RANGE_HEAD
@@ -174,26 +196,6 @@ Record both endpoints in the sync working notes before moving to Step 5:
 - **Range head:** the current commit SHA of `template/main`, or of the owner-chosen upstream branch or tag when applicable
 
 Step 5 initializes or updates `.template-sync.yml` after a first-time seed is chosen. Step 13 later advances `template_sync.last_reviewed_template_commit` to the reviewed range head only after the range has actually been reviewed.
-
-### Check That the Base Is Reachable
-
-After choosing the range base and range head, confirm that the range base is still in the history that leads to the range head. In beginner terms, "reachable from the range head" means Git can start at `RANGE_HEAD`, walk backward through parent commits, and eventually find `RANGE_BASE`. If Git cannot find the base this way, the two endpoints do not describe a normal forward span of upstream template history.
-
-Check reachability:
-
-```bash
-git merge-base --is-ancestor RANGE_BASE RANGE_HEAD
-```
-
-For example:
-
-```bash
-git merge-base --is-ancestor abc1234 template/main
-```
-
-Git may print no output when this command succeeds. A successful exit, exit code `0`, means the range base is reachable from the range head and the reviewed range is coherent. A non-zero exit means the base is not reachable from the head. In that case, stop and ask the owner to choose a new seed before running or trusting the diff.
-
-Reasonable re-seed choices include the original template adoption commit, a tagged template release that predates the downstream repository's first commit, or an owner-approved commit chosen after inspecting repository history. Do not silently reset the marker to the range head.
 
 ## Step 5: Initialize or Update the Sync Marker
 
