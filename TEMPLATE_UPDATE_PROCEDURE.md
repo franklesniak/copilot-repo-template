@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.0.20260514.2
+**Version:** 1.0.20260515.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-14
+- **Last Updated:** 2026-05-15
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes. Does not define automation contracts for a future manifest or sync tool.
 - **Related:** [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -22,12 +22,12 @@ Use this procedure when a downstream repository wants to review new changes from
 - **Module:** A unit in the taxonomy defined by this procedure, such as `markdown`, `powershell`, or `terraform`. Procedure logic operates on modules.
 - **Stack:** Informal shorthand for a related grouping of modules. For example, a "PowerShell stack" may mean `powershell`, `markdown`, `yaml`, and `agent-instructions`, depending on what the downstream repository adopted. Stack is acceptable in prose, but sync decisions MUST be recorded in module terms.
 - **Downstream sync marker:** The `.template-sync.yml` file at the downstream repository root. Under `template_sync`, it records the upstream template repository, the newest upstream template commit that has been reviewed, the modules the downstream repository has adopted, local override rules, and deferred protected-file candidates.
-- **Reviewed range:** The upstream template commit range being inspected for one sync. The range base is `template_sync.last_reviewed_template_commit` from the downstream sync marker when the marker exists and that field is present and non-empty, or an owner-chosen first-time seed when the marker is absent or when the marker exists but that field is missing or empty. The range head is `template/main` unless the owner explicitly chooses a different upstream branch or tag.
+- **Reviewed range:** The upstream template commit range inspected during a delta sync. It is recorded as `RANGE_BASE_SHA..RANGE_HEAD_SHA`, where both endpoints are resolved upstream template commit SHAs. Full reconciliation does not use a delta range; it compares a committed downstream snapshot against the resolved upstream range head.
 - **Included module:** A module listed in the downstream sync marker under `template_sync.included_modules`.
 - **Unadopted-module activity:** Upstream activity in a known taxonomy module that is not listed in `included_modules`.
 - **Unknown module:** A module name introduced by a newer upstream procedure or future manifest that the downstream marker does not recognize. Unknown modules MUST be surfaced for explicit owner decision.
 - **Protected file:** A governance or instruction file that requires explicit owner authorization before editing.
-- **Sync working notes:** Temporary notes maintained while applying this procedure. They MAY be a scratch document, a draft PR body, or another local checklist, but they are not the final sync PR summary. They MUST capture range endpoints, owner-chosen seeds, unmapped paths, per-file decisions, protected-file dispositions, validation results, and open questions as those facts are discovered. Step 14 turns these working notes into the final sync PR summary.
+- **Sync working notes:** Temporary notes maintained while applying this procedure. They MAY be a scratch document, a draft PR body, or another local checklist, but they are not the final sync PR summary. They MUST capture the range mode, range endpoints or reconciliation command, range-base rationale, unmapped paths, per-file decisions, protected-file dispositions, validation results, and open questions as those facts are discovered. Step 14 turns these working notes into the final sync PR summary.
 - **Sync PR summary:** The final owner-facing PR description created in Step 14 from the sync working notes. It is the durable review artifact for the sync PR.
 
 ## Safety Rules
@@ -95,113 +95,170 @@ Do not merge, rebase, or pull from `template/main` at this step.
 
 ## Step 4: Identify the Reviewed Range
 
-This step decides which upstream template commits need review during this sync. It does **not** decide which changes will be adopted. Later steps filter the changed paths by module, review each file, and record which upstream changes were taken, merged, skipped, or deferred.
+This step decides which upstream template changes need review during this sync. It does **not** decide which changes will be adopted. Later steps filter the changed paths by module, review each file, and record which upstream changes were taken, merged, skipped, or deferred.
 
 ### Terms Used in This Step
 
 - **`.template-sync.yml`:** The downstream sync marker file at the downstream repository root. It records what upstream template commit has already been reviewed and which template modules the downstream repository has adopted.
 - **Marker:** Short name for `.template-sync.yml`.
-- **`template_sync.last_reviewed_template_commit`:** The marker field that stores the newest upstream template commit already reviewed in a prior sync. Use this field as the next sync's starting point when it exists and is non-empty.
-- **Reviewed range:** The upstream commit span inspected in this sync. It is written as `RANGE_BASE..RANGE_HEAD`.
-- **Range base:** The older endpoint of the reviewed range. Changes after this commit are candidates for review.
-- **Range head:** The newer endpoint of the reviewed range. By default, this is `template/main`.
-- **First-time seed:** The owner-approved upstream template commit used as the range base when the downstream repository does not yet have a usable marker value.
+- **`template_sync.last_reviewed_template_commit`:** The marker field that stores the newest upstream template commit already reviewed in a prior sync. The durable marker value MUST be a resolved upstream template commit SHA, not a branch name, tag name, or other moving ref.
+- **Range mode:** The review path for this sync: normal delta sync, first sync from known lineage, full reconciliation, or the optional timestamp-proxy delta sub-path described below.
+- **Range base SHA:** The older endpoint of a delta reviewed range. Changes after this commit are candidates for review.
+- **Marker-supplied range base:** The present, non-empty `template_sync.last_reviewed_template_commit` value from the marker.
+- **Initial range base:** The upstream template commit where a first sync review starts. Upstream changes after that commit are candidates for review.
+- **Exact initial range base:** An initial range base that is known to be the upstream template commit used to create or copy the downstream template content.
+- **Proxy initial range base:** A conservative initial range base chosen when the exact source commit is unknown. It is useful for over-reviewing likely upstream changes, but it is not proof of lineage.
+- **Range head ref:** The upstream branch, tag, or commit the owner chooses as the newer endpoint. By default, this is `template/main`.
+- **Range head SHA:** The resolved upstream template commit SHA printed from the range head ref.
+- **Full reconciliation:** A first-sync mode that compares the committed downstream snapshot against the resolved upstream range head instead of trusting a delta range. It does not require shared Git history between the downstream repository and the template repository.
 
-### Choose the Range Base
+### Choose the Range Mode
 
-Use this decision tree before running the diff:
+Read `.template-sync.yml`, when present, before running any diff. A marker supplies a range base only when `template_sync.last_reviewed_template_commit` is present and non-empty. If the marker is absent, or if the field is missing or empty, the marker does not supply a range base and this is a first sync.
 
-| Marker state | Range base to use | What to record |
+When an agent runs this procedure, the repository owner confirms any initial range base or timestamp-proxy choice before the agent trusts it.
+
+| Situation | Mode | What to do |
 | --- | --- | --- |
-| `.template-sync.yml` does not exist yet | Use an owner-approved first-time seed. | Record the seed commit and why it was chosen in the sync working notes. Step 5 initializes the marker after this seed is chosen. |
-| `.template-sync.yml` exists, but `template_sync.last_reviewed_template_commit` is missing or empty | Treat the range base as unset and use an owner-approved first-time seed. | Record that the marker existed but did not contain a usable reviewed commit, plus the seed commit and rationale. Step 5 updates the marker. |
-| `.template-sync.yml` exists and `template_sync.last_reviewed_template_commit` is present and non-empty | Use `template_sync.last_reviewed_template_commit`. | Record that marker value as the range base. |
+| Marker supplies a range base | Normal delta sync | Use the marker value as the marker-supplied range base, resolve the range head, run the reachability check, then diff the reviewed range. |
+| No range base from the marker, but a trustworthy upstream origin commit is known | First sync from known lineage | Use that upstream template commit as the exact initial range base, resolve the range head, run the reachability check, then diff the reviewed range. |
+| No range base from the marker, and no trustworthy upstream origin commit is known | Full reconciliation | Compare the downstream tree against the resolved upstream range head, apply the pre-filter below, adjudicate candidate files through Steps 6-7, then set the marker to the resolved upstream range head only after review is complete. |
 
-When a first-time seed is needed, prefer the upstream template commit the downstream repository was originally created from. If that commit is unknown, ask the owner to choose a reasonable proxy before running the diff.
+A present, non-empty marker value that later fails the reachability check is handled by **Check That the Base Is Reachable** below. Do not run a separate routing-time reachability check, and do not silently replace the marker value with the range head.
 
-Reasonable first-time seed choices include:
+Full reconciliation is the recommended path for downstream repositories that adopted this template by manual copy, ZIP download, GitHub web UI copy, cherry-picking selected files, heavily editing template files, or using the copy-based paths in [Getting Started for Existing Repositories](GETTING_STARTED_EXISTING_REPO.md).
 
-- A tagged template release that predates the downstream repository's first commit.
-- Another upstream template commit the owner approves after inspecting the upstream history near the downstream repository's first commit date.
+### Find an Initial Range Base
 
-If the original template commit is unknown and no tagged template release predates the downstream repository's first commit, stop before running the diff. Inspect the upstream template history near the downstream repository's first commit date, propose one or more candidate upstream commits to the owner, and ask the owner to approve the seed. Record the chosen commit and rationale in the sync working notes, then carry that rationale into the final sync PR summary.
+Use this recipe only when the marker does not supply a range base and the owner wants a delta range instead of full reconciliation:
+
+1. Check adoption records first: the PR or commit that created the downstream repository, local sync notes, release tags, or any recorded upstream template commit.
+2. If the exact upstream source commit is known, resolve that commit and record it as an exact initial range base.
+3. If the exact source commit is unknown but the template was copied as a snapshot on a known date, the owner MAY choose a timestamp proxy: the latest upstream template commit at or before the copy or import timestamp.
+4. Verify any proxy by spot-diffing several copied template files against the candidate upstream commit.
+5. If the proxy remains uncertain, choose an older commit or use full reconciliation. Over-review is safer than under-review because under-review can silently skip upstream changes.
+
+Record the range base type, the rationale, and any uncertainty in the sync working notes. A stale local checkout, partial copy, cherry-pick, or later manual edit can make a timestamp proxy wrong. Record a timestamp proxy as date-based and approximate, not as a known source commit.
 
 ### Choose the Range Head
 
-Use `template/main` as the range head unless the owner explicitly chooses a different upstream branch or tag. Record the resolved range head commit SHA in the sync working notes.
+Use `template/main` as the range head ref unless the owner explicitly chooses a different upstream branch, tag, or commit. Resolve the ref to a commit SHA and record the printed SHA in the sync working notes as the range head SHA.
 
-Get the range head explicitly:
+Get the range head SHA explicitly:
 
 ```bash
-git rev-parse 'RANGE_HEAD^{commit}'
+git rev-parse 'RANGE_HEAD_REF^{commit}'
 ```
 
-For example, if the owner is using the default upstream branch, replace `RANGE_HEAD` with `template/main`:
+For example, if the owner is using the default upstream branch, replace `RANGE_HEAD_REF` with `template/main`:
 
 ```bash
 git rev-parse 'template/main^{commit}'
 ```
 
+`template/main` can move after each `git fetch`, while the resolved SHA records exactly what was reviewed and is the value Step 13 later writes to `template_sync.last_reviewed_template_commit`. Typing `template/main` directly is acceptable shorthand during interactive inspection when upstream is not changing under the maintainer, but the sync working notes, reachability check, diff command, and marker update use the resolved SHA.
+
 The `^{commit}` suffix peels the reference to its underlying commit. This matters when the range head is an annotated tag: a plain `git rev-parse` on an annotated tag prints the tag object's SHA instead of the commit SHA. For branches and lightweight tags the suffix is harmless and still prints the commit SHA. The single quotes keep the `^{commit}` suffix as literal text, so the shell does not interpret `^`, `{`, or `}`.
+
+If the chosen range base is a ref or tag rather than a commit SHA, resolve it the same way before recording or using it:
+
+```bash
+git rev-parse 'RANGE_BASE_REF^{commit}'
+```
+
+`RANGE_BASE_REF`, `RANGE_HEAD_REF`, `RANGE_BASE_SHA`, and `RANGE_HEAD_SHA` are placeholders for values recorded in the sync working notes. They are not shell variables that the snippets set.
 
 ### Check That the Base Is Reachable
 
-After choosing the range base and range head, confirm that the range base is still in the history that leads to the range head. In beginner terms, "reachable from the range head" means Git can start at `RANGE_HEAD`, walk backward through parent commits, and eventually find `RANGE_BASE`. If Git cannot find the base this way, the two endpoints do not describe a normal forward span of upstream template history.
+Run this check only for delta range modes. After choosing the range base SHA and range head SHA, confirm that the range base is still in the history that leads to the range head. In beginner terms, "reachable from the range head" means Git can start at `RANGE_HEAD_SHA`, walk backward through parent commits, and eventually find `RANGE_BASE_SHA`. If Git cannot find the base this way, the two endpoints do not describe a normal forward span of upstream template history.
 
-Check reachability:
+Check reachability with the recorded SHAs:
 
 ```bash
-git merge-base --is-ancestor RANGE_BASE RANGE_HEAD
+git merge-base --is-ancestor RANGE_BASE_SHA RANGE_HEAD_SHA
 ```
 
 For example:
 
 ```bash
-git merge-base --is-ancestor abc1234 template/main
+git merge-base --is-ancestor abc1234 2222bbb
 ```
 
-Git may print no output when this command succeeds. A successful exit, exit code `0`, means the range base is reachable from the range head and the reviewed range is coherent. A non-zero exit means the base is not reachable from the head. In that case, stop and ask the owner to choose a new seed before running or trusting the diff.
+Git may print no output when this command succeeds. A successful exit, exit code `0`, means the range base is reachable from the range head and the reviewed range is coherent. A non-zero exit means the base is not reachable from the head. In that case, stop and ask the owner to choose a new range base before running or trusting the diff.
 
-Reasonable re-seed choices include the original template adoption commit, a tagged template release that predates the downstream repository's first commit, or an owner-approved commit chosen after inspecting repository history. Do not silently reset the marker to the range head.
+Reasonable replacement bases include the exact upstream origin commit, a conservative proxy initial range base, or an older upstream commit chosen after inspecting repository history. Do not silently reset the marker to the range head.
 
-### Run the Diff
+### Run the Delta Diff
 
-After choosing both endpoints and confirming the base is reachable, replace `RANGE_BASE` and `RANGE_HEAD` with the actual values and list the upstream paths changed in that range:
+After choosing both endpoints and confirming the base is reachable, replace `RANGE_BASE_SHA` and `RANGE_HEAD_SHA` with the recorded values and list the upstream paths changed in that range:
 
 ```bash
-git diff --name-status -M RANGE_BASE..RANGE_HEAD
+git diff --name-status -M RANGE_BASE_SHA..RANGE_HEAD_SHA
 ```
 
 The `-M` flag is required so upstream renames appear as renames, such as `R100 old/path new/path`, instead of unrelated add/delete pairs.
 
-Example where the marker says the last reviewed upstream commit was `abc1234` and the owner is using the default range head:
+Example where the marker says the last reviewed upstream commit was `abc1234` and the resolved range head SHA is `2222bbb`:
 
 ```bash
-git diff --name-status -M abc1234..template/main
+git diff --name-status -M abc1234..2222bbb
 ```
 
-Example first-time sync where the owner approved upstream commit `def5678` as the seed:
+Example first-time sync where upstream commit `def5678` is the exact initial range base and the resolved range head SHA is `2222bbb`:
 
 ```bash
-git diff --name-status -M def5678..template/main
+git diff --name-status -M def5678..2222bbb
 ```
 
-Do not use the range head as a first-time seed just to make the diff empty. That would mark upstream changes as reviewed without reviewing them and would erase the distinction between reviewed upstream changes and adopted upstream changes.
+Do not use the range head as an initial range base just to make the diff empty. That would mark upstream changes as reviewed without reviewing them and would erase the distinction between reviewed upstream changes and adopted upstream changes.
 
-### Record the Endpoints
+### Run Full Reconciliation
 
-Record both endpoints in the sync working notes before moving to Step 5:
+Use this path when the marker does not supply a range base and there is no trustworthy upstream origin commit. Full reconciliation works even when the downstream repository and the template repository share no Git history, because `git diff` can compare two trees directly.
 
-- **Range base:** `template_sync.last_reviewed_template_commit` from `.template-sync.yml` when the marker exists and that field is present and non-empty, or the owner-chosen first-time seed when the marker is absent or when that field is missing or empty.
-- **Range head:** the current commit SHA of `template/main`, or of the owner-chosen upstream branch or tag when applicable
+Before running the comparison, confirm that the downstream working tree is clean or that any local edits that should be part of the reconciliation have been committed. In this command, `HEAD` means the committed downstream snapshot being reconciled. If a different local commit or branch is the downstream snapshot under review, use that ref instead of `HEAD`.
 
-Step 5 initializes or updates `.template-sync.yml` after a first-time seed is chosen. Step 13 later advances `template_sync.last_reviewed_template_commit` to the reviewed range head only after the range has actually been reviewed.
+```bash
+git diff --name-status -M HEAD RANGE_HEAD_SHA
+```
+
+When the downstream repository and the template repository share no Git history, read the status letters this way:
+
+| Status | Meaning |
+| --- | --- |
+| `A` | Present in the upstream template only. |
+| `D` | Present in the downstream repository only. |
+| `M` | Present in both trees, but different. |
+| `R` | Pairs a downstream-only path, shown first, with a similar upstream-only path, shown second. With no shared Git history, this is a content-similarity match, not a tracked rename; review each path on its merits. |
+
+Apply a Step 4 pre-filter before per-file review: when a downstream-only path matches no template-managed path or module mapping and is not template-derived, summarize it as local-only noise and exclude it from Steps 6-7. This keeps the downstream repository's own project files out of per-file adjudication.
+
+Do not exclude paths that appear template-derived or require owner attention. Template-derived paths include a copied template file that was later moved, renamed, or locally edited; a workflow copied from the template and renamed for the downstream project; a Markdown guide that still carries template placeholder conventions; or a protected instruction file whose content is based on this template. Send those paths through the Steps 6-7 taxonomy and per-file decision process unchanged.
+
+### Step 4 Completion Checklist
+
+Before moving to Step 5, the sync working notes MUST contain:
+
+- Range mode: normal delta sync, first sync from known lineage, full reconciliation, or timestamp-proxy delta sync when that optional sub-path was used
+- Range base SHA, when using a delta range, plus the ref or tag it resolved from if the base was not already a commit SHA
+- Range base type: marker-supplied range base, exact initial range base, or proxy initial range base
+- Range base rationale
+- Range head ref
+- Range head SHA
+- Reachability check result, when using a delta range
+- Diff command or full-reconciliation enumeration command used
+- Local-only noise excluded by the full-reconciliation pre-filter, when applicable
+- Any uncertainty that should be carried into the sync PR summary
+
+Step 5 initializes or updates `.template-sync.yml` after the range mode is chosen. Step 13 later advances `template_sync.last_reviewed_template_commit` to the resolved upstream range head SHA only after the relevant range or reconciliation has actually been reviewed.
 
 ## Step 5: Initialize or Update the Sync Marker
 
 Downstream repositories SHOULD keep a `.template-sync.yml` marker at the repository root. The marker distinguishes reviewed upstream changes from adopted upstream changes. Selective syncs may intentionally skip upstream files, so the preferred field under `template_sync` is `last_reviewed_template_commit`, not `last_adopted_template_commit`.
 
-If Step 4 used a first-time seed because the marker was missing or incomplete, initialize `.template-sync.yml` in this step. Set `template_sync.last_reviewed_template_commit` to the Step 4 range base until Step 13 advances it to the reviewed range head. Carry the seed rationale from the sync working notes into the final sync PR summary.
+If Step 4 used a first-sync delta range because the marker was missing or incomplete, initialize `.template-sync.yml` in this step. Set `template_sync.last_reviewed_template_commit` to the resolved Step 4 range base SHA until Step 13 advances it to the resolved upstream range head SHA. Carry the range-base rationale from the sync working notes into the final sync PR summary.
+
+If Step 4 selected full reconciliation, the marker still has no reviewed upstream commit at this step. You MAY initialize or update other marker fields, such as `source_repo`, `included_modules`, and local overrides chosen by the owner, but do not set `template_sync.last_reviewed_template_commit` until Step 13 records the resolved upstream range head SHA after review is complete.
 
 Example marker:
 
@@ -233,7 +290,7 @@ template_sync:
 ### Marker Semantics
 
 - `source_repo` is the upstream template repository under review.
-- `last_reviewed_template_commit` is the newest upstream commit whose changes were reviewed, regardless of how many were adopted.
+- `last_reviewed_template_commit` is the resolved upstream template commit SHA whose changes were most recently reviewed, regardless of how many were adopted. It MUST NOT be a branch name, tag name, or other moving ref.
 - `included_modules` is the adoption state. Anything not listed is not adopted.
 - `local_overrides` changes the starting recommendation for a path, but it MUST NOT hide upstream activity from the sync.
 - `deferred_protected_candidates` records protected-file updates that were reviewed but not applied because path-scoped owner authorization was absent.
@@ -512,12 +569,12 @@ Run `pre-commit run --all-files` before committing when the downstream repositor
 
 After all decisions are recorded and validation is complete, update `.template-sync.yml`:
 
-- Set `template_sync.last_reviewed_template_commit` to the upstream range head that was reviewed.
+- Set `template_sync.last_reviewed_template_commit` to the resolved upstream range head SHA that was reviewed.
 - Keep `included_modules` current.
 - Add, update, or remove `local_overrides` only when the owner made that adoption decision.
 - Add or refresh `deferred_protected_candidates` for unresolved protected-file changes.
 
-Do not set `template_sync.last_reviewed_template_commit` to a commit that was not actually reviewed through the taxonomy and per-file process.
+Do not set `template_sync.last_reviewed_template_commit` to a commit that was not actually reviewed through the taxonomy and per-file process. Do not store a branch name, tag name, or other moving ref in this marker field; store the resolved upstream template commit SHA that was reviewed.
 
 ## Step 14: Open the Sync PR
 
@@ -571,7 +628,8 @@ This example is illustrative. A downstream repository adopts `baseline`, `agent-
 ### Scenario State
 
 - Downstream sync marker at `.template-sync.yml`: `template_sync.last_reviewed_template_commit` is `1111aaa`
-- Upstream `template/main` head: `2222bbb`
+- Upstream range head ref: `template/main`
+- Resolved upstream range head SHA: `2222bbb`
 - Local customization: `.github/workflows/powershell-ci.yml` uses a self-hosted runner block.
 - Local customization: `.github/pull_request_template.md` includes project-specific checklist items.
 - Removed at adoption time: Terraform and Python workflows and template directories.
@@ -580,7 +638,9 @@ This example is illustrative. A downstream repository adopts `baseline`, `agent-
 
 ```bash
 git fetch template
-git diff --name-status -M 1111aaa..template/main
+git rev-parse 'template/main^{commit}'
+git merge-base --is-ancestor 1111aaa 2222bbb
+git diff --name-status -M 1111aaa..2222bbb
 ```
 
 The sync working notes start with the reviewed range endpoints:
