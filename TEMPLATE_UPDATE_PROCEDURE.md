@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.0.20260514.3
+**Version:** 1.0.20260515.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-14
+- **Last Updated:** 2026-05-15
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes. Does not define automation contracts for a future manifest or sync tool.
 - **Related:** [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
