@@ -18,6 +18,8 @@
 #                         `check-jsonschema` ID, including:
 #                           * the worked-example schema validation
 #                             (`schemas/examples/example-config/valid/`),
+#                           * the template sync manifest
+#                             (`.template-sync/manifest.yml`), and
 #                           * real load-bearing repository config
 #                             validation against built-in vendor schemas
 #                             shipped with `check-jsonschema` (currently
@@ -128,9 +130,10 @@ jobs:
         # `pre-commit run <hook-id> --all-files` runs all hooks sharing the
         # given ID, so this single invocation covers every check-jsonschema
         # hook configured in `.pre-commit-config.yaml`, including the
-        # worked-example schema validation and the real load-bearing
-        # repository config validation (currently `.github/dependabot.yml`
-        # against the bundled `vendor.dependabot` schema). The companion
+        # worked-example schema validation, template sync manifest validation,
+        # and real load-bearing repository config validation (currently
+        # `.github/dependabot.yml` against the bundled `vendor.dependabot`
+        # schema). The companion
         # `check-metaschema` hook (schema self-validation) is invoked
         # separately below because it has a distinct hook ID.
         run: pre-commit run check-jsonschema --all-files

@@ -1,14 +1,14 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260517.10
+**Version:** 1.1.20260517.11
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-05-17
-- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes. Does not define automation contracts for a future manifest or sync tool.
+- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, including the human-readable view of the template sync manifest. Does not define a runnable sync tool.
 - **Related:** [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
 ## Purpose
@@ -19,13 +19,13 @@ Use this procedure when a downstream repository wants to review new changes from
 
 ## Terminology
 
-- **Module:** A unit in the taxonomy defined by this procedure, such as `markdown`, `powershell`, or `terraform`. Procedure logic operates on modules.
+- **Module:** A unit in the taxonomy defined by `.template-sync/manifest.yml` and rendered in this procedure, such as `markdown`, `powershell`, or `terraform`. Procedure logic operates on modules.
 - **Stack:** Informal shorthand for a related grouping of modules. For example, a "PowerShell stack" may mean `powershell`, `markdown`, `yaml`, and `agent-instructions`, depending on what the downstream repository adopted. Stack is acceptable in prose, but sync decisions MUST be recorded in module terms.
 - **Downstream sync marker:** The `.template-sync/marker.yml` file in the downstream repository. Under `template_sync`, it records the upstream template repository, the newest upstream template commit that has been reviewed, the modules the downstream repository has adopted, local override rules, and deferred protected-file candidates.
 - **Reviewed range:** The upstream template commit range inspected during a delta sync. It is recorded as `RANGE_BASE_SHA..RANGE_HEAD_SHA`, where both endpoints are resolved upstream template commit SHAs. Full reconciliation does not use a delta range; it compares a committed downstream snapshot against the resolved upstream range head.
 - **Included module:** A module listed in the downstream sync marker under `template_sync.included_modules`.
 - **Unadopted-module activity:** Upstream activity in a known taxonomy module that is not listed in `included_modules`.
-- **Unknown module:** A module name introduced by a newer upstream procedure or future manifest that the downstream marker does not recognize. Unknown modules MUST be surfaced for explicit owner decision.
+- **Unknown module:** A module name introduced by a newer upstream manifest or procedure that the downstream marker does not recognize. Unknown modules MUST be surfaced for explicit owner decision.
 - **Protected file:** A governance or instruction file that requires explicit owner authorization before editing.
 - **Sync working notes:** Temporary notes maintained while applying this procedure. They MAY be a scratch document, a draft PR body, or another local checklist, but they are not the final sync PR summary. They MUST capture the range mode, range endpoints or reconciliation command, range-base rationale, unmapped paths, per-file decisions, protected-file dispositions, validation results, and open questions as those facts are discovered. Step 14 turns these working notes into the final sync PR summary.
 - **Sync PR summary:** The final owner-facing PR description created in Step 14 from the sync working notes. It is the durable review artifact for the sync PR.
@@ -99,7 +99,7 @@ This step decides which upstream template changes need review during this sync. 
 
 ### Terms Used in This Step
 
-- **Marker path:** Downstream repositories use `.template-sync/marker.yml` as the sync marker path. The marker lives inside `.template-sync/` so the directory can hold committed template-sync support files, such as the sync marker, future manifest files, and review artifacts only if a later issue explicitly defines them as committed outputs.
+- **Marker path:** Downstream repositories use `.template-sync/marker.yml` as the sync marker path. The marker lives inside `.template-sync/` so the directory can hold committed template-sync support files: the sync marker and the sync manifest are committed today, while additional items such as review artifacts are only added if a later issue explicitly defines them as committed outputs.
 - **Marker:** Short name for `.template-sync/marker.yml`.
 - **Marker authority:** The marker file is authoritative regardless of whether the downstream repository adopts `template-sync-support`. Module adoption controls only whether sync-procedure and marker-related upstream updates are reviewed in future syncs.
 - **`template_sync.last_reviewed_template_commit`:** The marker field that stores the newest upstream template commit already reviewed in a prior sync. The durable marker value MUST be a resolved upstream template commit SHA, not a branch name, tag name, or other moving ref. Always store the full 40-character SHA; short SHAs are ambiguous and are not durable marker values. See the [Step 5 example marker](#step-5-initialize-or-update-the-sync-marker) for the field in context.
@@ -386,7 +386,9 @@ To explicitly dismiss a deferred protected candidate:
 
 ## Step 6: Use the Authoritative Module Taxonomy
 
-The table in this section is authoritative for this manual procedure. If future automation moves the mapping into a machine-readable manifest, the manifest should preserve these semantics unless a later procedure explicitly changes them.
+The machine-readable `.template-sync/manifest.yml` file is authoritative for module definitions, path mappings, and filtering semantics. The tables in this section are a rendered human-readable view of that manifest, and [`tests/test_template_manifest.py`](tests/test_template_manifest.py) checks that the tables do not drift from the manifest.
+
+When changing the taxonomy, update `.template-sync/manifest.yml` first, then update or regenerate the rendered tables below.
 
 ### Module Definitions
 
@@ -398,7 +400,7 @@ The table in this section is authoritative for this manual procedure. If future 
 | `github-actions` | GitHub Actions workflow files under `.github/workflows/**`. |
 | `github-templates` | GitHub issue templates, PR templates, CODEOWNERS, and GitHub collaboration surfaces. |
 | `template-onboarding` | Template adoption and template maintainer guidance that downstream repositories typically remove after adoption. |
-| `template-sync-support` | Committed files used to perform future template syncs, such as the sync procedure, sync marker, future manifest references, and future sync validation docs. |
+| `template-sync-support` | Committed files used to perform future template syncs, such as the sync procedure, sync marker, sync manifest, and future sync validation docs. |
 | `markdown` | Markdown linting, Markdown templates, docs guidance, and Markdown-only documentation assets. |
 | `powershell` | PowerShell scripts, Pester tests, PSScriptAnalyzer configuration, and PowerShell CI. |
 | `json` | JSON and JSONC guidance, examples, validation commands, and JSON-oriented template files. |
@@ -411,11 +413,12 @@ The table in this section is authoritative for this manual procedure. If future 
 
 Apply the most specific matching row. The most-specific match wins: when an exact path or a narrower glob row covers a path, broader catch-all rows do not contribute additional modules to that path. If two rows match at the same specificity level, use the de-duplicated union of their modules. A path mapped to multiple modules is included in the per-file review only when every mapped module appears in `included_modules`.
 
-A future manifest representation may model richer semantics, such as `requires_all` plus `requires_any`, for platform-spanning files. Until that exists, this human procedure uses the AND-style rule above.
+Manifest version 1 ships with `requires_all` semantics only. A later manifest revision may model richer semantics, such as `requires_all` plus `requires_any`, for platform-spanning files. Until that exists, this procedure uses the AND-style rule above.
 
 | Path pattern | Module(s) |
 | --- | --- |
 | `.template-sync/marker.yml` | `template-sync-support` |
+| `.template-sync/manifest.yml` | `template-sync-support` |
 | `.github/copilot-instructions.md` | `agent-instructions` |
 | `.github/instructions/docs.instructions.md` | `markdown`, `agent-instructions` |
 | `.github/instructions/gitattributes.instructions.md` | `baseline`, `agent-instructions` |
@@ -450,6 +453,7 @@ A future manifest representation may model richer semantics, such as `requires_a
 | `templates/yaml/**` | `yaml` |
 | `schemas/**` | `schema` |
 | `tests/test_schema_examples.py` | `schema` |
+| `tests/test_template_manifest.py` | `template-sync-support`, `schema` |
 | `.github/scripts/terraform_hooks.py`, `tests/test_terraform_hooks.py` | `terraform` |
 | `templates/python/**`, `pyproject.toml`, `src/copilot_repo_template/**`, `tests/**/*.py` | `python` |
 | `templates/terraform/**`, `docs/terraform/**`, `modules/**`, `tests/**/*.tftest.hcl`, `.tflint.hcl`, `*.tf`, `*.tfvars`, `*.tftpl`, `*.tfbackend` | `terraform` |
@@ -860,13 +864,13 @@ Invoke-Pester -Path tests/ -Output Detailed
 
 Future automation MAY add:
 
-- a `.template-sync/manifest.yml` path-to-module manifest
 - a schema for `.template-sync/marker.yml`
 - valid and invalid marker fixtures
 - a pre-commit hook that checks manifest coverage for managed paths
 - a helper script that generates the candidate review table
+- a helper script that regenerates the Module Definitions and Path Mapping tables from `.template-sync/manifest.yml`
 - richer manifest semantics for platform-spanning files, such as representing `.github/workflows/data-ci.yml` as `github-actions` plus at least one of `json`, `yaml`, or `schema`
 
-Tracked follow-up issues are [Issue #530](../../issues/530) for extracting the taxonomy to a machine-readable manifest and [Issue #531](../../issues/531) for marker schema validation.
+Tracked follow-up issues include [Issue #531](../../issues/531) for marker schema validation.
 
-Until that automation exists, this document is the authoritative procedure.
+`.template-sync/manifest.yml` is authoritative for the taxonomy. Until a runnable sync tool exists, this document remains the authoritative manual procedure.
