@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260517.9
+**Version:** 1.1.20260517.10
 
 ## Metadata
 
@@ -640,7 +640,7 @@ Run validation appropriate to the included modules and files changed. Full templ
 | Module | Example validation |
 | --- | --- |
 | `baseline` | `pre-commit run --all-files` |
-| `agent-instructions` | `npm run lint:md`, `npm run lint:md:nested`, `pre-commit run check-json --all-files`, `pre-commit run check-toml --all-files`, shell-script syntax check for any session hooks (e.g., `(shopt -s nullglob; for f in .claude/hooks/*.sh; do bash -n "$f"; done)` — the subshell + `nullglob` makes the glob expand to nothing when no hook scripts exist, so the check is a clean no-op for downstream repos without `.claude/hooks/`), and any repo-specific instruction checks |
+| `agent-instructions` | `npm run lint:md`, `npm run lint:md:nested`, `pre-commit run check-json --all-files`, `pre-commit run check-toml --all-files`, shell-script syntax check for any session hooks (e.g., `if [ -d .claude/hooks ]; then find .claude/hooks -type f -name '*.sh' -exec bash -n {} \;; fi` — POSIX-portable; the `if [ -d ... ]` guard makes the check a clean no-op for downstream repos without `.claude/hooks/`, and `find` returns exit 0 when no `*.sh` files match), and any repo-specific instruction checks |
 | `github-platform` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run check-jsonschema --all-files` where configured, and repository-settings review |
 | `github-actions` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run actionlint --all-files` |
 | `github-templates` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `npm run lint:md`, and issue or PR template rendering review |
