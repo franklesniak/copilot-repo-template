@@ -73,7 +73,7 @@ repos:
 
   # JSON Schema validation
   #
-  # The hooks below cover three distinct categories:
+  # The hooks below cover four distinct categories:
   #
   #   A. Worked-example schema validation
   #      Validates the valid example data files under
@@ -91,10 +91,15 @@ repos:
   #      invalid examples fail.
   #
   #   B. Schema self-validation
-  #      Validates the worked-example schema itself against its declared
-  #      JSON Schema Draft 2020-12 metaschema using `check-metaschema`.
+  #      Validates project-owned schemas against their declared JSON Schema
+  #      Draft 2020-12 metaschema using `check-metaschema`.
   #
-  #   C. Real load-bearing repository configuration validation
+  #   C. Template sync manifest validation
+  #      Validates `.template-sync/manifest.yml` against
+  #      `schemas/template-sync-manifest.schema.json`. The manifest is the
+  #      source-of-truth module taxonomy for downstream template syncs.
+  #
+  #   D. Real load-bearing repository configuration validation
   #      Validates real, load-bearing configuration files against built-in
   #      vendor schemas shipped with `check-jsonschema`. Built-in schemas
   #      do not require network access at hook runtime; they are bundled
@@ -139,6 +144,13 @@ repos:
           - --schemafile
           - schemas/example-config.schema.json
       - id: check-jsonschema
+        alias: validate-template-sync-manifest
+        name: Validate template sync manifest
+        files: ^\.template-sync/manifest\.yml$
+        args:
+          - --schemafile
+          - schemas/template-sync-manifest.schema.json
+      - id: check-jsonschema
         alias: validate-dependabot-config
         name: Validate Dependabot configuration
         files: ^\.github/dependabot\.yml$
@@ -148,6 +160,9 @@ repos:
       - id: check-metaschema
         name: Self-validate example-config schema
         files: ^schemas/example-config\.schema\.json$
+      - id: check-metaschema
+        name: Self-validate template-sync-manifest schema
+        files: ^schemas/template-sync-manifest\.schema\.json$
 
   # Markdown linting
   - repo: https://github.com/DavidAnson/markdownlint-cli2

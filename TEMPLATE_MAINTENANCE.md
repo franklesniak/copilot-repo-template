@@ -191,7 +191,7 @@ The template ships a worked-example JSON Schema (`schemas/example-config.schema.
 
 ## Reviewing the Template Sync Module Taxonomy
 
-The downstream sync procedure uses the Module Definitions and Path Mapping tables in [TEMPLATE_UPDATE_PROCEDURE.md](TEMPLATE_UPDATE_PROCEDURE.md#step-6-use-the-authoritative-module-taxonomy) to decide which upstream template changes are in scope for a downstream repository.
+The downstream sync procedure uses [`.template-sync/manifest.yml`](.template-sync/manifest.yml) as the source of truth for module definitions, path mappings, and filtering semantics. The Module Definitions and Path Mapping tables in [TEMPLATE_UPDATE_PROCEDURE.md](TEMPLATE_UPDATE_PROCEDURE.md#step-6-use-the-authoritative-module-taxonomy) are the rendered human view of that manifest.
 
 Update that taxonomy whenever a template-managed file is:
 
@@ -201,9 +201,9 @@ Update that taxonomy whenever a template-managed file is:
 - moved between directories
 - changed so its primary purpose belongs to a different module
 
-For each affected path, maintainers **MUST** review whether the path mapping still uses the most specific pattern, whether multi-module rows still require the intended AND-style module set, and whether the module definition table needs a new or revised module. Keep examples and worked sync scenarios in `TEMPLATE_UPDATE_PROCEDURE.md` aligned with any taxonomy change.
+For each affected path, maintainers **MUST** update `.template-sync/manifest.yml` first, review whether the path mapping still uses the most specific pattern, whether multi-module rows still require the intended AND-style module set, and whether the module definition list needs a new or revised module. Then update or regenerate the rendered tables in `TEMPLATE_UPDATE_PROCEDURE.md`. Keep examples and worked sync scenarios in `TEMPLATE_UPDATE_PROCEDURE.md` aligned with any taxonomy change.
 
-When reviewing a taxonomy change, include at least one validation pass with `npm run lint:md` and `npm run lint:md:nested` (the latter catches lint failures in nested Markdown code fences inside files such as `TEMPLATE_UPDATE_PROCEDURE.md`). If the change also updates schema, YAML, GitHub Actions, Python, PowerShell, or Terraform files, run the validation commands for those modules as well.
+When reviewing a taxonomy change, include `pytest tests/test_template_manifest.py -v` so the manifest schema, semantic checks, and rendered-table drift checks run together. Also include at least one validation pass with `npm run lint:md` and `npm run lint:md:nested` (the latter catches lint failures in nested Markdown code fences inside files such as `TEMPLATE_UPDATE_PROCEDURE.md`). If the change also updates schema, YAML, GitHub Actions, Python, PowerShell, or Terraform files, run the validation commands for those modules as well.
 
 ---
 

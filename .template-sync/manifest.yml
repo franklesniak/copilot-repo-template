@@ -1,0 +1,335 @@
+template_manifest:
+  version: 1
+  modules:
+    - name: baseline
+      description: >-
+        Core repository scaffolding, community files, starter identity files,
+        and repository-level configuration not owned by a narrower module.
+    - name: agent-instructions
+      description: >-
+        Agent entry points, Copilot instructions, Cursor rules, reusable prompt
+        guidance, and modular instruction docs.
+    - name: github-platform
+      description: >-
+        Repository-level GitHub platform configuration that is not itself an
+        issue template, PR template, CODEOWNERS file, or workflow. Includes
+        Dependabot configuration, repository funding metadata, security-advisory
+        configuration, code-scanning configuration outside of workflows, and
+        similar repository-scope GitHub-only settings. Current example:
+        `.github/dependabot.yml`. Likely future inhabitants include
+        `.github/FUNDING.yml`, `.github/security/*`, and other repository-scope
+        GitHub configuration files.
+    - name: github-actions
+      description: GitHub Actions workflow files under `.github/workflows/**`.
+    - name: github-templates
+      description: >-
+        GitHub issue templates, PR templates, CODEOWNERS, and GitHub
+        collaboration surfaces.
+    - name: template-onboarding
+      description: >-
+        Template adoption and template maintainer guidance that downstream
+        repositories typically remove after adoption.
+    - name: template-sync-support
+      description: >-
+        Committed files used to perform future template syncs, such as the sync
+        procedure, sync marker, sync manifest, and future sync validation docs.
+    - name: markdown
+      description: >-
+        Markdown linting, Markdown templates, docs guidance, and Markdown-only
+        documentation assets.
+    - name: powershell
+      description: >-
+        PowerShell scripts, Pester tests, PSScriptAnalyzer configuration, and
+        PowerShell CI.
+    - name: json
+      description: >-
+        JSON and JSONC guidance, examples, validation commands, and
+        JSON-oriented template files.
+    - name: yaml
+      description: >-
+        YAML guidance, YAML template files, and YAML validation not owned by a
+        narrower module.
+    - name: schema
+      description: >-
+        JSON Schema contracts, schema examples, schema validation docs, and
+        schema-specific tests.
+    - name: python
+      description: >-
+        Python package scaffolding, Python tests, Python CI, and Python tooling
+        configuration.
+    - name: terraform
+      description: Terraform modules, tests, linting, documentation, and template files.
+  path_mappings:
+    - pattern: '.template-sync/marker.yml'
+      requires_all:
+        - template-sync-support
+    - pattern: '.template-sync/manifest.yml'
+      requires_all:
+        - template-sync-support
+    - pattern: '.github/copilot-instructions.md'
+      requires_all:
+        - agent-instructions
+    - pattern: '.github/instructions/docs.instructions.md'
+      requires_all:
+        - markdown
+        - agent-instructions
+    - pattern: '.github/instructions/gitattributes.instructions.md'
+      requires_all:
+        - baseline
+        - agent-instructions
+    - pattern: '.github/instructions/json.instructions.md'
+      requires_all:
+        - json
+        - agent-instructions
+    - pattern: '.github/instructions/powershell.instructions.md'
+      requires_all:
+        - powershell
+        - agent-instructions
+    - pattern: '.github/instructions/python.instructions.md'
+      requires_all:
+        - python
+        - agent-instructions
+    - pattern: '.github/instructions/terraform.instructions.md'
+      requires_all:
+        - terraform
+        - agent-instructions
+    - pattern: '.github/instructions/yaml.instructions.md'
+      requires_all:
+        - yaml
+        - agent-instructions
+    - pattern: '.github/instructions/*.instructions.md'
+      requires_all:
+        - agent-instructions
+      notes: >-
+        Most-specific matching means exact instruction-file rows above take
+        precedence. Surface this catch-all for the owner to confirm or add
+        additional module mappings.
+    - pattern: '.cursor/rules/**'
+      requires_all:
+        - agent-instructions
+    - pattern: '.hermes.md'
+      requires_all:
+        - agent-instructions
+    - pattern: 'AGENTS.md'
+      requires_all:
+        - agent-instructions
+    - pattern: 'CLAUDE.md'
+      requires_all:
+        - agent-instructions
+    - pattern: 'GEMINI.md'
+      requires_all:
+        - agent-instructions
+    - pattern: 'COPILOT_CHAT_PROMPTS.md'
+      requires_all:
+        - agent-instructions
+    - pattern: 'docs/PR_REVIEW_PROMPTS.md'
+      requires_all:
+        - agent-instructions
+    - pattern: '.codex/**'
+      requires_all:
+        - agent-instructions
+    - pattern: '.claude/**'
+      requires_all:
+        - agent-instructions
+    - pattern: '.github/ISSUE_TEMPLATE/**'
+      requires_all:
+        - github-templates
+    - pattern: '.github/pull_request_template.md'
+      requires_all:
+        - github-templates
+    - pattern: '.github/CODEOWNERS'
+      requires_all:
+        - github-templates
+    - pattern: '.github/dependabot.yml'
+      requires_all:
+        - github-platform
+    - pattern: '.github/workflows/markdownlint.yml'
+      requires_all:
+        - markdown
+        - github-actions
+    - pattern: '.github/workflows/powershell-ci.yml'
+      requires_all:
+        - powershell
+        - github-actions
+    - pattern: '.github/workflows/python-ci.yml'
+      requires_all:
+        - python
+        - github-actions
+    - pattern: '.github/workflows/terraform-ci.yml'
+      requires_all:
+        - terraform
+        - github-actions
+    - pattern: '.github/workflows/data-ci.yml'
+      requires_all:
+        - github-actions
+      notes: >-
+        Current version 1 semantics cannot express github-actions plus at least
+        one of json, yaml, or schema; record that richer include logic as future
+        work.
+    - pattern: '.github/workflows/check-placeholders.yml'
+      requires_all:
+        - baseline
+        - github-actions
+    - pattern: '.github/workflows/auto-fix-precommit.yml'
+      requires_all:
+        - baseline
+        - github-actions
+    - pattern: '.yamllint.yml'
+      requires_all:
+        - yaml
+    - pattern: '.pre-commit-config.yaml'
+      requires_all:
+        - baseline
+    - pattern: '.markdownlint.jsonc'
+      requires_all:
+        - markdown
+    - pattern: 'package.json'
+      requires_all:
+        - markdown
+    - pattern: 'package-lock.json'
+      requires_all:
+        - markdown
+    - pattern: '.github/scripts/lint-nested-markdown.js'
+      requires_all:
+        - markdown
+    - pattern: 'templates/markdown/**'
+      requires_all:
+        - markdown
+    - pattern: 'templates/powershell/**'
+      requires_all:
+        - powershell
+    - pattern: 'tests/PowerShell/**'
+      requires_all:
+        - powershell
+    - pattern: '.github/linting/PSScriptAnalyzerSettings.psd1'
+      requires_all:
+        - powershell
+    - pattern: 'src/tools/*.ps1'
+      requires_all:
+        - powershell
+    - pattern: 'templates/json/**'
+      requires_all:
+        - json
+    - pattern: 'templates/yaml/**'
+      requires_all:
+        - yaml
+    - pattern: 'schemas/**'
+      requires_all:
+        - schema
+    - pattern: 'tests/test_schema_examples.py'
+      requires_all:
+        - schema
+    - pattern: 'tests/test_template_manifest.py'
+      requires_all:
+        - template-sync-support
+        - schema
+    - pattern: '.github/scripts/terraform_hooks.py'
+      requires_all:
+        - terraform
+    - pattern: 'tests/test_terraform_hooks.py'
+      requires_all:
+        - terraform
+    - pattern: 'templates/python/**'
+      requires_all:
+        - python
+    - pattern: 'pyproject.toml'
+      requires_all:
+        - python
+    - pattern: 'src/copilot_repo_template/**'
+      requires_all:
+        - python
+    - pattern: 'tests/**/*.py'
+      requires_all:
+        - python
+    - pattern: 'templates/terraform/**'
+      requires_all:
+        - terraform
+    - pattern: 'docs/terraform/**'
+      requires_all:
+        - terraform
+    - pattern: 'modules/**'
+      requires_all:
+        - terraform
+    - pattern: 'tests/**/*.tftest.hcl'
+      requires_all:
+        - terraform
+    - pattern: '.tflint.hcl'
+      requires_all:
+        - terraform
+    - pattern: '*.tf'
+      requires_all:
+        - terraform
+    - pattern: '*.tfvars'
+      requires_all:
+        - terraform
+    - pattern: '*.tftpl'
+      requires_all:
+        - terraform
+    - pattern: '*.tfbackend'
+      requires_all:
+        - terraform
+    - pattern: 'README.md'
+      requires_all:
+        - baseline
+    - pattern: 'TEMPLATE_UPDATE_PROCEDURE.md'
+      requires_all:
+        - template-sync-support
+    - pattern: 'GETTING_STARTED_NEW_REPO.md'
+      requires_all:
+        - template-onboarding
+    - pattern: 'GETTING_STARTED_EXISTING_REPO.md'
+      requires_all:
+        - template-onboarding
+    - pattern: 'OPTIONAL_CONFIGURATIONS.md'
+      requires_all:
+        - template-onboarding
+    - pattern: 'TEMPLATE_MAINTENANCE.md'
+      requires_all:
+        - template-onboarding
+    - pattern: '.github/TEMPLATE_DESIGN_DECISIONS.md'
+      requires_all:
+        - template-onboarding
+    - pattern: 'CONTRIBUTING.md'
+      requires_all:
+        - baseline
+    - pattern: 'SECURITY.md'
+      requires_all:
+        - baseline
+    - pattern: 'CODE_OF_CONDUCT.md'
+      requires_all:
+        - baseline
+    - pattern: 'LICENSE'
+      requires_all:
+        - baseline
+    - pattern: '.gitignore'
+      requires_all:
+        - baseline
+    - pattern: '.gitattributes'
+      requires_all:
+        - baseline
+    - pattern: '.editorconfig'
+      requires_all:
+        - baseline
+    - pattern: '.vscode/**'
+      requires_all:
+        - baseline
+  filtering:
+    default_semantics: AND
+    path_matching: most_specific_match_wins
+    same_specificity_action: union_modules
+    unmapped_action: surface_for_owner
+  notes:
+    downstream_retention: |
+      Downstream repositories keep .template-sync/marker.yml when they use this
+      sync procedure. Downstream repositories do not need to retain
+      .template-sync/manifest.yml unless they intentionally want
+      machine-assisted future syncs.
+    known_limitations:
+      - path: '.github/workflows/data-ci.yml'
+        description: >-
+          Manifest version 1 ships with requires_all semantics only, so
+          platform-spanning workflow mappings cannot yet express
+          github-actions plus at least one of json, yaml, or schema.
+        future_work: >-
+          A later manifest revision may add richer include semantics such as
+          requires_any for this case.

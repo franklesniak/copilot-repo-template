@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/franklesniak/copilot-repo-template/schemas/template-sync-manifest.schema.json",
+  "title": "Template Sync Manifest",
+  "description": "Schema for .template-sync/manifest.yml, the source-of-truth module taxonomy and path mapping used by the downstream template sync procedure.",
+  "type": "object",
+  "required": ["template_manifest"],
+  "additionalProperties": false,
+  "properties": {
+    "template_manifest": {
+      "type": "object",
+      "required": ["version", "modules", "path_mappings", "filtering", "notes"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "integer",
+          "const": 1,
+          "description": "Manifest contract version."
+        },
+        "modules": {
+          "type": "array",
+          "description": "Known module definitions in deterministic display order.",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["name", "description"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/moduleName"
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "path_mappings": {
+          "type": "array",
+          "description": "Ordered path patterns and the modules required for each path.",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["pattern", "requires_all"],
+            "additionalProperties": false,
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "minLength": 1
+              },
+              "requires_all": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/moduleName"
+                }
+              },
+              "notes": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "filtering": {
+          "type": "object",
+          "required": [
+            "default_semantics",
+            "path_matching",
+            "same_specificity_action",
+            "unmapped_action"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "default_semantics": {
+              "type": "string",
+              "enum": ["AND"]
+            },
+            "path_matching": {
+              "type": "string",
+              "enum": ["most_specific_match_wins"]
+            },
+            "same_specificity_action": {
+              "type": "string",
+              "enum": ["union_modules"]
+            },
+            "unmapped_action": {
+              "type": "string",
+              "enum": ["surface_for_owner"]
+            }
+          }
+        },
+        "notes": {
+          "type": "object",
+          "required": ["downstream_retention", "known_limitations"],
+          "additionalProperties": false,
+          "properties": {
+            "downstream_retention": {
+              "type": "string",
+              "minLength": 1
+            },
+            "known_limitations": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "required": ["path", "description", "future_work"],
+                "additionalProperties": false,
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "description": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "future_work": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "moduleName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    }
+  }
+}
