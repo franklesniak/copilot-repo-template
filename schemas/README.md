@@ -37,9 +37,18 @@ This template provides `schemas/` as a convention for repositories that adopt sc
 Every schema SHOULD include the following top-level keywords:
 
 - `$schema` — the JSON Schema draft URI.
-- `$id` — a stable, absolute URI that identifies the schema.
+- `$id` — a stable, absolute URI that identifies the schema. See [`$id` URL Convention](#id-url-convention) for the two URL forms used in this directory.
 - `title` — a short, human-readable name for the contract.
 - `description` — a concise explanation of what the schema describes and which files it applies to.
+
+### `$id` URL Convention
+
+Two `$id` URL forms are used in this directory, depending on whether the schema is a worked example or a production contract. The distinction is intentional and is documented here so that future contributors do not "normalize" the two forms to a single value.
+
+- **Production schemas** (such as [`template-sync-manifest.schema.json`](./template-sync-manifest.schema.json)) use a stable, real URL that identifies the schema's canonical source — typically the upstream repository path where the schema is maintained (for example, `https://github.com/franklesniak/copilot-repo-template/schemas/<schema-name>.schema.json`). JSON Schema treats `$id` as an identifier, not a fetch URI; the URL does **not** need to resolve to the raw schema content, but a real URL accurately conveys that the schema is a real, maintained contract.
+- **Worked example schemas** (such as [`example-config.schema.json`](./example-config.schema.json)) use the reserved `https://example.invalid/schemas/<schema-name>.schema.json` form. Per [RFC 6761](https://www.rfc-editor.org/rfc/rfc6761.html#section-6.4), the `.invalid` TLD is reserved for non-resolving identifiers, which appropriately signals that the schema is template starter content rather than a production contract and reinforces that downstream consumers SHOULD replace or remove it (see the [Downstream Removal Checklist](#downstream-removal-checklist)).
+
+Downstream repositories that adopt this template **MAY** retain a production schema's `$id` pointing to the upstream URL (treating it as a "this is the contract version I am using" indicator), **MAY** rewrite it to their own canonical URL when forking or customizing the schema, or **MAY** remove the schema entirely if they do not use the corresponding template feature (such as the template sync procedure).
 
 ### Object Schemas
 
