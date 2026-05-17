@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260517.0
+**Version:** 1.1.20260517.1
 
 ## Metadata
 
@@ -642,7 +642,7 @@ Run validation appropriate to the included modules and files changed. Full templ
 | `agent-instructions` | `npm run lint:md`, `npm run lint:md:nested`, and any repo-specific instruction checks |
 | `github-platform` | `pre-commit run check-yaml --all-files`, `pre-commit run check-jsonschema --all-files` where configured, and repository-settings review |
 | `github-actions` | `pre-commit run check-yaml --all-files`, `pre-commit run actionlint --all-files` |
-| `github-templates` | `pre-commit run check-yaml --all-files` and issue or PR template rendering review |
+| `github-templates` | `pre-commit run check-yaml --all-files`, `npm run lint:md`, and issue or PR template rendering review |
 | `template-onboarding` | `npm run lint:md` and walkthrough review for kept onboarding paths |
 | `template-sync-support` | `npm run lint:md`, `npm run lint:md:nested`, and a dry-run review of the sync procedure examples |
 | `markdown` | `npm run lint:md`, `npm run lint:md:nested` |
@@ -865,6 +865,6 @@ Future automation MAY add:
 - a helper script that generates the candidate review table
 - richer manifest semantics for platform-spanning files, such as representing `.github/workflows/data-ci.yml` as `github-actions` plus at least one of `json`, `yaml`, or `schema`
 
-Tracked follow-up issues are [Issue #530](https://github.com/franklesniak/copilot-repo-template/issues/530) for extracting the taxonomy to a machine-readable manifest and [Issue #531](https://github.com/franklesniak/copilot-repo-template/issues/531) for marker schema validation.
+Tracked follow-up issues are [Issue #530](../../issues/530) for extracting the taxonomy to a machine-readable manifest and [Issue #531](../../issues/531) for marker schema validation.
 
 Until that automation exists, this document is the authoritative procedure.
