@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260517.5
+**Version:** 1.1.20260517.6
 
 ## Metadata
 
@@ -706,7 +706,7 @@ Example summary skeleton:
 **Protected files deferred:** `.github/copilot-instructions.md` at `2222222222222222222222222222222222222222`
 **Local overrides applied:** `README.md` defaulted to `SKIP`; upstream changed setup prose.
 **Local customizations preserved:** self-hosted runner block; project-specific PR checklist.
-**Validation:** `pre-commit run --all-files` (passed), `npm run lint:md` (passed), `Invoke-Pester -Path tests/ -Output Detailed` (passed)
+**Validation:** `pre-commit run --all-files` (passed), `npm run lint:md` (passed), `npm run lint:md:nested` (passed), `Invoke-Pester -Path tests/ -Output Detailed` (passed)
 
 ## Open Questions
 
@@ -833,6 +833,7 @@ template_sync:
 ```bash
 pre-commit run --all-files
 npm run lint:md
+npm run lint:md:nested
 ```
 
 PowerShell validation:
@@ -853,7 +854,7 @@ Invoke-Pester -Path tests/ -Output Detailed
 **Protected files deferred:** `.github/copilot-instructions.md` at `2222222222222222222222222222222222222222`, `.github/instructions/powershell.instructions.md` at `2222222222222222222222222222222222222222`
 **Local overrides applied:** none in scope this sync
 **Local customizations preserved:** self-hosted runner block; project-specific PR checklist
-**Validation:** `pre-commit run --all-files` (passed), `npm run lint:md` (passed), `Invoke-Pester -Path tests/ -Output Detailed` (passed)
+**Validation:** `pre-commit run --all-files` (passed), `npm run lint:md` (passed), `npm run lint:md:nested` (passed), `Invoke-Pester -Path tests/ -Output Detailed` (passed)
 ```
 
 ## Future Automation
