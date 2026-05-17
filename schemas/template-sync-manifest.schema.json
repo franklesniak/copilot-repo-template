@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/franklesniak/copilot-repo-template/schemas/template-sync-manifest.schema.json",
+  "$id": "https://raw.githubusercontent.com/franklesniak/copilot-repo-template/HEAD/schemas/template-sync-manifest.schema.json",
   "title": "Template Sync Manifest",
   "description": "Schema for .template-sync/manifest.yml, the source-of-truth module taxonomy and path mapping used by the downstream template sync procedure.",
   "type": "object",
