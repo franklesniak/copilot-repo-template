@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260517.2
+**Version:** 1.1.20260517.3
 
 ## Metadata
 
@@ -409,7 +409,7 @@ The table in this section is authoritative for this manual procedure. If future 
 
 ### Path Mapping
 
-Apply the most specific matching row. If multiple rows match, use the de-duplicated union of their modules. A path mapped to multiple modules is included in the per-file review only when every mapped module appears in `included_modules`.
+Apply the most specific matching row. The most-specific match wins: when an exact path or a narrower glob row covers a path, broader catch-all rows do not contribute additional modules to that path. If two rows match at the same specificity level, use the de-duplicated union of their modules. A path mapped to multiple modules is included in the per-file review only when every mapped module appears in `included_modules`.
 
 A future manifest representation may model richer semantics, such as `requires_all` plus `requires_any`, for platform-spanning files. Until that exists, this human procedure uses the AND-style rule above.
 
@@ -642,11 +642,11 @@ Run validation appropriate to the included modules and files changed. Full templ
 | --- | --- |
 | `baseline` | `pre-commit run --all-files` |
 | `agent-instructions` | `npm run lint:md`, `npm run lint:md:nested`, and any repo-specific instruction checks |
-| `github-platform` | `pre-commit run check-yaml --all-files`, `pre-commit run check-jsonschema --all-files` where configured, and repository-settings review |
-| `github-actions` | `pre-commit run check-yaml --all-files`, `pre-commit run actionlint --all-files` |
-| `github-templates` | `pre-commit run check-yaml --all-files`, `npm run lint:md`, and issue or PR template rendering review |
+| `github-platform` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run check-jsonschema --all-files` where configured, and repository-settings review |
+| `github-actions` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run actionlint --all-files` |
+| `github-templates` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `npm run lint:md`, and issue or PR template rendering review |
 | `template-onboarding` | `npm run lint:md` and walkthrough review for kept onboarding paths |
-| `template-sync-support` | `npm run lint:md`, `npm run lint:md:nested`, and a dry-run review of the sync procedure examples |
+| `template-sync-support` | `npm run lint:md`, `npm run lint:md:nested`, `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, and a dry-run review of the sync procedure examples |
 | `markdown` | `npm run lint:md`, `npm run lint:md:nested` |
 | `powershell` | `Invoke-Pester -Path tests/ -Output Detailed` |
 | `json` | `pre-commit run check-json --all-files` |
