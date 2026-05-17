@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/franklesniak/copilot-repo-template/HEAD/schemas/template-sync-marker.schema.json",
+  "title": "Template Sync Marker",
+  "description": "Schema for .template-sync/marker.yml, the downstream sync marker that records reviewed template commits, adopted modules, local override decisions, and deferred protected-file candidates.",
+  "type": "object",
+  "required": ["template_sync"],
+  "additionalProperties": false,
+  "properties": {
+    "template_sync": {
+      "type": "object",
+      "required": ["source_repo", "included_modules"],
+      "additionalProperties": false,
+      "properties": {
+        "source_repo": {
+          "type": "string",
+          "format": "uri",
+          "description": "Canonical URL for the upstream template repository."
+        },
+        "last_reviewed_template_commit": {
+          "$ref": "#/$defs/fullLowercaseSha"
+        },
+        "included_modules": {
+          "type": "array",
+          "description": "Template sync modules adopted by the downstream repository. The enum is mirrored from .template-sync/manifest.yml and guarded by tests/test_template_manifest.py.",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/moduleName"
+          }
+        },
+        "local_overrides": {
+          "type": "array",
+          "description": "Path-specific default decisions that preserve known downstream ownership choices while still surfacing upstream activity.",
+          "items": {
+            "type": "object",
+            "required": ["path", "reason", "default_decision"],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "$ref": "#/$defs/repositoryPath"
+              },
+              "reason": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "default_decision": {
+                "type": "string",
+                "enum": [
+                  "TAKE",
+                  "MERGE",
+                  "SKIP",
+                  "REMOVE-LOCAL",
+                  "DEFER",
+                  "PROTECTED-REVIEW"
+                ]
+              }
+            }
+          }
+        },
+        "deferred_protected_candidates": {
+          "type": "array",
+          "description": "Protected paths whose upstream changes require explicit owner authorization before they can be applied.",
+          "items": {
+            "type": "object",
+            "required": ["path", "source_commit", "reason"],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "$ref": "#/$defs/repositoryPath"
+              },
+              "source_commit": {
+                "$ref": "#/$defs/fullLowercaseSha"
+              },
+              "reason": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "fullLowercaseSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "moduleName": {
+      "type": "string",
+      "enum": [
+        "baseline",
+        "agent-instructions",
+        "github-platform",
+        "github-actions",
+        "github-templates",
+        "template-onboarding",
+        "template-sync-support",
+        "markdown",
+        "powershell",
+        "json",
+        "yaml",
+        "schema",
+        "python",
+        "terraform"
+      ]
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "repositoryPath": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

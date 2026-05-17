@@ -1096,7 +1096,7 @@ If your project prefers Husky for git hooks:
 
 **Files:** `.pre-commit-config.yaml`, `schemas/`, project test directory (for example, `tests/`)
 
-This template ships `schemas/` with one clearly removable worked example (see [`schemas/README.md`](schemas/README.md)). **The default-enabled `check-jsonschema` configuration covers the worked example plus one real load-bearing repository file: `.github/dependabot.yml` is validated against the bundled `vendor.dependabot` schema.** Beyond that, schema validation is opt-in and SHOULD be added per real schema-backed file family. If your downstream project does not need the worked example, follow the canonical [downstream removal checklist](schemas/README.md#downstream-removal-checklist) in `schemas/README.md` to remove it.
+This template ships `schemas/` with one clearly removable worked example and production schemas for template sync metadata (see [`schemas/README.md`](schemas/README.md)). **The default-enabled `check-jsonschema` configuration covers the worked example, `.template-sync/manifest.yml`, `.template-sync/marker.yml` when present, and one real load-bearing repository file: `.github/dependabot.yml` is validated against the bundled `vendor.dependabot` schema.** Beyond that, schema validation is opt-in and SHOULD be added per real schema-backed file family. If your downstream project does not need the worked example, follow the canonical [downstream removal checklist](schemas/README.md#downstream-removal-checklist) in `schemas/README.md` to remove it. Downstream repositories that use `.template-sync/marker.yml` SHOULD keep the marker schema hook so marker changes fail before review when they violate the contract.
 
 ### When to Add `check-jsonschema`
 

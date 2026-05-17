@@ -73,22 +73,22 @@ repos:
 
   # JSON Schema validation
   #
-  # The hooks below cover four distinct categories:
+  # The hooks below cover five distinct categories:
   #
-  #   A. Worked-example schema validation
+  #   A. Project-owned schema example validation
   #      Validates the valid example data files under
   #      `schemas/examples/example-config/valid/` against the worked-example
-  #      schema at `schemas/example-config.schema.json`. See
-  #      `schemas/README.md` for the canonical worked-example documentation
-  #      and downstream-removal checklist.
+  #      schema at `schemas/example-config.schema.json`, and the valid
+  #      marker examples under `schemas/examples/template-sync-marker/valid/`
+  #      against `schemas/template-sync-marker.schema.json`. See
+  #      `schemas/README.md` for schema documentation and downstream-removal
+  #      guidance.
   #
-  #      Invalid example data files under
-  #      `schemas/examples/example-config/invalid/` are intentionally NOT
-  #      wired into a normal pre-commit hook because they are expected to
-  #      fail validation. They are exercised by
-  #      `tests/test_schema_examples.py`, which auto-discovers
-  #      schema/example pairs and asserts that valid examples pass and
-  #      invalid examples fail.
+  #      Invalid example data files under `schemas/examples/*/invalid/` are
+  #      intentionally NOT wired into a normal pre-commit hook because they
+  #      are expected to fail validation. They are exercised by
+  #      `tests/test_schema_examples.py`, which auto-discovers schema/example
+  #      pairs and asserts that valid examples pass and invalid examples fail.
   #
   #   B. Schema self-validation
   #      Validates project-owned schemas against their declared JSON Schema
@@ -99,7 +99,13 @@ repos:
   #      `schemas/template-sync-manifest.schema.json`. The manifest is the
   #      source-of-truth module taxonomy for downstream template syncs.
   #
-  #   D. Real load-bearing repository configuration validation
+  #   D. Template sync marker validation
+  #      Validates `.template-sync/marker.yml` against
+  #      `schemas/template-sync-marker.schema.json`. This repository does not
+  #      need to carry a marker, but downstream repositories that adopt one
+  #      get validation automatically when the marker file is present.
+  #
+  #   E. Real load-bearing repository configuration validation
   #      Validates real, load-bearing configuration files against built-in
   #      vendor schemas shipped with `check-jsonschema`. Built-in schemas
   #      do not require network access at hook runtime; they are bundled
@@ -144,12 +150,25 @@ repos:
           - --schemafile
           - schemas/example-config.schema.json
       - id: check-jsonschema
+        name: Validate template sync marker valid examples
+        files: ^schemas/examples/template-sync-marker/valid/.*\.yml$
+        args:
+          - --schemafile
+          - schemas/template-sync-marker.schema.json
+      - id: check-jsonschema
         alias: validate-template-sync-manifest
         name: Validate template sync manifest
         files: ^\.template-sync/manifest\.yml$
         args:
           - --schemafile
           - schemas/template-sync-manifest.schema.json
+      - id: check-jsonschema
+        alias: validate-template-sync-marker
+        name: Validate template sync marker
+        files: ^\.template-sync/marker\.yml$
+        args:
+          - --schemafile
+          - schemas/template-sync-marker.schema.json
       - id: check-jsonschema
         alias: validate-dependabot-config
         name: Validate Dependabot configuration
@@ -163,6 +182,9 @@ repos:
       - id: check-metaschema
         name: Self-validate template-sync-manifest schema
         files: ^schemas/template-sync-manifest\.schema\.json$
+      - id: check-metaschema
+        name: Self-validate template-sync-marker schema
+        files: ^schemas/template-sync-marker\.schema\.json$
 
   # Markdown linting
   - repo: https://github.com/DavidAnson/markdownlint-cli2
