@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260517.1
+**Version:** 1.1.20260517.2
 
 ## Metadata
 
@@ -429,6 +429,7 @@ A future manifest representation may model richer semantics, such as `requires_a
 | `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` | `agent-instructions` |
 | `COPILOT_CHAT_PROMPTS.md`, `docs/PR_REVIEW_PROMPTS.md` | `agent-instructions` |
 | `.codex/**` | `agent-instructions` |
+| `.claude/**` | `agent-instructions` |
 | `.github/ISSUE_TEMPLATE/**` | `github-templates` |
 | `.github/pull_request_template.md` | `github-templates` |
 | `.github/CODEOWNERS` | `github-templates` |
@@ -442,19 +443,20 @@ A future manifest representation may model richer semantics, such as `requires_a
 | `.github/workflows/auto-fix-precommit.yml` | `baseline`, `github-actions` |
 | `.yamllint.yml` | `yaml` |
 | `.pre-commit-config.yaml` | `baseline` |
-| `.markdownlint.jsonc`, `package.json`, `package-lock.json` | `markdown` |
+| `.markdownlint.jsonc`, `package.json`, `package-lock.json`, `.github/scripts/lint-nested-markdown.js` | `markdown` |
 | `templates/markdown/**` | `markdown` |
 | `templates/powershell/**`, `tests/PowerShell/**`, `.github/linting/PSScriptAnalyzerSettings.psd1`, `src/tools/*.ps1` | `powershell` |
 | `templates/json/**` | `json` |
 | `templates/yaml/**` | `yaml` |
 | `schemas/**` | `schema` |
-| `tests/test_schema_examples.py` | `schema`, `python` |
-| `templates/python/**`, `pyproject.toml`, `tests/**/*.py` | `python` |
+| `tests/test_schema_examples.py` | `schema` |
+| `.github/scripts/terraform_hooks.py`, `tests/test_terraform_hooks.py` | `terraform` |
+| `templates/python/**`, `pyproject.toml`, `src/copilot_repo_template/**`, `tests/**/*.py` | `python` |
 | `templates/terraform/**`, `docs/terraform/**`, `modules/**`, `tests/**/*.tftest.hcl`, `.tflint.hcl`, `*.tf`, `*.tfvars`, `*.tftpl`, `*.tfbackend` | `terraform` |
 | `README.md` | `baseline` |
 | `OPTIONAL_CONFIGURATIONS.md` | `baseline` |
 | `TEMPLATE_UPDATE_PROCEDURE.md` | `template-sync-support` |
-| `GETTING_STARTED_NEW_REPO.md`, `GETTING_STARTED_EXISTING_REPO.md`, `TEMPLATE_MAINTENANCE.md` | `template-onboarding` |
+| `GETTING_STARTED_NEW_REPO.md`, `GETTING_STARTED_EXISTING_REPO.md`, `TEMPLATE_MAINTENANCE.md`, `.github/TEMPLATE_DESIGN_DECISIONS.md` | `template-onboarding` |
 | `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE` | `baseline` |
 | `.gitignore`, `.gitattributes`, `.editorconfig`, `.vscode/**` | `baseline` |
 
