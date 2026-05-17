@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260517.6
+**Version:** 1.1.20260517.7
 
 ## Metadata
 
@@ -454,9 +454,8 @@ A future manifest representation may model richer semantics, such as `requires_a
 | `templates/python/**`, `pyproject.toml`, `src/copilot_repo_template/**`, `tests/**/*.py` | `python` |
 | `templates/terraform/**`, `docs/terraform/**`, `modules/**`, `tests/**/*.tftest.hcl`, `.tflint.hcl`, `*.tf`, `*.tfvars`, `*.tftpl`, `*.tfbackend` | `terraform` |
 | `README.md` | `baseline` |
-| `OPTIONAL_CONFIGURATIONS.md` | `baseline` |
 | `TEMPLATE_UPDATE_PROCEDURE.md` | `template-sync-support` |
-| `GETTING_STARTED_NEW_REPO.md`, `GETTING_STARTED_EXISTING_REPO.md`, `TEMPLATE_MAINTENANCE.md`, `.github/TEMPLATE_DESIGN_DECISIONS.md` | `template-onboarding` |
+| `GETTING_STARTED_NEW_REPO.md`, `GETTING_STARTED_EXISTING_REPO.md`, `OPTIONAL_CONFIGURATIONS.md`, `TEMPLATE_MAINTENANCE.md`, `.github/TEMPLATE_DESIGN_DECISIONS.md` | `template-onboarding` |
 | `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE` | `baseline` |
 | `.gitignore`, `.gitattributes`, `.editorconfig`, `.vscode/**` | `baseline` |
 
@@ -641,7 +640,7 @@ Run validation appropriate to the included modules and files changed. Full templ
 | Module | Example validation |
 | --- | --- |
 | `baseline` | `pre-commit run --all-files` |
-| `agent-instructions` | `npm run lint:md`, `npm run lint:md:nested`, `pre-commit run check-json --all-files`, `pre-commit run check-toml --all-files`, and any repo-specific instruction checks |
+| `agent-instructions` | `npm run lint:md`, `npm run lint:md:nested`, `pre-commit run check-json --all-files`, `pre-commit run check-toml --all-files`, shell-script syntax check for any session hooks (e.g., `for f in .claude/hooks/*.sh; do bash -n "$f"; done`), and any repo-specific instruction checks |
 | `github-platform` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run check-jsonschema --all-files` where configured, and repository-settings review |
 | `github-actions` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run actionlint --all-files` |
 | `github-templates` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `npm run lint:md`, and issue or PR template rendering review |
