@@ -99,7 +99,7 @@ This step decides which upstream template changes need review during this sync. 
 
 ### Terms Used in This Step
 
-- **Marker path:** Downstream repositories use `.template-sync/marker.yml` as the sync marker path. The marker lives inside `.template-sync/` so the directory can hold committed template-sync support files, such as the sync marker, sync manifest, and review artifacts only if a later issue explicitly defines them as committed outputs.
+- **Marker path:** Downstream repositories use `.template-sync/marker.yml` as the sync marker path. The marker lives inside `.template-sync/` so the directory can hold committed template-sync support files: the sync marker and the sync manifest are committed today, while additional items such as review artifacts are only added if a later issue explicitly defines them as committed outputs.
 - **Marker:** Short name for `.template-sync/marker.yml`.
 - **Marker authority:** The marker file is authoritative regardless of whether the downstream repository adopts `template-sync-support`. Module adoption controls only whether sync-procedure and marker-related upstream updates are reviewed in future syncs.
 - **`template_sync.last_reviewed_template_commit`:** The marker field that stores the newest upstream template commit already reviewed in a prior sync. The durable marker value MUST be a resolved upstream template commit SHA, not a branch name, tag name, or other moving ref. Always store the full 40-character SHA; short SHAs are ambiguous and are not durable marker values. See the [Step 5 example marker](#step-5-initialize-or-update-the-sync-marker) for the field in context.

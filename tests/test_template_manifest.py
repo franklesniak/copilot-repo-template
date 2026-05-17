@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -140,7 +141,8 @@ def _path_mapping_rows_from_procedure() -> list[tuple[str, tuple[str, ...]]]:
 
 def _duplicates(values: list[str]) -> list[str]:
     """Return sorted duplicate values from ``values``."""
-    return sorted({value for value in values if values.count(value) > 1})
+    counts = Counter(values)
+    return sorted(value for value, count in counts.items() if count > 1)
 
 
 def test_template_manifest_parses_successfully() -> None:
