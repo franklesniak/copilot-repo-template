@@ -203,7 +203,7 @@ Update that taxonomy whenever a template-managed file is:
 
 For each affected path, maintainers **MUST** review whether the path mapping still uses the most specific pattern, whether multi-module rows still require the intended AND-style module set, and whether the module definition table needs a new or revised module. Keep examples and worked sync scenarios in `TEMPLATE_UPDATE_PROCEDURE.md` aligned with any taxonomy change.
 
-When reviewing a taxonomy change, include at least one validation pass with `npm run lint:md`. If the change also updates schema, YAML, GitHub Actions, Python, PowerShell, or Terraform files, run the validation commands for those modules as well.
+When reviewing a taxonomy change, include at least one validation pass with `npm run lint:md` and `npm run lint:md:nested` (the latter catches lint failures in nested Markdown code fences inside files such as `TEMPLATE_UPDATE_PROCEDURE.md`). If the change also updates schema, YAML, GitHub Actions, Python, PowerShell, or Terraform files, run the validation commands for those modules as well.
 
 ---
 
