@@ -1824,6 +1824,10 @@ Delete from the HTML comment through the end of the file.
 
 **To keep (if your project is also a template):** Leave the section as-is and customize it for your template's specific guidance.
 
+### Remove Template Maintenance Pointer
+
+`CONTRIBUTING.md` also includes a `Template Taxonomy Updates` section that points contributors to template-maintenance guidance. If your downstream repository no longer maintains this template itself, remove that section during adoption. Keep and customize it only when your repository remains a template and needs to maintain its own downstream sync path mapping.
+
 ### Other Customizations
 
 See [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md) for additional `CONTRIBUTING.md` customization guidance, including:

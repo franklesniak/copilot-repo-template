@@ -4,8 +4,8 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-11
-- **Scope:** Periodic maintenance procedures for the `franklesniak/copilot-repo-template` repository, including dependency review cadence, pre-commit hook upkeep, Terraform/TFLint version reviews, schema and worked-example reviews, and validation steps for template-only changes. Does not cover repositories created FROM this template; consumers of the template should follow [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md#ongoing-maintenance) instead.
+- **Last Updated:** 2026-05-17
+- **Scope:** Periodic maintenance procedures for the `franklesniak/copilot-repo-template` repository, including dependency review cadence, pre-commit hook upkeep, Terraform/TFLint version reviews, schema and worked-example reviews, template sync taxonomy upkeep, and validation steps for template-only changes. Does not cover repositories created FROM this template; consumers of the template should follow [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md#ongoing-maintenance) instead.
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [Contributing](CONTRIBUTING.md)
 
 This guide is for **maintainers of the `franklesniak/copilot-repo-template` repository**. It documents periodic maintenance tasks to keep the template current and functional.
@@ -19,6 +19,7 @@ This guide is for **maintainers of the `franklesniak/copilot-repo-template` repo
 - [Recommended Review Cadence](#recommended-review-cadence)
 - [Updating Pre-commit Hook Versions](#updating-pre-commit-hook-versions)
 - [Reviewing the Worked-Example Schema and Data CI Workflow](#reviewing-the-worked-example-schema-and-data-ci-workflow)
+- [Reviewing the Template Sync Module Taxonomy](#reviewing-the-template-sync-module-taxonomy)
 - [Reviewing Python Version Requirements](#reviewing-python-version-requirements)
 - [Reviewing Terraform and TFLint Version Requirements](#reviewing-terraform-and-tflint-version-requirements)
 - [Reviewing Terraform Provider Versions](#reviewing-terraform-provider-versions)
@@ -37,6 +38,7 @@ To keep the template current and functional, maintainers **SHOULD** review templ
 - [ ] Review and update pre-commit hook versions
 - [ ] Check for updates to GitHub Actions used in workflows
 - [ ] Review and update Terraform and TFLint versions in CI workflows
+- [ ] Review the template sync module taxonomy when template-managed paths changed
 - [ ] Review instruction files for accuracy and relevance
 - [ ] Verify all CI workflows still pass with latest dependency versions
 - [ ] Verify agent instruction files (`.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) remain aligned with `.github/copilot-instructions.md`
@@ -184,6 +186,24 @@ The template ships a worked-example JSON Schema (`schemas/example-config.schema.
 
 - If a hook ID, hook scope, or schema file moves, update the schema, the fixtures, the pre-commit config, the data CI workflow, and the canonical removal checklist together in the same change.
 - Do not duplicate the removal-checklist steps elsewhere; keep `schemas/README.md` as the single source of truth and link to it from any other documentation that mentions removal.
+
+---
+
+## Reviewing the Template Sync Module Taxonomy
+
+The downstream sync procedure uses the Module Definitions and Path Mapping tables in [TEMPLATE_UPDATE_PROCEDURE.md](TEMPLATE_UPDATE_PROCEDURE.md#step-6-use-the-authoritative-module-taxonomy) to decide which upstream template changes are in scope for a downstream repository.
+
+Update that taxonomy whenever a template-managed file is:
+
+- added
+- removed
+- renamed
+- moved between directories
+- changed so its primary purpose belongs to a different module
+
+For each affected path, maintainers **MUST** review whether the path mapping still uses the most specific pattern, whether multi-module rows still require the intended AND-style module set, and whether the module definition table needs a new or revised module. Keep examples and worked sync scenarios in `TEMPLATE_UPDATE_PROCEDURE.md` aligned with any taxonomy change.
+
+When reviewing a taxonomy change, include at least one validation pass with `npm run lint:md`. If the change also updates schema, YAML, GitHub Actions, Python, PowerShell, or Terraform files, run the validation commands for those modules as well.
 
 ---
 

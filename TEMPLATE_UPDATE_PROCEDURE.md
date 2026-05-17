@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.0.20260515.0
+**Version:** 1.1.20260517.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-15
+- **Last Updated:** 2026-05-17
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes. Does not define automation contracts for a future manifest or sync tool.
 - **Related:** [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -21,7 +21,7 @@ Use this procedure when a downstream repository wants to review new changes from
 
 - **Module:** A unit in the taxonomy defined by this procedure, such as `markdown`, `powershell`, or `terraform`. Procedure logic operates on modules.
 - **Stack:** Informal shorthand for a related grouping of modules. For example, a "PowerShell stack" may mean `powershell`, `markdown`, `yaml`, and `agent-instructions`, depending on what the downstream repository adopted. Stack is acceptable in prose, but sync decisions MUST be recorded in module terms.
-- **Downstream sync marker:** The `.template-sync.yml` file at the downstream repository root. Under `template_sync`, it records the upstream template repository, the newest upstream template commit that has been reviewed, the modules the downstream repository has adopted, local override rules, and deferred protected-file candidates.
+- **Downstream sync marker:** The `.template-sync/marker.yml` file in the downstream repository. Under `template_sync`, it records the upstream template repository, the newest upstream template commit that has been reviewed, the modules the downstream repository has adopted, local override rules, and deferred protected-file candidates.
 - **Reviewed range:** The upstream template commit range inspected during a delta sync. It is recorded as `RANGE_BASE_SHA..RANGE_HEAD_SHA`, where both endpoints are resolved upstream template commit SHAs. Full reconciliation does not use a delta range; it compares a committed downstream snapshot against the resolved upstream range head.
 - **Included module:** A module listed in the downstream sync marker under `template_sync.included_modules`.
 - **Unadopted-module activity:** Upstream activity in a known taxonomy module that is not listed in `included_modules`.
@@ -44,7 +44,7 @@ Use this procedure when a downstream repository wants to review new changes from
 2. Add this template repository as a `template` remote if it is not already present.
 3. Fetch upstream template changes without merging.
 4. Identify the upstream commit range under review with rename detection.
-5. Initialize or update `.template-sync.yml`.
+5. Initialize or update `.template-sync/marker.yml`.
 6. Filter upstream changes through the authoritative module taxonomy.
 7. Review every candidate file with an explicit decision.
 8. Perform manual merges using an ignored scratch location when needed.
@@ -99,22 +99,37 @@ This step decides which upstream template changes need review during this sync. 
 
 ### Terms Used in This Step
 
-- **`.template-sync.yml`:** The downstream sync marker file at the downstream repository root. It records what upstream template commit has already been reviewed and which template modules the downstream repository has adopted.
-- **Marker:** Short name for `.template-sync.yml`.
-- **`template_sync.last_reviewed_template_commit`:** The marker field that stores the newest upstream template commit already reviewed in a prior sync. The durable marker value MUST be a resolved upstream template commit SHA, not a branch name, tag name, or other moving ref.
-- **Range mode:** The review path for this sync: normal delta sync, first sync from known lineage, full reconciliation, or the optional timestamp-proxy delta sub-path described below.
+- **Marker path:** Downstream repositories use `.template-sync/marker.yml` as the sync marker path. The marker lives inside `.template-sync/` so the directory can hold committed template-sync support files, such as the sync marker, future manifest files, and review artifacts only if a later issue explicitly defines them as committed outputs.
+- **Marker:** Short name for `.template-sync/marker.yml`.
+- **Marker authority:** The marker file is authoritative regardless of whether the downstream repository adopts `template-sync-support`. Module adoption controls only whether sync-procedure and marker-related upstream updates are reviewed in future syncs.
+- **`template_sync.last_reviewed_template_commit`:** The marker field that stores the newest upstream template commit already reviewed in a prior sync. The durable marker value MUST be a resolved upstream template commit SHA, not a branch name, tag name, or other moving ref. Always store the full 40-character SHA; short SHAs are ambiguous and are not durable marker values. See the [Step 5 example marker](#step-5-initialize-or-update-the-sync-marker) for the field in context.
+- **Range mode:** The review path for this sync: normal delta sync, first sync from known lineage, timestamp-proxy delta sync, or full reconciliation.
 - **Range base SHA:** The older endpoint of a delta reviewed range. Changes after this commit are candidates for review.
 - **Marker-supplied range base:** The present, non-empty `template_sync.last_reviewed_template_commit` value from the marker.
 - **Initial range base:** The upstream template commit where a first sync review starts. Upstream changes after that commit are candidates for review.
 - **Exact initial range base:** An initial range base that is known to be the upstream template commit used to create or copy the downstream template content.
-- **Proxy initial range base:** A conservative initial range base chosen when the exact source commit is unknown. It is useful for over-reviewing likely upstream changes, but it is not proof of lineage.
+- **Timestamp-proxy delta sync:** A first-sync delta mode that uses the latest upstream template commit at or before a known copy or import timestamp as an approximate initial range base. It is useful for over-reviewing likely upstream changes, but it is not proof of lineage.
 - **Range head ref:** The upstream branch, tag, or commit the owner chooses as the newer endpoint. By default, this is `template/main`.
 - **Range head SHA:** The resolved upstream template commit SHA printed from the range head ref.
 - **Full reconciliation:** A first-sync mode that compares the committed downstream snapshot against the resolved upstream range head instead of trusting a delta range. It does not require shared Git history between the downstream repository and the template repository.
 
+### Discover the Marker
+
+Before reading any marker contents, choosing a range mode, or filtering by module, check for `.template-sync/marker.yml`.
+
+- If `.template-sync/marker.yml` is present, read it as the downstream sync marker.
+- If `.template-sync/marker.yml` is absent, proceed without a marker. The maintainer then chooses one of the first-sync paths below.
+
 ### Choose the Range Mode
 
-Read `.template-sync.yml`, when present, before running any diff. A marker supplies a range base only when `template_sync.last_reviewed_template_commit` is present and non-empty. If the marker is absent, or if the field is missing or empty, the marker does not supply a range base and this is a first sync.
+| Mode | Definition | When to use | Example |
+| --- | --- | --- | --- |
+| Normal delta sync | Review upstream changes after the marker-supplied range base through the resolved range head. | `.template-sync/marker.yml` exists and `template_sync.last_reviewed_template_commit` is present and non-empty. | Review `1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`. |
+| First sync from known lineage | Review upstream changes after the exact upstream commit used to create or copy the downstream template content. | The marker does not supply a range base, but a trustworthy upstream origin commit is known. | Review `dddddddddddddddddddddddddddddddddddddddd..2222222222222222222222222222222222222222`. |
+| Timestamp-proxy delta sync | Review upstream changes after an approximate date-based upstream commit chosen from the downstream copy or import timestamp. | The marker does not supply a range base, the exact source commit is unknown, and the owner accepts over-review risk from an approximate base. | Review `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa..2222222222222222222222222222222222222222` and record the timestamp rationale. |
+| Full reconciliation | Compare the committed downstream snapshot against the resolved upstream range head instead of trusting a delta range. | The marker does not supply a range base and no trustworthy exact or timestamp-proxy base should be used. | Compare `HEAD` to `2222222222222222222222222222222222222222`. |
+
+Read `.template-sync/marker.yml`, when present, before running any diff. A marker supplies a range base only when `template_sync.last_reviewed_template_commit` is present and non-empty. If the marker is absent, or if the field is missing or empty, the marker does not supply a range base; the maintainer chooses one of the first-sync paths.
 
 When an agent runs this procedure, the repository owner confirms any initial range base or timestamp-proxy choice before the agent trusts it.
 
@@ -122,6 +137,7 @@ When an agent runs this procedure, the repository owner confirms any initial ran
 | --- | --- | --- |
 | Marker supplies a range base | Normal delta sync | Use the marker value as the marker-supplied range base, resolve the range head, run the reachability check, then diff the reviewed range. |
 | No range base from the marker, but a trustworthy upstream origin commit is known | First sync from known lineage | Use that upstream template commit as the exact initial range base, resolve the range head, run the reachability check, then diff the reviewed range. |
+| No range base from the marker, no exact upstream origin commit is known, and the owner accepts a date-based proxy | Timestamp-proxy delta sync | Use the latest upstream template commit at or before the known copy or import timestamp as the initial range base, resolve the range head, run the reachability check, then diff the reviewed range. |
 | No range base from the marker, and no trustworthy upstream origin commit is known | Full reconciliation | Compare the downstream tree against the resolved upstream range head, apply the pre-filter below, adjudicate candidate files through Steps 6-7, then set the marker to the resolved upstream range head only after review is complete. |
 
 A present, non-empty marker value that later fails the reachability check is handled by **Check That the Base Is Reachable** below. Do not run a separate routing-time reachability check, and do not silently replace the marker value with the range head.
@@ -134,11 +150,11 @@ Use this recipe only when the marker does not supply a range base and the owner 
 
 1. Check adoption records first: the PR or commit that created the downstream repository, local sync notes, release tags, or any recorded upstream template commit.
 2. If the exact upstream source commit is known, resolve that commit and record it as an exact initial range base.
-3. If the exact source commit is unknown but the template was copied as a snapshot on a known date, the owner MAY choose a timestamp proxy: the latest upstream template commit at or before the copy or import timestamp.
+3. If the exact source commit is unknown but the template was copied as a snapshot on a known date, the owner MAY choose a timestamp-proxy delta sync: the latest upstream template commit at or before the copy or import timestamp.
 4. Verify any proxy by spot-diffing several copied template files against the candidate upstream commit.
 5. If the proxy remains uncertain, choose an older commit or use full reconciliation. Over-review is safer than under-review because under-review can silently skip upstream changes.
 
-Record the range base type, the rationale, and any uncertainty in the sync working notes. A stale local checkout, partial copy, cherry-pick, or later manual edit can make a timestamp proxy wrong. Record a timestamp proxy as date-based and approximate, not as a known source commit.
+Record the range base type, the rationale, and any uncertainty in the sync working notes. A stale local checkout, partial copy, cherry-pick, or later manual edit can make a timestamp-proxy delta sync wrong. Record the timestamp-proxy base as date-based and approximate, not as a known source commit.
 
 ### Choose the Range Head
 
@@ -181,12 +197,12 @@ git merge-base --is-ancestor RANGE_BASE_SHA RANGE_HEAD_SHA
 For example:
 
 ```bash
-git merge-base --is-ancestor abc1234 2222bbb
+git merge-base --is-ancestor 1111111111111111111111111111111111111111 2222222222222222222222222222222222222222
 ```
 
 Git may print no output when this command succeeds. A successful exit, exit code `0`, means the range base is reachable from the range head and the reviewed range is coherent. A non-zero exit means the base is not reachable from the head. In that case, stop and ask the owner to choose a new range base before running or trusting the diff.
 
-Reasonable replacement bases include the exact upstream origin commit, a conservative proxy initial range base, or an older upstream commit chosen after inspecting repository history. Do not silently reset the marker to the range head.
+Reasonable replacement bases include the exact upstream origin commit, a conservative timestamp-proxy base, or an older upstream commit chosen after inspecting repository history. Do not silently reset the marker to the range head.
 
 ### Run the Delta Diff
 
@@ -198,16 +214,16 @@ git diff --name-status -M RANGE_BASE_SHA..RANGE_HEAD_SHA
 
 The `-M` flag is required so upstream renames appear as renames, such as `R100 old/path new/path`, instead of unrelated add/delete pairs.
 
-Example where the marker says the last reviewed upstream commit was `abc1234` and the resolved range head SHA is `2222bbb`:
+Example where the marker says the last reviewed upstream commit was `1111111111111111111111111111111111111111` and the resolved range head SHA is `2222222222222222222222222222222222222222`:
 
 ```bash
-git diff --name-status -M abc1234..2222bbb
+git diff --name-status -M 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222
 ```
 
-Example first-time sync where upstream commit `def5678` is the exact initial range base and the resolved range head SHA is `2222bbb`:
+Example first-time sync where upstream commit `dddddddddddddddddddddddddddddddddddddddd` is the exact initial range base and the resolved range head SHA is `2222222222222222222222222222222222222222`:
 
 ```bash
-git diff --name-status -M def5678..2222bbb
+git diff --name-status -M dddddddddddddddddddddddddddddddddddddddd..2222222222222222222222222222222222222222
 ```
 
 Do not use the range head as an initial range base just to make the diff empty. That would mark upstream changes as reviewed without reviewing them and would erase the distinction between reviewed upstream changes and adopted upstream changes.
@@ -222,6 +238,21 @@ Before running the comparison, confirm that the downstream working tree is clean
 git diff --name-status -M HEAD RANGE_HEAD_SHA
 ```
 
+Concrete example after substituting the resolved range head SHA:
+
+```bash
+git diff --name-status -M HEAD 2222222222222222222222222222222222222222
+```
+
+Hypothetical full-reconciliation output:
+
+```text
+A       .github/workflows/markdownlint.yml
+D       src/app/legacy_service.py
+M       README.md
+R075    docs/old-template-guide.md   docs/template-sync-guide.md
+```
+
 When the downstream repository and the template repository share no Git history, read the status letters this way:
 
 | Status | Meaning |
@@ -231,7 +262,11 @@ When the downstream repository and the template repository share no Git history,
 | `M` | Present in both trees, but different. |
 | `R` | Pairs a downstream-only path, shown first, with a similar upstream-only path, shown second. With no shared Git history, this is a content-similarity match, not a tracked rename; review each path on its merits. |
 
+A cross-tree `R` row is advisory unless shared lineage is confirmed. For example, `R075 docs/old-template-guide.md docs/template-sync-guide.md` might mean the downstream file was renamed from an earlier template guide, or it might only mean the two files happen to share similar content. Without confirmed shared lineage, treat `docs/old-template-guide.md` as a `D` candidate and `docs/template-sync-guide.md` as an `A` candidate, then decide each through the same taxonomy and per-file review process.
+
 Apply a Step 4 pre-filter before per-file review: when a downstream-only path matches no template-managed path or module mapping and is not template-derived, summarize it as local-only noise and exclude it from Steps 6-7. This keeps the downstream repository's own project files out of per-file adjudication.
+
+The pre-filter does not require listing every downstream-only project file. A count plus one-line categorization is enough, such as `247 application source files under src/app/** excluded as local-only noise`.
 
 Do not exclude paths that appear template-derived or require owner attention. Template-derived paths include a copied template file that was later moved, renamed, or locally edited; a workflow copied from the template and renamed for the downstream project; a Markdown guide that still carries template placeholder conventions; or a protected instruction file whose content is based on this template. Send those paths through the Steps 6-7 taxonomy and per-file decision process unchanged.
 
@@ -241,7 +276,7 @@ Before moving to Step 5, the sync working notes MUST contain:
 
 - Range mode: normal delta sync, first sync from known lineage, full reconciliation, or timestamp-proxy delta sync when that optional sub-path was used
 - Range base SHA, when using a delta range, plus the ref or tag it resolved from if the base was not already a commit SHA
-- Range base type: marker-supplied range base, exact initial range base, or proxy initial range base
+- Range base type: marker-supplied range base, exact initial range base, or timestamp-proxy base
 - Range base rationale
 - Range head ref
 - Range head SHA
@@ -250,30 +285,55 @@ Before moving to Step 5, the sync working notes MUST contain:
 - Local-only noise excluded by the full-reconciliation pre-filter, when applicable
 - Any uncertainty that should be carried into the sync PR summary
 
-Step 5 initializes or updates `.template-sync.yml` after the range mode is chosen. Step 13 later advances `template_sync.last_reviewed_template_commit` to the resolved upstream range head SHA only after the relevant range or reconciliation has actually been reviewed.
+Example sync working-notes block:
+
+```markdown
+## Template Sync Working Notes
+
+- Marker discovery: `.template-sync/marker.yml` present
+- Range mode: normal delta sync
+- Range base SHA: `1111111111111111111111111111111111111111`
+- Range base type: marker-supplied range base
+- Range base rationale: read from `template_sync.last_reviewed_template_commit`
+- Range head ref: `template/main`
+- Range head SHA: `2222222222222222222222222222222222222222`
+- Reachability check: passed
+- Enumeration command: `git diff --name-status -M 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
+- Local-only noise: not applicable
+- Uncertainty: none
+```
+
+Step 5 initializes or updates `.template-sync/marker.yml` after the range mode is chosen. Step 13 later advances `template_sync.last_reviewed_template_commit` to the resolved upstream range head SHA only after the relevant range or reconciliation has actually been reviewed.
 
 ## Step 5: Initialize or Update the Sync Marker
 
-Downstream repositories SHOULD keep a `.template-sync.yml` marker at the repository root. The marker distinguishes reviewed upstream changes from adopted upstream changes. Selective syncs may intentionally skip upstream files, so the preferred field under `template_sync` is `last_reviewed_template_commit`, not `last_adopted_template_commit`.
+Downstream repositories SHOULD keep the sync marker at `.template-sync/marker.yml`, matching the marker path rule in Step 4. The marker distinguishes reviewed upstream changes from adopted upstream changes. Selective syncs may intentionally skip upstream files, so the preferred field under `template_sync` is `last_reviewed_template_commit`, not `last_adopted_template_commit`.
 
-If Step 4 used a first-sync delta range because the marker was missing or incomplete, initialize `.template-sync.yml` in this step. Set `template_sync.last_reviewed_template_commit` to the resolved Step 4 range base SHA until Step 13 advances it to the resolved upstream range head SHA. Carry the range-base rationale from the sync working notes into the final sync PR summary.
+For example, suppose upstream changed `README.md` and `.github/workflows/terraform-ci.yml`, and the downstream repository reviewed both but adopted neither because `README.md` is locally owned and Terraform is not adopted. The sync still advances `last_reviewed_template_commit` to the resolved range head after review, because those upstream changes were inspected and intentionally skipped. A `last_adopted_template_commit` field would incorrectly imply that skipped-but-reviewed changes need to be reviewed again during the next sync.
+
+If Step 4 used a first-sync delta range because the marker was missing or incomplete, initialize `.template-sync/marker.yml` in this step. Set `template_sync.last_reviewed_template_commit` to the resolved Step 4 range base SHA until Step 13 advances it to the resolved upstream range head SHA. Carry the range-base rationale from the sync working notes into the final sync PR summary.
 
 If Step 4 selected full reconciliation, the marker still has no reviewed upstream commit at this step. You MAY initialize or update other marker fields, such as `source_repo`, `included_modules`, and local overrides chosen by the owner, but do not set `template_sync.last_reviewed_template_commit` until Step 13 records the resolved upstream range head SHA after review is complete.
+
+`local_overrides` and `deferred_protected_candidates` are explained immediately after the example.
 
 Example marker:
 
 ```yaml
 template_sync:
   source_repo: https://github.com/franklesniak/copilot-repo-template.git
-  last_reviewed_template_commit: abc1234
+  last_reviewed_template_commit: 1111111111111111111111111111111111111111
   included_modules:
     - baseline
     - agent-instructions
+    - github-actions
+    - github-platform
     - github-templates
     - markdown
     - powershell
     - json
     - yaml
+    - template-sync-support
   local_overrides:
     - path: README.md
       reason: "Project-specific; use template only as reference."
@@ -283,7 +343,7 @@ template_sync:
       default_decision: MERGE
   deferred_protected_candidates:
     - path: .github/copilot-instructions.md
-      source_commit: def5678
+      source_commit: dddddddddddddddddddddddddddddddddddddddd
       reason: "Adds a stack-selection clause; pending owner authorization."
 ```
 
@@ -297,9 +357,16 @@ template_sync:
 
 ### Local Overrides
 
-When a changed upstream path appears in `local_overrides` and at least one of its mapped modules is in `included_modules`, start the per-file decision at the override's `default_decision`. Each applied override MUST still appear in the sync PR summary with a brief description of the upstream change.
+When a changed upstream path appears in `local_overrides` and every mapped module is in `included_modules`, start the per-file decision at the override's `default_decision`. Each applied override MUST still appear in the sync PR summary with a brief description of the upstream change.
 
 The agent or maintainer does not decide that an upstream change is too minor to mention under an override. Listing every applied override is the mechanism that lets the owner notice stale overrides, security-sensitive changes, validation changes, or governance changes that should override the override.
+
+Worked local-overrides mini scenario:
+
+1. The marker has a `README.md` override with `default_decision: SKIP` because the downstream README is project-specific.
+2. The reviewed upstream range changes `README.md` to add a security reporting note.
+3. The per-file row starts with `SKIP` from the override, but the maintainer upgrades the decision to `MERGE` because the security note is relevant.
+4. The sync PR summary still lists the applied override and the upstream change, for example: `README.md` defaulted to `SKIP`; upstream added security reporting guidance; final decision `MERGE`.
 
 ### Deferred Protected Candidates
 
@@ -311,6 +378,12 @@ Protected-file candidates remain in `deferred_protected_candidates` until the ow
 
 If the same protected path changes again upstream before the candidate is resolved, update the existing entry to the latest relevant source commit and preserve the prior rationale. Add a short refresh note to `reason` when the newer upstream change materially changes what is deferred. Add a separate entry only when the same path has distinct deferred candidates that cannot be represented clearly by one entry.
 
+To explicitly dismiss a deferred protected candidate:
+
+1. Remove that candidate from `.template-sync/marker.yml`.
+2. Record the dismissed candidate's `path`, `source_commit`, and dismissal rationale in the sync PR description or a linked owner comment.
+3. Allow later upstream changes to the same protected path to surface a new candidate during a future sync.
+
 ## Step 6: Use the Authoritative Module Taxonomy
 
 The table in this section is authoritative for this manual procedure. If future automation moves the mapping into a machine-readable manifest, the manifest should preserve these semantics unless a later procedure explicitly changes them.
@@ -319,24 +392,30 @@ The table in this section is authoritative for this manual procedure. If future 
 
 | Module | Scope |
 | --- | --- |
-| `baseline` | Core repository scaffolding, community files, starter identity files, template maintenance docs, and repository-level configuration not owned by a narrower module. |
+| `baseline` | Core repository scaffolding, community files, starter identity files, and repository-level configuration not owned by a narrower module. |
 | `agent-instructions` | Agent entry points, Copilot instructions, Cursor rules, reusable prompt guidance, and modular instruction docs. |
-| `github-templates` | GitHub issue templates, PR templates, CODEOWNERS, and GitHub-facing community workflow surfaces. |
+| `github-platform` | Repository-level GitHub platform configuration that is not itself an issue template, PR template, CODEOWNERS file, or workflow. Includes Dependabot configuration, repository funding metadata, security-advisory configuration, code-scanning configuration outside of workflows, and similar repository-scope GitHub-only settings. Current example: `.github/dependabot.yml`. Likely future inhabitants include `.github/FUNDING.yml`, `.github/security/*`, and other repository-scope GitHub configuration files. |
+| `github-actions` | GitHub Actions workflow files under `.github/workflows/**`. |
+| `github-templates` | GitHub issue templates, PR templates, CODEOWNERS, and GitHub collaboration surfaces. |
+| `template-onboarding` | Template adoption and template maintainer guidance that downstream repositories typically remove after adoption. |
+| `template-sync-support` | Committed files used to perform future template syncs, such as the sync procedure, sync marker, future manifest references, and future sync validation docs. |
 | `markdown` | Markdown linting, Markdown templates, docs guidance, and Markdown-only documentation assets. |
 | `powershell` | PowerShell scripts, Pester tests, PSScriptAnalyzer configuration, and PowerShell CI. |
 | `json` | JSON and JSONC guidance, examples, validation commands, and JSON-oriented template files. |
-| `yaml` | YAML guidance, YAML template files, YAML validation, and GitHub Actions syntax guidance not owned by a narrower workflow module. |
+| `yaml` | YAML guidance, YAML template files, and YAML validation not owned by a narrower module. |
 | `schema` | JSON Schema contracts, schema examples, schema validation docs, and schema-specific tests. |
 | `python` | Python package scaffolding, Python tests, Python CI, and Python tooling configuration. |
-| `terraform` | Terraform modules, tests, linting, documentation, workflows, and template files. |
+| `terraform` | Terraform modules, tests, linting, documentation, and template files. |
 
 ### Path Mapping
 
-Apply the most specific matching row. If multiple rows match, use the union of their modules. A path mapped to multiple modules is included in the review set if any mapped module appears in `included_modules`.
+Apply the most specific matching row. If multiple rows match, use the de-duplicated union of their modules. A path mapped to multiple modules is included in the per-file review only when every mapped module appears in `included_modules`.
+
+A future manifest representation may model richer semantics, such as `requires_all` plus `requires_any`, for platform-spanning files. Until that exists, this human procedure uses the AND-style rule above.
 
 | Path pattern | Module(s) |
 | --- | --- |
-| `.template-sync.yml` | `baseline` |
+| `.template-sync/marker.yml` | `template-sync-support` |
 | `.github/copilot-instructions.md` | `agent-instructions` |
 | `.github/instructions/docs.instructions.md` | `markdown`, `agent-instructions` |
 | `.github/instructions/gitattributes.instructions.md` | `baseline`, `agent-instructions` |
@@ -348,31 +427,38 @@ Apply the most specific matching row. If multiple rows match, use the union of t
 | `.github/instructions/*.instructions.md` not otherwise listed | `agent-instructions`; surface for owner to confirm or add additional module mappings |
 | `.cursor/rules/**` | `agent-instructions` |
 | `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` | `agent-instructions` |
-| `COPILOT_CHAT_PROMPTS.md`, `docs/PR_REVIEW_PROMPTS.md` | `agent-instructions`, `markdown` |
+| `COPILOT_CHAT_PROMPTS.md`, `docs/PR_REVIEW_PROMPTS.md` | `agent-instructions` |
 | `.codex/**` | `agent-instructions` |
-| `.github/ISSUE_TEMPLATE/**` | `github-templates`, `yaml` |
-| `.github/pull_request_template.md` | `github-templates`, `markdown` |
+| `.github/ISSUE_TEMPLATE/**` | `github-templates` |
+| `.github/pull_request_template.md` | `github-templates` |
 | `.github/CODEOWNERS` | `github-templates` |
-| `.github/workflows/markdownlint.yml` | `markdown`, `yaml` |
-| `.github/workflows/powershell-ci.yml` | `powershell`, `yaml` |
-| `.github/workflows/python-ci.yml` | `python`, `yaml` |
-| `.github/workflows/terraform-ci.yml` | `terraform`, `yaml` |
-| `.github/workflows/data-ci.yml` | `json`, `yaml`, `schema` |
-| `.github/workflows/check-placeholders.yml` | `baseline`, `github-templates`, `markdown`, `yaml` |
-| `.github/workflows/auto-fix-precommit.yml` | `baseline`, `yaml` |
-| `.github/dependabot.yml`, `.yamllint.yml` | `yaml` |
-| `.pre-commit-config.yaml` | `baseline`, `markdown`, `json`, `yaml`, `schema`, `python`, `terraform` |
-| `.markdownlint.jsonc`, `package.json`, `package-lock.json` | `markdown`, `json` |
+| `.github/dependabot.yml` | `github-platform` |
+| `.github/workflows/markdownlint.yml` | `markdown`, `github-actions` |
+| `.github/workflows/powershell-ci.yml` | `powershell`, `github-actions` |
+| `.github/workflows/python-ci.yml` | `python`, `github-actions` |
+| `.github/workflows/terraform-ci.yml` | `terraform`, `github-actions` |
+| `.github/workflows/data-ci.yml` | `github-actions` |
+| `.github/workflows/check-placeholders.yml` | `baseline`, `github-actions` |
+| `.github/workflows/auto-fix-precommit.yml` | `baseline`, `github-actions` |
+| `.yamllint.yml` | `yaml` |
+| `.pre-commit-config.yaml` | `baseline` |
+| `.markdownlint.jsonc`, `package.json`, `package-lock.json` | `markdown` |
 | `templates/markdown/**` | `markdown` |
 | `templates/powershell/**`, `tests/PowerShell/**`, `.github/linting/PSScriptAnalyzerSettings.psd1`, `src/tools/*.ps1` | `powershell` |
 | `templates/json/**` | `json` |
 | `templates/yaml/**` | `yaml` |
-| `schemas/**`, `tests/test_schema_examples.py` | `schema`, `json`, `python` |
+| `schemas/**` | `schema` |
+| `tests/test_schema_examples.py` | `schema`, `python` |
 | `templates/python/**`, `pyproject.toml`, `tests/**/*.py` | `python` |
 | `templates/terraform/**`, `docs/terraform/**`, `modules/**`, `tests/**/*.tftest.hcl`, `.tflint.hcl`, `*.tf`, `*.tfvars`, `*.tftpl`, `*.tfbackend` | `terraform` |
-| `README.md`, `GETTING_STARTED_NEW_REPO.md`, `GETTING_STARTED_EXISTING_REPO.md`, `OPTIONAL_CONFIGURATIONS.md`, `TEMPLATE_MAINTENANCE.md`, `TEMPLATE_UPDATE_PROCEDURE.md` | `baseline`, `markdown` |
-| `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE` | `baseline`, `markdown` |
+| `README.md` | `baseline` |
+| `OPTIONAL_CONFIGURATIONS.md` | `baseline` |
+| `TEMPLATE_UPDATE_PROCEDURE.md` | `template-sync-support` |
+| `GETTING_STARTED_NEW_REPO.md`, `GETTING_STARTED_EXISTING_REPO.md`, `TEMPLATE_MAINTENANCE.md` | `template-onboarding` |
+| `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE` | `baseline` |
 | `.gitignore`, `.gitattributes`, `.editorconfig`, `.vscode/**` | `baseline` |
+
+`.github/workflows/data-ci.yml` is platform-level under this AND-style human procedure, so it maps to `github-actions`. A later machine-readable manifest may refine this row to require `github-actions` plus at least one of `json`, `yaml`, or `schema`.
 
 If a changed upstream path does not match the table, classify it as `UNMAPPED` in the sync working notes and ask the owner to assign a module before deciding whether to include it.
 
@@ -381,8 +467,8 @@ If a changed upstream path does not match the table, classify it as `UNMAPPED` i
 For each path from `git diff --name-status -M`:
 
 1. Map the path to module(s).
-2. Include the path in the per-file review table if any mapped module is present in `included_modules`.
-3. Exclude the path from the per-file review table if all mapped modules are known taxonomy modules absent from `included_modules`.
+2. Include the path in the per-file review table only if every mapped module is present in `included_modules`.
+3. Exclude the path from the per-file review table if any mapped module is absent from `included_modules`.
 4. Summarize excluded paths as unadopted-module activity by module in the PR summary.
 5. Surface unknown modules and unmapped paths for explicit owner review before completing the sync.
 
@@ -412,8 +498,8 @@ Suggested table:
 | Path | Module(s) | Template Change | Local Customization | Decision | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `.github/instructions/docs.instructions.md` | `markdown`, `agent-instructions` | Updated style rules | None | `PROTECTED-REVIEW` | Requires owner authorization. |
-| `.github/workflows/powershell-ci.yml` | `powershell`, `yaml` | Updated validation steps | Local runner change | `MERGE` | Preserve local runner. |
-| `.github/workflows/terraform-ci.yml` | `terraform`, `yaml` | Updated TFLint setup | Repo excludes Terraform | `SKIP` | Summarize as unadopted-module activity. |
+| `.github/workflows/powershell-ci.yml` | `powershell`, `github-actions` | Updated validation steps | Local runner change | `MERGE` | Preserve local runner. |
+| `.github/workflows/terraform-ci.yml` | `terraform`, `github-actions` | Updated TFLint setup | Repo excludes Terraform | `SKIP` | Summarize as unadopted-module activity. |
 ```
 
 Upstream deletions MUST be surfaced for owner decision rather than applied automatically. Valid decisions for deletion rows include `TAKE` when the downstream owner agrees to delete the local file, `SKIP` when the downstream file is intentionally retained, and `MERGE` when only part of the deletion rationale applies.
@@ -496,7 +582,7 @@ Protected-file edits MUST be placed in a separate commit from non-protected chan
 
 ### Deferred Protected Edits
 
-If authorization is absent, leave the protected file unchanged and record the candidate in `.template-sync.yml` under `deferred_protected_candidates`.
+If authorization is absent, leave the protected file unchanged and record the candidate in `.template-sync/marker.yml` under `deferred_protected_candidates`.
 
 Example:
 
@@ -504,7 +590,7 @@ Example:
 template_sync:
   deferred_protected_candidates:
     - path: .github/copilot-instructions.md
-      source_commit: 2222bbb
+      source_commit: 2222222222222222222222222222222222222222
       reason: "Updates stack-selection guidance; awaiting owner authorization."
 ```
 
@@ -542,7 +628,7 @@ Common placeholder shapes include:
 - `https://github.com/OWNER/REPO.git`
 - `https://github.com/OWNER/REPO/blob/HEAD/PATH`
 
-References to the upstream template repository itself (for example, `franklesniak/copilot-repo-template` in `.template-sync.yml` under `source_repo`, in the Step 2 `git remote add template` example, or in adopted documentation that intentionally links to the upstream template) are not template placeholders and are out of scope for Step 11. Review and decide on those references under Step 10 (Preserve Local Identity) so that legitimate retentions are not rewritten and any deliberate rebranding remains an explicit decision.
+References to the upstream template repository itself (for example, `franklesniak/copilot-repo-template` in `.template-sync/marker.yml` under `source_repo`, in the Step 2 `git remote add template` example, or in adopted documentation that intentionally links to the upstream template) are not template placeholders and are out of scope for Step 11. Review and decide on those references under Step 10 (Preserve Local Identity) so that legitimate retentions are not rewritten and any deliberate rebranding remains an explicit decision.
 
 Do not replace didactic examples that intentionally explain the placeholder convention unless the downstream repository has removed the associated placeholder-check workflow and no longer wants the convention documented.
 
@@ -554,11 +640,15 @@ Run validation appropriate to the included modules and files changed. Full templ
 | --- | --- |
 | `baseline` | `pre-commit run --all-files` |
 | `agent-instructions` | `npm run lint:md`, `npm run lint:md:nested`, and any repo-specific instruction checks |
-| `github-templates` | `pre-commit run check-yaml --all-files`, `pre-commit run actionlint --all-files`, and template rendering review |
+| `github-platform` | `pre-commit run check-yaml --all-files`, `pre-commit run check-jsonschema --all-files` where configured, and repository-settings review |
+| `github-actions` | `pre-commit run check-yaml --all-files`, `pre-commit run actionlint --all-files` |
+| `github-templates` | `pre-commit run check-yaml --all-files` and issue or PR template rendering review |
+| `template-onboarding` | `npm run lint:md` and walkthrough review for kept onboarding paths |
+| `template-sync-support` | `npm run lint:md`, `npm run lint:md:nested`, and a dry-run review of the sync procedure examples |
 | `markdown` | `npm run lint:md`, `npm run lint:md:nested` |
 | `powershell` | `Invoke-Pester -Path tests/ -Output Detailed` |
 | `json` | `pre-commit run check-json --all-files` |
-| `yaml` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run actionlint --all-files` |
+| `yaml` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files` |
 | `schema` | `pre-commit run check-jsonschema --all-files`, `pre-commit run check-metaschema --all-files`, `pytest tests/test_schema_examples.py -v` after schema or schema-example changes |
 | `python` | `pytest tests/ -v --cov --cov-report=term-missing` |
 | `terraform` | `terraform fmt -check -recursive`, `tflint --recursive`, `terraform test -verbose` |
@@ -567,14 +657,14 @@ Run `pre-commit run --all-files` before committing when the downstream repositor
 
 ## Step 13: Record the Reviewed Commit
 
-After all decisions are recorded and validation is complete, update `.template-sync.yml`:
+After all decisions are recorded and validation is complete, update `.template-sync/marker.yml`:
 
 - Set `template_sync.last_reviewed_template_commit` to the resolved upstream range head SHA that was reviewed.
 - Keep `included_modules` current.
 - Add, update, or remove `local_overrides` only when the owner made that adoption decision.
 - Add or refresh `deferred_protected_candidates` for unresolved protected-file changes.
 
-Do not set `template_sync.last_reviewed_template_commit` to a commit that was not actually reviewed through the taxonomy and per-file process. Do not store a branch name, tag name, or other moving ref in this marker field; store the resolved upstream template commit SHA that was reviewed.
+Do not set `template_sync.last_reviewed_template_commit` to a commit that was not actually reviewed through the taxonomy and per-file process. Do not store a branch name, tag name, short SHA, or other moving ref in this marker field; store the full 40-character resolved upstream template commit SHA that was reviewed.
 
 ## Step 14: Open the Sync PR
 
@@ -602,8 +692,8 @@ Example summary skeleton:
 ```markdown
 ## Template Sync Summary
 
-**Upstream range reviewed:** `1111aaa..2222bbb`
-**Included modules:** baseline, agent-instructions, github-templates, markdown, powershell
+**Upstream range reviewed:** `1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
+**Included modules:** baseline, agent-instructions, github-actions, github-templates, markdown, powershell, template-sync-support
 **Unadopted-module activity:** terraform (`.github/workflows/terraform-ci.yml`)
 **Unknown modules or unmapped paths:** none
 **Files adopted unchanged:** `templates/markdown/README.md`
@@ -611,7 +701,7 @@ Example summary skeleton:
 **Files skipped:** none
 **Files removed locally:** none
 **Protected files applied:** none
-**Protected files deferred:** `.github/copilot-instructions.md` at `2222bbb`
+**Protected files deferred:** `.github/copilot-instructions.md` at `2222222222222222222222222222222222222222`
 **Local overrides applied:** `README.md` defaulted to `SKIP`; upstream changed setup prose.
 **Local customizations preserved:** self-hosted runner block; project-specific PR checklist.
 **Validation:** `pre-commit run --all-files` (passed), `npm run lint:md` (passed), `Invoke-Pester -Path tests/ -Output Detailed` (passed)
@@ -623,30 +713,35 @@ Example summary skeleton:
 
 ## Worked Example
 
-This example is illustrative. A downstream repository adopts `baseline`, `agent-instructions`, `github-templates`, `markdown`, and `powershell`. It does not use `terraform`, `python`, `json`, `yaml`, or `schema` as independent modules, though YAML files that belong to included modules may still be reviewed through their included module mapping.
+This example is illustrative. A downstream repository adopts `baseline`, `agent-instructions`, `github-actions`, `github-templates`, `markdown`, `powershell`, and `template-sync-support`. It does not use `terraform`, `python`, `json`, `yaml`, `schema`, or `github-platform` as independent modules.
 
 ### Scenario State
 
-- Downstream sync marker at `.template-sync.yml`: `template_sync.last_reviewed_template_commit` is `1111aaa`
+- Downstream sync marker at `.template-sync/marker.yml`: `template_sync.last_reviewed_template_commit` is `1111111111111111111111111111111111111111`
 - Upstream range head ref: `template/main`
-- Resolved upstream range head SHA: `2222bbb`
+- Resolved upstream range head SHA: `2222222222222222222222222222222222222222`
+- Included modules: `baseline`, `agent-instructions`, `github-actions`, `github-templates`, `markdown`, `powershell`, and `template-sync-support`
 - Local customization: `.github/workflows/powershell-ci.yml` uses a self-hosted runner block.
 - Local customization: `.github/pull_request_template.md` includes project-specific checklist items.
 - Removed at adoption time: Terraform and Python workflows and template directories.
 
 ### Fetch and Enumerate
 
+Marker discovery happens before range selection: `.template-sync/marker.yml` is present, so read it as the marker. The marker supplies `1111111111111111111111111111111111111111` as the range base, so this sync uses normal delta sync.
+
 ```bash
 git fetch template
 git rev-parse 'template/main^{commit}'
-git merge-base --is-ancestor 1111aaa 2222bbb
-git diff --name-status -M 1111aaa..2222bbb
+git merge-base --is-ancestor 1111111111111111111111111111111111111111 2222222222222222222222222222222222222222
+git diff --name-status -M 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222
 ```
 
 The sync working notes start with the reviewed range endpoints:
 
-- **Range base:** `1111aaa`
-- **Range head:** `2222bbb`
+- **Marker discovery:** `.template-sync/marker.yml` present
+- **Range mode:** normal delta sync
+- **Range base:** `1111111111111111111111111111111111111111`
+- **Range head:** `2222222222222222222222222222222222222222`
 
 Hypothetical output:
 
@@ -655,9 +750,10 @@ M       .github/copilot-instructions.md
 M       .github/workflows/powershell-ci.yml
 M       .github/instructions/powershell.instructions.md
 M       .github/pull_request_template.md
+M       TEMPLATE_UPDATE_PROCEDURE.md
 M       templates/markdown/README.md
 M       .github/workflows/terraform-ci.yml
-R100    docs/intro.md   docs/getting-started.md
+R100    templates/markdown/intro.md   templates/markdown/getting-started.md
 ```
 
 ### Filter by Modules
@@ -665,12 +761,13 @@ R100    docs/intro.md   docs/getting-started.md
 | Path | Module(s) | In scope? |
 | --- | --- | --- |
 | `.github/copilot-instructions.md` | `agent-instructions` | yes |
-| `.github/workflows/powershell-ci.yml` | `powershell`, `yaml` | yes |
+| `.github/workflows/powershell-ci.yml` | `powershell`, `github-actions` | yes |
 | `.github/instructions/powershell.instructions.md` | `powershell`, `agent-instructions` | yes |
-| `.github/pull_request_template.md` | `github-templates`, `markdown` | yes |
+| `.github/pull_request_template.md` | `github-templates` | yes |
+| `TEMPLATE_UPDATE_PROCEDURE.md` | `template-sync-support` | yes |
 | `templates/markdown/README.md` | `markdown` | yes |
-| `.github/workflows/terraform-ci.yml` | `terraform`, `yaml` | no for `terraform`; summarize as unadopted-module activity because `yaml` is not independently adopted in this scenario |
-| `docs/intro.md` to `docs/getting-started.md` | `markdown` | yes |
+| `.github/workflows/terraform-ci.yml` | `terraform`, `github-actions` | no; `terraform` is absent, so AND-style matching excludes the row even though `github-actions` is present |
+| `templates/markdown/intro.md` to `templates/markdown/getting-started.md` | `markdown` | yes |
 
 There are no unknown modules or unmapped paths in this example.
 
@@ -682,8 +779,9 @@ There are no unknown modules or unmapped paths in this example.
 | `.github/workflows/powershell-ci.yml` | `MERGE` | Preserve self-hosted runner block; adopt upstream validation step changes. |
 | `.github/instructions/powershell.instructions.md` | `PROTECTED-REVIEW` | Defer and record under `deferred_protected_candidates`. |
 | `.github/pull_request_template.md` | `MERGE` | Preserve project checklist; adopt upstream checklist additions. |
+| `TEMPLATE_UPDATE_PROCEDURE.md` | `TAKE` | Retain the sync procedure and adopt upstream clarification. |
 | `templates/markdown/README.md` | `TAKE` | No local customization. |
-| `docs/intro.md` to `docs/getting-started.md` | `TAKE` | Adopt upstream rename. |
+| `templates/markdown/intro.md` to `templates/markdown/getting-started.md` | `TAKE` | Adopt upstream rename. |
 
 Unadopted-module activity:
 
@@ -695,8 +793,8 @@ Unadopted-module activity:
 
 ```bash
 mkdir -p .cache/template-sync
-git show 2222bbb:.github/workflows/powershell-ci.yml > .cache/template-sync/powershell-ci.upstream.yml
-git show 2222bbb:.github/pull_request_template.md > .cache/template-sync/pr-template.upstream.md
+git show 2222222222222222222222222222222222222222:.github/workflows/powershell-ci.yml > .cache/template-sync/powershell-ci.upstream.yml
+git show 2222222222222222222222222222222222222222:.github/pull_request_template.md > .cache/template-sync/pr-template.upstream.md
 ```
 
 Manually reconcile each scratch file against the downstream file. The PowerShell workflow keeps its self-hosted runner block and adopts the upstream validation step changes. The PR template keeps project-specific checklist items and adopts the upstream checklist additions.
@@ -706,23 +804,25 @@ Manually reconcile each scratch file against the downstream file. The PowerShell
 ```yaml
 template_sync:
   source_repo: https://github.com/franklesniak/copilot-repo-template.git
-  last_reviewed_template_commit: 2222bbb
+  last_reviewed_template_commit: 2222222222222222222222222222222222222222
   included_modules:
     - baseline
     - agent-instructions
+    - github-actions
     - github-templates
     - markdown
     - powershell
+    - template-sync-support
   local_overrides:
     - path: README.md
       reason: "Project-specific; use template only as reference."
       default_decision: SKIP
   deferred_protected_candidates:
     - path: .github/copilot-instructions.md
-      source_commit: 2222bbb
+      source_commit: 2222222222222222222222222222222222222222
       reason: "Updated stack-selection clause; awaiting owner authorization."
     - path: .github/instructions/powershell.instructions.md
-      source_commit: 2222bbb
+      source_commit: 2222222222222222222222222222222222222222
       reason: "Adds parameter-validation guidance; awaiting owner authorization."
 ```
 
@@ -742,13 +842,13 @@ Invoke-Pester -Path tests/ -Output Detailed
 ### PR Summary Fragment
 
 ```markdown
-**Upstream range reviewed:** `1111aaa..2222bbb`
-**Included modules:** baseline, agent-instructions, github-templates, markdown, powershell
+**Upstream range reviewed:** `1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
+**Included modules:** baseline, agent-instructions, github-actions, github-templates, markdown, powershell, template-sync-support
 **Unadopted-module activity:** terraform (`.github/workflows/terraform-ci.yml`)
 **Unknown modules or unmapped paths:** none
-**Files adopted unchanged:** `templates/markdown/README.md`, `docs/getting-started.md` renamed from `docs/intro.md`
+**Files adopted unchanged:** `TEMPLATE_UPDATE_PROCEDURE.md`, `templates/markdown/README.md`, `templates/markdown/getting-started.md` renamed from `templates/markdown/intro.md`
 **Files manually merged:** `.github/workflows/powershell-ci.yml`, `.github/pull_request_template.md`
-**Protected files deferred:** `.github/copilot-instructions.md` at `2222bbb`, `.github/instructions/powershell.instructions.md` at `2222bbb`
+**Protected files deferred:** `.github/copilot-instructions.md` at `2222222222222222222222222222222222222222`, `.github/instructions/powershell.instructions.md` at `2222222222222222222222222222222222222222`
 **Local overrides applied:** none in scope this sync
 **Local customizations preserved:** self-hosted runner block; project-specific PR checklist
 **Validation:** `pre-commit run --all-files` (passed), `npm run lint:md` (passed), `Invoke-Pester -Path tests/ -Output Detailed` (passed)
@@ -758,10 +858,13 @@ Invoke-Pester -Path tests/ -Output Detailed
 
 Future automation MAY add:
 
-- a `.template-manifest.yml` path-to-module manifest
-- a schema for `.template-sync.yml`
+- a `.template-sync/manifest.yml` path-to-module manifest
+- a schema for `.template-sync/marker.yml`
 - valid and invalid marker fixtures
 - a pre-commit hook that checks manifest coverage for managed paths
 - a helper script that generates the candidate review table
+- richer manifest semantics for platform-spanning files, such as representing `.github/workflows/data-ci.yml` as `github-actions` plus at least one of `json`, `yaml`, or `schema`
+
+Tracked follow-up issues are [Issue #530](https://github.com/franklesniak/copilot-repo-template/issues/530) for extracting the taxonomy to a machine-readable manifest and [Issue #531](https://github.com/franklesniak/copilot-repo-template/issues/531) for marker schema validation.
 
 Until that automation exists, this document is the authoritative procedure.
