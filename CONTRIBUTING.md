@@ -91,6 +91,7 @@ Run markdown linting manually:
 
 ```bash
 npm run lint:md           # Lint all markdown files
+npm run lint:md:links     # Validate local markdown links and headings
 npm run lint:md:nested    # Lint nested markdown blocks in docs
 ```
 
@@ -413,4 +414,4 @@ You can customize these instruction files for your project's specific convention
 
 ### First-Time Setup Validation
 
-After creating a new repository from this template, see the [Validating Your New Repository](README.md#validating-your-new-repository) section in the README for guidance on verifying your setup.
+After creating a new repository from this template, see the [Validation and Testing](GETTING_STARTED_NEW_REPO.md#validation-and-testing) section for guidance on verifying your setup.

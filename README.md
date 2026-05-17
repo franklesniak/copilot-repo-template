@@ -33,7 +33,7 @@ This template includes:
 - **GitHub Copilot Instructions:** Comprehensive coding standards that guide AI-assisted development
 - **Multi-Agent Support:** Instruction files for Cursor Agent, Hermes Agent, Claude Code, OpenAI Codex CLI, and Gemini Code Assist (`.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`)
 - **Language-Specific Guidelines:** Modular instruction files for Markdown, PowerShell, Python, Terraform, JSON/JSONC, and YAML
-- **Linting Configurations:** Pre-configured settings for markdownlint, PSScriptAnalyzer, TFLint, and yamllint
+- **Linting Configurations:** Pre-configured settings for markdownlint, offline Markdown link validation, PSScriptAnalyzer, TFLint, and yamllint
 - **Data-File Validation:** Pre-commit hooks for `check-json`, `check-yaml`, `yamllint`, `actionlint` (GitHub Actions workflows), `check-jsonschema` (validates schema valid examples, `.template-sync/manifest.yml`, `.template-sync/marker.yml` when present, plus selected real load-bearing configuration files against built-in vendor schemas), and `check-metaschema` (project-owned schema self-validation)
 - **JSON Schemas:** Root-level `schemas/` directory convention for schema-backed JSON and YAML files
 - **Pre-commit Hooks:** Automated code quality checks before commits
@@ -70,7 +70,7 @@ For template maintainers, see [TEMPLATE_MAINTENANCE.md](TEMPLATE_MAINTENANCE.md)
     ├── auto-fix-precommit.yml        # Auto-fix pre-commit on copilot/** pushes (optional)
     ├── check-placeholders.yml       # Transitional OWNER/REPO placeholder check
     ├── data-ci.yml                   # JSON/YAML/Actions data-file linting CI
-    ├── markdownlint.yml              # Markdown linting CI (markdownlint)
+    ├── markdownlint.yml              # Markdown linting CI (markdownlint + link checks)
     ├── powershell-ci.yml             # PowerShell linting and testing CI (optional)
     ├── python-ci.yml                 # Python linting and testing CI (optional)
     └── terraform-ci.yml              # Terraform format, validate, lint, test, security CI (optional)
@@ -99,6 +99,8 @@ schemas/                             # JSON Schemas for load-bearing JSON/YAML f
 
 pyproject.toml                       # Python project configuration
 .markdownlint.jsonc                  # Markdown linting configuration
+.remarkignore                        # Markdown link-check scan exclusions
+.remarkrc.mjs                        # Markdown link-check configuration
 .yamllint.yml                        # YAML linting configuration
 .pre-commit-config.yaml              # Pre-commit hooks (multi-language)
 .cursor/rules/repository-instructions.mdc  # Agent instructions for Cursor Agent
@@ -120,11 +122,13 @@ GEMINI.md                            # Agent instructions for Gemini Code Assist
 | `.github/workflows/auto-fix-precommit.yml` | Automatically commits pre-commit auto-fixes on pushes to `copilot/**` branches by the Copilot coding agent (optional - remove if not using the Copilot coding agent) |
 | `.github/workflows/check-placeholders.yml` | Transitional CI workflow to verify OWNER/REPO and @OWNER placeholders are replaced after cloning; remove after initialization if placeholders are fully replaced and you no longer need the guardrail |
 | `.github/workflows/data-ci.yml` | Data-file (JSON/YAML/GitHub Actions) linting CI workflow — runs `check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, and `check-metaschema` as a dedicated check that can be required via branch protection |
-| `.github/workflows/markdownlint.yml` | Markdown linting CI workflow (uses [markdownlint](https://github.com/DavidAnson/markdownlint)) |
+| `.github/workflows/markdownlint.yml` | Markdown linting CI workflow (uses [markdownlint](https://github.com/DavidAnson/markdownlint), nested Markdown linting, and offline link validation) |
 | `.github/workflows/powershell-ci.yml` | PowerShell linting and Pester testing CI workflow (optional - remove if not using PowerShell) |
 | `.github/workflows/python-ci.yml` | Python linting and testing CI workflow (optional - remove if not using Python) |
 | `.github/workflows/terraform-ci.yml` | Terraform format, validate, lint, test, and security CI workflow (optional - remove if not using Terraform) |
 | `.markdownlint.jsonc` | Markdown linting rules prioritizing auto-fixable checks |
+| `.remarkignore` | Exclusions for offline Markdown link validation |
+| `.remarkrc.mjs` | Remark configuration for offline Markdown link validation |
 | `.yamllint.yml` | YAML linting configuration (2-space indentation, max line length 120 as warning, unquoted GitHub Actions `on:` allowed) |
 | `.pre-commit-config.yaml` | Pre-commit hooks for all projects (multi-language) |
 | `schemas/` | Root-level JSON Schemas (Draft 2020-12) describing load-bearing JSON and YAML files |
@@ -163,13 +167,20 @@ This template organizes linting configurations in `.github/linting/` (for PSScri
 
 Configuration: `.markdownlint.jsonc`
 
+Link-check configuration: `.remarkrc.mjs` and `.remarkignore`
+
 ```bash
 # Check markdown files
 npm run lint:md
 
+# Validate local markdown links and headings offline
+npm run lint:md:links
+
 # Auto-fix issues
 npx markdownlint-cli2 "**/*.md" "#node_modules" "#.pytest_cache" --fix
 ```
+
+`npm run lint:md:links` validates repository-local file links and Markdown heading fragments without checking external URLs, keeping the default command deterministic for CI.
 
 #### PowerShell Linting (PSScriptAnalyzer)
 
@@ -313,7 +324,7 @@ See `templates/terraform/Example.tftest.hcl` for a comprehensive Terraform test 
 
 This repository enforces code quality through:
 
-- **Markdown Linting:** Runs on pre-commit and in CI
+- **Markdown Linting and Link Checking:** markdownlint runs on pre-commit and in CI; offline Markdown link validation runs in CI
 - **JSON/YAML Validation:** `check-json` (strict `.json`), `check-yaml`, and `yamllint` run on pre-commit
 - **GitHub Actions Linting:** `actionlint` runs on pre-commit
 - **Schema Validation:** `check-jsonschema` validates schema valid examples, `.template-sync/manifest.yml`, `.template-sync/marker.yml` when present, and selected real load-bearing configuration files (e.g., `.github/dependabot.yml`) against built-in vendor schemas; `check-metaschema` self-validates project-owned schemas. See [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md) (Built-in Schema Validation ADR) for the policy

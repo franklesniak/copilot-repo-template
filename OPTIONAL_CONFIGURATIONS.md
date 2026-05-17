@@ -31,6 +31,7 @@ This guide covers optional customizations you can make after completing the init
 - [Removing the Worked Example Schema](#removing-the-worked-example-schema)
 - [Markdown Linting Configuration](#markdown-linting-configuration)
   - [Using the cli2-Specific Configuration Format](#using-the-cli2-specific-configuration-format)
+- [Markdown Link Checking Configuration](#markdown-link-checking-configuration)
 - [Nested Markdown Linting Configuration](#nested-markdown-linting-configuration)
 - [Markdown Lint Workflow Configuration](#markdown-lint-workflow-configuration)
 - [Copilot Documentation Instructions Configuration](#copilot-documentation-instructions-configuration)
@@ -1605,6 +1606,73 @@ rm .markdownlint.jsonc
 
 ---
 
+## Markdown Link Checking Configuration
+
+**Files:** `.remarkrc.mjs`, `.remarkignore`, `package.json`
+
+The repository uses `remark-cli` with `remark-validate-links` for offline Markdown link validation. This complements markdownlint: `npm run lint:md` enforces Markdown formatting, while `npm run lint:md:links` checks repository-local file links and Markdown heading fragments.
+
+### How to Run
+
+```bash
+npm run lint:md:links
+```
+
+The default command is offline and deterministic. It validates local Markdown links, including cross-file relative links such as `[guide](OPTIONAL_CONFIGURATIONS.md)` and cross-file heading links such as `[section](OPTIONAL_CONFIGURATIONS.md#markdown-linting-configuration)`.
+
+For this GitHub-hosted template repository, `remark-validate-links` uses its hosted-Git detection so normal GitHub-style Markdown heading fragments are validated. If a downstream repository uses a non-GitHub renderer or custom heading IDs, verify the checker behavior before treating the command as authoritative for that renderer.
+
+### Scan Exclusions
+
+The root `.remarkignore` file excludes generated, dependency, VCS, and runtime/cache directories such as `node_modules/`, `.git/`, `.pytest_cache/`, `.terraform/`, `dist/`, `build/`, and coverage output. Keep new exclusions narrow and tied to directories that are generated or not maintained as repository documentation.
+
+The root `.remarkrc.mjs` file configures `remark-validate-links`. It includes one narrow skip for the literal placeholder target `...`, which appears in protected instruction guidance as PowerShell syntax rather than as a real repository link. Do not use broad skip patterns to hide normal broken links.
+
+### External URL Policy
+
+The default command does **not** validate external HTTP or HTTPS URLs. This avoids CI flakes caused by network outages, rate limits, redirects, or temporary upstream failures.
+
+If your project needs external URL checking, add it as a separate opt-in command such as `lint:md:links:external`, configure explicit timeout and retry behavior, and avoid running that command in default CI until your team accepts the flakiness trade-off.
+
+### Pre-commit Integration (Optional)
+
+The template intentionally does not run the Markdown link checker in default pre-commit hooks. If your downstream repository wants local pre-commit enforcement, first ensure contributors have Node.js, npm, and installed project dependencies (`npm install` or `npm ci`), then add a local hook:
+
+```yaml
+- repo: local
+  hooks:
+    - id: markdown-link-check
+      name: Validate Markdown links
+      entry: npm run lint:md:links
+      language: system
+      pass_filenames: false
+      files: \.md$
+```
+
+This hook uses the same offline/local-link mode as CI. It does not enable external URL checking.
+
+### When to Use This Feature
+
+This feature is most useful for documentation-heavy repositories, template repositories with many cross-references, and projects that frequently rename or move Markdown files.
+
+### Removing This Feature
+
+If your project does not need Markdown link checking, remove the feature in one change so the package metadata, workflow, and documentation stay consistent:
+
+1. Delete `.remarkrc.mjs` and `.remarkignore`.
+2. Remove the `lint:md:links` script from `package.json`.
+3. Remove the link-check step from `.github/workflows/markdownlint.yml`, and update the final lint-result condition so it no longer references `steps.lint-links`.
+4. Remove the dependencies:
+
+   ```bash
+   npm uninstall remark-cli remark-validate-links
+   ```
+
+5. Run `npm install` to update `package-lock.json`.
+6. Remove any optional pre-commit hook you added for `markdown-link-check`.
+
+---
+
 ## Nested Markdown Linting Configuration
 
 **File:** `.github/scripts/lint-nested-markdown.js`
@@ -1741,7 +1809,7 @@ If you decide you don't need nested markdown linting, you can remove this option
 
 **File:** `.github/workflows/markdownlint.yml`
 
-The Markdown Lint workflow enforces consistent Markdown formatting across your repository by running markdownlint on every push and pull request. While it works out-of-the-box, you can customize it to match your project's needs.
+The Markdown Lint workflow enforces consistent Markdown formatting, nested Markdown code-fence linting, and offline local-link validation on every push and pull request. While it works out-of-the-box, you can customize it to match your project's needs.
 
 ### Restricting Branch Triggers
 
@@ -1777,7 +1845,7 @@ on:
 
 ### Adding Path Filters
 
-By default, the workflow runs on every push and pull request regardless of which files changed. To only run the workflow when Markdown files or linting configuration changes:
+By default, the workflow runs on every push and pull request regardless of which files changed. To only run the workflow when Markdown files or linting/link-check configuration changes:
 
 ```yaml
 on:
@@ -1786,6 +1854,8 @@ on:
     paths:
       - '**/*.md'
       - '.markdownlint.jsonc'
+      - '.remarkignore'
+      - '.remarkrc.mjs'
       - 'package.json'
       - 'package-lock.json'
   pull_request:
@@ -1793,11 +1863,13 @@ on:
     paths:
       - '**/*.md'
       - '.markdownlint.jsonc'
+      - '.remarkignore'
+      - '.remarkrc.mjs'
       - 'package.json'
       - 'package-lock.json'
 ```
 
-> **Note:** Include configuration files in the path filter to ensure the workflow runs when linting rules change.
+> **Note:** Include configuration files in the path filter to ensure the workflow runs when linting or link-check rules change. For the default template, include `.markdownlint.jsonc`, `.remarkignore`, `.remarkrc.mjs`, `package.json`, and `package-lock.json`.
 
 ### Changing Node.js Version
 
@@ -1819,11 +1891,11 @@ The workflow uses Node.js 20 by default:
     node-version: '22'
 ```
 
-> **Note:** Ensure the Node.js version you choose is compatible with your project's dependencies. Check the markdownlint-cli2 documentation for supported Node.js versions.
+> **Note:** Ensure the Node.js version you choose is compatible with your project's dependencies. Check the markdownlint-cli2 and remark documentation for supported Node.js versions.
 
 ### Disabling Nested Markdown Linting in CI
 
-The workflow runs two linting steps: one for outer Markdown files and one for nested Markdown code fences. If you want to keep the outer linting but disable the nested linting step in CI:
+The workflow runs three validation steps: one for outer Markdown files, one for nested Markdown code fences, and one for offline Markdown link checking. If you want to keep the outer linting and link checking but disable the nested linting step in CI:
 
 **Option 1: Remove the step entirely**
 
@@ -1837,11 +1909,11 @@ Delete or comment out the nested linting step:
 #   run: npm run lint:md:nested
 ```
 
-And update the final check step to only check the outer linting result:
+And update the final check step to check only the outer linting and link-check results:
 
 ```yaml
 - name: Check linting results
-  if: steps.lint-outer.outcome == 'failure'
+  if: steps.lint-outer.outcome == 'failure' || steps.lint-links.outcome == 'failure'
   run: |
     echo "::error::Markdown linting failed. Check the logs above for details."
     exit 1
@@ -1860,6 +1932,27 @@ Add a condition to skip the nested linting step:
 ```
 
 > **Note:** If you disable nested linting in CI, you may still want to run it locally using `npm run lint:md:nested` to catch issues before pushing.
+
+### Disabling Markdown Link Checking in CI
+
+If your repository does not need offline link checking in CI, remove or comment out the link-check step:
+
+```yaml
+# - name: Validate Markdown links
+#   id: lint-links
+#   continue-on-error: true
+#   run: npm run lint:md:links
+```
+
+Then update the final check step so it no longer references `steps.lint-links`:
+
+```yaml
+- name: Check linting results
+  if: steps.lint-outer.outcome == 'failure' || steps.lint-nested.outcome == 'failure'
+  run: |
+    echo "::error::Markdown linting failed. Check the logs above for details."
+    exit 1
+```
 
 ### Removing the Workflow
 

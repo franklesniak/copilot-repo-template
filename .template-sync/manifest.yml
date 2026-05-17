@@ -183,6 +183,12 @@ template_manifest:
     - pattern: '.markdownlint.jsonc'
       requires_all:
         - markdown
+    - pattern: '.remarkignore'
+      requires_all:
+        - markdown
+    - pattern: '.remarkrc.mjs'
+      requires_all:
+        - markdown
     - pattern: 'package.json'
       requires_all:
         - markdown

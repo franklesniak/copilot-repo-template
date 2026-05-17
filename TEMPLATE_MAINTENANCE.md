@@ -82,7 +82,7 @@ pre-commit run --all-files
 
 ### Tools to Track
 
-The following pre-commit hooks are configured in this template. Check their repositories for the latest releases:
+The following pre-commit hooks and npm-based documentation tools are configured in this template. Check their repositories for the latest releases:
 
 | Tool | Repository | Purpose |
 | --- | --- | --- |
@@ -90,6 +90,8 @@ The following pre-commit hooks are configured in this template. Check their repo
 | Black | <https://github.com/psf/black> | Python code formatting |
 | Ruff | <https://github.com/astral-sh/ruff-pre-commit> | Python linting and formatting |
 | markdownlint-cli2 | <https://github.com/DavidAnson/markdownlint-cli2> | Markdown linting |
+| remark-cli | <https://github.com/remarkjs/remark/tree/main/packages/remark-cli> | Markdown CLI runner for offline link validation |
+| remark-validate-links | <https://github.com/remarkjs/remark-validate-links> | Offline Markdown local file and heading validation |
 | Repo-local Terraform hooks | `.github/scripts/terraform_hooks.py` | Cross-platform Terraform formatting, validation, and linting wrappers |
 | yamllint | <https://github.com/adrienverge/yamllint> | YAML style enforcement (driven by `.yamllint.yml`) |
 | actionlint | <https://github.com/rhysd/actionlint> | GitHub Actions workflow linting |
@@ -203,7 +205,7 @@ Update that taxonomy whenever a template-managed file is:
 
 For each affected path, maintainers **MUST** update `.template-sync/manifest.yml` first, review whether the path mapping still uses the most specific pattern, whether multi-module rows still require the intended AND-style module set, and whether the module definition list needs a new or revised module. Then update or regenerate the rendered tables in `TEMPLATE_UPDATE_PROCEDURE.md`. Keep examples and worked sync scenarios in `TEMPLATE_UPDATE_PROCEDURE.md` aligned with any taxonomy change.
 
-When reviewing a taxonomy change, include `pytest tests/test_template_manifest.py -v` so the manifest schema, semantic checks, and rendered-table drift checks run together. Also include at least one validation pass with `npm run lint:md` and `npm run lint:md:nested` (the latter catches lint failures in nested Markdown code fences inside files such as `TEMPLATE_UPDATE_PROCEDURE.md`). If the change also updates schema, YAML, GitHub Actions, Python, PowerShell, or Terraform files, run the validation commands for those modules as well.
+When reviewing a taxonomy change, include `pytest tests/test_template_manifest.py -v` so the manifest schema, semantic checks, and rendered-table drift checks run together. Also include at least one validation pass with `npm run lint:md`, `npm run lint:md:links`, and `npm run lint:md:nested` (the latter catches lint failures in nested Markdown code fences inside files such as `TEMPLATE_UPDATE_PROCEDURE.md`). If the change also updates schema, YAML, GitHub Actions, Python, PowerShell, or Terraform files, run the validation commands for those modules as well.
 
 ---
 

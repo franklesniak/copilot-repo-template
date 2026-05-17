@@ -4,7 +4,8 @@
 # Licensed under MIT License
 # Source: https://github.com/DavidAnson/markdownlint
 #
-# Purpose: Enforce consistent Markdown formatting across the repository
+# Purpose: Enforce Markdown formatting, nested Markdown linting, and
+# offline repository-local link validation across the repository
 # Runs on: push and pull_request events
 
 name: Markdown Lint
@@ -46,8 +47,13 @@ jobs:
         continue-on-error: true
         run: npm run lint:md:nested
 
+      - name: Validate Markdown links
+        id: lint-links
+        continue-on-error: true
+        run: npm run lint:md:links
+
       - name: Check linting results
-        if: steps.lint-outer.outcome == 'failure' || steps.lint-nested.outcome == 'failure'
+        if: steps.lint-outer.outcome == 'failure' || steps.lint-nested.outcome == 'failure' || steps.lint-links.outcome == 'failure'
         run: |
-          echo "::error::Markdown linting failed. Check the logs above for details."
+          echo "::error::Markdown checks failed. Check the logs above for details."
           exit 1
