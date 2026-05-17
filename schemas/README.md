@@ -7,7 +7,7 @@
 - **Status:** Active
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-05-17
-- **Scope:** Conventions for JSON Schemas that describe load-bearing JSON and YAML files in this repository, the template sync manifest schema, plus a clearly removable worked example (`example-config.schema.json` with valid and invalid example data) wired into pre-commit and data CI to demonstrate the schema-validation pipeline end to end.
+- **Scope:** Conventions for JSON Schemas that describe load-bearing JSON and YAML files in this repository, the template sync manifest and marker schemas, plus a clearly removable worked example (`example-config.schema.json` with valid and invalid example data) wired into pre-commit and data CI to demonstrate the schema-validation pipeline end to end.
 - **Related:** [JSON Authoring Standards](../.github/instructions/json.instructions.md), [YAML Authoring Standards](../.github/instructions/yaml.instructions.md), [Repository Copilot Instructions](../.github/copilot-instructions.md), [Template Design Decisions — Schema Location at Repository Root](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-location-at-repository-root), [Template Design Decisions — Schema Validation Tiers](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-validation-tiers), [Template Design Decisions — Built-in Schema Validation for Real Load-Bearing Configuration Files](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files), [Template Design Decisions — `additionalProperties` Policy](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-additionalproperties-policy), [Template Design Decisions — Testing Beyond Linting for JSON/YAML](../.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-testing-beyond-linting-for-jsonyaml)
 
 ## Purpose
@@ -45,7 +45,7 @@ Every schema SHOULD include the following top-level keywords:
 
 Two `$id` URL forms are used in this directory, depending on whether the schema is a worked example or a production contract. The distinction is intentional and is documented here so that future contributors do not "normalize" the two forms to a single value.
 
-- **Production schemas** (such as [`template-sync-manifest.schema.json`](./template-sync-manifest.schema.json)) use a stable, real URL that resolves to the schema's canonical content. Use the `raw.githubusercontent.com` form anchored at the default branch — for example, `https://raw.githubusercontent.com/franklesniak/copilot-repo-template/HEAD/schemas/<schema-name>.schema.json`. JSON Schema treats `$id` primarily as an identifier rather than a fetch URI, but a URL that actually dereferences to the schema JSON lets tooling that does try to follow `$id` succeed and avoids 404s when a reader clicks the URL. `HEAD` tracks the repository's default branch, so the identifier remains stable across default-branch renames.
+- **Production schemas** (such as [`template-sync-manifest.schema.json`](./template-sync-manifest.schema.json) and [`template-sync-marker.schema.json`](./template-sync-marker.schema.json)) use a stable, real URL that resolves to the schema's canonical content. Use the `raw.githubusercontent.com` form anchored at the default branch, for example, `https://raw.githubusercontent.com/franklesniak/copilot-repo-template/HEAD/schemas/<schema-name>.schema.json`. JSON Schema treats `$id` primarily as an identifier rather than a fetch URI, but a URL that actually dereferences to the schema JSON lets tooling that does try to follow `$id` succeed and avoids 404s when a reader clicks the URL. `HEAD` tracks the repository's default branch, so the identifier remains stable across default-branch renames.
 - **Worked example schemas** (such as [`example-config.schema.json`](./example-config.schema.json)) use the reserved `https://example.invalid/schemas/<schema-name>.schema.json` form. Per [RFC 6761](https://www.rfc-editor.org/rfc/rfc6761.html#section-6.4), the `.invalid` TLD is reserved for non-resolving identifiers, which appropriately signals that the schema is template starter content rather than a production contract and reinforces that downstream consumers SHOULD replace or remove it (see the [Downstream Removal Checklist](#downstream-removal-checklist)).
 
 Downstream repositories that adopt this template **MAY** retain a production schema's `$id` pointing to the upstream URL (treating it as a "this is the contract version I am using" indicator), **MAY** rewrite it to their own canonical URL when forking or customizing the schema, or **MAY** remove the schema entirely if they do not use the corresponding template feature (such as the template sync procedure).
@@ -65,7 +65,7 @@ Schemas whose root type is `object` SHOULD define:
 
 ## Validation
 
-Schema-backed files are validated by pre-commit and the dedicated data-file CI workflow ([`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml)). This template ships a worked example (see [Worked Example](#worked-example) below) so the validation pipeline is exercised end to end out of the box, and it ships a production schema for the template sync manifest (see [Template Sync Manifest Schema](#template-sync-manifest-schema)). Downstream repositories that do not use schema-backed data files SHOULD remove the worked example using the [Downstream Removal Checklist](#downstream-removal-checklist). See the JSON authoring standards for the schema-validation policy and tier guidance.
+Schema-backed files are validated by pre-commit and the dedicated data-file CI workflow ([`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml)). This template ships a worked example (see [Worked Example](#worked-example) below) so the validation pipeline is exercised end to end out of the box, and it ships production schemas for the template sync manifest and marker (see [Template Sync Manifest Schema](#template-sync-manifest-schema) and [Template Sync Marker Schema](#template-sync-marker-schema)). Downstream repositories that do not use schema-backed data files SHOULD remove the worked example using the [Downstream Removal Checklist](#downstream-removal-checklist). See the JSON authoring standards for the schema-validation policy and tier guidance.
 
 ### Schema Categories
 
@@ -76,7 +76,7 @@ This repository distinguishes two schema categories. The distinction matters for
    - MAY include valid and invalid example fixtures under `schemas/examples/<schema-name>/{valid,invalid}/`.
    - Tested by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py), which auto-discovers schema/example pairs and asserts that valid examples pass and invalid examples fail.
    - Wired into pre-commit by adding a `check-jsonschema` hook that points at the schema with `--schemafile schemas/<name>.schema.json` and an anchored `files:` pattern matching the file family the schema covers.
-   - The [Worked Example](#worked-example) below is the canonical illustration of this category. The [Template Sync Manifest Schema](#template-sync-manifest-schema) is the production schema-backed contract this repository uses for downstream sync metadata.
+   - The [Worked Example](#worked-example) below is the canonical illustration of this category. The [Template Sync Manifest Schema](#template-sync-manifest-schema) and [Template Sync Marker Schema](#template-sync-marker-schema) are the production schema-backed contracts this repository uses for downstream sync metadata.
 
 2. **External built-in schemas.**
    - Referenced through `check-jsonschema --builtin-schema vendor.<name>` against schemas that ship inside the pinned `check-jsonschema` release.
@@ -98,11 +98,12 @@ If a downstream repository deletes one of these files, it **MUST** also remove t
 
 ### Project-Owned Schema-Backed Files
 
-The following project-owned files are validated by default through `check-jsonschema --schemafile ...` hooks in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml):
+The following project-owned file families are validated by default through `check-jsonschema --schemafile ...` hooks in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml):
 
 | File | Schema |
 | --- | --- |
 | [`.template-sync/manifest.yml`](../.template-sync/manifest.yml) | [`template-sync-manifest.schema.json`](./template-sync-manifest.schema.json) |
+| `.template-sync/marker.yml` when present | [`template-sync-marker.schema.json`](./template-sync-marker.schema.json) |
 
 ### File-Family Hooks
 
@@ -221,6 +222,20 @@ How the template sync manifest contract is validated:
 
 Downstream repositories that intentionally do not retain machine-assisted future sync metadata MAY remove `.template-sync/manifest.yml`, `schemas/template-sync-manifest.schema.json`, the matching pre-commit hooks, and `tests/test_template_manifest.py`. Downstream repositories that use this sync procedure SHOULD still keep `.template-sync/marker.yml`.
 
+## Template Sync Marker Schema
+
+[`template-sync-marker.schema.json`](./template-sync-marker.schema.json) defines the shape of the downstream sync marker at `.template-sync/marker.yml`. The schema validates marker contents only; marker placement is enforced by the `Validate template sync marker` hook's `files:` pattern in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml).
+
+How the template sync marker contract is validated:
+
+- The marker file is validated by the `Validate template sync marker` `check-jsonschema` hook when `.template-sync/marker.yml` is present. Repositories without a marker are unaffected because no file matches the hook's anchored pattern.
+- Valid marker fixtures under [`examples/template-sync-marker/valid/`](./examples/template-sync-marker/valid/) are validated by the `Validate template sync marker valid examples` `check-jsonschema` hook and by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+- Invalid marker fixtures under [`examples/template-sync-marker/invalid/`](./examples/template-sync-marker/invalid/) are exercised by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py), which asserts that each invalid example is rejected.
+- The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate template-sync-marker schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+- [`tests/test_template_manifest.py`](../tests/test_template_manifest.py) checks that the baked `included_modules` enum in the marker schema matches the module names in [`.template-sync/manifest.yml`](../.template-sync/manifest.yml).
+
+Marker changes SHOULD be rejected when they fail this schema. Downstream repositories that use the sync procedure SHOULD keep `.template-sync/marker.yml`, `schemas/template-sync-marker.schema.json`, the matching pre-commit hooks, and the marker examples or an equivalent validation path.
+
 ### Downstream Removal Checklist
 
 The worked example is intentionally easy to remove. To take it out of a downstream repository:
@@ -247,7 +262,7 @@ Candidate load-bearing repository configuration files that could later be schema
 
 ## Out of Scope for This Worked Example
 
-This directory ships one worked example schema and one production schema for the template sync manifest. It does not introduce:
+This directory ships one worked example schema and production schemas for the template sync manifest and marker. It does not introduce:
 
 - Additional SchemaStore-backed validation hooks beyond the wired `vendor.dependabot` validation of `.github/dependabot.yml` (which lives in `.pre-commit-config.yaml`, not in this directory).
 - Any JSONC, JSON5, or TOML schema validation tooling.

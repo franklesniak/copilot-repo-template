@@ -20,6 +20,9 @@
 #                             (`schemas/examples/example-config/valid/`),
 #                           * the template sync manifest
 #                             (`.template-sync/manifest.yml`), and
+#                           * the template sync marker when present
+#                             (`.template-sync/marker.yml`) plus its valid
+#                             example fixtures, and
 #                           * real load-bearing repository config
 #                             validation against built-in vendor schemas
 #                             shipped with `check-jsonschema` (currently
@@ -131,6 +134,8 @@ jobs:
         # given ID, so this single invocation covers every check-jsonschema
         # hook configured in `.pre-commit-config.yaml`, including the
         # worked-example schema validation, template sync manifest validation,
+        # template sync marker validation when `.template-sync/marker.yml` is
+        # present, valid marker fixture validation,
         # and real load-bearing repository config validation (currently
         # `.github/dependabot.yml` against the bundled `vendor.dependabot`
         # schema). The companion

@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260517.11
+**Version:** 1.1.20260517.12
 
 ## Metadata
 
@@ -308,6 +308,8 @@ Step 5 initializes or updates `.template-sync/marker.yml` after the range mode i
 ## Step 5: Initialize or Update the Sync Marker
 
 Downstream repositories SHOULD keep the sync marker at `.template-sync/marker.yml`, matching the marker path rule in Step 4. The marker distinguishes reviewed upstream changes from adopted upstream changes. Selective syncs may intentionally skip upstream files, so the preferred field under `template_sync` is `last_reviewed_template_commit`, not `last_adopted_template_commit`.
+
+Marker contents are schema-backed by [`schemas/template-sync-marker.schema.json`](schemas/template-sync-marker.schema.json). The `validate-template-sync-marker` pre-commit hook validates `.template-sync/marker.yml` when that file is present; repositories without a marker are unaffected because no file matches the hook's anchored pattern. Marker changes MUST be rejected when they fail the schema. The schema's `included_modules` enum mirrors `.template-sync/manifest.yml`, and [`tests/test_template_manifest.py`](tests/test_template_manifest.py) fails if the schema enum drifts from the manifest module list.
 
 For example, suppose upstream changed `README.md` and `.github/workflows/terraform-ci.yml`, and the downstream repository reviewed both but adopted neither because `README.md` is locally owned and Terraform is not adopted. The sync still advances `last_reviewed_template_commit` to the resolved range head after review, because those upstream changes were inspected and intentionally skipped. A `last_adopted_template_commit` field would incorrectly imply that skipped-but-reviewed changes need to be reviewed again during the next sync.
 
@@ -649,7 +651,7 @@ Run validation appropriate to the included modules and files changed. Full templ
 | `github-actions` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run actionlint --all-files` |
 | `github-templates` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `npm run lint:md`, and issue or PR template rendering review |
 | `template-onboarding` | `npm run lint:md`, `npm run lint:md:nested`, and walkthrough review for kept onboarding paths |
-| `template-sync-support` | `npm run lint:md`, `npm run lint:md:nested`, `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, and a dry-run review of the sync procedure examples |
+| `template-sync-support` | `npm run lint:md`, `npm run lint:md:nested`, `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run validate-template-sync-marker --all-files` when the marker hook is kept, and a dry-run review of the sync procedure examples |
 | `markdown` | `npm run lint:md`, `npm run lint:md:nested`, `pre-commit run check-json --all-files` |
 | `powershell` | `Invoke-Pester -Path tests/ -Output Detailed` |
 | `json` | `pre-commit run check-json --all-files` |
@@ -864,13 +866,9 @@ Invoke-Pester -Path tests/ -Output Detailed
 
 Future automation MAY add:
 
-- a schema for `.template-sync/marker.yml`
-- valid and invalid marker fixtures
 - a pre-commit hook that checks manifest coverage for managed paths
 - a helper script that generates the candidate review table
 - a helper script that regenerates the Module Definitions and Path Mapping tables from `.template-sync/manifest.yml`
 - richer manifest semantics for platform-spanning files, such as representing `.github/workflows/data-ci.yml` as `github-actions` plus at least one of `json`, `yaml`, or `schema`
-
-Tracked follow-up issues include [Issue #531](../../issues/531) for marker schema validation.
 
 `.template-sync/manifest.yml` is authoritative for the taxonomy. Until a runnable sync tool exists, this document remains the authoritative manual procedure.

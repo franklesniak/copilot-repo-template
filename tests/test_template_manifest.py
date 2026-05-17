@@ -14,6 +14,7 @@ import yaml  # type: ignore[import-untyped]
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_PATH = REPO_ROOT / ".template-sync" / "manifest.yml"
 MANIFEST_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-manifest.schema.json"
+MARKER_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-marker.schema.json"
 PROCEDURE_PATH = REPO_ROOT / "TEMPLATE_UPDATE_PROCEDURE.md"
 
 
@@ -36,6 +37,13 @@ def _load_manifest_schema() -> dict[str, Any]:
     """Parse the JSON Schema for the manifest."""
     schema = json.loads(MANIFEST_SCHEMA_PATH.read_text(encoding="utf-8"))
     assert isinstance(schema, dict), "manifest schema root must be a mapping"
+    return schema
+
+
+def _load_marker_schema() -> dict[str, Any]:
+    """Parse the JSON Schema for the downstream sync marker."""
+    schema = json.loads(MARKER_SCHEMA_PATH.read_text(encoding="utf-8"))
+    assert isinstance(schema, dict), "marker schema root must be a mapping"
     return schema
 
 
@@ -145,6 +153,18 @@ def _duplicates(values: list[str]) -> list[str]:
     return sorted(value for value, count in counts.items() if count > 1)
 
 
+def _module_enum_from_marker_schema() -> list[str]:
+    """Return the baked module enum from the marker schema."""
+    schema_defs = _load_marker_schema().get("$defs")
+    assert isinstance(schema_defs, dict), "marker schema $defs must be a mapping"
+    module_name = schema_defs.get("moduleName")
+    assert isinstance(module_name, dict), "marker schema moduleName definition must be a mapping"
+    enum = module_name.get("enum")
+    assert isinstance(enum, list), "marker schema moduleName enum must be a list"
+    assert all(isinstance(module, str) for module in enum), "moduleName enum values must be strings"
+    return enum
+
+
 def test_template_manifest_parses_successfully() -> None:
     """The committed manifest must be readable as YAML."""
     manifest = _load_manifest()
@@ -184,6 +204,12 @@ def test_template_manifest_path_mapping_modules_exist() -> None:
         if module not in modules
     }
     assert not unknown_modules
+
+
+def test_template_sync_marker_schema_module_enum_matches_manifest() -> None:
+    """The marker schema's baked module enum must mirror the manifest."""
+    manifest_modules = [name for name, _description in _module_rows_from_manifest()]
+    assert _module_enum_from_marker_schema() == manifest_modules
 
 
 def test_template_manifest_filtering_semantics_are_valid() -> None:

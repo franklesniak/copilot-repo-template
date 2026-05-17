@@ -1,0 +1,41 @@
+template_sync:
+  source_repo: https://github.com/franklesniak/copilot-repo-template.git
+  last_reviewed_template_commit: "0123456789abcdef0123456789abcdef01234567"
+  included_modules:
+    - baseline
+    - agent-instructions
+    - github-platform
+    - github-actions
+    - github-templates
+    - template-onboarding
+    - template-sync-support
+    - markdown
+    - powershell
+    - json
+    - yaml
+    - schema
+    - python
+    - terraform
+  local_overrides:
+    - path: README.md
+      reason: Project-specific reader-facing documentation.
+      default_decision: SKIP
+    - path: .github/workflows/python-ci.yml
+      reason: Preserve downstream runner and Python version policy.
+      default_decision: MERGE
+    - path: templates/terraform/
+      reason: Terraform was intentionally removed downstream.
+      default_decision: REMOVE-LOCAL
+    - path: .github/pull_request_template.md
+      reason: Review after owner confirms checklist changes.
+      default_decision: DEFER
+    - path: .github/instructions/powershell.instructions.md
+      reason: Protected instruction file requires owner authorization.
+      default_decision: PROTECTED-REVIEW
+    - path: docs/PR_REVIEW_PROMPTS.md
+      reason: Adopt upstream reusable prompt guidance when reviewed.
+      default_decision: TAKE
+  deferred_protected_candidates:
+    - path: .github/copilot-instructions.md
+      source_commit: "89abcdef0123456789abcdef0123456789abcdef"
+      reason: Protected governance file needs explicit owner authorization.
