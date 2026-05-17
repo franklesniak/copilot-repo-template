@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260517.3
+**Version:** 1.1.20260517.4
 
 ## Metadata
 
@@ -641,19 +641,19 @@ Run validation appropriate to the included modules and files changed. Full templ
 | Module | Example validation |
 | --- | --- |
 | `baseline` | `pre-commit run --all-files` |
-| `agent-instructions` | `npm run lint:md`, `npm run lint:md:nested`, and any repo-specific instruction checks |
+| `agent-instructions` | `npm run lint:md`, `npm run lint:md:nested`, `pre-commit run check-json --all-files`, and any repo-specific instruction checks |
 | `github-platform` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run check-jsonschema --all-files` where configured, and repository-settings review |
 | `github-actions` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run actionlint --all-files` |
 | `github-templates` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `npm run lint:md`, and issue or PR template rendering review |
 | `template-onboarding` | `npm run lint:md` and walkthrough review for kept onboarding paths |
 | `template-sync-support` | `npm run lint:md`, `npm run lint:md:nested`, `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, and a dry-run review of the sync procedure examples |
-| `markdown` | `npm run lint:md`, `npm run lint:md:nested` |
+| `markdown` | `npm run lint:md`, `npm run lint:md:nested`, `pre-commit run check-json --all-files` |
 | `powershell` | `Invoke-Pester -Path tests/ -Output Detailed` |
 | `json` | `pre-commit run check-json --all-files` |
 | `yaml` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files` |
 | `schema` | `pre-commit run check-jsonschema --all-files`, `pre-commit run check-metaschema --all-files`, `pytest tests/test_schema_examples.py -v` after schema or schema-example changes |
-| `python` | `pytest tests/ -v --cov --cov-report=term-missing` |
-| `terraform` | `terraform fmt -check -recursive`, `tflint --recursive`, `terraform test -verbose` |
+| `python` | `pytest tests/ -v --cov --cov-report=term-missing`, `pre-commit run check-toml --all-files` |
+| `terraform` | `terraform fmt -check -recursive`, `tflint --recursive`, `terraform test -verbose`, `pytest tests/test_terraform_hooks.py -v` after terraform-hook script changes |
 
 Run `pre-commit run --all-files` before committing when the downstream repository uses pre-commit. If a repository intentionally removed a module and its validation tooling, record that in the PR summary rather than reintroducing validation commands blindly.
 
