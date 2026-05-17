@@ -226,6 +226,10 @@ This repository includes comprehensive coding standards for multiple languages a
 
 These standards apply to all contributions and are enforced by the repository's pre-commit hooks and CI workflows. AI coding agents (such as GitHub Copilot, Claude Code, Codex, and Gemini) are configured to read these instruction files when generating or editing code, but enforcement of the standards on every commit comes from the tooling listed above, not from any individual agent.
 
+### Template Taxonomy Updates
+
+When a change adds, removes, renames, moves, or changes the primary purpose of a template-managed file, update the downstream sync path mapping in `TEMPLATE_UPDATE_PROCEDURE.md` as part of the same change. See [Reviewing the Template Sync Module Taxonomy](TEMPLATE_MAINTENANCE.md#reviewing-the-template-sync-module-taxonomy) for the maintainer checklist.
+
 ### Data-File and Schema Validation
 
 JSON, YAML, and GitHub Actions workflow files are first-class file types in this template. Contributor expectations:
