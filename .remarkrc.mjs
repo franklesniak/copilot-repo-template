@@ -3,7 +3,7 @@ export default {
     [
       'remark-validate-links',
       {
-        skipPathPatterns: ['\\.{3}$']
+        skipPathPatterns: ['(^|[/\\\\])\\.{3}$']
       }
     ]
   ]

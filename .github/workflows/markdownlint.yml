@@ -55,5 +55,5 @@ jobs:
       - name: Check linting results
         if: steps.lint-outer.outcome == 'failure' || steps.lint-nested.outcome == 'failure' || steps.lint-links.outcome == 'failure'
         run: |
-          echo "::error::Markdown linting failed. Check the logs above for details."
+          echo "::error::Markdown checks failed. Check the logs above for details."
           exit 1
