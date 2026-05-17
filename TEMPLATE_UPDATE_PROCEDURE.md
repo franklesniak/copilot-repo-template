@@ -324,7 +324,7 @@ Example marker:
 ```yaml
 template_sync:
   source_repo: https://github.com/franklesniak/copilot-repo-template.git
-  last_reviewed_template_commit: 1111111111111111111111111111111111111111
+  last_reviewed_template_commit: "1111111111111111111111111111111111111111"
   included_modules:
     - baseline
     - agent-instructions
@@ -345,7 +345,7 @@ template_sync:
       default_decision: MERGE
   deferred_protected_candidates:
     - path: .github/copilot-instructions.md
-      source_commit: dddddddddddddddddddddddddddddddddddddddd
+      source_commit: "dddddddddddddddddddddddddddddddddddddddd"
       reason: "Adds a stack-selection clause; pending owner authorization."
 ```
 
@@ -597,7 +597,7 @@ Example:
 template_sync:
   deferred_protected_candidates:
     - path: .github/copilot-instructions.md
-      source_commit: 2222222222222222222222222222222222222222
+      source_commit: "2222222222222222222222222222222222222222"
       reason: "Updates stack-selection guidance; awaiting owner authorization."
 ```
 
@@ -811,7 +811,7 @@ Manually reconcile each scratch file against the downstream file. The PowerShell
 ```yaml
 template_sync:
   source_repo: https://github.com/franklesniak/copilot-repo-template.git
-  last_reviewed_template_commit: 2222222222222222222222222222222222222222
+  last_reviewed_template_commit: "2222222222222222222222222222222222222222"
   included_modules:
     - baseline
     - agent-instructions
@@ -826,10 +826,10 @@ template_sync:
       default_decision: SKIP
   deferred_protected_candidates:
     - path: .github/copilot-instructions.md
-      source_commit: 2222222222222222222222222222222222222222
+      source_commit: "2222222222222222222222222222222222222222"
       reason: "Updated stack-selection clause; awaiting owner authorization."
     - path: .github/instructions/powershell.instructions.md
-      source_commit: 2222222222222222222222222222222222222222
+      source_commit: "2222222222222222222222222222222222222222"
       reason: "Adds parameter-validation guidance; awaiting owner authorization."
 ```
 

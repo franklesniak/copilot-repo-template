@@ -234,7 +234,7 @@ How the template sync marker contract is validated:
 - The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate template-sync-marker schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
 - [`tests/test_template_manifest.py`](../tests/test_template_manifest.py) checks that the baked `included_modules` enum in the marker schema matches the module names in [`.template-sync/manifest.yml`](../.template-sync/manifest.yml).
 
-Marker changes SHOULD be rejected when they fail this schema. Downstream repositories that use the sync procedure SHOULD keep `.template-sync/marker.yml`, `schemas/template-sync-marker.schema.json`, the matching pre-commit hooks, and the marker examples or an equivalent validation path.
+Marker changes MUST be rejected when they fail this schema. Downstream repositories that use the sync procedure SHOULD keep `.template-sync/marker.yml`, `schemas/template-sync-marker.schema.json`, the matching pre-commit hooks, and the marker examples or an equivalent validation path.
 
 ### Downstream Removal Checklist
 
