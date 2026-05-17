@@ -157,7 +157,7 @@ def test_template_manifest_validates_against_schema() -> None:
         validator.iter_errors(_load_manifest()),
         key=lambda error: error.json_path,
     )
-    assert not errors, "\n".join(error.message for error in errors)
+    assert not errors, "\n".join(f"{error.json_path}: {error.message}" for error in errors)
 
 
 def test_template_manifest_module_names_are_unique() -> None:
