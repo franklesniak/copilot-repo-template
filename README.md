@@ -34,7 +34,7 @@ This template includes:
 - **Multi-Agent Support:** Instruction files for Cursor Agent, Hermes Agent, Claude Code, OpenAI Codex CLI, and Gemini Code Assist (`.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`)
 - **Language-Specific Guidelines:** Modular instruction files for Markdown, PowerShell, Python, Terraform, JSON/JSONC, and YAML
 - **Linting Configurations:** Pre-configured settings for markdownlint, PSScriptAnalyzer, TFLint, and yamllint
-- **Data-File Validation:** Pre-commit hooks for `check-json`, `check-yaml`, `yamllint`, `actionlint` (GitHub Actions workflows), `check-jsonschema` (validates schema examples, `.template-sync/manifest.yml`, `.template-sync/marker.yml` when present, plus selected real load-bearing configuration files against built-in vendor schemas), and `check-metaschema` (project-owned schema self-validation)
+- **Data-File Validation:** Pre-commit hooks for `check-json`, `check-yaml`, `yamllint`, `actionlint` (GitHub Actions workflows), `check-jsonschema` (validates schema valid examples, `.template-sync/manifest.yml`, `.template-sync/marker.yml` when present, plus selected real load-bearing configuration files against built-in vendor schemas), and `check-metaschema` (project-owned schema self-validation)
 - **JSON Schemas:** Root-level `schemas/` directory convention for schema-backed JSON and YAML files
 - **Pre-commit Hooks:** Automated code quality checks before commits
 
@@ -316,7 +316,7 @@ This repository enforces code quality through:
 - **Markdown Linting:** Runs on pre-commit and in CI
 - **JSON/YAML Validation:** `check-json` (strict `.json`), `check-yaml`, and `yamllint` run on pre-commit
 - **GitHub Actions Linting:** `actionlint` runs on pre-commit
-- **Schema Validation:** `check-jsonschema` validates schema examples, `.template-sync/manifest.yml`, `.template-sync/marker.yml` when present, and selected real load-bearing configuration files (e.g., `.github/dependabot.yml`) against built-in vendor schemas; `check-metaschema` self-validates project-owned schemas. See [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md) (Built-in Schema Validation ADR) for the policy
+- **Schema Validation:** `check-jsonschema` validates schema valid examples, `.template-sync/manifest.yml`, `.template-sync/marker.yml` when present, and selected real load-bearing configuration files (e.g., `.github/dependabot.yml`) against built-in vendor schemas; `check-metaschema` self-validates project-owned schemas. See [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md) (Built-in Schema Validation ADR) for the policy
 - **JSON Schemas:** Root-level `schemas/` convention for schema-backed JSON/YAML files
 - **GitHub Copilot Instructions:** Guides AI-assisted development
 - **Pre-commit Hooks:** Catches issues before they reach CI
