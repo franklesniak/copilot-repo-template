@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260517.12
+**Version:** 1.1.20260517.13
 
 ## Metadata
 
@@ -448,7 +448,7 @@ Manifest version 1 ships with `requires_all` semantics only. A later manifest re
 | `.github/workflows/auto-fix-precommit.yml` | `baseline`, `github-actions` |
 | `.yamllint.yml` | `yaml` |
 | `.pre-commit-config.yaml` | `baseline` |
-| `.markdownlint.jsonc`, `package.json`, `package-lock.json`, `.github/scripts/lint-nested-markdown.js` | `markdown` |
+| `.markdownlint.jsonc`, `.remarkignore`, `.remarkrc.mjs`, `package.json`, `package-lock.json`, `.github/scripts/lint-nested-markdown.js` | `markdown` |
 | `templates/markdown/**` | `markdown` |
 | `templates/powershell/**`, `tests/PowerShell/**`, `.github/linting/PSScriptAnalyzerSettings.psd1`, `src/tools/*.ps1` | `powershell` |
 | `templates/json/**` | `json` |
@@ -646,13 +646,13 @@ Run validation appropriate to the included modules and files changed. Full templ
 | Module | Example validation |
 | --- | --- |
 | `baseline` | `pre-commit run --all-files` |
-| `agent-instructions` | `npm run lint:md`, `npm run lint:md:nested`, `pre-commit run check-json --all-files`, `pre-commit run check-toml --all-files`, shell-script syntax check for any session hooks (e.g., `if [ -d .claude/hooks ]; then find .claude/hooks -type f -name '*.sh' -exec bash -n {} \;; fi` — POSIX-portable; the `if [ -d ... ]` guard makes the check a clean no-op for downstream repos without `.claude/hooks/`, and `find` returns exit 0 when no `*.sh` files match), and any repo-specific instruction checks |
+| `agent-instructions` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-json --all-files`, `pre-commit run check-toml --all-files`, shell-script syntax check for any session hooks (e.g., `if [ -d .claude/hooks ]; then find .claude/hooks -type f -name '*.sh' -exec bash -n {} \;; fi` — POSIX-portable; the `if [ -d ... ]` guard makes the check a clean no-op for downstream repos without `.claude/hooks/`, and `find` returns exit 0 when no `*.sh` files match), and any repo-specific instruction checks |
 | `github-platform` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run check-jsonschema --all-files` where configured, and repository-settings review |
 | `github-actions` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run actionlint --all-files` |
-| `github-templates` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `npm run lint:md`, and issue or PR template rendering review |
-| `template-onboarding` | `npm run lint:md`, `npm run lint:md:nested`, and walkthrough review for kept onboarding paths |
-| `template-sync-support` | `npm run lint:md`, `npm run lint:md:nested`, `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run validate-template-sync-marker --all-files` when the marker hook is kept, and a dry-run review of the sync procedure examples |
-| `markdown` | `npm run lint:md`, `npm run lint:md:nested`, `pre-commit run check-json --all-files` |
+| `github-templates` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `npm run lint:md`, `npm run lint:md:links`, and issue or PR template rendering review |
+| `template-onboarding` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, and walkthrough review for kept onboarding paths |
+| `template-sync-support` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run validate-template-sync-marker --all-files` when the marker hook is kept, and a dry-run review of the sync procedure examples |
+| `markdown` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-json --all-files` |
 | `powershell` | `Invoke-Pester -Path tests/ -Output Detailed` |
 | `json` | `pre-commit run check-json --all-files` |
 | `yaml` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files` |

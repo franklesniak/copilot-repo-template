@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.pytest_cache\"",
+    "lint:md:links": "remark . --quiet --frail --ignore-path .remarkignore",
     "lint:md:nested": "node .github/scripts/lint-nested-markdown.js"
   },
   "keywords": [
@@ -22,6 +23,8 @@
     "jsonc-parser": "^3.3.1",
     "markdown-it": "^14.1.1",
     "markdownlint": "^0.40.0",
-    "markdownlint-cli2": "^0.22.1"
+    "markdownlint-cli2": "^0.22.1",
+    "remark-cli": "^12.0.1",
+    "remark-validate-links": "^13.1.0"
   }
 }

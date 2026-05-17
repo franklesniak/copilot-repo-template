@@ -1,12 +1,12 @@
 # Terraform Linting Implementation Guide
 
-**Version:** 1.0.20260511.0
+**Version:** 1.0.20260517.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-11
+- **Last Updated:** 2026-05-17
 - **Scope:** This document provides comprehensive guidance for implementing Terraform linting in CI for the `franklesniak/copilot-repo-template` repository. It covers tool selection, workflow design, configuration, pre-commit integration, and best practices. This is a **guidance-only** document—it does not modify workflows or configurations directly.
 - **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md), [Terraform Instructions](../../.github/instructions/terraform.instructions.md)
 
@@ -1051,7 +1051,7 @@ For organization-specific rules, consider:
 
 This repository already has Terraform hooks configured in `.pre-commit-config.yaml`. The active hooks are repo-local Python wrappers rather than POSIX shell hooks, so local validation works from native Windows / PowerShell, WSL/Linux, macOS, and Linux without depending on Bash path translation.
 
-> **Authoritative source:** [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) is the single source of truth for the hook IDs, entry points, and file scopes that pre-commit actually runs in this repository. Other Terraform documents in the repo may include illustrative `pre-commit-terraform` (i.e. `antonbabenko/pre-commit-terraform`) examples for reference (notably [`docs/terraform/TERRAFORM_COPILOT_INSTRUCTIONS_GUIDE.md`](TERRAFORM_COPILOT_INSTRUCTIONS_GUIDE.md) when describing how downstream instruction files commonly document Terraform hooks, and the upstream-sourced [`.github/instructions/terraform.instructions.md`](../../.github/instructions/terraform.instructions.md), which is intentionally not modified here per [`_TODO-TerraformStyleGuide-Issue-Description.md`](../../_TODO-TerraformStyleGuide-Issue-Description.md)). When the documents disagree, treat `.pre-commit-config.yaml` as authoritative.
+> **Authoritative source:** [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) is the single source of truth for the hook IDs, entry points, and file scopes that pre-commit actually runs in this repository. Other Terraform documents in the repo may include illustrative `pre-commit-terraform` (i.e. `antonbabenko/pre-commit-terraform`) examples for reference (notably [`docs/terraform/TERRAFORM_COPILOT_INSTRUCTIONS_GUIDE.md`](TERRAFORM_COPILOT_INSTRUCTIONS_GUIDE.md) when describing how downstream instruction files commonly document Terraform hooks, and the upstream-sourced [`.github/instructions/terraform.instructions.md`](../../.github/instructions/terraform.instructions.md), which is intentionally not modified here because instruction files are protected governance files). When the documents disagree, treat `.pre-commit-config.yaml` as authoritative.
 
 ### Recommended Hooks
 
