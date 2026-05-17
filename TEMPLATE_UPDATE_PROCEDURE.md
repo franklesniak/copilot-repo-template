@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260517.7
+**Version:** 1.1.20260517.8
 
 ## Metadata
 
@@ -500,7 +500,7 @@ Suggested table:
 | --- | --- | --- | --- | --- | --- |
 | `.github/instructions/docs.instructions.md` | `markdown`, `agent-instructions` | Updated style rules | None | `PROTECTED-REVIEW` | Requires owner authorization. |
 | `.github/workflows/powershell-ci.yml` | `powershell`, `github-actions` | Updated validation steps | Local runner change | `MERGE` | Preserve local runner. |
-| `.github/workflows/terraform-ci.yml` | `terraform`, `github-actions` | Updated TFLint setup | Repo excludes Terraform | `SKIP` | Summarize as unadopted-module activity. |
+| `README.md` | `baseline` | Updated setup prose | Project-specific README | `SKIP` | In-scope per AND-style filtering; local override defaulted to `SKIP`; recorded in PR summary. |
 ```
 
 Upstream deletions MUST be surfaced for owner decision rather than applied automatically. Valid decisions for deletion rows include `TAKE` when the downstream owner agrees to delete the local file, `SKIP` when the downstream file is intentionally retained, and `MERGE` when only part of the deletion rationale applies.
