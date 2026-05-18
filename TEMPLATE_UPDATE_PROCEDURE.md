@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260518.3
+**Version:** 1.1.20260518.5
 
 ## Metadata
 
@@ -492,13 +492,23 @@ Some retained files contain module-owned blocks delimited by YAML comments. The 
 # template-sync: begin yaml-only
 # ...
 # template-sync: end yaml-only
+
+# template-sync: begin schema-only
+# ...
+# template-sync: end schema-only
+
+# template-sync: begin schema-template-sync-support-only
+# ...
+# template-sync: end schema-template-sync-support-only
 ```
 
 These inline blocks let a downstream repository keep the containing baseline or cross-module file while removing toolchain assumptions for a module it did not adopt. During Step 6, after path mapping decides whether the containing file itself is in scope, apply these rules:
 
-1. If the module named by an inline-block marker is present in `included_modules`, retain that module's blocks unchanged unless the per-file review records a separate `MERGE` decision.
-2. If the module named by an inline-block marker is absent from `included_modules`, remove each complete block for that module, including the begin and end marker lines, before accepting or merging the containing file.
+1. If every module named by an inline-block marker is present in `included_modules`, retain those blocks unchanged unless the per-file review records a separate `MERGE` decision.
+2. If any module named by an inline-block marker is absent from `included_modules`, remove each complete block for that marker, including the begin and end marker lines, before accepting or merging the containing file.
 3. Treat unmatched, nested, or unknown inline-block markers as an explicit sync question for the owner; do not silently keep or drop the affected block.
+
+A marker naming multiple modules, for example `schema-template-sync-support-only`, is retained only when every module named in the marker is present in `included_modules`, and is stripped when any one of them is absent.
 
 The current `python-only` inline block lives in:
 
@@ -513,6 +523,16 @@ The current `yaml-only` inline blocks live in:
 - `.pre-commit-config.yaml` for the `yamllint` hook that depends on `.yamllint.yml`.
 - `.github/workflows/data-ci.yml` for the `yamllint` hook-list documentation and the dedicated `Run yamllint` step.
 
+The current `schema-only` inline blocks live in:
+
+- `.pre-commit-config.yaml` for schema example validators and `check-metaschema` schema self-validation hooks.
+- `.github/workflows/data-ci.yml` for schema validation hook-list documentation and the dedicated schema validation alias steps.
+
+The current `schema-template-sync-support-only` inline blocks live in:
+
+- `.pre-commit-config.yaml` for the `validate-template-sync-manifest` and `validate-template-sync-marker` hooks.
+- `.github/workflows/data-ci.yml` for template sync validation hook-list documentation and the dedicated template sync validation alias steps.
+
 The current `terraform-only` inline blocks live in:
 
 - `.pre-commit-config.yaml` for the `terraform-fmt`, `terraform-validate`, and `terraform-tflint` repo-local hooks.
@@ -524,6 +544,10 @@ After stripping `python-only` blocks, a downstream repository that excludes `pyt
 After stripping `markdown-only` blocks, a downstream repository that excludes `markdown` should be able to run `pre-commit run --all-files` without installing Node.js or markdownlint.
 
 After stripping `yaml-only` blocks, a downstream repository that excludes `yaml` should be able to run `pre-commit run --all-files` and the retained data-file workflow without retaining `.yamllint.yml` or invoking a missing `yamllint` hook.
+
+After stripping `schema-only` blocks, a downstream repository that excludes `schema` should be able to run `pre-commit run --all-files` and the retained data-file workflow without retaining schema example validators or `check-metaschema` hooks.
+
+After stripping `schema-template-sync-support-only` blocks, a downstream repository that excludes either `schema` or `template-sync-support` should be able to run `pre-commit run --all-files` and the retained data-file workflow without invoking template sync manifest or marker validators.
 
 After stripping `terraform-only` blocks, a downstream repository that excludes `terraform` should be able to run `pre-commit run --all-files` and the retained non-Terraform workflows without installing HashiCorp Terraform or TFLint.
 
@@ -707,16 +731,16 @@ Run validation appropriate to the included modules and files changed. Full templ
 | --- | --- |
 | `baseline` | `pre-commit run --all-files` |
 | `agent-instructions` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-json --all-files`, `pre-commit run check-toml --all-files`, shell-script syntax check for any session hooks (e.g., `if [ -d .claude/hooks ]; then find .claude/hooks -type f -name '*.sh' -exec bash -n {} \;; fi` — POSIX-portable; the `if [ -d ... ]` guard makes the check a clean no-op for downstream repos without `.claude/hooks/`, and `find` returns exit 0 when no `*.sh` files match), and any repo-specific instruction checks |
-| `github-platform` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run check-jsonschema --all-files` where configured, and repository-settings review |
+| `github-platform` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run validate-dependabot-config --all-files` where configured, and repository-settings review |
 | `github-actions` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run actionlint --all-files` |
 | `github-templates` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `npm run lint:md`, `npm run lint:md:links`, and issue or PR template rendering review |
 | `template-onboarding` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, and walkthrough review for kept onboarding paths |
-| `template-sync-support` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run validate-template-sync-marker --all-files` when the marker hook is kept, and a dry-run review of the sync procedure examples |
+| `template-sync-support` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run validate-template-sync-manifest --all-files` and `pre-commit run validate-template-sync-marker --all-files` when the schema-template-sync-support block is kept, and a dry-run review of the sync procedure examples |
 | `markdown` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-json --all-files` |
 | `powershell` | `Invoke-Pester -Path tests/ -Output Detailed` |
 | `json` | `pre-commit run check-json --all-files` |
 | `yaml` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files` |
-| `schema` | `pre-commit run check-jsonschema --all-files`, `pre-commit run check-metaschema --all-files`, `pytest tests/test_schema_examples.py -v` after schema or schema-example changes |
+| `schema` | `pre-commit run validate-example-config-valid-examples --all-files`, `pre-commit run validate-template-sync-marker-valid-examples --all-files`, `pre-commit run validate-example-config-schema --all-files`, `pre-commit run validate-template-sync-manifest-schema --all-files`, `pre-commit run validate-template-sync-marker-schema --all-files`, and `pytest tests/test_schema_examples.py -v` after schema or schema-example changes |
 | `python` | `pytest tests/ -v --cov --cov-report=term-missing`, `pre-commit run check-toml --all-files` |
 | `terraform` | `terraform fmt -check -recursive`, `tflint --recursive`, `terraform test -verbose`, `pytest tests/test_terraform_hooks.py -v` after terraform-hook script changes |
 

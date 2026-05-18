@@ -14,33 +14,38 @@
 #   - yamllint          — YAML style enforcement per .yamllint.yml
 # template-sync: end yaml-only
 #   - actionlint        — GitHub Actions workflow linting
-#   - check-jsonschema  — JSON Schema validation. This single
-#                         `pre-commit run check-jsonschema --all-files`
-#                         invocation runs every hook sharing the
-#                         `check-jsonschema` ID, including:
-#                           * the worked-example schema validation
-#                             (`schemas/examples/example-config/valid/`),
-#                           * the template sync manifest
-#                             (`.template-sync/manifest.yml`), and
-#                           * the template sync marker when present
-#                             (`.template-sync/marker.yml`) plus its valid
-#                             example fixtures, and
-#                           * real load-bearing repository config
-#                             validation against built-in vendor schemas
-#                             shipped with `check-jsonschema` (currently
-#                             `.github/dependabot.yml` against
-#                             `vendor.dependabot`), and
-#                           * any additional `check-jsonschema` hooks
-#                             downstream consumers configure.
-#                         The aggregate-step (Option B) strategy is used
-#                         here rather than one CI step per hook alias
-#                         (Option A); individual hooks are still
-#                         independently runnable locally via
-#                         `pre-commit run <alias> --all-files` (for
-#                         example, `validate-dependabot-config`).
-#                         Self-validation of the schema itself is wired as
-#                         a separate `check-metaschema` hook in
-#                         `.pre-commit-config.yaml`.
+# template-sync: begin schema-only
+#   - validate-example-config-valid-examples
+#                         — JSON Schema validation for valid example-config
+#                           fixtures under `schemas/examples/`.
+#   - validate-template-sync-marker-valid-examples
+#                         — JSON Schema validation for valid template-sync
+#                           marker fixtures under `schemas/examples/`.
+#   - validate-example-config-schema
+#                         — JSON Schema metaschema validation for the
+#                           example-config schema.
+#   - validate-template-sync-manifest-schema
+#                         — JSON Schema metaschema validation for the
+#                           template sync manifest schema.
+#   - validate-template-sync-marker-schema
+#                         — JSON Schema metaschema validation for the
+#                           template sync marker schema.
+# template-sync: end schema-only
+# template-sync: begin schema-template-sync-support-only
+#   - validate-template-sync-manifest
+#                         — JSON Schema validation for
+#                           `.template-sync/manifest.yml`.
+#   - validate-template-sync-marker
+#                         — JSON Schema validation for
+#                           `.template-sync/marker.yml` when present.
+# template-sync: end schema-template-sync-support-only
+#   - validate-dependabot-config
+#                         — JSON Schema validation for `.github/dependabot.yml`
+#                           against `vendor.dependabot`.
+#
+# Schema-backed checks are invoked by pre-commit alias instead of the aggregate
+# `check-jsonschema` or `check-metaschema` hook IDs so module-owned validation
+# can be removed without leaving CI steps that call stripped or unrelated hooks.
 #
 # Design Decisions:
 #
@@ -134,19 +139,30 @@ jobs:
       - name: Run actionlint
         run: pre-commit run actionlint --all-files
 
-      - name: Run check-jsonschema
-        # `pre-commit run <hook-id> --all-files` runs all hooks sharing the
-        # given ID, so this single invocation covers every check-jsonschema
-        # hook configured in `.pre-commit-config.yaml`, including the
-        # worked-example schema validation, template sync manifest validation,
-        # template sync marker validation when `.template-sync/marker.yml` is
-        # present, valid marker fixture validation,
-        # and real load-bearing repository config validation (currently
-        # `.github/dependabot.yml` against the bundled `vendor.dependabot`
-        # schema). The companion
-        # `check-metaschema` hook (schema self-validation) is invoked
-        # separately below because it has a distinct hook ID.
-        run: pre-commit run check-jsonschema --all-files
+      # template-sync: begin schema-only
+      - name: Run validate-example-config-valid-examples
+        run: pre-commit run validate-example-config-valid-examples --all-files
 
-      - name: Run check-metaschema
-        run: pre-commit run check-metaschema --all-files
+      - name: Run validate-template-sync-marker-valid-examples
+        run: pre-commit run validate-template-sync-marker-valid-examples --all-files
+
+      - name: Run validate-example-config-schema
+        run: pre-commit run validate-example-config-schema --all-files
+
+      - name: Run validate-template-sync-manifest-schema
+        run: pre-commit run validate-template-sync-manifest-schema --all-files
+
+      - name: Run validate-template-sync-marker-schema
+        run: pre-commit run validate-template-sync-marker-schema --all-files
+      # template-sync: end schema-only
+
+      # template-sync: begin schema-template-sync-support-only
+      - name: Run validate-template-sync-manifest
+        run: pre-commit run validate-template-sync-manifest --all-files
+
+      - name: Run validate-template-sync-marker
+        run: pre-commit run validate-template-sync-marker --all-files
+      # template-sync: end schema-template-sync-support-only
+
+      - name: Run validate-dependabot-config
+        run: pre-commit run validate-dependabot-config --all-files
