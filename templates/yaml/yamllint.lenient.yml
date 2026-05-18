@@ -6,9 +6,9 @@
 # existing file) when you want the template's current YAML linting defaults
 # verbatim.
 #
-# Defaults preserved here (see README.md in this directory for the
-# choose-between-lenient-and-strict guidance and
-# `.github/TEMPLATE_DESIGN_DECISIONS.md` for the rationale ADRs):
+# Defaults preserved here (see README.md in this directory and the upstream
+# template's design-decision ADRs for the rationale):
+# https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md
 #
 #   - truthy.check-keys: false
 #       Preserves the idiomatic GitHub Actions `on:` key without per-file
@@ -49,9 +49,9 @@ rules:
     max: 120
     allow-non-breakable-words: true
     allow-non-breakable-inline-mappings: true
-    # Kept at `warning` instead of the default `error`. See
-    # `.github/TEMPLATE_DESIGN_DECISIONS.md` →
-    # "yamllint line-length Warning Level Default" for the rationale.
+    # Kept at `warning` instead of the default `error`. See the upstream
+    # template's "yamllint line-length Warning Level Default" ADR:
+    # https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md
     level: warning
   new-line-at-end-of-file: enable
   trailing-spaces: enable

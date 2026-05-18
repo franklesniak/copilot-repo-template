@@ -40,7 +40,7 @@ schemas/
             └── missing-required.json
 ```
 
-Once the schema and fixtures are in place, follow the [JSON/YAML Starter Content (Opt-in)](../../OPTIONAL_CONFIGURATIONS.md#jsonyaml-starter-content-opt-in) section in `OPTIONAL_CONFIGURATIONS.md` to wire a scoped `check-jsonschema` pre-commit hook for the new schema-backed file family. Do not broaden the active `Validate example-config valid examples` hook to cover `templates/**`; the starter content under this directory is intentionally outside the active hook's scope.
+Once the schema and fixtures are in place, follow the upstream template's [JSON/YAML starter content adoption guidance](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md#jsonyaml-starter-content-opt-in) to wire a scoped `check-jsonschema` pre-commit hook for the new schema-backed file family. Do not broaden the active `Validate example-config valid examples` hook to cover `templates/**`; the starter content under this directory is intentionally outside the active hook's scope.
 
 ## Pre-commit Snippet for `check-jsonschema`
 
@@ -85,4 +85,4 @@ If you want the starter content under this directory to be validated locally bef
 - [`check-jsonschema` documentation](https://check-jsonschema.readthedocs.io/)
 - [`.github/instructions/json.instructions.md`](../../.github/instructions/json.instructions.md) — JSON authoring standards
 - [`schemas/README.md`](../../schemas/README.md) — schema conventions, the active worked example, and the canonical downstream-removal checklist
-- [JSON/YAML Starter Content (Opt-in)](../../OPTIONAL_CONFIGURATIONS.md#jsonyaml-starter-content-opt-in) — adoption guidance for these template starters
+- [Upstream JSON/YAML starter content adoption guidance](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md#jsonyaml-starter-content-opt-in) — adoption guidance for these template starters
