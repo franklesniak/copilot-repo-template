@@ -61,11 +61,24 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
+from importlib.util import find_spec
 from pathlib import Path
 
 import pytest
 
-CHECK_JSONSCHEMA = shutil.which("check-jsonschema")
+
+def _check_jsonschema_command() -> list[str] | None:
+    """Resolve the preferred ``check-jsonschema`` invocation for this environment."""
+    executable = shutil.which("check-jsonschema")
+    if executable is not None:
+        return [executable]
+    if find_spec("check_jsonschema") is not None:
+        return [sys.executable, "-m", "check_jsonschema"]
+    return None
+
+
+CHECK_JSONSCHEMA_COMMAND = _check_jsonschema_command()
 
 SCHEMA_SUFFIX = ".schema.json"
 _ROOT_MARKERS = ("pyproject.toml", "setup.cfg", "pytest.ini")
@@ -286,7 +299,7 @@ _CASES = _discover_cases()
 
 
 @pytest.mark.skipif(
-    CHECK_JSONSCHEMA is None,
+    CHECK_JSONSCHEMA_COMMAND is None,
     reason="check-jsonschema is not installed in this environment",
 )
 @pytest.mark.skipif(
@@ -319,13 +332,14 @@ def test_schema_example(
         AssertionError: If a valid example is rejected, or an invalid
             example is accepted, by ``check-jsonschema``.
     """
-    # CHECK_JSONSCHEMA is non-None here because of the skipif guard
-    # above; assert for type-checkers and as a defensive runtime check.
-    assert CHECK_JSONSCHEMA is not None
+    validator_command = CHECK_JSONSCHEMA_COMMAND
+    # The command is non-None here because of the skipif guard above;
+    # assert for type-checkers and as a defensive runtime check.
+    assert validator_command is not None
 
     result = subprocess.run(
         [
-            CHECK_JSONSCHEMA,
+            *validator_command,
             "--schemafile",
             str(schema_path),
             str(example_path),

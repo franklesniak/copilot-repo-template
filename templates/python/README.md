@@ -12,7 +12,7 @@ These template files demonstrate how to configure Python tooling to align with t
 - **`tests/`**: Sample test directory containing:
   - `__init__.py`: Package marker for the test directory.
   - `test_placeholder.py`: Placeholder test file that demonstrates pytest test structure.
-  - `test_schema_examples.py`: Starter pytest module that auto-discovers and validates schema example fixtures under `schemas/examples/<name>/{valid,invalid}/` with `check-jsonschema`; skips cleanly when the tool is not installed. Mirrors the active, canonical test at `tests/test_schema_examples.py` in the upstream template repository root. See the upstream template's [schema validation configuration guidance](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md#schema-validation-configuration).
+  - `test_schema_examples.py`: Starter pytest module that auto-discovers and validates schema example fixtures under `schemas/examples/<name>/{valid,invalid}/` with `check-jsonschema`; prefers the `check-jsonschema` console script and falls back to `python -m check_jsonschema` when the package is importable. It skips only when neither invocation is available. Mirrors the active, canonical test at `tests/test_schema_examples.py` in the upstream template repository root. See the upstream template's [schema validation configuration guidance](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md#schema-validation-configuration).
 - **`README.md`**: This file
 
 ## How to Use

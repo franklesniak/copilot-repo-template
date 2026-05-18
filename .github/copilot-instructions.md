@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.5.20260511.0
+**Version:** 1.5.20260518.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-11
+- **Last Updated:** 2026-05-18
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -393,4 +393,4 @@ terraform test -verbose
 pytest tests/test_schema_examples.py -v
 ```
 
-`tests/test_schema_examples.py` shells out to the `check-jsonschema` CLI from `PATH`. If `check-jsonschema` is not installed in the test environment, the parametrized cases are skipped by design (a skipped test is not a passing test — pytest still exits `0`, but no schema validation actually ran). Install it via `pip install -e ".[dev]"` or `pip install check-jsonschema` so the binary is on `PATH`. To validate schemas through the pre-commit toolchain instead, run `pre-commit run check-jsonschema --all-files` for example-fixture validation against schemas and `pre-commit run check-metaschema --all-files` for project-owned schema self-validation; `pre-commit run --all-files` exercises both at once. See [`README.md`](../README.md) for the full prerequisite note.
+`tests/test_schema_examples.py` shells out to the `check-jsonschema` validator by first using the `check-jsonschema` console script when it is on `PATH`, then falling back to `python -m check_jsonschema` when the package is importable in the pytest environment. The parametrized cases skip only when neither invocation is available (a skipped test is not a passing test — pytest still exits `0`, but no schema validation actually ran). Install it via `pip install -e ".[dev]"` or `pip install check-jsonschema` so the package is importable and, where supported by the environment, the console script is on `PATH`. To validate schemas through the pre-commit toolchain instead, run `pre-commit run check-jsonschema --all-files` for example-fixture validation against schemas and `pre-commit run check-metaschema --all-files` for project-owned schema self-validation; `pre-commit run --all-files` exercises both at once. See [`README.md`](../README.md) for the full prerequisite note.
