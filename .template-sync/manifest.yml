@@ -195,11 +195,13 @@ template_manifest:
         - baseline
       notes: >-
         Contains a YAML-only inline block for yamllint, a Python-only inline
-        block for Python project hooks, and a Terraform-only inline block for
-        repo-local Terraform hooks. Remove the delimited YAML block when the
-        yaml module is excluded, remove the delimited Python block when the
-        python module is excluded, and remove the delimited Terraform block
-        when the terraform module is excluded.
+        block for Python project hooks, a Markdown-only inline block for
+        markdownlint-cli2, and a Terraform-only inline block for repo-local
+        Terraform hooks. Remove the delimited YAML block when the yaml module
+        is excluded, remove the delimited Python block when the python module
+        is excluded, remove the delimited Markdown block when the markdown
+        module is excluded, and remove the delimited Terraform block when the
+        terraform module is excluded.
     - pattern: '.markdownlint.jsonc'
       requires_all:
         - markdown

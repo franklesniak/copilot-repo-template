@@ -190,11 +190,13 @@ repos:
         name: Self-validate template-sync-marker schema
         files: ^schemas/template-sync-marker\.schema\.json$
 
+  # template-sync: begin markdown-only
   # Markdown linting
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     rev: v0.22.1
     hooks:
       - id: markdownlint-cli2
+  # template-sync: end markdown-only
 
   # template-sync: begin terraform-only
   # Terraform formatting and validation.
