@@ -116,7 +116,7 @@ jobs:
   # Purpose: Run Pester 5.x tests across multiple operating systems
   #
   # Customization:
-  #   - To change test location, update $config.Run.Path in "Run Pester tests" step
+  #   - To change test location, update PESTER_TEST_ROOT in the test job env
   #   - To change output format, update $config.TestResult.OutputFormat
   #   - To add test filters, use $config.Filter.* properties
   #
@@ -127,6 +127,8 @@ jobs:
   test:
     name: PowerShell Tests (Pester)
     runs-on: ${{ matrix.os }}
+    env:
+      PESTER_TEST_ROOT: tests/
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
@@ -139,8 +141,13 @@ jobs:
         id: find-tests
         shell: pwsh
         run: |
-          $testFiles = Get-ChildItem -Path . -Filter "*.Tests.ps1" -Recurse -File |
-            Where-Object { $_.FullName -notmatch "node_modules" }
+          $testRoot = $env:PESTER_TEST_ROOT
+          if (Test-Path -LiteralPath $testRoot) {
+            $testFiles = Get-ChildItem -Path $testRoot -Filter "*.Tests.ps1" -Recurse -File |
+              Where-Object { $_.FullName -notmatch "node_modules" }
+          } else {
+            $testFiles = @()
+          }
           if ($testFiles.Count -eq 0) {
             Write-Host "No Pester test files found"
             "found=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
@@ -163,8 +170,8 @@ jobs:
         shell: pwsh
         run: |
           $config = New-PesterConfiguration
-          # Run tests from tests/ directory (includes subdirectories)
-          $config.Run.Path = "tests/"
+          # Run tests from the configured test root (includes subdirectories)
+          $config.Run.Path = $env:PESTER_TEST_ROOT
           # Exit with non-zero code if tests fail
           $config.Run.Exit = $true
           # Enable test result output
