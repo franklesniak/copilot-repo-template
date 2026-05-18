@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260518.4
+**Version:** 1.1.20260518.5
 
 ## Metadata
 
@@ -504,7 +504,7 @@ Some retained files contain module-owned blocks delimited by YAML comments. The 
 
 These inline blocks let a downstream repository keep the containing baseline or cross-module file while removing toolchain assumptions for a module it did not adopt. During Step 6, after path mapping decides whether the containing file itself is in scope, apply these rules:
 
-1. If the module or modules named by an inline-block marker are present in `included_modules`, retain those blocks unchanged unless the per-file review records a separate `MERGE` decision.
+1. If every module named by an inline-block marker is present in `included_modules`, retain those blocks unchanged unless the per-file review records a separate `MERGE` decision.
 2. If any module named by an inline-block marker is absent from `included_modules`, remove each complete block for that marker, including the begin and end marker lines, before accepting or merging the containing file.
 3. Treat unmatched, nested, or unknown inline-block markers as an explicit sync question for the owner; do not silently keep or drop the affected block.
 
