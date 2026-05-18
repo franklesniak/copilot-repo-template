@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260518.6
+**Version:** 1.1.20260518.7
 
 ## Metadata
 
@@ -27,8 +27,8 @@ Use this procedure when a downstream repository wants to review new changes from
 - **Unadopted-module activity:** Upstream activity in a known taxonomy module that is not listed in `included_modules`.
 - **Unknown module:** A module name introduced by a newer upstream manifest or procedure that the downstream marker does not recognize. Unknown modules MUST be surfaced for explicit owner decision.
 - **Protected file:** A governance or instruction file that requires explicit owner authorization before editing.
-- **Sync working notes:** Temporary notes maintained while applying this procedure. They MAY be a scratch document, a draft PR body, or another local checklist, but they are not the final sync PR summary. They MUST capture the range mode, range endpoints or reconciliation command, range-base rationale, unmapped paths, per-file decisions, protected-file dispositions, validation results, and open questions as those facts are discovered. Step 14 turns these working notes into the final sync PR summary.
-- **Sync PR summary:** The final owner-facing PR description created in Step 14 from the sync working notes. It is the durable review artifact for the sync PR.
+- **Sync working notes:** Temporary notes maintained while applying this procedure. They MAY be a scratch document, a draft PR body, or another local checklist, but they are not the final sync summary. They MUST capture the range mode, range endpoints or reconciliation command, range-base rationale, unmapped paths, per-file decisions, protected-file dispositions, line-ending normalization actions, validation results, validation issue classifications, finalization mode, and open questions as those facts are discovered. Step 14 turns these working notes into the final sync summary.
+- **Sync summary:** The final owner-facing record created in Step 14 from the sync working notes. Depending on the finalization mode, it MAY be a PR description, a committed summary artifact, a local handoff note, or a dry-run report. It is the durable review artifact for modes that commit a branch or open a PR; working-tree inspection and dry-run modes MUST still present it clearly before stopping.
 
 ## Safety Rules
 
@@ -47,13 +47,13 @@ Use this procedure when a downstream repository wants to review new changes from
 5. Initialize or update `.template-sync/marker.yml`.
 6. Filter upstream changes through the authoritative module taxonomy.
 7. Review every candidate file with an explicit decision.
-8. Perform manual merges using an ignored scratch location when needed.
+8. Perform manual merges using an ignored scratch location when needed, and normalize line endings after `.gitattributes` changes.
 9. Handle protected files through authorization or deferral.
 10. Preserve local customizations and downstream project identity.
 11. Re-substitute template placeholders such as `OWNER/REPO`.
-12. Run validation for the adopted modules.
+12. Run whitespace checks and validation for the adopted modules.
 13. Record the latest reviewed template commit.
-14. Open a PR with a clear sync summary.
+14. Finalize the sync using a declared mode and clear sync summary.
 
 Independent substeps, such as inspecting unrelated candidate files or collecting validation commands for separate modules, MAY be performed in parallel. The final recorded decisions and marker update MUST remain deterministic.
 
@@ -283,8 +283,8 @@ Before moving to Step 5, the sync working notes MUST contain:
 - Reachability check result, when using a delta range
 - Diff command or full-reconciliation enumeration command used
 - Local-only noise excluded by the full-reconciliation pre-filter, when applicable
-- Candidate inline module blocks discovered in changed files, when applicable. Retain or strip decisions for these blocks belong to Step 6 once path mapping has run; record them per file in the Step 7 decision notes and the sync PR summary.
-- Any uncertainty that should be carried into the sync PR summary
+- Candidate inline module blocks discovered in changed files, when applicable. Retain or strip decisions for these blocks belong to Step 6 once path mapping has run; record them per file in the Step 7 decision notes and the sync summary.
+- Any uncertainty that should be carried into the sync summary
 
 Example sync working-notes block:
 
@@ -315,7 +315,7 @@ Marker contents are schema-backed by [`schemas/template-sync-marker.schema.json`
 
 For example, suppose upstream changed `README.md` and `.github/workflows/terraform-ci.yml`, and the downstream repository reviewed both but adopted neither because `README.md` is locally owned and Terraform is not adopted. The sync still advances `last_reviewed_template_commit` to the resolved range head after review, because those upstream changes were inspected and intentionally skipped. A `last_adopted_template_commit` field would incorrectly imply that skipped-but-reviewed changes need to be reviewed again during the next sync.
 
-If Step 4 used a first-sync delta range because the marker was missing or incomplete, initialize `.template-sync/marker.yml` in this step. Set `template_sync.last_reviewed_template_commit` to the resolved Step 4 range base SHA until Step 13 advances it to the resolved upstream range head SHA. Carry the range-base rationale from the sync working notes into the final sync PR summary.
+If Step 4 used a first-sync delta range because the marker was missing or incomplete, initialize `.template-sync/marker.yml` in this step. Set `template_sync.last_reviewed_template_commit` to the resolved Step 4 range base SHA until Step 13 advances it to the resolved upstream range head SHA. Carry the range-base rationale from the sync working notes into the final sync summary.
 
 If Step 4 selected full reconciliation, the marker still has no reviewed upstream commit at this step. You MAY initialize or update other marker fields, such as `source_repo`, `included_modules`, and local overrides chosen by the owner, but do not set `template_sync.last_reviewed_template_commit` until Step 13 records the resolved upstream range head SHA after review is complete.
 
@@ -361,7 +361,7 @@ template_sync:
 
 ### Local Overrides
 
-When a changed upstream path appears in `local_overrides` and every mapped module is in `included_modules`, start the per-file decision at the override's `default_decision`. Each applied override MUST still appear in the sync PR summary with a brief description of the upstream change.
+When a changed upstream path appears in `local_overrides` and every mapped module is in `included_modules`, start the per-file decision at the override's `default_decision`. Each applied override MUST still appear in the sync summary with a brief description of the upstream change.
 
 The agent or maintainer does not decide that an upstream change is too minor to mention under an override. Listing every applied override is the mechanism that lets the owner notice stale overrides, security-sensitive changes, validation changes, or governance changes that should override the override.
 
@@ -370,7 +370,7 @@ Worked local-overrides mini scenario:
 1. The marker has a `README.md` override with `default_decision: SKIP` because the downstream README is project-specific.
 2. The reviewed upstream range changes `README.md` to add a security reporting note.
 3. The per-file row starts with `SKIP` from the override, but the maintainer upgrades the decision to `MERGE` because the security note is relevant.
-4. The sync PR summary still lists the applied override and the upstream change, for example: `README.md` defaulted to `SKIP`; upstream added security reporting guidance; final decision `MERGE`.
+4. The sync summary still lists the applied override and the upstream change, for example: `README.md` defaulted to `SKIP`; upstream added security reporting guidance; final decision `MERGE`.
 
 ### Deferred Protected Candidates
 
@@ -562,7 +562,7 @@ After stripping `github-platform-only` blocks, a downstream repository that excl
 
 After stripping `terraform-only` blocks, a downstream repository that excludes `terraform` should be able to run `pre-commit run --all-files` and the retained non-Terraform workflows without installing HashiCorp Terraform or TFLint.
 
-Record the resulting retain or strip decisions per affected path in the Step 7 per-file decision notes, and summarize them in the sync PR summary so the audit trail captures both the discovery from Step 4 and the resolution from Step 6.
+Record the resulting retain or strip decisions per affected path in the Step 7 per-file decision notes, and summarize them in the sync summary so the audit trail captures both the discovery from Step 4 and the resolution from Step 6.
 
 ### Filtering Rules
 
@@ -571,7 +571,7 @@ For each path from `git diff --name-status -M`:
 1. Map the path to module(s).
 2. Include the path in the per-file review table only if every mapped module is present in `included_modules`.
 3. Exclude the path from the per-file review table if any mapped module is absent from `included_modules`.
-4. Summarize excluded paths as unadopted-module activity by module in the PR summary.
+4. Summarize excluded paths as unadopted-module activity by module in the sync summary.
 5. Surface unknown modules and unmapped paths for explicit owner review before completing the sync.
 
 Unadopted-module activity and unknown modules are different cases:
@@ -579,7 +579,7 @@ Unadopted-module activity and unknown modules are different cases:
 - **Unadopted-module activity** uses known modules from this taxonomy, such as `terraform`, that the downstream marker intentionally omits. Summarize it by module and path count or path list.
 - **Unknown modules** are not known to the downstream marker or procedure. The owner MUST decide whether the module should be added to `included_modules`, mapped to an existing module, or deferred.
 
-If summarized unadopted-module activity appears relevant during review, the owner MAY opt into that module before completing the sync by adding it to `included_modules`, or MAY defer opt-in to a later PR. Record either choice in the sync PR summary.
+If summarized unadopted-module activity appears relevant during review, the owner MAY opt into that module before completing the sync by adding it to `included_modules`, or MAY defer opt-in to a later PR. Record either choice in the sync summary.
 
 ## Step 7: Review Each Candidate File
 
@@ -601,7 +601,7 @@ Suggested table:
 | --- | --- | --- | --- | --- | --- |
 | `.github/instructions/docs.instructions.md` | `markdown`, `agent-instructions` | Updated style rules | None | `PROTECTED-REVIEW` | Requires owner authorization. |
 | `.github/workflows/powershell-ci.yml` | `powershell`, `github-actions` | Updated validation steps | Local runner change | `MERGE` | Preserve local runner. |
-| `README.md` | `baseline` | Updated setup prose | Project-specific README | `SKIP` | In-scope per AND-style filtering; local override defaulted to `SKIP`; recorded in PR summary. |
+| `README.md` | `baseline` | Updated setup prose | Project-specific README | `SKIP` | In-scope per AND-style filtering; local override defaulted to `SKIP`; recorded in the sync summary. |
 ```
 
 Upstream deletions MUST be surfaced for owner decision rather than applied automatically. Valid decisions for deletion rows include `TAKE` when the downstream owner agrees to delete the local file, `SKIP` when the downstream file is intentionally retained, and `MERGE` when only part of the deletion rationale applies.
@@ -652,6 +652,29 @@ git show TEMPLATE_SHA:.github/workflows/powershell-ci.yml > .cache/template-sync
 
 Then manually reconcile the scratch copy with the downstream file. Preserve local customizations unless the per-file decision explicitly replaces them.
 
+### Normalize Line Endings After `.gitattributes` Changes
+
+When the sync adopts, updates, or reintroduces `.gitattributes`, run a reviewable line-ending normalization pass after the intended `.gitattributes` content is in the working tree and before validation. Exclude unrelated local edits first so the normalization review is limited to the sync.
+
+`git add --renormalize .` stages every tracked path whose clean-filtered content has changed, including substantive sync edits that happen to be unstaged, so before running it stage and commit (or stash) any substantive sync edits already in the working tree. When isolating substantive edits is impractical, restrict the renormalization pass to specific paths (for example, `git add --renormalize <path>...` for the files affected by the `.gitattributes` change) so the staged result contains only line-ending normalization.
+
+The preferred Git normalization pass is:
+
+```bash
+git add --renormalize .
+```
+
+Then inspect the staged normalization before committing it:
+
+```bash
+git diff --cached --check
+git diff --cached --name-status
+```
+
+If the downstream workflow does not stage changes during review, use an equivalent reviewable pass that shows which tracked files changed because of `.gitattributes`. Record the command or method in the sync working notes.
+
+The repository-wide commit-hygiene rule in [`.github/copilot-instructions.md`](.github/copilot-instructions.md) still forbids routine standalone formatting-only or lint-only commits. A separate normalization commit is allowed in this procedure when `.gitattributes` adoption causes broad mechanical line-ending churn and separating that churn materially improves reviewability. That commit MUST contain only the reviewed normalization effects caused by the `.gitattributes` change, MUST stay adjacent to the related sync change, and MUST be recorded in the sync summary. If the normalization is small, include it in the same substantive sync commit instead.
+
 ## Step 9: Handle Protected Files
 
 Protected governance and instruction files require explicit owner authorization before editing.
@@ -668,19 +691,19 @@ Protected files include:
 
 The default decision for protected-file changes is `PROTECTED-REVIEW`.
 
-### Same-PR Protected Edits
+### Same-Sync Protected Edits
 
-Protected-file changes MAY be included in the same sync PR only when the owner gives explicit, current-task authorization for the specific protected path or paths being changed.
+Protected-file changes MAY be included in the same sync change set, whether it finalizes as a PR-ready branch or a completed local branch, only when the owner gives explicit, current-task authorization for the specific protected path or paths being changed.
 
-The sync PR summary MUST record the authorization basis in a reviewer-verifiable form, such as:
+The sync summary MUST record the authorization basis in a reviewer-verifiable form, such as:
 
 - a linked owner comment
 - a linked authorization issue
 - a quoted owner instruction from the current task
 
-The PR summary MUST list each protected path, the authorization basis, and the validation performed.
+The sync summary MUST list each protected path, the authorization basis, and the validation performed.
 
-Protected-file edits MUST be placed in a separate commit from non-protected changes unless the owner's current-task authorization explicitly waives commit isolation. If commit isolation is waived, record the waiver and authorization basis in the PR summary.
+Protected-file edits MUST be placed in a separate commit from non-protected changes unless the owner's current-task authorization explicitly waives commit isolation. If commit isolation is waived, record the waiver and authorization basis in the sync summary.
 
 ### Deferred Protected Edits
 
@@ -738,6 +761,24 @@ Do not replace didactic examples that intentionally explain the placeholder conv
 
 Run validation appropriate to the included modules and files changed. Full template-like validation remains the safest default when the downstream repository keeps the relevant tooling.
 
+Before module-specific validators, check for whitespace errors and unresolved conflict markers:
+
+```bash
+git diff --check
+```
+
+When changes are staged or a separate normalization commit is being prepared, also check the staged diff:
+
+```bash
+git diff --cached --check
+```
+
+When `.gitattributes` changed or line-ending normalization occurred, verify the expected EOL attributes for the touched paths. A broad reviewable check is:
+
+```bash
+git ls-files --eol -- .
+```
+
 | Module | Example validation |
 | --- | --- |
 | `baseline` | `pre-commit run --all-files` |
@@ -755,7 +796,19 @@ Run validation appropriate to the included modules and files changed. Full templ
 | `python` | `pytest tests/ -v --cov --cov-report=term-missing`, `pre-commit run check-toml --all-files` |
 | `terraform` | `terraform fmt -check -recursive`, `tflint --recursive`, `terraform test -verbose`, `pytest tests/test_terraform_hooks.py -v` after terraform-hook script changes |
 
-Run `pre-commit run --all-files` before committing when the downstream repository uses pre-commit. If a repository intentionally removed a module and its validation tooling, record that in the PR summary rather than reintroducing validation commands blindly.
+Run `pre-commit run --all-files` before committing when the downstream repository uses pre-commit. If a repository intentionally removed a module and its validation tooling, record that in the sync summary rather than reintroducing validation commands blindly.
+
+### Validation Triage
+
+For each validation failure, record the validator, path, failing condition, whether the upstream range changed that path, and one classification in the sync working notes:
+
+| Classification | Use when | Required disposition |
+| --- | --- | --- |
+| upstream-template fix | The failure is caused by adopted upstream template content, or is reproducible in the upstream template at the reviewed range head. A template-owned file having changed in the reviewed range is not by itself sufficient when the failing condition comes from downstream customization in that same file. | Fix in the sync when in scope, or record the upstream defect and owner-facing follow-up. |
+| downstream-local fix | The failure is in downstream-owned content or downstream customization that the sync can safely fix now. | Fix locally in the sync and list the fix in the sync summary. |
+| deferred follow-up | The failure is pre-existing downstream debt or a policy decision that is outside the sync's approved scope. | Leave the validator failure visible, record the owner decision or follow-up needed, and do not describe the sync as PR-ready unless required validation is passing or explicitly deferred by the owner. |
+
+When a newly adopted validator fails on a file that the upstream template did not modify in the reviewed range, classify the finding as pre-existing downstream debt unless the same failure is reproducible in the upstream template at the reviewed range head. Do not weaken or remove the validator to make the sync pass. Fix the downstream issue, defer it with owner acknowledgement, or choose a finalization mode that accurately reflects the remaining validation debt.
 
 ## Step 13: Record the Reviewed Commit
 
@@ -768,12 +821,24 @@ After all decisions are recorded and validation is complete, update `.template-s
 
 Do not set `template_sync.last_reviewed_template_commit` to a commit that was not actually reviewed through the taxonomy and per-file process. Do not store a branch name, tag name, short SHA, or other moving ref in this marker field; store the full 40-character resolved upstream template commit SHA that was reviewed.
 
-## Step 14: Open the Sync PR
+If Step 14 will use dry-run analysis only, do not update `.template-sync/marker.yml`. Record the proposed marker update in the sync summary instead. If Step 14 will use a local-inspection mode with uncommitted changes, the marker update MAY remain in the working tree for owner inspection, but the sync summary MUST state that the reviewed commit is not durable until those changes are committed.
 
-The final sync PR summary is assembled from the sync working notes after decisions and validation are complete. The working notes can remain a scratch artifact; the PR summary is the durable owner-facing record attached to the sync PR.
+## Step 14: Finalize the Sync
 
-The sync PR summary SHOULD include:
+The final sync summary is assembled from the sync working notes after decisions and validation are complete. The working notes can remain a scratch artifact; the sync summary is the owner-facing record for the chosen finalization mode.
 
+Step 14 does not always open a PR. Choose and record exactly one finalization mode:
+
+| Finalization mode | Use when | Required result |
+| --- | --- | --- |
+| completed local branch with committed sync summary | The owner wants a complete local branch to inspect before any PR is opened. | Commit the applied sync changes and a sync summary artifact in an owner-approved or downstream-defined path. The working tree is clean, and the summary states whether a future PR is still needed. |
+| completed local branch with working-tree changes for inspection | The owner wants to inspect edits before committing, or validation debt requires local review first. | Leave the working tree in the requested inspection state and provide the sync summary as the local handoff record. The summary MUST state which changes are uncommitted, which validation passed or failed, and what remains before commit or PR. |
+| PR-ready branch | The sync is ready for normal review. | Commit the intended changes, record validation results, and prepare the sync summary for the PR body. Opening the PR MAY happen immediately when remote tooling and owner direction allow it. |
+| dry-run analysis only | The owner requested analysis without applying changes, or the sync must stop before changing files. | Do not advance `.template-sync/marker.yml` or commit sync changes. Provide the sync summary as a dry-run report with proposed decisions, proposed marker update, validation not run or simulated, and open questions. |
+
+The sync summary MUST include:
+
+- finalization mode
 - upstream template commit range reviewed
 - included modules
 - unadopted-module activity summarized by module
@@ -786,7 +851,9 @@ The sync PR summary SHOULD include:
 - protected files deferred for separate authorization
 - local overrides applied during this sync, each with a brief upstream change description
 - local customizations preserved
-- validation commands run
+- line-ending normalization actions and whether a separate normalization commit was used
+- validation commands run and results
+- each issue surfaced during validation or review, classified as upstream-template fix, downstream-local fix, or deferred follow-up
 - open questions for the owner
 
 Example summary skeleton:
@@ -794,6 +861,7 @@ Example summary skeleton:
 ```markdown
 ## Template Sync Summary
 
+**Finalization mode:** PR-ready branch
 **Upstream range reviewed:** `1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
 **Included modules:** baseline, agent-instructions, github-actions, github-templates, markdown, powershell, template-sync-support
 **Unadopted-module activity:** terraform (`.github/workflows/terraform-ci.yml`)
@@ -806,7 +874,14 @@ Example summary skeleton:
 **Protected files deferred:** `.github/copilot-instructions.md` at `2222222222222222222222222222222222222222`
 **Local overrides applied:** `README.md` defaulted to `SKIP`; upstream changed setup prose.
 **Local customizations preserved:** self-hosted runner block; project-specific PR checklist.
+**Line-ending normalization:** not needed; `.gitattributes` unchanged.
 **Validation:** `pre-commit run --all-files` (passed), `npm run lint:md` (passed), `npm run lint:md:nested` (passed), `Invoke-Pester -Path tests/ -Output Detailed` (passed)
+
+## Issue Classifications
+
+- upstream-template fix: none
+- downstream-local fix: none
+- deferred follow-up: none
 
 ## Open Questions
 
@@ -942,9 +1017,10 @@ PowerShell validation:
 Invoke-Pester -Path tests/ -Output Detailed
 ```
 
-### PR Summary Fragment
+### Sync Summary Fragment
 
 ```markdown
+**Finalization mode:** PR-ready branch
 **Upstream range reviewed:** `1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
 **Included modules:** baseline, agent-instructions, github-actions, github-templates, markdown, powershell, template-sync-support
 **Unadopted-module activity:** terraform (`.github/workflows/terraform-ci.yml`)
@@ -954,7 +1030,14 @@ Invoke-Pester -Path tests/ -Output Detailed
 **Protected files deferred:** `.github/copilot-instructions.md` at `2222222222222222222222222222222222222222`, `.github/instructions/powershell.instructions.md` at `2222222222222222222222222222222222222222`
 **Local overrides applied:** none in scope this sync
 **Local customizations preserved:** self-hosted runner block; project-specific PR checklist
+**Line-ending normalization:** not needed; `.gitattributes` unchanged.
 **Validation:** `pre-commit run --all-files` (passed), `npm run lint:md` (passed), `npm run lint:md:nested` (passed), `Invoke-Pester -Path tests/ -Output Detailed` (passed)
+
+## Issue Classifications
+
+- upstream-template fix: none
+- downstream-local fix: none
+- deferred follow-up: none
 ```
 
 ## Future Automation
