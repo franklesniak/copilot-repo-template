@@ -1187,7 +1187,7 @@ Use this checklist before the detailed Python and PowerShell sections below.
 Set up Python if you use it:
 
 - Read `.github/instructions/python.instructions.md` before editing `*.py` files.
-- Keep `.github/workflows/python-ci.yml` for Python linting, type checking, and tests.
+- Keep `.github/workflows/python-ci.yml` for Python type checking (mypy) and tests (pytest). Aggregate pre-commit enforcement lives in `.github/workflows/precommit-ci.yml`, which is baseline-scoped and stays regardless of Python adoption.
 - Keep `src/`, `tests/test_example.py`, `tests/__init__.py`, `pyproject.toml`, and `templates/python/` until you replace the example package and tests with your project code.
 
 Remove Python if you do not use it:
@@ -1198,7 +1198,8 @@ Remove Python if you do not use it:
 - Delete `.github/workflows/python-ci.yml`.
 - Delete `.github/instructions/python.instructions.md`.
 - Delete `templates/python/`.
-- Remove the `black` and `ruff-check` hooks from `.pre-commit-config.yaml`.
+- Keep `.github/workflows/precommit-ci.yml`. It is baseline-scoped and runs `pre-commit run --all-files` for repository hygiene; Python is still installed there only as the runtime for `pre-commit` itself and Python-based hooks (e.g., `check-jsonschema`).
+- Remove the `# template-sync: begin python-only` … `# template-sync: end python-only` block from `.pre-commit-config.yaml` (which contains the `black` and `ruff-check` hooks). The template-sync framework strips this block automatically when the `python` module is excluded; remove it manually if you are not using template sync.
 - Remove the `pip` ecosystem from `.github/dependabot.yml` if `pyproject.toml` is gone and no Python dependency manifest remains.
 - Remove Python validation references from `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `README.md`, `CONTRIBUTING.md`, and the PR template after the protected-file cleanup step below is authorized.
 - Keep Python installed for development tooling if you still run `pre-commit`, `check-jsonschema`, `check-metaschema`, or repo-local hooks.
