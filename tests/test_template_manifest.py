@@ -838,6 +838,41 @@ def test_aggregate_precommit_workflow_is_not_python_scoped() -> None:
     assert precommit_mapping.get("requires_all") == ["baseline", "github-actions"]
 
 
+def test_repeated_precommit_repos_share_rev() -> None:
+    """Repeated pre-commit ``repo:`` entries must share the same ``rev`` to avoid drift.
+
+    ``.pre-commit-config.yaml`` declares the same external repository more than
+    once when its hooks are split across template-sync modules (for example,
+    ``python-jsonschema/check-jsonschema`` appears under the schema-only,
+    schema-template-sync-support-only, and GitHub-platform blocks). Dependabot's
+    ``pre-commit`` ecosystem and manual edits both target each ``rev:`` line
+    independently, so this test asserts that every entry for the same repository
+    remains pinned to the same revision and surfaces any drift between them.
+    """
+    precommit_path = REPO_ROOT / ".pre-commit-config.yaml"
+    precommit_config = yaml.safe_load(precommit_path.read_text(encoding="utf-8"))
+    repos = precommit_config.get("repos")
+    assert isinstance(repos, list), ".pre-commit-config.yaml must declare repos as a list"
+
+    revs_by_repo: dict[str, set[str]] = {}
+    for repo in repos:
+        assert isinstance(repo, dict), "each pre-commit repo entry must be a mapping"
+        repo_url = repo.get("repo")
+        assert isinstance(repo_url, str), f"each pre-commit repo entry must define repo: {repo!r}"
+        if repo_url == "local":
+            continue
+        rev = repo.get("rev")
+        assert isinstance(rev, str), f"{repo_url}: each non-local repo entry must define rev"
+        revs_by_repo.setdefault(repo_url, set()).add(rev)
+
+    drifted = {repo_url: sorted(revs) for repo_url, revs in revs_by_repo.items() if len(revs) > 1}
+    assert not drifted, (
+        "Pre-commit repos declared more than once must share the same rev to "
+        "avoid version drift from independent Dependabot or manual bumps:\n"
+        + "\n".join(f"  {repo_url}: {revs}" for repo_url, revs in sorted(drifted.items()))
+    )
+
+
 def test_copy_ready_files_do_not_use_onboarding_only_relative_references() -> None:
     """Copy-ready module files must not assume template-onboarding is present."""
     failures: list[str] = []
