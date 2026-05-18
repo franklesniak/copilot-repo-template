@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/schemas/starter.schema.json",
   "title": "Starter Schema (template starter content)",
-  "description": "Minimal JSON Schema Draft 2020-12 starter shipped under templates/json/ for downstream consumers to copy into their own schemas/ directory and adapt. This file is starter content and is NOT an active contract while it remains under templates/. See templates/json/README.md and the JSON/YAML starter-content section in OPTIONAL_CONFIGURATIONS.md for the canonical adoption guidance, and schemas/README.md for the schema conventions used by this template.",
+  "description": "Minimal JSON Schema Draft 2020-12 starter shipped under templates/json/ for downstream consumers to copy into their own schemas/ directory and adapt. This file is starter content and is NOT an active contract while it remains under templates/. See templates/json/README.md for adoption guidance and schemas/README.md for schema conventions.",
   "type": "object",
   "additionalProperties": false,
   "required": [

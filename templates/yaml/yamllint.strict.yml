@@ -2,12 +2,13 @@
 #
 # Stricter alternative to the active repository-root .yamllint.yml defaults.
 # This file is starter content shipped under templates/yaml/; it is NOT the
-# active configuration for this template repository. To adopt it in a
+# active configuration for this repository. To adopt it in a
 # downstream repository, copy it to `.yamllint.yml` at the repository root
 # (overwriting any existing file).
 #
-# Stricter choices documented by the template's design-decision ADRs in
-# `.github/TEMPLATE_DESIGN_DECISIONS.md`:
+# Stricter choices are documented by the upstream template's design-decision
+# ADRs:
+# https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md
 #
 #   - truthy.check-keys: true
 #       Per the "yamllint truthy.check-keys Default" ADR, this is the

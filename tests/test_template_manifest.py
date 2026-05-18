@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections import Counter
 from pathlib import Path
@@ -16,6 +17,31 @@ MANIFEST_PATH = REPO_ROOT / ".template-sync" / "manifest.yml"
 MANIFEST_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-manifest.schema.json"
 MARKER_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-marker.schema.json"
 PROCEDURE_PATH = REPO_ROOT / "TEMPLATE_UPDATE_PROCEDURE.md"
+COPY_READY_REFERENCE_ROOTS = (
+    REPO_ROOT / "schemas",
+    REPO_ROOT / "templates" / "json",
+    REPO_ROOT / "templates" / "python",
+    REPO_ROOT / "templates" / "yaml",
+)
+COPY_READY_REFERENCE_FILES = (
+    REPO_ROOT / ".github" / "instructions" / "docs.instructions.md",
+    REPO_ROOT / ".github" / "instructions" / "json.instructions.md",
+    REPO_ROOT / ".github" / "instructions" / "yaml.instructions.md",
+)
+REFERENCE_FILE_SUFFIXES = {".json", ".md", ".yaml", ".yml"}
+ONBOARDING_ONLY_REFERENCE_TOKENS = (
+    "OPTIONAL_CONFIGURATIONS.md",
+    "GETTING_STARTED_NEW_REPO.md",
+    "GETTING_STARTED_EXISTING_REPO.md",
+    "TEMPLATE_MAINTENANCE.md",
+    "TEMPLATE_DESIGN_DECISIONS.md",
+)
+UPSTREAM_ONBOARDING_URL_RE = re.compile(
+    r"https://github\.com/franklesniak/copilot-repo-template/blob/HEAD/"
+    r"(?:OPTIONAL_CONFIGURATIONS\.md|GETTING_STARTED_NEW_REPO\.md|"
+    r"GETTING_STARTED_EXISTING_REPO\.md|TEMPLATE_MAINTENANCE\.md|"
+    r"\.github/TEMPLATE_DESIGN_DECISIONS\.md)(?:#[A-Za-z0-9._-]+)?"
+)
 
 
 def _load_manifest() -> dict[str, Any]:
@@ -153,6 +179,39 @@ def _duplicates(values: list[str]) -> list[str]:
     return sorted(value for value, count in counts.items() if count > 1)
 
 
+def _copy_ready_reference_files() -> list[Path]:
+    """Return copy-ready files scanned for onboarding-only relative references."""
+    repo_root_resolved = REPO_ROOT.resolve()
+    paths = [path for path in COPY_READY_REFERENCE_FILES if path.suffix in REFERENCE_FILE_SUFFIXES]
+
+    for root in COPY_READY_REFERENCE_ROOTS:
+        _assert_root_within_repo(root, repo_root_resolved)
+        root_resolved = root.resolve()
+        for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+            directory = Path(dirpath)
+            dirnames[:] = [
+                dirname for dirname in dirnames if not (directory / dirname).is_symlink()
+            ]
+            for filename in filenames:
+                path = directory / filename
+                if path.suffix not in REFERENCE_FILE_SUFFIXES or path.is_symlink():
+                    continue
+                assert path.resolve().is_relative_to(
+                    root_resolved
+                ), f"discovered path must resolve within {root}: {path}"
+                paths.append(path)
+
+    return sorted(paths)
+
+
+def _assert_root_within_repo(root: Path, repo_root_resolved: Path) -> None:
+    """Reject ``root`` if it is a symlink or resolves outside ``repo_root_resolved``."""
+    assert not root.is_symlink(), f"reference root must not be a symlink: {root}"
+    assert root.resolve().is_relative_to(
+        repo_root_resolved
+    ), f"reference root must resolve within REPO_ROOT: {root}"
+
+
 def _module_enum_from_marker_schema() -> list[str]:
     """Return the baked module enum from the marker schema."""
     schema_defs = _load_marker_schema().get("$defs")
@@ -204,6 +263,24 @@ def test_template_manifest_path_mapping_modules_exist() -> None:
         if module not in modules
     }
     assert not unknown_modules
+
+
+def test_copy_ready_files_do_not_use_onboarding_only_relative_references() -> None:
+    """Copy-ready module files must not assume template-onboarding is present."""
+    failures: list[str] = []
+
+    for path in _copy_ready_reference_files():
+        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            line_without_upstream_urls = UPSTREAM_ONBOARDING_URL_RE.sub("", line)
+            for token in ONBOARDING_ONLY_REFERENCE_TOKENS:
+                if token in line_without_upstream_urls:
+                    relative_path = path.relative_to(REPO_ROOT).as_posix()
+                    failures.append(f"{relative_path}:{line_number}: {token}")
+
+    assert not failures, (
+        "Copy-ready Markdown, YAML, and JSON files must use neutral wording or "
+        "absolute upstream URLs for template-onboarding-only references:\n" + "\n".join(failures)
+    )
 
 
 def test_template_sync_marker_schema_module_enum_matches_manifest() -> None:
