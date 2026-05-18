@@ -163,6 +163,7 @@ repos:
           - schemas/template-sync-marker.schema.json
   # template-sync: end schema-template-sync-support-only
 
+  # template-sync: begin github-platform-only
   # GitHub platform schema validation:
   #
   #   A. Real load-bearing repository configuration validation
@@ -210,6 +211,7 @@ repos:
         args:
           - --builtin-schema
           - vendor.dependabot
+  # template-sync: end github-platform-only
 
   # template-sync: begin markdown-only
   # Markdown linting

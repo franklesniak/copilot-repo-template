@@ -39,9 +39,11 @@
 #                         — JSON Schema validation for
 #                           `.template-sync/marker.yml` when present.
 # template-sync: end schema-template-sync-support-only
+# template-sync: begin github-platform-only
 #   - validate-dependabot-config
 #                         — JSON Schema validation for `.github/dependabot.yml`
 #                           against `vendor.dependabot`.
+# template-sync: end github-platform-only
 #
 # Schema-backed checks are invoked by pre-commit alias instead of the aggregate
 # `check-jsonschema` or `check-metaschema` hook IDs so module-owned validation
@@ -164,5 +166,7 @@ jobs:
         run: pre-commit run validate-template-sync-marker --all-files
       # template-sync: end schema-template-sync-support-only
 
+      # template-sync: begin github-platform-only
       - name: Run validate-dependabot-config
         run: pre-commit run validate-dependabot-config --all-files
+      # template-sync: end github-platform-only
