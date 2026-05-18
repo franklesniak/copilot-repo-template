@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260517.13
+**Version:** 1.1.20260518.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-17
+- **Last Updated:** 2026-05-18
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, including the human-readable view of the template sync manifest. Does not define a runnable sync tool.
 - **Related:** [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -283,6 +283,7 @@ Before moving to Step 5, the sync working notes MUST contain:
 - Reachability check result, when using a delta range
 - Diff command or full-reconciliation enumeration command used
 - Local-only noise excluded by the full-reconciliation pre-filter, when applicable
+- Inline module blocks retained or stripped from in-scope files, when applicable
 - Any uncertainty that should be carried into the sync PR summary
 
 Example sync working-notes block:
@@ -300,6 +301,7 @@ Example sync working-notes block:
 - Reachability check: passed
 - Enumeration command: `git diff --name-status -M 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
 - Local-only noise: not applicable
+- Inline module blocks: no in-scope inline blocks changed
 - Uncertainty: none
 ```
 
@@ -468,6 +470,30 @@ Manifest version 1 ships with `requires_all` semantics only. A later manifest re
 `.github/workflows/data-ci.yml` is platform-level under this AND-style human procedure, so it maps to `github-actions`. A later machine-readable manifest may refine this row to require `github-actions` plus at least one of `json`, `yaml`, or `schema`.
 
 If a changed upstream path does not match the table, classify it as `UNMAPPED` in the sync working notes and ask the owner to assign a module before deciding whether to include it.
+
+### Inline Module Blocks
+
+Some retained files contain module-owned blocks delimited by YAML comments. The current marker form is:
+
+```yaml
+# template-sync: begin terraform-only
+# ...
+# template-sync: end terraform-only
+```
+
+These inline blocks let a downstream repository keep the containing baseline or cross-module file while removing toolchain assumptions for a module it did not adopt. During Step 6, after path mapping decides whether the containing file itself is in scope, apply these rules:
+
+1. If `terraform` is present in `included_modules`, retain `terraform-only` blocks unchanged unless the per-file review records a separate `MERGE` decision.
+2. If `terraform` is absent from `included_modules`, remove each complete `terraform-only` block, including the begin and end marker lines, before accepting or merging the containing file.
+3. Treat unmatched, nested, or unknown inline-block markers as an explicit sync question for the owner; do not silently keep or drop the affected block.
+
+The current `terraform-only` inline blocks live in:
+
+- `.pre-commit-config.yaml` for the `terraform-fmt`, `terraform-validate`, and `terraform-tflint` repo-local hooks.
+- `.github/workflows/python-ci.yml` for the Terraform and TFLint setup steps required only when those hooks are retained.
+- `.github/workflows/auto-fix-precommit.yml` for the Terraform and TFLint setup steps required only when those hooks are retained.
+
+After stripping `terraform-only` blocks, a downstream repository that excludes `terraform` should be able to run `pre-commit run --all-files` and the retained non-Terraform workflows without installing HashiCorp Terraform or TFLint.
 
 ### Filtering Rules
 

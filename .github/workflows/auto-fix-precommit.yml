@@ -8,13 +8,12 @@
 # pipeline as `python-ci.yml`, so it runs every active hook in
 # `.pre-commit-config.yaml` (auto-fixing where the hook supports it) —
 # including JSON (check-json), YAML (check-yaml, yamllint), GitHub Actions
-# workflows (actionlint), Markdown (markdownlint-cli2), Terraform
-# (terraform-fmt, terraform-validate, terraform-tflint), and general hygiene
-# hooks. Note that hooks like yamllint, actionlint, terraform-validate, and
-# terraform-tflint are validators that do not auto-fix; this workflow runs
-# them but does not enforce their results (the `pre-commit` exit code is
-# intentionally ignored via `|| true` so that auto-fixed files can still be
-# committed). Validator failures are enforced by the `Pre-commit` job in
+# workflows (actionlint), Markdown (markdownlint-cli2), module-specific hooks
+# retained by the downstream sync, and general hygiene hooks. Note that hooks
+# like yamllint and actionlint are validators that do not auto-fix; this
+# workflow runs them but does not enforce their results (the `pre-commit` exit
+# code is intentionally ignored via `|| true` so that auto-fixed files can still
+# be committed). Validator failures are enforced by the `Pre-commit` job in
 # `python-ci.yml`, which runs the same hooks without `|| true`.
 #
 # Design considerations:
@@ -64,6 +63,7 @@ jobs:
         with:
           python-version: "3.13"
 
+      # template-sync: begin terraform-only
       # Install Terraform for repo-local Terraform pre-commit hooks.
       # Version Policy: Use the latest stable Terraform version for pre-commit.
       # Review and update quarterly per TEMPLATE_MAINTENANCE.md.
@@ -78,6 +78,7 @@ jobs:
         uses: terraform-linters/setup-tflint@v6
         with:
           tflint_version: "v0.51.1"
+      # template-sync: end terraform-only
 
       - name: Install pre-commit
         run: pip install pre-commit
