@@ -233,7 +233,7 @@ def _strip_python_only_inline_blocks(relative_path: str) -> str:
 
 
 def _strip_yaml_only_inline_blocks(relative_path: str) -> str:
-    """Return file text after simulating a downstream sync without YAML linting."""
+    """Return file text after simulating a downstream sync without YAML."""
     return _strip_inline_blocks(
         relative_path,
         YAML_INLINE_MARKER_BEGIN,
