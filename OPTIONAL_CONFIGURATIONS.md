@@ -1000,9 +1000,10 @@ If you remove Python project files manually instead of using template sync, remo
 
 ### Adjusting Line Length
 
-The default line length is 100 characters for both Black and Ruff:
+The default line length is 100 characters for both Black and Ruff. In `.pre-commit-config.yaml`, these entries live inside the `python-only` template-sync inline block so the template-sync framework can strip them automatically when the `python` module is excluded — the snippet below preserves those marker lines:
 
 ```yaml
+# template-sync: begin python-only
 - repo: https://github.com/psf/black
   rev: 26.3.1
   hooks:
@@ -1014,6 +1015,7 @@ The default line length is 100 characters for both Black and Ruff:
   hooks:
     - id: ruff-check
       args: [--fix, --line-length=100]
+# template-sync: end python-only
 ```
 
 **To use Black's default (88 characters):**
