@@ -181,9 +181,12 @@ def _duplicates(values: list[str]) -> list[str]:
 
 def _copy_ready_reference_files() -> list[Path]:
     """Return copy-ready files scanned for onboarding-only relative references."""
+    repo_root_resolved = REPO_ROOT.resolve()
     paths = [path for path in COPY_READY_REFERENCE_FILES if path.suffix in REFERENCE_FILE_SUFFIXES]
 
     for root in COPY_READY_REFERENCE_ROOTS:
+        _assert_root_within_repo(root, repo_root_resolved)
+        root_resolved = root.resolve()
         for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
             directory = Path(dirpath)
             dirnames[:] = [
@@ -191,10 +194,22 @@ def _copy_ready_reference_files() -> list[Path]:
             ]
             for filename in filenames:
                 path = directory / filename
-                if path.suffix in REFERENCE_FILE_SUFFIXES and not path.is_symlink():
-                    paths.append(path)
+                if path.suffix not in REFERENCE_FILE_SUFFIXES or path.is_symlink():
+                    continue
+                assert path.resolve().is_relative_to(
+                    root_resolved
+                ), f"discovered path must resolve within {root}: {path}"
+                paths.append(path)
 
     return sorted(paths)
+
+
+def _assert_root_within_repo(root: Path, repo_root_resolved: Path) -> None:
+    """Reject ``root`` if it is a symlink or resolves outside ``repo_root_resolved``."""
+    assert not root.is_symlink(), f"reference root must not be a symlink: {root}"
+    assert root.resolve().is_relative_to(
+        repo_root_resolved
+    ), f"reference root must resolve within REPO_ROOT: {root}"
 
 
 def _module_enum_from_marker_schema() -> list[str]:
