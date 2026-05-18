@@ -139,6 +139,26 @@ SCHEMA_TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS = {
         "pre-commit run validate-template-sync-marker --all-files",
     ),
 }
+GITHUB_PLATFORM_INLINE_BLOCK_COUNTS = {
+    ".pre-commit-config.yaml": 1,
+    ".github/workflows/data-ci.yml": 2,
+}
+GITHUB_PLATFORM_INLINE_MARKER_BEGIN = "# template-sync: begin github-platform-only"
+GITHUB_PLATFORM_INLINE_MARKER_END = "# template-sync: end github-platform-only"
+GITHUB_PLATFORM_SHARED_SURFACE_TOKENS = {
+    ".pre-commit-config.yaml": (
+        "validate-dependabot-config",
+        "Validate Dependabot configuration",
+        r"files: ^\.github/dependabot\.yml$",
+        "vendor.dependabot",
+    ),
+    ".github/workflows/data-ci.yml": (
+        "validate-dependabot-config",
+        "pre-commit run validate-dependabot-config --all-files",
+        ".github/dependabot.yml",
+        "vendor.dependabot",
+    ),
+}
 REFERENCE_FILE_SUFFIXES = {".json", ".md", ".yaml", ".yml"}
 ONBOARDING_ONLY_REFERENCE_TOKENS = (
     "OPTIONAL_CONFIGURATIONS.md",
@@ -318,6 +338,15 @@ def _strip_schema_template_sync_support_only_inline_blocks(relative_path: str) -
         relative_path,
         SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_BEGIN,
         SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_END,
+    )
+
+
+def _strip_github_platform_only_inline_blocks(relative_path: str) -> str:
+    """Return file text after simulating a downstream sync without GitHub platform."""
+    return _strip_inline_blocks(
+        relative_path,
+        GITHUB_PLATFORM_INLINE_MARKER_BEGIN,
+        GITHUB_PLATFORM_INLINE_MARKER_END,
     )
 
 
@@ -826,6 +855,56 @@ def test_schema_template_sync_support_sync_retains_combined_tooling() -> None:
             included_modules,
         )
         assert text == (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        for required_token in required_tokens:
+            assert required_token in text, f"{relative_path}: {required_token}"
+
+
+def test_github_platform_inline_blocks_are_declared_for_template_sync() -> None:
+    """GitHub-platform-only inline blocks must be paired with manifest notes."""
+    mappings = _path_mapping_by_pattern()
+
+    for relative_path, expected_count in GITHUB_PLATFORM_INLINE_BLOCK_COUNTS.items():
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        assert text.count(GITHUB_PLATFORM_INLINE_MARKER_BEGIN) == expected_count
+        assert text.count(GITHUB_PLATFORM_INLINE_MARKER_END) == expected_count
+        _strip_github_platform_only_inline_blocks(relative_path)
+
+        mapping = mappings.get(relative_path)
+        assert mapping is not None, f"{relative_path} must have a manifest mapping"
+        notes = mapping.get("notes")
+        assert isinstance(notes, str), f"{relative_path} mapping must describe inline blocks"
+        assert "github-platform-only inline block" in notes
+        assert "github-platform module is excluded" in notes
+
+
+def test_non_github_platform_sync_strips_dependabot_tooling_from_shared_surfaces() -> None:
+    """A simulated sync without GitHub platform must remove Dependabot validation."""
+    for relative_path, forbidden_tokens in GITHUB_PLATFORM_SHARED_SURFACE_TOKENS.items():
+        stripped_text = _strip_github_platform_only_inline_blocks(relative_path)
+        for forbidden_token in forbidden_tokens:
+            assert forbidden_token not in stripped_text, f"{relative_path}: {forbidden_token}"
+
+
+def test_non_github_platform_sync_leaves_shared_surfaces_as_valid_yaml() -> None:
+    """Stripping GitHub-platform-only blocks must not corrupt host YAML."""
+    for relative_path in GITHUB_PLATFORM_SHARED_SURFACE_TOKENS:
+        stripped_text = _strip_github_platform_only_inline_blocks(relative_path)
+        try:
+            parsed = yaml.safe_load(stripped_text)
+        except yaml.YAMLError as error:
+            raise AssertionError(
+                f"{relative_path}: stripped text is not valid YAML: {error}"
+            ) from error
+        assert isinstance(parsed, dict), (
+            f"{relative_path}: stripped YAML must load as a mapping, "
+            f"got {type(parsed).__name__}"
+        )
+
+
+def test_github_platform_sync_retains_dependabot_tooling_in_shared_surfaces() -> None:
+    """A sync that includes GitHub platform must keep Dependabot validation."""
+    for relative_path, required_tokens in GITHUB_PLATFORM_SHARED_SURFACE_TOKENS.items():
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
         for required_token in required_tokens:
             assert required_token in text, f"{relative_path}: {required_token}"
 

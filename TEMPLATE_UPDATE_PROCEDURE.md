@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260518.5
+**Version:** 1.1.20260518.6
 
 ## Metadata
 
@@ -500,6 +500,10 @@ Some retained files contain module-owned blocks delimited by YAML comments. The 
 # template-sync: begin schema-template-sync-support-only
 # ...
 # template-sync: end schema-template-sync-support-only
+
+# template-sync: begin github-platform-only
+# ...
+# template-sync: end github-platform-only
 ```
 
 These inline blocks let a downstream repository keep the containing baseline or cross-module file while removing toolchain assumptions for a module it did not adopt. During Step 6, after path mapping decides whether the containing file itself is in scope, apply these rules:
@@ -533,6 +537,11 @@ The current `schema-template-sync-support-only` inline blocks live in:
 - `.pre-commit-config.yaml` for the `validate-template-sync-manifest` and `validate-template-sync-marker` hooks.
 - `.github/workflows/data-ci.yml` for template sync validation hook-list documentation and the dedicated template sync validation alias steps.
 
+The current `github-platform-only` inline blocks live in:
+
+- `.pre-commit-config.yaml` for the `validate-dependabot-config` hook.
+- `.github/workflows/data-ci.yml` for Dependabot validation hook-list documentation and the dedicated `Run validate-dependabot-config` step.
+
 The current `terraform-only` inline blocks live in:
 
 - `.pre-commit-config.yaml` for the `terraform-fmt`, `terraform-validate`, and `terraform-tflint` repo-local hooks.
@@ -548,6 +557,8 @@ After stripping `yaml-only` blocks, a downstream repository that excludes `yaml`
 After stripping `schema-only` blocks, a downstream repository that excludes `schema` should be able to run `pre-commit run --all-files` and the retained data-file workflow without retaining schema example validators or `check-metaschema` hooks.
 
 After stripping `schema-template-sync-support-only` blocks, a downstream repository that excludes either `schema` or `template-sync-support` should be able to run `pre-commit run --all-files` and the retained data-file workflow without invoking template sync manifest or marker validators.
+
+After stripping `github-platform-only` blocks, a downstream repository that excludes `github-platform` should be able to run `pre-commit run --all-files` and the retained data-file workflow without retaining Dependabot validation hooks or invoking a missing `validate-dependabot-config` hook.
 
 After stripping `terraform-only` blocks, a downstream repository that excludes `terraform` should be able to run `pre-commit run --all-files` and the retained non-Terraform workflows without installing HashiCorp Terraform or TFLint.
 
