@@ -65,7 +65,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
@@ -82,7 +82,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
@@ -90,7 +90,7 @@ jobs:
           terraform_version: "1.14.4"
 
       - name: Cache Terraform Providers
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.terraform.d/plugin-cache
           key: terraform-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
@@ -127,10 +127,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Cache TFLint Plugins
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.tflint.d/plugins
           key: tflint-plugins-${{ hashFiles('.tflint.hcl') }}
@@ -155,7 +155,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
@@ -163,7 +163,7 @@ jobs:
           terraform_version: "1.14.4"
 
       - name: Cache Terraform Providers
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.terraform.d/plugin-cache
           key: terraform-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
@@ -220,7 +220,7 @@ jobs:
   #
   #   steps:
   #     - name: Checkout repository
-  #       uses: actions/checkout@v4
+  #       uses: actions/checkout@v6
   #
   #     - name: Run tfsec
   #       uses: aquasecurity/tfsec-action@v1.0.3
