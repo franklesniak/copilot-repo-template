@@ -283,7 +283,7 @@ Before moving to Step 5, the sync working notes MUST contain:
 - Reachability check result, when using a delta range
 - Diff command or full-reconciliation enumeration command used
 - Local-only noise excluded by the full-reconciliation pre-filter, when applicable
-- Inline module blocks retained or stripped from in-scope files, when applicable
+- Candidate inline module blocks discovered in changed files, when applicable. Retain or strip decisions for these blocks belong to Step 6 once path mapping has run; record them per file in the Step 7 decision notes and the sync PR summary.
 - Any uncertainty that should be carried into the sync PR summary
 
 Example sync working-notes block:
@@ -301,7 +301,7 @@ Example sync working-notes block:
 - Reachability check: passed
 - Enumeration command: `git diff --name-status -M 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
 - Local-only noise: not applicable
-- Inline module blocks: no in-scope inline blocks changed
+- Candidate inline module blocks: none discovered in changed files
 - Uncertainty: none
 ```
 
@@ -494,6 +494,8 @@ The current `terraform-only` inline blocks live in:
 - `.github/workflows/auto-fix-precommit.yml` for the Terraform and TFLint setup steps required only when those hooks are retained.
 
 After stripping `terraform-only` blocks, a downstream repository that excludes `terraform` should be able to run `pre-commit run --all-files` and the retained non-Terraform workflows without installing HashiCorp Terraform or TFLint.
+
+Record the resulting retain or strip decisions per affected path in the Step 7 per-file decision notes, and summarize them in the sync PR summary so the audit trail captures both the discovery from Step 4 and the resolution from Step 6.
 
 ### Filtering Rules
 

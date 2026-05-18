@@ -368,6 +368,30 @@ def test_non_terraform_sync_strips_terraform_tooling_from_shared_surfaces() -> N
             assert forbidden_token not in stripped_text, f"{relative_path}: {forbidden_token}"
 
 
+def test_non_terraform_sync_leaves_shared_surfaces_as_valid_yaml() -> None:
+    """Stripping Terraform-only blocks must not corrupt the host YAML document.
+
+    A misplaced inline marker (begin/end inside a mapping, between a key and
+    its value, or splitting a multi-line list element) would let the
+    token-absence test above still pass while producing an unusable downstream
+    config. Round-tripping each stripped text through ``yaml.safe_load`` and
+    asserting a mapping top level catches that class of failure without
+    pulling in pre-commit or Actions schema dependencies.
+    """
+    for relative_path in TERRAFORM_SHARED_SURFACE_TOKENS:
+        stripped_text = _strip_terraform_only_inline_blocks(relative_path)
+        try:
+            parsed = yaml.safe_load(stripped_text)
+        except yaml.YAMLError as error:
+            raise AssertionError(
+                f"{relative_path}: stripped text is not valid YAML: {error}"
+            ) from error
+        assert isinstance(parsed, dict), (
+            f"{relative_path}: stripped YAML must load as a mapping, "
+            f"got {type(parsed).__name__}"
+        )
+
+
 def test_terraform_sync_retains_terraform_tooling_in_shared_surfaces() -> None:
     """A sync that includes Terraform must keep the current aggregate validation surface."""
     for relative_path, required_tokens in TERRAFORM_SHARED_SURFACE_TOKENS.items():
