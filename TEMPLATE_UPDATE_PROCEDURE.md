@@ -656,6 +656,8 @@ Then manually reconcile the scratch copy with the downstream file. Preserve loca
 
 When the sync adopts, updates, or reintroduces `.gitattributes`, run a reviewable line-ending normalization pass after the intended `.gitattributes` content is in the working tree and before validation. Exclude unrelated local edits first so the normalization review is limited to the sync.
 
+`git add --renormalize .` stages every tracked path whose clean-filtered content has changed, including substantive sync edits that happen to be unstaged, so before running it stage and commit (or stash) any substantive sync edits already in the working tree. When isolating substantive edits is impractical, restrict the renormalization pass to specific paths (for example, `git add --renormalize <path>...` for the files affected by the `.gitattributes` change) so the staged result contains only line-ending normalization.
+
 The preferred Git normalization pass is:
 
 ```bash
@@ -802,7 +804,7 @@ For each validation failure, record the validator, path, failing condition, whet
 
 | Classification | Use when | Required disposition |
 | --- | --- | --- |
-| upstream-template fix | The failure is caused by adopted upstream template content, a template-owned file changed in the reviewed range, or a defect reproducible in the upstream template at the reviewed range head. | Fix in the sync when in scope, or record the upstream defect and owner-facing follow-up. |
+| upstream-template fix | The failure is caused by adopted upstream template content, or is reproducible in the upstream template at the reviewed range head. A template-owned file having changed in the reviewed range is not by itself sufficient when the failing condition comes from downstream customization in that same file. | Fix in the sync when in scope, or record the upstream defect and owner-facing follow-up. |
 | downstream-local fix | The failure is in downstream-owned content or downstream customization that the sync can safely fix now. | Fix locally in the sync and list the fix in the sync summary. |
 | deferred follow-up | The failure is pre-existing downstream debt or a policy decision that is outside the sync's approved scope. | Leave the validator failure visible, record the owner decision or follow-up needed, and do not describe the sync as PR-ready unless required validation is passing or explicitly deferred by the owner. |
 
