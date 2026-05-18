@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260518.1
+**Version:** 1.1.20260518.2
 
 ## Metadata
 
@@ -484,6 +484,10 @@ Some retained files contain module-owned blocks delimited by YAML comments. The 
 # template-sync: begin python-only
 # ...
 # template-sync: end python-only
+
+# template-sync: begin yaml-only
+# ...
+# template-sync: end yaml-only
 ```
 
 These inline blocks let a downstream repository keep the containing baseline or cross-module file while removing toolchain assumptions for a module it did not adopt. During Step 6, after path mapping decides whether the containing file itself is in scope, apply these rules:
@@ -496,6 +500,11 @@ The current `python-only` inline block lives in:
 
 - `.pre-commit-config.yaml` for the `black` and `ruff-check` Python project hooks.
 
+The current `yaml-only` inline blocks live in:
+
+- `.pre-commit-config.yaml` for the `yamllint` hook that depends on `.yamllint.yml`.
+- `.github/workflows/data-ci.yml` for the `yamllint` hook-list documentation and the dedicated `Run yamllint` step.
+
 The current `terraform-only` inline blocks live in:
 
 - `.pre-commit-config.yaml` for the `terraform-fmt`, `terraform-validate`, and `terraform-tflint` repo-local hooks.
@@ -503,6 +512,8 @@ The current `terraform-only` inline blocks live in:
 - `.github/workflows/auto-fix-precommit.yml` for the Terraform and TFLint setup steps required only when those hooks are retained.
 
 After stripping `python-only` blocks, a downstream repository that excludes `python` should be able to run `pre-commit run --all-files` without retaining Python project formatters or linters such as Black and Ruff.
+
+After stripping `yaml-only` blocks, a downstream repository that excludes `yaml` should be able to run `pre-commit run --all-files` and the retained data-file workflow without retaining `.yamllint.yml` or invoking a missing `yamllint` hook.
 
 After stripping `terraform-only` blocks, a downstream repository that excludes `terraform` should be able to run `pre-commit run --all-files` and the retained non-Terraform workflows without installing HashiCorp Terraform or TFLint.
 

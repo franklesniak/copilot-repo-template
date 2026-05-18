@@ -171,9 +171,11 @@ template_manifest:
       requires_all:
         - github-actions
       notes: >-
-        Current version 1 semantics cannot express github-actions plus at least
-        one of json, yaml, or schema; record that richer include logic as future
-        work.
+        Contains YAML-only inline blocks for yamllint-specific documentation and
+        the dedicated yamllint CI step. Remove the delimited blocks when the
+        yaml module is excluded. Current version 1 semantics cannot express
+        github-actions plus at least one of json, yaml, or schema; record that
+        richer include logic as future work.
     - pattern: '.github/workflows/check-placeholders.yml'
       requires_all:
         - baseline
@@ -192,10 +194,12 @@ template_manifest:
       requires_all:
         - baseline
       notes: >-
-        Contains a Python-only inline block for Python project hooks and a
-        Terraform-only inline block for repo-local Terraform hooks. Remove the
-        delimited Python block when the python module is excluded, and remove
-        the delimited Terraform block when the terraform module is excluded.
+        Contains a YAML-only inline block for yamllint, a Python-only inline
+        block for Python project hooks, and a Terraform-only inline block for
+        repo-local Terraform hooks. Remove the delimited YAML block when the
+        yaml module is excluded, remove the delimited Python block when the
+        python module is excluded, and remove the delimited Terraform block
+        when the terraform module is excluded.
     - pattern: '.markdownlint.jsonc'
       requires_all:
         - markdown

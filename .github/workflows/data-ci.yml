@@ -10,7 +10,9 @@
 #   - check-toml        — TOML syntax (any *.toml; covers .codex/config.toml
 #                         and any other TOML file added downstream)
 #   - check-yaml        — YAML parse check (.yml / .yaml)
+# template-sync: begin yaml-only
 #   - yamllint          — YAML style enforcement per .yamllint.yml
+# template-sync: end yaml-only
 #   - actionlint        — GitHub Actions workflow linting
 #   - check-jsonschema  — JSON Schema validation. This single
 #                         `pre-commit run check-jsonschema --all-files`
@@ -124,8 +126,10 @@ jobs:
       - name: Run check-yaml
         run: pre-commit run check-yaml --all-files
 
+      # template-sync: begin yaml-only
       - name: Run yamllint
         run: pre-commit run yamllint --all-files
+      # template-sync: end yaml-only
 
       - name: Run actionlint
         run: pre-commit run actionlint --all-files

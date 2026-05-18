@@ -40,12 +40,14 @@ repos:
       - id: check-toml
       - id: check-added-large-files
 
+  # template-sync: begin yaml-only
   # YAML linting
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.38.0
     hooks:
       - id: yamllint
         args: [-c, .yamllint.yml]
+  # template-sync: end yaml-only
 
   # GitHub Actions workflow linting
   # Note: First-run hook environment setup may fail on restricted networks
