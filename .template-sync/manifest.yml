@@ -172,10 +172,17 @@ template_manifest:
         - github-actions
       notes: >-
         Contains YAML-only inline blocks for yamllint-specific documentation and
-        the dedicated yamllint CI step. Remove the delimited blocks when the
-        yaml module is excluded. Current version 1 semantics cannot express
-        github-actions plus at least one of json, yaml, or schema; record that
-        richer include logic as future work.
+        the dedicated yamllint CI step. Contains Schema-only inline blocks for
+        schema example validation, schema self-validation documentation, and
+        alias-based CI steps. Contains Schema-template-sync-support-only inline
+        blocks for template sync manifest and marker validation documentation
+        and alias-based CI steps. Remove the delimited YAML blocks when the
+        yaml module is excluded, remove the delimited Schema-only inline blocks
+        when the schema module is excluded, and remove the delimited
+        Schema-template-sync-support-only inline blocks when the schema or
+        template-sync-support module is excluded. Current version 1 semantics
+        cannot express github-actions plus at least one of json, yaml, or
+        schema; record that richer include logic as future work.
     - pattern: '.github/workflows/check-placeholders.yml'
       requires_all:
         - baseline
@@ -195,13 +202,19 @@ template_manifest:
         - baseline
       notes: >-
         Contains a YAML-only inline block for yamllint, a Python-only inline
-        block for Python project hooks, a Markdown-only inline block for
+        block for Python project hooks, a Schema-only inline block for schema
+        example validators and schema self-validation hooks, a
+        Schema-template-sync-support-only inline block for template sync
+        manifest and marker validators, a Markdown-only inline block for
         markdownlint-cli2, and a Terraform-only inline block for repo-local
         Terraform hooks. Remove the delimited YAML block when the yaml module
         is excluded, remove the delimited Python block when the python module
-        is excluded, remove the delimited Markdown block when the markdown
-        module is excluded, and remove the delimited Terraform block when the
-        terraform module is excluded.
+        is excluded, remove the delimited Schema-only inline block when the
+        schema module is excluded, remove the delimited
+        Schema-template-sync-support-only inline block when the schema or
+        template-sync-support module is excluded, remove the delimited Markdown
+        block when the markdown module is excluded, and remove the delimited
+        Terraform block when the terraform module is excluded.
     - pattern: '.markdownlint.jsonc'
       requires_all:
         - markdown

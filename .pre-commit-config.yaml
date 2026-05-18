@@ -75,9 +75,12 @@ repos:
         args: [--fix, --line-length=100]
   # template-sync: end python-only
 
-  # JSON Schema validation
+  # JSON Schema validation is split by module ownership so downstream
+  # repositories can strip module-specific hooks without affecting unrelated
+  # validation surfaces.
   #
-  # The hooks below cover five distinct categories:
+  # template-sync: begin schema-only
+  # Schema-owned validation:
   #
   #   A. Project-owned schema example validation
   #      Validates the valid example data files under
@@ -97,19 +100,72 @@ repos:
   #   B. Schema self-validation
   #      Validates project-owned schemas against their declared JSON Schema
   #      Draft 2020-12 metaschema using `check-metaschema`.
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: "0.37.2"
+    hooks:
+      - id: check-jsonschema
+        alias: validate-example-config-valid-examples
+        name: Validate example-config valid examples
+        files: ^schemas/examples/example-config/valid/.*\.json$
+        args:
+          - --schemafile
+          - schemas/example-config.schema.json
+      - id: check-jsonschema
+        alias: validate-template-sync-marker-valid-examples
+        name: Validate template sync marker valid examples
+        files: ^schemas/examples/template-sync-marker/valid/.*\.yml$
+        args:
+          - --schemafile
+          - schemas/template-sync-marker.schema.json
+      - id: check-metaschema
+        alias: validate-example-config-schema
+        name: Self-validate example-config schema
+        files: ^schemas/example-config\.schema\.json$
+      - id: check-metaschema
+        alias: validate-template-sync-manifest-schema
+        name: Self-validate template-sync-manifest schema
+        files: ^schemas/template-sync-manifest\.schema\.json$
+      - id: check-metaschema
+        alias: validate-template-sync-marker-schema
+        name: Self-validate template-sync-marker schema
+        files: ^schemas/template-sync-marker\.schema\.json$
+  # template-sync: end schema-only
+
+  # template-sync: begin schema-template-sync-support-only
+  # Joint schema + template-sync-support validation:
   #
-  #   C. Template sync manifest validation
+  #   A. Template sync manifest validation
   #      Validates `.template-sync/manifest.yml` against
   #      `schemas/template-sync-manifest.schema.json`. The manifest is the
   #      source-of-truth module taxonomy for downstream template syncs.
   #
-  #   D. Template sync marker validation
+  #   B. Template sync marker validation
   #      Validates `.template-sync/marker.yml` against
   #      `schemas/template-sync-marker.schema.json`. This repository does not
   #      need to carry a marker, but downstream repositories that adopt one
   #      get validation automatically when the marker file is present.
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: "0.37.2"
+    hooks:
+      - id: check-jsonschema
+        alias: validate-template-sync-manifest
+        name: Validate template sync manifest
+        files: ^\.template-sync/manifest\.yml$
+        args:
+          - --schemafile
+          - schemas/template-sync-manifest.schema.json
+      - id: check-jsonschema
+        alias: validate-template-sync-marker
+        name: Validate template sync marker
+        files: ^\.template-sync/marker\.yml$
+        args:
+          - --schemafile
+          - schemas/template-sync-marker.schema.json
+  # template-sync: end schema-template-sync-support-only
+
+  # GitHub platform schema validation:
   #
-  #   E. Real load-bearing repository configuration validation
+  #   A. Real load-bearing repository configuration validation
   #      Validates real, load-bearing configuration files against built-in
   #      vendor schemas shipped with `check-jsonschema`. Built-in schemas
   #      do not require network access at hook runtime; they are bundled
@@ -148,47 +204,12 @@ repos:
     rev: "0.37.2"
     hooks:
       - id: check-jsonschema
-        name: Validate example-config valid examples
-        files: ^schemas/examples/example-config/valid/.*\.json$
-        args:
-          - --schemafile
-          - schemas/example-config.schema.json
-      - id: check-jsonschema
-        name: Validate template sync marker valid examples
-        files: ^schemas/examples/template-sync-marker/valid/.*\.yml$
-        args:
-          - --schemafile
-          - schemas/template-sync-marker.schema.json
-      - id: check-jsonschema
-        alias: validate-template-sync-manifest
-        name: Validate template sync manifest
-        files: ^\.template-sync/manifest\.yml$
-        args:
-          - --schemafile
-          - schemas/template-sync-manifest.schema.json
-      - id: check-jsonschema
-        alias: validate-template-sync-marker
-        name: Validate template sync marker
-        files: ^\.template-sync/marker\.yml$
-        args:
-          - --schemafile
-          - schemas/template-sync-marker.schema.json
-      - id: check-jsonschema
         alias: validate-dependabot-config
         name: Validate Dependabot configuration
         files: ^\.github/dependabot\.yml$
         args:
           - --builtin-schema
           - vendor.dependabot
-      - id: check-metaschema
-        name: Self-validate example-config schema
-        files: ^schemas/example-config\.schema\.json$
-      - id: check-metaschema
-        name: Self-validate template-sync-manifest schema
-        files: ^schemas/template-sync-manifest\.schema\.json$
-      - id: check-metaschema
-        name: Self-validate template-sync-marker schema
-        files: ^schemas/template-sync-marker\.schema\.json$
 
   # template-sync: begin markdown-only
   # Markdown linting

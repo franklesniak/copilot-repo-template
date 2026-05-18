@@ -95,6 +95,50 @@ YAML_SHARED_SURFACE_TOKENS = {
         "pre-commit run yamllint --all-files",
     ),
 }
+SCHEMA_INLINE_BLOCK_COUNTS = {
+    ".pre-commit-config.yaml": 1,
+    ".github/workflows/data-ci.yml": 2,
+}
+SCHEMA_INLINE_MARKER_BEGIN = "# template-sync: begin schema-only"
+SCHEMA_INLINE_MARKER_END = "# template-sync: end schema-only"
+SCHEMA_SHARED_SURFACE_TOKENS = {
+    ".pre-commit-config.yaml": (
+        "validate-example-config-valid-examples",
+        "validate-template-sync-marker-valid-examples",
+        "validate-example-config-schema",
+        "validate-template-sync-manifest-schema",
+        "validate-template-sync-marker-schema",
+        "check-metaschema",
+        "schemas/example-config.schema.json",
+    ),
+    ".github/workflows/data-ci.yml": (
+        "pre-commit run validate-example-config-valid-examples --all-files",
+        "pre-commit run validate-template-sync-marker-valid-examples --all-files",
+        "pre-commit run validate-example-config-schema --all-files",
+        "pre-commit run validate-template-sync-manifest-schema --all-files",
+        "pre-commit run validate-template-sync-marker-schema --all-files",
+    ),
+}
+SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_BLOCK_COUNTS = {
+    ".pre-commit-config.yaml": 1,
+    ".github/workflows/data-ci.yml": 2,
+}
+SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_BEGIN = (
+    "# template-sync: begin schema-template-sync-support-only"
+)
+SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_END = (
+    "# template-sync: end schema-template-sync-support-only"
+)
+SCHEMA_TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS = {
+    ".pre-commit-config.yaml": (
+        r"files: ^\.template-sync/manifest\.yml$",
+        r"files: ^\.template-sync/marker\.yml$",
+    ),
+    ".github/workflows/data-ci.yml": (
+        "pre-commit run validate-template-sync-manifest --all-files",
+        "pre-commit run validate-template-sync-marker --all-files",
+    ),
+}
 REFERENCE_FILE_SUFFIXES = {".json", ".md", ".yaml", ".yml"}
 ONBOARDING_ONLY_REFERENCE_TOKENS = (
     "OPTIONAL_CONFIGURATIONS.md",
@@ -257,6 +301,34 @@ def _strip_yaml_only_inline_blocks(relative_path: str) -> str:
         YAML_INLINE_MARKER_BEGIN,
         YAML_INLINE_MARKER_END,
     )
+
+
+def _strip_schema_only_inline_blocks(relative_path: str) -> str:
+    """Return file text after simulating a downstream sync without schemas."""
+    return _strip_inline_blocks(
+        relative_path,
+        SCHEMA_INLINE_MARKER_BEGIN,
+        SCHEMA_INLINE_MARKER_END,
+    )
+
+
+def _strip_schema_template_sync_support_only_inline_blocks(relative_path: str) -> str:
+    """Return file text after simulating a sync without all combined modules."""
+    return _strip_inline_blocks(
+        relative_path,
+        SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_BEGIN,
+        SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_END,
+    )
+
+
+def _strip_schema_template_sync_support_blocks_for_modules(
+    relative_path: str,
+    included_modules: set[str],
+) -> str:
+    """Return file text after applying combined-marker module presence semantics."""
+    if {"schema", "template-sync-support"}.issubset(included_modules):
+        return (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+    return _strip_schema_template_sync_support_only_inline_blocks(relative_path)
 
 
 def _extract_table_after_heading(markdown_text: str, heading: str) -> list[list[str]]:
@@ -620,6 +692,140 @@ def test_yaml_sync_retains_yamllint_tooling_in_shared_surfaces() -> None:
     """A sync that includes YAML must keep the current yamllint surfaces."""
     for relative_path, required_tokens in YAML_SHARED_SURFACE_TOKENS.items():
         text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        for required_token in required_tokens:
+            assert required_token in text, f"{relative_path}: {required_token}"
+
+
+def test_schema_inline_blocks_are_declared_for_template_sync() -> None:
+    """Schema-only inline blocks must be paired with manifest notes."""
+    mappings = _path_mapping_by_pattern()
+
+    for relative_path, expected_count in SCHEMA_INLINE_BLOCK_COUNTS.items():
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        assert text.count(SCHEMA_INLINE_MARKER_BEGIN) == expected_count
+        assert text.count(SCHEMA_INLINE_MARKER_END) == expected_count
+        _strip_schema_only_inline_blocks(relative_path)
+
+        mapping = mappings.get(relative_path)
+        assert mapping is not None, f"{relative_path} must have a manifest mapping"
+        notes = mapping.get("notes")
+        assert isinstance(notes, str), f"{relative_path} mapping must describe inline blocks"
+        assert "Schema-only inline block" in notes
+        assert "schema module is excluded" in notes
+
+
+def test_non_schema_sync_strips_schema_tooling_from_shared_surfaces() -> None:
+    """A simulated sync without schemas must remove schema-owned validators."""
+    for relative_path, forbidden_tokens in SCHEMA_SHARED_SURFACE_TOKENS.items():
+        stripped_text = _strip_schema_only_inline_blocks(relative_path)
+        for forbidden_token in forbidden_tokens:
+            assert forbidden_token not in stripped_text, f"{relative_path}: {forbidden_token}"
+
+
+def test_non_schema_sync_leaves_shared_surfaces_as_valid_yaml() -> None:
+    """Stripping Schema-only blocks must not corrupt the host YAML document."""
+    for relative_path in SCHEMA_SHARED_SURFACE_TOKENS:
+        stripped_text = _strip_schema_only_inline_blocks(relative_path)
+        try:
+            parsed = yaml.safe_load(stripped_text)
+        except yaml.YAMLError as error:
+            raise AssertionError(
+                f"{relative_path}: stripped text is not valid YAML: {error}"
+            ) from error
+        assert isinstance(parsed, dict), (
+            f"{relative_path}: stripped YAML must load as a mapping, "
+            f"got {type(parsed).__name__}"
+        )
+
+
+def test_schema_sync_retains_schema_tooling_in_shared_surfaces() -> None:
+    """A sync that includes schemas must keep schema-owned validators."""
+    for relative_path, required_tokens in SCHEMA_SHARED_SURFACE_TOKENS.items():
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        for required_token in required_tokens:
+            assert required_token in text, f"{relative_path}: {required_token}"
+
+
+def test_schema_template_sync_support_inline_blocks_are_declared() -> None:
+    """Combined schema/template-sync blocks must be paired with manifest notes."""
+    mappings = _path_mapping_by_pattern()
+
+    for relative_path, expected_count in SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_BLOCK_COUNTS.items():
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        assert text.count(SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_BEGIN) == expected_count
+        assert text.count(SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_END) == expected_count
+        _strip_schema_template_sync_support_only_inline_blocks(relative_path)
+
+        mapping = mappings.get(relative_path)
+        assert mapping is not None, f"{relative_path} must have a manifest mapping"
+        notes = mapping.get("notes")
+        assert isinstance(notes, str), f"{relative_path} mapping must describe inline blocks"
+        assert "Schema-template-sync-support-only inline block" in notes
+        assert "schema or template-sync-support module is excluded" in notes
+
+
+def test_sync_missing_schema_or_template_sync_support_strips_combined_tooling() -> None:
+    """Combined blocks must be removed when either required module is absent."""
+    module_sets_missing_one_or_more = (
+        {"template-sync-support"},
+        {"schema"},
+        set(),
+    )
+
+    for (
+        relative_path,
+        forbidden_tokens,
+    ) in SCHEMA_TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS.items():
+        for included_modules in module_sets_missing_one_or_more:
+            stripped_text = _strip_schema_template_sync_support_blocks_for_modules(
+                relative_path,
+                included_modules,
+            )
+            for forbidden_token in forbidden_tokens:
+                assert (
+                    forbidden_token not in stripped_text
+                ), f"{relative_path}: {sorted(included_modules)}: {forbidden_token}"
+
+
+def test_sync_missing_schema_or_template_sync_support_leaves_valid_yaml() -> None:
+    """Stripping combined blocks must not corrupt the host YAML document."""
+    module_sets_missing_one_or_more = (
+        {"template-sync-support"},
+        {"schema"},
+        set(),
+    )
+
+    for relative_path in SCHEMA_TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS:
+        for included_modules in module_sets_missing_one_or_more:
+            stripped_text = _strip_schema_template_sync_support_blocks_for_modules(
+                relative_path,
+                included_modules,
+            )
+            try:
+                parsed = yaml.safe_load(stripped_text)
+            except yaml.YAMLError as error:
+                raise AssertionError(
+                    f"{relative_path}: stripped text is not valid YAML: {error}"
+                ) from error
+            assert isinstance(parsed, dict), (
+                f"{relative_path}: stripped YAML must load as a mapping, "
+                f"got {type(parsed).__name__}"
+            )
+
+
+def test_schema_template_sync_support_sync_retains_combined_tooling() -> None:
+    """A sync with both modules must keep combined validation blocks."""
+    included_modules = {"schema", "template-sync-support"}
+
+    for (
+        relative_path,
+        required_tokens,
+    ) in SCHEMA_TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS.items():
+        text = _strip_schema_template_sync_support_blocks_for_modules(
+            relative_path,
+            included_modules,
+        )
+        assert text == (REPO_ROOT / relative_path).read_text(encoding="utf-8")
         for required_token in required_tokens:
             assert required_token in text, f"{relative_path}: {required_token}"
 
