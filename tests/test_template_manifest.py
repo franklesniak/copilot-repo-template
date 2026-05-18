@@ -57,6 +57,15 @@ TERRAFORM_SHARED_SURFACE_TOKENS = {
         'tflint_version: "v0.51.1"',
     ),
 }
+MARKDOWN_INLINE_BLOCK_PATHS = (".pre-commit-config.yaml",)
+MARKDOWN_INLINE_MARKER_BEGIN = "# template-sync: begin markdown-only"
+MARKDOWN_INLINE_MARKER_END = "# template-sync: end markdown-only"
+MARKDOWN_SHARED_SURFACE_TOKENS = {
+    ".pre-commit-config.yaml": (
+        "https://github.com/DavidAnson/markdownlint-cli2",
+        "id: markdownlint-cli2",
+    ),
+}
 PYTHON_INLINE_BLOCK_PATHS = (".pre-commit-config.yaml",)
 PYTHON_INLINE_MARKER_BEGIN = "# template-sync: begin python-only"
 PYTHON_INLINE_MARKER_END = "# template-sync: end python-only"
@@ -220,6 +229,15 @@ def _strip_terraform_only_inline_blocks(relative_path: str) -> str:
         relative_path,
         TERRAFORM_INLINE_MARKER_BEGIN,
         TERRAFORM_INLINE_MARKER_END,
+    )
+
+
+def _strip_markdown_only_inline_blocks(relative_path: str) -> str:
+    """Return file text after simulating a downstream sync without Markdown."""
+    return _strip_inline_blocks(
+        relative_path,
+        MARKDOWN_INLINE_MARKER_BEGIN,
+        MARKDOWN_INLINE_MARKER_END,
     )
 
 
@@ -451,6 +469,56 @@ def test_non_terraform_sync_leaves_shared_surfaces_as_valid_yaml() -> None:
 def test_terraform_sync_retains_terraform_tooling_in_shared_surfaces() -> None:
     """A sync that includes Terraform must keep the current aggregate validation surface."""
     for relative_path, required_tokens in TERRAFORM_SHARED_SURFACE_TOKENS.items():
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        for required_token in required_tokens:
+            assert required_token in text, f"{relative_path}: {required_token}"
+
+
+def test_markdown_inline_blocks_are_declared_for_template_sync() -> None:
+    """Markdown-only inline blocks must be paired with manifest notes."""
+    mappings = _path_mapping_by_pattern()
+
+    for relative_path in MARKDOWN_INLINE_BLOCK_PATHS:
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        assert text.count(MARKDOWN_INLINE_MARKER_BEGIN) == 1
+        assert text.count(MARKDOWN_INLINE_MARKER_END) == 1
+        _strip_markdown_only_inline_blocks(relative_path)
+
+        mapping = mappings.get(relative_path)
+        assert mapping is not None, f"{relative_path} must have a manifest mapping"
+        notes = mapping.get("notes")
+        assert isinstance(notes, str), f"{relative_path} mapping must describe inline blocks"
+        assert "Markdown-only inline block" in notes
+        assert "markdown module is excluded" in notes
+
+
+def test_non_markdown_sync_strips_markdown_tooling_from_shared_surfaces() -> None:
+    """A simulated sync without Markdown must remove shared Markdown requirements."""
+    for relative_path, forbidden_tokens in MARKDOWN_SHARED_SURFACE_TOKENS.items():
+        stripped_text = _strip_markdown_only_inline_blocks(relative_path)
+        for forbidden_token in forbidden_tokens:
+            assert forbidden_token not in stripped_text, f"{relative_path}: {forbidden_token}"
+
+
+def test_non_markdown_sync_leaves_shared_surfaces_as_valid_yaml() -> None:
+    """Stripping Markdown-only blocks must not corrupt the host YAML document."""
+    for relative_path in MARKDOWN_SHARED_SURFACE_TOKENS:
+        stripped_text = _strip_markdown_only_inline_blocks(relative_path)
+        try:
+            parsed = yaml.safe_load(stripped_text)
+        except yaml.YAMLError as error:
+            raise AssertionError(
+                f"{relative_path}: stripped text is not valid YAML: {error}"
+            ) from error
+        assert isinstance(parsed, dict), (
+            f"{relative_path}: stripped YAML must load as a mapping, "
+            f"got {type(parsed).__name__}"
+        )
+
+
+def test_markdown_sync_retains_markdown_tooling_in_shared_surfaces() -> None:
+    """A sync that includes Markdown must keep the current Markdown validation surface."""
+    for relative_path, required_tokens in MARKDOWN_SHARED_SURFACE_TOKENS.items():
         text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
         for required_token in required_tokens:
             assert required_token in text, f"{relative_path}: {required_token}"

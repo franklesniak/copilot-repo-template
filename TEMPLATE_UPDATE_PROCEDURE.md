@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260518.2
+**Version:** 1.1.20260518.3
 
 ## Metadata
 
@@ -485,6 +485,10 @@ Some retained files contain module-owned blocks delimited by YAML comments. The 
 # ...
 # template-sync: end python-only
 
+# template-sync: begin markdown-only
+# ...
+# template-sync: end markdown-only
+
 # template-sync: begin yaml-only
 # ...
 # template-sync: end yaml-only
@@ -500,6 +504,10 @@ The current `python-only` inline block lives in:
 
 - `.pre-commit-config.yaml` for the `black` and `ruff-check` Python project hooks.
 
+The current `markdown-only` inline block lives in:
+
+- `.pre-commit-config.yaml` for the `markdownlint-cli2` hook.
+
 The current `yaml-only` inline blocks live in:
 
 - `.pre-commit-config.yaml` for the `yamllint` hook that depends on `.yamllint.yml`.
@@ -512,6 +520,8 @@ The current `terraform-only` inline blocks live in:
 - `.github/workflows/auto-fix-precommit.yml` for the Terraform and TFLint setup steps required only when those hooks are retained.
 
 After stripping `python-only` blocks, a downstream repository that excludes `python` should be able to run `pre-commit run --all-files` without retaining Python project formatters or linters such as Black and Ruff.
+
+After stripping `markdown-only` blocks, a downstream repository that excludes `markdown` should be able to run `pre-commit run --all-files` without installing Node.js or markdownlint.
 
 After stripping `yaml-only` blocks, a downstream repository that excludes `yaml` should be able to run `pre-commit run --all-files` and the retained data-file workflow without retaining `.yamllint.yml` or invoking a missing `yamllint` hook.
 
