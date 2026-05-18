@@ -505,7 +505,7 @@ This section provides detailed guidance on implementing Terraform linting in Git
 
 #### Consolidated Single Workflow Approach
 
-Following the pattern in `python-ci.yml`, Terraform CI **SHOULD** use a single consolidated workflow with job dependencies:
+Terraform CI **SHOULD** use a single consolidated workflow with job dependencies:
 
 ```yaml
 # .github/workflows/terraform-ci.yml

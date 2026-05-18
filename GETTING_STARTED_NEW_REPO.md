@@ -1568,7 +1568,7 @@ For any repository that contains JSON or YAML (which is essentially all of them)
 - `.github/instructions/json.instructions.md` — JSON authoring standards.
 - `.github/instructions/yaml.instructions.md` — YAML authoring standards.
 - `.yamllint.yml` — YAML lint configuration consumed by the `yamllint` pre-commit hook (extends `default`, enforces 2-space indentation, sets the line-length warning at 120 characters, and disables `truthy.check-keys` so unquoted GitHub Actions `on:` keys are accepted; see the inline comment and the [yamllint truthy.check-keys ADR in `.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-truthycheck-keys-default) for the rationale).
-- `.github/workflows/data-ci.yml` — the dedicated data-file CI workflow that re-runs `check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, and `check-metaschema` so JSON/YAML/Actions enforcement can be required via branch protection independent of the Python CI job. See the top-of-file comment in `.github/workflows/data-ci.yml` for how it differs from `auto-fix-precommit.yml`.
+- `.github/workflows/data-ci.yml` — the dedicated data-file CI workflow that re-runs `check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, and `check-metaschema` so JSON/YAML/Actions enforcement can be required via branch protection independent of the aggregate pre-commit gate. See the top-of-file comment in `.github/workflows/data-ci.yml` for how it differs from `auto-fix-precommit.yml`.
 - The default pre-commit hooks for data files in `.pre-commit-config.yaml`:
   - `check-json` (validates **strict `.json` only** — see below)
   - `check-yaml`
@@ -1576,7 +1576,7 @@ For any repository that contains JSON or YAML (which is essentially all of them)
   - `actionlint` (GitHub Actions workflow validation)
   - `check-jsonschema` and `check-metaschema` (worked-example schema validation; see [Schemas: Worked Example Plus Opt-In for Load-Bearing Contracts](#schemas-worked-example-plus-opt-in-for-load-bearing-contracts))
 
-If you retain the template's pre-commit workflow (`.github/workflows/python-ci.yml` runs `pre-commit run --all-files`), CI will already enforce these hooks for every push and pull request — you do not need to wire up additional CI for JSON/YAML validation.
+If you retain the template's aggregate pre-commit workflow (`.github/workflows/precommit-ci.yml` runs `pre-commit run --all-files`), CI will already enforce these hooks for every push and pull request — you do not need to wire up additional CI for JSON/YAML validation.
 
 #### `check-json` vs. `.jsonc`
 

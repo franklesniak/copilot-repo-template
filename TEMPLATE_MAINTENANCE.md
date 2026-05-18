@@ -62,7 +62,7 @@ Pre-commit hooks **SHOULD** be kept up-to-date for security and compatibility.
 
 This template uses a layered cadence for pre-commit hook maintenance:
 
-- **Routine (weekly, automated).** [Dependabot](.github/dependabot.yml)'s `pre-commit` ecosystem opens grouped pull requests for minor and patch updates to hooks pinned in `.pre-commit-config.yaml`. These PRs SHOULD be reviewed and merged routinely; CI exercises the updated hooks via `pre-commit run --all-files` in `.github/workflows/python-ci.yml`.
+- **Routine (weekly, automated).** [Dependabot](.github/dependabot.yml)'s `pre-commit` ecosystem opens grouped pull requests for minor and patch updates to hooks pinned in `.pre-commit-config.yaml`. These PRs SHOULD be reviewed and merged routinely; CI exercises the updated hooks via `pre-commit run --all-files` in `.github/workflows/precommit-ci.yml`.
 - **Major-version refreshes (manual).** Maintainers MAY run `pre-commit autoupdate` manually to refresh major versions, or for an explicit quarterly maintenance pass. Major version bumps are not handled by the grouped Dependabot configuration and require an intentional review.
 - **Changelog review.** Before accepting any major hook update (whether from `pre-commit autoupdate` or a Dependabot PR), maintainers MUST review the upstream changelog or release notes for breaking changes. See [Breaking Change Considerations](#breaking-change-considerations) for tool-specific notes.
 - **Validation.** After any update — Dependabot-driven or manual — maintainers MUST run `pre-commit run --all-files` locally and confirm a clean pass.
@@ -120,7 +120,7 @@ After running `pre-commit autoupdate`, manually update version references in doc
 - `.pre-commit-config.yaml` (local hook IDs and file scopes)
 - `.github/scripts/terraform_hooks.py` (wrapper behavior and subprocess command construction)
 - `tests/test_terraform_hooks.py` (unit coverage for wrapper behavior)
-- `.github/workflows/python-ci.yml` and `.github/workflows/auto-fix-precommit.yml` (Terraform and TFLint setup for aggregate pre-commit runs)
+- `.github/workflows/precommit-ci.yml` and `.github/workflows/auto-fix-precommit.yml` (Terraform and TFLint setup for aggregate pre-commit runs)
 - Contributor documentation that explains Terraform local validation (`README.md`, `CONTRIBUTING.md`, and the getting-started guides)
 
 #### Other Hooks (no documentation references)
@@ -240,7 +240,7 @@ This template uses pinned Terraform and TFLint versions in CI workflows for repr
 3. Identify the latest stable releases (avoid alpha, beta, or RC versions)
 4. Update the Terraform and TFLint versions in the following workflow files:
    - `.github/workflows/terraform-ci.yml` (format, validate, lint, and test jobs)
-   - `.github/workflows/python-ci.yml` (pre-commit job)
+   - `.github/workflows/precommit-ci.yml` (pre-commit job)
    - `.github/workflows/auto-fix-precommit.yml` (auto-fix job)
 
 **Version considerations:**
