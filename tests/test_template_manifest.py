@@ -68,6 +68,24 @@ PYTHON_SHARED_SURFACE_TOKENS = {
         "id: ruff-check",
     ),
 }
+YAML_INLINE_BLOCK_COUNTS = {
+    ".pre-commit-config.yaml": 1,
+    ".github/workflows/data-ci.yml": 2,
+}
+YAML_INLINE_MARKER_BEGIN = "# template-sync: begin yaml-only"
+YAML_INLINE_MARKER_END = "# template-sync: end yaml-only"
+YAML_SHARED_SURFACE_TOKENS = {
+    ".pre-commit-config.yaml": (
+        "https://github.com/adrienverge/yamllint",
+        "id: yamllint",
+        "args: [-c, .yamllint.yml]",
+    ),
+    ".github/workflows/data-ci.yml": (
+        "YAML style enforcement per .yamllint.yml",
+        "Run yamllint",
+        "pre-commit run yamllint --all-files",
+    ),
+}
 REFERENCE_FILE_SUFFIXES = {".json", ".md", ".yaml", ".yml"}
 ONBOARDING_ONLY_REFERENCE_TOKENS = (
     "OPTIONAL_CONFIGURATIONS.md",
@@ -211,6 +229,15 @@ def _strip_python_only_inline_blocks(relative_path: str) -> str:
         relative_path,
         PYTHON_INLINE_MARKER_BEGIN,
         PYTHON_INLINE_MARKER_END,
+    )
+
+
+def _strip_yaml_only_inline_blocks(relative_path: str) -> str:
+    """Return file text after simulating a downstream sync without YAML linting."""
+    return _strip_inline_blocks(
+        relative_path,
+        YAML_INLINE_MARKER_BEGIN,
+        YAML_INLINE_MARKER_END,
     )
 
 
@@ -474,6 +501,56 @@ def test_non_python_sync_leaves_shared_surfaces_as_valid_yaml() -> None:
 def test_python_sync_retains_python_tooling_in_shared_surfaces() -> None:
     """A sync that includes Python must keep the current Python project hooks."""
     for relative_path, required_tokens in PYTHON_SHARED_SURFACE_TOKENS.items():
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        for required_token in required_tokens:
+            assert required_token in text, f"{relative_path}: {required_token}"
+
+
+def test_yaml_inline_blocks_are_declared_for_template_sync() -> None:
+    """YAML-only inline blocks must be paired with manifest notes."""
+    mappings = _path_mapping_by_pattern()
+
+    for relative_path, expected_count in YAML_INLINE_BLOCK_COUNTS.items():
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        assert text.count(YAML_INLINE_MARKER_BEGIN) == expected_count
+        assert text.count(YAML_INLINE_MARKER_END) == expected_count
+        _strip_yaml_only_inline_blocks(relative_path)
+
+        mapping = mappings.get(relative_path)
+        assert mapping is not None, f"{relative_path} must have a manifest mapping"
+        notes = mapping.get("notes")
+        assert isinstance(notes, str), f"{relative_path} mapping must describe inline blocks"
+        assert "YAML-only inline block" in notes
+        assert "yaml module is excluded" in notes
+
+
+def test_non_yaml_sync_strips_yamllint_tooling_from_shared_surfaces() -> None:
+    """A simulated sync without YAML must remove yamllint hooks and invocations."""
+    for relative_path, forbidden_tokens in YAML_SHARED_SURFACE_TOKENS.items():
+        stripped_text = _strip_yaml_only_inline_blocks(relative_path)
+        for forbidden_token in forbidden_tokens:
+            assert forbidden_token not in stripped_text, f"{relative_path}: {forbidden_token}"
+
+
+def test_non_yaml_sync_leaves_shared_surfaces_as_valid_yaml() -> None:
+    """Stripping YAML-only blocks must not corrupt the host YAML document."""
+    for relative_path in YAML_SHARED_SURFACE_TOKENS:
+        stripped_text = _strip_yaml_only_inline_blocks(relative_path)
+        try:
+            parsed = yaml.safe_load(stripped_text)
+        except yaml.YAMLError as error:
+            raise AssertionError(
+                f"{relative_path}: stripped text is not valid YAML: {error}"
+            ) from error
+        assert isinstance(parsed, dict), (
+            f"{relative_path}: stripped YAML must load as a mapping, "
+            f"got {type(parsed).__name__}"
+        )
+
+
+def test_yaml_sync_retains_yamllint_tooling_in_shared_surfaces() -> None:
+    """A sync that includes YAML must keep the current yamllint surfaces."""
+    for relative_path, required_tokens in YAML_SHARED_SURFACE_TOKENS.items():
         text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
         for required_token in required_tokens:
             assert required_token in text, f"{relative_path}: {required_token}"
