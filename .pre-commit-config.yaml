@@ -192,7 +192,8 @@ repos:
     hooks:
       - id: markdownlint-cli2
 
-  # Terraform formatting and validation (remove if not using Terraform)
+  # template-sync: begin terraform-only
+  # Terraform formatting and validation.
   #
   # These repo-local Python wrappers avoid POSIX shell assumptions so the
   # hooks run consistently from native Windows / PowerShell, WSL/Linux, and
@@ -217,3 +218,4 @@ repos:
         language: python
         pass_filenames: false
         files: '(^|/)([^/]+\.tf(\.json)?|\.tflint\.hcl)$'
+  # template-sync: end terraform-only

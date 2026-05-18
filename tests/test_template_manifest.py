@@ -28,6 +28,35 @@ COPY_READY_REFERENCE_FILES = (
     REPO_ROOT / ".github" / "instructions" / "json.instructions.md",
     REPO_ROOT / ".github" / "instructions" / "yaml.instructions.md",
 )
+TERRAFORM_INLINE_BLOCK_PATHS = (
+    ".pre-commit-config.yaml",
+    ".github/workflows/auto-fix-precommit.yml",
+    ".github/workflows/python-ci.yml",
+)
+TERRAFORM_INLINE_MARKER_BEGIN = "# template-sync: begin terraform-only"
+TERRAFORM_INLINE_MARKER_END = "# template-sync: end terraform-only"
+TERRAFORM_SHARED_SURFACE_TOKENS = {
+    ".pre-commit-config.yaml": (
+        "terraform-fmt",
+        "terraform-validate",
+        "terraform-tflint",
+        ".github/scripts/terraform_hooks.py fmt",
+        ".github/scripts/terraform_hooks.py validate",
+        ".github/scripts/terraform_hooks.py tflint",
+    ),
+    ".github/workflows/auto-fix-precommit.yml": (
+        "hashicorp/setup-terraform@v4",
+        "terraform-linters/setup-tflint@v6",
+        'terraform_version: "1.14.4"',
+        'tflint_version: "v0.51.1"',
+    ),
+    ".github/workflows/python-ci.yml": (
+        "hashicorp/setup-terraform@v4",
+        "terraform-linters/setup-tflint@v6",
+        'terraform_version: "1.14.4"',
+        'tflint_version: "v0.51.1"',
+    ),
+}
 REFERENCE_FILE_SUFFIXES = {".json", ".md", ".yaml", ".yml"}
 ONBOARDING_ONLY_REFERENCE_TOKENS = (
     "OPTIONAL_CONFIGURATIONS.md",
@@ -106,6 +135,54 @@ def _path_mapping_rows_from_manifest() -> list[tuple[str, tuple[str, ...]]]:
         ), f"{pattern} requires_all values must be strings"
         rows.append((pattern, tuple(requires_all)))
     return rows
+
+
+def _path_mapping_by_pattern() -> dict[str, dict[str, Any]]:
+    """Return path mapping objects keyed by their exact pattern."""
+    path_mappings = _template_manifest().get("path_mappings")
+    assert isinstance(path_mappings, list), "path_mappings must be a list"
+
+    rows: dict[str, dict[str, Any]] = {}
+    for mapping in path_mappings:
+        assert isinstance(mapping, dict), "each path mapping must be a mapping"
+        pattern = mapping.get("pattern")
+        assert isinstance(pattern, str), "path mapping pattern must be a string"
+        rows[pattern] = mapping
+    return rows
+
+
+def _strip_terraform_only_inline_blocks(relative_path: str) -> str:
+    """Return file text after simulating a downstream sync without Terraform."""
+    path = REPO_ROOT / relative_path
+    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+    stripped_lines: list[str] = []
+    is_inside_terraform_block = False
+    has_seen_terraform_block = False
+
+    for line_number, line in enumerate(lines, 1):
+        stripped_line = line.strip()
+
+        if stripped_line == TERRAFORM_INLINE_MARKER_BEGIN:
+            assert (
+                not is_inside_terraform_block
+            ), f"{relative_path}:{line_number}: nested terraform-only inline block"
+            is_inside_terraform_block = True
+            has_seen_terraform_block = True
+            continue
+
+        if stripped_line == TERRAFORM_INLINE_MARKER_END:
+            assert (
+                is_inside_terraform_block
+            ), f"{relative_path}:{line_number}: unmatched terraform-only end marker"
+            is_inside_terraform_block = False
+            continue
+
+        if not is_inside_terraform_block:
+            stripped_lines.append(line)
+
+    assert not is_inside_terraform_block, f"{relative_path}: unclosed terraform-only inline block"
+    assert has_seen_terraform_block, f"{relative_path}: missing terraform-only inline block"
+    return "".join(stripped_lines)
 
 
 def _extract_table_after_heading(markdown_text: str, heading: str) -> list[list[str]]:
@@ -263,6 +340,64 @@ def test_template_manifest_path_mapping_modules_exist() -> None:
         if module not in modules
     }
     assert not unknown_modules
+
+
+def test_terraform_inline_blocks_are_declared_for_template_sync() -> None:
+    """Terraform-only inline blocks must be paired with manifest notes."""
+    mappings = _path_mapping_by_pattern()
+
+    for relative_path in TERRAFORM_INLINE_BLOCK_PATHS:
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        assert text.count(TERRAFORM_INLINE_MARKER_BEGIN) == 1
+        assert text.count(TERRAFORM_INLINE_MARKER_END) == 1
+        _strip_terraform_only_inline_blocks(relative_path)
+
+        mapping = mappings.get(relative_path)
+        assert mapping is not None, f"{relative_path} must have a manifest mapping"
+        notes = mapping.get("notes")
+        assert isinstance(notes, str), f"{relative_path} mapping must describe inline blocks"
+        assert "Terraform-only inline block" in notes
+        assert "terraform module is excluded" in notes
+
+
+def test_non_terraform_sync_strips_terraform_tooling_from_shared_surfaces() -> None:
+    """A simulated sync without Terraform must remove shared Terraform requirements."""
+    for relative_path, forbidden_tokens in TERRAFORM_SHARED_SURFACE_TOKENS.items():
+        stripped_text = _strip_terraform_only_inline_blocks(relative_path)
+        for forbidden_token in forbidden_tokens:
+            assert forbidden_token not in stripped_text, f"{relative_path}: {forbidden_token}"
+
+
+def test_non_terraform_sync_leaves_shared_surfaces_as_valid_yaml() -> None:
+    """Stripping Terraform-only blocks must not corrupt the host YAML document.
+
+    A misplaced inline marker (begin/end inside a mapping, between a key and
+    its value, or splitting a multi-line list element) would let the
+    token-absence test above still pass while producing an unusable downstream
+    config. Round-tripping each stripped text through ``yaml.safe_load`` and
+    asserting a mapping top level catches that class of failure without
+    pulling in pre-commit or Actions schema dependencies.
+    """
+    for relative_path in TERRAFORM_SHARED_SURFACE_TOKENS:
+        stripped_text = _strip_terraform_only_inline_blocks(relative_path)
+        try:
+            parsed = yaml.safe_load(stripped_text)
+        except yaml.YAMLError as error:
+            raise AssertionError(
+                f"{relative_path}: stripped text is not valid YAML: {error}"
+            ) from error
+        assert isinstance(parsed, dict), (
+            f"{relative_path}: stripped YAML must load as a mapping, "
+            f"got {type(parsed).__name__}"
+        )
+
+
+def test_terraform_sync_retains_terraform_tooling_in_shared_surfaces() -> None:
+    """A sync that includes Terraform must keep the current aggregate validation surface."""
+    for relative_path, required_tokens in TERRAFORM_SHARED_SURFACE_TOKENS.items():
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        for required_token in required_tokens:
+            assert required_token in text, f"{relative_path}: {required_token}"
 
 
 def test_copy_ready_files_do_not_use_onboarding_only_relative_references() -> None:

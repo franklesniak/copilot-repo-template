@@ -155,6 +155,9 @@ template_manifest:
       requires_all:
         - python
         - github-actions
+      notes: >-
+        Contains a Terraform-only inline block for aggregate pre-commit setup.
+        Remove the delimited block when the terraform module is excluded.
     - pattern: '.github/workflows/terraform-ci.yml'
       requires_all:
         - terraform
@@ -174,12 +177,18 @@ template_manifest:
       requires_all:
         - baseline
         - github-actions
+      notes: >-
+        Contains a Terraform-only inline block for aggregate pre-commit setup.
+        Remove the delimited block when the terraform module is excluded.
     - pattern: '.yamllint.yml'
       requires_all:
         - yaml
     - pattern: '.pre-commit-config.yaml'
       requires_all:
         - baseline
+      notes: >-
+        Contains a Terraform-only inline block for repo-local Terraform hooks.
+        Remove the delimited block when the terraform module is excluded.
     - pattern: '.markdownlint.jsonc'
       requires_all:
         - markdown
