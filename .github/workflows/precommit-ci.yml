@@ -1,0 +1,80 @@
+# Pre-commit CI Workflow
+#
+# Purpose: Run the aggregate `pre-commit run --all-files` gate for every
+# active hook in `.pre-commit-config.yaml`.
+#
+# This workflow is baseline-scoped so downstream repositories can keep
+# repository hygiene enforcement even when they exclude Python project source.
+# Python is still installed as the runner for pre-commit itself and for
+# Python-based hooks such as check-jsonschema and repo-local wrappers.
+#
+# Hook coverage:
+#   - General hygiene (trailing-whitespace, end-of-file-fixer,
+#     check-added-large-files)
+#   - JSON/TOML/YAML syntax and YAML style
+#   - GitHub Actions workflow linting
+#   - JSON Schema validation
+#   - Markdown linting
+#   - Module-specific hooks retained by the downstream sync
+#
+# Note: This workflow is optional only if the repository removes pre-commit
+# entirely or replaces aggregate hook enforcement with an equivalent gate.
+
+name: Pre-commit CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pre-commit:
+    name: Pre-commit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      # template-sync: begin terraform-only
+      # Install Terraform for repo-local Terraform pre-commit hooks.
+      # Version Policy: Use the latest stable Terraform version for pre-commit.
+      # Review and update quarterly per TEMPLATE_MAINTENANCE.md.
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.14.4"
+
+      # Install TFLint for the repo-local terraform-tflint pre-commit hook.
+      # Keep this aligned with .github/workflows/terraform-ci.yml.
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v6
+        with:
+          tflint_version: "v0.51.1"
+      # template-sync: end terraform-only
+
+      - name: Cache pre-commit hooks
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Run pre-commit hooks
+        # Runs every hook in .pre-commit-config.yaml. Required system tools
+        # are set up above; other hooks provision their own environments
+        # inside pre-commit's hook cache.
+        run: pre-commit run --all-files

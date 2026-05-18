@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-10
+- **Last Updated:** 2026-05-18
 - **Scope:** Durable design-decision record for this repository template, including rationale for GitHub configuration, instruction files, validation policy, template structure, maintenance conventions, and the documentation-tier inventory below.
 - **Related:** [Repository Copilot Instructions](copilot-instructions.md), [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -865,21 +865,45 @@ The template ships with minimal package.json configuration (no repository field,
 
 ### Design Decision: Dedicated Data-File CI Workflow (`data-ci.yml`)
 
-The repository ships a dedicated `.github/workflows/data-ci.yml` workflow that runs JSON, YAML, and GitHub Actions workflow validation as a first-class CI gate, alongside `python-ci.yml`, `powershell-ci.yml`, `terraform-ci.yml`, and `markdownlint.yml`.
+The repository ships a dedicated `.github/workflows/data-ci.yml` workflow that runs JSON, YAML, and GitHub Actions workflow validation as a first-class CI gate, alongside the aggregate pre-commit gate (`precommit-ci.yml`) and the per-language workflows (`python-ci.yml`, `powershell-ci.yml`, `terraform-ci.yml`, and `markdownlint.yml`).
 
-**Why a dedicated workflow even though `python-ci.yml` already runs every pre-commit hook:**
+**Why a dedicated workflow even though `precommit-ci.yml` already runs every pre-commit hook:**
 
-- `python-ci.yml` runs `pre-commit run --all-files`, which transitively enforces the JSON/YAML/actionlint hooks. That works functionally but makes data-file validation appear incidental to Python CI.
-- A dedicated workflow gives JSON/YAML/Actions validation a distinct required-check identity, clearer ownership, and parity with other per-language workflows. Branch protection rules can require data-file validation independently from Python validation.
+- `precommit-ci.yml` runs `pre-commit run --all-files`, which transitively enforces the JSON/YAML/actionlint hooks. That works functionally but makes data-file validation appear incidental to the broader repository hygiene gate.
+- A dedicated workflow gives JSON/YAML/Actions validation a distinct required-check identity, clearer ownership, and parity with per-language workflows. Branch protection rules can require data-file validation independently from aggregate pre-commit validation.
 - Template adopters who do not use Python should still see data-file validation as a first-class concern; surfacing it only under Python CI would obscure that.
 
-**CI ownership decision:** `python-ci.yml` continues to run the full `pre-commit run --all-files` pipeline as the single canonical aggregate pre-commit gate. `data-ci.yml` runs the data-file hooks (`check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, and `check-metaschema`) explicitly. The hooks therefore execute in both workflows.
+**CI ownership decision:** `precommit-ci.yml` runs the full `pre-commit run --all-files` pipeline as the single canonical aggregate pre-commit gate. `data-ci.yml` runs the data-file hooks (`check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, and `check-metaschema`) explicitly. The hooks therefore execute in both workflows.
 
-**Trade-off accepted:** The duplication between `python-ci.yml` and `data-ci.yml` is intentional. Splitting responsibility — narrowing `python-ci.yml` to Python-only checks — was rejected because it would change existing CI topology and complicate downstream branch protection migrations for marginal benefit. Visibility and ownership were prioritized over avoiding the duplicated hook execution.
+**Trade-off accepted:** The duplication between `precommit-ci.yml` and `data-ci.yml` is intentional. The previous decision to keep aggregate pre-commit enforcement in `python-ci.yml` was reversed because excluding the `python` module deleted the aggregate gate for downstream repositories with no Python project source. The accepted topology keeps data-file visibility while moving shared hook enforcement to a baseline workflow.
 
 **Distinction from `auto-fix-precommit.yml`:** `data-ci.yml` is a contract enforcement gate that runs on all PRs and pushes. `.github/workflows/auto-fix-precommit.yml` is intentionally NOT a peer of `data-ci.yml`: it is a fix-up workflow scoped to `copilot/**` branches that auto-applies pre-commit fixes and does not enforce results. The two workflows serve different purposes and must not be conflated.
 
 **Schema validation steps:** As of the worked-example schema rollout, `data-ci.yml` runs dedicated `Run check-jsonschema` and `Run check-metaschema` steps that validate the template's worked-example schema (`schemas/example-config.schema.json`), its valid example data files, and the schema itself against its declared Draft 2020-12 metaschema. The single `Run check-jsonschema` step also covers real load-bearing repository configuration validation against built-in vendor schemas shipped with `check-jsonschema` — currently `.github/dependabot.yml` validated against `vendor.dependabot`. The aggregate `pre-commit run check-jsonschema --all-files` step is intentionally kept as a single invocation (Option B in the rollout) because it transitively runs every hook sharing the `check-jsonschema` ID, including any additional hooks downstream consumers add to `.pre-commit-config.yaml`. The dedicated steps are kept alongside the standard data-file hooks so the schema-validation surface is independently visible in CI logs.
+
+### Design Decision: Aggregate Pre-commit CI Workflow (`precommit-ci.yml`)
+
+The repository ships `.github/workflows/precommit-ci.yml` as the canonical aggregate pre-commit CI gate. It is mapped to the `baseline` and `github-actions` modules so downstream repositories can keep `pre-commit run --all-files` enforcement even when they exclude the `python` module.
+
+**Decision:** Aggregate pre-commit enforcement belongs in `precommit-ci.yml`, not in `python-ci.yml`. The Python workflow is limited to Python-specific checks such as mypy and pytest. The aggregate workflow still installs Python because pre-commit itself and several hooks are Python tools, but that runner dependency is distinct from shipping Python project source.
+
+**Rationale:**
+
+- Downstream repositories may exclude `python` while retaining `.pre-commit-config.yaml`; aggregate hook enforcement must survive that module choice.
+- `.pre-commit-config.yaml` is baseline-scoped and can contain inline module blocks for hooks that belong to optional modules.
+- Branch rulesets need a stable required-check identity for repository hygiene that is not tied to Python source ownership.
+
+**Alternatives considered:**
+
+1. Keep the aggregate `Pre-commit` job in `python-ci.yml` and document a manual downstream workaround. Rejected because excluding the `python` module removes `python-ci.yml` and therefore removes the recommended required check.
+2. Treat `data-ci.yml` as the aggregate replacement. Rejected because `data-ci.yml` intentionally runs selected data-file hooks for visibility and does not exercise every active hook in `.pre-commit-config.yaml`.
+3. Make `python-ci.yml` baseline-scoped. Rejected because it would force downstream repositories without Python source to retain mypy and pytest CI scaffolding.
+
+**Consequences:**
+
+- Repositories that exclude Python source can retain `precommit-ci.yml` and the shared pre-commit gate.
+- Python project hooks such as Black and Ruff must be inside `python-only` inline blocks in `.pre-commit-config.yaml`.
+- Terraform/TFLint setup for aggregate pre-commit runs moves with the aggregate workflow and remains inside a `terraform-only` inline block.
 
 ### Design Decision: Non-Blocking Type Checking by Default
 
@@ -1383,7 +1407,8 @@ The template provides these CI jobs that can be configured as required status ch
 
 | Workflow | Job Name | Recommended as Required | Notes |
 | --- | --- | --- | --- |
-| `python-ci.yml` | **Pre-commit** | ✅ Yes | Foundational check—catches formatting and linting issues |
+| `precommit-ci.yml` | **Pre-commit** | ✅ Yes | Foundational check—catches formatting and linting issues |
+| `data-ci.yml` | **Data file linting** | ✅ Yes | Gives JSON/YAML/Actions validation a distinct required-check identity |
 | `python-ci.yml` | **Type Check (mypy)** | Optional | Set to `continue-on-error: true` by default; make strict when ready |
 | `python-ci.yml` | **Test** | ✅ Yes | Ensures tests pass on all platforms |
 | `markdownlint.yml` | **Markdown Lint** | ✅ Yes | Ensures documentation quality |
@@ -1393,7 +1418,7 @@ The template provides these CI jobs that can be configured as required status ch
 
 > **Note:** In the GitHub Actions UI and branch ruleset status-check picker,
 > checks appear in the format **`Workflow name / Job name`** (for example,
-> `Python CI / Pre-commit`). The **Job Name** column above lists only the
+> `Pre-commit CI / Pre-commit`). The **Job Name** column above lists only the
 > job-level name; prepend the workflow name when searching for checks in the
 > ruleset configuration. Status checks only appear for selection after the
 > corresponding workflow has run at least once.
@@ -1435,20 +1460,20 @@ Complete this step **after** your CI workflows have run at least once so that st
 > [rulesets documentation](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets)
 > for more details.
 
-### Understanding `needs:` vs Branch Rulesets
+### Understanding Workflow Dependencies vs Branch Rulesets
 
-The template CI workflows use `needs:` to create internal job dependencies:
+Some template CI workflows use `needs:` to create internal job dependencies:
 
 ```yaml
-test:
-  name: Test
-  needs: pre-commit  # Test job waits for pre-commit to pass
+lint:
+  name: Lint
+  needs: validate  # Lint waits for validation to pass
 ```
 
 **How `needs:` works (internal CI dependency):**
 
-- If `pre-commit` fails, the `test` job is automatically skipped
-- This saves CI minutes by not running tests on poorly-formatted code
+- If the dependency job fails, the dependent job is automatically skipped
+- This saves CI minutes by not running later checks after earlier failures
 - The dependency is internal to the workflow—GitHub Actions manages it
 
 **How branch rulesets work (external gate):**
@@ -1463,11 +1488,11 @@ test:
 - Branch rulesets enforce quality gates (block merges until checks pass)
 - Using both provides defense in depth
 
-**Recommendation:** Require **both** the `Pre-commit` job AND downstream jobs like `Test` in the branch ruleset. Even though `Test` won't run if `Pre-commit` fails (due to `needs:`), requiring both ensures that:
+**Recommendation:** Require **both** the aggregate `Pre-commit` job and downstream jobs like `Test` in the branch ruleset. Requiring independent checks ensures that:
 
 1. Format/lint issues block the PR (Pre-commit requirement)
 2. Test failures block the PR (Test requirement)
-3. Skipped jobs (due to upstream failure) also block the PR
+3. Skipped jobs (due to an internal workflow dependency) also block the PR
 
 ### Example Branch Ruleset Configuration
 
@@ -1476,6 +1501,7 @@ For a Python project using this template:
 **Required status checks:**
 
 - Pre-commit
+- Data file linting
 - Test
 - Markdown Lint
 
@@ -1488,6 +1514,7 @@ For a multi-language project (Python + PowerShell):
 **Required status checks:**
 
 - Pre-commit
+- Data file linting
 - Test
 - Markdown Lint
 - Lint (PSScriptAnalyzer)

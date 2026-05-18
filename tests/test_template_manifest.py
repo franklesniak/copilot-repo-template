@@ -31,7 +31,7 @@ COPY_READY_REFERENCE_FILES = (
 TERRAFORM_INLINE_BLOCK_PATHS = (
     ".pre-commit-config.yaml",
     ".github/workflows/auto-fix-precommit.yml",
-    ".github/workflows/python-ci.yml",
+    ".github/workflows/precommit-ci.yml",
 )
 TERRAFORM_INLINE_MARKER_BEGIN = "# template-sync: begin terraform-only"
 TERRAFORM_INLINE_MARKER_END = "# template-sync: end terraform-only"
@@ -50,11 +50,22 @@ TERRAFORM_SHARED_SURFACE_TOKENS = {
         'terraform_version: "1.14.4"',
         'tflint_version: "v0.51.1"',
     ),
-    ".github/workflows/python-ci.yml": (
+    ".github/workflows/precommit-ci.yml": (
         "hashicorp/setup-terraform@v4",
         "terraform-linters/setup-tflint@v6",
         'terraform_version: "1.14.4"',
         'tflint_version: "v0.51.1"',
+    ),
+}
+PYTHON_INLINE_BLOCK_PATHS = (".pre-commit-config.yaml",)
+PYTHON_INLINE_MARKER_BEGIN = "# template-sync: begin python-only"
+PYTHON_INLINE_MARKER_END = "# template-sync: end python-only"
+PYTHON_SHARED_SURFACE_TOKENS = {
+    ".pre-commit-config.yaml": (
+        "https://github.com/psf/black",
+        "id: black",
+        "https://github.com/astral-sh/ruff-pre-commit",
+        "id: ruff-check",
     ),
 }
 REFERENCE_FILE_SUFFIXES = {".json", ".md", ".yaml", ".yml"}
@@ -151,38 +162,56 @@ def _path_mapping_by_pattern() -> dict[str, dict[str, Any]]:
     return rows
 
 
-def _strip_terraform_only_inline_blocks(relative_path: str) -> str:
-    """Return file text after simulating a downstream sync without Terraform."""
+def _strip_inline_blocks(relative_path: str, marker_begin: str, marker_end: str) -> str:
+    """Return file text after simulating a downstream sync without one module."""
     path = REPO_ROOT / relative_path
     lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
     stripped_lines: list[str] = []
-    is_inside_terraform_block = False
-    has_seen_terraform_block = False
+    is_inside_block = False
+    has_seen_block = False
 
     for line_number, line in enumerate(lines, 1):
         stripped_line = line.strip()
 
-        if stripped_line == TERRAFORM_INLINE_MARKER_BEGIN:
+        if stripped_line == marker_begin:
             assert (
-                not is_inside_terraform_block
-            ), f"{relative_path}:{line_number}: nested terraform-only inline block"
-            is_inside_terraform_block = True
-            has_seen_terraform_block = True
+                not is_inside_block
+            ), f"{relative_path}:{line_number}: nested inline block for {marker_begin}"
+            is_inside_block = True
+            has_seen_block = True
             continue
 
-        if stripped_line == TERRAFORM_INLINE_MARKER_END:
+        if stripped_line == marker_end:
             assert (
-                is_inside_terraform_block
-            ), f"{relative_path}:{line_number}: unmatched terraform-only end marker"
-            is_inside_terraform_block = False
+                is_inside_block
+            ), f"{relative_path}:{line_number}: unmatched inline block end marker"
+            is_inside_block = False
             continue
 
-        if not is_inside_terraform_block:
+        if not is_inside_block:
             stripped_lines.append(line)
 
-    assert not is_inside_terraform_block, f"{relative_path}: unclosed terraform-only inline block"
-    assert has_seen_terraform_block, f"{relative_path}: missing terraform-only inline block"
+    assert not is_inside_block, f"{relative_path}: unclosed inline block for {marker_begin}"
+    assert has_seen_block, f"{relative_path}: missing inline block for {marker_begin}"
     return "".join(stripped_lines)
+
+
+def _strip_terraform_only_inline_blocks(relative_path: str) -> str:
+    """Return file text after simulating a downstream sync without Terraform."""
+    return _strip_inline_blocks(
+        relative_path,
+        TERRAFORM_INLINE_MARKER_BEGIN,
+        TERRAFORM_INLINE_MARKER_END,
+    )
+
+
+def _strip_python_only_inline_blocks(relative_path: str) -> str:
+    """Return file text after simulating a downstream sync without Python."""
+    return _strip_inline_blocks(
+        relative_path,
+        PYTHON_INLINE_MARKER_BEGIN,
+        PYTHON_INLINE_MARKER_END,
+    )
 
 
 def _extract_table_after_heading(markdown_text: str, heading: str) -> list[list[str]]:
@@ -398,6 +427,64 @@ def test_terraform_sync_retains_terraform_tooling_in_shared_surfaces() -> None:
         text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
         for required_token in required_tokens:
             assert required_token in text, f"{relative_path}: {required_token}"
+
+
+def test_python_inline_blocks_are_declared_for_template_sync() -> None:
+    """Python-only inline blocks must be paired with manifest notes."""
+    mappings = _path_mapping_by_pattern()
+
+    for relative_path in PYTHON_INLINE_BLOCK_PATHS:
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        assert text.count(PYTHON_INLINE_MARKER_BEGIN) == 1
+        assert text.count(PYTHON_INLINE_MARKER_END) == 1
+        _strip_python_only_inline_blocks(relative_path)
+
+        mapping = mappings.get(relative_path)
+        assert mapping is not None, f"{relative_path} must have a manifest mapping"
+        notes = mapping.get("notes")
+        assert isinstance(notes, str), f"{relative_path} mapping must describe inline blocks"
+        assert "Python-only inline block" in notes
+        assert "python module is excluded" in notes
+
+
+def test_non_python_sync_strips_python_tooling_from_shared_surfaces() -> None:
+    """A simulated sync without Python must remove Python project hooks."""
+    for relative_path, forbidden_tokens in PYTHON_SHARED_SURFACE_TOKENS.items():
+        stripped_text = _strip_python_only_inline_blocks(relative_path)
+        for forbidden_token in forbidden_tokens:
+            assert forbidden_token not in stripped_text, f"{relative_path}: {forbidden_token}"
+
+
+def test_non_python_sync_leaves_shared_surfaces_as_valid_yaml() -> None:
+    """Stripping Python-only blocks must not corrupt the host YAML document."""
+    for relative_path in PYTHON_SHARED_SURFACE_TOKENS:
+        stripped_text = _strip_python_only_inline_blocks(relative_path)
+        try:
+            parsed = yaml.safe_load(stripped_text)
+        except yaml.YAMLError as error:
+            raise AssertionError(
+                f"{relative_path}: stripped text is not valid YAML: {error}"
+            ) from error
+        assert isinstance(parsed, dict), (
+            f"{relative_path}: stripped YAML must load as a mapping, "
+            f"got {type(parsed).__name__}"
+        )
+
+
+def test_python_sync_retains_python_tooling_in_shared_surfaces() -> None:
+    """A sync that includes Python must keep the current Python project hooks."""
+    for relative_path, required_tokens in PYTHON_SHARED_SURFACE_TOKENS.items():
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        for required_token in required_tokens:
+            assert required_token in text, f"{relative_path}: {required_token}"
+
+
+def test_aggregate_precommit_workflow_is_not_python_scoped() -> None:
+    """The aggregate pre-commit gate must survive excluding the Python module."""
+    mappings = _path_mapping_by_pattern()
+    precommit_mapping = mappings.get(".github/workflows/precommit-ci.yml")
+    assert precommit_mapping is not None, "precommit-ci.yml must have a manifest mapping"
+    assert precommit_mapping.get("requires_all") == ["baseline", "github-actions"]
 
 
 def test_copy_ready_files_do_not_use_onboarding_only_relative_references() -> None:

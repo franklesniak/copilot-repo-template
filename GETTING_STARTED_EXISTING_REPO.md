@@ -215,8 +215,8 @@ Keep these only when the repository has Python project source, Python tests, or 
 - `src/` or other Python package/source directories
 - Python tests such as `tests/test_example.py` and `tests/__init__.py`
 - `templates/python/`
-- Black and Ruff hooks in `.pre-commit-config.yaml`
-- `.github/workflows/python-ci.yml`
+- The `# template-sync: begin python-only` … `# template-sync: end python-only` block in `.pre-commit-config.yaml` (contains the Black and Ruff hooks; template-sync strips it automatically when the `python` module is excluded)
+- `.github/workflows/python-ci.yml` (type-check + tests). Note: `.github/workflows/precommit-ci.yml` is baseline-scoped and stays even when Python project source is removed.
 - The `pip` ecosystem in `.github/dependabot.yml`
 - `.github/instructions/python.instructions.md`
 - Python validation references in `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `README.md`, `CONTRIBUTING.md`, and PR/issue templates
@@ -1504,7 +1504,7 @@ If you remove the workflow, also drop or de-emphasize documentation that implies
 
 **Location:** `.github/workflows/python-ci.yml`
 
-**Purpose:** Runs pre-commit hooks, type checking (mypy), and tests (pytest) for Python code.
+**Purpose:** Runs type checking (mypy) and tests (pytest) for Python code. Aggregate pre-commit enforcement (`pre-commit run --all-files`) lives in `.github/workflows/precommit-ci.yml`, not in this workflow.
 
 **Prerequisites:**
 
@@ -1535,7 +1535,7 @@ If you remove the workflow, also drop or de-emphasize documentation that implies
 
 - Compare your workflow with the template
 - Consider adding specific checks from the template as additional jobs
-- The template's job dependency pattern (`needs: pre-commit`) ensures tests don't run on poorly-formatted code
+- Repository hygiene (formatting, linting, JSON/YAML validation, etc.) is enforced separately by `.github/workflows/precommit-ci.yml`, which runs the full `pre-commit run --all-files` pipeline. Adopt that workflow alongside Python CI rather than chaining a `needs: pre-commit` dependency inside `python-ci.yml`.
 
 #### If You Already Have pyproject.toml
 

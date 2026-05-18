@@ -72,7 +72,8 @@ For template maintainers, see [TEMPLATE_MAINTENANCE.md](TEMPLATE_MAINTENANCE.md)
     ├── data-ci.yml                   # JSON/YAML/Actions data-file linting CI
     ├── markdownlint.yml              # Markdown linting CI (markdownlint + link checks)
     ├── powershell-ci.yml             # PowerShell linting and testing CI (optional)
-    ├── python-ci.yml                 # Python linting and testing CI (optional)
+    ├── precommit-ci.yml              # Aggregate `pre-commit run --all-files` gate
+    ├── python-ci.yml                 # Python type-check (mypy) and test (pytest) CI (optional)
     └── terraform-ci.yml              # Terraform format, validate, lint, test, security CI (optional)
 
 src/
@@ -124,7 +125,8 @@ GEMINI.md                            # Agent instructions for Gemini Code Assist
 | `.github/workflows/data-ci.yml` | Data-file (JSON/YAML/GitHub Actions) linting CI workflow — runs `check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, and `check-metaschema` as a dedicated check that can be required via branch protection |
 | `.github/workflows/markdownlint.yml` | Markdown linting CI workflow (uses [markdownlint](https://github.com/DavidAnson/markdownlint), nested Markdown linting, and offline link validation) |
 | `.github/workflows/powershell-ci.yml` | PowerShell linting and Pester testing CI workflow (optional - remove if not using PowerShell) |
-| `.github/workflows/python-ci.yml` | Python linting and testing CI workflow (optional - remove if not using Python) |
+| `.github/workflows/precommit-ci.yml` | Aggregate pre-commit CI workflow — runs `pre-commit run --all-files` over every hook in `.pre-commit-config.yaml`; baseline-scoped so it stays even when Python project source is removed |
+| `.github/workflows/python-ci.yml` | Python type-check (mypy) and test (pytest) CI workflow (optional - remove if not using Python). The aggregate pre-commit gate lives in `precommit-ci.yml`. |
 | `.github/workflows/terraform-ci.yml` | Terraform format, validate, lint, test, and security CI workflow (optional - remove if not using Terraform) |
 | `.markdownlint.jsonc` | Markdown linting rules prioritizing auto-fixable checks |
 | `.remarkignore` | Exclusions for offline Markdown link validation |

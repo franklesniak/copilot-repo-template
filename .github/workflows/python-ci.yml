@@ -1,50 +1,33 @@
 # Python CI Workflow
 #
-# Purpose: Run pre-commit hooks, type checking (mypy), and tests (pytest) for
-# Python code in a single consolidated workflow.
+# Purpose: Run Python type checking (mypy) and tests (pytest).
 #
-# Despite the "Python CI" name, the `Pre-commit` job runs the full
-# `pre-commit run --all-files` pipeline and therefore enforces every active
-# hook in `.pre-commit-config.yaml`, including non-Python hooks:
-#   - JSON syntax (check-json, strict .json only)
-#   - YAML syntax and style (check-yaml, yamllint)
-#   - GitHub Actions workflow linting (actionlint)
-#   - Markdown linting (markdownlint-cli2)
-#   - Module-specific hooks retained by the downstream sync
-#   - General hygiene (trailing-whitespace, end-of-file-fixer,
-#     check-added-large-files)
-# This is the single canonical pre-commit enforcement workflow; downstream
-# repos and other workflows should not duplicate `pre-commit run --all-files`
-# as a required check.
+# Aggregate pre-commit enforcement lives in `.github/workflows/precommit-ci.yml`
+# so downstream repositories that exclude Python project source can still keep
+# `pre-commit run --all-files` as a required check.
 #
 # Design Decisions:
 #
-# 1. Single Workflow with Job Dependencies:
-#    This workflow combines pre-commit, type checking, and tests into a single
-#    workflow file using the `needs:` keyword for job dependencies. This design
-#    replaces the previous pattern of separate workflow files with `workflow_run`
-#    triggers.
+# 1. Python-Only Workflow:
+#    This workflow contains only Python project checks. Shared repository
+#    hygiene is enforced by precommit-ci.yml, which is baseline-scoped in the
+#    template sync manifest.
 #
 #    Benefits of this approach:
-#    - All jobs appear directly in the PR checks list (not hidden in Actions tab)
-#    - Easy to configure branch rulesets that require specific jobs
-#    - Tests don't run if pre-commit fails (saves CI minutes)
-#    - Simpler maintenance with a single workflow file
+#    - Downstream repositories can remove Python source without losing aggregate
+#      pre-commit CI enforcement
+#    - Python CI remains easy to delete when the python module is excluded
+#    - Branch rulesets can require Python checks independently from the
+#      foundational pre-commit gate
 #
-# 2. Job Dependencies:
-#    The `type-check` and `test` jobs both have `needs: pre-commit`, which means:
-#    - They only run AFTER the pre-commit job completes successfully
-#    - If pre-commit fails, downstream jobs are automatically skipped
-#    - This ensures tests don't run on poorly-formatted code
-#
-# 3. Template Repository Consideration:
+# 2. Template Repository Consideration:
 #    This workflow does NOT use path-based filtering (on.push.paths or
 #    on.pull_request.paths) because this is a template repository. Path
 #    filtering would prevent the workflow from being properly tested and
 #    copied by users of the template. Template repositories should run all
 #    workflows on all changes to ensure accuracy when the template is used.
 #
-# 4. Python Version Policy:
+# 3. Python Version Policy:
 #    Test only actively supported bugfix versions (not security-fix-only).
 #    Python versions in "security fix only" phase are NOT publicly installable
 #    with security updates—they require building from source.
@@ -52,7 +35,7 @@
 #    Update this when upstream support changes (typically annually around October).
 #    See: https://devguide.python.org/versions/
 #
-# 5. Dependency Caching:
+# 4. Dependency Caching:
 #    This workflow uses caching to improve performance on cloud-hosted runners.
 #    Caching reduces CI execution time by reusing previously downloaded
 #    dependencies instead of re-downloading them on every run.
@@ -60,8 +43,6 @@
 #    What is cached:
 #    - pip dependencies: Cached via actions/setup-python's built-in cache
 #      parameter. Cache key is based on dependency specification files.
-#    - pre-commit hooks: Cached via actions/cache. Cache key is based on
-#      the hash of .pre-commit-config.yaml.
 #
 #    Expected time savings: 60-150 seconds per CI run, depending on the
 #    number of dependencies and network conditions.
@@ -69,7 +50,6 @@
 #    Cache invalidation:
 #    - pip cache invalidates when dependency specification files change
 #      (e.g., pyproject.toml, requirements.txt, setup.py)
-#    - pre-commit cache invalidates when .pre-commit-config.yaml changes
 #
 #    Note: Type checking (mypy) runs only on ubuntu-latest, not in a
 #    cross-platform matrix. mypy performs platform-agnostic static analysis,
@@ -91,56 +71,8 @@ permissions:
   contents: read
 
 jobs:
-  pre-commit:
-    name: Pre-commit
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Setup Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-          cache: 'pip'
-
-      # template-sync: begin terraform-only
-      # Install Terraform for repo-local Terraform pre-commit hooks.
-      # Version Policy: Use the latest stable Terraform version for pre-commit.
-      # Review and update quarterly per TEMPLATE_MAINTENANCE.md.
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v4
-        with:
-          terraform_version: "1.14.4"
-
-      # Install TFLint for the repo-local terraform-tflint pre-commit hook.
-      # Keep this aligned with .github/workflows/terraform-ci.yml.
-      - name: Setup TFLint
-        uses: terraform-linters/setup-tflint@v6
-        with:
-          tflint_version: "v0.51.1"
-      # template-sync: end terraform-only
-
-      - name: Cache pre-commit hooks
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/pre-commit
-          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
-
-      - name: Install pre-commit
-        run: pip install pre-commit
-
-      - name: Run pre-commit hooks
-        # Runs every hook in .pre-commit-config.yaml (Python formatters/linters,
-        # JSON/YAML checks, yamllint, actionlint, markdownlint-cli2, and retained
-        # module-specific hooks). Required tools are set up above; other hooks
-        # provision their own environments inside pre-commit's hook cache.
-        run: pre-commit run --all-files
-
   type-check:
     name: Type Check (mypy)
-    needs: pre-commit
     runs-on: ubuntu-latest
 
     steps:
@@ -188,7 +120,6 @@ jobs:
 
   test:
     name: Test
-    needs: pre-commit
     runs-on: ${{ matrix.os }}
 
     strategy:

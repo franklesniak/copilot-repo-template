@@ -994,24 +994,28 @@ This template repository's own `.github/dependabot.yml` does not currently exerc
 
 Removing Python source files does not automatically remove Python from the repository's development tooling. The template uses Python to run `pre-commit`, `check-jsonschema`, `check-metaschema`, and repo-local hooks such as the Terraform wrappers.
 
-If your downstream repository removes `src/`, Python tests, `pyproject.toml`, and `.github/workflows/python-ci.yml` but keeps `.pre-commit-config.yaml`, keep Python available on developer machines and CI runners that execute pre-commit. Remove only the Python project hooks (`black` and `ruff-check`) unless you are also removing pre-commit and every Python-based hook.
+If your downstream repository excludes the `python` module through the template sync procedure, the `python-only` inline block in `.pre-commit-config.yaml` removes the Python project hooks (`black` and `ruff-check`) while the baseline `.github/workflows/precommit-ci.yml` workflow continues to run the aggregate `pre-commit run --all-files` gate. Keep Python available on developer machines and CI runners that execute pre-commit itself, even when the repository contains no Python project source.
+
+If you remove Python project files manually instead of using template sync, remove the complete `python-only` inline block from `.pre-commit-config.yaml`. Keep `.github/workflows/precommit-ci.yml` unless you are also removing pre-commit or replacing it with an equivalent aggregate CI gate.
 
 ### Adjusting Line Length
 
-The default line length is 100 characters for both Black and Ruff:
+The default line length is 100 characters for both Black and Ruff. In `.pre-commit-config.yaml`, these entries live inside the `python-only` template-sync inline block so the template-sync framework can strip them automatically when the `python` module is excluded — the snippet below preserves those marker lines:
 
 ```yaml
+# template-sync: begin python-only
 - repo: https://github.com/psf/black
-  rev: 26.1.0
+  rev: 26.3.1
   hooks:
     - id: black
       args: [--line-length=100]
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.14.14
+  rev: v0.15.12
   hooks:
     - id: ruff-check
       args: [--fix, --line-length=100]
+# template-sync: end python-only
 ```
 
 **To use Black's default (88 characters):**
@@ -2740,13 +2744,13 @@ The `check-toml` hook in `.pre-commit-config.yaml` (from `pre-commit/pre-commit-
 
 ## CI Workflow Configuration
 
-### Pre-commit-Only CI After Removing Python Source
+### Aggregate Pre-commit CI
 
-Removing Python project CI does not mean removing Python from CI entirely. If your repository keeps `.pre-commit-config.yaml`, `check-jsonschema`, `check-metaschema`, or other Python-based hooks, keep a narrow aggregate workflow that installs Python solely to run repository hygiene checks.
+**File:** `.github/workflows/precommit-ci.yml`
 
-Use a workflow name and comments that make the purpose explicit, for example "Repository Hygiene" rather than "Python CI". That workflow may use `actions/setup-python`, install `pre-commit`, and run `pre-commit run --all-files`, while omitting Python application steps such as `pip install -e ".[dev]"`, mypy, pytest, or coverage unless the repository still has Python source to validate.
+The template ships a baseline-scoped aggregate workflow that installs Python only as the runtime for pre-commit and Python-based hooks, then runs `pre-commit run --all-files`. Keep this workflow when removing Python project source, because `.github/workflows/python-ci.yml` now contains only Python-specific jobs such as mypy and pytest.
 
-**File:** `.github/workflows/python-ci.yml`
+Remove `.github/workflows/precommit-ci.yml` only if the downstream repository removes `.pre-commit-config.yaml` entirely or replaces aggregate pre-commit enforcement with an equivalent required CI check.
 
 ### Enabling Codecov Integration
 
@@ -2846,7 +2850,7 @@ If your project uses `requirements.txt` files instead of `pyproject.toml` option
     pip install -r requirements-dev.txt  # If you have separate dev requirements
 ```
 
-> **Note:** Update both the `type-check` job (line ~131) and the `test` job (line ~183) to keep them consistent.
+> **Note:** Update both the `type-check` job and the `test` job to keep them consistent.
 
 ---
 
@@ -2879,7 +2883,7 @@ Keep this workflow if:
 
 If you don't use GitHub Copilot Coding Agent or prefer to manually commit pre-commit fixes, you can safely remove this workflow.
 
-> **Note:** Removing this workflow is safe if another workflow still reports pre-commit failures. If you removed Python project CI but kept pre-commit hooks, keep or add a pre-commit-only repository hygiene workflow as described in [Pre-commit-Only CI After Removing Python Source](#pre-commit-only-ci-after-removing-python-source).
+> **Note:** Removing this workflow is safe if another workflow still reports pre-commit failures. If you removed Python project CI but kept pre-commit hooks, keep `.github/workflows/precommit-ci.yml` or another aggregate required check as described in [Aggregate Pre-commit CI](#aggregate-pre-commit-ci).
 
 **Steps to remove:**
 

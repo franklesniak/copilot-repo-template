@@ -250,7 +250,8 @@ This repository includes several GitHub Actions workflows that run automatically
 
 | Workflow | File | Purpose |
 | --- | --- | --- |
-| Python CI | `.github/workflows/python-ci.yml` | Runs pre-commit, mypy (type checking), and pytest on Python files |
+| Pre-commit CI | `.github/workflows/precommit-ci.yml` | Runs the aggregate `pre-commit run --all-files` gate over every hook in `.pre-commit-config.yaml` |
+| Python CI | `.github/workflows/python-ci.yml` | Runs mypy (type checking) and pytest on Python files |
 | Auto-fix Pre-commit | `.github/workflows/auto-fix-precommit.yml` | Automatically commits pre-commit auto-fixes on pushes to `copilot/**` branches authored by `copilot-swe-agent[bot]` (optional) |
 | Markdown Lint | `.github/workflows/markdownlint.yml` | Validates markdown formatting |
 | PowerShell CI | `.github/workflows/powershell-ci.yml` | Runs PSScriptAnalyzer on PowerShell files |
