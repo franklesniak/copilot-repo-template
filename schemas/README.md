@@ -160,19 +160,33 @@ Instead, invalid examples SHOULD be exercised by a test or script that asserts v
 ```python
 import shutil
 import subprocess
+import sys
+from importlib.util import find_spec
+
 import pytest
 
-CHECK_JSONSCHEMA = shutil.which("check-jsonschema")
+
+def check_jsonschema_command():
+    executable = shutil.which("check-jsonschema")
+    if executable is not None:
+        return [executable]
+    if find_spec("check_jsonschema") is not None:
+        return [sys.executable, "-m", "check_jsonschema"]
+    return None
+
+
+CHECK_JSONSCHEMA_COMMAND = check_jsonschema_command()
 
 
 @pytest.mark.skipif(
-    CHECK_JSONSCHEMA is None,
+    CHECK_JSONSCHEMA_COMMAND is None,
     reason="check-jsonschema is not installed in this environment",
 )
 def test_invalid_example_is_rejected():
+    assert CHECK_JSONSCHEMA_COMMAND is not None
     result = subprocess.run(
         [
-            CHECK_JSONSCHEMA,
+            *CHECK_JSONSCHEMA_COMMAND,
             "--schemafile",
             "schemas/project-config.schema.json",
             "schemas/examples/project-config/invalid/missing-required.json",
@@ -186,9 +200,9 @@ def test_invalid_example_is_rejected():
     )
 ```
 
-The same shape applies in PowerShell, Bash, or any CI step: invoke the validator on the invalid fixture and assert a non-zero exit.
+The command resolver prefers the `check-jsonschema` console script when it is on `PATH`, falls back to `python -m check_jsonschema` when the package is importable in the pytest environment, and skips only when neither invocation is available. The same shape applies in PowerShell, Bash, or any CI step: invoke the validator on the invalid fixture and assert a non-zero exit.
 
-A starter version of this pattern lives at [`templates/python/tests/test_schema_examples.py`](../templates/python/tests/test_schema_examples.py); the active, canonical version that this repository runs in CI lives at [`tests/test_schema_examples.py`](../tests/test_schema_examples.py). Both auto-discover schema/example pairs under `schemas/`. The starter retains a `skipif` guard so it remains safe to copy into downstream projects that have not yet added `check-jsonschema` to their dev/test dependencies.
+A starter version of this pattern lives at [`templates/python/tests/test_schema_examples.py`](../templates/python/tests/test_schema_examples.py); the active, canonical version that this repository runs in CI lives at [`tests/test_schema_examples.py`](../tests/test_schema_examples.py). Both auto-discover schema/example pairs under `schemas/`, prefer the console script, and fall back to `python -m check_jsonschema` when the package is importable. The starter retains a `skipif` guard so it remains safe to copy into downstream projects that have not yet added `check-jsonschema` to their dev/test dependencies.
 
 ## Worked Example
 
