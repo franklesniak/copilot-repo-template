@@ -143,7 +143,7 @@ jobs:
         run: |
           $testRoot = $env:PESTER_TEST_ROOT
           if (Test-Path -LiteralPath $testRoot) {
-            $testFiles = Get-ChildItem -Path $testRoot -Filter "*.Tests.ps1" -Recurse -File |
+            $testFiles = Get-ChildItem -LiteralPath $testRoot -Filter "*.Tests.ps1" -Recurse -File |
               Where-Object { $_.FullName -notmatch "node_modules" }
           } else {
             $testFiles = @()
