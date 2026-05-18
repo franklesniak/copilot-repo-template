@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260518.0
+**Version:** 1.1.20260518.1
 
 ## Metadata
 
@@ -444,6 +444,7 @@ Manifest version 1 ships with `requires_all` semantics only. A later manifest re
 | `.github/workflows/markdownlint.yml` | `markdown`, `github-actions` |
 | `.github/workflows/powershell-ci.yml` | `powershell`, `github-actions` |
 | `.github/workflows/python-ci.yml` | `python`, `github-actions` |
+| `.github/workflows/precommit-ci.yml` | `baseline`, `github-actions` |
 | `.github/workflows/terraform-ci.yml` | `terraform`, `github-actions` |
 | `.github/workflows/data-ci.yml` | `github-actions` |
 | `.github/workflows/check-placeholders.yml` | `baseline`, `github-actions` |
@@ -473,25 +474,35 @@ If a changed upstream path does not match the table, classify it as `UNMAPPED` i
 
 ### Inline Module Blocks
 
-Some retained files contain module-owned blocks delimited by YAML comments. The current marker form is:
+Some retained files contain module-owned blocks delimited by YAML comments. The current marker forms are:
 
 ```yaml
 # template-sync: begin terraform-only
 # ...
 # template-sync: end terraform-only
+
+# template-sync: begin python-only
+# ...
+# template-sync: end python-only
 ```
 
 These inline blocks let a downstream repository keep the containing baseline or cross-module file while removing toolchain assumptions for a module it did not adopt. During Step 6, after path mapping decides whether the containing file itself is in scope, apply these rules:
 
-1. If `terraform` is present in `included_modules`, retain `terraform-only` blocks unchanged unless the per-file review records a separate `MERGE` decision.
-2. If `terraform` is absent from `included_modules`, remove each complete `terraform-only` block, including the begin and end marker lines, before accepting or merging the containing file.
+1. If the module named by an inline-block marker is present in `included_modules`, retain that module's blocks unchanged unless the per-file review records a separate `MERGE` decision.
+2. If the module named by an inline-block marker is absent from `included_modules`, remove each complete block for that module, including the begin and end marker lines, before accepting or merging the containing file.
 3. Treat unmatched, nested, or unknown inline-block markers as an explicit sync question for the owner; do not silently keep or drop the affected block.
+
+The current `python-only` inline block lives in:
+
+- `.pre-commit-config.yaml` for the `black` and `ruff-check` Python project hooks.
 
 The current `terraform-only` inline blocks live in:
 
 - `.pre-commit-config.yaml` for the `terraform-fmt`, `terraform-validate`, and `terraform-tflint` repo-local hooks.
-- `.github/workflows/python-ci.yml` for the Terraform and TFLint setup steps required only when those hooks are retained.
+- `.github/workflows/precommit-ci.yml` for the Terraform and TFLint setup steps required only when those hooks are retained.
 - `.github/workflows/auto-fix-precommit.yml` for the Terraform and TFLint setup steps required only when those hooks are retained.
+
+After stripping `python-only` blocks, a downstream repository that excludes `python` should be able to run `pre-commit run --all-files` without retaining Python project formatters or linters such as Black and Ruff.
 
 After stripping `terraform-only` blocks, a downstream repository that excludes `terraform` should be able to run `pre-commit run --all-files` and the retained non-Terraform workflows without installing HashiCorp Terraform or TFLint.
 

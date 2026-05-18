@@ -7,8 +7,7 @@
 #
 # 1. Single Workflow with Job Dependencies:
 #    This workflow combines format, validate, lint, test, and security into a single
-#    workflow file using the `needs:` keyword for job dependencies. This design
-#    follows the pattern established in python-ci.yml.
+#    workflow file using the `needs:` keyword for job dependencies.
 #
 #    Benefits of this approach:
 #    - All jobs appear directly in the PR checks list (not hidden in Actions tab)
