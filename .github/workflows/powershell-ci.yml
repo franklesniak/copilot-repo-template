@@ -137,6 +137,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      # Keep discovery scoped to PESTER_TEST_ROOT; the canonical rule lives in
+      # `.github/instructions/powershell.instructions.md` under "Running Pester Tests".
       - name: Find Pester test files
         id: find-tests
         shell: pwsh
@@ -185,4 +187,4 @@ jobs:
 
       - name: Skip - No Pester tests
         if: steps.find-tests.outputs.found != 'true'
-        run: echo "Skipping Pester tests - no *.Tests.ps1 files found in repository"
+        run: echo "Skipping Pester tests - no *.Tests.ps1 files found in the configured test root"
