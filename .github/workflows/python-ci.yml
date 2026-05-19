@@ -34,6 +34,7 @@
 #    As of January 2026, Python 3.13 is the only version that qualifies.
 #    Update this when upstream support changes (typically annually around October).
 #    See: https://devguide.python.org/versions/
+#    See: .github/instructions/yaml.instructions.md (GitHub Actions Setup Version Pins).
 #
 # 4. Dependency Caching:
 #    This workflow uses caching to improve performance on cloud-hosted runners.
@@ -87,6 +88,7 @@ jobs:
           # As of January 2026, Python 3.13 is the latest bugfix-supported version.
           # Update this when upstream support changes (typically annually around October).
           # See: https://devguide.python.org/versions/
+          # See: .github/instructions/yaml.instructions.md (GitHub Actions Setup Version Pins).
           python-version: '3.13'
           cache: 'pip'
 
@@ -133,6 +135,7 @@ jobs:
         # with security updates—they require building from source.
         # Update this when upstream support changes (typically annually around October).
         # See: https://devguide.python.org/versions/
+        # See: .github/instructions/yaml.instructions.md (GitHub Actions Setup Version Pins).
         python-version: ['3.13']
 
     steps:

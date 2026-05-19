@@ -112,7 +112,8 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.x'
+          # See: .github/instructions/yaml.instructions.md (GitHub Actions Setup Version Pins).
+          python-version: '3.13'
           cache: 'pip'
 
       - name: Cache pre-commit hooks

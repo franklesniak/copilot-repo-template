@@ -7,13 +7,13 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.4.20260518.0
+**Version:** 1.4.20260519.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-18
+- **Last Updated:** 2026-05-19
 - **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by [JSON Writing Style](./json.instructions.md)) or generated YAML artifacts that are owned by another tool's serializer.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md), [`.yamllint.yml`](../../.yamllint.yml), [Data-File CI Workflow (`data-ci.yml`)](../workflows/data-ci.yml), [Schemas README](../../schemas/README.md), [Schema Example Tests (`tests/test_schema_examples.py`)](../../tests/test_schema_examples.py), [Template Design Decision — Dedicated JSON and YAML Instruction Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-json-and-yaml-instruction-files), [Template Design Decision — Baseline JSON/YAML Linting Stack](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-baseline-jsonyaml-linting-stack), [Template Design Decision — yamllint truthy.check-keys Default](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-truthycheck-keys-default), [Template Design Decision — yamllint line-length Warning Level Default](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-line-length-warning-level-default), [Template Design Decision — Dedicated Data-File CI Workflow (`data-ci.yml`)](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-data-file-ci-workflow-data-ciyml), [Template Design Decision — Prettier Deferral for Data Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-prettier-deferral-for-data-files), [Template Design Decision — Built-in Schema Validation for Real Load-Bearing Configuration Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files)
 
@@ -37,6 +37,7 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - **[All]** **SHOULD NOT** use anchors, aliases, merge keys, custom tags, or multi-document files unless required and supported by the consumer.
 - **[All]** **MUST NOT** commit secrets in YAML.
 - **[Actions]** **MUST** apply least-privilege `permissions:` on GitHub Actions workflows.
+- **[Actions]** `setup-*` action `with.*-version:` inputs (for example, `python-version`, `node-version`, `go-version`, and `dotnet-version`) in workflow files under `.github/workflows/` **MUST** pin to a literal release-line selector and **MUST NOT** use a broad floating selector such as `'3.x'`, `'latest'`, or `'*'`. The required granularity follows each ecosystem's release model: Python and Go **MUST** use major.minor (for example, `"3.13"` or `"1.21"`); Node.js **MAY** use major for an LTS line (for example, `"20"`) or major.minor (for example, `"20.18"`); .NET **MAY** use the most specific stable SDK channel selector documented by `actions/setup-dotnet`, such as major.minor.x (for example, `"8.0.x"`); for other ecosystems, use the most specific stable release-line selector documented by the action's README.
 - **[Actions]** Documentation/navigation comments above `uses:` lines **MUST** use versionless upstream URLs; the `uses:` line remains the authoritative action version.
 - **[Schemas]** Schema-backed YAML **MUST** pass any schema validator wired into pre-commit or CI; where no validator is wired up for a particular file family, authors **SHOULD** run the appropriate validator locally before committing.
 - **[Naming]** YAML filenames **SHOULD** be lowercase kebab-case; GitHub Actions workflows **MUST** use the `.yml` extension; project-owned YAML **MUST** choose `.yml` or `.yaml` and use it consistently.
@@ -100,6 +101,53 @@ rules:
 ```
 
 This configuration preserves the idiomatic GitHub Actions `on:` key while still flagging YAML 1.1 truthy hazards in **values**. Authors **MAY** alternatively quote the key as `"on":` to satisfy a stricter `truthy.check-keys: true` configuration, but this form is **non-idiomatic** in the GitHub Actions ecosystem and **SHOULD NOT** be adopted unless a downstream policy requires it.
+
+## GitHub Actions Setup Version Pins
+
+GitHub Actions workflow files under `.github/workflows/` that use `setup-*` actions **MUST** pass literal release-line selectors to `with.*-version:` inputs such as `python-version`, `node-version`, `go-version`, and `dotnet-version`. Broad floating selectors such as `'3.x'`, `'latest'`, and `'*'` **MUST NOT** be used for these inputs.
+
+The required selector granularity follows each ecosystem's release model:
+
+- Python and Go **MUST** use major.minor selectors, such as `"3.13"` or `"1.21"`.
+- Node.js **MAY** use a major selector for an LTS line, such as `"20"`, or a major.minor selector, such as `"20.18"`.
+- .NET **MAY** use the most specific stable SDK channel selector documented by `actions/setup-dotnet`, such as major.minor.x (`"8.0.x"`).
+- Other ecosystems **MUST** use the most specific stable release-line selector documented by the setup action's README.
+
+This rule protects CI determinism. Broad floating selectors couple workflow results to GitHub runner-image refreshes, setup action manifests, tool-cache contents, and download resolution behavior. A runner or toolchain refresh can then move CI to a different interpreter or runtime line and break a previously passing workflow even though the workflow file did not change.
+
+This is a stronger, separate rule from the requirement to quote all version pins. Quoting keeps YAML parsers from coercing version-looking strings to numbers; release-line specificity keeps setup actions from resolving to a different runtime line over time.
+
+**Compliant:**
+
+```yaml
+- uses: actions/setup-python@v6
+  with:
+    python-version: "3.13"
+
+- uses: actions/setup-node@v6
+  with:
+    node-version: "20"
+
+- uses: actions/setup-dotnet@v4
+  with:
+    dotnet-version: "8.0.x"
+```
+
+**Non-compliant:**
+
+```yaml
+- uses: actions/setup-python@v6
+  with:
+    python-version: '3.x'
+
+- uses: actions/setup-python@v6
+  with:
+    python-version: 'latest'
+
+- uses: actions/setup-dotnet@v4
+  with:
+    dotnet-version: '8.x'
+```
 
 ## GitHub Actions Documentation Comment URLs
 
