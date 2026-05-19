@@ -914,21 +914,20 @@ open-pull-requests-limit: 10
 - **Increase** if you have a large dependency tree and want faster updates
 - **Decrease** if Dependabot PRs are overwhelming your team
 
-### Adding Automatic Reviewers
+### Adding Automatic Assignees
 
-Automatically assign reviewers and assignees to Dependabot PRs:
+Automatically assign Dependabot PRs to users:
 
 ```yaml
 - package-ecosystem: "npm"
   directory: "/"
   schedule:
     interval: "weekly"
-  reviewers:
-    - "username1"
-    - "org/team-name"
   assignees:
     - "username2"
 ```
+
+This snippet is covered by the default `validate-dependabot-config` pre-commit hook and by the regression test at [`tests/test_dependabot_schema.py`](tests/test_dependabot_schema.py). Do not add a `reviewers:` key to this default-validated example: the pinned `check-jsonschema` `vendor.dependabot` schema rejects that key, and the current GitHub.com [Dependabot options reference](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference) documents `assignees` but does not list `reviewers`.
 
 ### Customizing Commit Message Prefixes
 
@@ -1189,7 +1188,7 @@ If you remove the `skipif` guard, you MUST ensure `check-jsonschema` is installe
   2. A `check-jsonschema --builtin-schema vendor.dependabot` hook that validates `.github/dependabot.yml` against the Dependabot built-in schema bundled with `check-jsonschema`. See the [Built-in Schema Validation for Real Load-Bearing Configuration Files](.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files) ADR for the policy, the explicit "Evaluated but deferred" negative-space record, and the downstream removal guidance.
 
   Downstream repositories MAY add additional `check-jsonschema` hook entries (project-owned `--schemafile` hooks for their own schema-backed file families, or additional `--builtin-schema` hooks for tool-owned configuration files), and MAY remove the worked example via the canonical [downstream removal checklist](schemas/README.md#downstream-removal-checklist). Hooks for files that a downstream repository deletes **MUST** be removed alongside the file.
-- The template ships an active root test, [`tests/test_schema_examples.py`](tests/test_schema_examples.py), that depends on `check-jsonschema` (declared in the root `pyproject.toml` `dev` group). A starter version with the same essential pattern is provided at `templates/python/tests/test_schema_examples.py` for downstream adoption.
+- The template ships active root tests that depend on `check-jsonschema` (declared in the root `pyproject.toml` `dev` group): [`tests/test_schema_examples.py`](tests/test_schema_examples.py) validates schema examples, and [`tests/test_dependabot_schema.py`](tests/test_dependabot_schema.py) validates the documented Dependabot auto-assignment fixture against `vendor.dependabot`. A starter version of the schema-example pattern is provided at `templates/python/tests/test_schema_examples.py` for downstream adoption.
 - Beyond the worked example and the wired built-in schema hooks, schema validation is opt-in; downstream repositories add real hooks and tests when they introduce additional real schemas, or when they want to enable additional `--builtin-schema` coverage.
 - Project-owned schemas SHOULD continue to live under `schemas/`. Built-in schemas referenced via `--builtin-schema` are **not** vendored into `schemas/`; their content tracks `check-jsonschema` releases.
 - JSONC, JSON5, ecosystem-specific YAML validators, and broader SchemaStore / catalog coverage remain opt-in unless a downstream repository explicitly ships them. See the dedicated subsections below for adoption guidance.

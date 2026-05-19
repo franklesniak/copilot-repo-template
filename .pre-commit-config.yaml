@@ -175,6 +175,11 @@ repos:
   #      Currently wired:
   #        - `.github/dependabot.yml` against `vendor.dependabot`.
   #
+  #      The documented Dependabot auto-assignment guidance is intentionally
+  #      limited to fields accepted by the pinned `vendor.dependabot` schema;
+  #      `tests/test_dependabot_schema.py` validates that fixture so future
+  #      schema regressions fail in CI.
+  #
   #      Evaluated but NOT currently wired (no verified built-in schema
   #      available in the pinned `check-jsonschema` version below; the
   #      `--builtin-schema` catalog reported by `check-jsonschema --help`
