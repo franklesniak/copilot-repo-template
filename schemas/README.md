@@ -228,7 +228,7 @@ How the worked example is validated:
 
 [`template-sync-manifest.schema.json`](./template-sync-manifest.schema.json) defines the shape of [`.template-sync/manifest.yml`](../.template-sync/manifest.yml), which is the source of truth for the downstream sync module taxonomy.
 
-The schema accepts both manifest version 1 and manifest version 2 documents. Version 1 preserves the original `requires_all`-only path mapping contract for downstream compatibility. Version 2 adds `requires_any` so a path can require all baseline modules plus at least one module from an alternative set, such as `.github/workflows/data-ci.yml` requiring `github-actions` plus at least one of `json`, `yaml`, or `schema`.
+The schema accepts both manifest version 1 and manifest version 2 documents. Version 1 preserves the original `requires_all`-only path mapping contract for downstream compatibility. Version 2 adds `requires_any` so a path can require all `requires_all` modules plus at least one `requires_any` module, such as `.github/workflows/data-ci.yml` requiring `github-actions` plus at least one of `json`, `yaml`, or `schema`.
 
 How the template sync manifest contract is validated:
 
