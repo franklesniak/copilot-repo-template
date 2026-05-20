@@ -7,13 +7,13 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.5.20260509.0
+**Version:** 1.5.20260520.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-09
+- **Last Updated:** 2026-05-20
 - **Scope:** Defines Python coding standards for all Python files in this repository, including modules, scripts, tests, and tooling. Covers style, structure, error handling, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -64,7 +64,13 @@ This baseline is not dogma.  When external constraints require modern Python (e.
 - **[Modern]** Type hints are expected broadly; **MUST** run static checking (e.g., mypy/pyright) in CI.
 - **[All]** Tests **MUST** exist for non-trivial logic; **SHOULD** use `pytest` unless repo standard differs.
 - **[All]** Tests **SHOULD** prefer public seams over monkeypatching private internals.
-- **[All]** **SHOULD** use Black for formatting and Ruff for linting (configured via `pyproject.toml` and pre-commit hooks).
+- **[All]** **SHOULD** use Black for formatting and Ruff for linting.
+- **[This repo]** `pre-commit run --all-files` is the authoritative local gate because it runs the pinned hook versions from `.pre-commit-config.yaml`.
+- **[This repo]** Targeted pre-commit hook runs, such as `pre-commit run black --all-files` when Python formatting is the only concern, are useful fast checks but **MUST NOT** replace the aggregate `pre-commit run --all-files` gate.
+- **[This repo]** Running hook tools directly outside pre-commit, for example `ruff`, `npx markdownlint-cli2`, or `yamllint`, **MAY** help during iteration but **MUST NOT** replace the aggregate gate; type checking (`mypy`) and tests (`pytest`) are enforced separately by [`.github/workflows/python-ci.yml`](../workflows/python-ci.yml).
+- **[This repo]** In the active root configuration, Black is the Python formatter enforced by the pinned `psf/black` pre-commit hook, and Ruff is lint-only through `ruff-check`; there is no active `ruff-format` hook and no root `[tool.ruff]` table.
+- **[This repo]** `ruff format` **MUST NOT** be used to apply or validate Python formatting unless a future toolchain change explicitly adopts Ruff formatting.
+- **[Downstream]** [`templates/python/pyproject.toml`](../../templates/python/pyproject.toml) shows starter `pyproject.toml` configuration for downstream adopters and is distinct from this repository's active root configuration.
 
 ### Package Versioning
 
