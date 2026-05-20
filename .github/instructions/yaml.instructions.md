@@ -7,13 +7,13 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.4.20260519.0
+**Version:** 1.5.20260520.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-19
+- **Last Updated:** 2026-05-20
 - **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by [JSON Writing Style](./json.instructions.md)) or generated YAML artifacts that are owned by another tool's serializer.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md), [`.yamllint.yml`](../../.yamllint.yml), [Data-File CI Workflow (`data-ci.yml`)](../workflows/data-ci.yml), [Schemas README](../../schemas/README.md), [Schema Example Tests (`tests/test_schema_examples.py`)](../../tests/test_schema_examples.py), [Template Design Decision — Dedicated JSON and YAML Instruction Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-json-and-yaml-instruction-files), [Template Design Decision — Baseline JSON/YAML Linting Stack](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-baseline-jsonyaml-linting-stack), [Template Design Decision — yamllint truthy.check-keys Default](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-truthycheck-keys-default), [Template Design Decision — yamllint line-length Warning Level Default](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-line-length-warning-level-default), [Template Design Decision — Dedicated Data-File CI Workflow (`data-ci.yml`)](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-data-file-ci-workflow-data-ciyml), [Template Design Decision — Prettier Deferral for Data Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-prettier-deferral-for-data-files), [Template Design Decision — Built-in Schema Validation for Real Load-Bearing Configuration Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files)
 
@@ -39,6 +39,7 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - **[Actions]** **MUST** apply least-privilege `permissions:` on GitHub Actions workflows.
 - **[Actions]** `setup-*` action `with.*-version:` inputs (for example, `python-version`, `node-version`, `go-version`, and `dotnet-version`) in workflow files under `.github/workflows/` **MUST** pin to a literal release-line selector and **MUST NOT** use a broad floating selector such as `'3.x'`, `'latest'`, or `'*'`. The required granularity follows each ecosystem's release model: Python and Go **MUST** use major.minor (for example, `"3.13"` or `"1.21"`); Node.js **MAY** use major for an LTS line (for example, `"20"`) or major.minor (for example, `"20.18"`); .NET **MAY** use the most specific stable SDK channel selector documented by `actions/setup-dotnet`, such as major.minor.x (for example, `"8.0.x"`); for other ecosystems, use the most specific stable release-line selector documented by the action's README.
 - **[Actions]** Documentation/navigation comments above `uses:` lines **MUST** use versionless upstream URLs; the `uses:` line remains the authoritative action version.
+- **[Actions]** Comments documenting where a GitHub Actions `with:` tool-version input is pinned, or that such a value must stay aligned across files, **SHOULD** describe the membership criterion instead of a hardcoded workflow-file list; if a concrete file list is included for convenience, it **SHOULD** be labeled as a non-authoritative snapshot.
 - **[Schemas]** Schema-backed YAML **MUST** pass any schema validator wired into pre-commit or CI; where no validator is wired up for a particular file family, authors **SHOULD** run the appropriate validator locally before committing.
 - **[Naming]** YAML filenames **SHOULD** be lowercase kebab-case; GitHub Actions workflows **MUST** use the `.yml` extension; project-owned YAML **MUST** choose `.yml` or `.yaml` and use it consistently.
 - **[IssueForms]** In `.github/ISSUE_TEMPLATE/*.yml`, repo-internal targets in both issue-form `value:` Markdown links (e.g., `bug_report.yml`) and `config.yml` `contact_links` `url:` fields **MUST** use absolute `https://github.com/OWNER/REPO/...` URLs (with `blob/HEAD` for file links); relative paths **MUST NOT** be used. The two file types fail for different reasons: `value:` Markdown blocks render at `/{owner}/{repo}/issues/new?...` so relative paths resolve against that URL and 404, while `contact_links` `url:` fields are not Markdown at all — GitHub validates them as absolute URLs at form-load time and rejects relative values outright.
@@ -188,6 +189,37 @@ Pinned documentation URLs go stale because Dependabot updates `uses:` references
 ```
 
 <!-- RATIONALE: github-actions-documentation-comment-urls -->
+
+## GitHub Actions Tool-Version Alignment Comments
+
+Prefer a single source of truth for repeated tool-version values where GitHub Actions supports one, such as a workflow-level `env:` value for versions used by multiple steps in one workflow. This guidance covers the residual cross-file case where a GitHub Actions `with:` tool-version input is still pinned in more than one place; it does not endorse duplicating tool versions unnecessarily.
+
+Comments in workflow files under `.github/workflows/` that document where a GitHub Actions `with:` tool-version input is pinned, or state that such a value must be kept in sync across the repository, **SHOULD** describe the membership criterion rather than enumerate a hardcoded list of filenames that nothing keeps in sync. For example, prefer "every `tflint_version:` input passed to `terraform-linters/setup-tflint` under `.github/workflows/`" over a fixed list of workflow filenames.
+
+The criterion **SHOULD NOT** embed the setup action's version (for example, `@v6`), because that action version is a separate Dependabot-managed `uses:` pin and can itself go stale inside comment text. This differs from pinned documentation URLs: tool-version inputs such as `terraform_version` and `tflint_version` are manually maintained CLI/tool versions, so their comment drift comes from unsynchronized manual edits that move, add, or remove pins.
+
+If a concrete file list is included for convenience, it **SHOULD** be marked as a non-authoritative snapshot, for example by prefixing it with "currently," so a stale list does not mislead. This mirrors the repository-wide documentation principle that every list of "things" should be complete or explicitly labeled as partial, and the general YAML comment guidance that comments should explain durable context rather than restate fragile details.
+
+This guidance applies to comments in workflow files under `.github/workflows/` and, advisorily, to comments in any other file that references these workflow pins, such as a script that hardcodes the same tool version. For non-YAML files this is advisory only because this guide's `applyTo` scope is YAML.
+
+**Compliant:**
+
+```yaml
+# Keep this tflint_version aligned with every other tflint_version input
+# passed to terraform-linters/setup-tflint under .github/workflows/.
+- uses: terraform-linters/setup-tflint@v6
+  with:
+    tflint_version: "v0.51.1"
+```
+
+**Non-compliant:**
+
+```yaml
+# This tflint_version must match terraform-ci.yml and auto-fix-precommit.yml.
+- uses: terraform-linters/setup-tflint@v6
+  with:
+    tflint_version: "v0.51.1"
+```
 
 ## Issue-form Markdown Links in `.github/ISSUE_TEMPLATE/*.yml`
 

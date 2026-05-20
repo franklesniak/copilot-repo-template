@@ -73,7 +73,8 @@ jobs:
           terraform_version: "1.14.4"
 
       # Install TFLint for the repo-local terraform-tflint pre-commit hook.
-      # Keep this aligned with .github/workflows/terraform-ci.yml.
+      # Keep this tflint_version aligned with every other tflint_version input
+      # passed to terraform-linters/setup-tflint under .github/workflows/.
       - name: Setup TFLint
         uses: terraform-linters/setup-tflint@v6
         with:
