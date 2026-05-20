@@ -18,6 +18,25 @@ INSTALL_DIR="/usr/local/bin"
 persist_path_prepend() {
   local path_entry="$1"
 
+  # The entry is written into CLAUDE_ENV_FILE, which later shells source, so
+  # refuse anything that is not a plain absolute path. This prevents a value
+  # containing shell metacharacters (quotes, $, backticks, newlines, ...) —
+  # which could arrive via UV_TOOL_BIN_DIR, PIPX_BIN_DIR, or HOME — from being
+  # evaluated as code when that file is loaded.
+  case "$path_entry" in
+    /*) ;;
+    *)
+      echo "persist_path_prepend: refusing non-absolute PATH entry: ${path_entry}" >&2
+      exit 1
+      ;;
+  esac
+  case "$path_entry" in
+    *[!A-Za-z0-9._/-]*)
+      echo "persist_path_prepend: refusing PATH entry with unsafe characters: ${path_entry}" >&2
+      exit 1
+      ;;
+  esac
+
   case ":${PATH}:" in
     *":${path_entry}:"*) ;;
     *) export PATH="${path_entry}:${PATH}" ;;
