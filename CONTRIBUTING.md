@@ -14,7 +14,7 @@ Rejected because: Harder to replace in bulk, produces non-working commands,
 inconsistent with other files that require real values (CI configs, package.json)
 
 See README.md Template Setup Checklist for adoption instructions.
-See OPTIONAL_CONFIGURATIONS.md for detailed customization guidance.
+See [OPTIONAL_CONFIGURATIONS.md](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md) for detailed customization guidance.
 -->
 
 Thank you for your interest in contributing! This document provides guidelines for contributing to this repository.
@@ -75,7 +75,7 @@ This repository uses pre-commit for git hooks. Configured hooks include:
 
 > **`check-json` validates strict `.json` only.** It does **not** validate `.jsonc`. JSONC files are allowed only when the consuming tool supports JSONC; downstream repositories that need stricter `.jsonc` enforcement should add **JSONC-aware tooling** rather than retrofitting `check-json`. See [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md) for the full JSON/JSONC dialect policy and [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md) for YAML authoring standards.
 >
-> **`actionlint` first-run-on-restricted-networks caveat.** The `actionlint` pre-commit hook builds the `actionlint` binary from source on first install, which downloads a Go toolchain. On networks that block Go module downloads (corporate proxies, air-gapped environments), the first-run install can fail. CI is the shared enforcement environment, so contributors who hit a network restriction locally can rely on CI to enforce this hook. The same caveat is documented inline in `.pre-commit-config.yaml` and in `.github/TEMPLATE_DESIGN_DECISIONS.md`.
+> **`actionlint` first-run-on-restricted-networks caveat.** The `actionlint` pre-commit hook builds the `actionlint` binary from source on first install, which downloads a Go toolchain. On networks that block Go module downloads (corporate proxies, air-gapped environments), the first-run install can fail. CI is the shared enforcement environment, so contributors who hit a network restriction locally can rely on CI to enforce this hook. The same caveat is documented inline in `.pre-commit-config.yaml` and in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md).
 >
 > **Terraform tool prerequisite.** The Terraform hooks are repo-local Python wrappers and do not require Bash. They do require HashiCorp Terraform (`terraform`) when Terraform format or validation targets are present, and TFLint (`tflint`) when Terraform lint targets are present. Install Terraform from [HashiCorp's official install guide](https://developer.hashicorp.com/terraform/install) and TFLint from the [TFLint installation guide](https://github.com/terraform-linters/tflint#installation), then restart your shell so both executables are on PATH. On Windows, native PowerShell is supported; download the Windows binaries and add them to PATH, or use Chocolatey (`choco install terraform` and `choco install tflint`) if your organization uses it.
 
@@ -229,7 +229,7 @@ These standards apply to all contributions and are enforced by the repository's 
 
 ### Template Taxonomy Updates
 
-When a change adds, removes, renames, moves, or changes the primary purpose of a template-managed file, update the downstream sync path mapping in `TEMPLATE_UPDATE_PROCEDURE.md` as part of the same change. See [Reviewing the Template Sync Module Taxonomy](TEMPLATE_MAINTENANCE.md#reviewing-the-template-sync-module-taxonomy) for the maintainer checklist.
+When a change adds, removes, renames, moves, or changes the primary purpose of a template-managed file, update the downstream sync path mapping in `TEMPLATE_UPDATE_PROCEDURE.md` as part of the same change. See [Reviewing the Template Sync Module Taxonomy](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/TEMPLATE_MAINTENANCE.md#reviewing-the-template-sync-module-taxonomy) for the maintainer checklist.
 
 ### Data-File and Schema Validation
 
@@ -376,7 +376,7 @@ If using a proprietary license:
 - Consider adding Contributor License Agreement (CLA) requirements
 - Consult with legal counsel for appropriate contribution terms
 
-See OPTIONAL_CONFIGURATIONS.md "License Customization" section for detailed guidance.
+See the [OPTIONAL_CONFIGURATIONS.md "License Customization" section](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md#license-customization) for detailed guidance.
 -->
 
 By contributing to this project, you agree that your contributions will be licensed under the same license as the project (MIT License).
@@ -390,7 +390,7 @@ After you've reviewed and understood this content, you should:
 - Option B: Keep it if your project is also a template
 - Option C: Move relevant content to your own project documentation
 
-See OPTIONAL_CONFIGURATIONS.md for detailed guidance on CONTRIBUTING.md customization.
+See [OPTIONAL_CONFIGURATIONS.md](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md) for detailed guidance on CONTRIBUTING.md customization.
 -->
 
 This repository is a template designed for projects that use GitHub Copilot for AI-assisted development.
@@ -415,4 +415,4 @@ You can customize these instruction files for your project's specific convention
 
 ### First-Time Setup Validation
 
-After creating a new repository from this template, see the [Validation and Testing](GETTING_STARTED_NEW_REPO.md#validation-and-testing) section for guidance on verifying your setup.
+After creating a new repository from this template, see the [Validation and Testing](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md#validation-and-testing) section for guidance on verifying your setup.

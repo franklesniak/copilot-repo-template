@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import fnmatch
 import json
 import os
+import posixpath
 import re
 from collections import Counter
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlsplit
 
 import jsonschema
 import yaml  # type: ignore[import-untyped]
@@ -160,6 +163,15 @@ GITHUB_PLATFORM_SHARED_SURFACE_TOKENS = {
     ),
 }
 REFERENCE_FILE_SUFFIXES = {".json", ".md", ".yaml", ".yml"}
+MARKDOWN_FILE_SUFFIXES = {".md", ".mdc"}
+SKIPPED_DISCOVERY_DIRS = {
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "node_modules",
+}
 ONBOARDING_ONLY_REFERENCE_TOKENS = (
     "OPTIONAL_CONFIGURATIONS.md",
     "GETTING_STARTED_NEW_REPO.md",
@@ -167,12 +179,20 @@ ONBOARDING_ONLY_REFERENCE_TOKENS = (
     "TEMPLATE_MAINTENANCE.md",
     "TEMPLATE_DESIGN_DECISIONS.md",
 )
+UPSTREAM_TEMPLATE_BLOB_ROOT = "https://github.com/franklesniak/copilot-repo-template/blob/HEAD/"
 UPSTREAM_ONBOARDING_URL_RE = re.compile(
-    r"https://github\.com/franklesniak/copilot-repo-template/blob/HEAD/"
-    r"(?:OPTIONAL_CONFIGURATIONS\.md|GETTING_STARTED_NEW_REPO\.md|"
+    re.escape(UPSTREAM_TEMPLATE_BLOB_ROOT)
+    + r"(?:OPTIONAL_CONFIGURATIONS\.md|GETTING_STARTED_NEW_REPO\.md|"
     r"GETTING_STARTED_EXISTING_REPO\.md|TEMPLATE_MAINTENANCE\.md|"
     r"\.github/TEMPLATE_DESIGN_DECISIONS\.md)(?:#[A-Za-z0-9._-]+)?"
 )
+# Allow optional blockquote markers before a fence (e.g. ``> ```py``) so fenced
+# code examples inside blockquotes are skipped like any other fenced block.
+MARKDOWN_FENCE_RE = re.compile(r"^(?: {0,3}>)* {0,3}(?P<fence>`{3,}|~{3,})")
+MARKDOWN_INLINE_LINK_RE = re.compile(
+    r"(?<!!)\[[^\]\n]+\]\((?P<target><[^>\n]+>|[^)\s\n]+)(?:\s+[^)\n]*)?\)"
+)
+MARKDOWN_REFERENCE_DEFINITION_RE = re.compile(r"^ {0,3}\[[^\]\n]+\]:\s+(?P<target><[^>\n]+>|\S+)")
 
 
 def _load_manifest() -> dict[str, Any]:
@@ -251,6 +271,35 @@ def _path_mapping_by_pattern() -> dict[str, dict[str, Any]]:
         assert isinstance(pattern, str), "path mapping pattern must be a string"
         rows[pattern] = mapping
     return rows
+
+
+def _pattern_specificity(pattern: str) -> tuple[int, int, int]:
+    """Return a sortable specificity rank for a manifest path pattern."""
+    is_exact = not any(wildcard in pattern for wildcard in "*?[")
+    literal_length = sum(1 for character in pattern if character not in "*?[]")
+    return (int(is_exact), literal_length, pattern.count("/"))
+
+
+def _manifest_modules_for_path(relative_path: str) -> tuple[str, ...] | None:
+    """Return the modules for ``relative_path`` using manifest filtering semantics."""
+    matches: list[tuple[tuple[int, int, int], tuple[str, ...]]] = []
+
+    for pattern, modules in _path_mapping_rows_from_manifest():
+        if fnmatch.fnmatchcase(relative_path, pattern):
+            matches.append((_pattern_specificity(pattern), modules))
+
+    if not matches:
+        return None
+
+    best_specificity = max(specificity for specificity, _modules in matches)
+    selected_modules: list[str] = []
+    for specificity, modules in matches:
+        if specificity != best_specificity:
+            continue
+        for module in modules:
+            if module not in selected_modules:
+                selected_modules.append(module)
+    return tuple(selected_modules)
 
 
 def _strip_inline_blocks(relative_path: str, marker_begin: str, marker_end: str) -> str:
@@ -454,6 +503,99 @@ def _copy_ready_reference_files() -> list[Path]:
                 paths.append(path)
 
     return sorted(paths)
+
+
+def _markdown_files() -> list[Path]:
+    """Return Markdown files discovered under the repository root."""
+    repo_root_resolved = REPO_ROOT.resolve()
+    _assert_root_within_repo(REPO_ROOT, repo_root_resolved)
+    paths: list[Path] = []
+
+    for dirpath, dirnames, filenames in os.walk(REPO_ROOT, followlinks=False):
+        directory = Path(dirpath)
+        dirnames[:] = [
+            dirname
+            for dirname in dirnames
+            if dirname not in SKIPPED_DISCOVERY_DIRS and not (directory / dirname).is_symlink()
+        ]
+        for filename in filenames:
+            path = directory / filename
+            if path.suffix not in MARKDOWN_FILE_SUFFIXES or path.is_symlink():
+                continue
+            assert path.resolve().is_relative_to(
+                repo_root_resolved
+            ), f"discovered Markdown path must resolve within REPO_ROOT: {path}"
+            paths.append(path)
+
+    return sorted(paths)
+
+
+def _retained_markdown_files() -> list[Path]:
+    """Return Markdown files whose manifest ownership is not template-onboarding."""
+    retained_paths: list[Path] = []
+
+    for path in _markdown_files():
+        relative_path = path.relative_to(REPO_ROOT).as_posix()
+        modules = _manifest_modules_for_path(relative_path)
+        assert modules is not None, f"{relative_path} must have a manifest mapping"
+        if "template-onboarding" not in modules:
+            retained_paths.append(path)
+
+    return retained_paths
+
+
+def _markdown_link_targets_outside_fences(path: Path) -> list[tuple[int, str]]:
+    """Return Markdown link targets that appear outside fenced code blocks."""
+    targets: list[tuple[int, str]] = []
+    active_fence_character: str | None = None
+    active_fence_length = 0
+
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        fence_match = MARKDOWN_FENCE_RE.match(line)
+        if fence_match is not None:
+            fence = fence_match.group("fence")
+            fence_character = fence[0]
+            if active_fence_character is None:
+                active_fence_character = fence_character
+                active_fence_length = len(fence)
+            elif fence_character == active_fence_character and len(fence) >= active_fence_length:
+                active_fence_character = None
+                active_fence_length = 0
+            continue
+
+        if active_fence_character is not None:
+            continue
+
+        targets.extend(
+            (line_number, match.group("target")) for match in MARKDOWN_INLINE_LINK_RE.finditer(line)
+        )
+        reference_match = MARKDOWN_REFERENCE_DEFINITION_RE.match(line)
+        if reference_match is not None:
+            targets.append((line_number, reference_match.group("target")))
+
+    return targets
+
+
+def _resolve_relative_markdown_target(source_path: Path, target: str) -> str | None:
+    """Return a repo-relative target path for local Markdown links."""
+    stripped_target = target.strip()
+    if stripped_target.startswith("<") and stripped_target.endswith(">"):
+        stripped_target = stripped_target[1:-1]
+
+    parsed_target = urlsplit(stripped_target)
+    if parsed_target.scheme or parsed_target.netloc or stripped_target.startswith("#"):
+        return None
+    if not parsed_target.path or parsed_target.path.startswith("/"):
+        return None
+
+    source_parent = source_path.relative_to(REPO_ROOT).parent.as_posix()
+    if source_parent == ".":
+        source_parent = ""
+
+    normalized_path = posixpath.normpath(posixpath.join(source_parent, unquote(parsed_target.path)))
+    if normalized_path in {"", "."} or normalized_path.startswith("../"):
+        return None
+    return normalized_path
 
 
 def _assert_root_within_repo(root: Path, repo_root_resolved: Path) -> None:
@@ -967,6 +1109,27 @@ def test_copy_ready_files_do_not_use_onboarding_only_relative_references() -> No
     assert not failures, (
         "Copy-ready Markdown, YAML, and JSON files must use neutral wording or "
         "absolute upstream URLs for template-onboarding-only references:\n" + "\n".join(failures)
+    )
+
+
+def test_retained_markdown_files_do_not_link_relatively_to_onboarding_files() -> None:
+    """Retained Markdown files must not link relatively to onboarding-only files."""
+    failures: list[str] = []
+
+    for path in _retained_markdown_files():
+        source_relative_path = path.relative_to(REPO_ROOT).as_posix()
+        for line_number, target in _markdown_link_targets_outside_fences(path):
+            resolved_target = _resolve_relative_markdown_target(path, target)
+            if resolved_target is None:
+                continue
+            target_modules = _manifest_modules_for_path(resolved_target)
+            if target_modules is None or "template-onboarding" not in target_modules:
+                continue
+            failures.append(f"{source_relative_path}:{line_number}: {target} -> {resolved_target}")
+
+    assert not failures, (
+        "Retained Markdown files must use neutral wording or absolute upstream URLs "
+        "when linking to template-onboarding-owned files:\n" + "\n".join(failures)
     )
 
 

@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Gemini Code Assist
 
-**Version:** 1.3.20260511.0
+**Version:** 1.3.20260520.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-11
+- **Last Updated:** 2026-05-20
 - **Scope:** Agent-specific entry point for Gemini Code Assist and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
 
@@ -51,7 +51,7 @@ During downstream template adoption and stack selection, perform non-protected c
     - [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md)
     - [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md)
     - [`schemas/README.md`](schemas/README.md)
-    - the **Built-in Schema Validation for Real Load-Bearing Configuration Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md)
+    - the **Built-in Schema Validation for Real Load-Bearing Configuration Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md)
 
 - **Modular instruction files**
   - Read the relevant file under `.github/instructions/` before modifying matching files:
@@ -73,4 +73,4 @@ During downstream template adoption and stack selection, perform non-protected c
 
 ---
 
-> This file is part of the `franklesniak/copilot-repo-template` template. Customize or remove agent instruction files for platforms you do not use. See `OPTIONAL_CONFIGURATIONS.md` for details.
+> This file is part of the `franklesniak/copilot-repo-template` template. Customize or remove agent instruction files for platforms you do not use. See [OPTIONAL_CONFIGURATIONS.md](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md) for details.

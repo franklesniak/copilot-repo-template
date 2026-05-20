@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.5.20260519.0
+**Version:** 1.5.20260520.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-19
+- **Last Updated:** 2026-05-20
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -107,7 +107,7 @@ In addition to formatting, linting, trailing-whitespace, and end-of-file fixes, 
 - `check-jsonschema` — JSON Schema validation. Validates: (a) the worked-example schema's valid example data under `schemas/examples/example-config/valid/` against `schemas/example-config.schema.json`; (b) selected real load-bearing repository configuration files (for example, `.github/dependabot.yml`) against built-in vendor schemas shipped with `check-jsonschema`; and (c) any future project-owned schema-backed file families that downstream maintainers wire up in `.pre-commit-config.yaml`. Documented optional keys for default-validated vendor configuration files must stay within the surface accepted by the pinned built-in schema, or the hook must be moved to an opt-in path.
 - `check-metaschema` — self-validates project-owned schemas (currently `schemas/example-config.schema.json`) against their declared JSON Schema metaschema, where configured in `.pre-commit-config.yaml`.
 
-`.pre-commit-config.yaml` is the authoritative list of active hooks. Do **not** rely on a hardcoded total hook count when describing the validation model; consult `.pre-commit-config.yaml` directly to see which hooks are wired up. For the policy and rationale behind which real load-bearing configuration files receive built-in schema validation, see the **Built-in Schema Validation for Real Load-Bearing Configuration Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](TEMPLATE_DESIGN_DECISIONS.md).
+`.pre-commit-config.yaml` is the authoritative list of active hooks. Do **not** rely on a hardcoded total hook count when describing the validation model; consult `.pre-commit-config.yaml` directly to see which hooks are wired up. For the policy and rationale behind which real load-bearing configuration files receive built-in schema validation, see the **Built-in Schema Validation for Real Load-Bearing Configuration Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md).
 
 Prettier is **opt-in** and is **not** part of the default data-file toolchain. (This framing has been re-verified against the built-in schema validation ADR and remains correct.)
 
@@ -120,7 +120,7 @@ Prettier is **opt-in** and is **not** part of the default data-file toolchain. (
 > - Invalid example fixtures under `schemas/examples/<name>/invalid/`.
 > - The pre-commit hook scope in `.pre-commit-config.yaml`.
 > - `.github/workflows/data-ci.yml` only when **adding or removing a hook ID** (for example, introducing a new `check-yaml-custom` hook), or when adding, removing, or renaming an explicit CI step or hook alias that the workflow invokes by name. Changes to an **existing** hook's `files:` regex (including `check-jsonschema` scope changes) are picked up automatically, because each `data-ci.yml` step invokes hooks by ID via `pre-commit run <hook-id> --all-files`.
-> - The **Built-in Schema Validation for Real Load-Bearing Configuration Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](TEMPLATE_DESIGN_DECISIONS.md) when **adding or removing** a default validated real load-bearing configuration file (for example, when wiring or unwiring a new built-in vendor schema).
+> - The **Built-in Schema Validation for Real Load-Bearing Configuration Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md) when **adding or removing** a default validated real load-bearing configuration file (for example, when wiring or unwiring a new built-in vendor schema).
 > - Any documentation that references the schema or the validation policy (for example, `schemas/README.md`, `README.md`, `CONTRIBUTING.md`, and `OPTIONAL_CONFIGURATIONS.md`).
 
 ### For GitHub Copilot Coding Agent (Automated PRs)
@@ -166,7 +166,7 @@ This repository includes an auto-fix workflow (`.github/workflows/auto-fix-preco
 
 GitHub Actions workflow files in this repository (`.github/workflows/*.yml`) reference both **action versions** (in `uses:` lines) and **tool versions** (passed to actions or shell commands as inputs or arguments). The two categories have different update mechanisms and different rules. Conflating them — or mirroring an action version into a secondary location that Dependabot does not rewrite — produces partial updates where the declared action version moves but related literals silently drift to the old version. The rules below prevent that drift.
 
-For the rationale, see the **Workflow Version Pinning and Dependabot Coherence** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](TEMPLATE_DESIGN_DECISIONS.md).
+For the rationale, see the **Workflow Version Pinning and Dependabot Coherence** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md).
 
 ### Action versions in `uses:` references
 
@@ -354,7 +354,7 @@ pre-commit run check-jsonschema --all-files
 pre-commit run check-metaschema --all-files
 ```
 
-Prettier is **opt-in** and is **not** part of the default data-file toolchain. The canonical statement lives in the **Data-File Validation** subsection above; if the two ever appear to diverge, treat the canonical statement as authoritative. For the rationale, see the **Prettier Deferral for Data Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](TEMPLATE_DESIGN_DECISIONS.md).
+Prettier is **opt-in** and is **not** part of the default data-file toolchain. The canonical statement lives in the **Data-File Validation** subsection above; if the two ever appear to diverge, treat the canonical statement as authoritative. For the rationale, see the **Prettier Deferral for Data Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md).
 
 ## Testing Tools
 
