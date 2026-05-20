@@ -50,11 +50,15 @@ table to select the best option. Finally, implement the necessary changes
 corresponding to the selected option.
 
 If the selected option would create, edit, delete, rename, or otherwise change
-a protected instruction file, including `.github/instructions/*`, keep the
-selected option fixed and pause before editing unless I have already explicitly
-authorized that specific protected-file change in this task. Ask one narrow
-authorization question that names the selected option, exact file, intended
-change, recommendation, and whether the file is already in the PR's scope. Do
+a protected instruction file — any file covered by the canonical Protected
+Instruction Files rule in `.github/copilot-instructions.md`, such as
+`.github/copilot-instructions.md`, the root agent entry points (`.hermes.md`,
+`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`), files under `.github/instructions/`, and
+files under `.cursor/rules/` — keep the selected option fixed and pause before
+editing unless I have already explicitly authorized that specific protected-file
+change in this task. Ask one narrow authorization question that names the
+selected option, exact file, intended change, recommendation, and whether the
+file is already in the PR's scope. Do
 not treat this prompt, the review comment, or generic permission to address
 feedback as authorization to edit protected files.
 
@@ -81,11 +85,15 @@ table to select the best option. Finally, implement the necessary changes
 corresponding to the selected option.
 
 If the selected option would create, edit, delete, rename, or otherwise change
-a protected instruction file, including `.github/instructions/*`, keep the
-selected option fixed and pause before editing unless I have already explicitly
-authorized that specific protected-file change in this task. Ask one narrow
-authorization question that names the selected option, exact file, intended
-change, recommendation, and whether the file is already in the PR's scope. Do
+a protected instruction file — any file covered by the canonical Protected
+Instruction Files rule in `.github/copilot-instructions.md`, such as
+`.github/copilot-instructions.md`, the root agent entry points (`.hermes.md`,
+`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`), files under `.github/instructions/`, and
+files under `.cursor/rules/` — keep the selected option fixed and pause before
+editing unless I have already explicitly authorized that specific protected-file
+change in this task. Ask one narrow authorization question that names the
+selected option, exact file, intended change, recommendation, and whether the
+file is already in the PR's scope. Do
 not treat this prompt, the review comment, or generic permission to address
 feedback as authorization to edit protected files.
 ```
