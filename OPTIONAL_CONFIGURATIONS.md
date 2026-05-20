@@ -927,7 +927,7 @@ Automatically assign Dependabot PRs to users:
     - "username2"
 ```
 
-This snippet is covered by the default `validate-dependabot-config` pre-commit hook and by the regression test at [`tests/test_dependabot_schema.py`](tests/test_dependabot_schema.py). Do not add a `reviewers:` key to this default-validated example: the pinned `check-jsonschema` `vendor.dependabot` schema rejects that key, and the current GitHub.com [Dependabot options reference](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference) documents `assignees` but does not list `reviewers`.
+The `assignees` field shown here is accepted by the pinned `check-jsonschema` `vendor.dependabot` schema, so it passes the default `validate-dependabot-config` pre-commit hook once added to your real [`.github/dependabot.yml`](.github/dependabot.yml) (the hook is path-scoped to that file and does not scan this snippet). The matching fixture at [`tests/fixtures/dependabot/auto-assignment.yml`](tests/fixtures/dependabot/auto-assignment.yml) is validated against the same schema by the regression test at [`tests/test_dependabot_schema.py`](tests/test_dependabot_schema.py). Do not add a `reviewers:` key to this example: the pinned `vendor.dependabot` schema rejects it, and the current GitHub.com [Dependabot options reference](https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference) documents `assignees` but not `reviewers`.
 
 ### Customizing Commit Message Prefixes
 
