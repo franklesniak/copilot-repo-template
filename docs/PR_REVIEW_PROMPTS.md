@@ -1,8 +1,10 @@
+<!-- markdownlint-disable MD013 -->
+
 # PR and Code Review Prompts
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-04-18
+- **Last Updated:** 2026-05-20
 - **Scope:** Ready-to-use prompts for responding to PR comments, code review
   feedback, branch management, and common false positives during code review.
 - **Related:** [Copilot Chat Prompts for Template Adoption](../COPILOT_CHAT_PROMPTS.md)
@@ -47,11 +49,25 @@ rubric to the options and display the results/scores in a table. Then, use the
 table to select the best option. Finally, implement the necessary changes
 corresponding to the selected option.
 
-Then, determine whether the style guide should be updated based on your
-evaluation. If so, please write a prompt in a Markdown code fence that I can
-send to GitHub Copilot's coding agent separately to update and clarify the
-style guide to match the style you determined was best. Don't update the style
-guide; just give me a prompt.
+If the selected option would create, edit, delete, rename, or otherwise change
+a protected instruction file — any file covered by the canonical Protected
+Instruction Files rule in `.github/copilot-instructions.md`, such as
+`.github/copilot-instructions.md`, the root agent entry points (`.hermes.md`,
+`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`), files under `.github/instructions/`, and
+files under `.cursor/rules/` — keep the selected option fixed and pause before
+editing unless I have already explicitly authorized that specific protected-file
+change in this task. Ask one narrow authorization question that names the
+selected option, exact file, intended change, recommendation, and whether the
+file is already in the PR's scope. Do not treat this prompt, the review comment,
+or generic permission to address feedback as authorization to edit protected
+files.
+
+Then, determine whether a secondary style guide update should be recommended
+based on your evaluation. If so, please write a prompt in a Markdown code fence
+that I can send to GitHub Copilot's coding agent separately to update and
+clarify the style guide to match the style you determined was best. Don't
+update the style guide for this secondary recommendation; just give me a
+prompt.
 ```
 
 ### Evaluate, Decide, and Implement (without Style Guide Update)
@@ -67,6 +83,19 @@ rubric to score the options and determine which is best. Apply the evaluation
 rubric to the options and display the results/scores in a table. Then, use the
 table to select the best option. Finally, implement the necessary changes
 corresponding to the selected option.
+
+If the selected option would create, edit, delete, rename, or otherwise change
+a protected instruction file — any file covered by the canonical Protected
+Instruction Files rule in `.github/copilot-instructions.md`, such as
+`.github/copilot-instructions.md`, the root agent entry points (`.hermes.md`,
+`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`), files under `.github/instructions/`, and
+files under `.cursor/rules/` — keep the selected option fixed and pause before
+editing unless I have already explicitly authorized that specific protected-file
+change in this task. Ask one narrow authorization question that names the
+selected option, exact file, intended change, recommendation, and whether the
+file is already in the PR's scope. Do not treat this prompt, the review comment,
+or generic permission to address feedback as authorization to edit protected
+files.
 ```
 
 ## Branch Management

@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for OpenAI Codex CLI
 
-**Version:** 1.4.20260511.0
+**Version:** 1.4.20260520.2
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-11
+- **Last Updated:** 2026-05-20
 - **Scope:** Agent-specific entry point for OpenAI Codex CLI and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
 
@@ -96,6 +96,17 @@ This workflow adapts the Claude-targeted process documented in `CLAUDE.md` for C
 
 For each code review comment received from GitHub Copilot, a human reviewer, or any other reviewer, follow these steps:
 
+#### Protected-file authorization terms
+
+These terms apply to the review-comment workflow below and defer to the canonical **Protected Instruction Files** rule in [`.github/copilot-instructions.md`](.github/copilot-instructions.md):
+
+- **Protected instruction file:** Any file covered by the canonical Protected Instruction Files rule, including `.github/copilot-instructions.md`, the root agent entry points (`.hermes.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`), files under `.github/instructions/`, and files under `.cursor/rules/`.
+- **Explicit protected-file authorization:** A direct maintainer or owner instruction in the current task authorizing the specific protected instruction-file change, either by naming the file or by clearly bounding the protected-file change set. The following are not sufficient on their own: a PR existing, a review comment existing, a generic "address the feedback" request, a reusable prompt, an automated review loop or active review workflow, or generic branch-placement authorization.
+- **Already in the PR's scope:** The protected file appears in the PR's changed-files list or diff against its base branch before the review-driven edit under consideration. This is relevant context, not authorization.
+- **Newly introduced protected file:** A protected file the PR did not modify before the review-driven edit. Introducing one exceeds any authorization scoped to the PR's existing changes and requires the narrow authorization question in step 7.
+- **Within the already-authorized scope:** An edit that resolves the reviewer's comment without expanding the protected file's changes beyond the specific protected-file change the maintainer already explicitly authorized for this task. A larger or more structural change, or one that newly introduces a protected file, exceeds the already-authorized scope.
+- **Secondary style-guide recommendation:** A step-8 recommendation to update a style guide to prevent similar issues in the future, distinct from the selected step-7 fix for the current review comment.
+
 1. **Signal processing (conditional).** If the GitHub plugin (or a documented fallback) supports adding emoji reactions to review comments, add an `eyes` (👀) reaction when work begins on the comment and remove it when the comment is fully processed (after step 9, or after the early-exit path in step 2). The reaction's `content` value is the literal string `eyes` as used by the GitHub Reactions API, not the Markdown shortcode `:eyes:`. If reaction tooling is not available in the current runtime, skip this step silently.
 
 2. **Validate the concern.** Determine whether the reviewer's feedback identifies a genuine gap, bug, style violation, or improvement opportunity. If the concern is not valid, post a reply explaining why through the GitHub plugin (or fallback), skip steps 3-8, and continue to step 9.
@@ -104,9 +115,9 @@ For each code review comment received from GitHub Copilot, a human reviewer, or 
 
 4. **Build an evaluation rubric.** Define 4-6 scoring criteria relevant to the concern (for example: style guide compliance, performance, code simplicity, PII safety, PowerShell 5.1 compatibility). Score each criterion on a 1-5 scale.
 
-5. **Score and select.** Apply the rubric to every option and present the results in a Markdown table. Select the option with the highest total score.
+5. **Score and select.** Apply the rubric to every option and present the results in a Markdown table. Select the option with the highest total score. When the rubric produces a clear highest-scoring option, the agent **MUST** select that option and carry it forward to step 7. A topic touching owner preferences, governance, or policy is not, by itself, an escalation trigger when the rubric produces a clear winner; this clarification stands independently of the protected-file authorization checkpoint in step 7.
 
-    **Escalation path.** If the rubric cannot produce a clear winner — because the decision depends on owner preferences, project-level policy, or the top options are too close to differentiate objectively — escalate to the PR owner instead of selecting an option. Post a **standalone PR comment** (not a reply to the review thread) through the GitHub plugin containing:
+    **Escalation path.** If the scores are tied or too close to differentiate objectively, or if the deciding question genuinely cannot be scored, escalate to the PR owner instead of selecting an option. Post a **standalone PR comment** (not a reply to the review thread) through the GitHub plugin containing:
 
     - A brief summary of the reviewer's concern and which file/line it applies to
     - The options and scoring tables
@@ -117,7 +128,15 @@ For each code review comment received from GitHub Copilot, a human reviewer, or 
 
 6. **Post the evaluation.** Reply to the review comment thread with the options table, the scoring table, the selected option, and either a note that implementation will follow in step 7 or, if the fix was already applied, the commit SHA that implements it. Post the reply through the GitHub plugin; fall back to `gh` only if the plugin reply tool is unavailable.
 
-7. **Implement the fix.** Apply the selected option locally, commit, and push to the agent's working branch using local `git`. To make the fix visible on the PR (i.e., reachable from the PR's head ref), choose the appropriate placement strategy:
+7. **Implement the fix.** Apply the selected option locally, commit, and push to the agent's working branch using local `git`.
+
+    **Protected-file authorization checkpoint.** Before creating, editing, deleting, renaming, or otherwise changing any protected instruction file, including a style guide under `.github/instructions/`, determine whether explicit protected-file authorization already covers that specific protected-file content change in the current task. Keep the selected option fixed while making this authorization determination; do not reopen option selection or ask the maintainer to choose among the scored options again merely because protected-file authorization is required.
+
+    - If explicit protected-file authorization already covers the change and the edit stays within the already-authorized scope, proceed with the selected option under the placement rules below.
+    - Otherwise, including when no explicit authorization exists, when the intended edit exceeds the already-authorized scope, or when the edit would newly introduce a protected file the PR did not previously modify, ask one narrow authorization question before editing. The question states the selected option, the protected file, the intended change, the agent's recommendation, and, when applicable, that the protected file is already in the PR's scope. Ask the question in the active Codex session when the owner is present; if the workflow is mediated through PR comments, post it as a standalone PR comment through the GitHub plugin and wait for the user to bring the maintainer's authorization back to the active Codex session.
+    - If authorization is declined, record the decision and resolve or leave the review thread according to step 9.
+
+    This checkpoint governs only authorization to change protected-file content. It does not expand any existing authorization for direct PR-head placement, which continues to govern only where an authorized commit lands. To make the fix visible on the PR (i.e., reachable from the PR's head ref), choose the appropriate placement strategy:
 
     - **Default — push to the working branch only.** Cross-branch integration onto the PR head is a manual owner action. State in the step-6 reply which branch the commit will be pushed to and whether a merge or cherry-pick will be required to make it visible on the PR head.
     - **Direct PR-head push (only with explicit user authorization).** Codex MAY push directly to the PR head branch only when **all** of the following hold:
@@ -128,7 +147,7 @@ For each code review comment received from GitHub Copilot, a human reviewer, or 
 
       When direct PR-head placement is used, record the resulting PR-head commit SHA(s) and post a follow-up reply confirming the placement and listing those SHA(s). If any of the four conditions above is not met, fall back to the default behavior.
 
-8. **Evaluate style guide impact.** Determine whether the relevant language instruction file(s) under `.github/instructions/` should be updated to prevent the same issue in the future. **Read the full applicable style guide(s) before answering** so the recommendation accounts for what the guide already covers and does not duplicate or contradict existing rules. If an update is warranted, write a prompt in a Markdown code fence (suitable for sending to GitHub Copilot's coding agent) that describes the style-guide change, and post it as a reply in the same review thread through the GitHub plugin. Do **not** modify the style guide directly: instruction files under `.github/instructions/`, files under `.cursor/rules/`, `.github/copilot-instructions.md`, and the root agent instruction files (`.hermes.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`) are protected and require explicit owner authorization to change.
+8. **Evaluate style guide impact.** Determine whether the relevant language instruction file(s) under `.github/instructions/` should be updated to prevent the same issue in the future. **Read the full applicable style guide(s) before answering** so the recommendation accounts for what the guide already covers and does not duplicate or contradict existing rules. The protected-file authorization checkpoint in step 7 governs selected fixes that would directly change any protected instruction file, including a style guide under `.github/instructions/`. This step governs secondary style-guide recommendations. If such a secondary update is warranted, write a prompt in a Markdown code fence (suitable for sending to GitHub Copilot's coding agent) that describes the style-guide change, and post it as a reply in the same review thread through the GitHub plugin. In this secondary-recommendation case, do **not** modify the style guide directly; if the maintainer later authorizes that change, handle it through the step-7 protected-file authorization checkpoint.
 
 9. **Resolve or leave open.** If **no** style guide update was recommended in step 8, resolve the review comment thread when tooling permits (for example, the GitHub plugin's thread-resolution capability, a `gh api graphql` call against the `resolveReviewThread` mutation, or manual owner action). If a style guide update **was** recommended, leave the thread **open** so the owner can act on the prompt before it is dismissed. If thread-resolution tooling is not available in the current runtime, leave a brief note in the reply that the thread should be resolved manually and continue.
 
