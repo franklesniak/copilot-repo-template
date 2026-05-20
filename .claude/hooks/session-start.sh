@@ -103,11 +103,13 @@ ensure_pre_commit() {
 
 ensure_pre_commit
 
-# Ensure the binary we install below resolves first for the rest of the
-# session, even if a different `terraform` exists earlier on the base
-# image's PATH. Reuse persist_path_prepend so PATH handling matches the
-# pre-commit bootstrap above: update PATH for this hook run and persist it
-# via CLAUDE_ENV_FILE for subsequent shells.
+# Persist INSTALL_DIR via CLAUDE_ENV_FILE so the terraform we install below
+# resolves first in subsequent shells, even if a different `terraform` is
+# earlier on the base image's PATH. Reuse persist_path_prepend to match the
+# pre-commit bootstrap; note it only prepends INSTALL_DIR to this hook's live
+# PATH when INSTALL_DIR is absent, and does not re-order an entry already
+# present later in PATH. That is fine here because the script calls terraform
+# by full path within this run.
 persist_path_prepend "$INSTALL_DIR"
 
 # Idempotency: check the install location specifically so a stale or
