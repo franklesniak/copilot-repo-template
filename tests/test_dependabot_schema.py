@@ -37,13 +37,11 @@ def pinned_check_jsonschema_rev() -> str:
     revs = {
         str(repo["rev"]).strip().lstrip("v")
         for repo in config.get("repos", [])
-        if str(repo.get("repo", "")).rstrip("/").endswith("/check-jsonschema")
-        and "rev" in repo
+        if str(repo.get("repo", "")).rstrip("/").endswith("/check-jsonschema") and "rev" in repo
     }
     assert revs, "No pinned check-jsonschema repo found in .pre-commit-config.yaml"
     assert len(revs) == 1, (
-        "check-jsonschema is pinned to multiple revs in .pre-commit-config.yaml: "
-        f"{sorted(revs)}"
+        "check-jsonschema is pinned to multiple revs in .pre-commit-config.yaml: " f"{sorted(revs)}"
     )
     return next(iter(revs))
 
