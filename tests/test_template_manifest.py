@@ -186,7 +186,9 @@ UPSTREAM_ONBOARDING_URL_RE = re.compile(
     r"GETTING_STARTED_EXISTING_REPO\.md|TEMPLATE_MAINTENANCE\.md|"
     r"\.github/TEMPLATE_DESIGN_DECISIONS\.md)(?:#[A-Za-z0-9._-]+)?"
 )
-MARKDOWN_FENCE_RE = re.compile(r"^ {0,3}(?P<fence>`{3,}|~{3,})")
+# Allow optional blockquote markers before a fence (e.g. ``> ```py``) so fenced
+# code examples inside blockquotes are skipped like any other fenced block.
+MARKDOWN_FENCE_RE = re.compile(r"^(?: {0,3}>)* {0,3}(?P<fence>`{3,}|~{3,})")
 MARKDOWN_INLINE_LINK_RE = re.compile(
     r"(?<!!)\[[^\]\n]+\]\((?P<target><[^>\n]+>|[^)\s\n]+)(?:\s+[^)\n]*)?\)"
 )
