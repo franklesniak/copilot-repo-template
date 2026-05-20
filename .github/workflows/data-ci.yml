@@ -42,7 +42,9 @@
 # template-sync: begin github-platform-only
 #   - validate-dependabot-config
 #                         — JSON Schema validation for `.github/dependabot.yml`
-#                           against `vendor.dependabot`.
+#                           against `vendor.dependabot`; documented optional
+#                           auto-assignment fields are regression-tested in
+#                           `tests/test_dependabot_schema.py`.
 # template-sync: end github-platform-only
 #
 # Schema-backed checks are invoked by pre-commit alias instead of the aggregate

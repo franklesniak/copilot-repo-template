@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.5.20260518.0
+**Version:** 1.5.20260519.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-18
+- **Last Updated:** 2026-05-19
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -104,7 +104,7 @@ In addition to formatting, linting, trailing-whitespace, and end-of-file fixes, 
 - `check-yaml` — parse-checks `.yml` / `.yaml` files.
 - `yamllint` — enforces YAML style per `.yamllint.yml`.
 - `actionlint` — lints GitHub Actions workflow files.
-- `check-jsonschema` — JSON Schema validation. Validates: (a) the worked-example schema's valid example data under `schemas/examples/example-config/valid/` against `schemas/example-config.schema.json`; (b) selected real load-bearing repository configuration files (for example, `.github/dependabot.yml`) against built-in vendor schemas shipped with `check-jsonschema`; and (c) any future project-owned schema-backed file families that downstream maintainers wire up in `.pre-commit-config.yaml`.
+- `check-jsonschema` — JSON Schema validation. Validates: (a) the worked-example schema's valid example data under `schemas/examples/example-config/valid/` against `schemas/example-config.schema.json`; (b) selected real load-bearing repository configuration files (for example, `.github/dependabot.yml`) against built-in vendor schemas shipped with `check-jsonschema`; and (c) any future project-owned schema-backed file families that downstream maintainers wire up in `.pre-commit-config.yaml`. Documented optional keys for default-validated vendor configuration files must stay within the surface accepted by the pinned built-in schema, or the hook must be moved to an opt-in path.
 - `check-metaschema` — self-validates project-owned schemas (currently `schemas/example-config.schema.json`) against their declared JSON Schema metaschema, where configured in `.pre-commit-config.yaml`.
 
 `.pre-commit-config.yaml` is the authoritative list of active hooks. Do **not** rely on a hardcoded total hook count when describing the validation model; consult `.pre-commit-config.yaml` directly to see which hooks are wired up. For the policy and rationale behind which real load-bearing configuration files receive built-in schema validation, see the **Built-in Schema Validation for Real Load-Bearing Configuration Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](TEMPLATE_DESIGN_DECISIONS.md).
@@ -319,7 +319,7 @@ This repository includes linting and validation tool configurations that align w
 | markdownlint | `.markdownlint.jsonc` | Markdown linting |
 | TFLint | `.tflint.hcl` | Terraform linting |
 | yamllint | `.yamllint.yml` | YAML style enforcement |
-| JSON Schema / `check-jsonschema` | `schemas/` and `.pre-commit-config.yaml` | Schema-driven validation: project-owned schemas under `schemas/` (the worked example today; future schema-backed file families) plus built-in vendor-schema checks of selected real load-bearing JSON/YAML config files (for example, `.github/dependabot.yml`) wired in `.pre-commit-config.yaml` |
+| JSON Schema / `check-jsonschema` | `schemas/`, `.pre-commit-config.yaml`, and `tests/test_dependabot_schema.py` | Schema-driven validation: project-owned schemas under `schemas/` (the worked example today; future schema-backed file families) plus built-in vendor-schema checks of selected real load-bearing JSON/YAML config files (for example, `.github/dependabot.yml`) wired in `.pre-commit-config.yaml`; the Dependabot optional auto-assignment fixture guards the documented default-validated surface |
 
 ### Running Linters
 

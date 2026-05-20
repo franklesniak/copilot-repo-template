@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-18
+- **Last Updated:** 2026-05-19
 - **Scope:** Durable design-decision record for this repository template, including rationale for GitHub configuration, instruction files, validation policy, template structure, maintenance conventions, and the documentation-tier inventory below.
 - **Related:** [Repository Copilot Instructions](copilot-instructions.md), [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -690,9 +690,11 @@ This template wires `check-jsonschema --builtin-schema ...` validation for selec
 
 **Selected files (currently wired):**
 
-| File | Built-in schema identifier | Hook in `.pre-commit-config.yaml` |
-| --- | --- | --- |
-| `.github/dependabot.yml` | `vendor.dependabot` | `validate-dependabot-config` alias on the `check-jsonschema` hook |
+| File | Built-in schema identifier | Hook in `.pre-commit-config.yaml` | Regression coverage |
+| --- | --- | --- | --- |
+| `.github/dependabot.yml` | `vendor.dependabot` | `validate-dependabot-config` alias on the `check-jsonschema` hook | [`tests/test_dependabot_schema.py`](../tests/test_dependabot_schema.py) validates the documented auto-assignment fixture |
+
+The currently pinned `check-jsonschema` 0.37.2 `vendor.dependabot` schema has been verified against the documented Dependabot auto-assignment snippet in [`OPTIONAL_CONFIGURATIONS.md`](../OPTIONAL_CONFIGURATIONS.md): it accepts `assignees` and rejects `reviewers` as an additional property. The template therefore keeps `validate-dependabot-config` default-wired, limits the documented auto-assignment guidance to the accepted `assignees` field, and regression-tests that fixture in [`tests/test_dependabot_schema.py`](../tests/test_dependabot_schema.py).
 
 **Evaluated but deferred:**
 
@@ -718,6 +720,7 @@ If a future `check-jsonschema` release adds a mature built-in schema for any of 
 - Stronger parity between JSON/YAML and other first-class file types: load-bearing configuration is checked by a real validator, not just by syntax-only `check-json` / `check-yaml`.
 - Built-in schema names and the schemas they reference track `check-jsonschema` releases. Schema updates arrive through the normal `check-jsonschema` release cycle rather than through hand-vendored snapshots.
 - Dependabot `pre-commit` ecosystem updates help keep schema support current; reviewers SHOULD treat `check-jsonschema` bumps as schema-content changes, not just dependency hygiene.
+- Documentation that recommends optional keys for a default-validated vendor configuration MUST stay within the surface accepted by the pinned built-in schema, or the hook must move to an opt-in path with clear downstream wiring instructions.
 - Downstream adopters who delete a validated file family **MUST** also remove the corresponding `check-jsonschema` hook (and any matching `data-ci.yml` step), per the removal guidance below.
 - External schemas can be stricter, looser, or differently timed than the consuming tool's actual behavior. Hooks that produce noisy or misleading failures **SHOULD** be evaluated carefully and either narrowed in scope or removed.
 
