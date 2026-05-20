@@ -58,9 +58,9 @@ files under `.cursor/rules/` — keep the selected option fixed and pause before
 editing unless I have already explicitly authorized that specific protected-file
 change in this task. Ask one narrow authorization question that names the
 selected option, exact file, intended change, recommendation, and whether the
-file is already in the PR's scope. Do
-not treat this prompt, the review comment, or generic permission to address
-feedback as authorization to edit protected files.
+file is already in the PR's scope. Do not treat this prompt, the review comment,
+or generic permission to address feedback as authorization to edit protected
+files.
 
 Then, determine whether a secondary style guide update should be recommended
 based on your evaluation. If so, please write a prompt in a Markdown code fence
@@ -93,9 +93,9 @@ files under `.cursor/rules/` — keep the selected option fixed and pause before
 editing unless I have already explicitly authorized that specific protected-file
 change in this task. Ask one narrow authorization question that names the
 selected option, exact file, intended change, recommendation, and whether the
-file is already in the PR's scope. Do
-not treat this prompt, the review comment, or generic permission to address
-feedback as authorization to edit protected files.
+file is already in the PR's scope. Do not treat this prompt, the review comment,
+or generic permission to address feedback as authorization to edit protected
+files.
 ```
 
 ## Branch Management
