@@ -6,7 +6,7 @@ This file contains ready-to-use prompts for GitHub Copilot Chat to help you anal
 
 - You have an existing repository where you want to adopt template features
 - You have access to GitHub Copilot Chat
-- You have read through [GETTING_STARTED_EXISTING_REPO.md](GETTING_STARTED_EXISTING_REPO.md) to understand what the template provides
+- You have read through [GETTING_STARTED_EXISTING_REPO.md](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md) to understand what the template provides
 
 ## Model Recommendation
 

@@ -42,11 +42,11 @@ This template includes:
 
 Choose the guide that matches your situation:
 
-- **[Creating a New Repository](GETTING_STARTED_NEW_REPO.md)**: Step-by-step guide for creating a new repository from this template
-- **[Adding to an Existing Repository](GETTING_STARTED_EXISTING_REPO.md)**: Guide for adopting template features into an existing repository
-- **[Optional Configurations](OPTIONAL_CONFIGURATIONS.md)**: Advanced customization options after initial setup
+- **[Creating a New Repository](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md)**: Step-by-step guide for creating a new repository from this template
+- **[Adding to an Existing Repository](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md)**: Guide for adopting template features into an existing repository
+- **[Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md)**: Advanced customization options after initial setup
 
-For template maintainers, see [TEMPLATE_MAINTENANCE.md](TEMPLATE_MAINTENANCE.md).
+For template maintainers, see [TEMPLATE_MAINTENANCE.md](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/TEMPLATE_MAINTENANCE.md).
 
 ### Repository Structure
 
@@ -329,7 +329,7 @@ This repository enforces code quality through:
 - **Markdown Linting and Link Checking:** markdownlint runs on pre-commit and in CI; offline Markdown link validation runs in CI
 - **JSON/YAML Validation:** `check-json` (strict `.json`), `check-yaml`, and `yamllint` run on pre-commit
 - **GitHub Actions Linting:** `actionlint` runs on pre-commit
-- **Schema Validation:** `check-jsonschema` validates schema valid examples, `.template-sync/manifest.yml`, `.template-sync/marker.yml` when present, and selected real load-bearing configuration files (e.g., `.github/dependabot.yml`) against built-in vendor schemas; `check-metaschema` self-validates project-owned schemas. See [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md) (Built-in Schema Validation ADR) for the policy
+- **Schema Validation:** `check-jsonschema` validates schema valid examples, `.template-sync/manifest.yml`, `.template-sync/marker.yml` when present, and selected real load-bearing configuration files (e.g., `.github/dependabot.yml`) against built-in vendor schemas; `check-metaschema` self-validates project-owned schemas. See [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md) (Built-in Schema Validation ADR) for the policy
 - **JSON Schemas:** Root-level `schemas/` convention for schema-backed JSON/YAML files
 - **GitHub Copilot Instructions:** Guides AI-assisted development
 - **Pre-commit Hooks:** Catches issues before they reach CI

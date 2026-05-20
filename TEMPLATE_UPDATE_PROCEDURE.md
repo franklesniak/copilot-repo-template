@@ -1,15 +1,15 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260518.7
+**Version:** 1.1.20260520.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-18
+- **Last Updated:** 2026-05-20
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, including the human-readable view of the template sync manifest. Does not define a runnable sync tool.
-- **Related:** [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
+- **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
 ## Purpose
 
@@ -142,7 +142,7 @@ When an agent runs this procedure, the repository owner confirms any initial ran
 
 A present, non-empty marker value that later fails the reachability check is handled by **Check That the Base Is Reachable** below. Do not run a separate routing-time reachability check, and do not silently replace the marker value with the range head.
 
-Full reconciliation is the recommended path for downstream repositories that adopted this template by manual copy, ZIP download, GitHub web UI copy, cherry-picking selected files, heavily editing template files, or using the copy-based paths in [Getting Started for Existing Repositories](GETTING_STARTED_EXISTING_REPO.md).
+Full reconciliation is the recommended path for downstream repositories that adopted this template by manual copy, ZIP download, GitHub web UI copy, cherry-picking selected files, heavily editing template files, or using the copy-based paths in [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md).
 
 ### Find an Initial Range Base
 
@@ -471,6 +471,8 @@ Manifest version 1 ships with `requires_all` semantics only. A later manifest re
 `.github/workflows/data-ci.yml` is platform-level under this AND-style human procedure, so it maps to `github-actions`. A later machine-readable manifest may refine this row to require `github-actions` plus at least one of `json`, `yaml`, or `schema`.
 
 If a changed upstream path does not match the table, classify it as `UNMAPPED` in the sync working notes and ask the owner to assign a module before deciding whether to include it.
+
+Retained Markdown documents, meaning `.md` or `.mdc` paths whose most-specific manifest mapping does not include `template-onboarding`, MUST NOT use relative Markdown links to `template-onboarding` files. Use an absolute upstream URL of the form `https://github.com/franklesniak/copilot-repo-template/blob/HEAD/<path>` when the reference remains useful after downstream onboarding files are removed, or use neutral wording with no link when the retained document does not need to navigate to the onboarding file.
 
 ### Inline Module Blocks
 
