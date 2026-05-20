@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260520.0
+**Version:** 1.1.20260520.1
 
 ## Metadata
 
@@ -415,9 +415,11 @@ When changing the taxonomy, update `.template-sync/manifest.yml` first, then upd
 
 ### Path Mapping
 
-Apply the most specific matching row. The most-specific match wins: when an exact path or a narrower glob row covers a path, broader catch-all rows do not contribute additional modules to that path. If two rows match at the same specificity level, use the de-duplicated union of their modules. A path mapped to multiple modules is included in the per-file review only when every mapped module appears in `included_modules`.
+Apply the most specific matching row. The most-specific match wins: when an exact path or a narrower glob row covers a path, broader catch-all rows do not contribute additional modules to that path. If two rows match at the same specificity level, use the de-duplicated union of their relation modules, preserving the relation kind.
 
-Manifest version 1 ships with `requires_all` semantics only. A later manifest revision may model richer semantics, such as `requires_all` plus `requires_any`, for platform-spanning files. Until that exists, this procedure uses the AND-style rule above.
+Manifest version 1 rows use `requires_all` only: the path is included in the per-file review only when every listed module appears in `included_modules`.
+
+Manifest version 2 rows MAY also use `requires_any`: the path is included only when every `requires_all` module appears in `included_modules` and, when `requires_any` is present, at least one `requires_any` module also appears in `included_modules`. A row with `requires_all` plus `requires_any` therefore means "all of these modules, plus at least one of these alternatives."
 
 | Path pattern | Module(s) |
 | --- | --- |
@@ -446,7 +448,7 @@ Manifest version 1 ships with `requires_all` semantics only. A later manifest re
 | `.github/workflows/python-ci.yml` | `python`, `github-actions` |
 | `.github/workflows/precommit-ci.yml` | `baseline`, `github-actions` |
 | `.github/workflows/terraform-ci.yml` | `terraform`, `github-actions` |
-| `.github/workflows/data-ci.yml` | `github-actions` |
+| `.github/workflows/data-ci.yml` | `github-actions`, plus one of `json`, `yaml`, `schema` |
 | `.github/workflows/check-placeholders.yml` | `baseline`, `github-actions` |
 | `.github/workflows/auto-fix-precommit.yml` | `baseline`, `github-actions` |
 | `.yamllint.yml` | `yaml` |
@@ -468,7 +470,18 @@ Manifest version 1 ships with `requires_all` semantics only. A later manifest re
 | `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE` | `baseline` |
 | `.gitignore`, `.gitattributes`, `.editorconfig`, `.vscode/**` | `baseline` |
 
-`.github/workflows/data-ci.yml` is platform-level under this AND-style human procedure, so it maps to `github-actions`. A later machine-readable manifest may refine this row to require `github-actions` plus at least one of `json`, `yaml`, or `schema`.
+### Manifest Version Migration
+
+Version 1 manifests remain valid for downstream repositories that have not adopted version 2. Treat every version 1 mapping as a `requires_all` mapping and ignore `requires_any`, because version 1 does not allow that field.
+
+To migrate a manifest from version 1 to version 2:
+
+1. Change `template_manifest.version` from `1` to `2`.
+2. Leave existing `requires_all` rows unchanged unless a path truly has cross-module alternatives.
+3. Add `requires_any` only for rows where a containing file should be retained when at least one alternative module is adopted. For example, `.github/workflows/data-ci.yml` uses `requires_all: [github-actions]` plus `requires_any: [json, yaml, schema]`.
+4. Add `filtering.requires_any_semantics: OR`.
+5. Remove any `known_limitations` entry whose only purpose was to record a cross-module relation that is now expressed by `requires_any`.
+6. Validate the manifest with `pre-commit run validate-template-sync-manifest --all-files` and run [`tests/test_template_manifest.py`](tests/test_template_manifest.py).
 
 If a changed upstream path does not match the table, classify it as `UNMAPPED` in the sync working notes and ask the owner to assign a module before deciding whether to include it.
 
@@ -570,9 +583,9 @@ Record the resulting retain or strip decisions per affected path in the Step 7 p
 
 For each path from `git diff --name-status -M`:
 
-1. Map the path to module(s).
-2. Include the path in the per-file review table only if every mapped module is present in `included_modules`.
-3. Exclude the path from the per-file review table if any mapped module is absent from `included_modules`.
+1. Map the path to its manifest relation.
+2. Include the path in the per-file review table only if every `requires_all` module is present in `included_modules` and, when `requires_any` is present, at least one `requires_any` module is present.
+3. Exclude the path from the per-file review table if any `requires_all` module is absent, or if `requires_any` is present and none of its modules are included.
 4. Summarize excluded paths as unadopted-module activity by module in the sync summary.
 5. Surface unknown modules and unmapped paths for explicit owner review before completing the sync.
 
@@ -603,7 +616,7 @@ Suggested table:
 | --- | --- | --- | --- | --- | --- |
 | `.github/instructions/docs.instructions.md` | `markdown`, `agent-instructions` | Updated style rules | None | `PROTECTED-REVIEW` | Requires owner authorization. |
 | `.github/workflows/powershell-ci.yml` | `powershell`, `github-actions` | Updated validation steps | Local runner change | `MERGE` | Preserve local runner. |
-| `README.md` | `baseline` | Updated setup prose | Project-specific README | `SKIP` | In-scope per AND-style filtering; local override defaulted to `SKIP`; recorded in the sync summary. |
+| `README.md` | `baseline` | Updated setup prose | Project-specific README | `SKIP` | In scope per relation filtering; local override defaulted to `SKIP`; recorded in the sync summary. |
 ```
 
 Upstream deletions MUST be surfaced for owner decision rather than applied automatically. Valid decisions for deletion rows include `TAKE` when the downstream owner agrees to delete the local file, `SKIP` when the downstream file is intentionally retained, and `MERGE` when only part of the deletion rationale applies.
@@ -945,7 +958,7 @@ R100    templates/markdown/intro.md   templates/markdown/getting-started.md
 | `.github/pull_request_template.md` | `github-templates` | yes |
 | `TEMPLATE_UPDATE_PROCEDURE.md` | `template-sync-support` | yes |
 | `templates/markdown/README.md` | `markdown` | yes |
-| `.github/workflows/terraform-ci.yml` | `terraform`, `github-actions` | no; `terraform` is absent, so AND-style matching excludes the row even though `github-actions` is present |
+| `.github/workflows/terraform-ci.yml` | `terraform`, `github-actions` | no; `terraform` is a `requires_all` module and is absent, so relation matching excludes the row even though `github-actions` is present |
 | `templates/markdown/intro.md` to `templates/markdown/getting-started.md` | `markdown` | yes |
 
 There are no unknown modules or unmapped paths in this example.
@@ -1049,6 +1062,5 @@ Future automation MAY add:
 - a pre-commit hook that checks manifest coverage for managed paths
 - a helper script that generates the candidate review table
 - a helper script that regenerates the Module Definitions and Path Mapping tables from `.template-sync/manifest.yml`
-- richer manifest semantics for platform-spanning files, such as representing `.github/workflows/data-ci.yml` as `github-actions` plus at least one of `json`, `yaml`, or `schema`
 
 `.template-sync/manifest.yml` is authoritative for the taxonomy. Until a runnable sync tool exists, this document remains the authoritative manual procedure.

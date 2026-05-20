@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-19
+- **Last Updated:** 2026-05-20
 - **Scope:** Conventions for JSON Schemas that describe load-bearing JSON and YAML files in this repository, the template sync manifest and marker schemas, plus a clearly removable worked example (`example-config.schema.json` with valid and invalid example data) wired into pre-commit and data CI to demonstrate the schema-validation pipeline end to end.
 - **Related:** [JSON Authoring Standards](../.github/instructions/json.instructions.md), [YAML Authoring Standards](../.github/instructions/yaml.instructions.md), [Repository Copilot Instructions](../.github/copilot-instructions.md), [Template Design Decisions — Schema Location at Repository Root](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-location-at-repository-root), [Template Design Decisions — Schema Validation Tiers](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-validation-tiers), [Template Design Decisions — Built-in Schema Validation for Real Load-Bearing Configuration Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files), [Template Design Decisions — `additionalProperties` Policy](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-additionalproperties-policy), [Template Design Decisions — Testing Beyond Linting for JSON/YAML](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-testing-beyond-linting-for-jsonyaml)
 
@@ -228,11 +228,13 @@ How the worked example is validated:
 
 [`template-sync-manifest.schema.json`](./template-sync-manifest.schema.json) defines the shape of [`.template-sync/manifest.yml`](../.template-sync/manifest.yml), which is the source of truth for the downstream sync module taxonomy.
 
+The schema accepts both manifest version 1 and manifest version 2 documents. Version 1 preserves the original `requires_all`-only path mapping contract for downstream compatibility. Version 2 adds `requires_any` so a path can require all baseline modules plus at least one module from an alternative set, such as `.github/workflows/data-ci.yml` requiring `github-actions` plus at least one of `json`, `yaml`, or `schema`.
+
 How the template sync manifest contract is validated:
 
 - The manifest file is validated by the `Validate template sync manifest` `check-jsonschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) and by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
 - The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate template-sync-manifest schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
-- [`tests/test_template_manifest.py`](../tests/test_template_manifest.py) validates manifest semantics that JSON Schema cannot express cleanly, including module-reference integrity, uniqueness rules, filtering semantics, and drift between the manifest and the rendered taxonomy tables in [`TEMPLATE_UPDATE_PROCEDURE.md`](../TEMPLATE_UPDATE_PROCEDURE.md).
+- [`tests/test_template_manifest.py`](../tests/test_template_manifest.py) validates manifest semantics that JSON Schema cannot express cleanly, including module-reference integrity, uniqueness rules, version 1 compatibility, version 2 relation semantics, filtering semantics, and drift between the manifest and the rendered taxonomy tables in [`TEMPLATE_UPDATE_PROCEDURE.md`](../TEMPLATE_UPDATE_PROCEDURE.md).
 
 Downstream repositories that intentionally do not retain machine-assisted future sync metadata MAY remove `.template-sync/manifest.yml`, `schemas/template-sync-manifest.schema.json`, the matching pre-commit hooks, and `tests/test_template_manifest.py`. Downstream repositories that use this sync procedure SHOULD still keep `.template-sync/marker.yml`.
 

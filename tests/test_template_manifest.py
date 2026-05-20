@@ -224,6 +224,55 @@ def _load_marker_schema() -> dict[str, Any]:
     return schema
 
 
+def _manifest_validation_errors(manifest: dict[str, Any]) -> list[jsonschema.ValidationError]:
+    """Return sorted validation errors for ``manifest`` against the manifest schema."""
+    validator = jsonschema.Draft202012Validator(_load_manifest_schema())
+    return sorted(
+        validator.iter_errors(manifest),
+        key=lambda error: error.json_path,
+    )
+
+
+def _minimal_manifest_document(version: int, path_mapping: dict[str, Any]) -> dict[str, Any]:
+    """Build a minimal manifest fixture for schema compatibility tests."""
+    filtering: dict[str, str] = {
+        "default_semantics": "AND",
+        "path_matching": "most_specific_match_wins",
+        "same_specificity_action": "union_modules",
+        "unmapped_action": "surface_for_owner",
+    }
+    notes: dict[str, Any] = {
+        "downstream_retention": "Downstream repositories keep the marker when syncing.",
+    }
+
+    if version == 1:
+        notes["known_limitations"] = [
+            {
+                "path": ".github/workflows/data-ci.yml",
+                "description": "Version 1 cannot model cross-module alternatives.",
+                "future_work": "Move to manifest version 2 relation semantics.",
+            }
+        ]
+    elif version == 2:
+        filtering["requires_any_semantics"] = "OR"
+
+    return {
+        "template_manifest": {
+            "version": version,
+            "modules": [
+                {"name": "baseline", "description": "Baseline files."},
+                {"name": "github-actions", "description": "GitHub Actions workflows."},
+                {"name": "json", "description": "JSON files."},
+                {"name": "yaml", "description": "YAML files."},
+                {"name": "schema", "description": "JSON Schema files."},
+            ],
+            "path_mappings": [path_mapping],
+            "filtering": filtering,
+            "notes": notes,
+        }
+    }
+
+
 def _module_rows_from_manifest() -> list[tuple[str, str]]:
     """Return ``(module_name, description)`` rows from the manifest."""
     modules = _template_manifest().get("modules")
@@ -241,7 +290,7 @@ def _module_rows_from_manifest() -> list[tuple[str, str]]:
 
 
 def _path_mapping_rows_from_manifest() -> list[tuple[str, tuple[str, ...]]]:
-    """Return ``(pattern, requires_all)`` rows from the manifest."""
+    """Return ``(pattern, referenced_modules)`` rows from the manifest."""
     path_mappings = _template_manifest().get("path_mappings")
     assert isinstance(path_mappings, list), "path_mappings must be a list"
 
@@ -249,13 +298,8 @@ def _path_mapping_rows_from_manifest() -> list[tuple[str, tuple[str, ...]]]:
     for mapping in path_mappings:
         assert isinstance(mapping, dict), "each path mapping must be a mapping"
         pattern = mapping.get("pattern")
-        requires_all = mapping.get("requires_all")
         assert isinstance(pattern, str), "path mapping pattern must be a string"
-        assert isinstance(requires_all, list), f"{pattern} requires_all must be a list"
-        assert all(
-            isinstance(module, str) for module in requires_all
-        ), f"{pattern} requires_all values must be strings"
-        rows.append((pattern, tuple(requires_all)))
+        rows.append((pattern, _path_mapping_referenced_modules(mapping)))
     return rows
 
 
@@ -271,6 +315,49 @@ def _path_mapping_by_pattern() -> dict[str, dict[str, Any]]:
         assert isinstance(pattern, str), "path mapping pattern must be a string"
         rows[pattern] = mapping
     return rows
+
+
+def _relation_modules(mapping: dict[str, Any], relation_key: str) -> tuple[str, ...]:
+    """Return module names for one path-mapping relation key."""
+    pattern = mapping.get("pattern", "<unknown>")
+    if relation_key not in mapping:
+        return ()
+
+    modules = mapping.get(relation_key)
+    assert isinstance(modules, list), f"{pattern} {relation_key} must be a list"
+    assert all(
+        isinstance(module, str) for module in modules
+    ), f"{pattern} {relation_key} values must be strings"
+    return tuple(modules)
+
+
+def _path_mapping_referenced_modules(mapping: dict[str, Any]) -> tuple[str, ...]:
+    """Return every module referenced by a path mapping in deterministic order."""
+    referenced_modules: list[str] = []
+
+    for relation_key in ("requires_all", "requires_any"):
+        for module in _relation_modules(mapping, relation_key):
+            if module not in referenced_modules:
+                referenced_modules.append(module)
+
+    pattern = mapping.get("pattern", "<unknown>")
+    assert referenced_modules, f"{pattern} must reference at least one module"
+    return tuple(referenced_modules)
+
+
+def _path_mapping_matches_modules(
+    mapping: dict[str, Any],
+    included_modules: set[str],
+) -> bool:
+    """Return whether ``included_modules`` satisfies a manifest path mapping."""
+    requires_all = set(_relation_modules(mapping, "requires_all"))
+    requires_any = set(_relation_modules(mapping, "requires_any"))
+
+    if not requires_all.issubset(included_modules):
+        return False
+    if requires_any and not requires_any.intersection(included_modules):
+        return False
+    return True
 
 
 def _pattern_specificity(pattern: str) -> tuple[int, int, int]:
@@ -626,13 +713,91 @@ def test_template_manifest_parses_successfully() -> None:
 
 def test_template_manifest_validates_against_schema() -> None:
     """The committed manifest must validate against its JSON Schema."""
-    schema = _load_manifest_schema()
-    validator = jsonschema.Draft202012Validator(schema)
-    errors = sorted(
-        validator.iter_errors(_load_manifest()),
-        key=lambda error: error.json_path,
-    )
+    errors = _manifest_validation_errors(_load_manifest())
     assert not errors, "\n".join(f"{error.json_path}: {error.message}" for error in errors)
+
+
+def test_template_manifest_schema_accepts_version_1_manifest() -> None:
+    """Manifest schema must preserve version 1 ``requires_all`` compatibility."""
+    manifest = _minimal_manifest_document(
+        1,
+        {
+            "pattern": "README.md",
+            "requires_all": ["baseline"],
+        },
+    )
+
+    errors = _manifest_validation_errors(manifest)
+
+    assert not errors, "\n".join(f"{error.json_path}: {error.message}" for error in errors)
+
+
+def test_template_manifest_schema_accepts_version_2_requires_any() -> None:
+    """Manifest schema must accept version 2 path mappings with alternatives."""
+    manifest = _minimal_manifest_document(
+        2,
+        {
+            "pattern": ".github/workflows/data-ci.yml",
+            "requires_all": ["github-actions"],
+            "requires_any": ["json", "yaml", "schema"],
+        },
+    )
+
+    errors = _manifest_validation_errors(manifest)
+
+    assert not errors, "\n".join(f"{error.json_path}: {error.message}" for error in errors)
+
+
+def test_template_manifest_schema_rejects_malformed_relation_combinations() -> None:
+    """Schema validation must reject invalid v1/v2 relation shapes."""
+    invalid_manifests = [
+        _minimal_manifest_document(
+            1,
+            {
+                "pattern": ".github/workflows/data-ci.yml",
+                "requires_all": ["github-actions"],
+                "requires_any": ["yaml"],
+            },
+        ),
+        _minimal_manifest_document(
+            2,
+            {
+                "pattern": ".github/workflows/data-ci.yml",
+            },
+        ),
+        _minimal_manifest_document(
+            2,
+            {
+                "pattern": ".github/workflows/data-ci.yml",
+                "requires_all": [],
+            },
+        ),
+        _minimal_manifest_document(
+            2,
+            {
+                "pattern": ".github/workflows/data-ci.yml",
+                "requires_all": ["github-actions"],
+                "requires_any": [],
+            },
+        ),
+    ]
+
+    for manifest in invalid_manifests:
+        assert _manifest_validation_errors(manifest)
+
+
+def test_template_manifest_data_ci_mapping_uses_v2_boolean_semantics() -> None:
+    """The data-file workflow must require GitHub Actions plus one data module."""
+    data_ci_mapping = _path_mapping_by_pattern()[".github/workflows/data-ci.yml"]
+
+    assert _relation_modules(data_ci_mapping, "requires_all") == ("github-actions",)
+    assert _relation_modules(data_ci_mapping, "requires_any") == ("json", "yaml", "schema")
+    assert _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "json"})
+    assert _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "yaml"})
+    assert _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "schema"})
+    assert not _path_mapping_matches_modules(data_ci_mapping, {"github-actions"})
+    assert not _path_mapping_matches_modules(data_ci_mapping, {"yaml", "schema"})
+    assert not _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "terraform"})
 
 
 def test_template_manifest_module_names_are_unique() -> None:
@@ -1140,10 +1305,11 @@ def test_template_sync_marker_schema_module_enum_matches_manifest() -> None:
 
 
 def test_template_manifest_filtering_semantics_are_valid() -> None:
-    """The manifest must keep the version 1 filtering semantics explicit."""
+    """The manifest must keep the version 2 filtering semantics explicit."""
     filtering = _template_manifest().get("filtering")
     assert filtering == {
         "default_semantics": "AND",
+        "requires_any_semantics": "OR",
         "path_matching": "most_specific_match_wins",
         "same_specificity_action": "union_modules",
         "unmapped_action": "surface_for_owner",
