@@ -59,14 +59,14 @@ ensure_pre_commit() {
   fi
 
   if command -v uv >/dev/null 2>&1; then
-    pre_commit_bin_dir="${UV_TOOL_BIN_DIR:-${HOME}/.local/bin}"
+    pre_commit_bin_dir="${UV_TOOL_BIN_DIR:-${HOME:?HOME or UV_TOOL_BIN_DIR must be set}/.local/bin}"
     persist_path_prepend "$pre_commit_bin_dir"
     if ! command -v pre-commit >/dev/null 2>&1; then
       echo "Installing pre-commit with uv tool"
       uv tool install pre-commit
     fi
   elif command -v pipx >/dev/null 2>&1; then
-    pre_commit_bin_dir="${PIPX_BIN_DIR:-${HOME}/.local/bin}"
+    pre_commit_bin_dir="${PIPX_BIN_DIR:-${HOME:?HOME or PIPX_BIN_DIR must be set}/.local/bin}"
     persist_path_prepend "$pre_commit_bin_dir"
     if ! command -v pre-commit >/dev/null 2>&1; then
       echo "Installing pre-commit with pipx"
@@ -97,12 +97,10 @@ ensure_pre_commit
 
 # Ensure the binary we install below resolves first for the rest of the
 # session, even if a different `terraform` exists earlier on the base
-# image's PATH. CLAUDE_ENV_FILE persists exports across hook invocations
-# and subsequent shells; guard against duplicate entries on re-runs.
-if [ -n "${CLAUDE_ENV_FILE:-}" ] \
-  && ! grep -Fq "export PATH=\"${INSTALL_DIR}:" "$CLAUDE_ENV_FILE" 2>/dev/null; then
-  echo "export PATH=\"${INSTALL_DIR}:\$PATH\"" >> "$CLAUDE_ENV_FILE"
-fi
+# image's PATH. Reuse persist_path_prepend so PATH handling matches the
+# pre-commit bootstrap above: update PATH for this hook run and persist it
+# via CLAUDE_ENV_FILE for subsequent shells.
+persist_path_prepend "$INSTALL_DIR"
 
 # Idempotency: check the install location specifically so a stale or
 # differently-versioned terraform earlier on PATH cannot mask us. Parse
