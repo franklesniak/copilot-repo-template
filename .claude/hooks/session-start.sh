@@ -3,9 +3,9 @@
 # Claude Code web sessions. Web-only by design; developer workstations manage
 # their own toolchain.
 #
-# Keep TERRAFORM_VERSION in sync with the `terraform_version:` pin used in
-# .github/workflows/python-ci.yml, .github/workflows/auto-fix-precommit.yml,
-# and .github/workflows/terraform-ci.yml.
+# Keep TERRAFORM_VERSION in sync with every `terraform_version:` input passed
+# to `hashicorp/setup-terraform@v4` in .github/workflows/. Those pins currently
+# live in precommit-ci.yml, auto-fix-precommit.yml, and terraform-ci.yml.
 set -euo pipefail
 
 if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
