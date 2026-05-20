@@ -49,11 +49,19 @@ python_user_bin_dir() {
   printf '%s/bin\n' "$user_base"
 }
 
+# Treat pre-commit as usable only if it both resolves on PATH and actually
+# runs. A broken wrapper (stale shebang, missing interpreter) can satisfy
+# `command -v` yet fail on execution, which would otherwise let the hook skip
+# installation and report a false success.
+pre_commit_runnable() {
+  command -v pre-commit >/dev/null 2>&1 && pre-commit --version >/dev/null 2>&1
+}
+
 ensure_pre_commit() {
   local pre_commit_bin_dir
   local python_bin
 
-  if command -v pre-commit >/dev/null 2>&1; then
+  if pre_commit_runnable; then
     echo "pre-commit already available at $(command -v pre-commit)"
     return 0
   fi
@@ -61,14 +69,14 @@ ensure_pre_commit() {
   if command -v uv >/dev/null 2>&1; then
     pre_commit_bin_dir="${UV_TOOL_BIN_DIR:-${HOME:?HOME or UV_TOOL_BIN_DIR must be set}/.local/bin}"
     persist_path_prepend "$pre_commit_bin_dir"
-    if ! command -v pre-commit >/dev/null 2>&1; then
+    if ! pre_commit_runnable; then
       echo "Installing pre-commit with uv tool"
       uv tool install pre-commit
     fi
   elif command -v pipx >/dev/null 2>&1; then
     pre_commit_bin_dir="${PIPX_BIN_DIR:-${HOME:?HOME or PIPX_BIN_DIR must be set}/.local/bin}"
     persist_path_prepend "$pre_commit_bin_dir"
-    if ! command -v pre-commit >/dev/null 2>&1; then
+    if ! pre_commit_runnable; then
       echo "Installing pre-commit with pipx"
       pipx install pre-commit
     fi
@@ -79,14 +87,14 @@ ensure_pre_commit() {
     }
     pre_commit_bin_dir="$(python_user_bin_dir "$python_bin")"
     persist_path_prepend "$pre_commit_bin_dir"
-    if ! command -v pre-commit >/dev/null 2>&1; then
+    if ! pre_commit_runnable; then
       echo "Installing pre-commit with ${python_bin} -m pip --user"
       "$python_bin" -m pip install --user pre-commit
     fi
   fi
 
-  if ! command -v pre-commit >/dev/null 2>&1; then
-    echo "pre-commit installation completed, but pre-commit is not on PATH" >&2
+  if ! pre_commit_runnable; then
+    echo "pre-commit installation completed, but pre-commit is not runnable" >&2
     exit 1
   fi
 
