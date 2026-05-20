@@ -360,6 +360,22 @@ def _path_mapping_matches_modules(
     return True
 
 
+def _path_mapping_relations_from_manifest() -> list[tuple[str, tuple[str, ...], tuple[str, ...]]]:
+    """Return ``(pattern, requires_all, requires_any)`` rows from the manifest."""
+    path_mappings = _template_manifest().get("path_mappings")
+    assert isinstance(path_mappings, list), "path_mappings must be a list"
+
+    rows: list[tuple[str, tuple[str, ...], tuple[str, ...]]] = []
+    for mapping in path_mappings:
+        assert isinstance(mapping, dict), "each path mapping must be a mapping"
+        pattern = mapping.get("pattern")
+        assert isinstance(pattern, str), "path mapping pattern must be a string"
+        requires_all = _relation_modules(mapping, "requires_all")
+        requires_any = _relation_modules(mapping, "requires_any")
+        rows.append((pattern, requires_all, requires_any))
+    return rows
+
+
 def _pattern_specificity(pattern: str) -> tuple[int, int, int]:
     """Return a sortable specificity rank for a manifest path pattern."""
     is_exact = not any(wildcard in pattern for wildcard in "*?[")
@@ -546,18 +562,39 @@ def _module_rows_from_procedure() -> list[tuple[str, str]]:
     return rows
 
 
-def _path_mapping_rows_from_procedure() -> list[tuple[str, tuple[str, ...]]]:
-    """Return expanded path mapping rows rendered in ``TEMPLATE_UPDATE_PROCEDURE.md``."""
+def _split_procedure_relation_cell(
+    modules_cell: str,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Split a procedure ``Module(s)`` cell into ``(requires_all, requires_any)``.
+
+    A ``requires_any`` alternative set is rendered after a ``one of`` phrase (for
+    example ``plus one of``). Code spans before the phrase are ``requires_all`` and
+    code spans after it are ``requires_any``; cells without the phrase are
+    ``requires_all`` only. This keeps the drift check sensitive to relation kind,
+    not only to module names.
+    """
+    marker = re.search(r"one of", modules_cell, flags=re.IGNORECASE)
+    if marker is None:
+        return tuple(_code_spans(modules_cell)), ()
+    requires_all = tuple(_code_spans(modules_cell[: marker.start()]))
+    requires_any = tuple(_code_spans(modules_cell[marker.end() :]))
+    return requires_all, requires_any
+
+
+def _path_mapping_relations_from_procedure() -> list[tuple[str, tuple[str, ...], tuple[str, ...]]]:
+    """Return ``(pattern, requires_all, requires_any)`` rows rendered in the procedure."""
     procedure_text = PROCEDURE_PATH.read_text(encoding="utf-8")
     table_rows = _extract_table_after_heading(procedure_text, "### Path Mapping")
 
-    rows: list[tuple[str, tuple[str, ...]]] = []
+    rows: list[tuple[str, tuple[str, ...], tuple[str, ...]]] = []
     for pattern_cell, modules_cell in table_rows[1:]:
         patterns = _code_spans(pattern_cell)
-        modules = tuple(_code_spans(modules_cell))
+        requires_all, requires_any = _split_procedure_relation_cell(modules_cell)
         assert patterns, f"expected at least one pattern code span in {pattern_cell!r}"
-        assert modules, f"expected at least one module code span in {modules_cell!r}"
-        rows.extend((pattern, modules) for pattern in patterns)
+        assert (
+            requires_all or requires_any
+        ), f"expected at least one module code span in {modules_cell!r}"
+        rows.extend((pattern, requires_all, requires_any) for pattern in patterns)
     return rows
 
 
@@ -1323,4 +1360,4 @@ def test_procedure_module_definitions_match_manifest() -> None:
 
 def test_procedure_path_mapping_matches_manifest() -> None:
     """The procedure's path mapping table must mirror the manifest exactly."""
-    assert _path_mapping_rows_from_procedure() == _path_mapping_rows_from_manifest()
+    assert _path_mapping_relations_from_procedure() == _path_mapping_relations_from_manifest()
