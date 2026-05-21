@@ -624,11 +624,14 @@ def build_candidate_row(
     protected_paths = [entry.path]
     if entry.old_path is not None:
         protected_paths.append(entry.old_path)
-        notes.append(f"Renamed from {entry.old_path}.")
+        is_copy = entry.status.startswith("C")
+        change_verb = "Copied" if is_copy else "Renamed"
+        change_noun = "Copy" if is_copy else "Rename"
+        notes.append(f"{change_verb} from {entry.old_path}.")
         old_relation = selected_relation_for_path(entry.old_path, mappings)
         if not relations_match(old_relation, relation):
             notes.append(
-                "Rename crosses module mapping boundaries: old path resolves to "
+                f"{change_noun} crosses module mapping boundaries: old path resolves to "
                 f"{describe_relation(old_relation)}; new path resolves to "
                 f"{describe_relation(relation)}. Review both mappings before deciding."
             )
