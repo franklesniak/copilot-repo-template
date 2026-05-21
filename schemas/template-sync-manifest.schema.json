@@ -8,6 +8,215 @@
   "additionalProperties": false,
   "properties": {
     "template_manifest": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/templateManifestV1"
+        },
+        {
+          "$ref": "#/$defs/templateManifestV2"
+        }
+      ]
+    }
+  },
+  "$defs": {
+    "moduleName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "moduleList": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/moduleName"
+      }
+    },
+    "moduleDefinition": {
+      "type": "object",
+      "required": ["name", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/moduleName"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "moduleDefinitions": {
+      "type": "array",
+      "description": "Known module definitions in deterministic display order.",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/moduleDefinition"
+      }
+    },
+    "pathMappingV1": {
+      "type": "object",
+      "required": ["pattern", "requires_all"],
+      "additionalProperties": false,
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requires_all": {
+          "$ref": "#/$defs/moduleList"
+        },
+        "notes": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "pathMappingV2": {
+      "type": "object",
+      "required": ["pattern"],
+      "additionalProperties": false,
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requires_all": {
+          "$ref": "#/$defs/moduleList"
+        },
+        "requires_any": {
+          "$ref": "#/$defs/moduleList"
+        },
+        "notes": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "anyOf": [
+        {
+          "required": ["requires_all"]
+        },
+        {
+          "required": ["requires_any"]
+        }
+      ]
+    },
+    "filteringV1": {
+      "type": "object",
+      "required": [
+        "default_semantics",
+        "path_matching",
+        "same_specificity_action",
+        "unmapped_action"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "default_semantics": {
+          "type": "string",
+          "enum": ["AND"]
+        },
+        "path_matching": {
+          "type": "string",
+          "enum": ["most_specific_match_wins"]
+        },
+        "same_specificity_action": {
+          "type": "string",
+          "enum": ["union_modules"]
+        },
+        "unmapped_action": {
+          "type": "string",
+          "enum": ["surface_for_owner"]
+        }
+      }
+    },
+    "filteringV2": {
+      "type": "object",
+      "required": [
+        "default_semantics",
+        "requires_any_semantics",
+        "path_matching",
+        "same_specificity_action",
+        "unmapped_action"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "default_semantics": {
+          "type": "string",
+          "enum": ["AND"]
+        },
+        "requires_any_semantics": {
+          "type": "string",
+          "enum": ["OR"]
+        },
+        "path_matching": {
+          "type": "string",
+          "enum": ["most_specific_match_wins"]
+        },
+        "same_specificity_action": {
+          "type": "string",
+          "enum": ["union_modules"]
+        },
+        "unmapped_action": {
+          "type": "string",
+          "enum": ["surface_for_owner"]
+        }
+      }
+    },
+    "knownLimitation": {
+      "type": "object",
+      "required": ["path", "description", "future_work"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "future_work": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "notesV1": {
+      "type": "object",
+      "required": ["downstream_retention", "known_limitations"],
+      "additionalProperties": false,
+      "properties": {
+        "downstream_retention": {
+          "type": "string",
+          "minLength": 1
+        },
+        "known_limitations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/knownLimitation"
+          }
+        }
+      }
+    },
+    "notesV2": {
+      "type": "object",
+      "required": ["downstream_retention"],
+      "additionalProperties": false,
+      "properties": {
+        "downstream_retention": {
+          "type": "string",
+          "minLength": 1
+        },
+        "known_limitations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/knownLimitation"
+          }
+        }
+      }
+    },
+    "templateManifestV1": {
       "type": "object",
       "required": ["version", "modules", "path_mappings", "filtering", "notes"],
       "additionalProperties": false,
@@ -18,121 +227,52 @@
           "description": "Manifest contract version."
         },
         "modules": {
-          "type": "array",
-          "description": "Known module definitions in deterministic display order.",
-          "minItems": 1,
-          "items": {
-            "type": "object",
-            "required": ["name", "description"],
-            "additionalProperties": false,
-            "properties": {
-              "name": {
-                "$ref": "#/$defs/moduleName"
-              },
-              "description": {
-                "type": "string",
-                "minLength": 1
-              }
-            }
-          }
+          "$ref": "#/$defs/moduleDefinitions"
         },
         "path_mappings": {
           "type": "array",
           "description": "Ordered path patterns and the modules required for each path.",
           "minItems": 1,
           "items": {
-            "type": "object",
-            "required": ["pattern", "requires_all"],
-            "additionalProperties": false,
-            "properties": {
-              "pattern": {
-                "type": "string",
-                "minLength": 1
-              },
-              "requires_all": {
-                "type": "array",
-                "minItems": 1,
-                "uniqueItems": true,
-                "items": {
-                  "$ref": "#/$defs/moduleName"
-                }
-              },
-              "notes": {
-                "type": "string",
-                "minLength": 1
-              }
-            }
+            "$ref": "#/$defs/pathMappingV1"
           }
         },
         "filtering": {
-          "type": "object",
-          "required": [
-            "default_semantics",
-            "path_matching",
-            "same_specificity_action",
-            "unmapped_action"
-          ],
-          "additionalProperties": false,
-          "properties": {
-            "default_semantics": {
-              "type": "string",
-              "enum": ["AND"]
-            },
-            "path_matching": {
-              "type": "string",
-              "enum": ["most_specific_match_wins"]
-            },
-            "same_specificity_action": {
-              "type": "string",
-              "enum": ["union_modules"]
-            },
-            "unmapped_action": {
-              "type": "string",
-              "enum": ["surface_for_owner"]
-            }
-          }
+          "$ref": "#/$defs/filteringV1"
         },
         "notes": {
-          "type": "object",
-          "required": ["downstream_retention", "known_limitations"],
-          "additionalProperties": false,
-          "properties": {
-            "downstream_retention": {
-              "type": "string",
-              "minLength": 1
-            },
-            "known_limitations": {
-              "type": "array",
-              "minItems": 1,
-              "items": {
-                "type": "object",
-                "required": ["path", "description", "future_work"],
-                "additionalProperties": false,
-                "properties": {
-                  "path": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "description": {
-                    "type": "string",
-                    "minLength": 1
-                  },
-                  "future_work": {
-                    "type": "string",
-                    "minLength": 1
-                  }
-                }
-              }
-            }
-          }
+          "$ref": "#/$defs/notesV1"
         }
       }
-    }
-  },
-  "$defs": {
-    "moduleName": {
-      "type": "string",
-      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "templateManifestV2": {
+      "type": "object",
+      "required": ["version", "modules", "path_mappings", "filtering", "notes"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "integer",
+          "const": 2,
+          "description": "Manifest contract version."
+        },
+        "modules": {
+          "$ref": "#/$defs/moduleDefinitions"
+        },
+        "path_mappings": {
+          "type": "array",
+          "description": "Ordered path patterns and the module relations required for each path.",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/pathMappingV2"
+          }
+        },
+        "filtering": {
+          "$ref": "#/$defs/filteringV2"
+        },
+        "notes": {
+          "$ref": "#/$defs/notesV2"
+        }
+      }
     }
   }
 }

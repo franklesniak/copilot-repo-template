@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-19
+- **Last Updated:** 2026-05-20
 - **Scope:** Durable design-decision record for this repository template, including rationale for GitHub configuration, instruction files, validation policy, template structure, maintenance conventions, and the documentation-tier inventory below.
 - **Related:** [Repository Copilot Instructions](copilot-instructions.md), [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -44,6 +44,8 @@ This document records design decisions made during the creation and maintenance 
   - [`additionalProperties` Policy](#design-decision-additionalproperties-policy)
   - [Testing Beyond Linting for JSON/YAML](#design-decision-testing-beyond-linting-for-jsonyaml)
   - [.gitattributes JSON/YAML LF Pinning](#design-decision-gitattributes-jsonyaml-lf-pinning)
+- [Template Sync](#template-sync)
+  - [Manifest v2 Path-Mapping Relations](#design-decision-manifest-v2-path-mapping-relations)
 - [Node.js Package Configuration](#nodejs-package-configuration)
 - [CI Workflow Configuration](#ci-workflow-configuration)
 - [Python Configuration](#python-configuration)
@@ -837,6 +839,35 @@ These should be added in the project's own `.gitattributes`, with a brief commen
 - **Leave YAML unpinned:** Rejected because the repo's configured `yamllint` rule makes LF a validation contract, so CRLF-converted YAML fails standard local validation.
 - **Pin JSON alongside YAML:** Rejected because `check-json` and `check-jsonschema` do not enforce newline style. JSON can remain under the narrower byte-exact-fixture policy until a concrete validator or byte-exact contract requires more.
 - **Relax or disable `yamllint`'s `new-lines` rule:** Rejected because the repository already standardizes YAML formatting through `yamllint`; aligning checkout behavior with the configured rule is less surprising than weakening the rule.
+
+---
+
+## Template Sync
+
+### Design Decision: Manifest v2 Path-Mapping Relations
+
+The template sync manifest uses version 2 semantics for path mappings. Version 2 keeps `requires_all` from version 1 and adds `requires_any` as the only new relation field.
+
+**Decision:**
+
+- `requires_all` remains an AND relation. Every listed module must be present in the downstream marker's `included_modules`.
+- `requires_any` is an OR relation. When present, at least one listed module must be present in `included_modules`.
+- When a mapping contains both fields, both conditions must pass. The practical reading is "all required modules, plus at least one alternative module."
+- Version 1 manifests remain valid and continue to mean `requires_all` only.
+- `known_limitations` is no longer used for cross-module mappings that version 2 can express natively.
+
+**Rationale:**
+
+1. **Smallest sufficient contract change:** The known gap was platform-spanning shared files, especially `.github/workflows/data-ci.yml`, which needs `github-actions` plus at least one data-file module. One OR group alongside the existing AND list expresses that without introducing an expression language.
+2. **Backward compatibility:** Keeping version 1 valid lets downstream repositories validate existing manifests while migrating on their own schedule.
+3. **Reviewability:** `requires_all` plus `requires_any` remains easy to render in human sync documentation and easy to validate with JSON Schema plus focused pytest coverage.
+4. **Migration clarity:** Existing rows can remain unchanged during a v1-to-v2 migration unless they truly need alternative-module semantics.
+
+**Alternatives considered:**
+
+- **Full boolean expression tree:** Rejected for now because nested `allOf` / `anyOf` / `not` style structures would be harder to read, harder to render in the manual procedure, and unnecessary for the current manifest.
+- **Duplicate path mappings for each accepted module combination:** Rejected because it would obscure the single ownership rule for a path and make most-specific matching harder to audit.
+- **Keep prose-only notes:** Rejected because downstream sync filtering needs machine-readable semantics; notes are useful for human context but should not be the only source of logical requirements.
 
 ---
 

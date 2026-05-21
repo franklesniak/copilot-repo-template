@@ -1,5 +1,5 @@
 template_manifest:
-  version: 1
+  version: 2
   modules:
     - name: baseline
       description: >-
@@ -170,6 +170,10 @@ template_manifest:
     - pattern: '.github/workflows/data-ci.yml'
       requires_all:
         - github-actions
+      requires_any:
+        - json
+        - yaml
+        - schema
       notes: >-
         Contains YAML-only inline blocks for yamllint-specific documentation and
         the dedicated yamllint CI step. Contains Schema-only inline blocks for
@@ -184,9 +188,8 @@ template_manifest:
         Schema-template-sync-support-only inline blocks when the schema or
         template-sync-support module is excluded. Remove the delimited
         github-platform-only inline block when the github-platform module is
-        excluded. Current version 1 semantics cannot express github-actions
-        plus at least one of json, yaml, or schema; record that richer include
-        logic as future work.
+        excluded. Retain this workflow only when github-actions is adopted and
+        at least one data-file module is adopted.
     - pattern: '.github/workflows/check-placeholders.yml'
       requires_all:
         - baseline
@@ -363,6 +366,7 @@ template_manifest:
         - baseline
   filtering:
     default_semantics: AND
+    requires_any_semantics: OR
     path_matching: most_specific_match_wins
     same_specificity_action: union_modules
     unmapped_action: surface_for_owner
@@ -372,12 +376,3 @@ template_manifest:
       sync procedure. Downstream repositories do not need to retain
       .template-sync/manifest.yml unless they intentionally want
       machine-assisted future syncs.
-    known_limitations:
-      - path: '.github/workflows/data-ci.yml'
-        description: >-
-          Manifest version 1 ships with requires_all semantics only, so
-          platform-spanning workflow mappings cannot yet express
-          github-actions plus at least one of json, yaml, or schema.
-        future_work: >-
-          A later manifest revision may add richer include semantics such as
-          requires_any for this case.
