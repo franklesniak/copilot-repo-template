@@ -463,6 +463,31 @@ def test_renamed_files_preserve_old_and_new_paths(tmp_path: Path) -> None:
     assert "Renamed from templates/markdown/intro.md." in result.stdout
 
 
+def test_rename_across_module_boundaries_is_flagged(tmp_path: Path) -> None:
+    """A rename whose old and new paths map to different modules is surfaced."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, "templates/markdown/intro.md", "same content\n")
+    base_sha = _commit_all(tmp_path, "base")
+    (tmp_path / "templates/markdown/intro.md").unlink()
+    _write_text(tmp_path, "templates/python/intro.md", "same content\n")
+    head_sha = _commit_all(tmp_path, "head")
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["markdown", "python"], last_reviewed_template_commit=base_sha),
+    )
+
+    result = _run_generator(tmp_path, "--range-head", head_sha)
+
+    assert result.returncode == 0, result.stderr
+    assert "templates/markdown/intro.md -> templates/python/intro.md" in result.stdout
+    assert "Renamed from templates/markdown/intro.md." in result.stdout
+    assert (
+        "Rename crosses module mapping boundaries: old path resolves to "
+        "requires all: markdown; new path resolves to requires all: python." in result.stdout
+    )
+
+
 def test_invalid_marker_schema_is_rejected(tmp_path: Path) -> None:
     """Marker and manifest files must pass the checked-in schemas before output."""
     _init_repo(tmp_path)

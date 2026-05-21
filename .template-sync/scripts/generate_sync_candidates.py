@@ -530,6 +530,18 @@ def selected_relation_for_path(
     )
 
 
+def describe_relation(relation: PathRelation | None) -> str:
+    """Return a human-readable module relation description, or ``unmapped``."""
+    return relation.description if relation is not None else "unmapped"
+
+
+def relations_match(left: PathRelation | None, right: PathRelation | None) -> bool:
+    """Return whether two relations resolve to the same module mapping."""
+    if left is None or right is None:
+        return left is None and right is None
+    return left.requires_all == right.requires_all and left.requires_any == right.requires_any
+
+
 def is_protected_instruction_path(relative_path: str) -> bool:
     """Return whether ``relative_path`` is a protected instruction/governance file."""
     if relative_path in PROTECTED_EXACT_PATHS:
@@ -613,6 +625,13 @@ def build_candidate_row(
     if entry.old_path is not None:
         protected_paths.append(entry.old_path)
         notes.append(f"Renamed from {entry.old_path}.")
+        old_relation = selected_relation_for_path(entry.old_path, mappings)
+        if not relations_match(old_relation, relation):
+            notes.append(
+                "Rename crosses module mapping boundaries: old path resolves to "
+                f"{describe_relation(old_relation)}; new path resolves to "
+                f"{describe_relation(relation)}. Review both mappings before deciding."
+            )
     protected_status = (
         "Yes" if any(is_protected_instruction_path(path) for path in protected_paths) else "No"
     )
