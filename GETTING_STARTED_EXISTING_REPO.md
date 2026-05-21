@@ -96,6 +96,7 @@ This template repository includes several features you can adopt individually or
 | **Pre-commit Hooks** | Automated code quality checks before commits |
 | **Linting Configurations** | Pre-configured settings for markdownlint, PSScriptAnalyzer, TFLint, and yamllint |
 | **Data-File Validation** | JSON, YAML, GitHub Actions, and JSON Schema example validation through pre-commit and `data-ci.yml` |
+| **Template Sync Support** | `.template-sync/marker.yml`, `.template-sync/manifest.yml`, and the marker-aware retained-state validation helper for future template syncs |
 | **Dependabot** | Automated dependency update monitoring |
 | **CODEOWNERS** | Automatic reviewer assignment for pull requests |
 | **Multi-Agent Support** | Instruction files for Cursor Agent, Hermes Agent, Claude Code, OpenAI Codex CLI, and Gemini Code Assist |
@@ -136,6 +137,7 @@ The tools you need depend on which features you plan to adopt:
 | Copilot Instructions | None |
 | Markdown Linting | Node.js |
 | Pre-commit Hooks | Python, pre-commit; Terraform and TFLint if retaining Terraform hooks |
+| Template Sync Support | Python plus the schema validation dependencies installed with the template's development or pre-commit tooling |
 | Python CI Workflow | Python |
 | PowerShell CI Workflow | PowerShell |
 
@@ -198,6 +200,7 @@ Use this matrix to decide which features to adopt based on complexity and depend
 | VS Code Settings | `.vscode/settings.json` | None | Low |
 | Markdown Linting | `.markdownlint.jsonc`, `package.json`, npm scripts | Node.js | Medium |
 | Pre-commit Hooks | `.pre-commit-config.yaml`, `.github/scripts/terraform_hooks.py` if retaining Terraform hooks | Python, pre-commit; Terraform and TFLint for Terraform hooks | Medium |
+| Template Sync Support | `.template-sync/marker.yml`, `.template-sync/manifest.yml`, `.template-sync/scripts/validate_marker.py`, `schemas/template-sync-marker.schema.json`, `schemas/template-sync-manifest.schema.json` | Python and schema validation dependencies | Medium |
 | PowerShell CI Workflow | `.github/workflows/powershell-ci.yml` | PowerShell, Pester | Medium |
 | PSScriptAnalyzer Config | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell | Low |
 | Python CI Workflow | `.github/workflows/python-ci.yml` | Python project structure | High |
@@ -1761,7 +1764,15 @@ pre-commit run --all-files
 
 Expected result: All hooks should pass, or you should understand and have addressed any failures.
 
-**2. Markdown linting (if adopted):**
+**2. Template sync marker check (if `.template-sync/marker.yml` is adopted):**
+
+```bash
+python .template-sync/scripts/validate_marker.py --require-marker
+```
+
+Expected result: The helper reports no retained-template inconsistencies. It validates `.template-sync/marker.yml` and `.template-sync/manifest.yml` against the checked-in schemas, reports leftover files from excluded modules, reports missing concrete files for included modules, and lists deferred protected-file candidates without failing solely because they exist.
+
+**3. Markdown linting (if adopted):**
 
 ```bash
 npm run lint:md
@@ -1769,7 +1780,7 @@ npm run lint:md
 
 Expected result: No errors, or only warnings you've chosen to accept.
 
-**3. Push to feature branch:**
+**4. Push to feature branch:**
 
 ```bash
 git add .
@@ -1777,13 +1788,13 @@ git commit -m "feat: adopt template configurations from copilot-repo-template"
 git push origin feature/adopt-template-features
 ```
 
-**4. Verify CI workflows:**
+**5. Verify CI workflows:**
 
 - Navigate to your repository's **Actions** tab
 - Check that all adopted workflows run
 - Fix any failures before merging
 
-**5. Test issue templates (if adopted):**
+**6. Test issue templates (if adopted):**
 
 - Navigate to **Issues** → **New Issue**
 - Verify all templates appear correctly
@@ -1791,7 +1802,7 @@ git push origin feature/adopt-template-features
 - Verify links in the template chooser (`config.yml`) work
 - Close test issues without saving (or delete after testing)
 
-**6. Test PR template (if adopted):**
+**7. Test PR template (if adopted):**
 
 - Open a test pull request (can be against your feature branch)
 - Verify the template renders correctly with all sections
@@ -2177,6 +2188,7 @@ Before considering adoption complete, verify:
 ### Functionality
 
 - [ ] Pre-commit runs successfully (`pre-commit run --all-files`)
+- [ ] Template sync marker validation passes (`python .template-sync/scripts/validate_marker.py --require-marker`) if `.template-sync/marker.yml` is adopted
 - [ ] Markdown linting passes (`npm run lint:md`)
 - [ ] All CI workflows pass in GitHub Actions
 - [ ] Issue templates display correctly in GitHub
