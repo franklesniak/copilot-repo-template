@@ -582,7 +582,7 @@ Record the resulting retain or strip decisions per affected path in the Step 7 p
 
 ### Filtering Rules
 
-After Step 4 has fetched the template remote, resolved the range endpoints, and confirmed reachability, and after Step 5 has a schema-valid marker with the intended `included_modules`, `local_overrides`, and `deferred_protected_candidates`, run the candidate table generator from the downstream repository root:
+After Step 3 has fetched the template remote and Step 4 has resolved the range endpoints and confirmed reachability, and after Step 5 has a schema-valid marker with the intended `included_modules`, `local_overrides`, and `deferred_protected_candidates`, run the candidate table generator from the downstream repository root:
 
 ```bash
 python .template-sync/scripts/generate_sync_candidates.py --range-head RANGE_HEAD_SHA
