@@ -96,7 +96,7 @@ This template repository includes several features you can adopt individually or
 | **Pre-commit Hooks** | Automated code quality checks before commits |
 | **Linting Configurations** | Pre-configured settings for markdownlint, PSScriptAnalyzer, TFLint, and yamllint |
 | **Data-File Validation** | JSON, YAML, GitHub Actions, and JSON Schema example validation through pre-commit and `data-ci.yml` |
-| **Template Sync Support** | `.template-sync/marker.yml`, `.template-sync/manifest.yml`, and the marker-aware retained-state validation helper for future template syncs |
+| **Template Sync Support** | `.template-sync/marker.yml`, `.template-sync/manifest.yml`, the marker-aware retained-state validation helper, and the candidate table generator for future template syncs |
 | **Dependabot** | Automated dependency update monitoring |
 | **CODEOWNERS** | Automatic reviewer assignment for pull requests |
 | **Multi-Agent Support** | Instruction files for Cursor Agent, Hermes Agent, Claude Code, OpenAI Codex CLI, and Gemini Code Assist |
@@ -200,7 +200,7 @@ Use this matrix to decide which features to adopt based on complexity and depend
 | VS Code Settings | `.vscode/settings.json` | None | Low |
 | Markdown Linting | `.markdownlint.jsonc`, `package.json`, npm scripts | Node.js | Medium |
 | Pre-commit Hooks | `.pre-commit-config.yaml`, `.github/scripts/terraform_hooks.py` if retaining Terraform hooks | Python, pre-commit; Terraform and TFLint for Terraform hooks | Medium |
-| Template Sync Support | `.template-sync/marker.yml`, `.template-sync/manifest.yml`, `.template-sync/scripts/validate_marker.py`, `schemas/template-sync-marker.schema.json`, `schemas/template-sync-manifest.schema.json` | Python and schema validation dependencies | Medium |
+| Template Sync Support | `.template-sync/marker.yml`, `.template-sync/manifest.yml`, `.template-sync/scripts/validate_marker.py`, `.template-sync/scripts/generate_sync_candidates.py`, `schemas/template-sync-marker.schema.json`, `schemas/template-sync-manifest.schema.json` | Python and schema validation dependencies | Medium |
 | PowerShell CI Workflow | `.github/workflows/powershell-ci.yml` | PowerShell, Pester | Medium |
 | PSScriptAnalyzer Config | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell | Low |
 | Python CI Workflow | `.github/workflows/python-ci.yml` | Python project structure | High |
@@ -1772,7 +1772,23 @@ python .template-sync/scripts/validate_marker.py --require-marker
 
 Expected result: The helper reports no retained-template inconsistencies. It validates `.template-sync/marker.yml` and `.template-sync/manifest.yml` against the checked-in schemas, reports leftover files from excluded modules, reports missing concrete files for included modules, and lists deferred protected-file candidates without failing solely because they exist.
 
-**3. Markdown linting (if adopted):**
+**3. Template sync candidate table (when performing a future sync):**
+
+After fetching the template remote and resolving the upstream range head, use the generator to create the first-pass Markdown decision aid:
+
+```bash
+python .template-sync/scripts/generate_sync_candidates.py --range-head RANGE_HEAD_SHA
+```
+
+For a first-sync delta review where `.template-sync/marker.yml` does not yet set `template_sync.last_reviewed_template_commit`, pass the owner-approved base explicitly:
+
+```bash
+python .template-sync/scripts/generate_sync_candidates.py --range-base RANGE_BASE_SHA --range-head RANGE_HEAD_SHA
+```
+
+Expected result: The helper validates `.template-sync/marker.yml` and `.template-sync/manifest.yml`, evaluates `RANGE_BASE_SHA..RANGE_HEAD_SHA`, and prints a Markdown table that flags retained/excluded paths, local overrides, deferred protected candidates, protected instruction files, unmapped paths, unknown modules, cross-module mappings, inline-block notes, and renames. It is read-only and does not replace the manual review process in [TEMPLATE_UPDATE_PROCEDURE.md](TEMPLATE_UPDATE_PROCEDURE.md).
+
+**4. Markdown linting (if adopted):**
 
 ```bash
 npm run lint:md
@@ -1780,7 +1796,7 @@ npm run lint:md
 
 Expected result: No errors, or only warnings you've chosen to accept.
 
-**4. Push to feature branch:**
+**5. Push to feature branch:**
 
 ```bash
 git add .
@@ -1788,13 +1804,13 @@ git commit -m "feat: adopt template configurations from copilot-repo-template"
 git push origin feature/adopt-template-features
 ```
 
-**5. Verify CI workflows:**
+**6. Verify CI workflows:**
 
 - Navigate to your repository's **Actions** tab
 - Check that all adopted workflows run
 - Fix any failures before merging
 
-**6. Test issue templates (if adopted):**
+**7. Test issue templates (if adopted):**
 
 - Navigate to **Issues** → **New Issue**
 - Verify all templates appear correctly
@@ -1802,7 +1818,7 @@ git push origin feature/adopt-template-features
 - Verify links in the template chooser (`config.yml`) work
 - Close test issues without saving (or delete after testing)
 
-**7. Test PR template (if adopted):**
+**8. Test PR template (if adopted):**
 
 - Open a test pull request (can be against your feature branch)
 - Verify the template renders correctly with all sections
@@ -2189,6 +2205,7 @@ Before considering adoption complete, verify:
 
 - [ ] Pre-commit runs successfully (`pre-commit run --all-files`)
 - [ ] Template sync marker validation passes (`python .template-sync/scripts/validate_marker.py --require-marker`) if `.template-sync/marker.yml` is adopted
+- [ ] Template sync candidate generation is available for future syncs (`python .template-sync/scripts/generate_sync_candidates.py --range-head RANGE_HEAD_SHA`) after fetching and choosing a reviewed range
 - [ ] Markdown linting passes (`npm run lint:md`)
 - [ ] All CI workflows pass in GitHub Actions
 - [ ] Issue templates display correctly in GitHub
