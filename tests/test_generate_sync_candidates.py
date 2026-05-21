@@ -439,7 +439,10 @@ def test_deferred_protected_candidates_and_protected_files_are_flagged(tmp_path:
     assert result.returncode == 0, result.stderr
     assert "Awaiting owner authorization." in result.stdout
     assert "| .github/copilot-instructions.md | Modified |" in result.stdout
-    assert "Protected instruction file; explicit owner authorization is required." in result.stdout
+    assert (
+        "Protected instruction/governance file; explicit owner authorization is required."
+        in result.stdout
+    )
 
 
 def test_renamed_files_preserve_old_and_new_paths(tmp_path: Path) -> None:

@@ -639,7 +639,9 @@ def build_candidate_row(
         "Yes" if any(is_protected_instruction_path(path) for path in protected_paths) else "No"
     )
     if protected_status == "Yes":
-        notes.append("Protected instruction file; explicit owner authorization is required.")
+        notes.append(
+            "Protected instruction/governance file; explicit owner authorization is required."
+        )
 
     if entry.status.startswith("D"):
         notes.append("Upstream deletion; owner must decide whether to remove the local file.")
@@ -665,7 +667,7 @@ def format_table(rows: tuple[CandidateRow, ...]) -> str:
     """Render candidate rows as a Markdown table."""
     header = (
         "| Path | Change | Matched module relation | Retained status | Local override | "
-        "Deferred protected candidate | Protected instruction file | Notes |"
+        "Deferred protected candidate | Protected instruction/governance file | Notes |"
     )
     divider = "| --- | --- | --- | --- | --- | --- | --- | --- |"
     rendered_rows = [header, divider]

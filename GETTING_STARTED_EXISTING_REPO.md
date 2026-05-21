@@ -1786,7 +1786,7 @@ For a first-sync delta review where `.template-sync/marker.yml` does not yet set
 python .template-sync/scripts/generate_sync_candidates.py --range-base RANGE_BASE_SHA --range-head RANGE_HEAD_SHA
 ```
 
-Expected result: The helper validates `.template-sync/marker.yml` and `.template-sync/manifest.yml`, evaluates `RANGE_BASE_SHA..RANGE_HEAD_SHA`, and prints a Markdown table that flags retained/excluded paths, local overrides, deferred protected candidates, protected instruction files, unmapped paths, unknown modules, cross-module mappings, inline-block notes, and renames. It is read-only and does not replace the manual review process in [TEMPLATE_UPDATE_PROCEDURE.md](TEMPLATE_UPDATE_PROCEDURE.md).
+Expected result: The helper validates `.template-sync/marker.yml` and `.template-sync/manifest.yml`, evaluates `RANGE_BASE_SHA..RANGE_HEAD_SHA`, and prints a Markdown table that flags retained/excluded paths, local overrides, deferred protected candidates, protected instruction/governance files, unmapped paths, unknown modules, cross-module mappings, inline-block notes, and renames. It is read-only and does not replace the manual review process in [TEMPLATE_UPDATE_PROCEDURE.md](TEMPLATE_UPDATE_PROCEDURE.md).
 
 **4. Markdown linting (if adopted):**
 
