@@ -1,14 +1,14 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260521.0
+**Version:** 1.1.20260521.2
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-05-21
-- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, including the human-readable view of the template sync manifest and the marker-aware retained-state validation helper command. Does not define an automated sync tool.
+- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, including the human-readable view of the template sync manifest, the marker-aware retained-state validation helper command, and the sync candidate table generator. Does not define an automated sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
 ## Purpose
@@ -582,6 +582,22 @@ Record the resulting retain or strip decisions per affected path in the Step 7 p
 
 ### Filtering Rules
 
+After Step 3 has fetched the template remote and Step 4 has resolved the range endpoints and confirmed reachability, and after Step 5 has a schema-valid marker with the intended `included_modules`, `local_overrides`, and `deferred_protected_candidates`, run the candidate table generator from the downstream repository root:
+
+```bash
+python .template-sync/scripts/generate_sync_candidates.py --range-head RANGE_HEAD_SHA
+```
+
+The helper defaults `--range-base` to `template_sync.last_reviewed_template_commit` from `.template-sync/marker.yml`. For a first-sync delta review where the marker has no reviewed commit yet, pass the owner-approved initial range base explicitly:
+
+```bash
+python .template-sync/scripts/generate_sync_candidates.py --range-base RANGE_BASE_SHA --range-head RANGE_HEAD_SHA
+```
+
+If `--range-head` is omitted, the helper uses the local `template/main` ref when that ref is present. It does **not** fetch automatically; run `git fetch template` in Step 3 before relying on the default head, or pass a resolved `RANGE_HEAD_SHA`.
+
+The generator validates `.template-sync/marker.yml` and `.template-sync/manifest.yml` against the checked-in schemas before producing output. It prints a Markdown table with one row per changed upstream path and columns for the matched module relation, retained/excluded status, local override status, deferred protected candidate status, protected instruction/governance-file status, and notes. The notes explicitly surface unmapped paths, unknown modules, cross-module manifest relations, manifest inline-block notes, protected-file handling, and renames. The output is a decision aid only: it does not update the marker, apply file changes, strip inline blocks, or make final per-file decisions. The manual review process in this procedure remains authoritative.
+
 For each path from `git diff --name-status -M`:
 
 1. Map the path to its manifest relation.
@@ -599,7 +615,7 @@ If summarized unadopted-module activity appears relevant during review, the owne
 
 ## Step 7: Review Each Candidate File
 
-Every included candidate requires a row in a per-file decision table.
+Every included candidate requires a row in a per-file decision table. When the Step 6 generator is used, treat its `Retained` rows as the starting candidate set and its `Excluded`, `Unmapped`, local override, deferred protected candidate, protected-file, rename, and inline-block notes as prompts for manual review and sync-summary entries.
 
 | Decision | Meaning |
 | --- | --- |
@@ -935,6 +951,7 @@ git fetch template
 git rev-parse 'template/main^{commit}'
 git merge-base --is-ancestor 1111111111111111111111111111111111111111 2222222222222222222222222222222222222222
 git diff --name-status -M 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222
+python .template-sync/scripts/generate_sync_candidates.py --range-head 2222222222222222222222222222222222222222
 ```
 
 The sync working notes start with the reviewed range endpoints:
@@ -958,6 +975,8 @@ R100    templates/markdown/intro.md   templates/markdown/getting-started.md
 ```
 
 ### Filter by Modules
+
+The manual module table below mirrors the candidate generator's retained/excluded classification for the hypothetical range. The generator output is still reviewed and rewritten into the Step 7 decision table before any file is adopted, merged, skipped, or deferred.
 
 | Path | Module(s) | In scope? |
 | --- | --- | --- |
@@ -1069,7 +1088,7 @@ Invoke-Pester -Path tests/ -Output Detailed
 Future automation MAY add:
 
 - a pre-commit hook that checks manifest coverage for managed paths
-- a helper script that generates the candidate review table
 - a helper script that regenerates the Module Definitions and Path Mapping tables from `.template-sync/manifest.yml`
+- a higher-level dry-run reporter that combines the candidate table with validation planning without applying changes
 
-`.template-sync/manifest.yml` is authoritative for the taxonomy. Until a runnable sync tool exists, this document remains the authoritative manual procedure.
+`.template-sync/manifest.yml` is authoritative for the taxonomy. The candidate generator is intentionally read-only; this document remains the authoritative manual procedure.
