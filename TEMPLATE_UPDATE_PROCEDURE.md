@@ -1,14 +1,14 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260520.1
+**Version:** 1.1.20260521.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-20
-- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, including the human-readable view of the template sync manifest. Does not define a runnable sync tool.
+- **Last Updated:** 2026-05-21
+- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, including the human-readable view of the template sync manifest and the marker-aware retained-state validation helper command. Does not define an automated sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
 ## Purpose
@@ -404,7 +404,7 @@ When changing the taxonomy, update `.template-sync/manifest.yml` first, then upd
 | `github-actions` | GitHub Actions workflow files under `.github/workflows/**`. |
 | `github-templates` | GitHub issue templates, PR templates, CODEOWNERS, and GitHub collaboration surfaces. |
 | `template-onboarding` | Template adoption and template maintainer guidance that downstream repositories typically remove after adoption. |
-| `template-sync-support` | Committed files used to perform future template syncs, such as the sync procedure, sync marker, sync manifest, and future sync validation docs. |
+| `template-sync-support` | Committed files used to perform future template syncs, such as the sync procedure, sync marker, sync manifest, sync validation helper scripts, and future sync validation docs. |
 | `markdown` | Markdown linting, Markdown templates, docs guidance, and Markdown-only documentation assets. |
 | `powershell` | PowerShell scripts, Pester tests, PSScriptAnalyzer configuration, and PowerShell CI. |
 | `json` | JSON and JSONC guidance, examples, validation commands, and JSON-oriented template files. |
@@ -425,6 +425,7 @@ Manifest version 2 rows MAY also use `requires_any`: the path is included only w
 | --- | --- |
 | `.template-sync/marker.yml` | `template-sync-support` |
 | `.template-sync/manifest.yml` | `template-sync-support` |
+| `.template-sync/scripts/**` | `template-sync-support` |
 | `.github/copilot-instructions.md` | `agent-instructions` |
 | `.github/instructions/docs.instructions.md` | `markdown`, `agent-instructions` |
 | `.github/instructions/gitattributes.instructions.md` | `baseline`, `agent-instructions` |
@@ -776,6 +777,14 @@ Do not replace didactic examples that intentionally explain the placeholder conv
 
 Run validation appropriate to the included modules and files changed. Full template-like validation remains the safest default when the downstream repository keeps the relevant tooling.
 
+Run the marker-aware retained-state helper after file removals, retained files, `included_modules`, `local_overrides`, and `deferred_protected_candidates` reflect the intended sync result, and before finalizing the sync summary. Use `--require-marker` once the downstream repository has committed to carrying `.template-sync/marker.yml` in CI:
+
+```bash
+python .template-sync/scripts/validate_marker.py --require-marker
+```
+
+Omit `--require-marker` only during initial adoption or exploratory sync work where the marker may intentionally be absent; in that mode, the helper exits zero with a clear no-marker message.
+
 Before module-specific validators, check for whitespace errors and unresolved conflict markers:
 
 ```bash
@@ -802,7 +811,7 @@ git ls-files --eol -- .
 | `github-actions` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run actionlint --all-files` |
 | `github-templates` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `npm run lint:md`, `npm run lint:md:links`, and issue or PR template rendering review |
 | `template-onboarding` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, and walkthrough review for kept onboarding paths |
-| `template-sync-support` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run validate-template-sync-manifest --all-files` and `pre-commit run validate-template-sync-marker --all-files` when the schema-template-sync-support block is kept, and a dry-run review of the sync procedure examples |
+| `template-sync-support` | `python .template-sync/scripts/validate_marker.py --require-marker` after marker decisions and retained files are current, `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run validate-template-sync-manifest --all-files` and `pre-commit run validate-template-sync-marker --all-files` when the schema-template-sync-support block is kept, and a dry-run review of the sync procedure examples |
 | `markdown` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-json --all-files` |
 | `powershell` | `Invoke-Pester -Path tests/ -Output Detailed` |
 | `json` | `pre-commit run check-json --all-files` |

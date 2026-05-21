@@ -1,0 +1,328 @@
+"""Exercise the marker-aware downstream sync validation helper."""
+
+from __future__ import annotations
+
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+import pytest
+import yaml  # type: ignore[import-untyped]
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "validate_marker.py"
+MARKER_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-marker.schema.json"
+MANIFEST_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-manifest.schema.json"
+SOURCE_REPO = "https://github.com/franklesniak/copilot-repo-template.git"
+FULL_SHA = "0123456789abcdef0123456789abcdef01234567"
+MODULE_DEFINITIONS = {
+    "baseline": "Baseline files.",
+    "template-sync-support": "Template sync support files.",
+    "python": "Python files.",
+    "schema": "Schema files.",
+    "github-actions": "GitHub Actions files.",
+    "yaml": "YAML files.",
+}
+
+
+def _write_text(repo_root: Path, relative_path: str, text: str = "placeholder\n") -> None:
+    """Write a text file below a fixture repository root."""
+    path = repo_root / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def _write_yaml(repo_root: Path, relative_path: str, data: dict[str, Any]) -> None:
+    """Write a YAML fixture below a fixture repository root."""
+    path = repo_root / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+
+def _copy_schemas(repo_root: Path) -> None:
+    """Copy the real marker and manifest schemas into a fixture repository."""
+    schemas_dir = repo_root / "schemas"
+    schemas_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(MARKER_SCHEMA_PATH, schemas_dir / MARKER_SCHEMA_PATH.name)
+    shutil.copyfile(MANIFEST_SCHEMA_PATH, schemas_dir / MANIFEST_SCHEMA_PATH.name)
+
+
+def _manifest(version: int = 2) -> dict[str, Any]:
+    """Build a small schema-valid manifest fixture."""
+    modules = [
+        {"name": name, "description": description}
+        for name, description in MODULE_DEFINITIONS.items()
+    ]
+    path_mappings: list[dict[str, Any]] = [
+        {"pattern": "README.md", "requires_all": ["baseline"]},
+        {
+            "pattern": ".template-sync/marker.yml",
+            "requires_all": ["template-sync-support"],
+        },
+        {
+            "pattern": ".template-sync/manifest.yml",
+            "requires_all": ["template-sync-support"],
+        },
+        {
+            "pattern": ".template-sync/scripts/**",
+            "requires_all": ["template-sync-support"],
+        },
+        {"pattern": "templates/python/**", "requires_all": ["python"]},
+        {"pattern": "tests/test_schema_examples.py", "requires_all": ["schema"]},
+    ]
+    filtering: dict[str, str] = {
+        "default_semantics": "AND",
+        "path_matching": "most_specific_match_wins",
+        "same_specificity_action": "union_modules",
+        "unmapped_action": "surface_for_owner",
+    }
+    notes: dict[str, Any] = {
+        "downstream_retention": "Downstream repositories keep marker data for syncs.",
+    }
+
+    if version == 1:
+        notes["known_limitations"] = [
+            {
+                "path": ".github/workflows/data-ci.yml",
+                "description": "Version 1 cannot model alternative module relations.",
+                "future_work": "Migrate to manifest version 2 relation semantics.",
+            }
+        ]
+    else:
+        path_mappings.append(
+            {
+                "pattern": ".github/workflows/data-ci.yml",
+                "requires_all": ["github-actions"],
+                "requires_any": ["yaml", "schema"],
+            }
+        )
+        filtering["requires_any_semantics"] = "OR"
+
+    return {
+        "template_manifest": {
+            "version": version,
+            "modules": modules,
+            "path_mappings": path_mappings,
+            "filtering": filtering,
+            "notes": notes,
+        }
+    }
+
+
+def _marker(
+    included_modules: list[str],
+    *,
+    local_overrides: list[dict[str, str]] | None = None,
+    deferred_candidates: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    """Build a small schema-valid marker fixture."""
+    template_sync: dict[str, Any] = {
+        "source_repo": SOURCE_REPO,
+        "last_reviewed_template_commit": FULL_SHA,
+        "included_modules": included_modules,
+    }
+    if local_overrides is not None:
+        template_sync["local_overrides"] = local_overrides
+    if deferred_candidates is not None:
+        template_sync["deferred_protected_candidates"] = deferred_candidates
+    return {"template_sync": template_sync}
+
+
+def _write_manifest(repo_root: Path, version: int = 2) -> None:
+    """Write the manifest fixture."""
+    _write_yaml(repo_root, ".template-sync/manifest.yml", _manifest(version))
+
+
+def _write_marker(
+    repo_root: Path,
+    included_modules: list[str],
+    *,
+    local_overrides: list[dict[str, str]] | None = None,
+    deferred_candidates: list[dict[str, str]] | None = None,
+) -> None:
+    """Write the marker fixture."""
+    _write_yaml(
+        repo_root,
+        ".template-sync/marker.yml",
+        _marker(
+            included_modules,
+            local_overrides=local_overrides,
+            deferred_candidates=deferred_candidates,
+        ),
+    )
+
+
+def _run_validator(repo_root: Path, *extra_args: str) -> subprocess.CompletedProcess[str]:
+    """Run the helper against a fixture repository."""
+    return subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--repo-root",
+            str(repo_root),
+            *extra_args,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+@pytest.fixture()
+def marker_repo(tmp_path: Path) -> Path:
+    """Create a fixture repository with schemas and a manifest."""
+    _copy_schemas(tmp_path)
+    _write_manifest(tmp_path)
+    return tmp_path
+
+
+def test_fully_included_template_state_passes(marker_repo: Path) -> None:
+    """All retained concrete paths and present glob files are accepted."""
+    _write_marker(
+        marker_repo,
+        ["baseline", "template-sync-support", "python", "schema", "github-actions"],
+    )
+    _write_text(marker_repo, "README.md")
+    _write_text(marker_repo, ".template-sync/scripts/validate_marker.py")
+    _write_text(marker_repo, "templates/python/app.py")
+    _write_text(marker_repo, "tests/test_schema_examples.py")
+    _write_text(marker_repo, ".github/workflows/data-ci.yml")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "Marker-aware template sync validation passed." in result.stdout
+    assert "No retained-template inconsistencies found." in result.stdout
+
+
+def test_partial_module_exclusion_without_leftovers_passes(marker_repo: Path) -> None:
+    """Excluded glob modules do not imply every possible glob match must exist."""
+    _write_marker(marker_repo, ["baseline", "template-sync-support"])
+    _write_text(marker_repo, "README.md")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "Marker-aware template sync validation passed." in result.stdout
+
+
+def test_absent_marker_skips_by_default_and_fails_when_required(tmp_path: Path) -> None:
+    """A missing marker is a no-op unless CI explicitly requires one."""
+    result = _run_validator(tmp_path)
+    required_result = _run_validator(tmp_path, "--require-marker")
+
+    assert result.returncode == 0, result.stderr
+    assert "No marker found at .template-sync/marker.yml" in result.stdout
+    assert required_result.returncode == 1
+    assert "Marker is required but was not found" in required_result.stderr
+
+
+def test_malformed_marker_data_is_rejected(marker_repo: Path) -> None:
+    """Present marker files must pass the existing marker schema."""
+    _write_yaml(
+        marker_repo,
+        ".template-sync/marker.yml",
+        _marker(["not-a-real-module"]),
+    )
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1
+    assert "Schema validation failed for .template-sync/marker.yml" in result.stderr
+
+
+def test_missing_concrete_mapped_file_fails(marker_repo: Path) -> None:
+    """Concrete retained mappings must exist on disk."""
+    _write_marker(marker_repo, ["baseline", "template-sync-support", "schema"])
+    _write_text(marker_repo, "README.md")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1
+    assert "Concrete mapped files expected for included modules but missing" in result.stdout
+    assert "tests/test_schema_examples.py" in result.stdout
+
+
+def test_leftover_file_from_excluded_module_fails(marker_repo: Path) -> None:
+    """Existing files mapped only to excluded modules are reported."""
+    _write_marker(marker_repo, ["baseline", "template-sync-support"])
+    _write_text(marker_repo, "README.md")
+    _write_text(marker_repo, "templates/python/app.py")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1
+    assert "Files present on disk but not retained by included modules" in result.stdout
+    assert "templates/python/app.py" in result.stdout
+
+
+def test_local_overrides_skip_matching_paths(marker_repo: Path) -> None:
+    """Local override paths are omitted from retained-template consistency checks."""
+    _write_marker(
+        marker_repo,
+        ["baseline", "template-sync-support"],
+        local_overrides=[
+            {
+                "path": "templates/python/",
+                "reason": "Local project owns this directory.",
+                "default_decision": "SKIP",
+            }
+        ],
+    )
+    _write_text(marker_repo, "README.md")
+    _write_text(marker_repo, "templates/python/app.py")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "Local overrides skipped:" in result.stdout
+    assert "templates/python/ (SKIP): Local project owns this directory." in result.stdout
+
+
+def test_deferred_protected_candidates_are_reported_without_failure(marker_repo: Path) -> None:
+    """Deferred protected candidates are visible but do not create failures."""
+    _write_marker(
+        marker_repo,
+        ["baseline", "template-sync-support"],
+        deferred_candidates=[
+            {
+                "path": ".github/copilot-instructions.md",
+                "source_commit": "89abcdef0123456789abcdef0123456789abcdef",
+                "reason": "Owner authorization is still pending.",
+            }
+        ],
+    )
+    _write_text(marker_repo, "README.md")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "Deferred protected candidates:" in result.stdout
+    assert ".github/copilot-instructions.md" in result.stdout
+
+
+def test_manifest_v2_requires_any_relation_is_consumed(marker_repo: Path) -> None:
+    """Version 2 mappings retain a file when one requires_any module is included."""
+    _write_marker(marker_repo, ["baseline", "template-sync-support", "github-actions", "yaml"])
+    _write_text(marker_repo, "README.md")
+    _write_text(marker_repo, ".github/workflows/data-ci.yml")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "Marker-aware template sync validation passed." in result.stdout
+
+
+def test_manifest_v1_requires_all_semantics_are_consumed(tmp_path: Path) -> None:
+    """Version 1 mappings continue to use requires_all-only semantics."""
+    _copy_schemas(tmp_path)
+    _write_manifest(tmp_path, version=1)
+    _write_marker(tmp_path, ["baseline", "template-sync-support"])
+    _write_text(tmp_path, "README.md")
+
+    result = _run_validator(tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    assert "Marker-aware template sync validation passed." in result.stdout

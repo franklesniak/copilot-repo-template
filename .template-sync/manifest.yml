@@ -32,7 +32,8 @@ template_manifest:
     - name: template-sync-support
       description: >-
         Committed files used to perform future template syncs, such as the sync
-        procedure, sync marker, sync manifest, and future sync validation docs.
+        procedure, sync marker, sync manifest, sync validation helper scripts,
+        and future sync validation docs.
     - name: markdown
       description: >-
         Markdown linting, Markdown templates, docs guidance, and Markdown-only
@@ -64,6 +65,9 @@ template_manifest:
       requires_all:
         - template-sync-support
     - pattern: '.template-sync/manifest.yml'
+      requires_all:
+        - template-sync-support
+    - pattern: '.template-sync/scripts/**'
       requires_all:
         - template-sync-support
     - pattern: '.github/copilot-instructions.md'

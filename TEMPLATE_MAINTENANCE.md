@@ -4,7 +4,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-18
+- **Last Updated:** 2026-05-21
 - **Scope:** Periodic maintenance procedures for the `franklesniak/copilot-repo-template` repository, including dependency review cadence, pre-commit hook upkeep, Terraform/TFLint version reviews, schema and worked-example reviews, template sync taxonomy upkeep, and validation steps for template-only changes. Does not cover repositories created FROM this template; consumers of the template should follow [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md#ongoing-maintenance) instead.
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [Contributing](CONTRIBUTING.md)
 
@@ -205,7 +205,9 @@ Update that taxonomy whenever a template-managed file is:
 
 For each affected path, maintainers **MUST** update `.template-sync/manifest.yml` first, review whether the path mapping still uses the most specific pattern, whether multi-module rows still require the intended AND-style module set, and whether the module definition list needs a new or revised module. Then update or regenerate the rendered tables in `TEMPLATE_UPDATE_PROCEDURE.md`. Keep examples and worked sync scenarios in `TEMPLATE_UPDATE_PROCEDURE.md` aligned with any taxonomy change.
 
-When reviewing a taxonomy change, include `pytest tests/test_template_manifest.py -v` so the manifest schema, semantic checks, and rendered-table drift checks run together. Also include at least one validation pass with `npm run lint:md`, `npm run lint:md:links`, and `npm run lint:md:nested` (the latter catches lint failures in nested Markdown code fences inside files such as `TEMPLATE_UPDATE_PROCEDURE.md`). If the change also updates schema, YAML, GitHub Actions, Python, PowerShell, or Terraform files, run the validation commands for those modules as well.
+When module relations, glob patterns, or marker fields change, maintainers **MUST** review `.template-sync/scripts/validate_marker.py` and `tests/test_validate_marker.py` so the downstream retained-state helper still matches the manifest contract. The helper should continue to use the existing schema validation stack (`PyYAML`, `jsonschema`, and the checked-in schemas) instead of introducing a separate validator dependency.
+
+When reviewing a taxonomy change, include `pytest tests/test_template_manifest.py tests/test_validate_marker.py -v` so the manifest schema, semantic checks, rendered-table drift checks, and retained-state helper behavior run together. Also include at least one validation pass with `npm run lint:md`, `npm run lint:md:links`, and `npm run lint:md:nested` (the latter catches lint failures in nested Markdown code fences inside files such as `TEMPLATE_UPDATE_PROCEDURE.md`). If the change also updates schema, YAML, GitHub Actions, Python, PowerShell, or Terraform files, run the validation commands for those modules as well.
 
 ---
 
