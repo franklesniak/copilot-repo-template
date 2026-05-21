@@ -242,7 +242,7 @@ def git_ref_exists(repo_root: Path, raw_ref: str) -> bool:
     """Return whether ``raw_ref`` resolves to a local commit."""
     result = run_git(
         repo_root,
-        ["rev-parse", "--verify", f"{raw_ref}^{{commit}}"],
+        ["rev-parse", "--verify", "--end-of-options", f"{raw_ref}^{{commit}}"],
         check=False,
     )
     return result.returncode == 0
@@ -252,7 +252,7 @@ def resolve_commit(repo_root: Path, raw_ref: str, label: str) -> str:
     """Resolve a commit-ish ref to a full commit SHA."""
     result = run_git(
         repo_root,
-        ["rev-parse", "--verify", f"{raw_ref}^{{commit}}"],
+        ["rev-parse", "--verify", "--end-of-options", f"{raw_ref}^{{commit}}"],
         check=False,
     )
     if result.returncode != 0:
