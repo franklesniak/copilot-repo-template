@@ -64,8 +64,8 @@ where = ["src"]
 
 [tool.black]
 line-length = 100
-# Keep this explicit so Black does not infer prerelease targets from
-# [project].requires-python before the template has opted into them.
+# Keep this explicit and aligned with the active Python support window
+# to avoid formatter/runtime mismatches and stale syntax allowances.
 target-version = ["py313", "py314"]
 
 [tool.mypy]

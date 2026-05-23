@@ -3168,7 +3168,7 @@ The `classifiers` field in `pyproject.toml` provides metadata for PyPI and other
 "Development Status :: 5 - Production/Stable"
 ```
 
-**Python Version Classifiers:** Update when your minimum Python version changes:
+**Python Version Classifiers:** Update when your supported Python version window changes:
 
 ```toml
 classifiers = [
