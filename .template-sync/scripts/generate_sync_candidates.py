@@ -393,11 +393,12 @@ def stale_procedure_warning(repo_root: Path, range_head_sha: str) -> str | None:
     try:
         local_text = local_path.read_text(encoding="utf-8")
     except OSError as error:
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
         return (
             f"WARNING: Unable to read local `{TEMPLATE_UPDATE_PROCEDURE_PATH}` "
-            f"for comparison with range head `{range_head_sha}`: {error}. Review the "
-            f"current upstream procedure with `{show_command}` before following local "
-            "procedure text."
+            f"for comparison with range head `{range_head_sha}`: {error_summary}. "
+            f"Review the current upstream procedure with `{show_command}` before "
+            "following local procedure text."
         )
 
     if local_text == upstream_result.stdout:

@@ -403,12 +403,13 @@ def test_write_candidates_writes_table_and_preserves_stdout(tmp_path: Path) -> N
         "--write-candidates",
         ".cache/template-sync/candidates.md",
     )
-    written_table = (tmp_path / ".cache/template-sync/candidates.md").read_text(encoding="utf-8")
 
     assert result.returncode == 0, result.stderr
     assert "# Template Sync Candidate Table" in result.stdout
     assert "- Saved candidate table: `.cache/template-sync/candidates.md`" in result.stdout
     assert "| README.md | Modified | requires all: baseline | Retained |" in result.stdout
+
+    written_table = (tmp_path / ".cache/template-sync/candidates.md").read_text(encoding="utf-8")
     assert written_table.startswith("| Path | Change | Matched module relation |")
     assert "| README.md | Modified | requires all: baseline | Retained |" in written_table
     assert "# Template Sync Candidate Table" not in written_table
