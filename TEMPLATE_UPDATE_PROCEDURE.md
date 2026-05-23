@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260523.3
+**Version:** 1.1.20260523.5
 
 ## Metadata
 
@@ -27,7 +27,7 @@ Use this procedure when a downstream repository wants to review new changes from
 - **Unadopted-module activity:** Upstream activity in a known taxonomy module that is not listed in `included_modules`.
 - **Unknown module:** A module name introduced by a newer upstream manifest or procedure that the downstream marker does not recognize. Unknown modules MUST be surfaced for explicit owner decision.
 - **Protected file:** A governance or instruction file that requires explicit owner authorization before editing.
-- **Sync working notes:** Temporary notes maintained while applying this procedure. They MAY be a scratch document, a draft PR body, or another local checklist, but they are not the final sync summary. They MUST capture the range mode, range endpoints or reconciliation command, range-base rationale, unmapped paths, per-file decisions, protected-file dispositions, line-ending normalization actions, validation results, validation issue classifications, finalization mode, and open questions as those facts are discovered. Step 14 turns these working notes into the final sync summary.
+- **Sync working notes:** Temporary notes maintained while applying this procedure. They MAY be a scratch document, a draft PR body, or another local checklist, but they are not the final sync summary. They MUST capture the range mode, range endpoints or reconciliation command, range-base rationale, saved Step 6 candidate table or table citation, unmapped paths, per-file decisions, protected-file dispositions, line-ending normalization actions, validation results, validation issue classifications, finalization mode, and open questions as those facts are discovered. Step 14 turns these working notes into the final sync summary.
 - **Sync summary:** The final owner-facing record created in Step 14 from the sync working notes. Depending on the finalization mode, it MAY be a PR description, a committed summary artifact, a local handoff note, or a dry-run report. It is the durable review artifact for modes that commit a branch or open a PR; working-tree inspection and dry-run modes MUST still present it clearly before stopping.
 
 ## Safety Rules
@@ -605,6 +605,20 @@ If `--range-head` is omitted, the helper uses the local `template/main` ref when
 
 The generator validates `.template-sync/marker.yml` and `.template-sync/manifest.yml` against the checked-in schemas before producing output. It prints a Markdown table with one row per changed upstream path and columns for the matched module relation, retained/excluded status, local override status, deferred protected candidate status, protected instruction/governance-file status, and notes. The notes explicitly surface unmapped paths, unknown modules, cross-module manifest relations, manifest inline-block notes, protected-file handling, and renames. The output is a decision aid only: it does not update the marker, apply file changes, strip inline blocks, or make final per-file decisions. The manual review process in this procedure remains authoritative.
 
+Before Step 13 advances `template_sync.last_reviewed_template_commit`, save the exact Step 6 candidate table into the sync working notes or into an owner-chosen local file cited by those notes. The helper prints the table to stdout, so shell redirection can persist it:
+
+```bash
+python .template-sync/scripts/generate_sync_candidates.py --range-head RANGE_HEAD_SHA > SYNC_CANDIDATE_TABLE_PATH
+```
+
+Record both `RANGE_BASE_SHA` and `RANGE_HEAD_SHA` with the saved table. After Step 13 advances the marker, rerunning the helper without an explicit old `--range-base` correctly uses the new marker value and can produce an empty range. To rerun the helper for the same reviewed range after marker advancement, pass the recorded range explicitly, even if `template/main` has moved:
+
+```bash
+python .template-sync/scripts/generate_sync_candidates.py --range-base RANGE_BASE_SHA --range-head RANGE_HEAD_SHA
+```
+
+The saved Step 6 candidate table is the source of truth for the reviewed candidate set. A rerun for the same range uses the current `.template-sync/marker.yml` values for `included_modules`, `local_overrides`, and `deferred_protected_candidates`, so its output can diverge from the saved table when Step 13 changed any of those fields even though the commit range is unchanged.
+
 For each path from `git diff --name-status -M`:
 
 1. Map the path to its manifest relation.
@@ -900,6 +914,7 @@ The sync summary MUST include:
 - local customizations preserved
 - line-ending normalization actions and whether a separate normalization commit was used
 - validation commands run and results
+- saved Step 6 candidate table location or sync working-notes citation, including the recorded `RANGE_BASE_SHA` and `RANGE_HEAD_SHA`
 - each issue surfaced during validation or review, classified as upstream-template fix, downstream-local fix, or deferred follow-up
 - open questions for the owner
 
@@ -923,6 +938,7 @@ Example summary skeleton:
 **Local customizations preserved:** self-hosted runner block; project-specific PR checklist.
 **Line-ending normalization:** not needed; `.gitattributes` unchanged.
 **Validation:** `pre-commit run --all-files` (passed), `npm run lint:md` (passed), `npm run lint:md:nested` (passed), `Invoke-Pester -Path tests/ -Output Detailed` (passed)
+**Saved candidate table:** sync working notes section "Step 6 Candidate Table" for `1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
 
 ## Issue Classifications
 
@@ -958,7 +974,8 @@ git fetch template
 git rev-parse 'template/main^{commit}'
 git merge-base --is-ancestor 1111111111111111111111111111111111111111 2222222222222222222222222222222222222222
 git diff --name-status -M 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222
-python .template-sync/scripts/generate_sync_candidates.py --range-head 2222222222222222222222222222222222222222
+mkdir -p .cache/template-sync
+python .template-sync/scripts/generate_sync_candidates.py --range-head 2222222222222222222222222222222222222222 > .cache/template-sync/candidates.md
 ```
 
 The sync working notes start with the reviewed range endpoints:
@@ -967,6 +984,7 @@ The sync working notes start with the reviewed range endpoints:
 - **Range mode:** normal delta sync
 - **Range base:** `1111111111111111111111111111111111111111`
 - **Range head:** `2222222222222222222222222222222222222222`
+- **Saved candidate table:** `.cache/template-sync/candidates.md` for `1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
 
 Hypothetical output:
 
@@ -1082,6 +1100,7 @@ Invoke-Pester -Path tests/ -Output Detailed
 **Local customizations preserved:** self-hosted runner block; project-specific PR checklist
 **Line-ending normalization:** not needed; `.gitattributes` unchanged.
 **Validation:** `pre-commit run --all-files` (passed), `npm run lint:md` (passed), `npm run lint:md:nested` (passed), `Invoke-Pester -Path tests/ -Output Detailed` (passed)
+**Saved candidate table:** `.cache/template-sync/candidates.md` for `1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
 
 ## Issue Classifications
 
