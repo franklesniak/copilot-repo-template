@@ -7,7 +7,7 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.5.20260523.0
+**Version:** 1.5.20260523.1
 
 ## Metadata
 
@@ -69,7 +69,7 @@ This baseline is not dogma.  When external constraints require modern Python (e.
 - **[This repo]** Targeted pre-commit hook runs, such as `pre-commit run black --all-files` when Python formatting is the only concern, are useful fast checks but **MUST NOT** replace the aggregate `pre-commit run --all-files` gate.
 - **[This repo]** Running hook tools directly outside pre-commit, for example `ruff` or `npm run lint:md`, **MAY** help during iteration but **MUST NOT** replace the aggregate gate; type checking (`mypy`) and tests (`pytest`) are enforced separately by [`.github/workflows/python-ci.yml`](../workflows/python-ci.yml).
 - **[This repo]** In the active root configuration, Black is the Python formatter enforced by the pinned `psf/black` pre-commit hook, and Ruff is lint-only through `ruff-check`; there is no active `ruff-format` hook and no root `[tool.ruff]` table.
-- **[This repo]** The root `[tool.black]` `target-version` list **MUST** stay aligned with the active Python support window so Black does not infer unsupported or prerelease Python grammar targets from `[project].requires-python`.
+- **[This repo]** The root `[tool.black]` `target-version` list **MUST** stay aligned with the active Python support window to prevent formatter/runtime mismatches and stale syntax allowances, and **MUST** remain explicit so Black does not fall back to inferring unsupported or prerelease Python grammar targets from `[project].requires-python`.
 - **[This repo]** `ruff format` **MUST NOT** be used to apply or validate Python formatting unless a future toolchain change explicitly adopts Ruff formatting.
 - **[Downstream]** [`templates/python/pyproject.toml`](../../templates/python/pyproject.toml) shows starter `pyproject.toml` configuration for downstream adopters and is distinct from this repository's active root configuration.
 
