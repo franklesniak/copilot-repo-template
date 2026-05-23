@@ -6,10 +6,11 @@ import argparse
 import fnmatch
 import json
 import os
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, Collection, Iterable, NoReturn
 
 import jsonschema
 import yaml  # type: ignore[import-untyped]
@@ -451,6 +452,58 @@ def is_locally_overridden(relative_path: str, local_overrides: tuple[LocalOverri
     return any(local_override.matches(relative_path) for local_override in local_overrides)
 
 
+def git_visible_paths(repo_root: Path) -> tuple[str, ...]:
+    """Return tracked and untracked non-ignored file paths according to Git."""
+    result = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        cwd=repo_root,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if result.returncode != 0:
+        message = result.stderr.strip() or result.stdout.strip() or "git ls-files failed"
+        raise MarkerValidationError(f"Unable to inspect Git-visible files: {message}")
+    return tuple(sorted({path for path in result.stdout.splitlines() if path}))
+
+
+def git_present_paths(repo_root: Path) -> tuple[str, ...]:
+    """Return Git-visible paths that are present in the working tree."""
+    present_paths: list[str] = []
+    for relative_path in git_visible_paths(repo_root):
+        path = repo_root / relative_path
+        if path.exists() or path.is_symlink():
+            present_paths.append(relative_path)
+    return tuple(present_paths)
+
+
+def unresolved_concrete_manifest_patterns(
+    mappings: tuple[ManifestMapping, ...],
+    present_paths: Iterable[str],
+    allowlist_paths: Collection[str] = (),
+    included_modules: set[str] | None = None,
+    local_overrides: tuple[LocalOverride, ...] = (),
+) -> tuple[tuple[str, PathRelation], ...]:
+    """Return concrete manifest mappings missing from the supplied present paths."""
+    present_path_set = set(present_paths)
+    missing_patterns: list[tuple[str, PathRelation]] = []
+
+    for pattern in sorted({mapping.pattern for mapping in mappings if mapping.is_concrete}):
+        if pattern in allowlist_paths or is_locally_overridden(pattern, local_overrides):
+            continue
+
+        relation = selected_relation_for_path(pattern, mappings)
+        if relation is None:
+            continue
+        if included_modules is not None and not relation.is_retained_by(included_modules):
+            continue
+        if pattern not in present_path_set:
+            missing_patterns.append((pattern, relation))
+
+    return tuple(missing_patterns)
+
+
 def iter_safe_repository_files(repo_root: Path) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """Return safely discovered regular files and skipped symlink paths."""
     discovered: list[str] = []
@@ -511,17 +564,23 @@ def validate_marker_state(
             + ", ".join(sorted(unknown_included_modules))
         )
 
+    present_paths = set(git_present_paths(repo_root))
     repository_files, skipped_symlinks = iter_safe_repository_files(repo_root)
     unsafe_managed_paths: list[str] = []
     for relative_path in skipped_symlinks:
-        if is_locally_overridden(relative_path, local_overrides):
+        normalized_relative_path = relative_path.rstrip("/")
+        if normalized_relative_path not in present_paths:
             continue
-        relation = selected_relation_for_path(relative_path, mappings)
+        if is_locally_overridden(normalized_relative_path, local_overrides):
+            continue
+        relation = selected_relation_for_path(normalized_relative_path, mappings)
         if relation is not None:
-            unsafe_managed_paths.append(relative_path)
+            unsafe_managed_paths.append(normalized_relative_path)
 
     leftover_files: list[tuple[str, PathRelation]] = []
     for relative_path in repository_files:
+        if relative_path not in present_paths:
+            continue
         if is_locally_overridden(relative_path, local_overrides):
             continue
         relation = selected_relation_for_path(relative_path, mappings)
@@ -530,23 +589,12 @@ def validate_marker_state(
         if not relation.is_retained_by(included_modules):
             leftover_files.append((relative_path, relation))
 
-    missing_expected_files: list[tuple[str, PathRelation]] = []
-    concrete_patterns = sorted({mapping.pattern for mapping in mappings if mapping.is_concrete})
-    for pattern in concrete_patterns:
-        if is_locally_overridden(pattern, local_overrides):
-            continue
-        relation = selected_relation_for_path(pattern, mappings)
-        if relation is None or not relation.is_retained_by(included_modules):
-            continue
-
-        expected_path = repo_root / pattern
-        if expected_path.is_symlink():
-            if pattern not in unsafe_managed_paths:
-                unsafe_managed_paths.append(pattern)
-            continue
-        if expected_path.exists():
-            continue
-        missing_expected_files.append((pattern, relation))
+    missing_expected_files = unresolved_concrete_manifest_patterns(
+        mappings=mappings,
+        present_paths=present_paths,
+        included_modules=included_modules,
+        local_overrides=local_overrides,
+    )
 
     return MarkerValidationReport(
         included_modules=tuple(sorted(included_modules)),

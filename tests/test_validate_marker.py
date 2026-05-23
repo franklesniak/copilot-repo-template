@@ -170,9 +170,22 @@ def _run_validator(repo_root: Path, *extra_args: str) -> subprocess.CompletedPro
     )
 
 
+def _run_git(repo_root: Path, *args: str) -> None:
+    """Run a git command in a fixture repository."""
+    subprocess.run(
+        ["git", *args],
+        cwd=repo_root,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+
 @pytest.fixture()
 def marker_repo(tmp_path: Path) -> Path:
     """Create a fixture repository with schemas and a manifest."""
+    _run_git(tmp_path, "init")
     _copy_schemas(tmp_path)
     _write_manifest(tmp_path)
     return tmp_path
@@ -237,6 +250,32 @@ def test_missing_concrete_mapped_file_fails(marker_repo: Path) -> None:
     """Concrete retained mappings must exist on disk."""
     _write_marker(marker_repo, ["baseline", "template-sync-support", "schema"])
     _write_text(marker_repo, "README.md")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1
+    assert "Concrete mapped files expected for included modules but missing" in result.stdout
+    assert "tests/test_schema_examples.py" in result.stdout
+
+
+def test_untracked_nonignored_concrete_file_counts_as_present(marker_repo: Path) -> None:
+    """Untracked retained files are accepted when Git does not ignore them."""
+    _write_marker(marker_repo, ["baseline", "template-sync-support", "schema"])
+    _write_text(marker_repo, "README.md")
+    _write_text(marker_repo, "tests/test_schema_examples.py")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "Marker-aware template sync validation passed." in result.stdout
+
+
+def test_ignored_retained_concrete_file_is_reported_missing(marker_repo: Path) -> None:
+    """Ignored files do not satisfy retained concrete manifest mappings."""
+    _write_marker(marker_repo, ["baseline", "template-sync-support", "schema"])
+    _write_text(marker_repo, ".gitignore", "tests/test_schema_examples.py\n")
+    _write_text(marker_repo, "README.md")
+    _write_text(marker_repo, "tests/test_schema_examples.py")
 
     result = _run_validator(marker_repo)
 
@@ -317,6 +356,7 @@ def test_manifest_v2_requires_any_relation_is_consumed(marker_repo: Path) -> Non
 
 def test_manifest_v1_requires_all_semantics_are_consumed(tmp_path: Path) -> None:
     """Version 1 mappings continue to use requires_all-only semantics."""
+    _run_git(tmp_path, "init")
     _copy_schemas(tmp_path)
     _write_manifest(tmp_path, version=1)
     _write_marker(tmp_path, ["baseline", "template-sync-support"])

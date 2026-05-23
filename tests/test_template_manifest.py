@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import fnmatch
+import importlib.util
 import json
 import os
 import posixpath
 import re
 import subprocess
+import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -18,6 +20,7 @@ import yaml  # type: ignore[import-untyped]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_PATH = REPO_ROOT / ".template-sync" / "manifest.yml"
+VALIDATE_MARKER_PATH = REPO_ROOT / ".template-sync" / "scripts" / "validate_marker.py"
 MANIFEST_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-manifest.schema.json"
 MARKER_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-marker.schema.json"
 PROCEDURE_PATH = REPO_ROOT / "TEMPLATE_UPDATE_PROCEDURE.md"
@@ -204,6 +207,24 @@ CONCRETE_PATTERN_ALLOWLIST = {
         "it but not committed in the upstream template."
     ),
 }
+SOURCE_REPO = "https://github.com/franklesniak/copilot-repo-template.git"
+FULL_SHA = "0123456789abcdef0123456789abcdef01234567"
+
+
+def _load_validate_marker_module() -> Any:
+    """Import the marker validator script as a module for shared helper tests."""
+    spec = importlib.util.spec_from_file_location(
+        "template_sync_validate_marker",
+        VALIDATE_MARKER_PATH,
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+VALIDATE_MARKER = _load_validate_marker_module()
 
 
 def _load_manifest() -> dict[str, Any]:
@@ -282,6 +303,105 @@ def _minimal_manifest_document(version: int, path_mapping: dict[str, Any]) -> di
             "notes": notes,
         }
     }
+
+
+def _synthetic_manifest_document(path_mappings: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build a version 2 manifest fixture for downstream marker-integrity tests."""
+    modules = [
+        {
+            "name": "baseline",
+            "description": "Baseline files.",
+        },
+        {
+            "name": "github-actions",
+            "description": "GitHub Actions files.",
+        },
+        {
+            "name": "github-platform",
+            "description": "GitHub platform files.",
+        },
+        {
+            "name": "schema",
+            "description": "Schema files.",
+        },
+        {
+            "name": "template-onboarding",
+            "description": "Template onboarding files.",
+        },
+        {
+            "name": "template-sync-support",
+            "description": "Template sync support files.",
+        },
+        {
+            "name": "terraform",
+            "description": "Terraform files.",
+        },
+        {
+            "name": "yaml",
+            "description": "YAML files.",
+        },
+    ]
+    return {
+        "template_manifest": {
+            "version": 2,
+            "modules": modules,
+            "path_mappings": path_mappings,
+            "filtering": {
+                "default_semantics": "AND",
+                "requires_any_semantics": "OR",
+                "path_matching": "most_specific_match_wins",
+                "same_specificity_action": "union_modules",
+                "unmapped_action": "surface_for_owner",
+            },
+            "notes": {
+                "downstream_retention": "Downstream repositories keep marker data for syncs.",
+            },
+        }
+    }
+
+
+def _marker_document(
+    included_modules: list[str],
+    *,
+    local_overrides: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    """Build a schema-valid marker fixture for downstream integrity tests."""
+    template_sync: dict[str, Any] = {
+        "source_repo": SOURCE_REPO,
+        "last_reviewed_template_commit": FULL_SHA,
+        "included_modules": included_modules,
+    }
+    if local_overrides is not None:
+        template_sync["local_overrides"] = local_overrides
+    return {"template_sync": template_sync}
+
+
+def _write_text(repo_root: Path, relative_path: str, text: str = "placeholder\n") -> None:
+    """Write text below a fixture repository root."""
+    path = repo_root / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def _write_yaml(repo_root: Path, relative_path: str, data: dict[str, Any]) -> None:
+    """Write YAML below a fixture repository root."""
+    path = repo_root / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+
+def _copy_marker_validation_schemas(repo_root: Path) -> None:
+    """Copy marker validation schemas into a fixture repository."""
+    schemas_dir = repo_root / "schemas"
+    schemas_dir.mkdir(parents=True, exist_ok=True)
+    (schemas_dir / MARKER_SCHEMA_PATH.name).write_text(
+        MARKER_SCHEMA_PATH.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+    (schemas_dir / MANIFEST_SCHEMA_PATH.name).write_text(
+        MANIFEST_SCHEMA_PATH.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
 
 
 def _module_rows_from_manifest() -> list[tuple[str, str]]:
@@ -456,20 +576,74 @@ def _git_tracked_paths(repo_root: Path) -> tuple[str, ...]:
     return tuple(path for path in result.stdout.splitlines() if path)
 
 
+def _git_present_paths(repo_root: Path) -> tuple[str, ...]:
+    """Return tracked and untracked non-ignored paths present in ``repo_root``."""
+    return VALIDATE_MARKER.git_present_paths(repo_root)
+
+
 def _unresolved_concrete_path_mapping_patterns(
-    path_mapping_rows: list[tuple[str, tuple[str, ...]]],
-    tracked_paths: Iterable[str],
+    manifest: dict[str, Any],
+    present_paths: Iterable[str],
     allowlist: Mapping[str, str],
+    *,
+    included_modules: set[str] | None = None,
+    local_overrides: tuple[Any, ...] = (),
 ) -> list[str]:
-    """Return concrete manifest patterns that do not resolve to tracked files."""
-    tracked_path_set = set(tracked_paths)
+    """Return concrete manifest patterns that do not resolve in the selected mode."""
+    _module_names, mappings = VALIDATE_MARKER.parse_manifest_mappings(manifest)
     return [
         pattern
-        for pattern, _modules in path_mapping_rows
-        if not _is_glob_pattern(pattern)
-        and pattern not in tracked_path_set
-        and pattern not in allowlist
+        for pattern, _relation in VALIDATE_MARKER.unresolved_concrete_manifest_patterns(
+            mappings=mappings,
+            present_paths=present_paths,
+            allowlist_paths=set(allowlist),
+            included_modules=included_modules,
+            local_overrides=local_overrides,
+        )
     ]
+
+
+def _concrete_pattern_integrity_failures(
+    repo_root: Path,
+    manifest: dict[str, Any],
+    allowlist: Mapping[str, str],
+) -> list[str]:
+    """Return concrete-pattern failures using upstream or downstream marker mode."""
+    marker_path = repo_root / ".template-sync" / "marker.yml"
+    if not marker_path.exists():
+        return _unresolved_concrete_path_mapping_patterns(
+            manifest,
+            _git_tracked_paths(repo_root),
+            allowlist,
+        )
+
+    marker = yaml.safe_load(marker_path.read_text(encoding="utf-8"))
+    assert isinstance(marker, dict), "marker root must be a mapping"
+    included_modules, local_overrides, _deferred_candidates = VALIDATE_MARKER.parse_marker(marker)
+    return _unresolved_concrete_path_mapping_patterns(
+        manifest,
+        _git_present_paths(repo_root),
+        {},
+        included_modules=included_modules,
+        local_overrides=local_overrides,
+    )
+
+
+def _run_marker_validator(repo_root: Path) -> subprocess.CompletedProcess[str]:
+    """Run the marker validator script in require-marker mode."""
+    return subprocess.run(
+        [
+            sys.executable,
+            str(VALIDATE_MARKER_PATH),
+            "--repo-root",
+            str(repo_root),
+            "--require-marker",
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
 
 
 def _unmapped_tracked_paths(
@@ -967,9 +1141,9 @@ def test_template_manifest_concrete_patterns_resolve_to_tracked_files() -> None:
         ),
     }
 
-    unresolved_patterns = _unresolved_concrete_path_mapping_patterns(
-        _path_mapping_rows_from_manifest(),
-        _git_tracked_paths(REPO_ROOT),
+    unresolved_patterns = _concrete_pattern_integrity_failures(
+        REPO_ROOT,
+        _load_manifest(),
         CONCRETE_PATTERN_ALLOWLIST,
     )
     failure_message = (
@@ -994,12 +1168,157 @@ def test_template_manifest_flags_unallowlisted_missing_concrete_patterns(
     )
 
     unresolved_patterns = _unresolved_concrete_path_mapping_patterns(
-        _path_mapping_rows_from_manifest_document(manifest),
+        manifest,
         ["tracked.txt"],
         {},
     )
 
     assert unresolved_patterns == ["missing.txt"]
+
+
+def test_downstream_marker_concrete_integrity_skips_excluded_and_overridden_patterns(
+    tmp_path: Path,
+) -> None:
+    """Downstream marker mode checks only retained, non-overridden concrete paths."""
+    _run_git(tmp_path, "init")
+    manifest = _synthetic_manifest_document(
+        [
+            {"pattern": "README.md", "requires_all": ["baseline"]},
+            {
+                "pattern": ".github/workflows/data-ci.yml",
+                "requires_all": ["github-actions"],
+                "requires_any": ["yaml", "schema"],
+            },
+            {
+                "pattern": "tests/fixtures/dependabot/auto-assignment.yml",
+                "requires_all": ["github-platform", "schema"],
+            },
+            {"pattern": "modules/main.tf", "requires_all": ["terraform"]},
+            {
+                "pattern": "GETTING_STARTED_NEW_REPO.md",
+                "requires_all": ["template-onboarding"],
+            },
+        ]
+    )
+    marker = _marker_document(
+        ["baseline", "github-actions", "github-platform", "schema", "yaml"],
+        local_overrides=[
+            {
+                "path": "tests/fixtures/dependabot/auto-assignment.yml",
+                "reason": "Downstream uses live Dependabot fields outside the fixture policy.",
+                "default_decision": "SKIP",
+            }
+        ],
+    )
+    _write_yaml(tmp_path, ".template-sync/manifest.yml", manifest)
+    _write_yaml(tmp_path, ".template-sync/marker.yml", marker)
+    _write_text(tmp_path, "README.md")
+    _write_text(tmp_path, ".github/workflows/data-ci.yml")
+
+    unresolved_patterns = _concrete_pattern_integrity_failures(
+        tmp_path,
+        manifest,
+        CONCRETE_PATTERN_ALLOWLIST,
+    )
+
+    assert unresolved_patterns == []
+
+
+def test_downstream_marker_concrete_integrity_flags_missing_retained_patterns(
+    tmp_path: Path,
+) -> None:
+    """Downstream marker mode still fails retained concrete paths that are absent."""
+    _run_git(tmp_path, "init")
+    manifest = _synthetic_manifest_document(
+        [
+            {"pattern": "README.md", "requires_all": ["baseline"]},
+            {
+                "pattern": ".github/workflows/data-ci.yml",
+                "requires_all": ["github-actions"],
+                "requires_any": ["yaml", "schema"],
+            },
+        ]
+    )
+    marker = _marker_document(["baseline", "github-actions", "yaml"])
+    _write_yaml(tmp_path, ".template-sync/manifest.yml", manifest)
+    _write_yaml(tmp_path, ".template-sync/marker.yml", marker)
+    _write_text(tmp_path, "README.md")
+
+    unresolved_patterns = _concrete_pattern_integrity_failures(
+        tmp_path,
+        manifest,
+        CONCRETE_PATTERN_ALLOWLIST,
+    )
+
+    assert unresolved_patterns == [".github/workflows/data-ci.yml"]
+
+
+def test_downstream_marker_concrete_integrity_ignores_ignored_retained_files(
+    tmp_path: Path,
+) -> None:
+    """Ignored scratch files do not satisfy retained concrete manifest mappings."""
+    _run_git(tmp_path, "init")
+    manifest = _synthetic_manifest_document(
+        [
+            {"pattern": "README.md", "requires_all": ["baseline"]},
+            {"pattern": ".cache/generated.txt", "requires_all": ["baseline"]},
+        ]
+    )
+    marker = _marker_document(["baseline"])
+    _write_yaml(tmp_path, ".template-sync/manifest.yml", manifest)
+    _write_yaml(tmp_path, ".template-sync/marker.yml", marker)
+    _write_text(tmp_path, ".gitignore", ".cache/\n")
+    _write_text(tmp_path, "README.md")
+    _write_text(tmp_path, ".cache/generated.txt")
+
+    unresolved_patterns = _concrete_pattern_integrity_failures(
+        tmp_path,
+        manifest,
+        CONCRETE_PATTERN_ALLOWLIST,
+    )
+
+    assert unresolved_patterns == [".cache/generated.txt"]
+
+
+def test_downstream_marker_concrete_integrity_agrees_with_validate_marker(
+    tmp_path: Path,
+) -> None:
+    """The manifest helper and validator agree for the same downstream marker."""
+    _run_git(tmp_path, "init")
+    _copy_marker_validation_schemas(tmp_path)
+    manifest = _synthetic_manifest_document(
+        [
+            {"pattern": "README.md", "requires_all": ["baseline"]},
+            {"pattern": "tests/test_schema_examples.py", "requires_all": ["schema"]},
+        ]
+    )
+    marker = _marker_document(["baseline", "schema"])
+    _write_yaml(tmp_path, ".template-sync/manifest.yml", manifest)
+    _write_yaml(tmp_path, ".template-sync/marker.yml", marker)
+    _write_text(tmp_path, "README.md")
+
+    unresolved_patterns = _concrete_pattern_integrity_failures(
+        tmp_path,
+        manifest,
+        CONCRETE_PATTERN_ALLOWLIST,
+    )
+    failing_result = _run_marker_validator(tmp_path)
+
+    assert unresolved_patterns == ["tests/test_schema_examples.py"]
+    assert failing_result.returncode == 1
+    assert "tests/test_schema_examples.py" in failing_result.stdout
+
+    _write_text(tmp_path, "tests/test_schema_examples.py")
+
+    unresolved_patterns = _concrete_pattern_integrity_failures(
+        tmp_path,
+        manifest,
+        CONCRETE_PATTERN_ALLOWLIST,
+    )
+    passing_result = _run_marker_validator(tmp_path)
+
+    assert unresolved_patterns == []
+    assert passing_result.returncode == 0, passing_result.stderr
 
 
 def test_template_manifest_maps_every_tracked_file() -> None:
