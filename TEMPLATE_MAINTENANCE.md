@@ -222,7 +222,11 @@ This template supports Python versions that are currently receiving bugfix updat
 1. Visit the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page
 2. Identify which versions are in "bugfix" status (not "security" or "end-of-life")
 3. Update the following files if the supported version window changes:
-   - `.github/workflows/python-ci.yml` (Python version matrix)
+   - `.github/workflows/python-ci.yml` (Python version matrix and any single-version setup steps)
+   - `.github/workflows/precommit-ci.yml` (pre-commit job runtime pin)
+   - `.github/workflows/data-ci.yml` (data-file CI runtime pin)
+   - `.github/workflows/auto-fix-precommit.yml` (auto-fix job runtime pin)
+   - Any other `.github/workflows/*.yml` step that pins `actions/setup-python` `python-version`, so the checklist stays complete as workflows change
    - `pyproject.toml` (requires-python field)
    - `templates/python/pyproject.toml` (requires-python field)
    - Black `target-version` entries in the root and template `pyproject.toml` files
