@@ -362,9 +362,6 @@ template_manifest:
     - pattern: '.gitattributes'
       requires_all:
         - baseline
-    - pattern: '.editorconfig'
-      requires_all:
-        - baseline
     - pattern: '.vscode/**'
       requires_all:
         - baseline

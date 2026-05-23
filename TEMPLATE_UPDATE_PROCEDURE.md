@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260521.2
+**Version:** 1.1.20260523.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-21
+- **Last Updated:** 2026-05-23
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, including the human-readable view of the template sync manifest, the marker-aware retained-state validation helper command, and the sync candidate table generator. Does not define an automated sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -469,7 +469,7 @@ Manifest version 2 rows MAY also use `requires_any`: the path is included only w
 | `TEMPLATE_UPDATE_PROCEDURE.md` | `template-sync-support` |
 | `GETTING_STARTED_NEW_REPO.md`, `GETTING_STARTED_EXISTING_REPO.md`, `OPTIONAL_CONFIGURATIONS.md`, `TEMPLATE_MAINTENANCE.md`, `.github/TEMPLATE_DESIGN_DECISIONS.md` | `template-onboarding` |
 | `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE` | `baseline` |
-| `.gitignore`, `.gitattributes`, `.editorconfig`, `.vscode/**` | `baseline` |
+| `.gitignore`, `.gitattributes`, `.vscode/**` | `baseline` |
 
 ### Manifest Version Migration
 
