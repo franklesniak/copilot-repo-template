@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260523.6
+**Version:** 1.1.20260523.7
 
 ## Metadata
 
@@ -821,6 +821,8 @@ python .template-sync/scripts/validate_marker.py --require-marker
 ```
 
 Omit `--require-marker` only during initial adoption or exploratory sync work where the marker may intentionally be absent; in that mode, the helper exits zero with a clear no-marker message.
+
+The manifest concrete-pattern integrity check has two modes. In the upstream template repository, where `.template-sync/marker.yml` is intentionally absent, `pytest tests/test_template_manifest.py -v` uses upstream-template mode: every concrete manifest path MUST resolve to a Git-tracked file unless it is explicitly allowlisted. In a downstream repository that carries `.template-sync/marker.yml`, the same test uses downstream-marker mode: it reads `template_sync.included_modules` and `template_sync.local_overrides`, checks only concrete paths retained by the marker's module relation, skips local overrides, treats untracked non-ignored files as present, and does not treat ignored scratch or cache files as retained-template files.
 
 Before module-specific validators, check for whitespace errors and unresolved conflict markers:
 
