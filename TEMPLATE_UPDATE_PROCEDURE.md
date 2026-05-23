@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260523.2
+**Version:** 1.1.20260523.3
 
 ## Metadata
 
@@ -470,7 +470,7 @@ Manifest version 2 rows MAY also use `requires_any`: the path is included only w
 | `tests/test_schema_examples.py` | `schema` |
 | `tests/test_generate_sync_candidates.py`, `tests/test_template_manifest.py`, `tests/test_validate_marker.py` | `template-sync-support`, `schema` |
 | `.github/scripts/terraform_hooks.py`, `tests/test_terraform_hooks.py` | `terraform` |
-| `templates/python/**`, `pyproject.toml`, `src/copilot_repo_template/**`, `tests/**/*.py` | `python` |
+| `templates/python/**`, `pyproject.toml`, `src/copilot_repo_template/**`, `tests/*.py`, `tests/**/*.py` | `python` |
 | `templates/terraform/**`, `docs/terraform/**`, `modules/**`, `tests/**/*.tftest.hcl`, `.tflint.hcl`, `*.tf`, `*.tfvars`, `*.tftpl`, `*.tfbackend` | `terraform` |
 | `README.md` | `baseline` |
 | `TEMPLATE_UPDATE_PROCEDURE.md` | `template-sync-support` |

@@ -309,6 +309,9 @@ template_manifest:
     - pattern: 'src/copilot_repo_template/**'
       requires_all:
         - python
+    - pattern: 'tests/*.py'
+      requires_all:
+        - python
     - pattern: 'tests/**/*.py'
       requires_all:
         - python

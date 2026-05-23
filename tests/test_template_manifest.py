@@ -7,9 +7,10 @@ import json
 import os
 import posixpath
 import re
+import subprocess
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable, Mapping
 from urllib.parse import unquote, urlsplit
 
 import jsonschema
@@ -193,6 +194,12 @@ MARKDOWN_INLINE_LINK_RE = re.compile(
     r"(?<!!)\[[^\]\n]+\]\((?P<target><[^>\n]+>|[^)\s\n]+)(?:\s+[^)\n]*)?\)"
 )
 MARKDOWN_REFERENCE_DEFINITION_RE = re.compile(r"^ {0,3}\[[^\]\n]+\]:\s+(?P<target><[^>\n]+>|\S+)")
+CONCRETE_PATTERN_ALLOWLIST = {
+    ".template-sync/marker.yml": (
+        "Downstream-local retained marker; mapped because downstream repos carry "
+        "it but not committed in the upstream template."
+    ),
+}
 
 
 def _load_manifest() -> dict[str, Any]:
@@ -291,7 +298,23 @@ def _module_rows_from_manifest() -> list[tuple[str, str]]:
 
 def _path_mapping_rows_from_manifest() -> list[tuple[str, tuple[str, ...]]]:
     """Return ``(pattern, referenced_modules)`` rows from the manifest."""
-    path_mappings = _template_manifest().get("path_mappings")
+    return _path_mapping_rows_from_template_manifest(_template_manifest())
+
+
+def _path_mapping_rows_from_manifest_document(
+    manifest: dict[str, Any],
+) -> list[tuple[str, tuple[str, ...]]]:
+    """Return path-mapping rows from a manifest document object."""
+    template_manifest = manifest.get("template_manifest")
+    assert isinstance(template_manifest, dict), "template_manifest must be a mapping"
+    return _path_mapping_rows_from_template_manifest(template_manifest)
+
+
+def _path_mapping_rows_from_template_manifest(
+    template_manifest: dict[str, Any],
+) -> list[tuple[str, tuple[str, ...]]]:
+    """Return path-mapping rows from a nested ``template_manifest`` object."""
+    path_mappings = template_manifest.get("path_mappings")
     assert isinstance(path_mappings, list), "path_mappings must be a list"
 
     rows: list[tuple[str, tuple[str, ...]]] = []
@@ -378,16 +401,27 @@ def _path_mapping_relations_from_manifest() -> list[tuple[str, tuple[str, ...], 
 
 def _pattern_specificity(pattern: str) -> tuple[int, int, int]:
     """Return a sortable specificity rank for a manifest path pattern."""
-    is_exact = not any(wildcard in pattern for wildcard in "*?[")
+    is_exact = not _is_glob_pattern(pattern)
     literal_length = sum(1 for character in pattern if character not in "*?[]")
     return (int(is_exact), literal_length, pattern.count("/"))
 
 
-def _manifest_modules_for_path(relative_path: str) -> tuple[str, ...] | None:
+def _is_glob_pattern(pattern: str) -> bool:
+    """Return whether ``pattern`` uses fnmatch wildcard syntax."""
+    return any(wildcard in pattern for wildcard in "*?[")
+
+
+def _manifest_modules_for_path(
+    relative_path: str,
+    path_mapping_rows: list[tuple[str, tuple[str, ...]]] | None = None,
+) -> tuple[str, ...] | None:
     """Return the modules for ``relative_path`` using manifest filtering semantics."""
+    if path_mapping_rows is None:
+        path_mapping_rows = _path_mapping_rows_from_manifest()
+
     matches: list[tuple[tuple[int, int, int], tuple[str, ...]]] = []
 
-    for pattern, modules in _path_mapping_rows_from_manifest():
+    for pattern, modules in path_mapping_rows:
         if fnmatch.fnmatchcase(relative_path, pattern):
             matches.append((_pattern_specificity(pattern), modules))
 
@@ -403,6 +437,59 @@ def _manifest_modules_for_path(relative_path: str) -> tuple[str, ...] | None:
             if module not in selected_modules:
                 selected_modules.append(module)
     return tuple(selected_modules)
+
+
+def _git_tracked_paths(repo_root: Path) -> tuple[str, ...]:
+    """Return paths tracked by git under ``repo_root`` using POSIX separators."""
+    result = subprocess.run(
+        ["git", "ls-files"],
+        cwd=repo_root,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    return tuple(path for path in result.stdout.splitlines() if path)
+
+
+def _unresolved_concrete_path_mapping_patterns(
+    path_mapping_rows: list[tuple[str, tuple[str, ...]]],
+    tracked_paths: Iterable[str],
+    allowlist: Mapping[str, str],
+) -> list[str]:
+    """Return concrete manifest patterns that do not resolve to tracked files."""
+    tracked_path_set = set(tracked_paths)
+    return [
+        pattern
+        for pattern, _modules in path_mapping_rows
+        if not _is_glob_pattern(pattern)
+        and pattern not in tracked_path_set
+        and pattern not in allowlist
+    ]
+
+
+def _unmapped_tracked_paths(
+    tracked_paths: Iterable[str],
+    path_mapping_rows: list[tuple[str, tuple[str, ...]]],
+) -> list[str]:
+    """Return git-tracked paths that do not resolve to a manifest mapping."""
+    return [
+        tracked_path
+        for tracked_path in tracked_paths
+        if _manifest_modules_for_path(tracked_path, path_mapping_rows) is None
+    ]
+
+
+def _run_git(repo_root: Path, *args: str) -> None:
+    """Run a git command in ``repo_root`` for manifest-integrity fixtures."""
+    subprocess.run(
+        ["git", *args],
+        cwd=repo_root,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
 
 
 def _strip_inline_blocks(relative_path: str, marker_begin: str, marker_end: str) -> str:
@@ -859,6 +946,92 @@ def test_template_manifest_path_mapping_modules_exist() -> None:
         if module not in modules
     }
     assert not unknown_modules
+
+
+def test_top_level_python_tests_map_to_python_module() -> None:
+    """Top-level Python test files must not fall through the recursive glob gap."""
+    assert _manifest_modules_for_path("tests/__init__.py") == ("python",)
+    assert _manifest_modules_for_path("tests/test_example.py") == ("python",)
+
+
+def test_template_manifest_concrete_patterns_resolve_to_tracked_files() -> None:
+    """Concrete manifest patterns must point at tracked paths unless allowlisted."""
+    assert CONCRETE_PATTERN_ALLOWLIST == {
+        ".template-sync/marker.yml": (
+            "Downstream-local retained marker; mapped because downstream repos carry "
+            "it but not committed in the upstream template."
+        ),
+    }
+
+    unresolved_patterns = _unresolved_concrete_path_mapping_patterns(
+        _path_mapping_rows_from_manifest(),
+        _git_tracked_paths(REPO_ROOT),
+        CONCRETE_PATTERN_ALLOWLIST,
+    )
+    failure_message = (
+        "Concrete manifest patterns must resolve to tracked files or be allowlisted:\n"
+        + "\n".join(unresolved_patterns)
+    )
+
+    assert not unresolved_patterns, failure_message
+
+
+def test_template_manifest_flags_unallowlisted_missing_concrete_patterns(
+    tmp_path: Path,
+) -> None:
+    """A stale concrete path in a synthetic manifest must fail integrity checks."""
+    (tmp_path / "tracked.txt").write_text("tracked\n", encoding="utf-8")
+    manifest = _minimal_manifest_document(
+        2,
+        {
+            "pattern": "missing.txt",
+            "requires_all": ["baseline"],
+        },
+    )
+
+    unresolved_patterns = _unresolved_concrete_path_mapping_patterns(
+        _path_mapping_rows_from_manifest_document(manifest),
+        ["tracked.txt"],
+        {},
+    )
+
+    assert unresolved_patterns == ["missing.txt"]
+
+
+def test_template_manifest_maps_every_tracked_file() -> None:
+    """Every git-tracked path must resolve through manifest matching semantics."""
+    unmapped_paths = _unmapped_tracked_paths(
+        _git_tracked_paths(REPO_ROOT),
+        _path_mapping_rows_from_manifest(),
+    )
+    failure_message = (
+        "Git-tracked files must resolve to a template sync manifest mapping:\n"
+        + "\n".join(unmapped_paths)
+    )
+
+    assert not unmapped_paths, failure_message
+
+
+def test_template_manifest_flags_unmapped_tracked_files(tmp_path: Path) -> None:
+    """A tracked file with no synthetic manifest mapping must fail integrity checks."""
+    _run_git(tmp_path, "init")
+    (tmp_path / "mapped.txt").write_text("mapped\n", encoding="utf-8")
+    (tmp_path / "unmapped.txt").write_text("unmapped\n", encoding="utf-8")
+    _run_git(tmp_path, "add", "--", "mapped.txt", "unmapped.txt")
+    manifest = _minimal_manifest_document(
+        2,
+        {
+            "pattern": "mapped.txt",
+            "requires_all": ["baseline"],
+        },
+    )
+
+    unmapped_paths = _unmapped_tracked_paths(
+        _git_tracked_paths(tmp_path),
+        _path_mapping_rows_from_manifest_document(manifest),
+    )
+
+    assert unmapped_paths == ["unmapped.txt"]
 
 
 def test_template_sync_helper_tests_map_to_support_and_schema_modules() -> None:
