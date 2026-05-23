@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260523.4
+**Version:** 1.1.20260523.5
 
 ## Metadata
 
@@ -611,11 +611,13 @@ Before Step 13 advances `template_sync.last_reviewed_template_commit`, save the 
 python .template-sync/scripts/generate_sync_candidates.py --range-head RANGE_HEAD_SHA > SYNC_CANDIDATE_TABLE_PATH
 ```
 
-Record both `RANGE_BASE_SHA` and `RANGE_HEAD_SHA` with the saved table. After Step 13 advances the marker, rerunning the helper without an explicit old `--range-base` correctly uses the new marker value and can produce an empty range. To reproduce the reviewed table after marker advancement, pass the recorded range explicitly, even if `template/main` has moved:
+Record both `RANGE_BASE_SHA` and `RANGE_HEAD_SHA` with the saved table. After Step 13 advances the marker, rerunning the helper without an explicit old `--range-base` correctly uses the new marker value and can produce an empty range. To rerun the helper for the same reviewed range after marker advancement, pass the recorded range explicitly, even if `template/main` has moved:
 
 ```bash
 python .template-sync/scripts/generate_sync_candidates.py --range-base RANGE_BASE_SHA --range-head RANGE_HEAD_SHA
 ```
+
+The saved Step 6 candidate table is the source of truth for the reviewed candidate set. A rerun for the same range uses the current `.template-sync/marker.yml` values for `included_modules`, `local_overrides`, and `deferred_protected_candidates`, so its output can diverge from the saved table when Step 13 changed any of those fields even though the commit range is unchanged.
 
 For each path from `git diff --name-status -M`:
 
