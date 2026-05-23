@@ -861,6 +861,14 @@ def test_template_manifest_path_mapping_modules_exist() -> None:
     assert not unknown_modules
 
 
+def test_template_sync_helper_tests_map_to_support_and_schema_modules() -> None:
+    """Top-level template-sync helper tests must have explicit manifest mappings."""
+    expected_modules = ("template-sync-support", "schema")
+
+    assert _manifest_modules_for_path("tests/test_generate_sync_candidates.py") == expected_modules
+    assert _manifest_modules_for_path("tests/test_validate_marker.py") == expected_modules
+
+
 def test_terraform_inline_blocks_are_declared_for_template_sync() -> None:
     """Terraform-only inline blocks must be paired with manifest notes."""
     mappings = _path_mapping_by_pattern()
