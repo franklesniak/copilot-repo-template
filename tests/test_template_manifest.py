@@ -869,6 +869,17 @@ def test_template_sync_helper_tests_map_to_support_and_schema_modules() -> None:
     assert _manifest_modules_for_path("tests/test_validate_marker.py") == expected_modules
 
 
+def test_dependabot_schema_regression_surface_maps_to_github_platform_and_schema() -> None:
+    """Dependabot schema regression files must be kept in the same manifest surface."""
+    expected_modules = ("github-platform", "schema")
+
+    assert _manifest_modules_for_path("tests/test_dependabot_schema.py") == expected_modules
+    assert (
+        _manifest_modules_for_path("tests/fixtures/dependabot/auto-assignment.yml")
+        == expected_modules
+    )
+
+
 def test_terraform_inline_blocks_are_declared_for_template_sync() -> None:
     """Terraform-only inline blocks must be paired with manifest notes."""
     mappings = _path_mapping_by_pattern()
