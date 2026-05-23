@@ -41,7 +41,7 @@ As of May 2026, this repository's active Python support window is Python 3.13 th
 
 ### When to Update
 
-Check the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page annually (typically around October when new Python versions are released). Update the minimum required version when upstream support changes.
+Check the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page annually (typically around October when new Python versions are released). Update the supported Python version window when upstream support changes. See [Reviewing Python Version Requirements](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/TEMPLATE_MAINTENANCE.md#reviewing-python-version-requirements) for the maintainer checklist of files to update in sync.
 
 **Do not default to or require unsupported Python versions in code, documentation, or configuration files.**
 
