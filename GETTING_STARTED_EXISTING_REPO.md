@@ -152,7 +152,7 @@ The tools you need depend on which features you plan to adopt:
 git --version
 
 # Check Python version (if adopting Python features or pre-commit)
-# Python 3.13+ is required by this template's pre-commit hooks and CI workflows
+# Python 3.13 or 3.14 is required by this template's pre-commit hooks and CI workflows
 python --version
 
 # Check pip version (if adopting Python features or pre-commit)
@@ -169,7 +169,7 @@ node --version
 git --version
 
 # Check Python version (if adopting Python features or pre-commit)
-# Python 3.13+ is required by this template's pre-commit hooks and CI workflows
+# Python 3.13 or 3.14 is required by this template's pre-commit hooks and CI workflows
 python3 --version
 
 # Check pip version (if adopting Python features or pre-commit)
@@ -991,7 +991,7 @@ Pre-commit hooks run automated checks before each commit, catching issues early 
 
 **Prerequisites:**
 
-- Python installed (3.13+)
+- Python installed (3.13 or 3.14)
 - pre-commit installed (see installation steps below; pipx/Homebrew installs make `pre-commit` available via PATH, pip installs require module invocation)
 - HashiCorp Terraform and TFLint installed if you keep the Terraform hooks
 
@@ -1579,7 +1579,7 @@ The CI workflow runs mypy for type checking. Add the `[tool.mypy]` section if no
 
 ```toml
 [tool.mypy]
-python_version = "3.13"  # Match your project's requires-python version
+python_version = "3.13"  # Use the lowest Python line your project supports
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false  # Start permissive, tighten later as you add type hints
@@ -1961,7 +1961,7 @@ Instead, update your existing README to document any new development requirement
 ### Prerequisites
 
 - Node.js 20+ (for markdown linting)
-- Python 3.13+ (for pre-commit hooks)
+- Python 3.13 or 3.14 (for pre-commit hooks)
 - PowerShell (for PSScriptAnalyzer)
 
 ### Setup

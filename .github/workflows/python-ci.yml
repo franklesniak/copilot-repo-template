@@ -28,10 +28,10 @@
 #    workflows on all changes to ensure accuracy when the template is used.
 #
 # 3. Python Version Policy:
-#    Test only actively supported bugfix versions (not security-fix-only).
+#    Test actively supported bugfix versions (not security-fix-only).
 #    Python versions in "security fix only" phase are NOT publicly installable
 #    with security updates—they require building from source.
-#    As of January 2026, Python 3.13 is the only version that qualifies.
+#    As of May 2026, Python 3.13 and 3.14 qualify.
 #    Update this when upstream support changes (typically annually around October).
 #    See: https://devguide.python.org/versions/
 #    See: .github/instructions/yaml.instructions.md (GitHub Actions Setup Version Pins).
@@ -84,8 +84,8 @@ jobs:
         uses: actions/setup-python@v6
         with:
           # Python Version Policy:
-          # Always test with a Python version currently receiving bugfixes.
-          # As of January 2026, Python 3.13 is the latest bugfix-supported version.
+          # Run mypy on the lowest supported bugfix line so type checks stay
+          # compatible across the supported Python window.
           # Update this when upstream support changes (typically annually around October).
           # See: https://devguide.python.org/versions/
           # See: .github/instructions/yaml.instructions.md (GitHub Actions Setup Version Pins).
@@ -128,15 +128,15 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         # Python Version Policy:
-        # Test only actively supported bugfix versions (not security-fix-only).
-        # As of January 2026, Python 3.13 is the latest bugfix-supported version.
+        # Test actively supported bugfix versions (not security-fix-only).
+        # As of May 2026, Python 3.13 and 3.14 qualify.
         # Python 3.12 stopped receiving bugfixes in April 2025 (security-fix-only).
         # Python versions in "security fix only" phase are NOT publicly installable
         # with security updates—they require building from source.
         # Update this when upstream support changes (typically annually around October).
         # See: https://devguide.python.org/versions/
         # See: .github/instructions/yaml.instructions.md (GitHub Actions Setup Version Pins).
-        python-version: ['3.13']
+        python-version: ['3.13', '3.14']
 
     steps:
       - name: Checkout repository
