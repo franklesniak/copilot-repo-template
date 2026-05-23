@@ -4,7 +4,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-21
+- **Last Updated:** 2026-05-23
 - **Scope:** Periodic maintenance procedures for the `franklesniak/copilot-repo-template` repository, including dependency review cadence, pre-commit hook upkeep, Terraform/TFLint version reviews, schema and worked-example reviews, template sync taxonomy upkeep, and validation steps for template-only changes. Does not cover repositories created FROM this template; consumers of the template should follow [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md#ongoing-maintenance) instead.
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [Contributing](CONTRIBUTING.md)
 
@@ -213,7 +213,7 @@ When reviewing a taxonomy change, include `pytest tests/test_template_manifest.p
 
 ## Reviewing Python Version Requirements
 
-This template requires Python versions that are currently receiving bugfix updates from the Python core team.
+This template supports Python versions that are currently receiving bugfix updates from the Python core team.
 
 **When to review:** Annually, typically around October when new Python versions are released.
 
@@ -221,11 +221,13 @@ This template requires Python versions that are currently receiving bugfix updat
 
 1. Visit the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page
 2. Identify which versions are in "bugfix" status (not "security" or "end-of-life")
-3. Update the following files if the minimum supported version changes:
+3. Update the following files if the supported version window changes:
    - `.github/workflows/python-ci.yml` (Python version matrix)
    - `pyproject.toml` (requires-python field)
    - `templates/python/pyproject.toml` (requires-python field)
-   - `.github/instructions/python.instructions.md` (version references)
+   - Black `target-version` entries in the root and template `pyproject.toml` files
+   - `[tool.mypy] python_version` entries when the lowest supported version changes
+   - `.github/instructions/python.instructions.md` (version references, after explicit protected-file authorization)
 
 ---
 

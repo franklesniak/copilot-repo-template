@@ -295,7 +295,7 @@ Update the placeholder examples to match your project's supported runtimes:
 ```yaml
 # Default (Python-focused):
 placeholder: |
-  Python 3.13.1 (or your installed version)
+  Python 3.14.2 (or your installed supported version)
   PowerShell 7.4.6 or Windows PowerShell 5.1
   Markdown tooling/renderer (if relevant): e.g., Pandoc 3.1.2
 
@@ -2782,23 +2782,23 @@ The mypy step includes `continue-on-error: true` by default:
 
 ### Customizing Python Version Matrix
 
-The test matrix runs on Python 3.13 by default:
+The test matrix runs on the template's currently bugfix-supported Python lines by default:
 
 ```yaml
 strategy:
   matrix:
-    python-version: ['3.13']
+    python-version: ['3.13', '3.14']
 ```
 
-**To test multiple versions:**
+**To narrow or expand the matrix for your own support policy:**
 
 ```yaml
 strategy:
   matrix:
-    python-version: ['3.11', '3.12', '3.13']
+    python-version: ['3.14']
 ```
 
-> **Note:** Only test Python versions currently receiving bugfix updates. Security-fix-only versions require building from source and are not recommended for CI.
+> **Note:** Only test Python versions currently receiving bugfix updates unless your project has a separate long-term-support policy. Security-fix-only versions require building from source and are not recommended for this template's default CI.
 
 ### Customizing Test Paths
 
@@ -3174,8 +3174,8 @@ The `classifiers` field in `pyproject.toml` provides metadata for PyPI and other
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 ```
 
@@ -3240,27 +3240,27 @@ The `src/` layout is recommended because it:
 
 ### Python Version Configuration
 
-Different Python tools require different version format specifications. When updating the minimum Python version, you must update **all three** of these settings:
+Different Python tools require different version format specifications. When updating the Python support window, you must update the relevant settings together:
 
 #### 1. Project Metadata: `requires-python`
 
 ```toml
 [project]
-requires-python = ">=3.13"  # PEP 621 standard: ">=" operator with dotted version
+requires-python = ">=3.13,<3.15"  # PEP 621 version range using dotted versions
 ```
 
 #### 2. Black Configuration: `target-version`
 
 ```toml
 [tool.black]
-target-version = ["py313"]  # List of strings in "pyXYZ" format
+target-version = ["py313", "py314"]  # List of strings in "pyXYZ" format
 ```
 
 #### 3. mypy Configuration: `python_version`
 
 ```toml
 [tool.mypy]
-python_version = "3.13"  # Dotted version string (no ">=" operator)
+python_version = "3.13"  # Lowest supported version, dotted string only
 ```
 
 #### 4. Ruff Configuration: `target-version` (Optional)
@@ -3269,7 +3269,7 @@ python_version = "3.13"  # Dotted version string (no ">=" operator)
 [tool.ruff]
 # Ruff automatically infers target-version from [project].requires-python
 # Only set this if you need to override:
-# target-version = "py313"  # Single string in "pyXYZ" format (not a list)
+# target-version = "py313"  # Lowest supported version, single string (not a list)
 ```
 
 **Important:** If you set `[project].requires-python`, Ruff will automatically use that value. Setting `[tool.ruff].target-version` explicitly will override the inferred value.
@@ -3281,12 +3281,12 @@ python_version = "3.13"  # Dotted version string (no ">=" operator)
 - Python versions in "security fix only" phase are **not publicly installable** with security updates—they require building from source with manually applied patches.
 - Check the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page for current version status.
 
-> **Template adopters:** The template defaults to Python 3.13+. Customize the `requires-python` field in `pyproject.toml` based on your project's specific requirements.
+> **Template adopters:** The template currently defaults to Python 3.13 through 3.14. Customize the `requires-python` field in `pyproject.toml` based on your project's specific requirements.
 
 **When to update:**
 
 - Check the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page annually (typically around October when new Python versions are released)
-- Update all version references in `pyproject.toml` when the minimum supported version changes
+- Update all version references in `pyproject.toml` when the supported version window changes
 - Update the CI workflow's Python version matrix in `.github/workflows/python-ci.yml`
 
 ### mypy Path Configuration
@@ -3814,12 +3814,12 @@ git commit -m "chore: update pre-commit hooks"
 
 ### Reviewing Python Version Requirements
 
-If your project uses Python, periodically review your minimum Python version requirement:
+If your project uses Python, periodically review your Python support window:
 
 1. Visit the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page
 2. Check which versions are in "bugfix" status
-3. Update `pyproject.toml` `requires-python` field if needed
-4. Update CI workflow Python version matrix if needed
+3. Update `pyproject.toml` `requires-python`, Black `target-version`, and mypy `python_version` fields if needed
+4. Update the CI workflow Python version matrix if needed
 
 ---
 

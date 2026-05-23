@@ -18,10 +18,11 @@ version = "0.1.0"
 description = "Template repository providing GitHub Copilot instructions and CI configurations"
 readme = "README.md"
 # Python Version Policy:
-# Always require a Python version that is currently receiving bugfixes.
+# Support Python release lines that are currently receiving bugfixes.
 # Check https://devguide.python.org/versions/ for current version status.
-# Update this when upstream support changes (typically annually around October).
-requires-python = ">=3.13"
+# Keep this range, classifiers, Black targets, mypy's lowest-supported version,
+# and the CI matrix aligned when upstream support changes.
+requires-python = ">=3.13,<3.15"
 license = "MIT"
 authors = [
     { name = "Frank Lesniak" }
@@ -31,6 +32,7 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 
 # Runtime dependencies
@@ -60,9 +62,15 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.black]
+line-length = 100
+# Keep this explicit so Black does not infer prerelease targets from
+# [project].requires-python before the template has opted into them.
+target-version = ["py313", "py314"]
+
 [tool.mypy]
-# Update python_version when minimum Python version changes.
-# mypy uses a dotted version string (e.g., "3.13" for Python 3.13).
+# Check against the lowest supported Python line so type checks stay compatible
+# across the support window. mypy uses a dotted version string.
 python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true

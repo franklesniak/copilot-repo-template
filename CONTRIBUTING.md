@@ -21,7 +21,7 @@ Thank you for your interest in contributing! This document provides guidelines f
 
 ## Python Version Requirements
 
-**Important:** Contributors and maintainers must use a Python version that is **currently receiving bugfixes** from the Python core team.
+**Important:** Contributors and maintainers must use a Python version that is **currently receiving bugfixes** from the Python core team. This template currently supports Python 3.13 and 3.14.
 
 ### Why This Matters
 
@@ -34,6 +34,8 @@ Thank you for your interest in contributing! This document provides guidelines f
 This project requires a Python version that is currently in "bugfix" status according to the Python core team.
 
 See the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page for current version status.
+
+As of May 2026, this repository's active Python support window is Python 3.13 through Python 3.14. The root `pyproject.toml`, Python CI matrix, Black target versions, and contributor guidance should move together when the upstream bugfix window changes.
 
 > **Template adopters:** Customize this section based on your project's specific Python version requirements. You may specify a minimum version (e.g., "Python 3.11+") or reference your project's own support policy.
 
@@ -122,7 +124,7 @@ The hooks mirror Terraform CI: format checks run from the repository root, valid
 Ensure you have a Python version that is currently receiving bugfixes (see [Python Version Requirements](#python-version-requirements) above):
 
 ```bash
-python --version  # Should be a version currently receiving bugfixes
+python --version  # Should be Python 3.13 or 3.14 while this policy applies
 ```
 
 ### 4. Install pre-commit (Globally)
@@ -346,7 +348,7 @@ Open a PR on GitHub and fill out the PR template checklist.
 
 When submitting a pull request:
 
-- [ ] Confirm minimum Python version (if applicable) complies with bugfix support policy
+- [ ] Confirm Python version policy (if applicable) complies with the bugfix support window
 - [ ] Confirm `pre-commit run --all-files` passes locally
 - [ ] Include tests for new functionality
 - [ ] Update documentation as needed
