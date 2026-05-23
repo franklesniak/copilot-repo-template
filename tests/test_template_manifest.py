@@ -180,6 +180,10 @@ ONBOARDING_ONLY_REFERENCE_TOKENS = (
     "TEMPLATE_MAINTENANCE.md",
     "TEMPLATE_DESIGN_DECISIONS.md",
 )
+SKIPPABLE_OPTIONAL_REFERENCE_PATHS = (
+    "tests/test_dependabot_schema.py",
+    "tests/fixtures/dependabot/auto-assignment.yml",
+)
 UPSTREAM_TEMPLATE_BLOB_ROOT = "https://github.com/franklesniak/copilot-repo-template/blob/HEAD/"
 UPSTREAM_ONBOARDING_URL_RE = re.compile(
     re.escape(UPSTREAM_TEMPLATE_BLOB_ROOT)
@@ -1506,8 +1510,8 @@ def test_copy_ready_files_do_not_use_onboarding_only_relative_references() -> No
     )
 
 
-def test_retained_markdown_files_do_not_link_relatively_to_onboarding_files() -> None:
-    """Retained Markdown files must not link relatively to onboarding-only files."""
+def test_retained_markdown_files_do_not_link_relatively_to_skippable_files() -> None:
+    """Retained Markdown files must not link relatively to skippable files."""
     failures: list[str] = []
 
     for path in _retained_markdown_files():
@@ -1517,13 +1521,16 @@ def test_retained_markdown_files_do_not_link_relatively_to_onboarding_files() ->
             if resolved_target is None:
                 continue
             target_modules = _manifest_modules_for_path(resolved_target)
-            if target_modules is None or "template-onboarding" not in target_modules:
+            if resolved_target not in SKIPPABLE_OPTIONAL_REFERENCE_PATHS and (
+                target_modules is None or "template-onboarding" not in target_modules
+            ):
                 continue
             failures.append(f"{source_relative_path}:{line_number}: {target} -> {resolved_target}")
 
     assert not failures, (
         "Retained Markdown files must use neutral wording or absolute upstream URLs "
-        "when linking to template-onboarding-owned files:\n" + "\n".join(failures)
+        "when linking to template-onboarding-owned files or explicitly skippable "
+        "optional files:\n" + "\n".join(failures)
     )
 
 

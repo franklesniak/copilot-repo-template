@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260523.5
+**Version:** 1.1.20260523.6
 
 ## Metadata
 
@@ -374,7 +374,7 @@ Worked local-overrides mini scenario:
 
 ### Downstream adoption: Dependabot schema regression surface
 
-Downstream repositories that adopt both `github-platform` and `schema` SHOULD adopt [`tests/test_dependabot_schema.py`](tests/test_dependabot_schema.py), [`tests/fixtures/dependabot/auto-assignment.yml`](tests/fixtures/dependabot/auto-assignment.yml), and the related Dependabot validation hook or configuration when their live `.github/dependabot.yml` stays within the pinned `vendor.dependabot` schema surface. This keeps the documented Dependabot auto-assignment guidance and the pytest-to-pre-commit `check-jsonschema` pin alignment under test.
+Downstream repositories that adopt both `github-platform` and `schema` SHOULD adopt [`tests/test_dependabot_schema.py`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/tests/test_dependabot_schema.py), [`tests/fixtures/dependabot/auto-assignment.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/tests/fixtures/dependabot/auto-assignment.yml), and the related Dependabot validation hook or configuration when their live `.github/dependabot.yml` stays within the pinned `vendor.dependabot` schema surface. This keeps the documented Dependabot auto-assignment guidance and the pytest-to-pre-commit `check-jsonschema` pin alignment under test.
 
 A downstream repository MAY skip this regression surface when its live `.github/dependabot.yml` intentionally uses GitHub-supported fields rejected by the pinned built-in `vendor.dependabot` schema, or when the repository does not adopt Dependabot platform configuration. Record that skip explicitly: prefer path-scoped `local_overrides` entries in `.template-sync/marker.yml` for the fixture, test, and related Dependabot validation paths, each with the skip rationale; alternatively, record an explicit validation-policy decision in the sync summary that names the skipped paths and explains why the repository chose not to retain the pinned vendor-schema regression surface.
 
