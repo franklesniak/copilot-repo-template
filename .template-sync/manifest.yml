@@ -147,6 +147,14 @@ template_manifest:
     - pattern: '.github/dependabot.yml'
       requires_all:
         - github-platform
+    - pattern: 'tests/test_dependabot_schema.py'
+      requires_all:
+        - github-platform
+        - schema
+    - pattern: 'tests/fixtures/dependabot/auto-assignment.yml'
+      requires_all:
+        - github-platform
+        - schema
     - pattern: '.github/workflows/markdownlint.yml'
       requires_all:
         - markdown

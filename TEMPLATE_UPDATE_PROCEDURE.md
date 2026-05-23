@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260523.1
+**Version:** 1.1.20260523.2
 
 ## Metadata
 
@@ -372,6 +372,12 @@ Worked local-overrides mini scenario:
 3. The per-file row starts with `SKIP` from the override, but the maintainer upgrades the decision to `MERGE` because the security note is relevant.
 4. The sync summary still lists the applied override and the upstream change, for example: `README.md` defaulted to `SKIP`; upstream added security reporting guidance; final decision `MERGE`.
 
+### Downstream adoption: Dependabot schema regression surface
+
+Downstream repositories that adopt both `github-platform` and `schema` SHOULD adopt [`tests/test_dependabot_schema.py`](tests/test_dependabot_schema.py), [`tests/fixtures/dependabot/auto-assignment.yml`](tests/fixtures/dependabot/auto-assignment.yml), and the related Dependabot validation hook or configuration when their live `.github/dependabot.yml` stays within the pinned `vendor.dependabot` schema surface. This keeps the documented Dependabot auto-assignment guidance and the pytest-to-pre-commit `check-jsonschema` pin alignment under test.
+
+A downstream repository MAY skip this regression surface when its live `.github/dependabot.yml` intentionally uses GitHub-supported fields rejected by the pinned built-in `vendor.dependabot` schema, or when the repository does not adopt Dependabot platform configuration. Record that skip explicitly: prefer path-scoped `local_overrides` entries in `.template-sync/marker.yml` for the fixture, test, and related Dependabot validation paths, each with the skip rationale; alternatively, record an explicit validation-policy decision in the sync summary that names the skipped paths and explains why the repository chose not to retain the pinned vendor-schema regression surface.
+
 ### Deferred Protected Candidates
 
 Protected-file candidates remain in `deferred_protected_candidates` until the owner applies them through an authorized PR or explicitly dismisses them. Each entry includes:
@@ -444,6 +450,7 @@ Manifest version 2 rows MAY also use `requires_any`: the path is included only w
 | `.github/pull_request_template.md` | `github-templates` |
 | `.github/CODEOWNERS` | `github-templates` |
 | `.github/dependabot.yml` | `github-platform` |
+| `tests/test_dependabot_schema.py`, `tests/fixtures/dependabot/auto-assignment.yml` | `github-platform`, `schema` |
 | `.github/workflows/markdownlint.yml` | `markdown`, `github-actions` |
 | `.github/workflows/powershell-ci.yml` | `powershell`, `github-actions` |
 | `.github/workflows/python-ci.yml` | `python`, `github-actions` |
