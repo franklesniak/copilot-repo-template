@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.5.20260518.0
+**Version:** 1.5.20260524.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-18
+- **Last Updated:** 2026-05-24
 - **Scope:** Defines documentation standards for Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) files in this repository, including specs, design docs, runbooks, ADRs, instruction files, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -163,6 +163,38 @@ This subsection applies to Tier 1 documents and to any other document that inten
   - Per-file `<!-- markdownlint-disable RULE -->` directives MUST NOT contradict the configuration in `.markdownlint.jsonc`; their purpose is portability, not local override.
   - When a contributor wants an additional rule disabled, update `.markdownlint.jsonc` first. Per-file directives are only for mirroring repo-wide configuration where default enforcement would harm portability.
 - Code-fence info strings MUST contain only a single language tag (e.g., `powershell`, `text`, `json`, `bash`). Do NOT embed file paths, URLs, or other metadata in the info string (for example, `powershell name=src/Foo.ps1 url=https://...#L1-L9` is not allowed). To cite the source of a code excerpt, place a line of the form ``Source: [`relative/path` (lines <start>-<end>)](relative/path#L<start>-L<end>).`` in prose immediately above the fence (for example, ``Source: [`src/Foo.ps1` (lines 1-9)](src/Foo.ps1#L1-L9).``). This keeps the language tag standard, preserves syntax highlighting across Markdown renderers, and reinforces the existing rule to avoid raw URLs in prose.
+
+#### Fenced code blocks inside list items
+
+When a bullet item includes a fenced code block followed by continuation prose that should render as part of the same bullet, the fence **and** the continuation prose **MUST** both be indented to the column after the bullet marker. For this repository's unordered `-` bullets, that is 2 spaces after the marker (markdownlint's MD007 default, which is not overridden in `.markdownlint.jsonc`). Within this pattern, blank lines between the bullet text, fence, and continuation prose **SHOULD** remain truly blank. Mixing an unindented fence with an indented continuation paragraph **MUST NOT** occur, because CommonMark-style renderers can end the list item at the unindented fence and then treat the continuation paragraph as a disconnected block.
+
+When no continuation prose follows the fence before the next sibling bullet or section, a fenced code block that is intended as a standalone example associated with the preceding bullet **MAY** be left at 0 indent. This preserves the existing repository convention used in places such as the `JSONDecodeError` example in `.github/instructions/python.instructions.md` under `Error Handling`. To make the fence render as part of the bullet item, use the 2-space-indented pattern (per the MUST rule above).
+
+MUST-compliant example:
+
+````markdown
+- Generate the local report.
+
+  ```bash
+  ./scripts/write-report.sh
+  ```
+
+  The command prints the report path after it completes.
+````
+
+MUST NOT example:
+
+````markdown
+- Generate the local report.
+
+```bash
+./scripts/write-report.sh
+```
+
+  The command prints the report path after it completes.
+````
+
+Note: A renderer can end the list item at the unindented fence and render the continuation as a separate paragraph.
 
 #### Shell command portability
 
