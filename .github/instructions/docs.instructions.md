@@ -7,7 +7,7 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.5.20260524.0
+**Version:** 1.5.20260524.1
 
 ## Metadata
 
@@ -267,6 +267,7 @@ When writing or updating requirements in specification documents:
   - `PROJ-REQ-001`, `PROJ-REQ-002`, ...
 - Each requirement MUST be phrased as a testable statement:
   - "The system MUST …"
+- Each requirement MUST define required behavior, limits, defaults, and ownership without unresolved placeholder markers; see the placeholder-marker rule in [Prohibited Patterns](#prohibited-patterns).
 - Each requirement entry SHOULD include:
   - **Rationale:** why it exists
   - **Acceptance Criteria:** objective checks (bullets)
@@ -350,7 +351,16 @@ Before merging, verify:
 
 ## Prohibited Patterns
 
-- "TODO:  document later" in spec docs (use "Open Question" instead)
+- Unresolved requirement or specification content in normative or definitional text. Prohibited markers include, but are not limited to:
+  - `TODO:  document later`, `TODO`, `FIXME`, and `XXX` when used as unresolved requirement content.
+  - `TBD`, `to be determined`, `(default ... to be determined)`, and other parenthetical `to be determined` defaults inside requirement clauses.
+  - Bare `unspecified` or `left to the implementer` language when it leaves required behavior, limits, defaults, or ownership unresolved without an explicit `**Open Question:**`, `**Assumption:**`, measurable bound, or cross-reference.
+  Replace these patterns with one of:
+  - A measurable value, such as `(default 10 seconds; SHOULD be configurable)`.
+  - An explicit `**Open Question:**` labeled entry.
+  - An explicit `**Assumption:**` labeled entry.
+  - A cross-reference to another requirement or section that defines the value.
+  This rule applies to unresolved requirements/specification content only. It does not ban legitimate template-substitution placeholders, didactic examples, migration notes, or code-comment TODO examples elsewhere in the repository.
 - Contradictory statements between the spec and other docs
 - Vague guarantees without measurable definitions
 - Unowned open questions ("someone should figure out…")
