@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.5.20260524.1
+**Version:** 1.5.20260524.2
 
 ## Metadata
 
@@ -98,7 +98,7 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
 4. **Build an evaluation rubric.** Define 4-6 scoring criteria relevant to the concern (e.g., style guide compliance, performance, code simplicity, PII safety, PS 5.1 compatibility). Score each criterion on a 1-5 scale.
 
-5. **Score and select.** Apply the rubric to every option. Present the results in a Markdown table. Select the option with the highest total score. When the rubric produces a clear highest-scoring option, the agent **MUST** select that option and carry it forward to step 7. A topic touching owner preferences, governance, or policy is not, by itself, an escalation trigger when the rubric produces a clear winner; this clarification stands independently of the protected-file authorization checkpoint in step 7.
+5. **Score and select.** Apply the rubric to every option. Present the results in a Markdown table. Select the option with the highest total score. When the rubric produces a clear highest-scoring option, the agent **MUST** select that option and carry it forward to step 7, unless an escalation condition under the **Operationalized escalation gate** below applies. A topic touching owner preferences, governance, or policy is not, by itself, an escalation trigger when the rubric produces a clear winner; this clarification stands independently of the protected-file authorization checkpoint in step 7.
 
     **Escalation path:** If one of the escalation conditions (a)-(d) under **Operationalized escalation gate** below applies, escalate to the PR owner instead of selecting an option. Post a **standalone PR comment** (not a reply to the review thread) containing:
     - A brief summary of the reviewer's concern and which file/line it applies to
