@@ -747,8 +747,9 @@ def write_candidate_table(repo_root: Path, output_path: Path, candidate_table: s
         output_path.write_text(candidate_table + "\n", encoding="utf-8")
     except OSError as error:
         output_relative = repository_relative_path(output_path, repo_root)
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
         raise CandidateGenerationError(
-            f"Unable to write candidate table to {output_relative}: {error}"
+            f"Unable to write candidate table to {output_relative}: {error_summary}"
         ) from error
 
 
