@@ -7,13 +7,13 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.5.20260523.1
+**Version:** 1.5.20260524.1
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-23
+- **Last Updated:** 2026-05-24
 - **Scope:** Defines Python coding standards for all Python files in this repository, including modules, scripts, tests, and tooling. Covers style, structure, error handling, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -194,6 +194,14 @@ except json.JSONDecodeError as error:
 ```
 
 - **MUST NOT** swallow errors silently.  If you must continue, **MUST** log at `debug` or `warning` with rationale.
+- **SHOULD NOT** interpolate an `OSError`-derived exception directly into user-facing output. User-facing output includes CLI output written to stdout/stderr, generated reports, warnings emitted to a user-visible terminal, and any log line intended to be pasted, shared, or quoted verbatim into bug reports, GitHub issues, or chat. For `OSError` and subclasses such as `FileNotFoundError`, `PermissionError`, `IsADirectoryError`, and `NotADirectoryError`, **SHOULD NOT** use `str(error)`, `f"{error}"`, `error.filename`, or `error.filename2` directly in those surfaces, because the default string form and filename attributes can expose absolute local filesystem paths.
+- **SHOULD** report `OSError`-derived failures in user-facing output with the exception class name plus a short human-readable cause derived from `error.strerror`, using a non-`None` fallback because `strerror` may be `None` for some `OSError` instances:
+
+  ```python
+  error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+  ```
+
+  Callers **MAY** include a deliberately chosen safe path representation in the surrounding message, such as a repo-relative path, configured display name, or otherwise sanitized path. This rule only forbids deriving that path from the exception's default string form or from `filename` / `filename2`. Internal-only diagnostics, such as `DEBUG`-level logs that never reach end users, **MAY** continue to log the full exception via `logger.exception(...)` or `str(error)`.
 
 ## Logging and Output
 
@@ -231,6 +239,27 @@ except json.JSONDecodeError as error:
 - Tests **SHOULD NOT** read from or monkeypatch private (single-underscore-prefixed) attributes or methods of production classes.
 - When a test needs to substitute collaborators or inject fixtures that production code would normally build internally, production code **SHOULD** expose a narrow public seam (for example, a keyword-only `__init__` parameter or another explicit injection point) rather than relying on tests to monkeypatch private internals.
 - Production call sites **SHOULD** use the default behavior of that seam unless an override is intentionally required.
+- When a test invokes an external command, subprocess, child process, or generator and then both asserts the command's success and reads derived artifacts the command or generator was supposed to produce, the test **SHOULD** assert success plus any expected `stdout` / `stderr` contents before reading the derived artifacts. Reading the derived artifact first can cause a regression in the command under test to surface as an unrelated `FileNotFoundError` or similar I/O error on the read, hiding the more informative `result.stderr` message that the success assertion is designed to surface. This rule does not apply when the test intentionally verifies that an artifact is absent or unreadable. In those cases, still assert the external command, subprocess, child process, or generator outcome and diagnostic output before checking artifact absence whenever that ordering gives clearer failure messages.
+
+Compliant example:
+
+```python
+result = _run_generator(...)
+assert result.returncode == 0, result.stderr
+assert "expected stdout line" in result.stdout
+
+output = (tmp_path / "out.txt").read_text(encoding="utf-8")
+assert "expected output content" in output
+```
+
+Non-compliant counter-example:
+
+```python
+result = _run_generator(...)
+output = (tmp_path / "out.txt").read_text(encoding="utf-8")  # masks generator failures
+assert result.returncode == 0, result.stderr
+assert "expected output content" in output
+```
 
 ## Performance and Safety
 
