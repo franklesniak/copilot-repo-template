@@ -30,6 +30,7 @@ from validate_marker import (
 )
 
 DEFAULT_RANGE_HEAD_REF = "template/main"
+TEMPLATE_UPDATE_PROCEDURE_PATH = "TEMPLATE_UPDATE_PROCEDURE.md"
 PROTECTED_EXACT_PATHS = frozenset(
     {
         ".github/copilot-instructions.md",
@@ -219,6 +220,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "template/main ref when it is present. The helper does not fetch."
         ),
     )
+    parser.add_argument(
+        "--write-candidates",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Write the rendered candidate table to PATH while still printing the full "
+            "report to stdout. PATH must stay inside the repository root."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -354,13 +364,51 @@ def changed_paths(
         [
             "diff",
             "--name-status",
-            "--find-renames",
+            "-M",
             f"{range_base_sha}..{range_head_sha}",
             "--",
         ],
     )
     entries = [parse_name_status_line(line) for line in result.stdout.splitlines() if line.strip()]
     return tuple(entries)
+
+
+def modeled_diff_command(range_base_sha: str, range_head_sha: str) -> str:
+    """Return the copyable diff command modeled by candidate generation."""
+    return f"git diff --name-status -M {range_base_sha}..{range_head_sha} --"
+
+
+def stale_procedure_warning(repo_root: Path, range_head_sha: str) -> str | None:
+    """Return a warning when the local procedure differs from range-head upstream."""
+    upstream_result = run_git(
+        repo_root,
+        ["show", f"{range_head_sha}:{TEMPLATE_UPDATE_PROCEDURE_PATH}"],
+        check=False,
+    )
+    if upstream_result.returncode != 0:
+        return None
+
+    local_path = repo_root / TEMPLATE_UPDATE_PROCEDURE_PATH
+    show_command = f"git show {range_head_sha}:{TEMPLATE_UPDATE_PROCEDURE_PATH}"
+    try:
+        local_text = local_path.read_text(encoding="utf-8")
+    except OSError as error:
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        return (
+            f"WARNING: Unable to read local `{TEMPLATE_UPDATE_PROCEDURE_PATH}` "
+            f"for comparison with range head `{range_head_sha}`: {error_summary}. "
+            f"Review the current upstream procedure with `{show_command}` before "
+            "following local procedure text."
+        )
+
+    if local_text == upstream_result.stdout:
+        return None
+
+    return (
+        f"WARNING: Local `{TEMPLATE_UPDATE_PROCEDURE_PATH}` may be stale; it differs "
+        f"from the upstream copy at range head `{range_head_sha}`. Review the current "
+        f"upstream procedure with `{show_command}` before following local procedure text."
+    )
 
 
 def parse_marker(marker: dict[str, Any]) -> MarkerData:
@@ -692,6 +740,19 @@ def format_table(rows: tuple[CandidateRow, ...]) -> str:
     return "\n".join(rendered_rows)
 
 
+def write_candidate_table(repo_root: Path, output_path: Path, candidate_table: str) -> None:
+    """Write the rendered candidate table to a repository-contained path."""
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(candidate_table + "\n", encoding="utf-8")
+    except OSError as error:
+        output_relative = repository_relative_path(output_path, repo_root)
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        raise CandidateGenerationError(
+            f"Unable to write candidate table to {output_relative}: {error_summary}"
+        ) from error
+
+
 def load_and_validate_inputs(
     repo_root: Path,
     marker_path: Path,
@@ -726,6 +787,9 @@ def print_report(
     manifest_modules: frozenset[str],
     marker_data: MarkerData,
     rows: tuple[CandidateRow, ...],
+    candidate_table: str,
+    procedure_warning: str | None,
+    write_candidates_path: Path | None,
 ) -> None:
     """Print the Markdown candidate table report."""
     marker_relative = repository_relative_path(marker_path, repo_root)
@@ -738,6 +802,14 @@ def print_report(
     print(f"- Manifest: `{manifest_relative}`")
     print(f"- Range base: `{range_base_sha}` from `{range_base_ref}` ({range_base_source})")
     print(f"- Range head: `{range_head_sha}` from `{range_head_ref}`")
+    print(f"- Modeled diff command: `{modeled_diff_command(range_base_sha, range_head_sha)}`")
+    if procedure_warning is not None:
+        print(f"- {procedure_warning}")
+    if write_candidates_path is not None:
+        print(
+            "- Saved candidate table: "
+            f"`{repository_relative_path(write_candidates_path, repo_root)}`"
+        )
     print(
         "- Included modules: "
         + (", ".join(f"`{module}`" for module in sorted(marker_data.included_modules)) or "none")
@@ -758,7 +830,7 @@ def print_report(
         print("No changed paths found in the reviewed range.")
         return
 
-    print(format_table(rows))
+    print(candidate_table)
 
 
 def fail(message: str) -> NoReturn:
@@ -776,6 +848,11 @@ def main(argv: list[str] | None = None) -> int:
         manifest_path = resolve_repo_path(repo_root, args.manifest)
         marker_schema_path = resolve_repo_path(repo_root, args.marker_schema)
         manifest_schema_path = resolve_repo_path(repo_root, args.manifest_schema)
+        write_candidates_path = (
+            resolve_repo_path(repo_root, args.write_candidates)
+            if args.write_candidates is not None
+            else None
+        )
 
         marker_data, manifest_modules, mappings = load_and_validate_inputs(
             repo_root=repo_root,
@@ -794,6 +871,10 @@ def main(argv: list[str] | None = None) -> int:
 
         entries = changed_paths(repo_root, range_base_sha, range_head_sha)
         rows = tuple(build_candidate_row(entry, marker_data, mappings) for entry in entries)
+        candidate_table = format_table(rows)
+        procedure_warning = stale_procedure_warning(repo_root, range_head_sha)
+        if write_candidates_path is not None:
+            write_candidate_table(repo_root, write_candidates_path, candidate_table)
     except (CandidateGenerationError, MarkerValidationError) as error:
         fail(str(error))
 
@@ -809,6 +890,9 @@ def main(argv: list[str] | None = None) -> int:
         manifest_modules=manifest_modules,
         marker_data=marker_data,
         rows=rows,
+        candidate_table=candidate_table,
+        procedure_warning=procedure_warning,
+        write_candidates_path=write_candidates_path,
     )
     return 0
 

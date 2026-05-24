@@ -245,6 +245,7 @@ def test_normal_mixed_change_set_reports_marker_and_manifest_decisions(tmp_path:
     result = _run_generator(tmp_path, "--range-head", head_sha)
 
     assert result.returncode == 0, result.stderr
+    assert f"git diff --name-status -M {base_sha}..{head_sha} --" in result.stdout
     assert "| README.md | Modified | requires all: baseline | Retained |" in result.stdout
     assert "requires all: github-actions; requires any: json, schema, yaml" in result.stdout
     assert "Cross-module manifest relation matched." in result.stdout
@@ -293,6 +294,52 @@ def test_explicit_range_base_allows_marker_without_last_reviewed(tmp_path: Path)
 
     assert result.returncode == 0, result.stderr
     assert f"- Range base: `{base_sha}` from `{base_sha}` (--range-base)" in result.stdout
+    assert f"git diff --name-status -M {base_sha}..{head_sha} --" in result.stdout
+    assert "| README.md | Modified | requires all: baseline | Retained |" in result.stdout
+
+
+def test_matching_local_procedure_does_not_warn(tmp_path: Path) -> None:
+    """The procedure warning is quiet when local text matches range-head upstream."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, "README.md", "base\n")
+    _write_text(tmp_path, "TEMPLATE_UPDATE_PROCEDURE.md", "procedure v1\n")
+    base_sha = _commit_all(tmp_path, "base")
+    _write_text(tmp_path, "README.md", "head\n")
+    head_sha = _commit_all(tmp_path, "head")
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["baseline"], last_reviewed_template_commit=base_sha),
+    )
+
+    result = _run_generator(tmp_path, "--range-head", head_sha)
+
+    assert result.returncode == 0, result.stderr
+    assert "WARNING: Local `TEMPLATE_UPDATE_PROCEDURE.md` may be stale" not in result.stdout
+    assert f"git show {head_sha}:TEMPLATE_UPDATE_PROCEDURE.md" not in result.stdout
+
+
+def test_stale_local_procedure_warns_with_upstream_show_command(tmp_path: Path) -> None:
+    """A stale local procedure produces a non-fatal warning with a copyable command."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, "README.md", "base\n")
+    _write_text(tmp_path, "TEMPLATE_UPDATE_PROCEDURE.md", "procedure v1\n")
+    base_sha = _commit_all(tmp_path, "base")
+    _write_text(tmp_path, "README.md", "head\n")
+    _write_text(tmp_path, "TEMPLATE_UPDATE_PROCEDURE.md", "procedure v2\n")
+    head_sha = _commit_all(tmp_path, "head")
+    _write_text(tmp_path, "TEMPLATE_UPDATE_PROCEDURE.md", "procedure v1\n")
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["baseline"], last_reviewed_template_commit=base_sha),
+    )
+
+    result = _run_generator(tmp_path, "--range-head", head_sha)
+
+    assert result.returncode == 0, result.stderr
+    assert "WARNING: Local `TEMPLATE_UPDATE_PROCEDURE.md` may be stale" in result.stdout
+    assert f"git show {head_sha}:TEMPLATE_UPDATE_PROCEDURE.md" in result.stdout
     assert "| README.md | Modified | requires all: baseline | Retained |" in result.stdout
 
 
@@ -334,6 +381,63 @@ def test_default_range_head_uses_local_template_main_ref(tmp_path: Path) -> None
 
     assert result.returncode == 0, result.stderr
     assert f"- Range head: `{head_sha}` from `template/main`" in result.stdout
+
+
+def test_write_candidates_writes_table_and_preserves_stdout(tmp_path: Path) -> None:
+    """The optional output path receives the table while stdout keeps the full report."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, "README.md", "base\n")
+    base_sha = _commit_all(tmp_path, "base")
+    _write_text(tmp_path, "README.md", "head\n")
+    head_sha = _commit_all(tmp_path, "head")
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["baseline"], last_reviewed_template_commit=base_sha),
+    )
+
+    result = _run_generator(
+        tmp_path,
+        "--range-head",
+        head_sha,
+        "--write-candidates",
+        ".cache/template-sync/candidates.md",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "# Template Sync Candidate Table" in result.stdout
+    assert "- Saved candidate table: `.cache/template-sync/candidates.md`" in result.stdout
+    assert "| README.md | Modified | requires all: baseline | Retained |" in result.stdout
+
+    written_table = (tmp_path / ".cache/template-sync/candidates.md").read_text(encoding="utf-8")
+    assert written_table.startswith("| Path | Change | Matched module relation |")
+    assert "| README.md | Modified | requires all: baseline | Retained |" in written_table
+    assert "# Template Sync Candidate Table" not in written_table
+
+
+def test_write_candidates_rejects_paths_outside_repository(tmp_path: Path) -> None:
+    """The optional output path uses the existing repo-root traversal guard."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, "README.md", "base\n")
+    base_sha = _commit_all(tmp_path, "base")
+    _write_text(tmp_path, "README.md", "head\n")
+    head_sha = _commit_all(tmp_path, "head")
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["baseline"], last_reviewed_template_commit=base_sha),
+    )
+
+    result = _run_generator(
+        tmp_path,
+        "--range-head",
+        head_sha,
+        "--write-candidates",
+        "../candidates.md",
+    )
+
+    assert result.returncode == 1
+    assert "Path escapes the repository root: ../candidates.md" in result.stderr
 
 
 def test_unmapped_paths_are_flagged(tmp_path: Path) -> None:

@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260523.7
+**Version:** 1.1.20260524.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-23
+- **Last Updated:** 2026-05-24
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, including the human-readable view of the template sync manifest, the marker-aware retained-state validation helper command, and the sync candidate table generator. Does not define an automated sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -209,7 +209,7 @@ Reasonable replacement bases include the exact upstream origin commit, a conserv
 After choosing both endpoints and confirming the base is reachable, replace `RANGE_BASE_SHA` and `RANGE_HEAD_SHA` with the recorded values and list the upstream paths changed in that range:
 
 ```bash
-git diff --name-status -M RANGE_BASE_SHA..RANGE_HEAD_SHA
+git diff --name-status -M RANGE_BASE_SHA..RANGE_HEAD_SHA --
 ```
 
 The `-M` flag is required so upstream renames appear as renames, such as `R100 old/path new/path`, instead of unrelated add/delete pairs.
@@ -217,13 +217,13 @@ The `-M` flag is required so upstream renames appear as renames, such as `R100 o
 Example where the marker says the last reviewed upstream commit was `1111111111111111111111111111111111111111` and the resolved range head SHA is `2222222222222222222222222222222222222222`:
 
 ```bash
-git diff --name-status -M 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222
+git diff --name-status -M 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222 --
 ```
 
 Example first-time sync where upstream commit `dddddddddddddddddddddddddddddddddddddddd` is the exact initial range base and the resolved range head SHA is `2222222222222222222222222222222222222222`:
 
 ```bash
-git diff --name-status -M dddddddddddddddddddddddddddddddddddddddd..2222222222222222222222222222222222222222
+git diff --name-status -M dddddddddddddddddddddddddddddddddddddddd..2222222222222222222222222222222222222222 --
 ```
 
 Do not use the range head as an initial range base just to make the diff empty. That would mark upstream changes as reviewed without reviewing them and would erase the distinction between reviewed upstream changes and adopted upstream changes.
@@ -299,7 +299,7 @@ Example sync working-notes block:
 - Range head ref: `template/main`
 - Range head SHA: `2222222222222222222222222222222222222222`
 - Reachability check: passed
-- Enumeration command: `git diff --name-status -M 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
+- Enumeration command: `git diff --name-status -M 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222 --`
 - Local-only noise: not applicable
 - Candidate inline module blocks: none discovered in changed files
 - Uncertainty: none
@@ -603,15 +603,15 @@ python .template-sync/scripts/generate_sync_candidates.py --range-base RANGE_BAS
 
 If `--range-head` is omitted, the helper uses the local `template/main` ref when that ref is present. It does **not** fetch automatically; run `git fetch template` in Step 3 before relying on the default head, or pass a resolved `RANGE_HEAD_SHA`.
 
-The generator validates `.template-sync/marker.yml` and `.template-sync/manifest.yml` against the checked-in schemas before producing output. It prints a Markdown table with one row per changed upstream path and columns for the matched module relation, retained/excluded status, local override status, deferred protected candidate status, protected instruction/governance-file status, and notes. The notes explicitly surface unmapped paths, unknown modules, cross-module manifest relations, manifest inline-block notes, protected-file handling, and renames. The output is a decision aid only: it does not update the marker, apply file changes, strip inline blocks, or make final per-file decisions. The manual review process in this procedure remains authoritative.
+The generator validates `.template-sync/marker.yml` and `.template-sync/manifest.yml` against the checked-in schemas before producing output. Its report header prints the exact delta command it models, `git diff --name-status -M RANGE_BASE_SHA..RANGE_HEAD_SHA --`, so maintainers can cross-check the path list directly. It also compares local `TEMPLATE_UPDATE_PROCEDURE.md` with the upstream copy at the resolved range head; when they differ, the report prints a warning that local procedure text may be stale and includes `git show RANGE_HEAD_SHA:TEMPLATE_UPDATE_PROCEDURE.md` for reviewing the current upstream procedure. It prints a Markdown table with one row per changed upstream path and columns for the matched module relation, retained/excluded status, local override status, deferred protected candidate status, protected instruction/governance-file status, and notes. The notes explicitly surface unmapped paths, unknown modules, cross-module manifest relations, manifest inline-block notes, protected-file handling, and renames. The output is a decision aid only: it does not update the marker, apply file changes, strip inline blocks, or make final per-file decisions. The manual review process in this procedure remains authoritative.
 
-Before Step 13 advances `template_sync.last_reviewed_template_commit`, save the exact Step 6 candidate table into the sync working notes or into an owner-chosen local file cited by those notes. The helper prints the table to stdout, so shell redirection can persist it:
+Before Step 13 advances `template_sync.last_reviewed_template_commit`, save the exact Step 6 candidate table into the sync working notes or into an owner-chosen local file cited by those notes. To write only the rendered candidate table to a repository-contained file while preserving the full normal report on stdout, pass `--write-candidates`:
 
 ```bash
-python .template-sync/scripts/generate_sync_candidates.py --range-head RANGE_HEAD_SHA > SYNC_CANDIDATE_TABLE_PATH
+python .template-sync/scripts/generate_sync_candidates.py --range-head RANGE_HEAD_SHA --write-candidates SYNC_CANDIDATE_TABLE_PATH
 ```
 
-Record both `RANGE_BASE_SHA` and `RANGE_HEAD_SHA` with the saved table. After Step 13 advances the marker, rerunning the helper without an explicit old `--range-base` correctly uses the new marker value and can produce an empty range. To rerun the helper for the same reviewed range after marker advancement, pass the recorded range explicitly, even if `template/main` has moved:
+The `SYNC_CANDIDATE_TABLE_PATH` value MUST remain inside the repository root; the helper rejects paths that escape it. Record both `RANGE_BASE_SHA` and `RANGE_HEAD_SHA` with the saved table. After Step 13 advances the marker, rerunning the helper without an explicit old `--range-base` correctly uses the new marker value and can produce an empty range. To rerun the helper for the same reviewed range after marker advancement, pass the recorded range explicitly, even if `template/main` has moved:
 
 ```bash
 python .template-sync/scripts/generate_sync_candidates.py --range-base RANGE_BASE_SHA --range-head RANGE_HEAD_SHA
@@ -975,9 +975,9 @@ Marker discovery happens before range selection: `.template-sync/marker.yml` is 
 git fetch template
 git rev-parse 'template/main^{commit}'
 git merge-base --is-ancestor 1111111111111111111111111111111111111111 2222222222222222222222222222222222222222
-git diff --name-status -M 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222
+git diff --name-status -M 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222 --
 mkdir -p .cache/template-sync
-python .template-sync/scripts/generate_sync_candidates.py --range-head 2222222222222222222222222222222222222222 > .cache/template-sync/candidates.md
+python .template-sync/scripts/generate_sync_candidates.py --range-head 2222222222222222222222222222222222222222 --write-candidates .cache/template-sync/candidates.md
 ```
 
 The sync working notes start with the reviewed range endpoints:
