@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.5.20260524.0
+**Version:** 1.5.20260524.1
 
 ## Metadata
 
@@ -100,7 +100,7 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
 5. **Score and select.** Apply the rubric to every option. Present the results in a Markdown table. Select the option with the highest total score. When the rubric produces a clear highest-scoring option, the agent **MUST** select that option and carry it forward to step 7. A topic touching owner preferences, governance, or policy is not, by itself, an escalation trigger when the rubric produces a clear winner; this clarification stands independently of the protected-file authorization checkpoint in step 7.
 
-    **Escalation path:** If the scores are tied or too close to differentiate objectively, or if the deciding question genuinely cannot be scored, escalate to the PR owner instead of selecting an option. Post a **standalone PR comment** (not a reply to the review thread) containing:
+    **Escalation path:** If one of the escalation conditions (a)-(d) under **Operationalized escalation gate** below applies, escalate to the PR owner instead of selecting an option. Post a **standalone PR comment** (not a reply to the review thread) containing:
     - A brief summary of the reviewer's concern and which file/line it applies to
     - The options and scoring tables
     - The specific question the owner needs to answer
@@ -108,7 +108,7 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
     Operational complexity in an already-selected or already-documented fallback path is **not** a valid escalation trigger. Escalation remains appropriate only when the rubric cannot produce a clear winner for substantive policy, design, safety, or owner-preference reasons. When a documented fallback path (such as the GitHub MCP/API file-write path in **Automated Review Loop** step 7 **Push mechanism**) already determines what the agent should do, the agent **MUST NOT** post owner-decision options — including options that ask the owner to choose between MCP/API placement and manual integration — merely because that documented path is more cumbersome than the preferred mechanism. For concrete examples of operational complexity that **do not** justify escalation, see the canonical example list in **Automated Review Loop** step 7 **Push mechanism** ("Operational complexity is not failure or unavailability").
 
-    **PAUSE** processing of this comment until the owner responds. Continue processing other independent review comments in the meantime.
+    When escalation has been chosen, **PAUSE** processing of this comment until the owner responds. Continue processing other independent review comments in the meantime.
 
     **Operationalized escalation gate.** The agent **MUST** select the unique highest-scoring option unless at least one of the following conditions applies:
 
