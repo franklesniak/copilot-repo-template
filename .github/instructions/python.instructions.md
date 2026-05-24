@@ -7,7 +7,7 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.5.20260524.0
+**Version:** 1.5.20260524.1
 
 ## Metadata
 
@@ -239,6 +239,27 @@ except json.JSONDecodeError as error:
 - Tests **SHOULD NOT** read from or monkeypatch private (single-underscore-prefixed) attributes or methods of production classes.
 - When a test needs to substitute collaborators or inject fixtures that production code would normally build internally, production code **SHOULD** expose a narrow public seam (for example, a keyword-only `__init__` parameter or another explicit injection point) rather than relying on tests to monkeypatch private internals.
 - Production call sites **SHOULD** use the default behavior of that seam unless an override is intentionally required.
+- When a test invokes an external command, subprocess, child process, or generator and then both asserts the command's success and reads derived artifacts the command or generator was supposed to produce, the test **SHOULD** assert success plus any expected `stdout` / `stderr` contents before reading the derived artifacts. Reading the derived artifact first can cause a regression in the command under test to surface as an unrelated `FileNotFoundError` or similar I/O error on the read, hiding the more informative `result.stderr` message that the success assertion is designed to surface. This rule does not apply when the test intentionally verifies that an artifact is absent or unreadable. In those cases, still assert the external command, subprocess, child process, or generator outcome and diagnostic output before checking artifact absence whenever that ordering gives clearer failure messages.
+
+Compliant example:
+
+```python
+result = _run_generator(...)
+assert result.returncode == 0, result.stderr
+assert "expected stdout line" in result.stdout
+
+output = (tmp_path / "out.txt").read_text(encoding="utf-8")
+assert "expected output content" in output
+```
+
+Non-compliant counter-example:
+
+```python
+result = _run_generator(...)
+output = (tmp_path / "out.txt").read_text(encoding="utf-8")  # masks generator failures
+assert result.returncode == 0, result.stderr
+assert "expected output content" in output
+```
 
 ## Performance and Safety
 
