@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.5.20260524.2
+**Version:** 1.5.20260524.3
 
 ## Metadata
 
@@ -106,7 +106,7 @@ These terms apply to the review-comment workflow below and defer to the canonica
     - The specific question the owner needs to answer
     - Instructions: *"Reply to this comment starting with `@claude` followed by your chosen option or direction."*
 
-    Operational complexity in an already-selected or already-documented fallback path is **not** a valid escalation trigger. Escalation remains appropriate only when the rubric cannot produce a clear winner for substantive policy, design, safety, or owner-preference reasons. When a documented fallback path (such as the GitHub MCP/API file-write path in **Automated Review Loop** step 7 **Push mechanism**) already determines what the agent should do, the agent **MUST NOT** post owner-decision options — including options that ask the owner to choose between MCP/API placement and manual integration — merely because that documented path is more cumbersome than the preferred mechanism. For concrete examples of operational complexity that **do not** justify escalation, see the canonical example list in **Automated Review Loop** step 7 **Push mechanism** ("Operational complexity is not failure or unavailability").
+    Operational complexity in an already-selected or already-documented fallback path is **not** a valid escalation trigger. Escalation remains appropriate only when one of conditions (a)-(d) in the **Operationalized escalation gate** below applies. When a documented fallback path (such as the GitHub MCP/API file-write path in **Automated Review Loop** step 7 **Push mechanism**) already determines what the agent should do, the agent **MUST NOT** post owner-decision options — including options that ask the owner to choose between MCP/API placement and manual integration — merely because that documented path is more cumbersome than the preferred mechanism. For concrete examples of operational complexity that **do not** justify escalation, see the canonical example list in **Automated Review Loop** step 7 **Push mechanism** ("Operational complexity is not failure or unavailability").
 
     When escalation has been chosen, **PAUSE** processing of this comment until the owner responds. Continue processing other independent review comments in the meantime.
 
