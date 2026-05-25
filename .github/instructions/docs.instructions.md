@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.5.20260524.1
+**Version:** 1.5.20260525.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-24
+- **Last Updated:** 2026-05-25
 - **Scope:** Defines documentation standards for Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) files in this repository, including specs, design docs, runbooks, ADRs, instruction files, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -361,6 +361,7 @@ Before merging, verify:
   - An explicit `**Assumption:**` labeled entry.
   - A cross-reference to another requirement or section that defines the value.
   This rule applies to unresolved requirements/specification content only. It does not ban legitimate template-substitution placeholders, didactic examples, migration notes, or code-comment TODO examples elsewhere in the repository.
+- Markdown files under `docs/**` are additionally checked by the repo-local `check-prohibited-placeholders` pre-commit hook for case-insensitive `TBD`, `TODO:`, `FIXME`, `XXX`, `to be determined`, and `(default ... to be determined)` placeholder forms. Remediate flagged lines with a measurable value, an explicit `**Open Question:**` entry, an explicit `**Assumption:**` entry, or a cross-reference to another requirement. The hook intentionally allows fenced examples, HTML comments, `CHANGELOG*.md` files, and a same-line `<!-- ALLOW-TBD: <reason> -->` marker when a brief suppression justification is necessary.
 - Contradictory statements between the spec and other docs
 - Vague guarantees without measurable definitions
 - Unowned open questions ("someone should figure out…")

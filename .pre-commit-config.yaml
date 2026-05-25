@@ -219,6 +219,16 @@ repos:
   # template-sync: end github-platform-only
 
   # template-sync: begin markdown-only
+  # Markdown placeholder checks
+  - repo: local
+    hooks:
+      - id: check-prohibited-placeholders
+        name: Check prohibited Markdown placeholders
+        entry: python .github/scripts/check-prohibited-placeholders.py
+        language: python
+        types: [markdown]
+        files: ^docs/.*\.md$
+
   # Markdown linting
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     rev: v0.22.1

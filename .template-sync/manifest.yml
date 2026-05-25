@@ -255,6 +255,12 @@ template_manifest:
     - pattern: '.github/scripts/lint-nested-markdown.js'
       requires_all:
         - markdown
+    - pattern: '.github/scripts/check-prohibited-placeholders.py'
+      requires_all:
+        - markdown
+    - pattern: 'tests/test_check_prohibited_placeholders.py'
+      requires_all:
+        - markdown
     - pattern: 'templates/markdown/**'
       requires_all:
         - markdown
