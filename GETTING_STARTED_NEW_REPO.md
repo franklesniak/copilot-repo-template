@@ -618,29 +618,20 @@ This file records first-adoption decisions for this downstream repository. It is
 - [ ] Existing `SECURITY.md`, `CODE_OF_CONDUCT.md`, `.github/CODEOWNERS`, and issue-template files reviewed
 - [ ] Existing `.template-sync/marker.yml` or adoption note checked before asking any repeated questions
 
-## Maintainer Decisions
+## Maintainer Policy Decisions
 
 - [ ] Code of Conduct reporting contact method: `[confirmed contact method]`
 - [ ] Security vulnerability reporting channel: `[private vulnerability reporting, monitored email, or both]`
-- [ ] Private vulnerability reporting setting: `[enable, leave disabled, or not available for private repository]`
-- [ ] GitHub Discussions setting: `[enable or leave disabled]`
-- [ ] Expected labels, including `triage`: `[create, skip, or already present]`
 - [ ] CODEOWNERS owner/team identity: `[@user or @org/team]`
 - [ ] Template-derived file posture: `[preserve closely or tailor freely]`
 - [ ] GHES host override: `[none or github.company.com]`
-- [ ] Default branch protection/ruleset policy: `[organization or maintainer policy]`
 
-## Manual Repository Settings
+## Manual GitHub Settings
 
-- [ ] Enable private vulnerability reporting, if desired or required.
-- [ ] Confirm `SECURITY.md` links after private vulnerability reporting is enabled.
-- [ ] Enable Discussions, if desired.
-- [ ] Create expected labels such as `triage`.
-- [ ] Enable protection or a ruleset for the repository default branch, normally `main`, according to maintainer or organization policy.
-- [ ] Confirm Code of Conduct reporting contact method.
-- [ ] Confirm CODEOWNERS owner/team identity.
-- [ ] Confirm whether template files should be preserved closely or freely tailored.
-- [ ] Record any GHES host override.
+- [ ] Private vulnerability reporting: `[enable, leave disabled, or not available for private repository]`; if enabled, confirm `SECURITY.md` links afterward.
+- [ ] GitHub Discussions: `[enable or leave disabled]`.
+- [ ] Expected labels, including `triage`: `[create, skip, or already present]`.
+- [ ] Default-branch protection or ruleset for `main` (or your default branch): `[enable per organization or maintainer policy, or leave unchanged]`.
 
 ## Resolution Log
 
