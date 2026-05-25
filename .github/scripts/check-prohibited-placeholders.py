@@ -243,6 +243,14 @@ def normalize_for_fence_opening(line: str, list_contexts: list[ListContext]) -> 
         # A blockquote nested inside the list item lives at the list-content
         # column, so its ">" is past the 0-3 column rule that
         # BLOCK_QUOTE_PREFIX_PATTERN enforces on the raw line.
+        #
+        # LIST_ITEM_PATTERN is intentionally not re-run after this inner strip:
+        # tracking a list item that lives inside a blockquote that lives inside
+        # another list item would require a multi-level container path on
+        # ListContext (essentially the CommonMark container-stack model).
+        # That deeper pattern is unsupported here; fence detection inside such
+        # a triply-nested context may produce false positives until the hook
+        # is rewritten around an ordered container stack.
         relative_line, inner_block_quote_depth = strip_block_quote_prefixes(relative_line)
         list_indent = parent_indent if parent_indent != 0 else None
         return FenceLine(
