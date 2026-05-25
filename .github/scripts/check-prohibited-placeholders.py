@@ -199,8 +199,8 @@ def strip_active_list_prefix(line: str, list_content_indents: list[int]) -> tupl
 
 def normalize_for_fence_opening(line: str, list_content_indents: list[int]) -> FenceLine:
     """Return a line normalized to its current Markdown container content column."""
-    line, block_quote_depth = strip_block_quote_prefixes(line)
     prune_inactive_list_contexts(line, list_content_indents)
+    line, block_quote_depth = strip_block_quote_prefixes(line)
 
     relative_line, parent_indent = strip_active_list_prefix(line, list_content_indents)
     list_match = LIST_ITEM_PATTERN.match(relative_line)

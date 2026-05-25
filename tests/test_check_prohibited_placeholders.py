@@ -182,6 +182,28 @@ def test_container_fenced_code_blocks_are_not_flagged(
     assert violations == []
 
 
+def test_blockquote_inside_list_item_preserves_list_context(tmp_path: Path) -> None:
+    """A blockquote within a list item must not pop the active list context."""
+    path = write_file(
+        tmp_path / "docs" / "spec" / "example.md",
+        "\n".join(
+            [
+                "- Parent item with an aside:",
+                "  > A quoted aside inside the list item.",
+                "",
+                "    ```text",
+                "    TBD inside a continuation fence after a blockquote.",
+                "    ```",
+            ]
+        )
+        + "\n",
+    )
+
+    violations = scan_single_file(path, tmp_path)
+
+    assert violations == []
+
+
 def test_top_level_four_space_fence_marker_is_not_treated_as_fence(tmp_path: Path) -> None:
     """A top-level 4-space-indented fence marker does not suppress later prose."""
     path = write_file(
