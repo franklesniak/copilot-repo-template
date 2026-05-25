@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.5.20260525.0
+**Version:** 1.5.20260525.1
 
 ## Metadata
 
@@ -96,7 +96,7 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
 3. **List options.** Address each reviewer concern **one at a time**. For each concern, think hard about possible ways to resolve the problem or address the feedback and enumerate all **materially distinct reasonable options**. Where appropriate, consult vendor or official documentation (for example, language, framework, cloud-provider, API, or tooling docs) so the option set reflects current authoritative guidance, not just generalized prior knowledge. If documentation materially informs the option set or scoring, name or cite the source in the evaluation reply. Where it would materially change the outcome, consider permutations and combinations of base options (for example, "Option A plus a narrowed part of Option C") rather than treating only mutually exclusive base options. Take the time needed to reach a defensibly complete list before scoring, while collapsing duplicate or materially equivalent options.
 
-4. **Build an evaluation rubric.** Define 4-6 scoring criteria relevant to the concern (for example, style guide compliance, correctness, security, performance, maintainability, code simplicity, PII safety, PS 5.1 compatibility, test reliability, user impact, compatibility, or long-term clarity). Score each criterion on a 1-5 scale. Take the time needed to ensure the rubric is **comprehensive and defensible**: each criterion should be one a reasonable maintainer would accept as relevant, and the criteria collectively should cover the substantive technical considerations of the concern, not just surface-level ones.
+4. **Build an evaluation rubric.** Define 4-6 scoring criteria relevant to the concern (for example, style-guide compliance, correctness, security, performance, maintainability, code simplicity, PII safety, PS 5.1 compatibility, test reliability, user impact, backward compatibility, or long-term clarity). Score each criterion on a 1-5 scale. Take the time needed to ensure the rubric is **comprehensive and defensible**: each criterion should be one a reasonable maintainer would accept as relevant, and the criteria collectively should cover the substantive technical considerations of the concern, not just surface-level ones.
 
     **Criterion-weighting guidance.** When the rubric includes either of the following criteria, weight them **less than** substantive technical criteria such as correctness, security, maintainability, style-guide compliance, compatibility, test reliability, and long-term clarity, unless the reviewer's concern is itself primarily about that criterion:
 
