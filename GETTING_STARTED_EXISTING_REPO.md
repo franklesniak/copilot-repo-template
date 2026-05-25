@@ -211,13 +211,15 @@ Use this matrix to decide which features to adopt based on complexity and depend
 
 When this is the first import of template content into an existing repository, create or update a root `_TODO-repo-init.md` checklist before adopting template files whose contents depend on unresolved maintainer choices. If the repository already records these answers in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or an equivalent committed adoption note named by a prior adoption procedure, carry those answers forward and do not re-ask resolved questions.
 
-Use the concrete `_TODO-repo-init.md` example in [GETTING_STARTED_NEW_REPO.md](GETTING_STARTED_NEW_REPO.md#first-adoption-preflight-checklist) and keep only the items that are unresolved for this repository. Discovery may inspect files and Git metadata first, but agents and maintainers MUST NOT invent contact emails, reporting channels, branch protection policy, CODEOWNERS identities, GHES hosts, label availability, or GitHub repository settings.
+Use the concrete `_TODO-repo-init.md` example in [GETTING_STARTED_NEW_REPO.md](GETTING_STARTED_NEW_REPO.md#first-adoption-preflight-checklist) and keep only the items that are unresolved for this repository. Discovery may inspect files and Git metadata first, but agents and maintainers MUST NOT invent contact emails, reporting channels, branch protection policy, CODEOWNERS identities, GHES hosts, label availability, GitHub repository settings, or adoption modes beyond the documented default.
+
+The default adoption mode for protected files and template-derived governance, community, process, workflow, and collaboration files is `minimal-preservation`: keep upstream wording and structure, substitute placeholders, trim sections owned by unadopted manifest modules, fix broken links, and record required local overrides in `.template-sync/marker.yml` when template sync support is retained. Select `tailored` only when the maintainer explicitly wants broader downstream rewriting for a specific file or file set. Record that choice in `_TODO-repo-init.md`, `.template-sync/marker.yml` local overrides, or another committed adoption note before editing.
 
 Separate the checklist into:
 
 - **Discoverable repository state:** owner/name, default branch, existing files, existing `.template-sync/marker.yml`, and any committed adoption notes.
 - **Manual GitHub settings:** private vulnerability reporting, Discussions, labels such as `triage`, and default-branch protection or rulesets.
-- **Maintainer policy decisions:** Code of Conduct contact method, security reporting channel, CODEOWNERS owner/team identity, template preservation posture, and any GHES host override.
+- **Maintainer policy decisions:** Code of Conduct contact method, security reporting channel, CODEOWNERS owner/team identity, adoption mode for protected and template-derived files, explicit `tailored` opt-ins, and any GHES host override.
 
 Downstream work may assume a checklist item is complete only after it is recorded as resolved in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or the equivalent committed adoption note named by the adoption procedure.
 
@@ -751,12 +753,13 @@ GitHub Copilot Instructions guide AI-assisted development by providing project-s
 The template treats `.github/copilot-instructions.md`, `.github/instructions/**`, `.cursor/rules/**`, and root agent instruction files such as `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` as protected governance files. When adopting into an existing repository:
 
 1. Perform non-protected cleanup first, including unused workflows, source examples, tests, templates, and lint configuration.
-2. Record the protected-file changes still needed after stack selection.
-3. Obtain explicit maintainer authorization for those protected-file edits.
-4. Update `.github/copilot-instructions.md`, remaining root agent files, and relevant `.github/instructions/*.instructions.md` files so they match the stacks and tools actually retained.
-5. Remove references to deleted tools, workflows, hooks, and validation commands.
-6. Bump `Last Updated` and `Version` metadata where those fields exist.
-7. Avoid ephemeral implementation-stage language in durable governance docs.
+2. Record the adoption mode for the protected files that remain. Use `minimal-preservation` by default; choose `tailored` only when the maintainer explicitly approves broader rewriting for named files.
+3. Record the protected-file changes still needed after stack selection.
+4. Obtain explicit maintainer authorization for those protected-file edits. `minimal-preservation` limits the scope of an authorized edit but does not authorize protected-file changes by itself.
+5. Update `.github/copilot-instructions.md`, remaining root agent files, and relevant `.github/instructions/*.instructions.md` files so they match the stacks and tools actually retained.
+6. Remove references to deleted tools, workflows, hooks, and validation commands.
+7. Bump `Last Updated` and `Version` metadata where those fields exist.
+8. Avoid ephemeral implementation-stage language in durable governance docs.
 
 ### Main Instructions File
 
