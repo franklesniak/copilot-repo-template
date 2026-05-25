@@ -27,10 +27,12 @@ PLACEHOLDER_PATTERN = re.compile(
 )
 ALLOW_TBD_PATTERN = re.compile(r"<!--\s*ALLOW-TBD:\s*\S.*?-->", re.IGNORECASE)
 ALLOWED_LABEL_PATTERN = re.compile(
-    r"^\s*(?:[-*+]\s+)?\*\*(?:Open Questions?|Assumption):\*\*",
+    r"^\s*(?:(?:[-*+]|\d{1,9}[.)])\s+)?\*\*(?:Open Questions?|Assumption):\*\*",
     re.IGNORECASE,
 )
 FENCE_OPEN_PATTERN = re.compile(r"^ {0,3}(?P<marker>`{3,}|~{3,})")
+BLOCK_QUOTE_PREFIX_PATTERN = re.compile(r"^ {0,3}> ?")
+LIST_ITEM_PATTERN = re.compile(r"^(?P<indent> {0,3})(?P<marker>[-*+]|\d{1,9}[.)])(?P<spacing> +)")
 
 REMEDIATION_HINT = (
     "replace with a measurable value, an **Open Question:** entry, an "
@@ -54,6 +56,48 @@ class Violation:
             f"{self.display_path}:{self.line_number}: prohibited placeholder "
             f"{json.dumps(self.matched_text)}; {REMEDIATION_HINT}"
         )
+
+
+CONTAINER_KIND_LIST = "list"
+CONTAINER_KIND_BLOCK_QUOTE = "blockquote"
+
+
+@dataclass(frozen=True)
+class Container:
+    """A peelable Markdown container prefix on a line.
+
+    A ``list`` container consumes ``indent`` leading spaces from its parent
+    container's interior. A ``blockquote`` container consumes a single
+    ``BLOCK_QUOTE_PREFIX_PATTERN`` match (``>`` optionally followed by a
+    space) at the start of its parent's interior; ``indent`` is unused.
+    """
+
+    kind: str
+    indent: int = 0
+
+
+@dataclass(frozen=True)
+class FenceLine:
+    """A Markdown line normalized for fenced code block detection."""
+
+    content: str
+    containment_path: tuple[Container, ...] = ()
+
+
+@dataclass(frozen=True)
+class ActiveFence:
+    """The active fenced code block marker and containing Markdown context."""
+
+    character: str
+    minimum_length: int
+    containment_path: tuple[Container, ...] = ()
+
+
+@dataclass(frozen=True)
+class ListContext:
+    """An active Markdown list, identified by its full containment path from the document root."""
+
+    containment_path: tuple[Container, ...]
 
 
 class FileReadError(RuntimeError):
@@ -130,6 +174,121 @@ def strip_html_comments(line: str, is_in_html_comment: bool) -> tuple[str, bool]
     return "".join(uncommented_parts), is_in_html_comment
 
 
+def count_leading_spaces(line: str) -> int:
+    """Return the number of leading space characters in a line."""
+    return len(line) - len(line.lstrip(" "))
+
+
+def peel_containers(line: str, path: tuple[Container, ...]) -> tuple[str, int]:
+    """Peel container prefixes from ``line`` in order; return ``(remaining, peeled_count)``.
+
+    A list container consumes ``container.indent`` leading spaces (or fails if
+    the line has fewer). A blockquote container consumes one
+    ``BLOCK_QUOTE_PREFIX_PATTERN`` match (or fails if the line does not start
+    with one in its current coordinate system). Peeling stops at the first
+    container that cannot be consumed; the caller can compare ``peeled_count``
+    to ``len(path)`` to detect partial peels.
+    """
+    for index, container in enumerate(path):
+        if container.kind == CONTAINER_KIND_LIST:
+            if count_leading_spaces(line) < container.indent:
+                return line, index
+            line = line[container.indent :]
+        else:
+            match = BLOCK_QUOTE_PREFIX_PATTERN.match(line)
+            if match is None:
+                return line, index
+            line = line[match.end() :]
+    return line, len(path)
+
+
+def prune_inactive_list_contexts(line: str, list_contexts: list[ListContext]) -> None:
+    """Drop active list contexts that a nonblank Markdown line has outdented past."""
+    if not line.strip():
+        return
+
+    while list_contexts:
+        top = list_contexts[-1]
+        remaining, peeled_count = peel_containers(line, top.containment_path)
+        if peeled_count == len(top.containment_path):
+            return
+        # The line did not peel cleanly to this list's interior. Decide
+        # whether the partial peel still keeps the list active.
+        if not remaining.strip():
+            # A blank line inside a partly-peeled container is a continuation.
+            return
+        failed_container = top.containment_path[peeled_count]
+        if (
+            failed_container.kind == CONTAINER_KIND_LIST
+            and BLOCK_QUOTE_PREFIX_PATTERN.match(remaining) is not None
+        ):
+            # A deeper blockquote nested inside the list keeps the list active;
+            # the list's content indent is not meaningful in that deeper
+            # coordinate system.
+            return
+        list_contexts.pop()
+
+
+def list_content_indent(match: re.Match[str]) -> int:
+    """Return the list-item content indent relative to the marker's parent interior."""
+    marker_end_column = match.end("marker")
+    spacing_width = len(match.group("spacing"))
+    content_padding = spacing_width if spacing_width <= 4 else 1
+    return marker_end_column + content_padding
+
+
+def normalize_for_fence_opening(line: str, list_contexts: list[ListContext]) -> FenceLine:
+    """Return a line normalized to its current Markdown container content column."""
+    prune_inactive_list_contexts(line, list_contexts)
+
+    active_path = list_contexts[-1].containment_path if list_contexts else ()
+    relative_line, peeled_count = peel_containers(line, active_path)
+    effective_path = active_path[:peeled_count]
+
+    extras: list[Container] = []
+    while True:
+        match = BLOCK_QUOTE_PREFIX_PATTERN.match(relative_line)
+        if match is None:
+            break
+        extras.append(Container(kind=CONTAINER_KIND_BLOCK_QUOTE))
+        relative_line = relative_line[match.end() :]
+
+    list_match = LIST_ITEM_PATTERN.match(relative_line)
+    if list_match is not None:
+        content_indent_rel = list_content_indent(list_match)
+        extras.append(Container(kind=CONTAINER_KIND_LIST, indent=content_indent_rel))
+        relative_line = (
+            relative_line[content_indent_rel:] if len(relative_line) >= content_indent_rel else ""
+        )
+        list_contexts.append(ListContext(containment_path=effective_path + tuple(extras)))
+
+    return FenceLine(
+        content=relative_line,
+        containment_path=effective_path + tuple(extras),
+    )
+
+
+def normalize_for_fence_closing(line: str, active_fence: ActiveFence) -> str:
+    """Return a fenced-block line normalized to the opening fence's container."""
+    peeled, peeled_count = peel_containers(line, active_fence.containment_path)
+    if peeled_count < len(active_fence.containment_path):
+        return line
+    return peeled
+
+
+def build_active_fence(
+    opening_fence: tuple[str, int],
+    fence_line: FenceLine,
+) -> ActiveFence:
+    """Return active fenced code block state for a detected opening fence."""
+    fence_character, minimum_length = opening_fence
+    return ActiveFence(
+        character=fence_character,
+        minimum_length=minimum_length,
+        containment_path=fence_line.containment_path,
+    )
+
+
 def parse_opening_fence(line: str) -> tuple[str, int] | None:
     """Return the opening fence marker character and length, if present."""
     match = FENCE_OPEN_PATTERN.match(line)
@@ -155,20 +314,26 @@ def find_violations_in_text(text: str, display_path: str) -> list[Violation]:
     """Find prohibited placeholder markers in Markdown text."""
     violations: list[Violation] = []
     is_in_html_comment = False
-    active_fence: tuple[str, int] | None = None
+    active_fence: ActiveFence | None = None
+    list_contexts: list[ListContext] = []
 
     for line_number, raw_line in enumerate(text.splitlines(), start=1):
         if active_fence is not None:
-            fence_character, minimum_length = active_fence
-            if is_closing_fence(raw_line, fence_character, minimum_length):
+            fence_line = normalize_for_fence_closing(raw_line, active_fence)
+            if is_closing_fence(
+                fence_line,
+                active_fence.character,
+                active_fence.minimum_length,
+            ):
                 active_fence = None
             continue
 
         commentless_line, is_in_html_comment = strip_html_comments(raw_line, is_in_html_comment)
 
-        opening_fence = parse_opening_fence(commentless_line)
+        fence_line = normalize_for_fence_opening(commentless_line, list_contexts)
+        opening_fence = parse_opening_fence(fence_line.content)
         if opening_fence is not None:
-            active_fence = opening_fence
+            active_fence = build_active_fence(opening_fence, fence_line)
             continue
 
         if ALLOW_TBD_PATTERN.search(raw_line):
