@@ -17,6 +17,7 @@ This guide walks you through creating a brand-new repository using `franklesniak
 - [Creating Your Repository on GitHub](#creating-your-repository-on-github)
 - [Cloning Your New Repository](#cloning-your-new-repository)
 - [Installing Dependencies](#installing-dependencies)
+- [First-Adoption Preflight Checklist](#first-adoption-preflight-checklist)
 - [Initial Placeholder Replacement](#initial-placeholder-replacement)
 - [Creating Optional Labels](#creating-optional-labels)
 - [Installing and Configuring Pre-commit](#installing-and-configuring-pre-commit)
@@ -592,6 +593,53 @@ This command:
 > **Note:** The `node_modules` folder is automatically excluded from Git (via `.gitignore`), so these files won't be committed to your repository.
 >
 > **Tip:** The repository also includes an optional nested markdown linting script that checks Markdown code blocks within your documentation. See [Nested Markdown Linting Configuration](OPTIONAL_CONFIGURATIONS.md#nested-markdown-linting-configuration) in the optional configurations guide for details.
+
+---
+
+## First-Adoption Preflight Checklist
+
+Before editing files whose contents depend on maintainer choices, create a root `_TODO-repo-init.md` checklist in the downstream repository. Discovery and non-content setup may happen before this checklist exists, but agents and maintainers MUST NOT invent contact emails, reporting channels, branch protection policy, or GitHub repository settings to continue setup.
+
+This preflight is for first-time template adoption only. Do not recreate it or re-ask resolved questions during later template syncs when the answers are already recorded in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or an equivalent committed adoption note named by the adoption procedure.
+
+Use repository files and Git metadata for discoverable facts, such as the repository name, default branch, current placeholder values, and existing files. Use the checklist for manual GitHub settings and maintainer policy decisions that cannot be inferred safely from files, such as private vulnerability reporting, Discussions, branch protection, label availability, conduct reporting, security reporting, CODEOWNERS identity, GHES host override, and how closely template-derived files should be preserved.
+
+Create `_TODO-repo-init.md` from this example and replace bracketed notes only after the maintainer confirms them:
+
+```markdown
+# Repository Initialization Checklist
+
+This file records first-adoption decisions for this downstream repository. It is downstream-owned state and is excluded from upstream template sync candidate review.
+
+## Discoverable Repository State
+
+- [ ] Repository owner/name recorded: `OWNER/REPO`
+- [ ] Repository default branch recorded: `main` unless changed
+- [ ] Existing `SECURITY.md`, `CODE_OF_CONDUCT.md`, `.github/CODEOWNERS`, and issue-template files reviewed
+- [ ] Existing `.template-sync/marker.yml` or adoption note checked before asking any repeated questions
+
+## Maintainer Policy Decisions
+
+- [ ] Code of Conduct reporting contact method: `[confirmed contact method]`
+- [ ] Security vulnerability reporting channel: `[private vulnerability reporting, monitored email, or both]`
+- [ ] CODEOWNERS owner/team identity: `[@user or @org/team]`
+- [ ] Template-derived file posture: `[preserve closely or tailor freely]`
+- [ ] GHES host override: `[none or github.company.com]`
+
+## Manual GitHub Settings
+
+- [ ] Private vulnerability reporting: `[enable, leave disabled, or not available for private repository]`; if enabled, confirm `SECURITY.md` links afterward.
+- [ ] GitHub Discussions: `[enable or leave disabled]`.
+- [ ] Expected labels, including `triage`: `[create, skip, or already present]`.
+- [ ] Default-branch protection or ruleset for `main` (or your default branch): `[enable per organization or maintainer policy, or leave unchanged]`.
+
+## Resolution Log
+
+- [ ] All items above are resolved before dependent files are considered finalized.
+- Resolution evidence: `[commit, PR, maintainer note, or link]`
+```
+
+Downstream work may assume a checklist item is complete only after it is recorded as resolved in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or the equivalent committed adoption note named by the adoption procedure.
 
 ---
 
