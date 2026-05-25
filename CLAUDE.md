@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.5.20260525.1
+**Version:** 1.5.20260525.2
 
 ## Metadata
 
@@ -107,7 +107,7 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
     The PR-scope explicit-boundary escalation under condition (d) of the **Operationalized escalation gate** in step 5 is unchanged: an explicit scope sentence in the PR description that the selected fix would directly violate still triggers escalation regardless of weighting.
 
-5. **Score and select.** Apply the rubric to every option, taking the time needed to score each criterion defensibly. Present the results in a Markdown table. If the rubric uses weighted criteria per step 4, display each criterion's weight and each option's weighted total so the computation is auditable. Select the option with the highest total weighted score when weights are used, or the highest total score when all weights are equal. When the rubric produces a clear highest-scoring option, the agent **MUST** select that option and carry it forward to step 7, unless an escalation condition under the **Operationalized escalation gate** below applies. The thresholds defined in the **Operationalized escalation gate** continue to operate against weighted totals when weighting is applied. A topic touching owner preferences, governance, or policy is not, by itself, an escalation trigger when the rubric produces a clear winner; this clarification stands independently of the protected-file authorization checkpoint in step 7.
+5. **Score and select.** Apply the rubric to every option, taking the time needed to score each criterion defensibly. Present the results in a Markdown table. If the rubric uses weighted criteria per step 4, display each criterion's weight and each option's weighted total so the computation is auditable. Select the option with the highest total weighted score when weights are used, or the highest total score when all weights are equal. When the rubric produces a clear highest-scoring option, the agent **MUST** select that option and carry it forward to step 7, unless an escalation condition under the **Operationalized escalation gate** below applies. The conditions defined in the **Operationalized escalation gate** continue to operate against weighted totals when weighting is applied. A topic touching owner preferences, governance, or policy is not, by itself, an escalation trigger when the rubric produces a clear winner; this clarification stands independently of the protected-file authorization checkpoint in step 7.
 
     **Escalation path:** If one of the escalation conditions (a)-(d) under **Operationalized escalation gate** below applies, escalate to the PR owner instead of selecting an option. Post a **standalone PR comment** (not a reply to the review thread) containing:
     - A brief summary of the reviewer's concern and which file/line it applies to
