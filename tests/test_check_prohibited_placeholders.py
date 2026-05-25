@@ -71,6 +71,8 @@ def test_required_patterns_are_flagged(
         "**Assumption:** FIXME is quoted from an upstream draft.\n",
         "- **Open Question:** Can this stay TODO: until the spec lands?\n",
         "- **Assumption:** The value is XXX in the source document.\n",
+        "1. **Open Question:** Does the limit stay TBD until v2?\n",
+        "12. **Assumption:** XXX represents a placeholder index.\n",
     ],
 )
 def test_required_allowlist_contexts_are_not_flagged(tmp_path: Path, content: str) -> None:
@@ -80,6 +82,17 @@ def test_required_allowlist_contexts_are_not_flagged(tmp_path: Path, content: st
     violations = scan_single_file(path, tmp_path)
 
     assert violations == []
+
+
+def test_ordered_allowlist_label_requires_marker_spacing(tmp_path: Path) -> None:
+    """A malformed ordered-list marker does not suppress placeholder checks."""
+    path = write_file(tmp_path / "docs" / "spec" / "example.md", "1.**Open Question:** TBD\n")
+
+    violations = scan_single_file(path, tmp_path)
+
+    assert len(violations) == 1
+    assert violations[0].line_number == 1
+    assert violations[0].matched_text == "TBD"
 
 
 def test_changelog_markdown_files_are_not_flagged(tmp_path: Path) -> None:
@@ -109,6 +122,85 @@ def test_multiline_fenced_code_block_is_not_flagged(tmp_path: Path) -> None:
     violations = scan_single_file(path, tmp_path)
 
     assert violations == []
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "\n".join(
+            [
+                "- A bullet with a continuation fence:",
+                "",
+                "    ```text",
+                "    TODO: example value",
+                "    ```",
+                "- Next bullet.",
+            ]
+        )
+        + "\n",
+        "\n".join(
+            [
+                "1. A numbered item with a continuation fence:",
+                "",
+                "    ```text",
+                "    TBD inside a numbered-list fence.",
+                "    ```",
+                "2. Next numbered item.",
+            ]
+        )
+        + "\n",
+        "\n".join(
+            [
+                "> ```text",
+                "> FIXME inside a blockquote fence.",
+                "> ```",
+            ]
+        )
+        + "\n",
+        "\n".join(
+            [
+                "- Parent item:",
+                "  - Child item with a continuation fence:",
+                "",
+                "      ```text",
+                "      XXX inside a nested-list fence.",
+                "      ```",
+            ]
+        )
+        + "\n",
+    ],
+)
+def test_container_fenced_code_blocks_are_not_flagged(
+    tmp_path: Path,
+    content: str,
+) -> None:
+    """Fenced code blocks indented under Markdown containers are excluded."""
+    path = write_file(tmp_path / "docs" / "spec" / "example.md", content)
+
+    violations = scan_single_file(path, tmp_path)
+
+    assert violations == []
+
+
+def test_top_level_four_space_fence_marker_is_not_treated_as_fence(tmp_path: Path) -> None:
+    """A top-level 4-space-indented fence marker does not suppress later prose."""
+    path = write_file(
+        tmp_path / "docs" / "spec" / "example.md",
+        "\n".join(
+            [
+                "    ```text",
+                "TODO: this line remains scannable outside a recognized fence.",
+                "    ```",
+            ]
+        )
+        + "\n",
+    )
+
+    violations = scan_single_file(path, tmp_path)
+
+    assert len(violations) == 1
+    assert violations[0].line_number == 2
+    assert violations[0].matched_text == "TODO:"
 
 
 def test_multiline_tilde_fenced_code_block_is_not_flagged(tmp_path: Path) -> None:
