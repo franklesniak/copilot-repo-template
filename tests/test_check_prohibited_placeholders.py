@@ -150,6 +150,49 @@ def test_multiline_html_comment_is_not_flagged(tmp_path: Path) -> None:
     assert violations == []
 
 
+def test_allow_tbd_on_html_comment_closing_line_preserves_state(tmp_path: Path) -> None:
+    """ALLOW-TBD on a line that also closes a multi-line HTML comment keeps state correct."""
+    path = write_file(
+        tmp_path / "docs" / "spec" / "example.md",
+        "\n".join(
+            [
+                "<!-- multi-line comment opening",
+                "still inside the comment --> <!-- ALLOW-TBD: closing line -->",
+                "The value is TBD on a regular line.",
+            ]
+        )
+        + "\n",
+    )
+
+    violations = scan_single_file(path, tmp_path)
+
+    assert len(violations) == 1
+    assert violations[0].line_number == 3
+    assert violations[0].matched_text == "TBD"
+
+
+def test_allow_tbd_on_fence_opening_line_enters_fence(tmp_path: Path) -> None:
+    """ALLOW-TBD on a line that also opens a fenced code block still enters the fence."""
+    path = write_file(
+        tmp_path / "docs" / "spec" / "example.md",
+        "\n".join(
+            [
+                "```text <!-- ALLOW-TBD: documented example -->",
+                "TBD inside the fenced block should not be flagged.",
+                "```",
+                "The value is TBD outside the fenced block.",
+            ]
+        )
+        + "\n",
+    )
+
+    violations = scan_single_file(path, tmp_path)
+
+    assert len(violations) == 1
+    assert violations[0].line_number == 4
+    assert violations[0].matched_text == "TBD"
+
+
 def test_todo_task_list_without_colon_is_not_flagged(tmp_path: Path) -> None:
     """GitHub issue-style TODO task items without a colon are allowed."""
     path = write_file(tmp_path / "docs" / "spec" / "example.md", "- [ ] TODO\n")

@@ -164,14 +164,14 @@ def find_violations_in_text(text: str, display_path: str) -> list[Violation]:
                 active_fence = None
             continue
 
-        if ALLOW_TBD_PATTERN.search(raw_line):
-            continue
-
         commentless_line, is_in_html_comment = strip_html_comments(raw_line, is_in_html_comment)
 
         opening_fence = parse_opening_fence(commentless_line)
         if opening_fence is not None:
             active_fence = opening_fence
+            continue
+
+        if ALLOW_TBD_PATTERN.search(raw_line):
             continue
 
         if is_allowed_label_line(commentless_line):
