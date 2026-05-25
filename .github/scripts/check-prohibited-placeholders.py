@@ -65,6 +65,7 @@ class FenceLine:
     content: str
     list_indent: int | None
     block_quote_depth: int
+    inner_block_quote_depth: int = 0
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,7 @@ class ActiveFence:
     minimum_length: int
     list_indent: int | None
     block_quote_depth: int
+    inner_block_quote_depth: int = 0
 
 
 @dataclass(frozen=True)
@@ -232,11 +234,16 @@ def normalize_for_fence_opening(line: str, list_contexts: list[ListContext]) -> 
     relative_line, parent_indent = strip_active_list_prefix(line, list_contexts)
     list_match = LIST_ITEM_PATTERN.match(relative_line)
     if list_match is None:
+        # A blockquote nested inside the list item lives at the list-content
+        # column, so its ">" is past the 0-3 column rule that
+        # BLOCK_QUOTE_PREFIX_PATTERN enforces on the raw line.
+        relative_line, inner_block_quote_depth = strip_block_quote_prefixes(relative_line)
         list_indent = parent_indent if parent_indent != 0 else None
         return FenceLine(
             content=relative_line,
             list_indent=list_indent,
             block_quote_depth=block_quote_depth,
+            inner_block_quote_depth=inner_block_quote_depth,
         )
 
     content_indent = list_content_indent(list_match, parent_indent)
@@ -259,13 +266,18 @@ def normalize_for_fence_closing(line: str, active_fence: ActiveFence) -> str:
             return line
         normalized_line = normalized_line[match.end() :]
 
-    if active_fence.list_indent is None:
-        return normalized_line
+    if active_fence.list_indent is not None:
+        if count_leading_spaces(normalized_line) < active_fence.list_indent:
+            return line
+        normalized_line = normalized_line[active_fence.list_indent :]
 
-    if count_leading_spaces(normalized_line) < active_fence.list_indent:
-        return line
+    for _quote_level in range(active_fence.inner_block_quote_depth):
+        match = BLOCK_QUOTE_PREFIX_PATTERN.match(normalized_line)
+        if match is None:
+            return line
+        normalized_line = normalized_line[match.end() :]
 
-    return normalized_line[active_fence.list_indent :]
+    return normalized_line
 
 
 def build_active_fence(
@@ -279,6 +291,7 @@ def build_active_fence(
         minimum_length=minimum_length,
         list_indent=fence_line.list_indent,
         block_quote_depth=fence_line.block_quote_depth,
+        inner_block_quote_depth=fence_line.inner_block_quote_depth,
     )
 
 

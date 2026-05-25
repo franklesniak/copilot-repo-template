@@ -227,6 +227,28 @@ def test_list_inside_blockquote_preserves_list_context_across_blank_line(
     assert violations == []
 
 
+def test_blockquote_inside_nested_list_item_fence_is_not_flagged(tmp_path: Path) -> None:
+    """A blockquote-wrapped fence inside a nested list item (> past column 3) is excluded."""
+    path = write_file(
+        tmp_path / "docs" / "spec" / "example.md",
+        "\n".join(
+            [
+                "- Parent item:",
+                "  - Child item with a quoted fence:",
+                "",
+                "      > ```text",
+                "      > XXX inside a nested-list blockquote fence.",
+                "      > ```",
+            ]
+        )
+        + "\n",
+    )
+
+    violations = scan_single_file(path, tmp_path)
+
+    assert violations == []
+
+
 def test_top_level_four_space_fence_marker_is_not_treated_as_fence(tmp_path: Path) -> None:
     """A top-level 4-space-indented fence marker does not suppress later prose."""
     path = write_file(
