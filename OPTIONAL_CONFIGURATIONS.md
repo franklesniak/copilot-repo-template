@@ -11,6 +11,7 @@ This guide covers optional customizations you can make after completing the init
 
 ## Table of Contents
 
+- [First-Adoption Preflight Answers](#first-adoption-preflight-answers)
 - [Issue Template Configuration](#issue-template-configuration)
   - [Bug Report Template Customization](#bug-report-template-customization)
   - [Feature Request Template Customization](#feature-request-template-customization)
@@ -57,6 +58,30 @@ This guide covers optional customizations you can make after completing the init
   - [Reviewing Upstream Template Changes](#reviewing-upstream-template-changes)
   - [Updating Pre-commit Hooks](#updating-pre-commit-hooks)
   - [Reviewing Python Version Requirements](#reviewing-python-version-requirements)
+
+---
+
+## First-Adoption Preflight Answers
+
+The getting-started guides require a root `_TODO-repo-init.md` checklist during first-time adoption when maintainer choices are not already recorded. This section describes optional answers that often affect later configuration. These answers are optional because repositories may choose different settings, not because agents may guess them.
+
+Use file inspection and Git metadata only for discoverable repository state. Record manual GitHub settings and maintainer policy decisions in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or an equivalent committed adoption note named by the adoption procedure before treating them as resolved.
+
+| Preflight answer | Category | Follow-up configuration |
+| --- | --- | --- |
+| Enable GitHub Discussions | Manual GitHub setting | If enabled, uncomment the Discussions contact link in `.github/ISSUE_TEMPLATE/config.yml` and confirm the `OWNER/REPO` or GHES host substitution. |
+| Create `triage` or other expected labels | Manual GitHub setting | Create labels in GitHub before uncommenting label entries in issue templates. |
+| Enable private vulnerability reporting | Manual GitHub setting | Public repositories may enable it under Settings > Security. After enabling, update `.github/ISSUE_TEMPLATE/config.yml` and `SECURITY.md` to use the direct advisory-reporting path if desired. |
+| Configure default-branch protection or rulesets | Manual GitHub setting plus maintainer policy | Enable protection for the repository default branch, normally `main`, according to maintainer or organization policy. Do not infer required checks or approval counts from this template. |
+| Choose Code of Conduct reporting contact | Maintainer policy decision | Replace `[INSERT CONTACT METHOD]` in `CODE_OF_CONDUCT.md` only with a confirmed monitored channel. |
+| Choose security reporting channel | Maintainer policy decision | Replace `[security contact email]`, remove the email path, or use private vulnerability reporting only after the maintainer confirms the intended channel. |
+| Choose CODEOWNERS owner/team identity | Maintainer policy decision | Replace `@OWNER` with the confirmed user or team. Organization team slugs must be confirmed by the repository owner or maintainers. |
+| Choose template preservation posture | Maintainer policy decision | Record whether template-derived files should be preserved closely for future syncs or freely tailored as downstream-owned files. Use `.template-sync/marker.yml` `local_overrides` for path-specific sync defaults when future sync support is adopted. |
+| Record a GHES host override | Maintainer policy decision | Replace `github.com` in absolute template URLs only when the repository is hosted on the confirmed GitHub Enterprise Server host. |
+
+Agents MUST NOT invent contact emails, reporting channels, branch protection policy, label existence, private vulnerability reporting state, Discussions state, or GHES host names. Downstream work may assume a preflight item is done only after it is recorded as resolved in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or the equivalent committed adoption note named by the adoption procedure.
+
+This preflight is gated to first-time adoption or missing first-adoption state. Ongoing initialized delta syncs MUST NOT re-ask questions that are already resolved in one of those records.
 
 ---
 

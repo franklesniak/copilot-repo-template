@@ -18,6 +18,7 @@ This guide walks you through adopting features from `franklesniak/copilot-repo-t
   - [Tools Needed](#tools-needed)
 - [Planning Your Adoption](#planning-your-adoption)
   - [Feature Decision Matrix](#feature-decision-matrix)
+  - [First-Adoption Preflight Checklist](#first-adoption-preflight-checklist)
   - [Stack Selection Cleanup Checklist](#stack-selection-cleanup-checklist)
   - [Recommended Adoption Order](#recommended-adoption-order)
   - [Repo Layout Examples](#repo-layout-examples)
@@ -205,6 +206,20 @@ Use this matrix to decide which features to adopt based on complexity and depend
 | PSScriptAnalyzer Config | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell | Low |
 | Python CI Workflow | `.github/workflows/python-ci.yml` | Python project structure | High |
 | Agent Instruction Files | `.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md` | Adopt `.github/copilot-instructions.md` first | Low |
+
+### First-Adoption Preflight Checklist
+
+When this is the first import of template content into an existing repository, create or update a root `_TODO-repo-init.md` checklist before adopting template files whose contents depend on unresolved maintainer choices. If the repository already records these answers in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or an equivalent committed adoption note named by a prior adoption procedure, carry those answers forward and do not re-ask resolved questions.
+
+Use the concrete `_TODO-repo-init.md` example in [GETTING_STARTED_NEW_REPO.md](GETTING_STARTED_NEW_REPO.md#first-adoption-preflight-checklist) and keep only the items that are unresolved for this repository. Discovery may inspect files and Git metadata first, but agents and maintainers MUST NOT invent contact emails, reporting channels, branch protection policy, CODEOWNERS identities, GHES hosts, label availability, or GitHub repository settings.
+
+Separate the checklist into:
+
+- **Discoverable repository state:** owner/name, default branch, existing files, existing `.template-sync/marker.yml`, and any committed adoption notes.
+- **Manual GitHub settings:** private vulnerability reporting, Discussions, labels such as `triage`, and default-branch protection or rulesets.
+- **Maintainer policy decisions:** Code of Conduct contact method, security reporting channel, CODEOWNERS owner/team identity, template preservation posture, and any GHES host override.
+
+Downstream work may assume a checklist item is complete only after it is recorded as resolved in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or the equivalent committed adoption note named by the adoption procedure.
 
 ### Stack Selection Cleanup Checklist
 

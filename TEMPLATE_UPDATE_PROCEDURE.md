@@ -1,14 +1,14 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260525.0
+**Version:** 1.1.20260525.1
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-05-25
-- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, including the human-readable view of the template sync manifest, the marker-aware retained-state validation helper command, and the sync candidate table generator. Does not define an automated sync tool.
+- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the human-readable view of the template sync manifest, the marker-aware retained-state validation helper command, and the sync candidate table generator. Does not define an automated sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
 ## Purpose
@@ -22,23 +22,29 @@ Use this procedure when a downstream repository wants to review new changes from
 - **Module:** A unit in the taxonomy defined by `.template-sync/manifest.yml` and rendered in this procedure, such as `markdown`, `powershell`, or `terraform`. Procedure logic operates on modules.
 - **Stack:** Informal shorthand for a related grouping of modules. For example, a "PowerShell stack" may mean `powershell`, `markdown`, `yaml`, and `agent-instructions`, depending on what the downstream repository adopted. Stack is acceptable in prose, but sync decisions MUST be recorded in module terms.
 - **Downstream sync marker:** The `.template-sync/marker.yml` file in the downstream repository. Under `template_sync`, it records the upstream template repository, the newest upstream template commit that has been reviewed, the modules the downstream repository has adopted, local override rules, and deferred protected-file candidates.
+- **First-adoption preflight checklist:** A root `_TODO-repo-init.md` file, or an equivalent committed adoption note named by this procedure, that records manual GitHub settings and maintainer policy decisions that cannot be inferred from repository files during first-time template adoption.
+- **First-adoption state:** The resolved answers from the first-adoption preflight checklist, `.template-sync/marker.yml`, or an equivalent committed adoption note. Examples include conduct and security reporting channels, private vulnerability reporting, Discussions, expected labels, CODEOWNERS owner/team identity, default-branch protection policy, template preservation posture, and any GHES host override.
 - **Reviewed range:** The upstream template commit range inspected during a delta sync. It is recorded as `RANGE_BASE_SHA..RANGE_HEAD_SHA`, where both endpoints are resolved upstream template commit SHAs. Full reconciliation does not use a delta range; it compares a committed downstream snapshot against the resolved upstream range head.
 - **Included module:** A module listed in the downstream sync marker under `template_sync.included_modules`.
 - **Unadopted-module activity:** Upstream activity in a known taxonomy module that is not listed in `included_modules`.
 - **Unknown module:** A module name introduced by a newer upstream manifest or procedure that the downstream marker does not recognize. Unknown modules MUST be surfaced for explicit owner decision.
 - **Protected file:** A governance or instruction file that requires explicit owner authorization before editing.
-- **Sync working notes:** Temporary notes maintained while applying this procedure. They MAY be a scratch document, a draft PR body, or another local checklist, but they are not the final sync summary. They MUST capture the range mode, range endpoints or reconciliation command, range-base rationale, saved Step 6 candidate table or table citation, unmapped paths, per-file decisions, protected-file dispositions, line-ending normalization actions, validation results, validation issue classifications, finalization mode, and open questions as those facts are discovered. Step 14 turns these working notes into the final sync summary.
+- **Sync working notes:** Temporary notes maintained while applying this procedure. They MAY be a scratch document, a draft PR body, or another local checklist, but they are not the final sync summary. They MUST capture the first-adoption preflight disposition when applicable, the range mode, range endpoints or reconciliation command, range-base rationale, saved Step 6 candidate table or table citation, unmapped paths, per-file decisions, protected-file dispositions, line-ending normalization actions, validation results, validation issue classifications, finalization mode, and open questions as those facts are discovered. Step 14 turns these working notes into the final sync summary.
 - **Sync summary:** The final owner-facing record created in Step 14 from the sync working notes. Depending on the finalization mode, it MAY be a PR description, a committed summary artifact, a local handoff note, or a dry-run report. It is the durable review artifact for modes that commit a branch or open a PR; working-tree inspection and dry-run modes MUST still present it clearly before stopping.
 
 ## Safety Rules
 
 - Do not run `git pull template main`, `git merge template/main`, or `git rebase template/main` as the update mechanism. Fetch first, inspect the range, and make explicit per-file decisions.
 - Do not overwrite downstream project identity, repository URLs, issue templates, PR templates, workflow runner choices, validation commands, README content, package metadata, or local policy without a recorded decision.
+- Do not invent contact emails, reporting channels, branch protection policy, default-branch ruleset settings, CODEOWNERS identities, label existence, Discussions state, private vulnerability reporting state, GHES hosts, or template-preservation policy.
 - Do not edit protected files unless the owner gives explicit, path-scoped authorization in the current task.
 - Do not weaken existing security, validation, or pre-commit expectations to make a sync easier.
 - Do not silently include or exclude unknown modules.
+- Do not re-ask first-adoption preflight questions that are already recorded as resolved in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or an equivalent committed adoption note named by this procedure.
 
 ## Procedure Overview
+
+At the start of the procedure, determine whether the first-adoption preflight gate below applies. If it applies, generate or update the checklist before any content edits whose correctness depends on unresolved adoption answers.
 
 1. Create a dedicated sync branch.
 2. Add this template repository as a `template` remote if it is not already present.
@@ -56,6 +62,20 @@ Use this procedure when a downstream repository wants to review new changes from
 14. Finalize the sync using a declared mode and clear sync summary.
 
 Independent substeps, such as inspecting unrelated candidate files or collecting validation commands for separate modules, MAY be performed in parallel. The final recorded decisions and marker update MUST remain deterministic.
+
+## First-Adoption Preflight Gate
+
+Run this gate only when the downstream repository is receiving template contents for the first time, or when the repository is missing recorded first-adoption state that affects the files under review. Normal initialized delta syncs MUST NOT re-trigger this gate when `_TODO-repo-init.md`, `.template-sync/marker.yml`, or an equivalent committed adoption note already records the relevant answers.
+
+If the gate applies, generate or update root `_TODO-repo-init.md` before editing files whose content depends on unresolved adoption answers. Discovery, manifest inspection, range selection, and non-content setup may still happen before the checklist is complete. The checklist is downstream-owned state, not an upstream template file, and is excluded from upstream sync candidate review.
+
+The checklist MUST separate:
+
+- **Discoverable repository state:** owner/name, default branch, existing files, existing marker state, and prior committed adoption notes.
+- **Manual GitHub settings:** private vulnerability reporting, Discussions, expected labels such as `triage`, and default-branch protection or rulesets.
+- **Maintainer policy decisions:** Code of Conduct reporting contact method, security reporting channel, CODEOWNERS owner/team identity, template preservation posture, and any GHES host override.
+
+Downstream work may assume a checklist item is complete only after it is recorded as resolved in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or the equivalent committed adoption note named by this procedure. If the owner prefers a different committed adoption note instead of `_TODO-repo-init.md`, name that note in the sync working notes and final sync summary.
 
 ## Step 1: Create a Sync Branch
 
@@ -115,7 +135,7 @@ This step decides which upstream template changes need review during this sync. 
 
 ### Discover the Marker
 
-Before reading any marker contents, choosing a range mode, or filtering by module, check for `.template-sync/marker.yml`.
+Before reading any marker contents, choosing a range mode, or filtering by module, check for `.template-sync/marker.yml`. Also check for `_TODO-repo-init.md` or an equivalent committed adoption note when this appears to be first-time adoption or missing first-adoption state.
 
 - If `.template-sync/marker.yml` is present, read it as the downstream sync marker.
 - If `.template-sync/marker.yml` is absent, proceed without a marker. The maintainer then chooses one of the first-sync paths below.
@@ -132,6 +152,8 @@ Before reading any marker contents, choosing a range mode, or filtering by modul
 Read `.template-sync/marker.yml`, when present, before running any diff. A marker supplies a range base only when `template_sync.last_reviewed_template_commit` is present and non-empty. If the marker is absent, or if the field is missing or empty, the marker does not supply a range base; the maintainer chooses one of the first-sync paths.
 
 When an agent runs this procedure, the repository owner confirms any initial range base or timestamp-proxy choice before the agent trusts it.
+
+Range mode does not, by itself, authorize re-asking first-adoption questions. First sync from known lineage, timestamp-proxy delta sync, and full reconciliation all use the first-adoption preflight gate only when the required adoption answers are absent or unresolved. Normal initialized delta sync uses the recorded first-adoption state and MUST NOT re-prompt for resolved answers.
 
 | Situation | Mode | What to do |
 | --- | --- | --- |
@@ -266,6 +288,8 @@ A cross-tree `R` row is advisory unless shared lineage is confirmed. For example
 
 Apply a Step 4 pre-filter before per-file review: when a downstream-only path matches no template-managed path or module mapping and is not template-derived, summarize it as local-only noise and exclude it from Steps 6-7. This keeps the downstream repository's own project files out of per-file adjudication.
 
+Always treat `_TODO-repo-init.md` as downstream-owned first-adoption state. If it appears as a downstream-only path during full reconciliation, exclude it from upstream sync candidate review and cite it only as first-adoption state in the sync working notes or summary.
+
 The pre-filter does not require listing every downstream-only project file. A count plus one-line categorization is enough, such as `247 application source files under src/app/** excluded as local-only noise`.
 
 Do not exclude paths that appear template-derived or require owner attention. Template-derived paths include a copied template file that was later moved, renamed, or locally edited; a workflow copied from the template and renamed for the downstream project; a Markdown guide that still carries template placeholder conventions; or a protected instruction file whose content is based on this template. Send those paths through the Steps 6-7 taxonomy and per-file decision process unchanged.
@@ -282,6 +306,7 @@ Before moving to Step 5, the sync working notes MUST contain:
 - Range head SHA
 - Reachability check result, when using a delta range
 - Diff command or full-reconciliation enumeration command used
+- First-adoption preflight disposition: not applicable, already resolved with record path, generated or updated with unresolved items, or blocked pending owner answers
 - Local-only noise excluded by the full-reconciliation pre-filter, when applicable
 - Candidate inline module blocks discovered in changed files, when applicable. Retain or strip decisions for these blocks belong to Step 6 once path mapping has run; record them per file in the Step 7 decision notes and the sync summary.
 - Any uncertainty that should be carried into the sync summary
@@ -300,6 +325,7 @@ Example sync working-notes block:
 - Range head SHA: `2222222222222222222222222222222222222222`
 - Reachability check: passed
 - Enumeration command: `git diff --name-status -M 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222 --`
+- First-adoption preflight: not applicable; first-adoption state was already recorded
 - Local-only noise: not applicable
 - Candidate inline module blocks: none discovered in changed files
 - Uncertainty: none
@@ -312,6 +338,8 @@ Step 5 initializes or updates `.template-sync/marker.yml` after the range mode i
 Downstream repositories SHOULD keep the sync marker at `.template-sync/marker.yml`, matching the marker path rule in Step 4. The marker distinguishes reviewed upstream changes from adopted upstream changes. Selective syncs may intentionally skip upstream files, so the preferred field under `template_sync` is `last_reviewed_template_commit`, not `last_adopted_template_commit`.
 
 Marker contents are schema-backed by [`schemas/template-sync-marker.schema.json`](schemas/template-sync-marker.schema.json). The `validate-template-sync-marker` pre-commit hook validates `.template-sync/marker.yml` when that file is present; repositories without a marker are unaffected because no file matches the hook's anchored pattern. Marker changes MUST be rejected when they fail the schema. The schema's `included_modules` enum mirrors `.template-sync/manifest.yml`, and [`tests/test_template_manifest.py`](tests/test_template_manifest.py) fails if the schema enum drifts from the manifest module list.
+
+The marker may record sync-specific first-adoption state, such as adopted modules, path-specific local overrides, and deferred protected-file candidates. It is not a general replacement for `_TODO-repo-init.md` when manual GitHub settings or maintainer policy decisions still need explicit resolution.
 
 For example, suppose upstream changed `README.md` and `.github/workflows/terraform-ci.yml`, and the downstream repository reviewed both but adopted neither because `README.md` is locally owned and Terraform is not adopted. The sync still advances `last_reviewed_template_commit` to the resolved range head after review, because those upstream changes were inspected and intentionally skipped. A `last_adopted_template_commit` field would incorrectly imply that skipped-but-reviewed changes need to be reviewed again during the next sync.
 
@@ -619,6 +647,8 @@ python .template-sync/scripts/generate_sync_candidates.py --range-base RANGE_BAS
 
 The saved Step 6 candidate table is the source of truth for the reviewed candidate set. A rerun for the same range uses the current `.template-sync/marker.yml` values for `included_modules`, `local_overrides`, and `deferred_protected_candidates`, so its output can diverge from the saved table when Step 13 changed any of those fields even though the commit range is unchanged.
 
+The generated candidate table models upstream path changes. It MUST NOT be expanded to review `_TODO-repo-init.md` as an upstream candidate; that file is downstream-owned first-adoption state. During full reconciliation, carry forward the Step 4 pre-filter decision that excludes `_TODO-repo-init.md` from candidate review.
+
 For each path from `git diff --name-status -M`:
 
 1. Map the path to its manifest relation.
@@ -902,6 +932,7 @@ Step 14 does not always open a PR. Choose and record exactly one finalization mo
 The sync summary MUST include:
 
 - finalization mode
+- first-adoption preflight record and unresolved items, when applicable
 - upstream template commit range reviewed
 - included modules
 - unadopted-module activity summarized by module
@@ -926,6 +957,7 @@ Example summary skeleton:
 ## Template Sync Summary
 
 **Finalization mode:** PR-ready branch
+**First-adoption preflight:** not applicable; existing `_TODO-repo-init.md` and `.template-sync/marker.yml` recorded resolved adoption answers.
 **Upstream range reviewed:** `1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
 **Included modules:** baseline, agent-instructions, github-actions, github-templates, markdown, powershell, template-sync-support
 **Unadopted-module activity:** terraform (`.github/workflows/terraform-ci.yml`)
@@ -960,6 +992,7 @@ This example is illustrative. A downstream repository adopts `baseline`, `agent-
 ### Scenario State
 
 - Downstream sync marker at `.template-sync/marker.yml`: `template_sync.last_reviewed_template_commit` is `1111111111111111111111111111111111111111`
+- First-adoption state: `_TODO-repo-init.md` exists and records resolved conduct, security, CODEOWNERS, label, Discussions, private vulnerability reporting, default-branch protection, template-preservation, and GHES-host decisions
 - Upstream range head ref: `template/main`
 - Resolved upstream range head SHA: `2222222222222222222222222222222222222222`
 - Included modules: `baseline`, `agent-instructions`, `github-actions`, `github-templates`, `markdown`, `powershell`, and `template-sync-support`
@@ -1091,6 +1124,7 @@ Invoke-Pester -Path tests/ -Output Detailed
 
 ```markdown
 **Finalization mode:** PR-ready branch
+**First-adoption preflight:** not applicable; existing `_TODO-repo-init.md` and `.template-sync/marker.yml` recorded resolved adoption answers.
 **Upstream range reviewed:** `1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
 **Included modules:** baseline, agent-instructions, github-actions, github-templates, markdown, powershell, template-sync-support
 **Unadopted-module activity:** terraform (`.github/workflows/terraform-ci.yml`)
