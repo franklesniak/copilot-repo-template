@@ -273,6 +273,30 @@ def test_nested_blockquote_in_blockquote_list_preserves_continuation_fence(
     assert violations == []
 
 
+def test_list_inside_blockquote_inside_list_item_preserves_fence(
+    tmp_path: Path,
+) -> None:
+    """A list nested inside a blockquote that is itself nested inside another list item."""
+    path = write_file(
+        tmp_path / "docs" / "spec" / "example.md",
+        "\n".join(
+            [
+                "123. Outer item with content_indent=5.",
+                "     > 1. Nested list inside blockquote.",
+                "     >",
+                "     >     ```text",
+                "     >     TBD inside continuation fence.",
+                "     >     ```",
+            ]
+        )
+        + "\n",
+    )
+
+    violations = scan_single_file(path, tmp_path)
+
+    assert violations == []
+
+
 def test_top_level_four_space_fence_marker_is_not_treated_as_fence(tmp_path: Path) -> None:
     """A top-level 4-space-indented fence marker does not suppress later prose."""
     path = write_file(

@@ -58,14 +58,30 @@ class Violation:
         )
 
 
+CONTAINER_KIND_LIST = "list"
+CONTAINER_KIND_BLOCK_QUOTE = "blockquote"
+
+
+@dataclass(frozen=True)
+class Container:
+    """A peelable Markdown container prefix on a line.
+
+    A ``list`` container consumes ``indent`` leading spaces from its parent
+    container's interior. A ``blockquote`` container consumes a single
+    ``BLOCK_QUOTE_PREFIX_PATTERN`` match (``>`` optionally followed by a
+    space) at the start of its parent's interior; ``indent`` is unused.
+    """
+
+    kind: str
+    indent: int = 0
+
+
 @dataclass(frozen=True)
 class FenceLine:
     """A Markdown line normalized for fenced code block detection."""
 
     content: str
-    list_indent: int | None
-    block_quote_depth: int
-    inner_block_quote_depth: int = 0
+    containment_path: tuple[Container, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -74,17 +90,14 @@ class ActiveFence:
 
     character: str
     minimum_length: int
-    list_indent: int | None
-    block_quote_depth: int
-    inner_block_quote_depth: int = 0
+    containment_path: tuple[Container, ...] = ()
 
 
 @dataclass(frozen=True)
 class ListContext:
-    """An active Markdown list context with its containing block-quote depth."""
+    """An active Markdown list, identified by its full containment path from the document root."""
 
-    content_indent: int
-    block_quote_depth: int
+    containment_path: tuple[Container, ...]
 
 
 class FileReadError(RuntimeError):
@@ -161,20 +174,32 @@ def strip_html_comments(line: str, is_in_html_comment: bool) -> tuple[str, bool]
     return "".join(uncommented_parts), is_in_html_comment
 
 
-def strip_block_quote_prefixes(line: str) -> tuple[str, int]:
-    """Return a Markdown line with leading block quote container markers removed."""
-    block_quote_depth = 0
-    while True:
-        match = BLOCK_QUOTE_PREFIX_PATTERN.match(line)
-        if match is None:
-            return line, block_quote_depth
-        line = line[match.end() :]
-        block_quote_depth += 1
-
-
 def count_leading_spaces(line: str) -> int:
     """Return the number of leading space characters in a line."""
     return len(line) - len(line.lstrip(" "))
+
+
+def peel_containers(line: str, path: tuple[Container, ...]) -> tuple[str, int]:
+    """Peel container prefixes from ``line`` in order; return ``(remaining, peeled_count)``.
+
+    A list container consumes ``container.indent`` leading spaces (or fails if
+    the line has fewer). A blockquote container consumes one
+    ``BLOCK_QUOTE_PREFIX_PATTERN`` match (or fails if the line does not start
+    with one in its current coordinate system). Peeling stops at the first
+    container that cannot be consumed; the caller can compare ``peeled_count``
+    to ``len(path)`` to detect partial peels.
+    """
+    for index, container in enumerate(path):
+        if container.kind == CONTAINER_KIND_LIST:
+            if count_leading_spaces(line) < container.indent:
+                return line, index
+            line = line[container.indent :]
+        else:
+            match = BLOCK_QUOTE_PREFIX_PATTERN.match(line)
+            if match is None:
+                return line, index
+            line = line[match.end() :]
+    return line, len(path)
 
 
 def prune_inactive_list_contexts(line: str, list_contexts: list[ListContext]) -> None:
@@ -184,32 +209,38 @@ def prune_inactive_list_contexts(line: str, list_contexts: list[ListContext]) ->
 
     while list_contexts:
         top = list_contexts[-1]
-        stripped = line
-        sufficient_block_quote_depth = True
-        for _quote_level in range(top.block_quote_depth):
-            match = BLOCK_QUOTE_PREFIX_PATTERN.match(stripped)
-            if match is None:
-                sufficient_block_quote_depth = False
-                break
-            stripped = stripped[match.end() :]
+        peeled = line
+        peel_failed_on_kind: str | None = None
+        for container in top.containment_path:
+            # A line that becomes blank partway through container peeling is a
+            # blank line inside the container — treat it as a continuation and
+            # keep the list active.
+            if not peeled.strip():
+                return
+            if container.kind == CONTAINER_KIND_LIST:
+                if count_leading_spaces(peeled) < container.indent:
+                    peel_failed_on_kind = CONTAINER_KIND_LIST
+                    break
+                peeled = peeled[container.indent :]
+            else:
+                match = BLOCK_QUOTE_PREFIX_PATTERN.match(peeled)
+                if match is None:
+                    peel_failed_on_kind = CONTAINER_KIND_BLOCK_QUOTE
+                    break
+                peeled = peeled[match.end() :]
 
-        if not sufficient_block_quote_depth:
+        if peel_failed_on_kind == CONTAINER_KIND_LIST:
+            # A deeper blockquote nested inside the list keeps the list active;
+            # the list's content indent is not meaningful in that deeper
+            # coordinate system.
+            if BLOCK_QUOTE_PREFIX_PATTERN.match(peeled) is not None:
+                return
             list_contexts.pop()
             continue
-
-        # A line with more block-quote prefixes than the list's recorded depth is
-        # inside a blockquote nested in the list. Preserve the list — its
-        # content_indent is not meaningful in this deeper coordinate system.
-        if BLOCK_QUOTE_PREFIX_PATTERN.match(stripped) is not None:
-            return
-
-        if not stripped.strip():
-            return
-
-        if count_leading_spaces(stripped) >= top.content_indent:
-            return
-
-        list_contexts.pop()
+        if peel_failed_on_kind == CONTAINER_KIND_BLOCK_QUOTE:
+            list_contexts.pop()
+            continue
+        return
 
 
 def list_content_indent(match: re.Match[str], parent_indent: int) -> int:
@@ -220,78 +251,43 @@ def list_content_indent(match: re.Match[str], parent_indent: int) -> int:
     return marker_end_column + content_padding
 
 
-def strip_active_list_prefix(line: str, list_contexts: list[ListContext]) -> tuple[str, int]:
-    """Return a line relative to the innermost active list context."""
-    if not list_contexts:
-        return line, 0
-
-    parent_indent = list_contexts[-1].content_indent
-    if count_leading_spaces(line) < parent_indent:
-        return line, 0
-
-    return line[parent_indent:], parent_indent
-
-
 def normalize_for_fence_opening(line: str, list_contexts: list[ListContext]) -> FenceLine:
     """Return a line normalized to its current Markdown container content column."""
     prune_inactive_list_contexts(line, list_contexts)
-    line, block_quote_depth = strip_block_quote_prefixes(line)
 
-    relative_line, parent_indent = strip_active_list_prefix(line, list_contexts)
+    active_path = list_contexts[-1].containment_path if list_contexts else ()
+    relative_line, peeled_count = peel_containers(line, active_path)
+    effective_path = active_path[:peeled_count]
+
+    extras: list[Container] = []
+    while True:
+        match = BLOCK_QUOTE_PREFIX_PATTERN.match(relative_line)
+        if match is None:
+            break
+        extras.append(Container(kind=CONTAINER_KIND_BLOCK_QUOTE))
+        relative_line = relative_line[match.end() :]
+
     list_match = LIST_ITEM_PATTERN.match(relative_line)
-    if list_match is None:
-        # A blockquote nested inside the list item lives at the list-content
-        # column, so its ">" is past the 0-3 column rule that
-        # BLOCK_QUOTE_PREFIX_PATTERN enforces on the raw line.
-        #
-        # LIST_ITEM_PATTERN is intentionally not re-run after this inner strip:
-        # tracking a list item that lives inside a blockquote that lives inside
-        # another list item would require a multi-level container path on
-        # ListContext (essentially the CommonMark container-stack model).
-        # That deeper pattern is unsupported here; fence detection inside such
-        # a triply-nested context may produce false positives until the hook
-        # is rewritten around an ordered container stack.
-        relative_line, inner_block_quote_depth = strip_block_quote_prefixes(relative_line)
-        list_indent = parent_indent if parent_indent != 0 else None
-        return FenceLine(
-            content=relative_line,
-            list_indent=list_indent,
-            block_quote_depth=block_quote_depth,
-            inner_block_quote_depth=inner_block_quote_depth,
+    if list_match is not None:
+        content_indent_rel = list_content_indent(list_match, 0)
+        extras.append(Container(kind=CONTAINER_KIND_LIST, indent=content_indent_rel))
+        relative_line = (
+            relative_line[content_indent_rel:] if len(relative_line) >= content_indent_rel else ""
         )
+        list_contexts.append(ListContext(containment_path=effective_path + tuple(extras)))
 
-    content_indent = list_content_indent(list_match, parent_indent)
-    list_contexts.append(
-        ListContext(content_indent=content_indent, block_quote_depth=block_quote_depth)
-    )
     return FenceLine(
-        content=line[content_indent:] if len(line) >= content_indent else "",
-        list_indent=content_indent,
-        block_quote_depth=block_quote_depth,
+        content=relative_line,
+        containment_path=effective_path + tuple(extras),
     )
 
 
 def normalize_for_fence_closing(line: str, active_fence: ActiveFence) -> str:
     """Return a fenced-block line normalized to the opening fence's container."""
-    normalized_line = line
-    for _quote_level in range(active_fence.block_quote_depth):
-        match = BLOCK_QUOTE_PREFIX_PATTERN.match(normalized_line)
-        if match is None:
-            return line
-        normalized_line = normalized_line[match.end() :]
-
-    if active_fence.list_indent is not None:
-        if count_leading_spaces(normalized_line) < active_fence.list_indent:
-            return line
-        normalized_line = normalized_line[active_fence.list_indent :]
-
-    for _quote_level in range(active_fence.inner_block_quote_depth):
-        match = BLOCK_QUOTE_PREFIX_PATTERN.match(normalized_line)
-        if match is None:
-            return line
-        normalized_line = normalized_line[match.end() :]
-
-    return normalized_line
+    peeled, peeled_count = peel_containers(line, active_fence.containment_path)
+    if peeled_count < len(active_fence.containment_path):
+        return line
+    return peeled
 
 
 def build_active_fence(
@@ -303,9 +299,7 @@ def build_active_fence(
     return ActiveFence(
         character=fence_character,
         minimum_length=minimum_length,
-        list_indent=fence_line.list_indent,
-        block_quote_depth=fence_line.block_quote_depth,
-        inner_block_quote_depth=fence_line.inner_block_quote_depth,
+        containment_path=fence_line.containment_path,
     )
 
 
