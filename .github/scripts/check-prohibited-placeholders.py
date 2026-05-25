@@ -209,43 +209,29 @@ def prune_inactive_list_contexts(line: str, list_contexts: list[ListContext]) ->
 
     while list_contexts:
         top = list_contexts[-1]
-        peeled = line
-        peel_failed_on_kind: str | None = None
-        for container in top.containment_path:
-            # A line that becomes blank partway through container peeling is a
-            # blank line inside the container — treat it as a continuation and
-            # keep the list active.
-            if not peeled.strip():
-                return
-            if container.kind == CONTAINER_KIND_LIST:
-                if count_leading_spaces(peeled) < container.indent:
-                    peel_failed_on_kind = CONTAINER_KIND_LIST
-                    break
-                peeled = peeled[container.indent :]
-            else:
-                match = BLOCK_QUOTE_PREFIX_PATTERN.match(peeled)
-                if match is None:
-                    peel_failed_on_kind = CONTAINER_KIND_BLOCK_QUOTE
-                    break
-                peeled = peeled[match.end() :]
-
-        if peel_failed_on_kind == CONTAINER_KIND_LIST:
+        remaining, peeled_count = peel_containers(line, top.containment_path)
+        if peeled_count == len(top.containment_path):
+            return
+        # The line did not peel cleanly to this list's interior. Decide
+        # whether the partial peel still keeps the list active.
+        if not remaining.strip():
+            # A blank line inside a partly-peeled container is a continuation.
+            return
+        failed_container = top.containment_path[peeled_count]
+        if (
+            failed_container.kind == CONTAINER_KIND_LIST
+            and BLOCK_QUOTE_PREFIX_PATTERN.match(remaining) is not None
+        ):
             # A deeper blockquote nested inside the list keeps the list active;
             # the list's content indent is not meaningful in that deeper
             # coordinate system.
-            if BLOCK_QUOTE_PREFIX_PATTERN.match(peeled) is not None:
-                return
-            list_contexts.pop()
-            continue
-        if peel_failed_on_kind == CONTAINER_KIND_BLOCK_QUOTE:
-            list_contexts.pop()
-            continue
-        return
+            return
+        list_contexts.pop()
 
 
-def list_content_indent(match: re.Match[str], parent_indent: int) -> int:
-    """Return the content indent column for a Markdown list-item marker."""
-    marker_end_column = parent_indent + match.end("marker")
+def list_content_indent(match: re.Match[str]) -> int:
+    """Return the list-item content indent relative to the marker's parent interior."""
+    marker_end_column = match.end("marker")
     spacing_width = len(match.group("spacing"))
     content_padding = spacing_width if spacing_width <= 4 else 1
     return marker_end_column + content_padding
@@ -269,7 +255,7 @@ def normalize_for_fence_opening(line: str, list_contexts: list[ListContext]) -> 
 
     list_match = LIST_ITEM_PATTERN.match(relative_line)
     if list_match is not None:
-        content_indent_rel = list_content_indent(list_match, 0)
+        content_indent_rel = list_content_indent(list_match)
         extras.append(Container(kind=CONTAINER_KIND_LIST, indent=content_indent_rel))
         relative_line = (
             relative_line[content_indent_rel:] if len(relative_line) >= content_indent_rel else ""
