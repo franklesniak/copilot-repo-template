@@ -204,6 +204,29 @@ def test_blockquote_inside_list_item_preserves_list_context(tmp_path: Path) -> N
     assert violations == []
 
 
+def test_list_inside_blockquote_preserves_list_context_across_blank_line(
+    tmp_path: Path,
+) -> None:
+    """A list nested inside a blockquote must not be pruned by a blank blockquote line."""
+    path = write_file(
+        tmp_path / "docs" / "spec" / "example.md",
+        "\n".join(
+            [
+                "> 1. Item with a continuation fence:",
+                ">",
+                ">     ```text",
+                ">     TBD inside a blockquote-list continuation fence.",
+                ">     ```",
+            ]
+        )
+        + "\n",
+    )
+
+    violations = scan_single_file(path, tmp_path)
+
+    assert violations == []
+
+
 def test_top_level_four_space_fence_marker_is_not_treated_as_fence(tmp_path: Path) -> None:
     """A top-level 4-space-indented fence marker does not suppress later prose."""
     path = write_file(

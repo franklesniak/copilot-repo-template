@@ -77,6 +77,14 @@ class ActiveFence:
     block_quote_depth: int
 
 
+@dataclass(frozen=True)
+class ListContext:
+    """An active Markdown list context with its containing block-quote depth."""
+
+    content_indent: int
+    block_quote_depth: int
+
+
 class FileReadError(RuntimeError):
     """Raised when a candidate Markdown file cannot be read."""
 
@@ -167,14 +175,33 @@ def count_leading_spaces(line: str) -> int:
     return len(line) - len(line.lstrip(" "))
 
 
-def prune_inactive_list_contexts(line: str, list_content_indents: list[int]) -> None:
+def prune_inactive_list_contexts(line: str, list_contexts: list[ListContext]) -> None:
     """Drop active list contexts that a nonblank Markdown line has outdented past."""
     if not line.strip():
         return
 
-    leading_spaces = count_leading_spaces(line)
-    while list_content_indents and leading_spaces < list_content_indents[-1]:
-        list_content_indents.pop()
+    while list_contexts:
+        top = list_contexts[-1]
+        stripped = line
+        sufficient_block_quote_depth = True
+        for _quote_level in range(top.block_quote_depth):
+            match = BLOCK_QUOTE_PREFIX_PATTERN.match(stripped)
+            if match is None:
+                sufficient_block_quote_depth = False
+                break
+            stripped = stripped[match.end() :]
+
+        if not sufficient_block_quote_depth:
+            list_contexts.pop()
+            continue
+
+        if not stripped.strip():
+            return
+
+        if count_leading_spaces(stripped) >= top.content_indent:
+            return
+
+        list_contexts.pop()
 
 
 def list_content_indent(match: re.Match[str], parent_indent: int) -> int:
@@ -185,24 +212,24 @@ def list_content_indent(match: re.Match[str], parent_indent: int) -> int:
     return marker_end_column + content_padding
 
 
-def strip_active_list_prefix(line: str, list_content_indents: list[int]) -> tuple[str, int]:
+def strip_active_list_prefix(line: str, list_contexts: list[ListContext]) -> tuple[str, int]:
     """Return a line relative to the innermost active list context."""
-    if not list_content_indents:
+    if not list_contexts:
         return line, 0
 
-    parent_indent = list_content_indents[-1]
+    parent_indent = list_contexts[-1].content_indent
     if count_leading_spaces(line) < parent_indent:
         return line, 0
 
     return line[parent_indent:], parent_indent
 
 
-def normalize_for_fence_opening(line: str, list_content_indents: list[int]) -> FenceLine:
+def normalize_for_fence_opening(line: str, list_contexts: list[ListContext]) -> FenceLine:
     """Return a line normalized to its current Markdown container content column."""
-    prune_inactive_list_contexts(line, list_content_indents)
+    prune_inactive_list_contexts(line, list_contexts)
     line, block_quote_depth = strip_block_quote_prefixes(line)
 
-    relative_line, parent_indent = strip_active_list_prefix(line, list_content_indents)
+    relative_line, parent_indent = strip_active_list_prefix(line, list_contexts)
     list_match = LIST_ITEM_PATTERN.match(relative_line)
     if list_match is None:
         list_indent = parent_indent if parent_indent != 0 else None
@@ -213,7 +240,9 @@ def normalize_for_fence_opening(line: str, list_content_indents: list[int]) -> F
         )
 
     content_indent = list_content_indent(list_match, parent_indent)
-    list_content_indents.append(content_indent)
+    list_contexts.append(
+        ListContext(content_indent=content_indent, block_quote_depth=block_quote_depth)
+    )
     return FenceLine(
         content=line[content_indent:] if len(line) >= content_indent else "",
         list_indent=content_indent,
@@ -279,7 +308,7 @@ def find_violations_in_text(text: str, display_path: str) -> list[Violation]:
     violations: list[Violation] = []
     is_in_html_comment = False
     active_fence: ActiveFence | None = None
-    list_content_indents: list[int] = []
+    list_contexts: list[ListContext] = []
 
     for line_number, raw_line in enumerate(text.splitlines(), start=1):
         if active_fence is not None:
@@ -294,7 +323,7 @@ def find_violations_in_text(text: str, display_path: str) -> list[Violation]:
 
         commentless_line, is_in_html_comment = strip_html_comments(raw_line, is_in_html_comment)
 
-        fence_line = normalize_for_fence_opening(commentless_line, list_content_indents)
+        fence_line = normalize_for_fence_opening(commentless_line, list_contexts)
         opening_fence = parse_opening_fence(fence_line.content)
         if opening_fence is not None:
             active_fence = build_active_fence(opening_fence, fence_line)
