@@ -197,6 +197,12 @@ def prune_inactive_list_contexts(line: str, list_contexts: list[ListContext]) ->
             list_contexts.pop()
             continue
 
+        # A line with more block-quote prefixes than the list's recorded depth is
+        # inside a blockquote nested in the list. Preserve the list — its
+        # content_indent is not meaningful in this deeper coordinate system.
+        if BLOCK_QUOTE_PREFIX_PATTERN.match(stripped) is not None:
+            return
+
         if not stripped.strip():
             return
 

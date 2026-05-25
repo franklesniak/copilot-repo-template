@@ -249,6 +249,30 @@ def test_blockquote_inside_nested_list_item_fence_is_not_flagged(tmp_path: Path)
     assert violations == []
 
 
+def test_nested_blockquote_in_blockquote_list_preserves_continuation_fence(
+    tmp_path: Path,
+) -> None:
+    """A nested blockquote aside inside a blockquote-contained list must not break later fences."""
+    path = write_file(
+        tmp_path / "docs" / "spec" / "example.md",
+        "\n".join(
+            [
+                "> 1. Item with a nested aside:",
+                "> > Note: see the upstream draft.",
+                ">",
+                ">     ```text",
+                ">     TBD inside a continuation fence after a nested blockquote.",
+                ">     ```",
+            ]
+        )
+        + "\n",
+    )
+
+    violations = scan_single_file(path, tmp_path)
+
+    assert violations == []
+
+
 def test_top_level_four_space_fence_marker_is_not_treated_as_fence(tmp_path: Path) -> None:
     """A top-level 4-space-indented fence marker does not suppress later prose."""
     path = write_file(
