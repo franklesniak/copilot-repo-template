@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.5.20260524.3
+**Version:** 1.5.20260525.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-24
+- **Last Updated:** 2026-05-25
 - **Scope:** Agent-specific entry point for Claude Code and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
 
@@ -94,11 +94,20 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
 2. **Validate the concern.** Determine whether the reviewer's feedback identifies a genuine gap, bug, style violation, or improvement opportunity. If the concern is not valid, explain why in a reply, skip steps 3-8, and continue to step 9 to complete any required thread resolution and cleanup.
 
-3. **List options.** Enumerate all reasonable ways to resolve the problem or address the feedback.
+3. **List options.** Address each reviewer concern **one at a time**. For each concern, think hard about possible ways to resolve the problem or address the feedback and enumerate all **materially distinct reasonable options**. Where appropriate, consult vendor or official documentation (for example, language, framework, cloud-provider, API, or tooling docs) so the option set reflects current authoritative guidance, not just generalized prior knowledge. If documentation materially informs the option set or scoring, name or cite the source in the evaluation reply. Where it would materially change the outcome, consider permutations and combinations of base options (for example, "Option A plus a narrowed part of Option C") rather than treating only mutually exclusive base options. Take the time needed to reach a defensibly complete list before scoring, while collapsing duplicate or materially equivalent options.
 
-4. **Build an evaluation rubric.** Define 4-6 scoring criteria relevant to the concern (e.g., style guide compliance, performance, code simplicity, PII safety, PS 5.1 compatibility). Score each criterion on a 1-5 scale.
+4. **Build an evaluation rubric.** Define 4-6 scoring criteria relevant to the concern (for example, style guide compliance, correctness, security, performance, maintainability, code simplicity, PII safety, PS 5.1 compatibility, test reliability, user impact, compatibility, or long-term clarity). Score each criterion on a 1-5 scale. Take the time needed to ensure the rubric is **comprehensive and defensible**: each criterion should be one a reasonable maintainer would accept as relevant, and the criteria collectively should cover the substantive technical considerations of the concern, not just surface-level ones.
 
-5. **Score and select.** Apply the rubric to every option. Present the results in a Markdown table. Select the option with the highest total score. When the rubric produces a clear highest-scoring option, the agent **MUST** select that option and carry it forward to step 7, unless an escalation condition under the **Operationalized escalation gate** below applies. A topic touching owner preferences, governance, or policy is not, by itself, an escalation trigger when the rubric produces a clear winner; this clarification stands independently of the protected-file authorization checkpoint in step 7.
+    **Criterion-weighting guidance.** When the rubric includes either of the following criteria, weight them **less than** substantive technical criteria such as correctness, security, maintainability, style-guide compliance, compatibility, test reliability, and long-term clarity, unless the reviewer's concern is itself primarily about that criterion:
+
+    - **Difficulty to implement** (effort required, churn introduced, complexity of the change)
+    - **Tightness of PR scope** (how narrowly the change stays within the PR's stated boundary)
+
+    These two criteria are legitimate considerations but tend to bias rubrics toward minimal, status-quo-preserving options even when a substantively better option exists. Implement this de-weighting by assigning these criteria a lower weight multiplier, such as `0.5` compared with `1.0` for substantive technical criteria. Keep all criteria scored on the same 1-5 scale, and show the weights in the posted rubric so the computation is auditable.
+
+    The PR-scope explicit-boundary escalation under condition (d) of the **Operationalized escalation gate** in step 5 is unchanged: an explicit scope sentence in the PR description that the selected fix would directly violate still triggers escalation regardless of weighting.
+
+5. **Score and select.** Apply the rubric to every option, taking the time needed to score each criterion defensibly. Present the results in a Markdown table. If the rubric uses weighted criteria per step 4, display each criterion's weight and each option's weighted total so the computation is auditable. Select the option with the highest total weighted score when weights are used, or the highest total score when all weights are equal. When the rubric produces a clear highest-scoring option, the agent **MUST** select that option and carry it forward to step 7, unless an escalation condition under the **Operationalized escalation gate** below applies. The thresholds defined in the **Operationalized escalation gate** continue to operate against weighted totals when weighting is applied. A topic touching owner preferences, governance, or policy is not, by itself, an escalation trigger when the rubric produces a clear winner; this clarification stands independently of the protected-file authorization checkpoint in step 7.
 
     **Escalation path:** If one of the escalation conditions (a)-(d) under **Operationalized escalation gate** below applies, escalate to the PR owner instead of selecting an option. Post a **standalone PR comment** (not a reply to the review thread) containing:
     - A brief summary of the reviewer's concern and which file/line it applies to
