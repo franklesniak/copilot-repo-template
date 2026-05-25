@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.5.20260520.3
+**Version:** 1.5.20260524.3
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-20
+- **Last Updated:** 2026-05-24
 - **Scope:** Agent-specific entry point for Claude Code and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
 
@@ -98,17 +98,41 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
 4. **Build an evaluation rubric.** Define 4-6 scoring criteria relevant to the concern (e.g., style guide compliance, performance, code simplicity, PII safety, PS 5.1 compatibility). Score each criterion on a 1-5 scale.
 
-5. **Score and select.** Apply the rubric to every option. Present the results in a Markdown table. Select the option with the highest total score. When the rubric produces a clear highest-scoring option, the agent **MUST** select that option and carry it forward to step 7. A topic touching owner preferences, governance, or policy is not, by itself, an escalation trigger when the rubric produces a clear winner; this clarification stands independently of the protected-file authorization checkpoint in step 7.
+5. **Score and select.** Apply the rubric to every option. Present the results in a Markdown table. Select the option with the highest total score. When the rubric produces a clear highest-scoring option, the agent **MUST** select that option and carry it forward to step 7, unless an escalation condition under the **Operationalized escalation gate** below applies. A topic touching owner preferences, governance, or policy is not, by itself, an escalation trigger when the rubric produces a clear winner; this clarification stands independently of the protected-file authorization checkpoint in step 7.
 
-    **Escalation path:** If the scores are tied or too close to differentiate objectively, or if the deciding question genuinely cannot be scored, escalate to the PR owner instead of selecting an option. Post a **standalone PR comment** (not a reply to the review thread) containing:
+    **Escalation path:** If one of the escalation conditions (a)-(d) under **Operationalized escalation gate** below applies, escalate to the PR owner instead of selecting an option. Post a **standalone PR comment** (not a reply to the review thread) containing:
     - A brief summary of the reviewer's concern and which file/line it applies to
     - The options and scoring tables
     - The specific question the owner needs to answer
     - Instructions: *"Reply to this comment starting with `@claude` followed by your chosen option or direction."*
 
-    Operational complexity in an already-selected or already-documented fallback path is **not** a valid escalation trigger. Escalation remains appropriate only when the rubric cannot produce a clear winner for substantive policy, design, safety, or owner-preference reasons. When a documented fallback path (such as the GitHub MCP/API file-write path in **Automated Review Loop** step 7 **Push mechanism**) already determines what the agent should do, the agent **MUST NOT** post owner-decision options — including options that ask the owner to choose between MCP/API placement and manual integration — merely because that documented path is more cumbersome than the preferred mechanism. For concrete examples of operational complexity that **do not** justify escalation, see the canonical example list in **Automated Review Loop** step 7 **Push mechanism** ("Operational complexity is not failure or unavailability").
+    Operational complexity in an already-selected or already-documented fallback path is **not** a valid escalation trigger. Escalation remains appropriate only when one of conditions (a)-(d) in the **Operationalized escalation gate** below applies. When a documented fallback path (such as the GitHub MCP/API file-write path in **Automated Review Loop** step 7 **Push mechanism**) already determines what the agent should do, the agent **MUST NOT** post owner-decision options — including options that ask the owner to choose between MCP/API placement and manual integration — merely because that documented path is more cumbersome than the preferred mechanism. For concrete examples of operational complexity that **do not** justify escalation, see the canonical example list in **Automated Review Loop** step 7 **Push mechanism** ("Operational complexity is not failure or unavailability").
 
-    **PAUSE** processing of this comment until the owner responds. Continue processing other independent review comments in the meantime.
+    When escalation has been chosen, **PAUSE** processing of this comment until the owner responds. Continue processing other independent review comments in the meantime.
+
+    **Operationalized escalation gate.** The agent **MUST** select the unique highest-scoring option unless at least one of the following conditions applies:
+
+    (a) The top options are tied, so there is no unique highest-scoring option.
+
+    (b) A criterion genuinely cannot be scored from repository state, reviewer text, PR text, or already-available context, **AND** that missing score is decisive. A missing score is decisive when at least one plausible score within the 1-5 rubric range could change the top-ranked option.
+
+    (c) The decision hinges on a criterion whose scoring requires owner preference, meaning a value judgment the agent cannot resolve from repository state, reviewer text, PR text, or already-available context, **AND** that criterion is decisive. An owner-preference criterion is decisive when changing only that criterion's score by one point in any valid direction within the 1-5 score range would change the top-ranked option.
+
+    (d) The selected fix would directly violate a scope boundary explicitly set by the PR description, such as a sentence of the form "this PR will not modify X" where the selected fix does modify X.
+
+    A small score margin is not, by itself, an escalation trigger. A low-margin result may prompt the agent to re-check the conditions above; if none applies, the agent **MUST** select the rubric winner and proceed.
+
+    **Negative cases — DO NOT escalate merely because:**
+
+    - The rubric leader's margin is small, when none of the escalation conditions above applies.
+    - The agent feels uncertain even though the rubric has a unique winner. Subjective uncertainty is **not** an escalation trigger when the rubric is decisive.
+    - The current comment is adjacent to a previously deferred concern, such as the same file region or architectural area. **Each comment gets its own rubric; prior deferrals do not propagate to related-but-different comments.**
+    - The fix touches content from a recent merge or another contributor's branch. Cross-branch content provenance is one criterion among many in the rubric; it does not by itself trigger escalation.
+    - `AskUserQuestion` or any other interactive prompt tool is technically available and feels lightweight. The bar for an interactive prompt is the **same** as the bar for the protocol-defined standalone PR-comment escalation; treat it as having a real cost.
+    - General advisory text at the same or lower instruction priority, such as "ask first if ambiguous or architecturally significant," sounds more permissive than this rule. The escalation rule defined here controls whenever both apply.
+    - The fix touches an area the PR description does not explicitly forbid modifying. Only an *explicit* scope boundary stated in the PR description triggers escalation under (d); implicit PR-scope concerns remain one criterion among many in the rubric.
+
+    **Rubric-construction discipline.** Build the rubric **once** with a fixed set of criteria, then apply it **once**. Do not re-score with revised criteria mid-deliberation unless a **new external information source arrives**, such as a reviewer follow-up, CI failure, or newly discovered repository constraint. If, after rubric application, the agent wants to add or remove criteria in order to produce a different winner, treat that as analysis paralysis: commit to the rubric output and proceed unless one of the escalation conditions above applies.
 
 6. **Post the evaluation.** Reply to the review comment thread with the options table, the scoring table, the selected option, and either a note that implementation will follow in step 7 or, if the fix was already applied, the commit SHA that implements it.
 
