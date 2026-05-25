@@ -602,7 +602,9 @@ Before editing files whose contents depend on maintainer choices, create a root 
 
 This preflight is for first-time template adoption only. Do not recreate it or re-ask resolved questions during later template syncs when the answers are already recorded in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or an equivalent committed adoption note named by the adoption procedure.
 
-Use repository files and Git metadata for discoverable facts, such as the repository name, default branch, current placeholder values, and existing files. Use the checklist for manual GitHub settings and maintainer policy decisions that cannot be inferred safely from files, such as private vulnerability reporting, Discussions, branch protection, label availability, conduct reporting, security reporting, CODEOWNERS identity, GHES host override, and how closely template-derived files should be preserved.
+Use repository files and Git metadata for discoverable facts, such as the repository name, default branch, current placeholder values, and existing files. Use the checklist for manual GitHub settings and maintainer policy decisions that cannot be inferred safely from files, such as private vulnerability reporting, Discussions, branch protection, label availability, conduct reporting, security reporting, CODEOWNERS identity, GHES host override, and any explicit opt-in to broader rewriting of template-derived files.
+
+The default adoption mode for protected files and template-derived governance, community, process, workflow, and collaboration files is `minimal-preservation`: keep upstream wording and structure, substitute placeholders, trim sections owned by unadopted manifest modules, fix broken links, and record required local overrides in `.template-sync/marker.yml` when template sync support is retained. Select `tailored` only when the maintainer explicitly wants broader downstream rewriting for a specific file or file set. Record that choice before editing so agents do not repeatedly prompt when the default applies.
 
 Create `_TODO-repo-init.md` from this example and replace bracketed notes only after the maintainer confirms them:
 
@@ -623,7 +625,7 @@ This file records first-adoption decisions for this downstream repository. It is
 - [ ] Code of Conduct reporting contact method: `[confirmed contact method]`
 - [ ] Security vulnerability reporting channel: `[private vulnerability reporting, monitored email, or both]`
 - [ ] CODEOWNERS owner/team identity: `[@user or @org/team]`
-- [ ] Template-derived file posture: `[preserve closely or tailor freely]`
+- [ ] Adoption mode for protected and template-derived governance, community, process, workflow, and collaboration files: `minimal-preservation` by default; list any specific `tailored` opt-ins.
 - [ ] GHES host override: `[none or github.company.com]`
 
 ## Manual GitHub Settings
@@ -1948,11 +1950,12 @@ The `.github/copilot-instructions.md` file contains repository-wide coding stand
 The template protects `.github/copilot-instructions.md`, files under `.github/instructions/`, `.cursor/rules/`, and root agent files such as `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`. Stack selection usually requires legitimate updates to those files, but make those updates deliberately:
 
 1. Perform non-protected cleanup first, such as deleting unused workflows, templates, source files, and lint configuration.
-2. Record the protected-file edits that remain, including removed tool references, changed validation commands, and language-table updates.
-3. Obtain explicit maintainer authorization for the protected-file cleanup.
-4. Update `.github/copilot-instructions.md`, any remaining root agent files, and relevant `.github/instructions/*.instructions.md` files so they no longer reference deleted tools or stacks.
-5. Bump `Last Updated` and `Version` metadata in protected files that carry those fields.
-6. Use durable adoption language. Avoid temporary implementation notes such as "for this migration" in governance docs that downstream maintainers will keep.
+2. Record the adoption mode for the protected files that remain. Use `minimal-preservation` by default; choose `tailored` only when the maintainer explicitly approves broader rewriting for named files.
+3. Record the protected-file edits that remain, including removed tool references, changed validation commands, and language-table updates.
+4. Obtain explicit maintainer authorization for the protected-file cleanup. `minimal-preservation` limits the scope of an authorized edit but does not authorize protected-file changes by itself.
+5. Update `.github/copilot-instructions.md`, any remaining root agent files, and relevant `.github/instructions/*.instructions.md` files so they no longer reference deleted tools or stacks.
+6. Bump `Last Updated` and `Version` metadata in protected files that carry those fields.
+7. Use durable adoption language. Avoid temporary implementation notes such as "for this migration" in governance docs that downstream maintainers will keep.
 
 ### Customizing the Source of Truth Section
 

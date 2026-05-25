@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260525.1
+**Version:** 1.1.20260525.2
 
 ## Metadata
 
@@ -23,7 +23,10 @@ Use this procedure when a downstream repository wants to review new changes from
 - **Stack:** Informal shorthand for a related grouping of modules. For example, a "PowerShell stack" may mean `powershell`, `markdown`, `yaml`, and `agent-instructions`, depending on what the downstream repository adopted. Stack is acceptable in prose, but sync decisions MUST be recorded in module terms.
 - **Downstream sync marker:** The `.template-sync/marker.yml` file in the downstream repository. Under `template_sync`, it records the upstream template repository, the newest upstream template commit that has been reviewed, the modules the downstream repository has adopted, local override rules, and deferred protected-file candidates.
 - **First-adoption preflight checklist:** A root `_TODO-repo-init.md` file, or an equivalent committed adoption note named by this procedure, that records manual GitHub settings and maintainer policy decisions that cannot be inferred from repository files during first-time template adoption.
-- **First-adoption state:** The resolved answers from the first-adoption preflight checklist, `.template-sync/marker.yml`, or an equivalent committed adoption note. Examples include conduct and security reporting channels, private vulnerability reporting, Discussions, expected labels, CODEOWNERS owner/team identity, default-branch protection policy, template preservation posture, and any GHES host override.
+- **First-adoption state:** The resolved answers from the first-adoption preflight checklist, `.template-sync/marker.yml`, or an equivalent committed adoption note. Examples include conduct and security reporting channels, private vulnerability reporting, Discussions, expected labels, CODEOWNERS owner/team identity, default-branch protection policy, adoption mode, and any GHES host override.
+- **Adoption mode:** The preservation posture applied before editing protected files and template-derived governance, community, process, workflow, or collaboration files. Valid named modes are `minimal-preservation` and `tailored`.
+- **`minimal-preservation`:** The default adoption mode for protected files and template-derived governance, community, process, workflow, and collaboration files. Keep upstream wording and structure; limit edits to placeholder substitution, removing complete delimited sections owned by unadopted manifest modules, fixing broken links, and adding required local overrides that are recorded in `.template-sync/marker.yml`.
+- **`tailored`:** A maintainer-selected adoption mode for a specific file or file set that allows broader downstream rewriting. The maintainer MUST select `tailored` explicitly before the broader rewrite starts, and the selection MUST be recorded in `_TODO-repo-init.md`, `.template-sync/marker.yml` local overrides, the sync working notes, or the final sync summary.
 - **Reviewed range:** The upstream template commit range inspected during a delta sync. It is recorded as `RANGE_BASE_SHA..RANGE_HEAD_SHA`, where both endpoints are resolved upstream template commit SHAs. Full reconciliation does not use a delta range; it compares a committed downstream snapshot against the resolved upstream range head.
 - **Included module:** A module listed in the downstream sync marker under `template_sync.included_modules`.
 - **Unadopted-module activity:** Upstream activity in a known taxonomy module that is not listed in `included_modules`.
@@ -36,15 +39,16 @@ Use this procedure when a downstream repository wants to review new changes from
 
 - Do not run `git pull template main`, `git merge template/main`, or `git rebase template/main` as the update mechanism. Fetch first, inspect the range, and make explicit per-file decisions.
 - Do not overwrite downstream project identity, repository URLs, issue templates, PR templates, workflow runner choices, validation commands, README content, package metadata, or local policy without a recorded decision.
-- Do not invent contact emails, reporting channels, branch protection policy, default-branch ruleset settings, CODEOWNERS identities, label existence, Discussions state, private vulnerability reporting state, GHES hosts, or template-preservation policy.
+- Do not invent contact emails, reporting channels, branch protection policy, default-branch ruleset settings, CODEOWNERS identities, label existence, Discussions state, private vulnerability reporting state, GHES hosts, adoption modes, or template-preservation policy.
 - Do not edit protected files unless the owner gives explicit, path-scoped authorization in the current task.
+- Do not treat `minimal-preservation` as protected-file authorization. Adoption mode limits what an authorized edit may do; it does not grant permission to edit protected files.
 - Do not weaken existing security, validation, or pre-commit expectations to make a sync easier.
 - Do not silently include or exclude unknown modules.
 - Do not re-ask first-adoption preflight questions that are already recorded as resolved in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or an equivalent committed adoption note named by this procedure.
 
 ## Procedure Overview
 
-At the start of the procedure, determine whether the first-adoption preflight gate below applies. If it applies, generate or update the checklist before any content edits whose correctness depends on unresolved adoption answers.
+At the start of the procedure, determine whether the first-adoption preflight gate below applies. If it applies, generate or update the checklist before any content edits whose correctness depends on unresolved adoption answers. Before editing protected files or template-derived governance, community, process, workflow, or collaboration files, record the applicable adoption mode. Use `minimal-preservation` when no explicit maintainer selection exists.
 
 1. Create a dedicated sync branch.
 2. Add this template repository as a `template` remote if it is not already present.
@@ -52,7 +56,7 @@ At the start of the procedure, determine whether the first-adoption preflight ga
 4. Identify the upstream commit range under review with rename detection.
 5. Initialize or update `.template-sync/marker.yml`.
 6. Filter upstream changes through the authoritative module taxonomy.
-7. Review every candidate file with an explicit decision.
+7. Review every candidate file with an explicit adoption mode and decision.
 8. Perform manual merges using an ignored scratch location when needed, and normalize line endings after `.gitattributes` changes.
 9. Handle protected files through authorization or deferral.
 10. Preserve local customizations and downstream project identity.
@@ -73,7 +77,7 @@ The checklist MUST separate:
 
 - **Discoverable repository state:** owner/name, default branch, existing files, existing marker state, and prior committed adoption notes.
 - **Manual GitHub settings:** private vulnerability reporting, Discussions, expected labels such as `triage`, and default-branch protection or rulesets.
-- **Maintainer policy decisions:** Code of Conduct reporting contact method, security reporting channel, CODEOWNERS owner/team identity, template preservation posture, and any GHES host override.
+- **Maintainer policy decisions:** Code of Conduct reporting contact method, security reporting channel, CODEOWNERS owner/team identity, adoption mode for protected and template-derived files, explicit `tailored` opt-ins, and any GHES host override.
 
 Downstream work may assume a checklist item is complete only after it is recorded as resolved in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or the equivalent committed adoption note named by this procedure. If the owner prefers a different committed adoption note instead of `_TODO-repo-init.md`, name that note in the sync working notes and final sync summary.
 
@@ -339,7 +343,7 @@ Downstream repositories SHOULD keep the sync marker at `.template-sync/marker.ym
 
 Marker contents are schema-backed by [`schemas/template-sync-marker.schema.json`](schemas/template-sync-marker.schema.json). The `validate-template-sync-marker` pre-commit hook validates `.template-sync/marker.yml` when that file is present; repositories without a marker are unaffected because no file matches the hook's anchored pattern. Marker changes MUST be rejected when they fail the schema. The schema's `included_modules` enum mirrors `.template-sync/manifest.yml`, and [`tests/test_template_manifest.py`](tests/test_template_manifest.py) fails if the schema enum drifts from the manifest module list.
 
-The marker may record sync-specific first-adoption state, such as adopted modules, path-specific local overrides, and deferred protected-file candidates. It is not a general replacement for `_TODO-repo-init.md` when manual GitHub settings or maintainer policy decisions still need explicit resolution.
+The marker may record sync-specific first-adoption state, such as adopted modules, path-specific local overrides, explicit `tailored` opt-ins for locally owned paths, and deferred protected-file candidates. It is not a general replacement for `_TODO-repo-init.md` when manual GitHub settings or maintainer policy decisions still need explicit resolution.
 
 For example, suppose upstream changed `README.md` and `.github/workflows/terraform-ci.yml`, and the downstream repository reviewed both but adopted neither because `README.md` is locally owned and Terraform is not adopted. The sync still advances `last_reviewed_template_commit` to the resolved range head after review, because those upstream changes were inspected and intentionally skipped. A `last_adopted_template_commit` field would incorrectly imply that skipped-but-reviewed changes need to be reviewed again during the next sync.
 
@@ -399,6 +403,16 @@ Worked local-overrides mini scenario:
 2. The reviewed upstream range changes `README.md` to add a security reporting note.
 3. The per-file row starts with `SKIP` from the override, but the maintainer upgrades the decision to `MERGE` because the security note is relevant.
 4. The sync summary still lists the applied override and the upstream change, for example: `README.md` defaulted to `SKIP`; upstream added security reporting guidance; final decision `MERGE`.
+
+### Adoption Mode Records
+
+Before editing protected files or template-derived governance, community, process, workflow, or collaboration files, record the mode for the affected file or file set:
+
+- Record the default `minimal-preservation` mode in `_TODO-repo-init.md` when that checklist exists.
+- Record path-specific `tailored` opt-ins or required local ownership exceptions in `.template-sync/marker.yml` as `local_overrides`, with a reason that names the selected mode and the local policy being preserved.
+- Record the mode in the sync working notes and final sync summary when the sync does not modify `_TODO-repo-init.md` or `.template-sync/marker.yml`.
+
+Do not add ad hoc, non-schema fields to `.template-sync/marker.yml`. Use the schema-backed marker fields above, or record the mode in the checklist, working notes, or sync summary.
 
 ### Downstream adoption: Dependabot schema regression surface
 
@@ -668,6 +682,23 @@ If summarized unadopted-module activity appears relevant during review, the owne
 
 Every included candidate requires a row in a per-file decision table. When the Step 6 generator is used, treat its `Retained` rows as the starting candidate set and its `Excluded`, `Unmapped`, local override, deferred protected candidate, protected-file, rename, and inline-block notes as prompts for manual review and sync-summary entries.
 
+For protected files and template-derived governance, community, process, workflow, or collaboration files, assign an adoption mode before choosing the file decision:
+
+- Use `minimal-preservation` by default. Do not prompt the maintainer repeatedly when this default applies.
+- Use `tailored` only when the maintainer explicitly selects it for the specific file or file set.
+- Record the selected mode in `_TODO-repo-init.md`, `.template-sync/marker.yml` local overrides, the sync working notes, or the final sync summary before editing the affected file.
+
+In `minimal-preservation` mode, permitted edits are limited to:
+
+- substituting repository placeholders such as `OWNER/REPO`, confirmed contacts, confirmed owner/team names, and GHES hosts
+- removing complete delimited sections owned by unadopted manifest modules, such as a `# template-sync: begin terraform-only` block when the `terraform` module is excluded
+- fixing links that would otherwise be broken after placeholder substitution, module removal, or path deletion
+- adding required local overrides or local ownership records in `.template-sync/marker.yml`
+
+In `minimal-preservation` mode, do not shorten or restructure instruction files for style, paraphrase protected prose, rewrite community or workflow files merely to sound more project-specific, or remove rules that still apply to adopted modules.
+
+Adoption mode applies in addition to protected-file authorization. Selecting `minimal-preservation` does not by itself authorize editing `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, root agent files, or other protected instruction files.
+
 | Decision | Meaning |
 | --- | --- |
 | `TAKE` | Adopt the upstream version as-is. |
@@ -680,11 +711,11 @@ Every included candidate requires a row in a per-file decision table. When the S
 Suggested table:
 
 ```markdown
-| Path | Module(s) | Template Change | Local Customization | Decision | Notes |
-| --- | --- | --- | --- | --- | --- |
-| `.github/instructions/docs.instructions.md` | `markdown`, `agent-instructions` | Updated style rules | None | `PROTECTED-REVIEW` | Requires owner authorization. |
-| `.github/workflows/powershell-ci.yml` | `powershell`, `github-actions` | Updated validation steps | Local runner change | `MERGE` | Preserve local runner. |
-| `README.md` | `baseline` | Updated setup prose | Project-specific README | `SKIP` | In scope per relation filtering; local override defaulted to `SKIP`; recorded in the sync summary. |
+| Path | Module(s) | Adoption Mode | Template Change | Local Customization | Decision | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `.github/instructions/docs.instructions.md` | `markdown`, `agent-instructions` | `minimal-preservation` | Updated style rules | None | `PROTECTED-REVIEW` | Requires owner authorization; mode does not grant it. |
+| `.github/workflows/powershell-ci.yml` | `powershell`, `github-actions` | `minimal-preservation` | Updated validation steps | Local runner change | `MERGE` | Preserve local runner while retaining upstream workflow structure. |
+| `README.md` | `baseline` | `tailored` | Updated setup prose | Project-specific README | `SKIP` | In scope per relation filtering; local override defaulted to `SKIP`; recorded in the sync summary. |
 ```
 
 Upstream deletions MUST be surfaced for owner decision rather than applied automatically. Valid decisions for deletion rows include `TAKE` when the downstream owner agrees to delete the local file, `SKIP` when the downstream file is intentionally retained, and `MERGE` when only part of the deletion rationale applies.
@@ -773,6 +804,8 @@ Protected files include:
 - `GEMINI.md`
 
 The default decision for protected-file changes is `PROTECTED-REVIEW`.
+
+The default adoption mode for protected-file candidates is `minimal-preservation`, but that default only constrains the edit once authorization exists. It does not replace the explicit owner authorization requirement. A maintainer MAY select `tailored` for a protected file, but that selection still requires the same path-scoped protected-file authorization before editing.
 
 ### Same-Sync Protected Edits
 
@@ -911,6 +944,7 @@ After all decisions are recorded and validation is complete, update `.template-s
 - Keep `included_modules` current.
 - Add, update, or remove `local_overrides` only when the owner made that adoption decision.
 - Add or refresh `deferred_protected_candidates` for unresolved protected-file changes.
+- Preserve adoption-mode records: keep the default `minimal-preservation` record in `_TODO-repo-init.md` or the sync summary, and represent path-specific `tailored` opt-ins or required local ownership exceptions as `local_overrides` when `.template-sync/marker.yml` is the durable record.
 
 Do not set `template_sync.last_reviewed_template_commit` to a commit that was not actually reviewed through the taxonomy and per-file process. Do not store a branch name, tag name, short SHA, or other moving ref in this marker field; store the full 40-character resolved upstream template commit SHA that was reviewed.
 
@@ -933,6 +967,7 @@ The sync summary MUST include:
 
 - finalization mode
 - first-adoption preflight record and unresolved items, when applicable
+- adoption mode record for protected files and template-derived governance, community, process, workflow, or collaboration files
 - upstream template commit range reviewed
 - included modules
 - unadopted-module activity summarized by module
@@ -958,6 +993,7 @@ Example summary skeleton:
 
 **Finalization mode:** PR-ready branch
 **First-adoption preflight:** not applicable; existing `_TODO-repo-init.md` and `.template-sync/marker.yml` recorded resolved adoption answers.
+**Adoption mode:** `minimal-preservation` by default for protected files and template-derived governance, community, process, workflow, and collaboration files; `README.md` has a path-specific `tailored` local override.
 **Upstream range reviewed:** `1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
 **Included modules:** baseline, agent-instructions, github-actions, github-templates, markdown, powershell, template-sync-support
 **Unadopted-module activity:** terraform (`.github/workflows/terraform-ci.yml`)
@@ -992,7 +1028,7 @@ This example is illustrative. A downstream repository adopts `baseline`, `agent-
 ### Scenario State
 
 - Downstream sync marker at `.template-sync/marker.yml`: `template_sync.last_reviewed_template_commit` is `1111111111111111111111111111111111111111`
-- First-adoption state: `_TODO-repo-init.md` exists and records resolved conduct, security, CODEOWNERS, label, Discussions, private vulnerability reporting, default-branch protection, template-preservation, and GHES-host decisions
+- First-adoption state: `_TODO-repo-init.md` exists and records resolved conduct, security, CODEOWNERS, label, Discussions, private vulnerability reporting, default-branch protection, default `minimal-preservation` adoption mode, and GHES-host decisions
 - Upstream range head ref: `template/main`
 - Resolved upstream range head SHA: `2222222222222222222222222222222222222222`
 - Included modules: `baseline`, `agent-instructions`, `github-actions`, `github-templates`, `markdown`, `powershell`, and `template-sync-support`
@@ -1053,15 +1089,15 @@ There are no unknown modules or unmapped paths in this example.
 
 ### Decide Per File
 
-| Path | Decision | Notes |
-| --- | --- | --- |
-| `.github/copilot-instructions.md` | `PROTECTED-REVIEW` | Owner authorization is absent; defer and record under `deferred_protected_candidates`. |
-| `.github/workflows/powershell-ci.yml` | `MERGE` | Preserve self-hosted runner block; adopt upstream validation step changes. |
-| `.github/instructions/powershell.instructions.md` | `PROTECTED-REVIEW` | Defer and record under `deferred_protected_candidates`. |
-| `.github/pull_request_template.md` | `MERGE` | Preserve project checklist; adopt upstream checklist additions. |
-| `TEMPLATE_UPDATE_PROCEDURE.md` | `TAKE` | Retain the sync procedure and adopt upstream clarification. |
-| `templates/markdown/README.md` | `TAKE` | No local customization. |
-| `templates/markdown/intro.md` to `templates/markdown/getting-started.md` | `TAKE` | Adopt upstream rename. |
+| Path | Adoption Mode | Decision | Notes |
+| --- | --- | --- | --- |
+| `.github/copilot-instructions.md` | `minimal-preservation` | `PROTECTED-REVIEW` | Owner authorization is absent; defer and record under `deferred_protected_candidates`. |
+| `.github/workflows/powershell-ci.yml` | `minimal-preservation` | `MERGE` | Preserve self-hosted runner block; adopt upstream validation step changes without restructuring the workflow. |
+| `.github/instructions/powershell.instructions.md` | `minimal-preservation` | `PROTECTED-REVIEW` | Defer and record under `deferred_protected_candidates`. |
+| `.github/pull_request_template.md` | `minimal-preservation` | `MERGE` | Preserve project checklist; adopt upstream checklist additions. |
+| `TEMPLATE_UPDATE_PROCEDURE.md` | `minimal-preservation` | `TAKE` | Retain the sync procedure and adopt upstream clarification. |
+| `templates/markdown/README.md` | not applicable | `TAKE` | No local customization. |
+| `templates/markdown/intro.md` to `templates/markdown/getting-started.md` | not applicable | `TAKE` | Adopt upstream rename. |
 
 Unadopted-module activity:
 
@@ -1095,7 +1131,7 @@ template_sync:
     - template-sync-support
   local_overrides:
     - path: README.md
-      reason: "Project-specific; use template only as reference."
+      reason: "Tailored adoption mode: project-specific; use template only as reference."
       default_decision: SKIP
   deferred_protected_candidates:
     - path: .github/copilot-instructions.md
@@ -1125,6 +1161,7 @@ Invoke-Pester -Path tests/ -Output Detailed
 ```markdown
 **Finalization mode:** PR-ready branch
 **First-adoption preflight:** not applicable; existing `_TODO-repo-init.md` and `.template-sync/marker.yml` recorded resolved adoption answers.
+**Adoption mode:** `minimal-preservation` by default for protected files and template-derived governance, community, process, workflow, and collaboration files; `README.md` uses a path-specific `tailored` local override.
 **Upstream range reviewed:** `1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
 **Included modules:** baseline, agent-instructions, github-actions, github-templates, markdown, powershell, template-sync-support
 **Unadopted-module activity:** terraform (`.github/workflows/terraform-ci.yml`)

@@ -12,6 +12,7 @@ This guide covers optional customizations you can make after completing the init
 ## Table of Contents
 
 - [First-Adoption Preflight Answers](#first-adoption-preflight-answers)
+- [Adoption Mode Opt-Ins](#adoption-mode-opt-ins)
 - [Issue Template Configuration](#issue-template-configuration)
   - [Bug Report Template Customization](#bug-report-template-customization)
   - [Feature Request Template Customization](#feature-request-template-customization)
@@ -76,12 +77,30 @@ Use file inspection and Git metadata only for discoverable repository state. Rec
 | Choose Code of Conduct reporting contact | Maintainer policy decision | Replace `[INSERT CONTACT METHOD]` in `CODE_OF_CONDUCT.md` only with a confirmed monitored channel. |
 | Choose security reporting channel | Maintainer policy decision | Replace `[security contact email]`, remove the email path, or use private vulnerability reporting only after the maintainer confirms the intended channel. |
 | Choose CODEOWNERS owner/team identity | Maintainer policy decision | Replace `@OWNER` with the confirmed user or team. Organization team slugs must be confirmed by the repository owner or maintainers. |
-| Choose template preservation posture | Maintainer policy decision | Record whether template-derived files should be preserved closely for future syncs or freely tailored as downstream-owned files. Use `.template-sync/marker.yml` `local_overrides` for path-specific sync defaults when future sync support is adopted. |
+| Choose adoption mode for template-derived files | Maintainer policy decision | Use `minimal-preservation` by default for protected files and template-derived governance, community, process, workflow, and collaboration files. Record explicit `tailored` opt-ins for named files or file sets before broader rewriting. Use `.template-sync/marker.yml` `local_overrides` for path-specific sync defaults when future sync support is adopted. |
 | Record a GHES host override | Maintainer policy decision | Replace `github.com` in absolute template URLs only when the repository is hosted on the confirmed GitHub Enterprise Server host. |
 
-Agents MUST NOT invent contact emails, reporting channels, branch protection policy, label existence, private vulnerability reporting state, Discussions state, or GHES host names. Downstream work may assume a preflight item is done only after it is recorded as resolved in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or the equivalent committed adoption note named by the adoption procedure.
+Agents MUST NOT invent contact emails, reporting channels, branch protection policy, label existence, private vulnerability reporting state, Discussions state, GHES host names, or adoption modes beyond the documented default. Downstream work may assume a preflight item is done only after it is recorded as resolved in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or the equivalent committed adoption note named by the adoption procedure.
 
 This preflight is gated to first-time adoption or missing first-adoption state. Ongoing initialized delta syncs MUST NOT re-ask questions that are already resolved in one of those records.
+
+---
+
+## Adoption Mode Opt-Ins
+
+`minimal-preservation` is the default for protected files and template-derived governance, community, process, workflow, and collaboration files. In this mode, keep upstream wording and structure; substitute placeholders, remove complete delimited sections owned by unadopted manifest modules, fix broken links, and record required local overrides in `.template-sync/marker.yml`.
+
+Choose `tailored` only when the maintainer explicitly wants broader downstream rewriting for a specific file or file set. Legitimate opt-ins include:
+
+- Existing issue or PR templates with established fields, labels, or project-specific review checklists that must be merged with the template rather than preserved verbatim.
+- Community-health files such as `SECURITY.md`, `CODE_OF_CONDUCT.md`, or `CONTRIBUTING.md` when the downstream project has confirmed local policy text that goes beyond placeholder substitution.
+- Workflow files that need repository-specific runner labels, cache strategy, required checks, or secret names after the retained modules are known.
+- Root README or onboarding guides that become downstream-owned product documentation after initial adoption.
+- Protected instruction files only after the maintainer separately grants explicit path-scoped protected-file authorization.
+
+The tradeoff is sync drift: `tailored` files are easier to make project-specific, but future upstream template changes require more manual review and may need path-specific `local_overrides`. Selecting `tailored` MUST NOT weaken security, validation, or pre-commit expectations, and it does not bypass protected-file authorization.
+
+Record the choice in `_TODO-repo-init.md`, `.template-sync/marker.yml` local overrides, or another committed adoption note before editing. If no explicit opt-in is recorded, agents should apply `minimal-preservation` without repeatedly prompting.
 
 ---
 
@@ -2526,11 +2545,12 @@ The main `.github/copilot-instructions.md` file provides repository-wide instruc
 The template protects `.github/copilot-instructions.md`, `.github/instructions/**`, `.cursor/rules/**`, and root agent files such as `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`. During stack selection:
 
 1. Complete non-protected cleanup first, such as unused workflows, examples, templates, and lint configuration.
-2. Record the protected-file changes needed to remove references to deleted tools or stacks.
-3. Get explicit maintainer authorization for those protected-file edits.
-4. Update `.github/copilot-instructions.md`, remaining root agent files, and relevant `.github/instructions/*.instructions.md` files.
-5. Bump `Last Updated` and `Version` metadata where those fields exist.
-6. Avoid temporary migration wording in governance docs that downstream maintainers will keep.
+2. Record the adoption mode for the protected files that remain. Use `minimal-preservation` by default; choose `tailored` only when the maintainer explicitly approves broader rewriting for named files.
+3. Record the protected-file changes needed to remove references to deleted tools or stacks.
+4. Get explicit maintainer authorization for those protected-file edits. `minimal-preservation` limits the scope of an authorized edit but does not authorize protected-file changes by itself.
+5. Update `.github/copilot-instructions.md`, remaining root agent files, and relevant `.github/instructions/*.instructions.md` files.
+6. Bump `Last Updated` and `Version` metadata where those fields exist.
+7. Avoid temporary migration wording in governance docs that downstream maintainers will keep.
 
 ### Customizing the Pre-commit Discipline Section
 
