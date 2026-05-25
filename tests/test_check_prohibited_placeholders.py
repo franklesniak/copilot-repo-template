@@ -73,6 +73,8 @@ def test_required_patterns_are_flagged(
         "- **Assumption:** The value is XXX in the source document.\n",
         "1. **Open Question:** Does the limit stay TBD until v2?\n",
         "12. **Assumption:** XXX represents a placeholder index.\n",
+        "1) **Open Question:** Does the parenthesized marker stay TBD?\n",
+        "12) **Assumption:** XXX in a parenthesized ordered list.\n",
     ],
 )
 def test_required_allowlist_contexts_are_not_flagged(tmp_path: Path, content: str) -> None:
@@ -87,6 +89,20 @@ def test_required_allowlist_contexts_are_not_flagged(tmp_path: Path, content: st
 def test_ordered_allowlist_label_requires_marker_spacing(tmp_path: Path) -> None:
     """A malformed ordered-list marker does not suppress placeholder checks."""
     path = write_file(tmp_path / "docs" / "spec" / "example.md", "1.**Open Question:** TBD\n")
+
+    violations = scan_single_file(path, tmp_path)
+
+    assert len(violations) == 1
+    assert violations[0].line_number == 1
+    assert violations[0].matched_text == "TBD"
+
+
+def test_ordered_allowlist_label_rejects_overlong_digit_marker(tmp_path: Path) -> None:
+    """An ordered marker with more than 9 digits is not a CommonMark list marker."""
+    path = write_file(
+        tmp_path / "docs" / "spec" / "example.md",
+        "1234567890. **Open Question:** TBD with an overlong digit marker.\n",
+    )
 
     violations = scan_single_file(path, tmp_path)
 

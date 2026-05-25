@@ -27,7 +27,7 @@ PLACEHOLDER_PATTERN = re.compile(
 )
 ALLOW_TBD_PATTERN = re.compile(r"<!--\s*ALLOW-TBD:\s*\S.*?-->", re.IGNORECASE)
 ALLOWED_LABEL_PATTERN = re.compile(
-    r"^\s*(?:(?:[-*+]|\d+\.)\s+)?\*\*(?:Open Questions?|Assumption):\*\*",
+    r"^\s*(?:(?:[-*+]|\d{1,9}[.)])\s+)?\*\*(?:Open Questions?|Assumption):\*\*",
     re.IGNORECASE,
 )
 FENCE_OPEN_PATTERN = re.compile(r"^ {0,3}(?P<marker>`{3,}|~{3,})")
