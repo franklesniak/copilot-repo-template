@@ -323,8 +323,9 @@ def replace_placeholders(
 ) -> tuple[ReplacementRecord, ...]:
     """Replace approved placeholders in allowlisted files."""
     records: list[ReplacementRecord] = []
+    rules = build_replacement_rules(context)
     files_by_path: dict[str, tuple[Path, str]] = {}
-    for rule in build_replacement_rules(context):
+    for rule in rules:
         for relative_path in rule.paths:
             files_by_path[relative_path] = (
                 resolve_repo_path(repo_root, relative_path),
@@ -339,7 +340,7 @@ def replace_placeholders(
             raise PlaceholderError(f"{display_path}: expected a regular file.")
         file_texts[relative_path] = read_text(path, display_path)
 
-    for rule in build_replacement_rules(context):
+    for rule in rules:
         for relative_path in rule.paths:
             if relative_path not in file_texts:
                 continue

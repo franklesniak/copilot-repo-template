@@ -379,7 +379,10 @@ def test_resolve_repo_path_rejects_symlinked_allowlisted_file(tmp_path: Path) ->
     target.write_text("* @real\n", encoding="utf-8")
     link = tmp_path / ".github" / "CODEOWNERS"
     link.parent.mkdir(parents=True, exist_ok=True)
-    link.symlink_to(target)
+    try:
+        link.symlink_to(target)
+    except (OSError, NotImplementedError) as error:
+        pytest.skip(f"symlink creation not supported in this environment: {error}")
 
     with pytest.raises(placeholder_helper.PlaceholderError, match="must not traverse a symlink"):
         placeholder_helper.resolve_repo_path(tmp_path, ".github/CODEOWNERS")
@@ -390,7 +393,10 @@ def test_resolve_repo_path_rejects_symlinked_parent_directory(tmp_path: Path) ->
     real_dir = tmp_path / "real_dot_github"
     real_dir.mkdir()
     (real_dir / "CODEOWNERS").write_text("* @real\n", encoding="utf-8")
-    (tmp_path / ".github").symlink_to(real_dir)
+    try:
+        (tmp_path / ".github").symlink_to(real_dir)
+    except (OSError, NotImplementedError) as error:
+        pytest.skip(f"symlink creation not supported in this environment: {error}")
 
     with pytest.raises(placeholder_helper.PlaceholderError, match="must not traverse a symlink"):
         placeholder_helper.resolve_repo_path(tmp_path, ".github/CODEOWNERS")
