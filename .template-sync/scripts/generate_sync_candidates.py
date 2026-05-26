@@ -110,8 +110,9 @@ VALIDATION_COMMANDS_BY_MODULE = {
         "pre-commit run validate-template-sync-marker --all-files",
     ),
     "terraform": (
-        "terraform fmt -check -recursive",
-        "tflint --recursive",
+        "terraform fmt -check -recursive -diff",
+        "tflint --init",
+        'tflint --recursive --config "$(pwd)/.tflint.hcl"',
         "terraform test -verbose",
         "pytest tests/test_terraform_hooks.py -v",
     ),
