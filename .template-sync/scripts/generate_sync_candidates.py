@@ -992,8 +992,13 @@ def todo_link_target(
 
     When ``ledger_output_dir`` is provided, the target is computed relative to
     that directory so the link resolves correctly when the rendered ledger is
-    committed under it. Otherwise the target is repo-root-relative so the link
-    resolves correctly when the rendered ledger is pasted into a PR description.
+    committed under it. Otherwise the target is repo-root-relative, which is
+    informative when reading the ledger in a terminal but is not a clickable
+    link to the checklist file when the ledger is rendered from a PR or issue
+    body (GitHub resolves relative Markdown link targets in PR/issue bodies
+    relative to the PR/issue URL, not the repository root). Callers that need
+    clickable rendered links should pass ``ledger_output_dir`` and commit the
+    saved ledger so it is rendered under that directory on GitHub.
     """
     if ledger_output_dir is None:
         return repository_relative_path(todo_path, repo_root)
