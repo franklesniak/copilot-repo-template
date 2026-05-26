@@ -223,6 +223,12 @@ When adding or modifying a template-substitution marker, maintainers **MUST** ke
 - The BSD `sed` snippet in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
 - The manual Find/Replace instructions in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
 - The grep patterns for hard-coded marker strings in [`.github/workflows/check-placeholders.yml`](.github/workflows/check-placeholders.yml)
+- The validation phases and allowlists in [`.github/workflows/check-placeholders.yml`](.github/workflows/check-placeholders.yml), because the placeholder validation workflow must stay aligned with every marker that adopters are expected to replace.
+- The **Files That Need Placeholders Replaced** inventory table in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md), because it is the at-a-glance marker-to-file mapping adopters read first and must gain or update the corresponding row when a marker changes.
+- The **What the Placeholders Mean** definition list in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md), because it is the canonical glossary for each marker's meaning and must define new markers or reflect renames.
+- The **GHES adopters** callouts and snippet comments in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md) that enumerate files requiring `github.com`-to-GHES host substitution, because they tell GHES adopters which absolute GitHub URLs need host substitution.
+- The per-file adoption-step subsections in [`GETTING_STARTED_EXISTING_REPO.md`](GETTING_STARTED_EXISTING_REPO.md) that reference marker strings, including **CODEOWNERS** (`@OWNER`), **Security Policy** (`[security contact email]` and relevant `OWNER/REPO` URL variants), **LICENSE** (`Frank Lesniak`), **Code of Conduct** (`[INSERT CONTACT METHOD]`), **VS Code Settings** (`window.title` instruction text), **Adopting Issue Templates** (`OWNER/REPO`), and **Adopting PR Template** (`OWNER/REPO`), because they are the parallel adoption surfaces for existing-repository adopters.
+- The **First-Adoption Preflight Answers** table in [`OPTIONAL_CONFIGURATIONS.md`](OPTIONAL_CONFIGURATIONS.md), because it maps maintainer policy decisions to policy-driven markers (`[INSERT CONTACT METHOD]`, `[security contact email]`, `@OWNER`, and GHES host replacement) and must be extended when those markers change.
 
 ---
 
