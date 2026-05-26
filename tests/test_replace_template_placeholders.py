@@ -179,6 +179,32 @@ def test_scan_reports_unresolved_placeholders(tmp_path: Path) -> None:
     }
 
 
+def test_scan_reports_unresolved_url_placeholders_inside_markdown_delimiters(
+    tmp_path: Path,
+) -> None:
+    """Approved placeholder URLs followed by ) or ] are still reported as unresolved."""
+    write_file(
+        tmp_path / ".github" / "pull_request_template.md",
+        "\n".join(
+            [
+                "[contrib](https://github.com/OWNER/REPO/blob/HEAD/CONTRIBUTING.md)",
+                "[issues](https://github.com/OWNER/REPO/issues)",
+                "ref [advisories](https://github.com/OWNER/REPO/security/advisories/new)",
+                "bracketed [https://github.com/OWNER/REPO/security]",
+            ]
+        )
+        + "\n",
+    )
+
+    findings = placeholder_helper.scan_repository(tmp_path)
+    matched = {finding.matched_text for finding in findings}
+
+    assert "https://github.com/OWNER/REPO/blob/HEAD/CONTRIBUTING.md" in matched
+    assert "https://github.com/OWNER/REPO/issues" in matched
+    assert "https://github.com/OWNER/REPO/security/advisories/new" in matched
+    assert "https://github.com/OWNER/REPO/security" in matched
+
+
 def test_scan_ignores_didactic_owner_repo_text_outside_allowlisted_files(
     tmp_path: Path,
 ) -> None:
