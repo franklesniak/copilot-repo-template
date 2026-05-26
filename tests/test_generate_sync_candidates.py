@@ -509,6 +509,75 @@ def test_ledger_only_reports_manifest_marker_and_todo_decisions(tmp_path: Path) 
     assert "| `_TODO-repo-init.md` link |" in written_ledger
 
 
+def test_write_ledger_rejects_paths_outside_repository(tmp_path: Path) -> None:
+    """The ledger snapshot path uses the existing repo-root traversal guard."""
+    _init_repo(tmp_path)
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["baseline"], last_reviewed_template_commit=None),
+    )
+
+    result = _run_generator(
+        tmp_path,
+        "--ledger-only",
+        "--write-ledger",
+        "../adoption-ledger.md",
+    )
+
+    assert result.returncode == 1
+    assert "Path escapes the repository root: ../adoption-ledger.md" in result.stderr
+
+
+def test_ledger_only_rejects_write_candidates_flag(tmp_path: Path) -> None:
+    """`--ledger-only` cannot be combined with `--write-candidates`."""
+    _init_repo(tmp_path)
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["baseline"], last_reviewed_template_commit=None),
+    )
+
+    result = _run_generator(
+        tmp_path,
+        "--ledger-only",
+        "--write-candidates",
+        ".cache/template-sync/candidates.md",
+    )
+
+    assert result.returncode == 1
+    assert "--write-candidates cannot be used with --ledger-only." in result.stderr
+
+
+def test_ledger_flag_appends_ledger_after_candidate_table(tmp_path: Path) -> None:
+    """`--ledger` (non-only) prints the candidate table followed by the adoption ledger."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, "README.md", "base\n")
+    base_sha = _commit_all(tmp_path, "base")
+    _write_text(tmp_path, "README.md", "head\n")
+    head_sha = _commit_all(tmp_path, "head")
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["baseline"], last_reviewed_template_commit=base_sha),
+    )
+
+    result = _run_generator(
+        tmp_path,
+        "--range-head",
+        head_sha,
+        "--ledger",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "# Template Sync Candidate Table" in result.stdout
+    assert "| README.md | Modified | requires all: baseline | Retained |" in result.stdout
+    assert "# Template Adoption Ledger" in result.stdout
+    assert result.stdout.index("# Template Sync Candidate Table") < result.stdout.index(
+        "# Template Adoption Ledger"
+    )
+
+
 def test_unmapped_paths_are_flagged(tmp_path: Path) -> None:
     """Changed paths outside the manifest surface as owner-review items."""
     _init_repo(tmp_path)
