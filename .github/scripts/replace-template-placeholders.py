@@ -78,7 +78,7 @@ SKIPPED_DISCOVERY_DIRS = {
 }
 REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 HOST_PATTERN = re.compile(r"^[A-Za-z0-9.-]+(?::[0-9]+)?$")
-OWNER_REPO_NON_PATH_SEGMENT_PATTERN = re.compile(r"(?<!/)OWNER/REPO")
+OWNER_REPO_NON_PATH_SEGMENT_PATTERN = re.compile(r"(?<!/)OWNER/REPO(?![A-Za-z0-9_-])")
 URL_BOUNDARY_PATTERN = r"(?=$|[^A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-])"
 
 

@@ -271,6 +271,36 @@ def test_cli_rejects_empty_or_unsafe_values(
     assert captured.err.startswith("ERROR:")
 
 
+def test_owner_repo_token_does_not_replace_prefix_of_longer_token(tmp_path: Path) -> None:
+    """OWNER/REPO must not match when it is a prefix of a longer repo-name token."""
+    write_file(
+        tmp_path / "CONTRIBUTING.md",
+        "\n".join(
+            [
+                "Mirror to OWNER/REPOSITORY for archival.",
+                "Mirror to OWNER/REPORT for archival.",
+                "Mirror to OWNER/REPO_TEST for archival.",
+                "Mirror to OWNER/REPO-TEST for archival.",
+                "Mirror to OWNER/REPO123 for archival.",
+                "Replace OWNER/REPO. End of sentence.",
+                "Standalone OWNER/REPO works.",
+            ]
+        )
+        + "\n",
+    )
+
+    placeholder_helper.replace_placeholders(repo_root=tmp_path, context=build_context())
+
+    text = read_file(tmp_path / "CONTRIBUTING.md")
+    assert "OWNER/REPOSITORY" in text
+    assert "OWNER/REPORT" in text
+    assert "OWNER/REPO_TEST" in text
+    assert "OWNER/REPO-TEST" in text
+    assert "OWNER/REPO123" in text
+    assert "Replace octo/widget. End of sentence." in text
+    assert "Standalone octo/widget works." in text
+
+
 def test_resolve_repo_path_rejects_symlinked_allowlisted_file(tmp_path: Path) -> None:
     """An allowlisted path that is itself a symlink is rejected before resolution."""
     target = tmp_path / "real_codeowners"
