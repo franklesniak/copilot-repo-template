@@ -188,17 +188,23 @@ def resolve_repo_root(raw_repo_root: str | None) -> Path:
 
 
 def resolve_repo_path(repo_root: Path, relative_path: str) -> Path:
-    """Resolve a committed relative path inside ``repo_root``."""
+    """Resolve a committed relative path inside ``repo_root`` without following symlinks."""
     if "\\" in relative_path or Path(relative_path).is_absolute():
         raise PlaceholderError(f"Allowlisted path must be repository-relative: {relative_path}")
-    candidate = (repo_root / relative_path).resolve()
+    candidate = repo_root / relative_path
+    current = repo_root
+    for part in Path(relative_path).parts:
+        current = current / part
+        if current.is_symlink():
+            raise PlaceholderError(f"Allowlisted path must not traverse a symlink: {relative_path}")
+    resolved = candidate.resolve()
     try:
-        candidate.relative_to(repo_root)
+        resolved.relative_to(repo_root)
     except ValueError as error:
         raise PlaceholderError(
             f"Allowlisted path escapes repository root: {relative_path}"
         ) from error
-    return candidate
+    return resolved
 
 
 def read_text(path: Path, display_path: str) -> str:
@@ -319,7 +325,7 @@ def replace_placeholders(
     for relative_path, (path, display_path) in files_by_path.items():
         if not path.exists():
             continue
-        if path.is_symlink() or not path.is_file():
+        if not path.is_file():
             raise PlaceholderError(f"{display_path}: expected a regular file.")
         file_texts[relative_path] = read_text(path, display_path)
 
@@ -378,7 +384,7 @@ def scan_unresolved_placeholders(repo_root: Path) -> tuple[ScanFinding, ...]:
             path = resolve_repo_path(repo_root, relative_path)
             if not path.exists():
                 continue
-            if path.is_symlink() or not path.is_file():
+            if not path.is_file():
                 raise PlaceholderError(f"{relative_path}: expected a regular file.")
             text = read_text(path, relative_path)
             for line_number, matched_text in iter_regex_matches(text, pattern):
@@ -463,18 +469,19 @@ def scan_corruption_patterns(repo_root: Path, repository: str | None) -> tuple[S
         return ()
 
     findings: list[ScanFinding] = []
-    for pattern, message in build_corruption_patterns(repository):
-        for relative_path, path in iter_safe_repository_files(repo_root):
-            try:
-                text = path.read_bytes().decode("utf-8")
-            except UnicodeDecodeError:
-                continue
-            except OSError as error:
-                error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
-                raise PlaceholderError(
-                    f"{relative_path}: unable to read file ({error_summary})."
-                ) from error
+    patterns = build_corruption_patterns(repository)
+    for relative_path, path in iter_safe_repository_files(repo_root):
+        try:
+            text = path.read_bytes().decode("utf-8")
+        except UnicodeDecodeError:
+            continue
+        except OSError as error:
+            error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+            raise PlaceholderError(
+                f"{relative_path}: unable to read file ({error_summary})."
+            ) from error
 
+        for pattern, message in patterns:
             for line_number, matched_text in iter_regex_matches(text, pattern):
                 findings.append(
                     ScanFinding(
