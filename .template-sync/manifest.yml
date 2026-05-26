@@ -206,6 +206,9 @@ template_manifest:
       requires_all:
         - baseline
         - github-actions
+    - pattern: '.github/scripts/replace-template-placeholders.py'
+      requires_all:
+        - baseline
     - pattern: '.github/workflows/auto-fix-precommit.yml'
       requires_all:
         - baseline
@@ -258,6 +261,9 @@ template_manifest:
     - pattern: '.github/scripts/check-prohibited-placeholders.py'
       requires_all:
         - markdown
+    - pattern: 'tests/test_replace_template_placeholders.py'
+      requires_all:
+        - baseline
     - pattern: 'tests/test_check_prohibited_placeholders.py'
       requires_all:
         - markdown

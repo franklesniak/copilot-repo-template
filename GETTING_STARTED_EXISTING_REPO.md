@@ -407,6 +407,21 @@ If your existing repository lacks Python project structure and you want to adopt
 
 These files can be copied directly with minimal modifications.
 
+After copying any placeholder-bearing template files, prefer the helper in `.github/scripts/replace-template-placeholders.py` over ad hoc global find/replace. It replaces only the approved template placeholders and GitHub URL shapes, supports `--github-host` for GitHub Enterprise Server URL contexts, and scans afterward for unresolved placeholders and common broad-replacement corruption such as mutated `REPORT`, `REPOSITORY`, or `REPOSITORIES` text.
+
+Example after copying the helper and the files you intend to adopt:
+
+```bash
+python .github/scripts/replace-template-placeholders.py replace \
+    --repository "your-username/your-repo-name" \
+    --security-contact "security@example.com" \
+    --conduct-contact "conduct@example.com" \
+    --codeowners-owner "@your-username" \
+    --vscode-title "your-repo-name"
+```
+
+Use `python3` instead of `python` on systems where Python 3 is exposed only as `python3`. For GitHub Enterprise Server, add `--github-host "github.company.com"`; the helper limits host substitution to approved template URL placeholders and does not rewrite unrelated `github.com` links.
+
 ### CODEOWNERS
 
 The CODEOWNERS file automatically assigns reviewers to pull requests based on file paths.
@@ -506,6 +521,9 @@ The security policy tells users how to report security vulnerabilities.
 1. **If you don't have a SECURITY.md file:**
    - Copy `SECURITY.md` from the template to your repository root
    - Replace `[security contact email]` with your email address
+   - Clear the security-contact `TODO: Replace` marker after the contact is configured
+   - Replace `OWNER/REPO` in the direct private-reporting URL `https://github.com/OWNER/REPO/security/advisories/new` with your repository's `owner/repo` (so the URL points at your repo, not the template)
+     - **GHES only:** also replace `github.com` with your GHES host in that URL
    - Or remove the email option and use only GitHub Security Advisories (for public repositories)
    - If private vulnerability reporting is enabled, prefer the direct reporting URL `https://github.com/OWNER/REPO/security/advisories/new`
 
@@ -599,7 +617,7 @@ If your repository doesn't have issue templates, adopt the full set:
    url: https://github.com/your-username/your-repo/blob/HEAD/CONTRIBUTING.md
    ```
 
-3. **Update `bug_report.yml`:** Replace `OWNER/REPO` placeholders in the security-notice URLs (the Security tab and `SECURITY.md` links). Both URLs use the same `https://github.com/OWNER/REPO/...` form as `config.yml`. If you also adopt and keep `.github/workflows/check-placeholders.yml` (an optional adoption step), CI will fail until this substitution is made; if you do not adopt that workflow or you remove it after initial setup, no CI guardrail catches a missed substitution and you must verify the replacement manually.
+3. **Update `bug_report.yml`:** Replace `OWNER/REPO` placeholders in the security-notice URLs (the private vulnerability reporting form, Security tab, and `SECURITY.md` links). These URLs use the same `https://github.com/OWNER/REPO/...` form as `config.yml`. If you also adopt and keep `.github/workflows/check-placeholders.yml` (an optional adoption step), CI will fail until this substitution is made; if you do not adopt that workflow or you remove it after initial setup, no CI guardrail catches a missed substitution and you must verify the replacement manually.
 
    **GHES adopters:** In both `config.yml` and `bug_report.yml`, also replace `github.com` with your GHES host (e.g., `github.company.com`). The host substitution is not validated by `.github/workflows/check-placeholders.yml`, but inline YAML comments above the affected blocks (in both files) note the requirement.
 
@@ -714,7 +732,7 @@ The template uses an absolute URL with the `OWNER/REPO` placeholder for the cont
 [contributing guidelines](https://github.com/OWNER/REPO/blob/HEAD/CONTRIBUTING.md)
 ```
 
-Replace `OWNER/REPO` with your actual organization and repository name. If you also adopt and keep `.github/workflows/check-placeholders.yml` (an optional adoption step), CI will fail until this substitution is made; if you do not adopt that workflow or you remove it after initial setup, no CI guardrail catches a missed substitution and you must verify the replacement manually. If your CONTRIBUTING.md is in a different location, update the path inside the URL accordingly. **GHES adopters** must additionally replace `github.com` with their GHES host (e.g., `github.company.com`); the host substitution is not validated by `.github/workflows/check-placeholders.yml` even when that workflow is kept. Absolute URLs are required in `.github/ISSUE_TEMPLATE/*.yml` and `.github/pull_request_template.md`; see the **Issue and PR templates** carve-out in `.github/instructions/docs.instructions.md` and the [Pull Request Template Customization](OPTIONAL_CONFIGURATIONS.md#contributing-guidelines-link) section in `OPTIONAL_CONFIGURATIONS.md`.
+Replace `OWNER/REPO` with your actual organization and repository name, preferably by running `.github/scripts/replace-template-placeholders.py` after copying the template files you intend to keep. If you also adopt and keep `.github/workflows/check-placeholders.yml` (an optional adoption step), CI will fail until this substitution is made; if you do not adopt that workflow or you remove it after initial setup, no CI guardrail catches a missed substitution and you must verify the replacement manually. If your CONTRIBUTING.md is in a different location, update the path inside the URL accordingly. **GHES adopters** must additionally replace `github.com` with their GHES host (e.g., `github.company.com`); the helper supports this with `--github-host`, but the host substitution is not validated by `.github/workflows/check-placeholders.yml` even when that workflow is kept. Absolute URLs are required in `.github/ISSUE_TEMPLATE/*.yml` and `.github/pull_request_template.md`; see the **Issue and PR templates** carve-out in `.github/instructions/docs.instructions.md` and the [Pull Request Template Customization](OPTIONAL_CONFIGURATIONS.md#contributing-guidelines-link) section in `OPTIONAL_CONFIGURATIONS.md`.
 
 ### Merging with Existing PR Template
 
@@ -1501,13 +1519,15 @@ Name and comment the workflow so it is clearly repository hygiene tooling, not P
 
 - Runs automatically on push, pull request, and manual dispatch
 - Is already configured to exclude only the original template repository (`franklesniak/copilot-repo-template`)
-- Will check your repository for unreplaced placeholders
+- Runs `.github/scripts/replace-template-placeholders.py scan`, so the CI audit uses the same placeholder and URL-shape allowlist as the substitution helper
 
 **Adoption considerations:**
 
 1. **If you copied templates with placeholders:** The workflow will catch any unreplaced placeholders and fail CI until you fix them
 
-2. **After all placeholders are replaced:** Treat the workflow as transitional and choose one valid end state:
+2. **If you copy this workflow manually:** Also copy `.github/scripts/replace-template-placeholders.py`; the workflow calls that helper for its hard-fail audit.
+
+3. **After all placeholders are replaced:** Treat the workflow as transitional and choose one valid end state:
    - **Keep the workflow** while `OWNER/REPO`, `@OWNER`, `[security contact email]`, or similar template placeholders are still being replaced, or when future template syncs may add placeholder-bearing files
    - **Remove the workflow** once the repository is initialized and placeholders have been replaced with concrete downstream values
 
@@ -1515,11 +1535,13 @@ If you remove the workflow, also drop or de-emphasize documentation that implies
 
 **What the workflow checks:**
 
-- `OWNER/REPO` in `.github/ISSUE_TEMPLATE/config.yml` (contact links URLs)
-- `OWNER/REPO` in `CONTRIBUTING.md` (clone URL and issues link)
+- Approved `https://github.com/OWNER/REPO...` URL placeholders in `.github/ISSUE_TEMPLATE/config.yml`, `.github/ISSUE_TEMPLATE/bug_report.yml`, `.github/pull_request_template.md`, `CONTRIBUTING.md`, and `SECURITY.md`
+- `OWNER/REPO` in the helper's allowlisted non-URL placeholder contexts
 - `@OWNER` in `.github/CODEOWNERS`
 - `[security contact email]` and `TODO: Replace` in `SECURITY.md`
-- `https://github.com/OWNER/REPO` URLs in any file under `.github/`
+- `[INSERT CONTACT METHOD]` in `CODE_OF_CONDUCT.md`
+- The template `window.title` value in `.vscode/settings.json`
+- Common broad-replacement corruption patterns, such as repository names accidentally injected into `REPORT`, `REPOSITORY`, or `REPOSITORIES`
 
 ### Python CI Workflow
 
