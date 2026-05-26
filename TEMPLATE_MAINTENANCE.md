@@ -4,7 +4,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-23
+- **Last Updated:** 2026-05-26
 - **Scope:** Periodic maintenance procedures for the `franklesniak/copilot-repo-template` repository, including dependency review cadence, pre-commit hook upkeep, Terraform/TFLint version reviews, schema and worked-example reviews, template sync taxonomy upkeep, and validation steps for template-only changes. Does not cover repositories created FROM this template; consumers of the template should follow [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md#ongoing-maintenance) instead.
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [Contributing](CONTRIBUTING.md)
 
@@ -20,6 +20,7 @@ This guide is for **maintainers of the `franklesniak/copilot-repo-template` repo
 - [Updating Pre-commit Hook Versions](#updating-pre-commit-hook-versions)
 - [Reviewing the Worked-Example Schema and Data CI Workflow](#reviewing-the-worked-example-schema-and-data-ci-workflow)
 - [Reviewing the Template Sync Module Taxonomy](#reviewing-the-template-sync-module-taxonomy)
+- [Adding or Modifying Template-Substitution Markers](#adding-or-modifying-template-substitution-markers)
 - [Reviewing Python Version Requirements](#reviewing-python-version-requirements)
 - [Reviewing Terraform and TFLint Version Requirements](#reviewing-terraform-and-tflint-version-requirements)
 - [Reviewing Terraform Provider Versions](#reviewing-terraform-provider-versions)
@@ -208,6 +209,29 @@ For each affected path, maintainers **MUST** update `.template-sync/manifest.yml
 When module relations, glob patterns, or marker fields change, maintainers **MUST** review `.template-sync/scripts/validate_marker.py`, `.template-sync/scripts/generate_sync_candidates.py`, `tests/test_validate_marker.py`, and `tests/test_generate_sync_candidates.py` so the downstream retained-state helper and candidate table generator still match the manifest contract. These helpers should continue to use the existing schema validation stack (`PyYAML`, `jsonschema`, and the checked-in schemas) instead of introducing a separate validator dependency.
 
 When reviewing a taxonomy change, include `pytest tests/test_template_manifest.py tests/test_validate_marker.py tests/test_generate_sync_candidates.py -v` so the manifest schema, semantic checks, rendered-table drift checks, retained-state helper behavior, and candidate table generation behavior run together. Also include at least one validation pass with `npm run lint:md`, `npm run lint:md:links`, and `npm run lint:md:nested` (the latter catches lint failures in nested Markdown code fences inside files such as `TEMPLATE_UPDATE_PROCEDURE.md`). If the change also updates schema, YAML, GitHub Actions, Python, PowerShell, or Terraform files, run the validation commands for those modules as well.
+
+---
+
+## Adding or Modifying Template-Substitution Markers
+
+For the portable authoring principle, see [Template-substitution marker boundaries and replacement surfaces](.github/instructions/docs.instructions.md#template-substitution-marker-boundaries-and-replacement-surfaces).
+
+When adding or modifying a template-substitution marker, maintainers **MUST** keep these repository-specific surfaces in sync in the same change:
+
+- `TOKEN_REPLACEMENT_SPECS` in `.github/scripts/replace-template-placeholders.py`
+- The PowerShell snippet in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
+- The GNU `sed` snippet in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
+- The BSD `sed` snippet in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
+- The manual Find/Replace instructions in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
+- The regression coverage in `tests/test_replace_template_placeholders.py`
+
+### Regression Assertion Convention
+
+Maintainers **SHOULD** extend `tests/test_replace_template_placeholders.py` with assertions that check the post-substitution result text, not only the absence of the original marker. The existing security-contact assertions in that test are the model: they check both the absence of `TODO: Replace` and the presence of `<!-- Security contact configured -->`. New markers **MUST** include equivalent post-substitution-result coverage.
+
+### Worked Example
+
+The `SECURITY.md` security-contact marker demonstrates the substitution-boundary rule. The marker `<!-- TODO: Replace with your security contact email -->` previously allowed a partial substitution that produced the incoherent result `<!-- Security contact configured with your security contact email -->`. The corrected boundary replaces the whole HTML comment line and produces `<!-- Security contact configured -->`.
 
 ---
 
