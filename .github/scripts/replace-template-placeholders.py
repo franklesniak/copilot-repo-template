@@ -341,7 +341,10 @@ def replace_placeholders(
                 file_texts[relative_path] = updated_text
 
     if not dry_run:
+        modified_paths = {record.path for record in records}
         for relative_path, text in file_texts.items():
+            if relative_path not in modified_paths:
+                continue
             path, display_path = files_by_path[relative_path]
             write_text(path, display_path, text)
 

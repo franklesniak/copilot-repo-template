@@ -710,7 +710,7 @@ The helper does not edit `LICENSE`, because `Frank Lesniak` is not a pattern-bas
 
 ### Option B: Exact Find and Replace Fallbacks
 
-The platform-specific commands below remain available as visible fallbacks. Keep them scoped to the exact placeholders shown here; do not run a broad replacement for `REPO`, because that can corrupt normal words such as `REPORT`, `REPOSITORY`, and `REPOSITORIES`. For GHES host substitution, prefer Option A with `--github-host`. If you use Option B on GHES, run the *GHES Host Substitution (GHES Adopters Only)* commands below after the platform-specific commands; they rewrite only the approved `https://github.com/OWNER/REPO...` URLs the template emits, never every `github.com` occurrence in a file.
+The platform-specific commands below remain available as visible fallbacks. Keep them scoped to the exact placeholders shown here; do not run a broad replacement for `REPO`, because that can corrupt normal words such as `REPORT`, `REPOSITORY`, and `REPOSITORIES`. For GHES host substitution, prefer Option A with `--github-host`. If you use Option B on GHES, run the *GHES Host Substitution (GHES Adopters Only)* commands below after the platform-specific commands; they rewrite only the approved `https://github.com/OWNER/REPO...` URLs the template emits, never every `github.com` occurrence in a file. Option B's commands also use a single contact value (the security email) for both the `[INSERT CONTACT METHOD]` Code of Conduct placeholder and the `[security contact email]` placeholder; if you want a distinct Code of Conduct contact, prefer Option A with `--conduct-contact`, or edit the `CODE_OF_CONDUCT.md` line in the commands below to use a different value.
 
 #### Windows (PowerShell)
 

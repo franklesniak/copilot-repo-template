@@ -297,6 +297,30 @@ def test_cli_rejects_empty_or_unsafe_values(
     assert captured.err.startswith("ERROR:")
 
 
+def test_replace_placeholders_does_not_rewrite_unchanged_files(tmp_path: Path) -> None:
+    """Files without any approved-placeholder replacements keep their original mtime."""
+    unchanged = write_file(
+        tmp_path / "CODE_OF_CONDUCT.md",
+        "Contact: conduct@already-replaced.example\n",
+    )
+    changed = write_file(
+        tmp_path / "CONTRIBUTING.md",
+        "git clone https://github.com/OWNER/REPO.git\n",
+    )
+    import os
+
+    old_mtime_ns = 1700000000_000000000
+    os.utime(unchanged, ns=(old_mtime_ns, old_mtime_ns))
+    os.utime(changed, ns=(old_mtime_ns, old_mtime_ns))
+
+    placeholder_helper.replace_placeholders(repo_root=tmp_path, context=build_context())
+
+    assert unchanged.stat().st_mtime_ns == old_mtime_ns
+    assert changed.stat().st_mtime_ns != old_mtime_ns
+    assert "octo/widget" in read_file(changed)
+    assert read_file(unchanged) == "Contact: conduct@already-replaced.example\n"
+
+
 def test_owner_repo_token_does_not_replace_prefix_of_longer_token(tmp_path: Path) -> None:
     """OWNER/REPO must not match when it is a prefix of a longer repo-name token."""
     write_file(
