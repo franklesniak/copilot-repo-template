@@ -76,6 +76,8 @@ SKIPPED_DISCOVERY_DIRS = {
     "node_modules",
     "__pycache__",
 }
+# Structural validation only; does not enforce GitHub's user/org/repo naming
+# rules. Callers must supply a real GitHub identifier.
 REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 HOST_PATTERN = re.compile(r"^[A-Za-z0-9.-]+(?::[0-9]+)?$")
 OWNER_REPO_NON_PATH_SEGMENT_PATTERN = re.compile(r"(?<!/)OWNER/REPO(?![A-Za-z0-9_-])")
@@ -141,10 +143,18 @@ class ScanFinding:
 
 
 def parse_repository(repository: str) -> tuple[str, str]:
-    """Validate and split an ``OWNER/REPO`` repository identifier."""
+    """Validate the structural shape of an ``OWNER/REPO`` identifier and split it.
+
+    Performs character-class validation only; does not enforce GitHub's
+    actual user, organization, or repository naming rules. Callers must
+    supply a real GitHub identifier.
+    """
     if not REPOSITORY_PATTERN.fullmatch(repository):
         raise PlaceholderError(
-            "Repository must use OWNER/REPO format with GitHub-safe owner and repo names."
+            "Repository must use the OWNER/REPO form with URL-safe characters "
+            "(letters, digits, underscore, dot, hyphen) in each segment. The "
+            "helper performs structural validation only; the caller is "
+            "responsible for ensuring the value matches a real GitHub identifier."
         )
     owner, repo = repository.split("/", 1)
     return owner, repo
