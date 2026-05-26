@@ -710,7 +710,7 @@ The helper does not edit `LICENSE`, because `Frank Lesniak` is not a pattern-bas
 
 ### Option B: Exact Find and Replace Fallbacks
 
-The platform-specific commands below remain available as visible fallbacks. Keep them scoped to the exact placeholders shown here; do not run a broad replacement for `REPO`, because that can corrupt normal words such as `REPORT`, `REPOSITORY`, and `REPOSITORIES`. For GHES host substitution, prefer Option A with `--github-host`; if you use a fallback path, edit only the approved template URL placeholders instead of replacing every `github.com` occurrence in a file.
+The platform-specific commands below remain available as visible fallbacks. Keep them scoped to the exact placeholders shown here; do not run a broad replacement for `REPO`, because that can corrupt normal words such as `REPORT`, `REPOSITORY`, and `REPOSITORIES`. For GHES host substitution, prefer Option A with `--github-host`. If you use Option B on GHES, run the *GHES Host Substitution (GHES Adopters Only)* commands below after the platform-specific commands; they rewrite only the approved `https://github.com/OWNER/REPO...` URLs the template emits, never every `github.com` occurrence in a file.
 
 #### Windows (PowerShell)
 
@@ -837,6 +837,46 @@ sed -i '' 's|Go to \.vscode/settings\.json and make this the name of the repo|'"
 If using **Git Bash**, use the Linux (GNU sed) commands above. If using **WSL (Windows Subsystem for Linux)**, use the Linux commands. Alternatively, use the PowerShell commands in the previous section.
 
 > **Note on special characters:** If your email or contact method contains special `sed` characters (`&`, `\`, or `|`), escape them with a backslash or use the PowerShell commands instead, which handle special characters more reliably.
+
+#### GHES Host Substitution (GHES Adopters Only)
+
+If your repository is hosted on GitHub Enterprise Server, run **one additional command set** after the platform commands above so the approved template URLs point to your GHES host. The commands below rewrite only the `https://github.com/OWNER/REPO...` URLs the template emits — they leave unrelated `github.com` links (for example, `https://github.com/actions/checkout` in workflow files) untouched. They assume the variables defined in the platform commands above (`$Owner`/`$Repo` for PowerShell or `$OWNER`/`$REPO` for Bash) are still in scope; if you started a new shell, redefine them first.
+
+**Windows (PowerShell):**
+
+```powershell
+$GhesHost = "github.company.com"  # replace with your GHES host
+$GhubPrefix = "https://github.com/$Owner/$Repo"
+$GhesPrefix = "https://$GhesHost/$Owner/$Repo"
+
+foreach ($File in @(
+    ".github/ISSUE_TEMPLATE/config.yml",
+    ".github/ISSUE_TEMPLATE/bug_report.yml",
+    ".github/pull_request_template.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md"
+)) {
+    (Get-Content $File -Raw -Encoding UTF8).Replace($GhubPrefix, $GhesPrefix) | Set-Content $File -Encoding UTF8
+}
+```
+
+**Linux (GNU sed):**
+
+```bash
+GHES_HOST="github.company.com"  # replace with your GHES host
+for file in .github/ISSUE_TEMPLATE/config.yml .github/ISSUE_TEMPLATE/bug_report.yml .github/pull_request_template.md CONTRIBUTING.md SECURITY.md; do
+    sed -i "s|https://github.com/${OWNER}/${REPO}|https://${GHES_HOST}/${OWNER}/${REPO}|g" "$file"
+done
+```
+
+**macOS / FreeBSD (BSD sed):**
+
+```bash
+GHES_HOST="github.company.com"  # replace with your GHES host
+for file in .github/ISSUE_TEMPLATE/config.yml .github/ISSUE_TEMPLATE/bug_report.yml .github/pull_request_template.md CONTRIBUTING.md SECURITY.md; do
+    sed -i '' "s|https://github.com/${OWNER}/${REPO}|https://${GHES_HOST}/${OWNER}/${REPO}|g" "$file"
+done
+```
 
 ### Option C: Manual Replacement
 
