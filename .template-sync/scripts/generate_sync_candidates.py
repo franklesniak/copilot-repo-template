@@ -328,7 +328,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "report to stdout. PATH must stay inside the repository root."
         ),
     )
-    parser.add_argument(
+    ledger_mode_group = parser.add_mutually_exclusive_group()
+    ledger_mode_group.add_argument(
         "--ledger",
         action="store_true",
         help=(
@@ -336,7 +337,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "The ledger is a review artifact only."
         ),
     )
-    parser.add_argument(
+    ledger_mode_group.add_argument(
         "--ledger-only",
         action="store_true",
         help=(
@@ -1179,7 +1180,7 @@ def build_manifest_ledger_row(
     )
 
 
-def build_unmapped_local_override_row(
+def build_unmatched_local_override_row(
     *,
     local_override: LocalOverride,
     mappings: tuple[ManifestMapping, ...],
@@ -1188,7 +1189,7 @@ def build_unmapped_local_override_row(
     repo_root: Path,
     default_adoption_mode: str,
 ) -> LedgerRow:
-    """Build a ledger row for a local override outside manifest coverage."""
+    """Build a ledger row for a marker local override not consumed by any manifest mapping row."""
     display_path = local_override.path + ("/" if local_override.is_directory else "")
     relation = selected_relation_for_path(local_override.path, mappings)
     modules = relation.requires_all | relation.requires_any if relation is not None else frozenset()
@@ -1282,7 +1283,7 @@ def build_adoption_ledger_rows(
         key=lambda override: override.path,
     ):
         rows.append(
-            build_unmapped_local_override_row(
+            build_unmatched_local_override_row(
                 local_override=local_override,
                 mappings=mappings,
                 todo_items=todo_items,
