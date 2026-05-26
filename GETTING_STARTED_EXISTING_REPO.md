@@ -522,6 +522,8 @@ The security policy tells users how to report security vulnerabilities.
    - Copy `SECURITY.md` from the template to your repository root
    - Replace `[security contact email]` with your email address
    - Clear the security-contact `TODO: Replace` marker after the contact is configured
+   - Replace `OWNER/REPO` in the direct private-reporting URL `https://github.com/OWNER/REPO/security/advisories/new` with your repository's `owner/repo` (so the URL points at your repo, not the template)
+     - **GHES only:** also replace `github.com` with your GHES host in that URL
    - Or remove the email option and use only GitHub Security Advisories (for public repositories)
    - If private vulnerability reporting is enabled, prefer the direct reporting URL `https://github.com/OWNER/REPO/security/advisories/new`
 

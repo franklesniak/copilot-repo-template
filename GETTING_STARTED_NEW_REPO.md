@@ -660,7 +660,7 @@ This template uses placeholder values that you **must** replace with your actual
 | `CODE_OF_CONDUCT.md` | `[INSERT CONTACT METHOD]` (enforcement contact for code of conduct violations) |
 | `CONTRIBUTING.md` | `OWNER/REPO` (appears in clone URL and issues URL) |
 | `LICENSE` | `Frank Lesniak` (copyright holder name — replace with your name or organization) |
-| `SECURITY.md` | `[security contact email]` and the security-contact `TODO: Replace` marker |
+| `SECURITY.md` | `[security contact email]`, the security-contact `TODO: Replace` marker, and the `OWNER/REPO` placeholder in the direct private-reporting URL |
 | `.vscode/settings.json` | `window.title` value (replace with your repository name) |
 
 ### What the Placeholders Mean
@@ -734,6 +734,9 @@ $SecurityEmail = "security@example.com"
 # Replace OWNER/REPO in CONTRIBUTING.md
 (Get-Content "CONTRIBUTING.md" -Raw -Encoding UTF8).Replace('OWNER/REPO', "$Owner/$Repo") | Set-Content "CONTRIBUTING.md" -Encoding UTF8
 
+# Replace OWNER/REPO in SECURITY.md (the direct private-reporting URL `https://github.com/OWNER/REPO/security/advisories/new`)
+(Get-Content "SECURITY.md" -Raw -Encoding UTF8).Replace('OWNER/REPO', "$Owner/$Repo") | Set-Content "SECURITY.md" -Encoding UTF8
+
 # Replace @OWNER in CODEOWNERS (note the @ prefix)
 (Get-Content ".github/CODEOWNERS" -Raw -Encoding UTF8).Replace('@OWNER', "@$Owner") | Set-Content ".github/CODEOWNERS" -Encoding UTF8
 
@@ -783,6 +786,9 @@ sed -i "s|OWNER/REPO|$OWNER/$REPO|g" .github/pull_request_template.md
 # Replace OWNER/REPO in CONTRIBUTING.md
 sed -i "s|OWNER/REPO|$OWNER/$REPO|g" CONTRIBUTING.md
 
+# Replace OWNER/REPO in SECURITY.md (the direct private-reporting URL https://github.com/OWNER/REPO/security/advisories/new)
+sed -i "s|OWNER/REPO|$OWNER/$REPO|g" SECURITY.md
+
 # Replace @OWNER in CODEOWNERS
 sed -i "s|@OWNER|@$OWNER|g" .github/CODEOWNERS
 
@@ -814,6 +820,9 @@ sed -i '' "s|OWNER/REPO|$OWNER/$REPO|g" .github/pull_request_template.md
 
 # Replace OWNER/REPO in CONTRIBUTING.md
 sed -i '' "s|OWNER/REPO|$OWNER/$REPO|g" CONTRIBUTING.md
+
+# Replace OWNER/REPO in SECURITY.md (the direct private-reporting URL https://github.com/OWNER/REPO/security/advisories/new)
+sed -i '' "s|OWNER/REPO|$OWNER/$REPO|g" SECURITY.md
 
 # Replace @OWNER in CODEOWNERS
 sed -i '' "s|@OWNER|@$OWNER|g" .github/CODEOWNERS
@@ -882,7 +891,7 @@ done
 
 If you prefer, you can open each file in a text editor and manually find and replace the placeholders:
 
-> **GHES adopters:** In addition to the `OWNER/REPO` substitutions below, also replace `github.com` with your GHES host (e.g., `github.company.com`) in items 1, 2, 3, and 6. The host substitution is not validated by `.github/workflows/check-placeholders.yml`, so it MUST be done manually.
+> **GHES adopters:** In addition to the `OWNER/REPO` substitutions below, also replace `github.com` with your GHES host (e.g., `github.company.com`) in items 1, 2, 3, 6, and 7. The host substitution is not validated by `.github/workflows/check-placeholders.yml`, so it MUST be done manually.
 
 1. **`.github/ISSUE_TEMPLATE/config.yml`:**
    - Find: `OWNER/REPO`
@@ -923,6 +932,9 @@ If you prefer, you can open each file in a text editor and manually find and rep
    - Replace with: your actual security contact email address
    - Find: `<!-- TODO: Replace with your security contact email -->` (the whole HTML comment line)
    - Replace with: `<!-- Security contact configured -->`
+   - Find: `OWNER/REPO` (appears in the direct private-reporting URL `https://github.com/OWNER/REPO/security/advisories/new`)
+   - Replace with: `your-username/your-repo-name`
+   - **GHES only:** also replace `github.com` with your GHES host (in the same URL)
 
 8. **`.vscode/settings.json`:**
    - Find: `Go to .vscode/settings.json and make this the name of the repo`
