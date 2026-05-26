@@ -297,6 +297,28 @@ def test_cli_rejects_empty_or_unsafe_values(
     assert captured.err.startswith("ERROR:")
 
 
+def test_url_replacement_does_not_rewrite_unapproved_longer_urls(tmp_path: Path) -> None:
+    """The bare https://github.com/OWNER/REPO placeholder must not prefix-rewrite longer URLs."""
+    write_file(
+        tmp_path / "CONTRIBUTING.md",
+        "\n".join(
+            [
+                "Issues: https://github.com/OWNER/REPO/issues",
+                "Other: https://github.com/OWNER/REPO/contributions",
+                "Stars: https://github.com/OWNER/REPO/stargazers",
+            ]
+        )
+        + "\n",
+    )
+
+    placeholder_helper.replace_placeholders(repo_root=tmp_path, context=build_context())
+
+    text = read_file(tmp_path / "CONTRIBUTING.md")
+    assert "https://github.com/octo/widget/issues" in text
+    assert "https://github.com/OWNER/REPO/contributions" in text
+    assert "https://github.com/OWNER/REPO/stargazers" in text
+
+
 def test_replace_placeholders_does_not_rewrite_unchanged_files(tmp_path: Path) -> None:
     """Files without any approved-placeholder replacements keep their original mtime."""
     unchanged = write_file(

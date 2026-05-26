@@ -248,6 +248,16 @@ def replace_owner_repo_token(repository: str) -> Callable[[str], tuple[str, int]
     return replace
 
 
+def replace_url_pattern(placeholder: str, replacement: str) -> Callable[[str], tuple[str, int]]:
+    """Build a URL replacement callable that requires a URL boundary after the placeholder."""
+    pattern = re.compile(re.escape(placeholder) + URL_BOUNDARY_PATTERN)
+
+    def replace(text: str) -> tuple[str, int]:
+        return pattern.subn(lambda _match: replacement, text)
+
+    return replace
+
+
 def build_replacement_context(
     repository: str,
     github_host: str = "github.com",
@@ -283,7 +293,7 @@ def build_replacement_rules(context: ReplacementContext) -> tuple[ReplacementRul
                 placeholder=placeholder,
                 replacement=replacement,
                 paths=GITHUB_URL_TOKEN_PATHS,
-                replace=replace_literal(placeholder, replacement),
+                replace=replace_url_pattern(placeholder, replacement),
             )
         )
 
