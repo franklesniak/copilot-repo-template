@@ -222,6 +222,7 @@ When adding or modifying a template-substitution marker, maintainers **MUST** ke
 - The GNU `sed` snippet in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
 - The BSD `sed` snippet in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
 - The manual Find/Replace instructions in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
+- The grep patterns for hard-coded marker strings in [`.github/workflows/check-placeholders.yml`](.github/workflows/check-placeholders.yml)
 
 ---
 
