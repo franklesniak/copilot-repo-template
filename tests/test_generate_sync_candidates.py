@@ -440,6 +440,144 @@ def test_write_candidates_rejects_paths_outside_repository(tmp_path: Path) -> No
     assert "Path escapes the repository root: ../candidates.md" in result.stderr
 
 
+def test_ledger_only_reports_manifest_marker_and_todo_decisions(tmp_path: Path) -> None:
+    """The adoption ledger can be generated without a git comparison range."""
+    _init_repo(tmp_path)
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["baseline"],
+            last_reviewed_template_commit=None,
+            local_overrides=[
+                {
+                    "path": "README.md",
+                    "reason": "Project-specific README.",
+                    "default_decision": "SKIP",
+                }
+            ],
+        ),
+    )
+    _write_text(
+        tmp_path,
+        "_TODO-repo-init.md",
+        (
+            "- [ ] Confirm private vulnerability reporting.\n"
+            "- [x] Record adoption mode for protected files.\n"
+        ),
+    )
+
+    result = _run_generator(
+        tmp_path,
+        "--ledger-only",
+        "--write-ledger",
+        ".cache/template-sync/adoption-ledger.md",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Saved adoption ledger: `.cache/template-sync/adoption-ledger.md`" in result.stdout
+    assert "# Template Adoption Ledger" in result.stdout
+    assert "Generated snapshot; review artifact only." in result.stdout
+    assert (
+        "| README.md | all: baseline | local override | "
+        "Marker local override defaults to `SKIP`: Project-specific README."
+    ) in result.stdout
+    assert "| .pre-commit-config.yaml | all: baseline | trim |" in result.stdout
+    assert "module-scoped inline blocks" in result.stdout
+    assert (
+        "| .github/copilot-instructions.md | all: agent-instructions | "
+        "needs maintainer decision | Protected path is not retained by included modules"
+    ) in result.stdout
+    assert (
+        "| templates/python/** | all: python | skip | Required module(s) not included: python."
+        in (result.stdout)
+    )
+    assert "| _TODO-repo-init.md | manual setup | manual TODO | open:" in result.stdout
+    assert "[line 1](../../_TODO-repo-init.md#L1)" in result.stdout
+    assert "pre-commit run --all-files" in result.stdout
+    assert "manual first-adoption review" in result.stdout
+    assert "No range base was provided" not in result.stderr
+
+    written_ledger = (tmp_path / ".cache/template-sync/adoption-ledger.md").read_text(
+        encoding="utf-8"
+    )
+    assert written_ledger.startswith("# Template Adoption Ledger")
+    assert (
+        ".template-sync/manifest.yml` and `.template-sync/marker.yml` remain the authoritative"
+        in written_ledger
+    )
+    assert "| `_TODO-repo-init.md` link |" in written_ledger
+
+
+def test_write_ledger_rejects_paths_outside_repository(tmp_path: Path) -> None:
+    """The ledger snapshot path uses the existing repo-root traversal guard."""
+    _init_repo(tmp_path)
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["baseline"], last_reviewed_template_commit=None),
+    )
+
+    result = _run_generator(
+        tmp_path,
+        "--ledger-only",
+        "--write-ledger",
+        "../adoption-ledger.md",
+    )
+
+    assert result.returncode == 1
+    assert "Path escapes the repository root: ../adoption-ledger.md" in result.stderr
+
+
+def test_ledger_only_rejects_write_candidates_flag(tmp_path: Path) -> None:
+    """`--ledger-only` cannot be combined with `--write-candidates`."""
+    _init_repo(tmp_path)
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["baseline"], last_reviewed_template_commit=None),
+    )
+
+    result = _run_generator(
+        tmp_path,
+        "--ledger-only",
+        "--write-candidates",
+        ".cache/template-sync/candidates.md",
+    )
+
+    assert result.returncode == 1
+    assert "--write-candidates cannot be used with --ledger-only." in result.stderr
+
+
+def test_ledger_flag_appends_ledger_after_candidate_table(tmp_path: Path) -> None:
+    """`--ledger` (non-only) prints the candidate table followed by the adoption ledger."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, "README.md", "base\n")
+    base_sha = _commit_all(tmp_path, "base")
+    _write_text(tmp_path, "README.md", "head\n")
+    head_sha = _commit_all(tmp_path, "head")
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["baseline"], last_reviewed_template_commit=base_sha),
+    )
+
+    result = _run_generator(
+        tmp_path,
+        "--range-head",
+        head_sha,
+        "--ledger",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "# Template Sync Candidate Table" in result.stdout
+    assert "| README.md | Modified | requires all: baseline | Retained |" in result.stdout
+    assert "# Template Adoption Ledger" in result.stdout
+    assert result.stdout.index("# Template Sync Candidate Table") < result.stdout.index(
+        "# Template Adoption Ledger"
+    )
+
+
 def test_unmapped_paths_are_flagged(tmp_path: Path) -> None:
     """Changed paths outside the manifest surface as owner-review items."""
     _init_repo(tmp_path)

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -30,6 +32,7 @@ from validate_marker import (
 )
 
 DEFAULT_RANGE_HEAD_REF = "template/main"
+DEFAULT_TODO_PATH = "_TODO-repo-init.md"
 TEMPLATE_UPDATE_PROCEDURE_PATH = "TEMPLATE_UPDATE_PROCEDURE.md"
 PROTECTED_EXACT_PATHS = frozenset(
     {
@@ -44,6 +47,80 @@ PROTECTED_GLOB_PATTERNS = (
     ".github/instructions/**",
     ".cursor/rules/**",
 )
+ADOPTION_MODE_MODULES = frozenset(
+    {
+        "agent-instructions",
+        "baseline",
+        "github-actions",
+        "github-platform",
+        "github-templates",
+        "template-onboarding",
+        "template-sync-support",
+    }
+)
+INLINE_TRIM_NOTE_KEYWORDS = (
+    "inline block",
+    "inline blocks",
+    "delimited",
+    "strip",
+)
+TODO_LINK_LIMIT = 3
+VALIDATION_COMMANDS_BY_MODULE = {
+    "agent-instructions": (
+        "npm run lint:md",
+        "manual protected-file authorization review",
+    ),
+    "baseline": (
+        "pre-commit run --all-files",
+        "placeholder and repository-identity review",
+    ),
+    "github-actions": ("pre-commit run actionlint --all-files",),
+    "github-platform": (
+        "pre-commit run validate-dependabot-config --all-files",
+        "pytest tests/test_dependabot_schema.py -v",
+    ),
+    "github-templates": ("manual GitHub template rendering review",),
+    "json": ("pre-commit run check-json --all-files",),
+    "markdown": (
+        "npm run lint:md",
+        "npm run lint:md:links",
+        "npm run lint:md:nested",
+    ),
+    "powershell": ("Invoke-Pester -Path tests/ -Output Detailed",),
+    "python": (
+        "pytest tests/ -v --cov --cov-report=term-missing",
+        "pre-commit run check-toml --all-files",
+    ),
+    "schema": (
+        "pre-commit run validate-example-config-valid-examples --all-files",
+        "pre-commit run validate-template-sync-marker-valid-examples --all-files",
+        "pre-commit run validate-example-config-schema --all-files",
+        "pre-commit run validate-template-sync-manifest-schema --all-files",
+        "pre-commit run validate-template-sync-marker-schema --all-files",
+        "pytest tests/test_schema_examples.py -v",
+    ),
+    "template-onboarding": (
+        "npm run lint:md",
+        "npm run lint:md:links",
+        "npm run lint:md:nested",
+    ),
+    "template-sync-support": (
+        "python .template-sync/scripts/validate_marker.py --require-marker",
+        "pre-commit run validate-template-sync-manifest --all-files",
+        "pre-commit run validate-template-sync-marker --all-files",
+    ),
+    "terraform": (
+        "terraform fmt -check -recursive -diff",
+        "tflint --init",
+        'tflint --recursive --config "$(pwd)/.tflint.hcl"',
+        "terraform test -verbose",
+        "pytest tests/test_terraform_hooks.py -v",
+    ),
+    "yaml": (
+        "pre-commit run check-yaml --all-files",
+        "pre-commit run yamllint --all-files",
+    ),
+}
 
 
 class CandidateGenerationError(Exception):
@@ -162,6 +239,30 @@ class CandidateRow:
     notes: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class TodoItem:
+    """One first-adoption checklist item that can be linked from the ledger."""
+
+    line_number: int
+    text: str
+    is_complete: bool
+
+
+@dataclass(frozen=True)
+class LedgerRow:
+    """A rendered adoption-ledger row for one manifest or manual setup item."""
+
+    path: str
+    manifest_modules: str
+    decision: str
+    reason: str
+    protected_file: str
+    requires_maintainer_decision: str
+    adoption_mode: str
+    todo_link: str
+    validation_commands: str
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
@@ -227,6 +328,50 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help=(
             "Write the rendered candidate table to PATH while still printing the full "
             "report to stdout. PATH must stay inside the repository root."
+        ),
+    )
+    ledger_mode_group = parser.add_mutually_exclusive_group()
+    ledger_mode_group.add_argument(
+        "--ledger",
+        action="store_true",
+        help=(
+            "Include a generated adoption ledger in stdout after the candidate table. "
+            "The ledger is a review artifact only."
+        ),
+    )
+    ledger_mode_group.add_argument(
+        "--ledger-only",
+        action="store_true",
+        help=(
+            "Emit only the generated adoption ledger and skip git range inspection. "
+            "Use this for first-adoption or full-reconciliation review when a delta "
+            "candidate table is not available."
+        ),
+    )
+    parser.add_argument(
+        "--write-ledger",
+        default=None,
+        metavar="PATH",
+        help=(
+            "Write the generated adoption ledger snapshot to PATH. PATH must stay "
+            "inside the repository root."
+        ),
+    )
+    parser.add_argument(
+        "--todo-file",
+        default=DEFAULT_TODO_PATH,
+        help=(
+            "First-adoption checklist path relative to the repository root. "
+            f"Default: {DEFAULT_TODO_PATH}"
+        ),
+    )
+    parser.add_argument(
+        "--adoption-mode",
+        choices=("minimal-preservation", "tailored"),
+        default="minimal-preservation",
+        help=(
+            "Default adoption mode to show for protected and template-derived files "
+            "in the generated ledger. Default: minimal-preservation"
         ),
     )
     return parser.parse_args(argv)
@@ -597,6 +742,59 @@ def is_protected_instruction_path(relative_path: str) -> bool:
     return any(fnmatch.fnmatchcase(relative_path, pattern) for pattern in PROTECTED_GLOB_PATTERNS)
 
 
+def has_wildcard(pattern: str) -> bool:
+    """Return whether ``pattern`` contains shell-style wildcard syntax."""
+    return any(wildcard in pattern for wildcard in "*?[")
+
+
+def is_protected_manifest_pattern(pattern: str) -> bool:
+    """Return whether a manifest pattern names protected instruction paths."""
+    if not has_wildcard(pattern):
+        return is_protected_instruction_path(pattern)
+    if pattern in PROTECTED_GLOB_PATTERNS:
+        return True
+    if pattern.startswith(".github/instructions/") or pattern.startswith(".cursor/rules/"):
+        return True
+    return any(fnmatch.fnmatchcase(path, pattern) for path in PROTECTED_EXACT_PATHS)
+
+
+def manifest_pattern_matches_path(pattern: str, relative_path: str) -> bool:
+    """Return whether a manifest pattern could cover ``relative_path``."""
+    if has_wildcard(pattern):
+        return fnmatch.fnmatchcase(relative_path, pattern)
+    return pattern == relative_path
+
+
+def matching_local_overrides_for_pattern(
+    pattern: str,
+    local_overrides: tuple[LocalOverride, ...],
+) -> tuple[LocalOverride, ...]:
+    """Return marker local overrides that apply to a manifest pattern."""
+    matches: list[LocalOverride] = []
+    for local_override in local_overrides:
+        if not has_wildcard(pattern) and local_override.matches(pattern):
+            matches.append(local_override)
+            continue
+        if local_override.is_directory and pattern.startswith(f"{local_override.path}/"):
+            matches.append(local_override)
+            continue
+        if local_override.path == pattern:
+            matches.append(local_override)
+    return tuple(matches)
+
+
+def matching_deferred_candidates_for_pattern(
+    pattern: str,
+    deferred_candidates: tuple[DeferredProtectedCandidate, ...],
+) -> tuple[DeferredProtectedCandidate, ...]:
+    """Return deferred protected candidates that apply to a manifest pattern."""
+    return tuple(
+        candidate
+        for candidate in deferred_candidates
+        if manifest_pattern_matches_path(pattern, candidate.path)
+    )
+
+
 def matching_local_overrides(
     entry: DiffEntry,
     local_overrides: tuple[LocalOverride, ...],
@@ -706,6 +904,450 @@ def build_candidate_row(
     )
 
 
+def format_manifest_modules(requires_all: frozenset[str], requires_any: frozenset[str]) -> str:
+    """Return a compact module relation summary for the adoption ledger."""
+    parts: list[str] = []
+    if requires_all:
+        parts.append("all: " + ", ".join(sorted(requires_all)))
+    if requires_any:
+        parts.append("any: " + ", ".join(sorted(requires_any)))
+    return "; ".join(parts) if parts else "none"
+
+
+def relation_module_names(mapping: ManifestMapping) -> frozenset[str]:
+    """Return all manifest modules referenced by ``mapping``."""
+    return mapping.requires_all | mapping.requires_any
+
+
+def validation_commands_for_modules(modules: frozenset[str]) -> str:
+    """Return validation commands affected by a set of manifest modules."""
+    commands: list[str] = []
+    for module in sorted(modules):
+        for command in VALIDATION_COMMANDS_BY_MODULE.get(module, ()):
+            if command not in commands:
+                commands.append(command)
+    return "<br>".join(commands) if commands else "manual review"
+
+
+def local_override_reason(local_overrides: tuple[LocalOverride, ...]) -> str:
+    """Return the ledger reason text for matching local overrides."""
+    return "; ".join(
+        f"Marker local override defaults to `{override.default_decision}`: {override.reason}"
+        for override in local_overrides
+    )
+
+
+def has_trim_note(notes: tuple[str, ...]) -> bool:
+    """Return whether manifest notes indicate module-scoped trim work."""
+    return any(keyword in note.lower() for note in notes for keyword in INLINE_TRIM_NOTE_KEYWORDS)
+
+
+def notes_mention_modules(notes: tuple[str, ...], modules: frozenset[str]) -> bool:
+    """Return whether manifest notes mention any module in ``modules``."""
+    normalized_notes = " ".join(notes).lower()
+    return any(
+        module in normalized_notes or module.replace("-", " ") in normalized_notes
+        for module in modules
+    )
+
+
+def retention_gap_reason(mapping: ManifestMapping, included_modules: frozenset[str]) -> str:
+    """Return why a manifest mapping is not retained by included modules."""
+    missing_all = mapping.requires_all - included_modules
+    if missing_all:
+        return "Required module(s) not included: " + ", ".join(sorted(missing_all)) + "."
+    if mapping.requires_any and not mapping.requires_any.intersection(included_modules):
+        return (
+            "None of the required alternative module(s) are included: "
+            + ", ".join(sorted(mapping.requires_any))
+            + "."
+        )
+    return "Excluded by marker included_modules."
+
+
+def adoption_mode_for_modules(
+    modules: frozenset[str],
+    local_overrides: tuple[LocalOverride, ...],
+    is_protected: bool,
+    default_adoption_mode: str,
+) -> str:
+    """Return the adoption mode displayed for a ledger row."""
+    for local_override in local_overrides:
+        lowered_reason = local_override.reason.lower()
+        if "tailored" in lowered_reason:
+            return "tailored (marker local override)"
+        if "minimal-preservation" in lowered_reason:
+            return "minimal-preservation (marker local override)"
+
+    if is_protected or modules.intersection(ADOPTION_MODE_MODULES):
+        return default_adoption_mode
+    return "not applicable"
+
+
+def todo_link_target(
+    todo_path: Path,
+    repo_root: Path,
+    ledger_output_dir: Path | None,
+) -> str:
+    """Return the link target string for the checklist file.
+
+    When ``ledger_output_dir`` is provided, the target is computed relative to
+    that directory so the link resolves correctly when the rendered ledger is
+    committed under it. Otherwise the target is repo-root-relative, which is
+    informative when reading the ledger in a terminal but is not a clickable
+    link to the checklist file when the ledger is rendered from a PR or issue
+    body (GitHub resolves relative Markdown link targets in PR/issue bodies
+    relative to the PR/issue URL, not the repository root). Callers that need
+    clickable rendered links should pass ``ledger_output_dir`` and commit the
+    saved ledger so it is rendered under that directory on GitHub.
+    """
+    if ledger_output_dir is None:
+        return repository_relative_path(todo_path, repo_root)
+    return os.path.relpath(str(todo_path), str(ledger_output_dir)).replace(os.sep, "/")
+
+
+def todo_item_link(
+    todo_path: Path,
+    repo_root: Path,
+    item: TodoItem,
+    ledger_output_dir: Path | None = None,
+) -> str:
+    """Return a Markdown link to one checklist line."""
+    todo_relative = todo_link_target(todo_path, repo_root, ledger_output_dir)
+    return f"[line {item.line_number}]({todo_relative}#L{item.line_number})"
+
+
+def matching_todo_links(
+    *,
+    path: str,
+    modules: frozenset[str],
+    is_protected: bool,
+    todo_items: tuple[TodoItem, ...],
+    todo_path: Path,
+    repo_root: Path,
+    ledger_output_dir: Path | None = None,
+) -> str:
+    """Return links to first-adoption checklist rows relevant to a ledger row."""
+    if not todo_items:
+        return "None"
+
+    normalized_path = path.rstrip("/")
+    path_parts = [normalized_path.lower()]
+    if "/" in normalized_path:
+        path_parts.append(normalized_path.rsplit("/", maxsplit=1)[-1].lower())
+    needles = set(path_parts)
+    needles.update(module.lower() for module in modules)
+    if is_protected:
+        needles.update({"protected", "adoption mode"})
+
+    links: list[str] = []
+    for item in todo_items:
+        text = item.text.lower()
+        if any(needle and needle in text for needle in needles):
+            links.append(todo_item_link(todo_path, repo_root, item, ledger_output_dir))
+
+    if not links:
+        return "None"
+    if len(links) > TODO_LINK_LIMIT:
+        visible_links = links[:TODO_LINK_LIMIT]
+        visible_links.append(f"{len(links) - TODO_LINK_LIMIT} more")
+        return ", ".join(visible_links)
+    return ", ".join(links)
+
+
+def load_todo_items(todo_path: Path, repo_root: Path) -> tuple[TodoItem, ...]:
+    """Load checkbox items from the first-adoption checklist when it exists."""
+    if not todo_path.exists():
+        return ()
+    try:
+        lines = todo_path.read_text(encoding="utf-8").splitlines()
+    except OSError as error:
+        todo_relative = repository_relative_path(todo_path, repo_root)
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        raise CandidateGenerationError(
+            f"Unable to read adoption checklist {todo_relative}: {error_summary}"
+        ) from error
+
+    items: list[TodoItem] = []
+    for line_number, line in enumerate(lines, start=1):
+        match = re.match(r"^\s*[-*]\s+\[(?P<status>[ xX])\]\s+(?P<text>.+?)\s*$", line)
+        if match is None:
+            continue
+        items.append(
+            TodoItem(
+                line_number=line_number,
+                text=match.group("text"),
+                is_complete=match.group("status").lower() == "x",
+            )
+        )
+    return tuple(items)
+
+
+def build_manifest_ledger_row(
+    *,
+    mapping: ManifestMapping,
+    marker_data: MarkerData,
+    manifest_modules: frozenset[str],
+    todo_items: tuple[TodoItem, ...],
+    todo_path: Path,
+    repo_root: Path,
+    default_adoption_mode: str,
+    ledger_output_dir: Path | None = None,
+) -> tuple[LedgerRow, tuple[LocalOverride, ...]]:
+    """Build one adoption-ledger row from a manifest mapping."""
+    modules = relation_module_names(mapping)
+    local_overrides = matching_local_overrides_for_pattern(
+        mapping.pattern,
+        marker_data.local_overrides,
+    )
+    deferred_candidates = matching_deferred_candidates_for_pattern(
+        mapping.pattern,
+        marker_data.deferred_candidates,
+    )
+    is_protected = is_protected_manifest_pattern(mapping.pattern)
+    retained = not mapping.unknown_modules and PathRelation(
+        patterns=(mapping.pattern,),
+        requires_all=mapping.requires_all,
+        requires_any=mapping.requires_any,
+        notes=(mapping.notes,) if mapping.notes else (),
+        unknown_modules=mapping.unknown_modules,
+    ).is_retained_by(marker_data.included_modules)
+    should_trim = (
+        retained
+        and mapping.notes is not None
+        and has_trim_note((mapping.notes,))
+        and notes_mention_modules(
+            (mapping.notes,),
+            manifest_modules - marker_data.included_modules,
+        )
+    )
+
+    decision = "retain"
+    requires_decision = False
+    reason_parts: list[str] = []
+
+    if mapping.unknown_modules:
+        decision = "needs maintainer decision"
+        requires_decision = True
+        reason_parts.append(
+            "Manifest references unknown module(s): "
+            + ", ".join(sorted(mapping.unknown_modules))
+            + "."
+        )
+    elif local_overrides:
+        decision = "local override"
+        reason_parts.append(local_override_reason(local_overrides))
+        if any(
+            override.default_decision in {"DEFER", "PROTECTED-REVIEW"}
+            for override in local_overrides
+        ):
+            requires_decision = True
+    elif deferred_candidates:
+        decision = "needs maintainer decision"
+        requires_decision = True
+        reason_parts.append(
+            "Deferred protected candidate: "
+            + "; ".join(
+                f"{candidate.source_commit}: {candidate.reason}"
+                for candidate in deferred_candidates
+            )
+        )
+    elif is_protected:
+        decision = "needs maintainer decision"
+        requires_decision = True
+        if retained:
+            reason_parts.append("Protected retained path requires explicit owner authorization.")
+        else:
+            reason_parts.append(
+                "Protected path is not retained by included modules; confirm deferral or skip."
+            )
+    elif not retained:
+        decision = "skip"
+        reason_parts.append(retention_gap_reason(mapping, marker_data.included_modules))
+    elif should_trim:
+        decision = "trim"
+        reason_parts.append(
+            "Retained path has manifest notes for module-scoped inline blocks; "
+            "remove blocks for unadopted modules and keep the retained file."
+        )
+    else:
+        reason_parts.append(
+            "Retained because marker included_modules satisfy the manifest relation."
+        )
+
+    if is_protected and decision != "needs maintainer decision":
+        requires_decision = True
+        reason_parts.append(
+            "Protected file; explicit owner authorization is required before edits."
+        )
+    if mapping.notes:
+        reason_parts.append(f"Manifest note: {mapping.notes}")
+
+    return (
+        LedgerRow(
+            path=mapping.pattern,
+            manifest_modules=format_manifest_modules(mapping.requires_all, mapping.requires_any),
+            decision=decision,
+            reason=" ".join(reason_parts),
+            protected_file="Yes" if is_protected else "No",
+            requires_maintainer_decision="Yes" if requires_decision else "No",
+            adoption_mode=adoption_mode_for_modules(
+                modules,
+                local_overrides,
+                is_protected,
+                default_adoption_mode,
+            ),
+            todo_link=matching_todo_links(
+                path=mapping.pattern,
+                modules=modules,
+                is_protected=is_protected,
+                todo_items=todo_items,
+                todo_path=todo_path,
+                repo_root=repo_root,
+                ledger_output_dir=ledger_output_dir,
+            ),
+            validation_commands=validation_commands_for_modules(modules),
+        ),
+        local_overrides,
+    )
+
+
+def build_unmatched_local_override_row(
+    *,
+    local_override: LocalOverride,
+    mappings: tuple[ManifestMapping, ...],
+    todo_items: tuple[TodoItem, ...],
+    todo_path: Path,
+    repo_root: Path,
+    default_adoption_mode: str,
+    ledger_output_dir: Path | None = None,
+) -> LedgerRow:
+    """Build a ledger row for a marker local override not consumed by any manifest mapping row."""
+    display_path = local_override.path + ("/" if local_override.is_directory else "")
+    relation = selected_relation_for_path(local_override.path, mappings)
+    modules = relation.requires_all | relation.requires_any if relation is not None else frozenset()
+    is_protected = is_protected_instruction_path(local_override.path)
+    requires_decision = (
+        is_protected
+        or relation is None
+        or local_override.default_decision in {"DEFER", "PROTECTED-REVIEW"}
+    )
+    reason = (
+        f"Marker local override defaults to `{local_override.default_decision}`: "
+        f"{local_override.reason}"
+    )
+    if relation is None:
+        reason += " No manifest mapping currently matches this override path."
+
+    return LedgerRow(
+        path=display_path,
+        manifest_modules=(
+            format_manifest_modules(relation.requires_all, relation.requires_any)
+            if relation is not None
+            else "unmapped"
+        ),
+        decision="local override",
+        reason=reason,
+        protected_file="Yes" if is_protected else "No",
+        requires_maintainer_decision="Yes" if requires_decision else "No",
+        adoption_mode=adoption_mode_for_modules(
+            modules,
+            (local_override,),
+            is_protected,
+            default_adoption_mode,
+        ),
+        todo_link=matching_todo_links(
+            path=display_path,
+            modules=modules,
+            is_protected=is_protected,
+            todo_items=todo_items,
+            todo_path=todo_path,
+            repo_root=repo_root,
+            ledger_output_dir=ledger_output_dir,
+        ),
+        validation_commands=validation_commands_for_modules(modules),
+    )
+
+
+def build_manual_todo_ledger_row(
+    *,
+    todo_item: TodoItem,
+    todo_path: Path,
+    repo_root: Path,
+    ledger_output_dir: Path | None = None,
+) -> LedgerRow:
+    """Build a ledger row for one first-adoption checklist item."""
+    status = "complete" if todo_item.is_complete else "open"
+    return LedgerRow(
+        path=repository_relative_path(todo_path, repo_root),
+        manifest_modules="manual setup",
+        decision="manual TODO",
+        reason=f"{status}: {todo_item.text}",
+        protected_file="No",
+        requires_maintainer_decision="No" if todo_item.is_complete else "Yes",
+        adoption_mode="recorded in checklist",
+        todo_link=todo_item_link(todo_path, repo_root, todo_item, ledger_output_dir),
+        validation_commands="manual first-adoption review",
+    )
+
+
+def build_adoption_ledger_rows(
+    *,
+    marker_data: MarkerData,
+    manifest_modules: frozenset[str],
+    mappings: tuple[ManifestMapping, ...],
+    todo_items: tuple[TodoItem, ...],
+    todo_path: Path,
+    repo_root: Path,
+    default_adoption_mode: str,
+    ledger_output_dir: Path | None = None,
+) -> tuple[LedgerRow, ...]:
+    """Build the generated adoption ledger rows."""
+    rows: list[LedgerRow] = []
+    matched_overrides: set[LocalOverride] = set()
+    for mapping in mappings:
+        row, local_overrides = build_manifest_ledger_row(
+            mapping=mapping,
+            marker_data=marker_data,
+            manifest_modules=manifest_modules,
+            todo_items=todo_items,
+            todo_path=todo_path,
+            repo_root=repo_root,
+            default_adoption_mode=default_adoption_mode,
+            ledger_output_dir=ledger_output_dir,
+        )
+        rows.append(row)
+        matched_overrides.update(local_overrides)
+
+    for local_override in sorted(
+        set(marker_data.local_overrides) - matched_overrides,
+        key=lambda override: override.path,
+    ):
+        rows.append(
+            build_unmatched_local_override_row(
+                local_override=local_override,
+                mappings=mappings,
+                todo_items=todo_items,
+                todo_path=todo_path,
+                repo_root=repo_root,
+                default_adoption_mode=default_adoption_mode,
+                ledger_output_dir=ledger_output_dir,
+            )
+        )
+
+    for todo_item in todo_items:
+        rows.append(
+            build_manual_todo_ledger_row(
+                todo_item=todo_item,
+                todo_path=todo_path,
+                repo_root=repo_root,
+                ledger_output_dir=ledger_output_dir,
+            )
+        )
+
+    return tuple(rows)
+
+
 def markdown_cell(value: str) -> str:
     """Escape a value for inclusion in a Markdown table cell."""
     return value.replace("\n", "<br>").replace("|", r"\|")
@@ -740,6 +1382,77 @@ def format_table(rows: tuple[CandidateRow, ...]) -> str:
     return "\n".join(rendered_rows)
 
 
+def format_ledger_table(rows: tuple[LedgerRow, ...]) -> str:
+    """Render adoption-ledger rows as a Markdown table."""
+    header = (
+        "| Path | Manifest module(s) | Decision | Reason | Protected file | "
+        "Requires maintainer decision | Adoption mode | `_TODO-repo-init.md` link | "
+        "Validation command affected |"
+    )
+    divider = "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+    rendered_rows = [header, divider]
+    for row in rows:
+        rendered_rows.append(
+            "| "
+            + " | ".join(
+                markdown_cell(cell)
+                for cell in (
+                    row.path,
+                    row.manifest_modules,
+                    row.decision,
+                    row.reason,
+                    row.protected_file,
+                    row.requires_maintainer_decision,
+                    row.adoption_mode,
+                    row.todo_link,
+                    row.validation_commands,
+                )
+            )
+            + " |"
+        )
+    return "\n".join(rendered_rows)
+
+
+def format_adoption_ledger(
+    *,
+    marker_path: Path,
+    manifest_path: Path,
+    todo_path: Path,
+    repo_root: Path,
+    marker_data: MarkerData,
+    rows: tuple[LedgerRow, ...],
+    default_adoption_mode: str,
+) -> str:
+    """Render the generated adoption ledger as a Markdown snapshot."""
+    marker_relative = repository_relative_path(marker_path, repo_root)
+    manifest_relative = repository_relative_path(manifest_path, repo_root)
+    todo_relative = repository_relative_path(todo_path, repo_root)
+    todo_status = "found" if todo_path.exists() else "not found"
+    included_modules = (
+        ", ".join(f"`{module}`" for module in sorted(marker_data.included_modules)) or "none"
+    )
+
+    lines = [
+        "# Template Adoption Ledger",
+        "",
+        (
+            "Generated snapshot; review artifact only. "
+            f"`{manifest_relative}` and `{marker_relative}` remain the authoritative "
+            "machine-readable state. Regenerate this ledger before first-adoption, "
+            "full-reconciliation, or protected-file review."
+        ),
+        "",
+        f"- Marker: `{marker_relative}`",
+        f"- Manifest: `{manifest_relative}`",
+        f"- First-adoption checklist: `{todo_relative}` ({todo_status})",
+        f"- Included modules: {included_modules}",
+        f"- Default adoption mode: `{default_adoption_mode}`",
+        "",
+        format_ledger_table(rows) if rows else "No manifest mappings or manual TODO rows found.",
+    ]
+    return "\n".join(lines)
+
+
 def write_candidate_table(repo_root: Path, output_path: Path, candidate_table: str) -> None:
     """Write the rendered candidate table to a repository-contained path."""
     try:
@@ -750,6 +1463,19 @@ def write_candidate_table(repo_root: Path, output_path: Path, candidate_table: s
         error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
         raise CandidateGenerationError(
             f"Unable to write candidate table to {output_relative}: {error_summary}"
+        ) from error
+
+
+def write_adoption_ledger(repo_root: Path, output_path: Path, ledger_document: str) -> None:
+    """Write the rendered adoption ledger to a repository-contained path."""
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(ledger_document + "\n", encoding="utf-8")
+    except OSError as error:
+        output_relative = repository_relative_path(output_path, repo_root)
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        raise CandidateGenerationError(
+            f"Unable to write adoption ledger to {output_relative}: {error_summary}"
         ) from error
 
 
@@ -790,6 +1516,8 @@ def print_report(
     candidate_table: str,
     procedure_warning: str | None,
     write_candidates_path: Path | None,
+    write_ledger_path: Path | None,
+    ledger_document: str | None,
 ) -> None:
     """Print the Markdown candidate table report."""
     marker_relative = repository_relative_path(marker_path, repo_root)
@@ -810,6 +1538,11 @@ def print_report(
             "- Saved candidate table: "
             f"`{repository_relative_path(write_candidates_path, repo_root)}`"
         )
+    if write_ledger_path is not None:
+        print(
+            "- Saved adoption ledger: "
+            f"`{repository_relative_path(write_ledger_path, repo_root)}`"
+        )
     print(
         "- Included modules: "
         + (", ".join(f"`{module}`" for module in sorted(marker_data.included_modules)) or "none")
@@ -828,9 +1561,30 @@ def print_report(
 
     if not rows:
         print("No changed paths found in the reviewed range.")
+        if ledger_document is not None:
+            print()
+            print(ledger_document)
         return
 
     print(candidate_table)
+    if ledger_document is not None:
+        print()
+        print(ledger_document)
+
+
+def print_ledger_only_report(
+    *,
+    ledger_document: str,
+    write_ledger_path: Path | None,
+    repo_root: Path,
+) -> None:
+    """Print the adoption-ledger-only report."""
+    if write_ledger_path is not None:
+        print(
+            "Saved adoption ledger: " f"`{repository_relative_path(write_ledger_path, repo_root)}`"
+        )
+        print()
+    print(ledger_document)
 
 
 def fail(message: str) -> NoReturn:
@@ -843,14 +1597,23 @@ def main(argv: list[str] | None = None) -> int:
     """Generate the sync candidate table."""
     args = parse_args(sys.argv[1:] if argv is None else argv)
     try:
+        if args.ledger_only and args.write_candidates is not None:
+            raise CandidateGenerationError("--write-candidates cannot be used with --ledger-only.")
+
         repo_root = resolve_repo_root(args.repo_root)
         marker_path = resolve_repo_path(repo_root, args.marker)
         manifest_path = resolve_repo_path(repo_root, args.manifest)
         marker_schema_path = resolve_repo_path(repo_root, args.marker_schema)
         manifest_schema_path = resolve_repo_path(repo_root, args.manifest_schema)
+        todo_path = resolve_repo_path(repo_root, args.todo_file)
         write_candidates_path = (
             resolve_repo_path(repo_root, args.write_candidates)
             if args.write_candidates is not None
+            else None
+        )
+        write_ledger_path = (
+            resolve_repo_path(repo_root, args.write_ledger)
+            if args.write_ledger is not None
             else None
         )
 
@@ -861,6 +1624,42 @@ def main(argv: list[str] | None = None) -> int:
             marker_schema_path=marker_schema_path,
             manifest_schema_path=manifest_schema_path,
         )
+        ledger_document = None
+        if args.ledger or args.ledger_only or write_ledger_path is not None:
+            todo_items = load_todo_items(todo_path, repo_root)
+            ledger_output_dir = write_ledger_path.parent if write_ledger_path is not None else None
+            ledger_rows = build_adoption_ledger_rows(
+                marker_data=marker_data,
+                manifest_modules=manifest_modules,
+                mappings=mappings,
+                todo_items=todo_items,
+                todo_path=todo_path,
+                repo_root=repo_root,
+                default_adoption_mode=args.adoption_mode,
+                ledger_output_dir=ledger_output_dir,
+            )
+            ledger_document = format_adoption_ledger(
+                marker_path=marker_path,
+                manifest_path=manifest_path,
+                todo_path=todo_path,
+                repo_root=repo_root,
+                marker_data=marker_data,
+                rows=ledger_rows,
+                default_adoption_mode=args.adoption_mode,
+            )
+
+        if args.ledger_only:
+            if ledger_document is None:
+                raise CandidateGenerationError("Unable to generate adoption ledger.")
+            if write_ledger_path is not None:
+                write_adoption_ledger(repo_root, write_ledger_path, ledger_document)
+            print_ledger_only_report(
+                ledger_document=ledger_document,
+                write_ledger_path=write_ledger_path,
+                repo_root=repo_root,
+            )
+            return 0
+
         range_base_ref, range_base_sha, range_base_source = resolve_range_base_ref(
             repo_root,
             args.range_base,
@@ -875,6 +1674,10 @@ def main(argv: list[str] | None = None) -> int:
         procedure_warning = stale_procedure_warning(repo_root, range_head_sha)
         if write_candidates_path is not None:
             write_candidate_table(repo_root, write_candidates_path, candidate_table)
+        if write_ledger_path is not None:
+            if ledger_document is None:
+                raise CandidateGenerationError("Unable to generate adoption ledger.")
+            write_adoption_ledger(repo_root, write_ledger_path, ledger_document)
     except (CandidateGenerationError, MarkerValidationError) as error:
         fail(str(error))
 
@@ -893,6 +1696,8 @@ def main(argv: list[str] | None = None) -> int:
         candidate_table=candidate_table,
         procedure_warning=procedure_warning,
         write_candidates_path=write_candidates_path,
+        write_ledger_path=write_ledger_path,
+        ledger_document=ledger_document if args.ledger else None,
     )
     return 0
 

@@ -1,14 +1,14 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260526.0
+**Version:** 1.1.20260526.1
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-05-26
-- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the human-readable view of the template sync manifest, the marker-aware retained-state validation helper command, and the sync candidate table generator. Does not define an automated sync tool.
+- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the human-readable view of the template sync manifest, the marker-aware retained-state validation helper command, the sync candidate table generator, and the generated adoption ledger review artifact. Does not define an automated sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
 ## Purpose
@@ -24,6 +24,7 @@ Use this procedure when a downstream repository wants to review new changes from
 - **Downstream sync marker:** The `.template-sync/marker.yml` file in the downstream repository. Under `template_sync`, it records the upstream template repository, the newest upstream template commit that has been reviewed, the modules the downstream repository has adopted, local override rules, and deferred protected-file candidates.
 - **First-adoption preflight checklist:** A root `_TODO-repo-init.md` file, or an equivalent committed adoption note named by this procedure, that records manual GitHub settings and maintainer policy decisions that cannot be inferred from repository files during first-time template adoption.
 - **First-adoption state:** The resolved answers from the first-adoption preflight checklist, `.template-sync/marker.yml`, or an equivalent committed adoption note. Examples include conduct and security reporting channels, private vulnerability reporting, Discussions, expected labels, CODEOWNERS owner/team identity, default-branch protection policy, adoption mode, and any GHES host override.
+- **Adoption ledger:** A generated Markdown review artifact emitted by `.template-sync/scripts/generate_sync_candidates.py`. It summarizes manifest module assignments, marker local overrides, protected-file flags, adoption-mode posture, `_TODO-repo-init.md` checklist links, and affected validation commands. It is not authoritative state; `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable sources of truth.
 - **Adoption mode:** The preservation posture applied before editing protected files and template-derived governance, community, process, workflow, or collaboration files. Valid named modes are `minimal-preservation` and `tailored`.
 - **`minimal-preservation`:** The default adoption mode for protected files and template-derived governance, community, process, workflow, and collaboration files. Keep upstream wording and structure; limit edits to placeholder substitution, removing complete delimited sections owned by unadopted manifest modules, fixing broken links, and adding required local overrides that are recorded in `.template-sync/marker.yml`.
 - **`tailored`:** A maintainer-selected adoption mode for a specific file or file set that allows broader downstream rewriting. The maintainer MUST select `tailored` explicitly before the broader rewrite starts, and the selection MUST be recorded in `_TODO-repo-init.md`, `.template-sync/marker.yml` local overrides, the sync working notes, or the final sync summary.
@@ -32,7 +33,7 @@ Use this procedure when a downstream repository wants to review new changes from
 - **Unadopted-module activity:** Upstream activity in a known taxonomy module that is not listed in `included_modules`.
 - **Unknown module:** A module name introduced by a newer upstream manifest or procedure that the downstream marker does not recognize. Unknown modules MUST be surfaced for explicit owner decision.
 - **Protected file:** A governance or instruction file that requires explicit owner authorization before editing.
-- **Sync working notes:** Temporary notes maintained while applying this procedure. They MAY be a scratch document, a draft PR body, or another local checklist, but they are not the final sync summary. They MUST capture the first-adoption preflight disposition when applicable, the range mode, range endpoints or reconciliation command, range-base rationale, saved Step 6 candidate table or table citation, unmapped paths, per-file decisions, protected-file dispositions, line-ending normalization actions, validation results, validation issue classifications, finalization mode, and open questions as those facts are discovered. Step 14 turns these working notes into the final sync summary.
+- **Sync working notes:** Temporary notes maintained while applying this procedure. They MAY be a scratch document, a draft PR body, or another local checklist, but they are not the final sync summary. They MUST capture the first-adoption preflight disposition when applicable, the range mode, range endpoints or reconciliation command, range-base rationale, saved Step 6 candidate table or table citation, saved adoption ledger location or ledger citation, unmapped paths, per-file decisions, protected-file dispositions, line-ending normalization actions, validation results, validation issue classifications, finalization mode, and open questions as those facts are discovered. Step 14 turns these working notes into the final sync summary.
 - **Sync summary:** The final owner-facing record created in Step 14 from the sync working notes. Depending on the finalization mode, it MAY be a PR description, a committed summary artifact, a local handoff note, or a dry-run report. It is the durable review artifact for modes that commit a branch or open a PR; working-tree inspection and dry-run modes MUST still present it clearly before stopping.
 
 ## Safety Rules
@@ -48,14 +49,14 @@ Use this procedure when a downstream repository wants to review new changes from
 
 ## Procedure Overview
 
-At the start of the procedure, determine whether the first-adoption preflight gate below applies. If it applies, generate or update the checklist before any content edits whose correctness depends on unresolved adoption answers. Before editing protected files or template-derived governance, community, process, workflow, or collaboration files, record the applicable adoption mode. Use `minimal-preservation` when no explicit maintainer selection exists.
+At the start of the procedure, determine whether the first-adoption preflight gate below applies. If it applies, generate or update the checklist before any content edits whose correctness depends on unresolved adoption answers. Before editing protected files or template-derived governance, community, process, workflow, or collaboration files, create or review the adoption ledger and record the applicable adoption mode. Use `minimal-preservation` when no explicit maintainer selection exists.
 
 1. Create a dedicated sync branch.
 2. Add this template repository as a `template` remote if it is not already present.
 3. Fetch upstream template changes without merging.
 4. Identify the upstream commit range under review with rename detection.
 5. Initialize or update `.template-sync/marker.yml`.
-6. Filter upstream changes through the authoritative module taxonomy.
+6. Filter upstream changes through the authoritative module taxonomy and create or refresh the adoption ledger.
 7. Review every candidate file with an explicit adoption mode and decision.
 8. Perform manual merges using an ignored scratch location when needed, and normalize line endings after `.gitattributes` changes.
 9. Handle protected files through authorization or deferral.
@@ -664,6 +665,22 @@ python .template-sync/scripts/generate_sync_candidates.py --range-base RANGE_BAS
 
 The saved Step 6 candidate table is the source of truth for the reviewed candidate set. A rerun for the same range uses the current `.template-sync/marker.yml` values for `included_modules`, `local_overrides`, and `deferred_protected_candidates`, so its output can diverge from the saved table when Step 13 changed any of those fields even though the commit range is unchanged.
 
+Create or refresh the adoption ledger during first sync and full-reconciliation syncs, and review it before editing protected files. To include the ledger in the normal delta report, pass `--ledger`; to write a generated snapshot that can be committed to the repository, pass `--write-ledger`:
+
+```bash
+python .template-sync/scripts/generate_sync_candidates.py --range-head RANGE_HEAD_SHA --ledger --write-ledger ADOPTION_LEDGER_PATH
+```
+
+For first-adoption or full-reconciliation work that needs the ledger before a delta range is available, emit only the ledger and skip git range inspection:
+
+```bash
+python .template-sync/scripts/generate_sync_candidates.py --ledger-only --write-ledger ADOPTION_LEDGER_PATH
+```
+
+The `ADOPTION_LEDGER_PATH` value MUST remain inside the repository root; the helper rejects paths that escape it. The ledger is a generated review artifact. It MUST be regenerated when `.template-sync/manifest.yml`, `.template-sync/marker.yml`, `_TODO-repo-init.md`, the selected adoption mode, or the included module set changes. Do not treat a stale committed ledger as authoritative: `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable source of truth. Rows marked `manual TODO` link to `_TODO-repo-init.md` checklist lines when that file exists. Rows marked `local override` MUST show a reason from `.template-sync/marker.yml`; if a local override has no durable reason, fix the marker before relying on the ledger.
+
+`_TODO-repo-init.md` link targets in the ledger depend on the rendering destination. When `--write-ledger` is used, the helper writes Markdown link targets relative to the saved file's directory so the links resolve correctly when the saved ledger is committed and rendered on GitHub. When the ledger is emitted only to stdout (no `--write-ledger`), the helper writes repo-root-relative link targets, which are informative when reading the ledger in a terminal but **do not** render as clickable links to repository files when pasted into a GitHub pull request or issue body — GitHub resolves relative Markdown link targets in PR/issue bodies relative to the PR/issue URL, not the repository root. For clickable rendered links, run the helper with `--write-ledger ADOPTION_LEDGER_PATH`, commit the saved file, and review it directly on GitHub.
+
 The generated candidate table models upstream path changes. It MUST NOT be expanded to review `_TODO-repo-init.md` as an upstream candidate; that file is downstream-owned first-adoption state. During full reconciliation, carry forward the Step 4 pre-filter decision that excludes `_TODO-repo-init.md` from candidate review.
 
 For each path from `git diff --name-status -M`:
@@ -683,7 +700,7 @@ If summarized unadopted-module activity appears relevant during review, the owne
 
 ## Step 7: Review Each Candidate File
 
-Every included candidate requires a row in a per-file decision table. When the Step 6 generator is used, treat its `Retained` rows as the starting candidate set and its `Excluded`, `Unmapped`, local override, deferred protected candidate, protected-file, rename, and inline-block notes as prompts for manual review and sync-summary entries.
+Every included candidate requires a row in a per-file decision table. When the Step 6 generator is used, treat its `Retained` rows as the starting candidate set and its `Excluded`, `Unmapped`, local override, deferred protected candidate, protected-file, rename, and inline-block notes as prompts for manual review and sync-summary entries. When a Step 6 adoption ledger exists, review it before editing any protected file and carry forward its protected-file flag, local-override reason, adoption-mode value, `_TODO-repo-init.md` link, and validation-command hints into the per-file decision table or sync working notes.
 
 For protected files and template-derived governance, community, process, workflow, or collaboration files, assign an adoption mode before choosing the file decision:
 
@@ -986,6 +1003,7 @@ The sync summary MUST include:
 - line-ending normalization actions and whether a separate normalization commit was used
 - validation commands run and results
 - saved Step 6 candidate table location or sync working-notes citation, including the recorded `RANGE_BASE_SHA` and `RANGE_HEAD_SHA`
+- saved adoption ledger location or sync working-notes citation, including whether it was generated by `--ledger` or `--ledger-only`
 - each issue surfaced during validation or review, classified as upstream-template fix, downstream-local fix, or deferred follow-up
 - open questions for the owner
 
@@ -1012,6 +1030,7 @@ Example summary skeleton:
 **Line-ending normalization:** not needed; `.gitattributes` unchanged.
 **Validation:** `pre-commit run --all-files` (passed), `npm run lint:md` (passed), `npm run lint:md:nested` (passed), `Invoke-Pester -Path tests/ -Output Detailed` (passed)
 **Saved candidate table:** sync working notes section "Step 6 Candidate Table" for `1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
+**Saved adoption ledger:** `.cache/template-sync/adoption-ledger.md` generated with `--ledger`
 
 ## Issue Classifications
 
@@ -1049,7 +1068,7 @@ git rev-parse 'template/main^{commit}'
 git merge-base --is-ancestor 1111111111111111111111111111111111111111 2222222222222222222222222222222222222222
 git diff --name-status -M 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222 --
 mkdir -p .cache/template-sync
-python .template-sync/scripts/generate_sync_candidates.py --range-head 2222222222222222222222222222222222222222 --write-candidates .cache/template-sync/candidates.md
+python .template-sync/scripts/generate_sync_candidates.py --range-head 2222222222222222222222222222222222222222 --ledger --write-candidates .cache/template-sync/candidates.md --write-ledger .cache/template-sync/adoption-ledger.md
 ```
 
 The sync working notes start with the reviewed range endpoints:
@@ -1059,6 +1078,7 @@ The sync working notes start with the reviewed range endpoints:
 - **Range base:** `1111111111111111111111111111111111111111`
 - **Range head:** `2222222222222222222222222222222222222222`
 - **Saved candidate table:** `.cache/template-sync/candidates.md` for `1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
+- **Saved adoption ledger:** `.cache/template-sync/adoption-ledger.md`
 
 Hypothetical output:
 
@@ -1177,6 +1197,7 @@ Invoke-Pester -Path tests/ -Output Detailed
 **Line-ending normalization:** not needed; `.gitattributes` unchanged.
 **Validation:** `pre-commit run --all-files` (passed), `npm run lint:md` (passed), `npm run lint:md:nested` (passed), `Invoke-Pester -Path tests/ -Output Detailed` (passed)
 **Saved candidate table:** `.cache/template-sync/candidates.md` for `1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
+**Saved adoption ledger:** `.cache/template-sync/adoption-ledger.md`
 
 ## Issue Classifications
 
@@ -1193,4 +1214,4 @@ Future automation MAY add:
 - a helper script that regenerates the Module Definitions and Path Mapping tables from `.template-sync/manifest.yml`
 - a higher-level dry-run reporter that combines the candidate table with validation planning without applying changes
 
-`.template-sync/manifest.yml` is authoritative for the taxonomy. The candidate generator is intentionally read-only; this document remains the authoritative manual procedure.
+`.template-sync/manifest.yml` is authoritative for the taxonomy. `.template-sync/marker.yml` is authoritative for included modules, local overrides, and deferred protected candidates. The candidate generator and generated adoption ledger are intentionally read-only review aids; this document remains the authoritative manual procedure.
