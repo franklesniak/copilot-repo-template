@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.5.20260525.0
+**Version:** 1.5.20260526.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-25
+- **Last Updated:** 2026-05-26
 - **Scope:** Defines documentation standards for Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) files in this repository, including specs, design docs, runbooks, ADRs, instruction files, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -241,6 +241,30 @@ This is a placeholder-convention rule only. It does not require converting norma
 - Didactic example text inside style-guide and design-decision files (`.github/instructions/**`, `.github/copilot-instructions.md`, and the template design-decision document under `.github/`) **MAY** use alternative placeholder forms when describing the convention rather than creating a live substitution target.
 - Generic GitHub Actions references in `uses:` lines and the adjacent navigation-aid comments under `.github/workflows/` (covered by [`.github/instructions/yaml.instructions.md`](./yaml.instructions.md)) use `<owner>/<repo>` as a metasyntactic placeholder for arbitrary upstream action repositories (e.g., `actions/checkout`) and are **not** template-adopter substitutions; they are unaffected by this rule.
 - Illustrative post-substitution examples in adoption-guide prose, such as `your-org/your-repo`, `your-username/your-repo`, or `YOUR-USERNAME/your-repo-name`, are values a reader might type **after** substitution and are not live unresolved template placeholders; they are unaffected by this rule.
+
+#### Template-substitution marker boundaries and replacement surfaces
+
+When a template-substitution marker is embedded in a structured Markdown construct, such as an HTML comment, link target, fenced code block, or table cell, authors **MUST** design the substitution boundary so the post-substitution text is syntactically and semantically meaningful when read in isolation. Authors **SHOULD** prefer replacing the whole enclosing construct, for example the entire HTML comment line, over replacing only a substring inside that construct.
+
+Authors who add or modify a template-substitution marker **MUST** keep every surface that references the marker consistent with it. This includes any automated substitution helper or allowlist, any setup-guide snippets that perform the substitution, any manual find-and-replace instructions, and any regression tests that exercise the substitution.
+
+For example, this marker is embedded in an HTML comment:
+
+```markdown
+<!-- TODO: Replace with your support contact address -->
+```
+
+If the substitution covers only `TODO: Replace`, the resulting comment is syntactically valid but semantically incoherent:
+
+```markdown
+<!-- Support contact configured with your support contact address -->
+```
+
+The safer boundary is the whole comment line, so the substituted result is meaningful as a standalone construct:
+
+```markdown
+<!-- Support contact configured -->
+```
 
 ## ADR Standards
 
