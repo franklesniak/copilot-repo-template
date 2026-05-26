@@ -665,7 +665,7 @@ python .template-sync/scripts/generate_sync_candidates.py --range-base RANGE_BAS
 
 The saved Step 6 candidate table is the source of truth for the reviewed candidate set. A rerun for the same range uses the current `.template-sync/marker.yml` values for `included_modules`, `local_overrides`, and `deferred_protected_candidates`, so its output can diverge from the saved table when Step 13 changed any of those fields even though the commit range is unchanged.
 
-Create or refresh the adoption ledger during first sync and full-reconciliation syncs, and review it before editing protected files. To include the ledger in the normal delta report, pass `--ledger`; to write a generated snapshot that can be committed or pasted into a PR description, pass `--write-ledger`:
+Create or refresh the adoption ledger during first sync and full-reconciliation syncs, and review it before editing protected files. To include the ledger in the normal delta report, pass `--ledger`; to write a generated snapshot that can be committed to the repository, pass `--write-ledger`:
 
 ```bash
 python .template-sync/scripts/generate_sync_candidates.py --range-head RANGE_HEAD_SHA --ledger --write-ledger ADOPTION_LEDGER_PATH
@@ -678,6 +678,8 @@ python .template-sync/scripts/generate_sync_candidates.py --ledger-only --write-
 ```
 
 The `ADOPTION_LEDGER_PATH` value MUST remain inside the repository root; the helper rejects paths that escape it. The ledger is a generated review artifact. It MUST be regenerated when `.template-sync/manifest.yml`, `.template-sync/marker.yml`, `_TODO-repo-init.md`, the selected adoption mode, or the included module set changes. Do not treat a stale committed ledger as authoritative: `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable source of truth. Rows marked `manual TODO` link to `_TODO-repo-init.md` checklist lines when that file exists. Rows marked `local override` MUST show a reason from `.template-sync/marker.yml`; if a local override has no durable reason, fix the marker before relying on the ledger.
+
+`_TODO-repo-init.md` link targets in the ledger depend on the rendering destination: when `--write-ledger` is used, the helper writes links relative to the saved file's directory so the links resolve correctly when the ledger is committed under that directory; when the ledger is emitted only to stdout (no `--write-ledger`), the helper writes repo-root-relative links so the links resolve correctly when the output is pasted into a PR description on GitHub. To paste the ledger into a PR description, run the helper without `--write-ledger`; to commit the ledger to a path such as `.cache/template-sync/adoption-ledger.md`, run the helper with `--write-ledger` pointing at that path.
 
 The generated candidate table models upstream path changes. It MUST NOT be expanded to review `_TODO-repo-init.md` as an upstream candidate; that file is downstream-owned first-adoption state. During full reconciliation, carry forward the Step 4 pre-filter decision that excludes `_TODO-repo-init.md` from candidate review.
 

@@ -493,7 +493,7 @@ def test_ledger_only_reports_manifest_marker_and_todo_decisions(tmp_path: Path) 
         in (result.stdout)
     )
     assert "| _TODO-repo-init.md | manual setup | manual TODO | open:" in result.stdout
-    assert "[line 1](_TODO-repo-init.md#L1)" in result.stdout
+    assert "[line 1](../../_TODO-repo-init.md#L1)" in result.stdout
     assert "pre-commit run --all-files" in result.stdout
     assert "manual first-adoption review" in result.stdout
     assert "No range base was provided" not in result.stderr

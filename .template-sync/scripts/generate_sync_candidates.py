@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import os
 import re
 import subprocess
 import sys
@@ -982,9 +983,31 @@ def adoption_mode_for_modules(
     return "not applicable"
 
 
-def todo_item_link(todo_path: Path, repo_root: Path, item: TodoItem) -> str:
+def todo_link_target(
+    todo_path: Path,
+    repo_root: Path,
+    ledger_output_dir: Path | None,
+) -> str:
+    """Return the link target string for the checklist file.
+
+    When ``ledger_output_dir`` is provided, the target is computed relative to
+    that directory so the link resolves correctly when the rendered ledger is
+    committed under it. Otherwise the target is repo-root-relative so the link
+    resolves correctly when the rendered ledger is pasted into a PR description.
+    """
+    if ledger_output_dir is None:
+        return repository_relative_path(todo_path, repo_root)
+    return os.path.relpath(str(todo_path), str(ledger_output_dir)).replace(os.sep, "/")
+
+
+def todo_item_link(
+    todo_path: Path,
+    repo_root: Path,
+    item: TodoItem,
+    ledger_output_dir: Path | None = None,
+) -> str:
     """Return a Markdown link to one checklist line."""
-    todo_relative = repository_relative_path(todo_path, repo_root)
+    todo_relative = todo_link_target(todo_path, repo_root, ledger_output_dir)
     return f"[line {item.line_number}]({todo_relative}#L{item.line_number})"
 
 
@@ -996,6 +1019,7 @@ def matching_todo_links(
     todo_items: tuple[TodoItem, ...],
     todo_path: Path,
     repo_root: Path,
+    ledger_output_dir: Path | None = None,
 ) -> str:
     """Return links to first-adoption checklist rows relevant to a ledger row."""
     if not todo_items:
@@ -1014,7 +1038,7 @@ def matching_todo_links(
     for item in todo_items:
         text = item.text.lower()
         if any(needle and needle in text for needle in needles):
-            links.append(todo_item_link(todo_path, repo_root, item))
+            links.append(todo_item_link(todo_path, repo_root, item, ledger_output_dir))
 
     if not links:
         return "None"
@@ -1062,6 +1086,7 @@ def build_manifest_ledger_row(
     todo_path: Path,
     repo_root: Path,
     default_adoption_mode: str,
+    ledger_output_dir: Path | None = None,
 ) -> tuple[LedgerRow, tuple[LocalOverride, ...]]:
     """Build one adoption-ledger row from a manifest mapping."""
     modules = relation_module_names(mapping)
@@ -1173,6 +1198,7 @@ def build_manifest_ledger_row(
                 todo_items=todo_items,
                 todo_path=todo_path,
                 repo_root=repo_root,
+                ledger_output_dir=ledger_output_dir,
             ),
             validation_commands=validation_commands_for_modules(modules),
         ),
@@ -1188,6 +1214,7 @@ def build_unmatched_local_override_row(
     todo_path: Path,
     repo_root: Path,
     default_adoption_mode: str,
+    ledger_output_dir: Path | None = None,
 ) -> LedgerRow:
     """Build a ledger row for a marker local override not consumed by any manifest mapping row."""
     display_path = local_override.path + ("/" if local_override.is_directory else "")
@@ -1208,7 +1235,11 @@ def build_unmatched_local_override_row(
 
     return LedgerRow(
         path=display_path,
-        manifest_modules=relation.description if relation is not None else "unmapped",
+        manifest_modules=(
+            format_manifest_modules(relation.requires_all, relation.requires_any)
+            if relation is not None
+            else "unmapped"
+        ),
         decision="local override",
         reason=reason,
         protected_file="Yes" if is_protected else "No",
@@ -1226,6 +1257,7 @@ def build_unmatched_local_override_row(
             todo_items=todo_items,
             todo_path=todo_path,
             repo_root=repo_root,
+            ledger_output_dir=ledger_output_dir,
         ),
         validation_commands=validation_commands_for_modules(modules),
     )
@@ -1236,6 +1268,7 @@ def build_manual_todo_ledger_row(
     todo_item: TodoItem,
     todo_path: Path,
     repo_root: Path,
+    ledger_output_dir: Path | None = None,
 ) -> LedgerRow:
     """Build a ledger row for one first-adoption checklist item."""
     status = "complete" if todo_item.is_complete else "open"
@@ -1247,7 +1280,7 @@ def build_manual_todo_ledger_row(
         protected_file="No",
         requires_maintainer_decision="No" if todo_item.is_complete else "Yes",
         adoption_mode="recorded in checklist",
-        todo_link=todo_item_link(todo_path, repo_root, todo_item),
+        todo_link=todo_item_link(todo_path, repo_root, todo_item, ledger_output_dir),
         validation_commands="manual first-adoption review",
     )
 
@@ -1261,6 +1294,7 @@ def build_adoption_ledger_rows(
     todo_path: Path,
     repo_root: Path,
     default_adoption_mode: str,
+    ledger_output_dir: Path | None = None,
 ) -> tuple[LedgerRow, ...]:
     """Build the generated adoption ledger rows."""
     rows: list[LedgerRow] = []
@@ -1274,6 +1308,7 @@ def build_adoption_ledger_rows(
             todo_path=todo_path,
             repo_root=repo_root,
             default_adoption_mode=default_adoption_mode,
+            ledger_output_dir=ledger_output_dir,
         )
         rows.append(row)
         matched_overrides.update(local_overrides)
@@ -1290,6 +1325,7 @@ def build_adoption_ledger_rows(
                 todo_path=todo_path,
                 repo_root=repo_root,
                 default_adoption_mode=default_adoption_mode,
+                ledger_output_dir=ledger_output_dir,
             )
         )
 
@@ -1299,6 +1335,7 @@ def build_adoption_ledger_rows(
                 todo_item=todo_item,
                 todo_path=todo_path,
                 repo_root=repo_root,
+                ledger_output_dir=ledger_output_dir,
             )
         )
 
@@ -1584,6 +1621,7 @@ def main(argv: list[str] | None = None) -> int:
         ledger_document = None
         if args.ledger or args.ledger_only or write_ledger_path is not None:
             todo_items = load_todo_items(todo_path, repo_root)
+            ledger_output_dir = write_ledger_path.parent if write_ledger_path is not None else None
             ledger_rows = build_adoption_ledger_rows(
                 marker_data=marker_data,
                 manifest_modules=manifest_modules,
@@ -1592,6 +1630,7 @@ def main(argv: list[str] | None = None) -> int:
                 todo_path=todo_path,
                 repo_root=repo_root,
                 default_adoption_mode=args.adoption_mode,
+                ledger_output_dir=ledger_output_dir,
             )
             ledger_document = format_adoption_ledger(
                 marker_path=marker_path,
