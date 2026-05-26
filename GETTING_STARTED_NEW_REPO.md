@@ -743,8 +743,8 @@ $SecurityEmail = "security@example.com"
 # Replace security email placeholder in SECURITY.md
 (Get-Content "SECURITY.md" -Raw -Encoding UTF8).Replace('[security contact email]', $SecurityEmail) | Set-Content "SECURITY.md" -Encoding UTF8
 
-# Clear the security-contact TODO marker in SECURITY.md
-(Get-Content "SECURITY.md" -Raw -Encoding UTF8).Replace('TODO: Replace', 'Security contact configured') | Set-Content "SECURITY.md" -Encoding UTF8
+# Clear the security-contact TODO marker in SECURITY.md (replaces the whole HTML comment line so SECURITY.md text stays accurate)
+(Get-Content "SECURITY.md" -Raw -Encoding UTF8).Replace('<!-- TODO: Replace with your security contact email -->', '<!-- Security contact configured -->') | Set-Content "SECURITY.md" -Encoding UTF8
 
 # Replace window.title placeholder in VS Code settings
 (Get-Content ".vscode\settings.json" -Raw -Encoding UTF8).Replace('Go to .vscode/settings.json and make this the name of the repo', $Repo) | Set-Content ".vscode\settings.json" -Encoding UTF8
@@ -792,8 +792,8 @@ sed -i "s|\[INSERT CONTACT METHOD\]|$SECURITY_EMAIL|g" CODE_OF_CONDUCT.md
 # Replace security email placeholder in SECURITY.md
 sed -i "s|\[security contact email\]|$SECURITY_EMAIL|g" SECURITY.md
 
-# Clear the security-contact TODO marker in SECURITY.md
-sed -i "s|TODO: Replace|Security contact configured|g" SECURITY.md
+# Clear the security-contact TODO marker in SECURITY.md (replaces the whole HTML comment line so SECURITY.md text stays accurate)
+sed -i "s|<!-- TODO: Replace with your security contact email -->|<!-- Security contact configured -->|g" SECURITY.md
 
 # Replace window.title placeholder in VS Code settings
 sed -i 's|Go to \.vscode/settings\.json and make this the name of the repo|'"$REPO"'|g' .vscode/settings.json
@@ -824,8 +824,8 @@ sed -i '' "s|\[INSERT CONTACT METHOD\]|$SECURITY_EMAIL|g" CODE_OF_CONDUCT.md
 # Replace security email placeholder in SECURITY.md
 sed -i '' "s|\[security contact email\]|$SECURITY_EMAIL|g" SECURITY.md
 
-# Clear the security-contact TODO marker in SECURITY.md
-sed -i '' "s|TODO: Replace|Security contact configured|g" SECURITY.md
+# Clear the security-contact TODO marker in SECURITY.md (replaces the whole HTML comment line so SECURITY.md text stays accurate)
+sed -i '' "s|<!-- TODO: Replace with your security contact email -->|<!-- Security contact configured -->|g" SECURITY.md
 
 # Replace window.title placeholder in VS Code settings
 sed -i '' 's|Go to \.vscode/settings\.json and make this the name of the repo|'"$REPO"'|g' .vscode/settings.json
@@ -921,8 +921,8 @@ If you prefer, you can open each file in a text editor and manually find and rep
 7. **`SECURITY.md`:**
    - Find: `[security contact email]`
    - Replace with: your actual security contact email address
-   - Find: `TODO: Replace`
-   - Replace with: `Security contact configured`
+   - Find: `<!-- TODO: Replace with your security contact email -->` (the whole HTML comment line)
+   - Replace with: `<!-- Security contact configured -->`
 
 8. **`.vscode/settings.json`:**
    - Find: `Go to .vscode/settings.json and make this the name of the repo`

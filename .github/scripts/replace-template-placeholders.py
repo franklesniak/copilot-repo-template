@@ -54,7 +54,7 @@ TOKEN_REPLACEMENT_SPECS = (
     ("security contact", "[security contact email]", ("SECURITY.md",), "security_contact"),
     (
         "security contact todo",
-        "TODO: Replace",
+        "<!-- TODO: Replace with your security contact email -->",
         ("SECURITY.md",),
         "security_todo_replacement",
     ),
@@ -100,7 +100,7 @@ class ReplacementContext:
     @property
     def security_todo_replacement(self) -> str:
         """Return the replacement for the security-contact TODO marker."""
-        return "Security contact configured"
+        return "<!-- Security contact configured -->"
 
 
 @dataclass(frozen=True)

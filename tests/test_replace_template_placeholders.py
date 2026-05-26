@@ -111,8 +111,11 @@ def test_approved_placeholder_replacement_does_not_mutate_normal_words(tmp_path:
     assert "cd REPO" in contributing
     assert "@OWNER" not in read_file(tmp_path / ".github" / "CODEOWNERS")
     assert "conduct@example.com" in read_file(tmp_path / "CODE_OF_CONDUCT.md")
-    assert "security@example.com" in read_file(tmp_path / "SECURITY.md")
-    assert "TODO: Replace" not in read_file(tmp_path / "SECURITY.md")
+    security_text = read_file(tmp_path / "SECURITY.md")
+    assert "security@example.com" in security_text
+    assert "TODO: Replace" not in security_text
+    assert "<!-- Security contact configured -->" in security_text
+    assert "with your security contact email" not in security_text
     assert "widget" in read_file(tmp_path / ".vscode" / "settings.json")
 
 
