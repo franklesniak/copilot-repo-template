@@ -218,20 +218,10 @@ For the portable authoring principle, see [Template-substitution marker boundari
 
 When adding or modifying a template-substitution marker, maintainers **MUST** keep these repository-specific surfaces in sync in the same change:
 
-- `TOKEN_REPLACEMENT_SPECS` in `.github/scripts/replace-template-placeholders.py`
 - The PowerShell snippet in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
 - The GNU `sed` snippet in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
 - The BSD `sed` snippet in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
 - The manual Find/Replace instructions in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
-- The regression coverage in `tests/test_replace_template_placeholders.py`
-
-### Regression Assertion Convention
-
-Maintainers **SHOULD** extend `tests/test_replace_template_placeholders.py` with assertions that check the post-substitution result text, not only the absence of the original marker. The existing security-contact assertions in that test are the model: they check both the absence of `TODO: Replace` and the presence of `<!-- Security contact configured -->`. New markers **MUST** include equivalent post-substitution-result coverage.
-
-### Worked Example
-
-The `SECURITY.md` security-contact marker demonstrates the substitution-boundary rule. The marker `<!-- TODO: Replace with your security contact email -->` previously allowed a partial substitution that produced the incoherent result `<!-- Security contact configured with your security contact email -->`. The corrected boundary replaces the whole HTML comment line and produces `<!-- Security contact configured -->`.
 
 ---
 
