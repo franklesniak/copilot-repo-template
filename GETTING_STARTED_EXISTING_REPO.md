@@ -213,7 +213,7 @@ When this is the first import of template content into an existing repository, c
 
 Use the concrete `_TODO-repo-init.md` example in [GETTING_STARTED_NEW_REPO.md](GETTING_STARTED_NEW_REPO.md#first-adoption-preflight-checklist) and keep only the items that are unresolved for this repository. Discovery may inspect files and Git metadata first, but agents and maintainers MUST NOT invent contact emails, reporting channels, branch protection policy, CODEOWNERS identities, GHES hosts, label availability, GitHub repository settings, or adoption modes beyond the documented default.
 
-The default adoption mode for protected files and template-derived governance, community, process, workflow, and collaboration files is `minimal-preservation`: keep upstream wording and structure, substitute placeholders, trim sections owned by unadopted manifest modules, fix broken links, and record required local overrides in `.template-sync/marker.yml` when template sync support is retained. Select `tailored` only when the maintainer explicitly wants broader downstream rewriting for a specific file or file set. Record that choice in `_TODO-repo-init.md`, `.template-sync/marker.yml` local overrides, or another committed adoption note before editing.
+The default adoption mode for protected files and template-derived governance, community, process, workflow, and collaboration files is `minimal-preservation`: keep upstream wording and structure, substitute placeholders, trim sections owned by unadopted manifest modules, fix broken links, and record required local overrides in `.template-sync/marker.yml` when template sync support is retained. Select `tailored` only when the maintainer explicitly wants broader downstream rewriting for a specific file or file set. For protected files, record that choice in `template_sync.protected_file_decisions` with the required authorization fields before editing. For non-protected files, record that choice in `_TODO-repo-init.md`, `.template-sync/marker.yml` local overrides, or another committed adoption note before editing.
 
 Separate the checklist into:
 
@@ -773,11 +773,13 @@ The template treats `.github/copilot-instructions.md`, `.github/instructions/**`
 1. Perform non-protected cleanup first, including unused workflows, source examples, tests, templates, and lint configuration.
 2. Record the adoption mode for the protected files that remain. Use `minimal-preservation` by default; choose `tailored` only when the maintainer explicitly approves broader rewriting for named files.
 3. Record the protected-file changes still needed after stack selection.
-4. Obtain explicit maintainer authorization for those protected-file edits. `minimal-preservation` limits the scope of an authorized edit but does not authorize protected-file changes by itself.
-5. Update `.github/copilot-instructions.md`, remaining root agent files, and relevant `.github/instructions/*.instructions.md` files so they match the stacks and tools actually retained.
-6. Remove references to deleted tools, workflows, hooks, and validation commands.
-7. Bump `Last Updated` and `Version` metadata where those fields exist.
-8. Avoid ephemeral implementation-stage language in durable governance docs.
+4. Obtain explicit maintainer authorization for those protected-file edits or removals. `minimal-preservation` limits the scope of an authorized edit but does not authorize protected-file changes by itself.
+5. Before editing or removing a protected file, add a matching `template_sync.protected_file_decisions` marker record. `TAKE` and `MERGE` records need `adoption_mode`, `authorization_basis`, and `authorized_scope`; `tailored` records also need `tailored_authorization_basis`; `REMOVE-LOCAL` records need explicit removal authorization, `authorized_scope`, and a substantive `reason`.
+6. For `REMOVE-LOCAL`, make `authorization_basis` name the removed file and mention removal, deletion, or equivalent wording. Reviewers should verify that wording before approving; maintainers who want an automated brittle check can run `python .template-sync/scripts/validate_marker.py --require-marker --strict-remove-local-phrasing`.
+7. Update `.github/copilot-instructions.md`, remaining root agent files, and relevant `.github/instructions/*.instructions.md` files so they match the stacks and tools actually retained.
+8. Remove references to deleted tools, workflows, hooks, and validation commands.
+9. Bump `Last Updated` and `Version` metadata where those fields exist.
+10. Avoid ephemeral implementation-stage language in durable governance docs.
 
 ### Main Instructions File
 

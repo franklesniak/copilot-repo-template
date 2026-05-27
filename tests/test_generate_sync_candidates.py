@@ -147,6 +147,7 @@ def _marker(
     last_reviewed_template_commit: str | None,
     local_overrides: list[dict[str, str]] | None = None,
     deferred_candidates: list[dict[str, str]] | None = None,
+    protected_decisions: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Build a small schema-valid marker fixture."""
     template_sync: dict[str, Any] = {
@@ -159,6 +160,8 @@ def _marker(
         template_sync["local_overrides"] = local_overrides
     if deferred_candidates is not None:
         template_sync["deferred_protected_candidates"] = deferred_candidates
+    if protected_decisions is not None:
+        template_sync["protected_file_decisions"] = protected_decisions
     return {"template_sync": template_sync}
 
 
@@ -685,6 +688,128 @@ def test_deferred_protected_candidates_and_protected_files_are_flagged(tmp_path:
         "Protected instruction/governance file; explicit owner authorization is required."
         in result.stdout
     )
+
+
+def test_protected_file_decision_is_reported_in_candidate_table(tmp_path: Path) -> None:
+    """Changed protected paths show matching protected decision records."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, ".github/copilot-instructions.md", "base\n")
+    base_sha = _commit_all(tmp_path, "base")
+    _write_text(tmp_path, ".github/copilot-instructions.md", "head\n")
+    head_sha = _commit_all(tmp_path, "head")
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["agent-instructions"],
+            last_reviewed_template_commit=base_sha,
+            protected_decisions=[
+                {
+                    "path": ".github/copilot-instructions.md",
+                    "decision": "MERGE",
+                    "adoption_mode": "minimal-preservation",
+                    "authorization_basis": "Owner authorized protected edits on 2026-05-27.",
+                    "authorized_scope": ".github/copilot-instructions.md only.",
+                }
+            ],
+        ),
+    )
+
+    result = _run_generator(tmp_path, "--range-head", head_sha)
+
+    assert result.returncode == 0, result.stderr
+    assert "Protected file decision" in result.stdout
+    assert "decision=MERGE; adoption_mode=minimal-preservation" in result.stdout
+    assert "Protected file decision record present in marker." in result.stdout
+
+
+def test_ledger_reports_protected_decision_modes_and_remove_local_section(
+    tmp_path: Path,
+) -> None:
+    """The adoption ledger distinguishes tailored decisions and removals."""
+    _init_repo(tmp_path)
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["agent-instructions"],
+            last_reviewed_template_commit=None,
+            protected_decisions=[
+                {
+                    "path": ".github/copilot-instructions.md",
+                    "decision": "TAKE",
+                    "adoption_mode": "tailored",
+                    "authorization_basis": "Owner authorized protected edits on 2026-05-27.",
+                    "authorized_scope": ".github/copilot-instructions.md only.",
+                    "tailored_authorization_basis": "Owner authorized a tailored rewrite.",
+                },
+                {
+                    "path": "GEMINI.md",
+                    "decision": "REMOVE-LOCAL",
+                    "authorization_basis": "Owner explicitly authorized removing GEMINI.md.",
+                    "authorized_scope": "GEMINI.md only.",
+                    "reason": "Gemini agent not used by this repository.",
+                },
+            ],
+        ),
+    )
+
+    result = _run_generator(tmp_path, "--ledger-only")
+
+    assert result.returncode == 0, result.stderr
+    assert (
+        "| .github/copilot-instructions.md | all: agent-instructions | protected decision: TAKE |"
+        in (result.stdout)
+    )
+    assert "tailored (authorized protected-file decision)" in result.stdout
+    assert "tailored_authorization_basis: Owner authorized a tailored rewrite." in result.stdout
+    assert "| GEMINI.md | unmapped | protected decision: REMOVE-LOCAL |" in result.stdout
+    assert "## REMOVE-LOCAL Authorizations" in result.stdout
+    assert "authorization_basis: Owner explicitly authorized removing GEMINI.md." in result.stdout
+    assert "authorized_scope: GEMINI.md only." in result.stdout
+    assert "reason: Gemini agent not used by this repository." in result.stdout
+
+
+def test_ledger_reports_protected_decision_overlap_side_by_side(tmp_path: Path) -> None:
+    """Ledger protected decision context shows compatible local override overlap."""
+    _init_repo(tmp_path)
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["agent-instructions"],
+            last_reviewed_template_commit=None,
+            local_overrides=[
+                {
+                    "path": ".github/copilot-instructions.md",
+                    "reason": "Use minimal-preservation with a local policy note.",
+                    "default_decision": "MERGE",
+                }
+            ],
+            protected_decisions=[
+                {
+                    "path": ".github/copilot-instructions.md",
+                    "decision": "MERGE",
+                    "adoption_mode": "minimal-preservation",
+                    "authorization_basis": "Owner authorized protected edits on 2026-05-27.",
+                    "authorized_scope": ".github/copilot-instructions.md only.",
+                }
+            ],
+        ),
+    )
+
+    result = _run_generator(tmp_path, "--ledger-only")
+
+    assert result.returncode == 0, result.stderr
+    assert "## Protected File Decision Records" in result.stdout
+    assert (
+        "protected_file_decisions: decision=MERGE; adoption_mode=minimal-preservation"
+        in result.stdout
+    )
+    assert (
+        "local_overrides: path=.github/copilot-instructions.md; default_decision=MERGE; "
+        "reason=Use minimal-preservation with a local policy note."
+    ) in result.stdout
 
 
 def test_renamed_files_preserve_old_and_new_paths(tmp_path: Path) -> None:

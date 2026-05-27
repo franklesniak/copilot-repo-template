@@ -19,6 +19,7 @@ DEFAULT_MARKER_PATH = ".template-sync/marker.yml"
 DEFAULT_MANIFEST_PATH = ".template-sync/manifest.yml"
 DEFAULT_MARKER_SCHEMA_PATH = "schemas/template-sync-marker.schema.json"
 DEFAULT_MANIFEST_SCHEMA_PATH = "schemas/template-sync-manifest.schema.json"
+DEFAULT_REMOVE_LOCAL_AUTHORIZATION_TOKENS = ("remov", "delet")
 SKIPPED_DISCOVERY_DIRS = {
     ".git",
     ".mypy_cache",
@@ -30,6 +31,7 @@ SKIPPED_DISCOVERY_DIRS = {
     "node_modules",
     "__pycache__",
 }
+REMOVAL_DECISION = "REMOVE-LOCAL"
 
 
 class MarkerValidationError(Exception):
@@ -52,6 +54,38 @@ class LocalOverride:
         if self.is_directory:
             return relative_path.startswith(f"{self.path}/")
         return False
+
+
+@dataclass(frozen=True)
+class DeferredProtectedCandidate:
+    """A protected path awaiting owner authorization for an upstream change."""
+
+    path: str
+    source_commit: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class ProtectedFileDecision:
+    """A path-scoped protected-file decision recorded in the marker."""
+
+    path: str
+    decision: str
+    adoption_mode: str | None
+    authorization_basis: str | None
+    authorized_scope: str | None
+    tailored_authorization_basis: str | None
+    reason: str | None
+
+
+@dataclass(frozen=True)
+class MarkerPathOverlap:
+    """Side-by-side marker records that apply to the same protected path."""
+
+    path: str
+    protected_decision: ProtectedFileDecision
+    local_overrides: tuple[LocalOverride, ...]
+    deferred_candidates: tuple[DeferredProtectedCandidate, ...]
 
 
 @dataclass(frozen=True)
@@ -105,7 +139,9 @@ class MarkerValidationReport:
     missing_expected_files: tuple[tuple[str, PathRelation], ...]
     leftover_files: tuple[tuple[str, PathRelation], ...]
     local_overrides: tuple[LocalOverride, ...]
-    deferred_candidates: tuple[dict[str, str], ...]
+    deferred_candidates: tuple[DeferredProtectedCandidate, ...]
+    protected_decisions: tuple[ProtectedFileDecision, ...]
+    marker_path_overlaps: tuple[MarkerPathOverlap, ...]
 
     @property
     def has_failures(self) -> bool:
@@ -119,7 +155,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         description=(
             "Validate .template-sync/marker.yml against .template-sync/manifest.yml "
             "and the current repository files."
-        )
+        ),
+        epilog=(
+            "Protected-file decision overlap checks fail when the same path has "
+            "different protected_file_decisions.decision and local_overrides[].default_decision "
+            "values, or when the same path appears in both protected_file_decisions and "
+            "deferred_protected_candidates."
+        ),
     )
     parser.add_argument(
         "--repo-root",
@@ -159,6 +201,34 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--require-marker",
         action="store_true",
         help="Fail when the marker file is absent instead of treating the run as a no-op.",
+    )
+    parser.add_argument(
+        "--strict-remove-local-phrasing",
+        action="store_true",
+        help=(
+            "Fail REMOVE-LOCAL protected-file decisions whose authorization_basis "
+            "does not contain a configured removal token. Off by default."
+        ),
+    )
+    parser.add_argument(
+        "--remove-local-authorization-token",
+        action="append",
+        default=None,
+        metavar="TOKEN",
+        help=(
+            "Case-insensitive substring token accepted by --strict-remove-local-phrasing. "
+            "May be repeated. Defaults to: remov, delet."
+        ),
+    )
+    parser.add_argument(
+        "--remove-local-authorization-tokens",
+        default=None,
+        metavar="TOKENS",
+        help=(
+            "Comma-separated case-insensitive substring tokens accepted by "
+            "--strict-remove-local-phrasing. Overrides are combined with repeated "
+            "--remove-local-authorization-token values."
+        ),
     )
     return parser.parse_args(argv)
 
@@ -338,10 +408,251 @@ def parse_manifest_mappings(
     return module_names, tuple(mappings)
 
 
+def optional_marker_string(
+    raw_record: dict[str, Any],
+    field_name: str,
+    record_name: str,
+) -> str | None:
+    """Return an optional string field from a marker record."""
+    value = raw_record.get(field_name)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise MarkerValidationError(f"{record_name}.{field_name} must be a string when present.")
+    return value
+
+
+def parse_protected_file_decisions(
+    template_sync: dict[str, Any],
+) -> tuple[ProtectedFileDecision, ...]:
+    """Extract normalized protected-file decision records from ``template_sync``."""
+    protected_decisions: list[ProtectedFileDecision] = []
+    for raw_decision in template_sync.get("protected_file_decisions", []):
+        if not isinstance(raw_decision, dict):
+            raise MarkerValidationError("Each protected file decision must be a mapping.")
+        raw_path = raw_decision.get("path")
+        decision = raw_decision.get("decision")
+        if not isinstance(raw_path, str) or not isinstance(decision, str):
+            raise MarkerValidationError(
+                "Each protected file decision must define string path and decision."
+            )
+        normalized_path, _is_directory = normalize_repository_path(
+            raw_path,
+            "template_sync.protected_file_decisions[].path",
+        )
+        protected_decisions.append(
+            ProtectedFileDecision(
+                path=normalized_path,
+                decision=decision,
+                adoption_mode=optional_marker_string(
+                    raw_decision,
+                    "adoption_mode",
+                    "template_sync.protected_file_decisions[]",
+                ),
+                authorization_basis=optional_marker_string(
+                    raw_decision,
+                    "authorization_basis",
+                    "template_sync.protected_file_decisions[]",
+                ),
+                authorized_scope=optional_marker_string(
+                    raw_decision,
+                    "authorized_scope",
+                    "template_sync.protected_file_decisions[]",
+                ),
+                tailored_authorization_basis=optional_marker_string(
+                    raw_decision,
+                    "tailored_authorization_basis",
+                    "template_sync.protected_file_decisions[]",
+                ),
+                reason=optional_marker_string(
+                    raw_decision,
+                    "reason",
+                    "template_sync.protected_file_decisions[]",
+                ),
+            )
+        )
+    return tuple(protected_decisions)
+
+
+def remove_local_authorization_tokens(
+    repeated_tokens: list[str] | None,
+    comma_separated_tokens: str | None,
+) -> tuple[str, ...]:
+    """Return normalized REMOVE-LOCAL strict-phrasing tokens."""
+    raw_tokens: list[str] = []
+    if comma_separated_tokens:
+        raw_tokens.extend(comma_separated_tokens.split(","))
+    if repeated_tokens:
+        raw_tokens.extend(repeated_tokens)
+    tokens = tuple(token.strip().lower() for token in raw_tokens if token.strip())
+    return tokens or DEFAULT_REMOVE_LOCAL_AUTHORIZATION_TOKENS
+
+
+def marker_path_overlaps(
+    protected_decisions: tuple[ProtectedFileDecision, ...],
+    local_overrides: tuple[LocalOverride, ...],
+    deferred_candidates: tuple[DeferredProtectedCandidate, ...],
+) -> tuple[MarkerPathOverlap, ...]:
+    """Return marker records that overlap with protected-file decisions."""
+    overlaps: list[MarkerPathOverlap] = []
+    for protected_decision in protected_decisions:
+        matching_local_overrides = tuple(
+            local_override
+            for local_override in local_overrides
+            if local_override.matches(protected_decision.path)
+        )
+        matching_deferred_candidates = tuple(
+            candidate
+            for candidate in deferred_candidates
+            if candidate.path == protected_decision.path
+        )
+        if matching_local_overrides or matching_deferred_candidates:
+            overlaps.append(
+                MarkerPathOverlap(
+                    path=protected_decision.path,
+                    protected_decision=protected_decision,
+                    local_overrides=matching_local_overrides,
+                    deferred_candidates=matching_deferred_candidates,
+                )
+            )
+    return tuple(overlaps)
+
+
+def protected_decision_summary(protected_decision: ProtectedFileDecision) -> str:
+    """Return a compact protected-file decision summary."""
+    parts = [f"decision={protected_decision.decision}"]
+    if protected_decision.adoption_mode is not None:
+        parts.append(f"adoption_mode={protected_decision.adoption_mode}")
+    if protected_decision.authorization_basis is not None:
+        parts.append(f"authorization_basis={protected_decision.authorization_basis}")
+    if protected_decision.authorized_scope is not None:
+        parts.append(f"authorized_scope={protected_decision.authorized_scope}")
+    if protected_decision.tailored_authorization_basis is not None:
+        parts.append(
+            "tailored_authorization_basis=" f"{protected_decision.tailored_authorization_basis}"
+        )
+    if protected_decision.reason is not None:
+        parts.append(f"reason={protected_decision.reason}")
+    return "; ".join(parts)
+
+
+def local_override_summary(local_override: LocalOverride) -> str:
+    """Return a compact local override summary."""
+    suffix = "/" if local_override.is_directory else ""
+    return (
+        f"path={local_override.path}{suffix}; "
+        f"default_decision={local_override.default_decision}; "
+        f"reason={local_override.reason}"
+    )
+
+
+def deferred_candidate_summary(candidate: DeferredProtectedCandidate) -> str:
+    """Return a compact deferred protected candidate summary."""
+    return f"source_commit={candidate.source_commit}; reason={candidate.reason}"
+
+
+def format_overlap_block(overlap: MarkerPathOverlap) -> str:
+    """Return a side-by-side marker overlap block for diagnostics."""
+    lines = [
+        f"  - {overlap.path}",
+        f"    protected_file_decisions: {protected_decision_summary(overlap.protected_decision)}",
+    ]
+    for local_override in overlap.local_overrides:
+        lines.append(f"    local_overrides: {local_override_summary(local_override)}")
+    for candidate in overlap.deferred_candidates:
+        lines.append(
+            "    deferred_protected_candidates: " f"{deferred_candidate_summary(candidate)}"
+        )
+    return "\n".join(lines)
+
+
+def validate_protected_file_decisions(
+    protected_decisions: tuple[ProtectedFileDecision, ...],
+    local_overrides: tuple[LocalOverride, ...],
+    deferred_candidates: tuple[DeferredProtectedCandidate, ...],
+    *,
+    strict_remove_local_phrasing: bool = False,
+    remove_local_tokens: tuple[str, ...] = DEFAULT_REMOVE_LOCAL_AUTHORIZATION_TOKENS,
+) -> tuple[MarkerPathOverlap, ...]:
+    """Validate protected-file decision integrity beyond JSON Schema checks."""
+    seen_paths: set[str] = set()
+    duplicate_paths: set[str] = set()
+    for protected_decision in protected_decisions:
+        if protected_decision.path in seen_paths:
+            duplicate_paths.add(protected_decision.path)
+        seen_paths.add(protected_decision.path)
+    if duplicate_paths:
+        raise MarkerValidationError(
+            "Duplicate protected_file_decisions path(s): " + ", ".join(sorted(duplicate_paths))
+        )
+
+    overlaps = marker_path_overlaps(
+        protected_decisions,
+        local_overrides,
+        deferred_candidates,
+    )
+    contradictions: list[str] = []
+    for overlap in overlaps:
+        mismatched_local_overrides = tuple(
+            local_override
+            for local_override in overlap.local_overrides
+            if local_override.path == overlap.path
+            and local_override.default_decision != overlap.protected_decision.decision
+        )
+        if mismatched_local_overrides:
+            contradictions.append(
+                format_overlap_block(
+                    MarkerPathOverlap(
+                        path=overlap.path,
+                        protected_decision=overlap.protected_decision,
+                        local_overrides=mismatched_local_overrides,
+                        deferred_candidates=(),
+                    )
+                )
+                + "\n    conflict: protected decision and local override decisions differ."
+            )
+        if overlap.deferred_candidates:
+            contradictions.append(
+                format_overlap_block(
+                    MarkerPathOverlap(
+                        path=overlap.path,
+                        protected_decision=overlap.protected_decision,
+                        local_overrides=(),
+                        deferred_candidates=overlap.deferred_candidates,
+                    )
+                )
+                + "\n    conflict: protected decision asserts current authorization while "
+                "the deferred candidate is awaiting authorization."
+            )
+    if contradictions:
+        raise MarkerValidationError(
+            "Contradictory protected-file marker entries:\n" + "\n".join(contradictions)
+        )
+
+    if strict_remove_local_phrasing:
+        normalized_tokens = tuple(token.lower() for token in remove_local_tokens if token)
+        for protected_decision in protected_decisions:
+            if protected_decision.decision != REMOVAL_DECISION:
+                continue
+            authorization_basis = protected_decision.authorization_basis or ""
+            if not any(token in authorization_basis.lower() for token in normalized_tokens):
+                raise MarkerValidationError(
+                    f"{protected_decision.path} REMOVE-LOCAL authorization_basis must "
+                    "contain at least one configured removal token: " + ", ".join(normalized_tokens)
+                )
+
+    return overlaps
+
+
 def parse_marker(
     marker: dict[str, Any],
-) -> tuple[set[str], tuple[LocalOverride, ...], tuple[dict[str, str], ...]]:
-    """Extract included modules, local overrides, and deferred candidates from a marker."""
+) -> tuple[
+    set[str],
+    tuple[LocalOverride, ...],
+    tuple[DeferredProtectedCandidate, ...],
+    tuple[ProtectedFileDecision, ...],
+]:
+    """Extract included modules, local overrides, deferred candidates, and decisions."""
     template_sync = marker.get("template_sync")
     if not isinstance(template_sync, dict):
         raise MarkerValidationError("Marker must contain template_sync mapping.")
@@ -381,7 +692,7 @@ def parse_marker(
             )
         )
 
-    deferred_candidates: list[dict[str, str]] = []
+    deferred_candidates: list[DeferredProtectedCandidate] = []
     for raw_candidate in template_sync.get("deferred_protected_candidates", []):
         if not isinstance(raw_candidate, dict):
             raise MarkerValidationError("Each deferred protected candidate must be a mapping.")
@@ -401,14 +712,21 @@ def parse_marker(
             "template_sync.deferred_protected_candidates[].path",
         )
         deferred_candidates.append(
-            {
-                "path": normalized_path,
-                "source_commit": source_commit,
-                "reason": reason,
-            }
+            DeferredProtectedCandidate(
+                path=normalized_path,
+                source_commit=source_commit,
+                reason=reason,
+            )
         )
 
-    return included_modules, tuple(local_overrides), tuple(deferred_candidates)
+    protected_decisions = parse_protected_file_decisions(template_sync)
+
+    return (
+        included_modules,
+        tuple(local_overrides),
+        tuple(deferred_candidates),
+        protected_decisions,
+    )
 
 
 def pattern_specificity(pattern: str) -> tuple[int, int, int]:
@@ -545,6 +863,9 @@ def validate_marker_state(
     manifest_path: Path,
     marker_schema_path: Path,
     manifest_schema_path: Path,
+    *,
+    strict_remove_local_phrasing: bool = False,
+    remove_local_tokens: tuple[str, ...] = DEFAULT_REMOVE_LOCAL_AUTHORIZATION_TOKENS,
 ) -> MarkerValidationReport:
     """Validate marker decisions against manifest mappings and on-disk files."""
     marker = load_yaml_mapping(marker_path, repo_root)
@@ -556,7 +877,16 @@ def validate_marker_state(
     validate_schema(manifest, manifest_schema, manifest_path, repo_root)
 
     manifest_modules, mappings = parse_manifest_mappings(manifest)
-    included_modules, local_overrides, deferred_candidates = parse_marker(marker)
+    included_modules, local_overrides, deferred_candidates, protected_decisions = parse_marker(
+        marker
+    )
+    overlaps = validate_protected_file_decisions(
+        protected_decisions,
+        local_overrides,
+        deferred_candidates,
+        strict_remove_local_phrasing=strict_remove_local_phrasing,
+        remove_local_tokens=remove_local_tokens,
+    )
     unknown_included_modules = included_modules - manifest_modules
     if unknown_included_modules:
         raise MarkerValidationError(
@@ -604,6 +934,8 @@ def validate_marker_state(
         leftover_files=tuple(leftover_files),
         local_overrides=local_overrides,
         deferred_candidates=deferred_candidates,
+        protected_decisions=protected_decisions,
+        marker_path_overlaps=overlaps,
     )
 
 
@@ -643,10 +975,43 @@ def print_report(report: MarkerValidationReport) -> None:
     if report.deferred_candidates:
         print("\nDeferred protected candidates:")
         for candidate in report.deferred_candidates:
-            print(
-                f"  - {candidate['path']} at {candidate['source_commit']}: "
-                f"{candidate['reason']}"
-            )
+            print(f"  - {candidate.path} at {candidate.source_commit}: {candidate.reason}")
+
+    if report.protected_decisions:
+        print("\nProtected file decisions:")
+        for protected_decision in report.protected_decisions:
+            print(f"  - {protected_decision.path}: {protected_decision.decision}")
+            if protected_decision.adoption_mode is not None:
+                print(f"    adoption_mode: {protected_decision.adoption_mode}")
+            if protected_decision.authorization_basis is not None:
+                print(f"    authorization_basis: {protected_decision.authorization_basis}")
+            if protected_decision.authorized_scope is not None:
+                print(f"    authorized_scope: {protected_decision.authorized_scope}")
+            if protected_decision.tailored_authorization_basis is not None:
+                print(
+                    "    tailored_authorization_basis: "
+                    f"{protected_decision.tailored_authorization_basis}"
+                )
+            if protected_decision.reason is not None:
+                print(f"    reason: {protected_decision.reason}")
+
+    remove_local_decisions = tuple(
+        protected_decision
+        for protected_decision in report.protected_decisions
+        if protected_decision.decision == REMOVAL_DECISION
+    )
+    if remove_local_decisions:
+        print("\nREMOVE-LOCAL authorizations:")
+        for protected_decision in remove_local_decisions:
+            print(f"  - {protected_decision.path}")
+            print(f"    authorization_basis: {protected_decision.authorization_basis}")
+            print(f"    authorized_scope: {protected_decision.authorized_scope}")
+            print(f"    reason: {protected_decision.reason}")
+
+    if report.marker_path_overlaps:
+        print("\nProtected decision overlaps:")
+        for overlap in report.marker_path_overlaps:
+            print(format_overlap_block(overlap))
 
     if not report.has_failures:
         print("\nNo retained-template inconsistencies found.")
@@ -683,6 +1048,11 @@ def main(argv: list[str] | None = None) -> int:
             manifest_path=manifest_path,
             marker_schema_path=marker_schema_path,
             manifest_schema_path=manifest_schema_path,
+            strict_remove_local_phrasing=args.strict_remove_local_phrasing,
+            remove_local_tokens=remove_local_authorization_tokens(
+                args.remove_local_authorization_token,
+                args.remove_local_authorization_tokens,
+            ),
         )
     except MarkerValidationError as error:
         fail(str(error))
