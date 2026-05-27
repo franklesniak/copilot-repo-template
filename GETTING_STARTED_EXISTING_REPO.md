@@ -71,6 +71,7 @@ This guide walks you through adopting features from `franklesniak/copilot-repo-t
 - [Adopting PSScriptAnalyzer Configuration](#adopting-psscriptanalyzer-configuration)
   - [Copying the Configuration](#copying-the-configuration-1)
   - [Using the Configuration](#using-the-configuration)
+  - [Analyzer Debt Triage for Existing Repositories](#analyzer-debt-triage-for-existing-repositories)
   - [Customizing Rules](#customizing-rules)
 - [Validation and Testing](#validation-and-testing)
   - [Verify All Configurations Work](#verify-all-configurations-work)
@@ -1770,9 +1771,35 @@ Get-ChildItem -Path . -Filter "*.ps1" -Recurse | ForEach-Object {
 }
 ```
 
+### Analyzer Debt Triage for Existing Repositories
+
+Existing PowerShell repositories can have pre-existing analyzer findings before this template's PSScriptAnalyzer settings are adopted. Treat the first analyzer run as a debt-discovery step, not as a reason to weaken `.github/linting/PSScriptAnalyzerSettings.psd1`.
+
+Use this workflow when the initial analyzer run reports failures:
+
+1. **Baseline the findings.** Run PSScriptAnalyzer against the adopted PowerShell scope and group findings by rule and file.
+2. **Classify each finding.** Assign one accepted decision to every finding group:
+   - **Fix now:** Update the script in the adoption branch when the change is low risk, clearly correct, and covered by existing tests or review.
+   - **Suppress narrowly with rationale:** Use the smallest suppression scope available, such as the affected command, function, or file. Include a reason that explains why the rule does not apply for that case.
+   - **Defer with owner acceptance:** Record the debt in a visible committed note, issue, or narrow code TODO, and identify the accepting owner or review decision. Deferred debt MUST remain visible; do not hide it with broad configuration changes.
+3. **Record the triage decision.** Commit a short report with the adoption work or link to an issue that contains the same information.
+4. **Re-run validation.** Re-run PSScriptAnalyzer after fixes or suppressions so remaining findings match the recorded deferrals.
+
+Sample triage report:
+
+```markdown
+| Rule | File | Count | Decision | Rationale | Follow-up |
+| --- | --- | ---: | --- | --- | --- |
+| `PSAvoidUsingPositionalParameters` | `scripts/Build.ps1` | 4 | Fix now | Named parameters improve readability and are safe to update in this script. | Included in adoption branch |
+| `PSUseApprovedVerbs` | `scripts/LegacyDeploy.ps1` | 1 | Suppress narrowly | The command name is published in an external runbook and will be renamed in a separate change. | Inline suppression with issue link |
+| `PSProvideCommentHelp` | `scripts/internal/Migrate.ps1` | 3 | Defer with owner acceptance | Internal migration helpers need usage notes, but the adopting team accepted this as follow-up debt. | Issue #123 or committed TODO |
+```
+
+Rule changes to `.github/linting/PSScriptAnalyzerSettings.psd1` SHOULD be rare. Make them only when the repository intentionally changes its PowerShell quality bar, document the reason in the adoption review, and route the change through normal code review. Do not disable or loosen rules merely to make the first adoption run pass.
+
 ### Customizing Rules
 
-Review the rules in `PSScriptAnalyzerSettings.psd1` and adjust as needed:
+Review the rules in `PSScriptAnalyzerSettings.psd1` before changing them. Rule edits change the repository's PowerShell quality bar, so prefer fixing findings, using narrow justified suppressions, or recording accepted deferrals before changing the shared settings.
 
 **Key configurable rules:**
 
@@ -1891,7 +1918,7 @@ git push origin feature/adopt-template-features
 | Pre-commit downloads every time | Environment cache issue | Run `pre-commit clean && pre-commit install` |
 | Markdown lint finds many errors | Stricter rules than before | Adjust `.markdownlint.jsonc` or fix files |
 | Python CI fails on imports | Different package structure | Update `MYPY_PATHS` in workflow |
-| PSScriptAnalyzer fails | Code doesn't match OTBS style | Run with `-Fix` or adjust settings |
+| PSScriptAnalyzer fails | Code does not match the adopted analyzer rules | Run with `-Fix`, apply the analyzer debt triage workflow, or add narrow justified suppressions |
 | npm install fails | Node.js version mismatch | Update Node.js to v20+ (see `engines` in package.json) |
 | Placeholder check fails | OWNER/REPO not replaced | Search and replace all placeholders |
 
