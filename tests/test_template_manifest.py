@@ -619,7 +619,9 @@ def _concrete_pattern_integrity_failures(
 
     marker = yaml.safe_load(marker_path.read_text(encoding="utf-8"))
     assert isinstance(marker, dict), "marker root must be a mapping"
-    included_modules, local_overrides, _deferred_candidates = VALIDATE_MARKER.parse_marker(marker)
+    included_modules, local_overrides, _deferred_candidates, _protected_decisions = (
+        VALIDATE_MARKER.parse_marker(marker)
+    )
     return _unresolved_concrete_path_mapping_patterns(
         manifest,
         _git_present_paths(repo_root),
