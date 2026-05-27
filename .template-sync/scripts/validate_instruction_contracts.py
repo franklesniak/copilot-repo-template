@@ -473,8 +473,28 @@ def strip_fenced_code_blocks(text: str) -> str:
 
 
 def heading_is_present(text: str, heading: str) -> bool:
-    """Return whether ``heading`` exists as an exact Markdown heading line."""
-    return any(line.strip() == heading for line in text.splitlines())
+    """Return whether ``heading`` appears as a CommonMark ATX heading line.
+
+    Per CommonMark, an ATX heading may have 0-3 leading spaces of indentation;
+    lines with 4+ leading spaces or any leading tab character are indented code
+    blocks rather than headings and cannot satisfy the contract.
+    """
+    for line in text.splitlines():
+        leading_spaces = 0
+        has_leading_tab = False
+        for ch in line:
+            if ch == " ":
+                leading_spaces += 1
+            elif ch == "\t":
+                has_leading_tab = True
+                break
+            else:
+                break
+        if has_leading_tab or leading_spaces > 3:
+            continue
+        if line[leading_spaces:].rstrip() == heading:
+            return True
+    return False
 
 
 def validate_contracts(

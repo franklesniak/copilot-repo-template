@@ -271,6 +271,64 @@ def test_valid_downstream_waiver_is_reported_loudly(tmp_path: Path) -> None:
     assert "Owner authorized this waiver on 2026-05-27." in result.stdout
 
 
+def test_required_heading_inside_indented_code_block_is_not_satisfied(
+    tmp_path: Path,
+) -> None:
+    """A heading inside an indented code block (4+ leading spaces) must not satisfy."""
+    _write_common_contract_repo(
+        tmp_path,
+        _contracts(required_headings=["## Handling Code Review Comments"]),
+    )
+    _write_text(
+        tmp_path,
+        "CLAUDE.md",
+        "# Agent Instructions\n\nSee example:\n\n    ## Handling Code Review Comments\n",
+    )
+
+    result = _run_validator(tmp_path, "--mode", "upstream-template")
+
+    assert result.returncode == 1
+    assert "CLAUDE.md: missing required heading: ## Handling Code Review Comments" in result.stdout
+
+
+def test_required_heading_inside_tab_indented_line_is_not_satisfied(
+    tmp_path: Path,
+) -> None:
+    """A heading with a leading tab is treated as indented code per CommonMark."""
+    _write_common_contract_repo(
+        tmp_path,
+        _contracts(required_headings=["## Handling Code Review Comments"]),
+    )
+    _write_text(
+        tmp_path,
+        "CLAUDE.md",
+        "# Agent Instructions\n\n\t## Handling Code Review Comments\n",
+    )
+
+    result = _run_validator(tmp_path, "--mode", "upstream-template")
+
+    assert result.returncode == 1
+    assert "CLAUDE.md: missing required heading: ## Handling Code Review Comments" in result.stdout
+
+
+def test_required_heading_with_three_leading_spaces_is_satisfied(tmp_path: Path) -> None:
+    """CommonMark allows up to 3 leading spaces for an ATX heading."""
+    _write_common_contract_repo(
+        tmp_path,
+        _contracts(required_headings=["## Handling Code Review Comments"]),
+    )
+    _write_text(
+        tmp_path,
+        "CLAUDE.md",
+        "# Agent Instructions\n\n   ## Handling Code Review Comments\n",
+    )
+
+    result = _run_validator(tmp_path, "--mode", "upstream-template")
+
+    assert result.returncode == 0, result.stderr
+    assert "Instruction-contract validation passed." in result.stdout
+
+
 def test_required_heading_inside_fenced_code_block_is_not_satisfied(tmp_path: Path) -> None:
     """A heading nested inside a fenced code block must not satisfy the contract."""
     _write_common_contract_repo(
