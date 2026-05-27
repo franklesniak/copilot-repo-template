@@ -467,6 +467,30 @@ def test_directory_style_protected_decision_path_fails(marker_repo: Path) -> Non
     )
 
 
+def test_directory_style_deferred_candidate_path_fails(marker_repo: Path) -> None:
+    """Deferred protected candidates must reference a file, not a directory."""
+    _write_marker(
+        marker_repo,
+        ["template-sync-support"],
+        deferred_candidates=[
+            {
+                "path": ".github/instructions/",
+                "source_commit": FULL_SHA,
+                "reason": "Protected governance directory needs explicit owner authorization.",
+            }
+        ],
+    )
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1
+    assert "Schema validation failed for .template-sync/marker.yml" in result.stderr
+    assert (
+        ".template_sync.deferred_protected_candidates[0].path" in result.stderr
+        or "template_sync.deferred_protected_candidates[0].path" in result.stderr
+    )
+
+
 def test_noncontradictory_protected_decision_local_override_overlap_is_reported(
     marker_repo: Path,
 ) -> None:

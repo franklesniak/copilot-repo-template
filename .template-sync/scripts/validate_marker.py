@@ -712,10 +712,15 @@ def parse_marker(
             raise MarkerValidationError(
                 "Each deferred protected candidate must define string path, source_commit, and reason."
             )
-        normalized_path, _is_directory = normalize_repository_path(
+        normalized_path, is_directory = normalize_repository_path(
             raw_path,
             "template_sync.deferred_protected_candidates[].path",
         )
+        if is_directory:
+            raise MarkerValidationError(
+                "template_sync.deferred_protected_candidates[].path must reference a file, "
+                f"not a directory: {raw_path}"
+            )
         deferred_candidates.append(
             DeferredProtectedCandidate(
                 path=normalized_path,

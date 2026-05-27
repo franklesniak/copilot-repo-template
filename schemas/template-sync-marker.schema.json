@@ -65,7 +65,7 @@
             "additionalProperties": false,
             "properties": {
               "path": {
-                "$ref": "#/$defs/repositoryPath"
+                "$ref": "#/$defs/repositoryFilePath"
               },
               "source_commit": {
                 "$ref": "#/$defs/fullLowercaseSha"
