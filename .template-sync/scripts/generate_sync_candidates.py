@@ -1291,7 +1291,7 @@ def build_manifest_ledger_row(
             "Retained because marker included_modules satisfy the manifest relation."
         )
 
-    if is_protected and decision != "needs maintainer decision":
+    if is_protected and decision != "needs maintainer decision" and not protected_decisions:
         requires_decision = True
         reason_parts.append(
             "Protected file; explicit owner authorization is required before edits."
@@ -1402,6 +1402,7 @@ def build_unmatched_protected_decision_row(
     """Build a ledger row for a protected decision not consumed by a manifest mapping."""
     relation = selected_relation_for_path(protected_decision.path, mappings)
     modules = relation.requires_all | relation.requires_any if relation is not None else frozenset()
+    is_protected = is_protected_instruction_path(protected_decision.path)
     return LedgerRow(
         path=protected_decision.path,
         manifest_modules=(
@@ -1411,7 +1412,7 @@ def build_unmatched_protected_decision_row(
         ),
         decision=f"protected decision: {protected_decision.decision}",
         reason=protected_decision_reason((protected_decision,)),
-        protected_file="Yes",
+        protected_file="Yes" if is_protected else "No",
         requires_maintainer_decision=(
             "Yes"
             if protected_decision_requires_maintainer_decision((protected_decision,))
@@ -1421,7 +1422,7 @@ def build_unmatched_protected_decision_row(
         todo_link=matching_todo_links(
             path=protected_decision.path,
             modules=modules,
-            is_protected=True,
+            is_protected=is_protected,
             todo_items=todo_items,
             todo_path=todo_path,
             repo_root=repo_root,

@@ -812,6 +812,72 @@ def test_ledger_reports_protected_decision_overlap_side_by_side(tmp_path: Path) 
     ) in result.stdout
 
 
+def test_authorized_protected_decision_does_not_require_maintainer_decision(
+    tmp_path: Path,
+) -> None:
+    """Authorized TAKE/MERGE protected decisions do not re-flag maintainer review."""
+    _init_repo(tmp_path)
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["agent-instructions"],
+            last_reviewed_template_commit=None,
+            protected_decisions=[
+                {
+                    "path": ".github/copilot-instructions.md",
+                    "decision": "MERGE",
+                    "adoption_mode": "minimal-preservation",
+                    "authorization_basis": "Owner authorized protected edits on 2026-05-27.",
+                    "authorized_scope": ".github/copilot-instructions.md only.",
+                }
+            ],
+        ),
+    )
+
+    result = _run_generator(tmp_path, "--ledger-only")
+
+    assert result.returncode == 0, result.stderr
+    assert (
+        "| .github/copilot-instructions.md | all: agent-instructions "
+        "| protected decision: MERGE | Authorized minimal-preservation protected-file edit."
+    ) in result.stdout
+    assert (
+        "authorization_basis: Owner authorized protected edits on 2026-05-27. "
+        "authorized_scope: .github/copilot-instructions.md only. | Yes | No |"
+    ) in result.stdout
+
+
+def test_unmatched_protected_decision_for_non_protected_path_reports_no(
+    tmp_path: Path,
+) -> None:
+    """Non-protected paths in protected_file_decisions report protected_file=No."""
+    _init_repo(tmp_path)
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["agent-instructions"],
+            last_reviewed_template_commit=None,
+            protected_decisions=[
+                {
+                    "path": "docs/non-protected-note.md",
+                    "decision": "SKIP",
+                    "reason": "Owner has decided not to adopt this file.",
+                }
+            ],
+        ),
+    )
+
+    result = _run_generator(tmp_path, "--ledger-only")
+
+    assert result.returncode == 0, result.stderr
+    assert (
+        "| docs/non-protected-note.md | unmapped | protected decision: SKIP "
+        "| Protected decision `SKIP`: Owner has decided not to adopt this file. | No |"
+    ) in result.stdout
+
+
 def test_renamed_files_preserve_old_and_new_paths(tmp_path: Path) -> None:
     """Rename rows keep both paths and identify the rename status."""
     _init_repo(tmp_path)
