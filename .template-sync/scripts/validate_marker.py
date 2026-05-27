@@ -436,10 +436,15 @@ def parse_protected_file_decisions(
             raise MarkerValidationError(
                 "Each protected file decision must define string path and decision."
             )
-        normalized_path, _is_directory = normalize_repository_path(
+        normalized_path, is_directory = normalize_repository_path(
             raw_path,
             "template_sync.protected_file_decisions[].path",
         )
+        if is_directory:
+            raise MarkerValidationError(
+                "template_sync.protected_file_decisions[].path must reference a file, "
+                f"not a directory: {raw_path}"
+            )
         protected_decisions.append(
             ProtectedFileDecision(
                 path=normalized_path,

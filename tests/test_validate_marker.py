@@ -441,6 +441,32 @@ def test_duplicate_protected_decision_paths_fail(marker_repo: Path) -> None:
     assert "Duplicate protected_file_decisions path(s): CLAUDE.md" in result.stderr
 
 
+def test_directory_style_protected_decision_path_fails(marker_repo: Path) -> None:
+    """Protected-file decisions must reference a file, not a directory."""
+    _write_marker(
+        marker_repo,
+        ["template-sync-support"],
+        protected_decisions=[
+            {
+                "path": ".github/instructions/",
+                "decision": "MERGE",
+                "adoption_mode": "minimal-preservation",
+                "authorization_basis": "Owner authorized protected edits on 2026-05-27.",
+                "authorized_scope": ".github/instructions/ only.",
+            }
+        ],
+    )
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1
+    assert "Schema validation failed for .template-sync/marker.yml" in result.stderr
+    assert (
+        ".template_sync.protected_file_decisions[0].path" in result.stderr
+        or "template_sync.protected_file_decisions[0].path" in result.stderr
+    )
+
+
 def test_noncontradictory_protected_decision_local_override_overlap_is_reported(
     marker_repo: Path,
 ) -> None:
