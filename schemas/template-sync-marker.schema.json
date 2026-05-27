@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/franklesniak/copilot-repo-template/HEAD/schemas/template-sync-marker.schema.json",
   "title": "Template Sync Marker",
-  "description": "Schema for .template-sync/marker.yml, the downstream sync marker that records reviewed template commits, adopted modules, local override decisions, and deferred protected-file candidates.",
+  "description": "Schema for .template-sync/marker.yml, the downstream sync marker that records reviewed template commits, adopted modules, local override decisions, protected-file decisions, and deferred protected-file candidates.",
   "type": "object",
   "required": ["template_sync"],
   "additionalProperties": false,
@@ -65,7 +65,7 @@
             "additionalProperties": false,
             "properties": {
               "path": {
-                "$ref": "#/$defs/repositoryPath"
+                "$ref": "#/$defs/repositoryFilePath"
               },
               "source_commit": {
                 "$ref": "#/$defs/fullLowercaseSha"
@@ -74,6 +74,13 @@
                 "$ref": "#/$defs/nonEmptyString"
               }
             }
+          }
+        },
+        "protected_file_decisions": {
+          "type": "array",
+          "description": "Path-scoped protected-file authorization and adoption decisions for current sync work.",
+          "items": {
+            "$ref": "#/$defs/protectedFileDecision"
           }
         }
       }
@@ -109,7 +116,130 @@
     },
     "repositoryPath": {
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(/|$))(?!.*//).+$"
+    },
+    "repositoryFilePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(/|$))(?!.*//)(?!.*/$).+$"
+    },
+    "protectedFileDecisionValue": {
+      "type": "string",
+      "enum": [
+        "TAKE",
+        "MERGE",
+        "SKIP",
+        "REMOVE-LOCAL",
+        "DEFER",
+        "PROTECTED-REVIEW"
+      ]
+    },
+    "adoptionMode": {
+      "type": "string",
+      "enum": [
+        "minimal-preservation",
+        "tailored"
+      ]
+    },
+    "protectedFileDecision": {
+      "type": "object",
+      "required": ["path", "decision"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/repositoryFilePath"
+        },
+        "decision": {
+          "$ref": "#/$defs/protectedFileDecisionValue"
+        },
+        "adoption_mode": {
+          "$ref": "#/$defs/adoptionMode"
+        },
+        "authorization_basis": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authorized_scope": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "tailored_authorization_basis": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["decision"],
+            "properties": {
+              "decision": {
+                "enum": ["TAKE", "MERGE"]
+              }
+            }
+          },
+          "then": {
+            "required": ["adoption_mode", "authorization_basis", "authorized_scope"]
+          }
+        },
+        {
+          "if": {
+            "required": ["decision"],
+            "properties": {
+              "decision": {
+                "const": "REMOVE-LOCAL"
+              }
+            }
+          },
+          "then": {
+            "required": ["authorization_basis", "authorized_scope", "reason"]
+          }
+        },
+        {
+          "if": {
+            "required": ["decision"],
+            "properties": {
+              "decision": {
+                "enum": ["SKIP", "DEFER", "PROTECTED-REVIEW"]
+              }
+            }
+          },
+          "then": {
+            "required": ["reason"]
+          }
+        },
+        {
+          "if": {
+            "required": ["decision", "adoption_mode"],
+            "properties": {
+              "decision": {
+                "enum": ["SKIP", "REMOVE-LOCAL", "DEFER", "PROTECTED-REVIEW"]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "adoption_mode": {
+                "const": "minimal-preservation"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["adoption_mode"],
+            "properties": {
+              "adoption_mode": {
+                "const": "tailored"
+              }
+            }
+          },
+          "then": {
+            "required": ["tailored_authorization_basis"]
+          }
+        }
+      ]
     }
   }
 }

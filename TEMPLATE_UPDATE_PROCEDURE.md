@@ -1,14 +1,14 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260526.1
+**Version:** 1.1.20260527.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-26
-- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the human-readable view of the template sync manifest, the marker-aware retained-state validation helper command, the sync candidate table generator, and the generated adoption ledger review artifact. Does not define an automated sync tool.
+- **Last Updated:** 2026-05-27
+- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the human-readable view of the template sync manifest, protected-file decision records, the marker-aware retained-state validation helper command, the sync candidate table generator, and the generated adoption ledger review artifact. Does not define an automated sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
 ## Purpose
@@ -21,13 +21,13 @@ Use this procedure when a downstream repository wants to review new changes from
 
 - **Module:** A unit in the taxonomy defined by `.template-sync/manifest.yml` and rendered in this procedure, such as `markdown`, `powershell`, or `terraform`. Procedure logic operates on modules.
 - **Stack:** Informal shorthand for a related grouping of modules. For example, a "PowerShell stack" may mean `powershell`, `markdown`, `yaml`, and `agent-instructions`, depending on what the downstream repository adopted. Stack is acceptable in prose, but sync decisions MUST be recorded in module terms.
-- **Downstream sync marker:** The `.template-sync/marker.yml` file in the downstream repository. Under `template_sync`, it records the upstream template repository, the newest upstream template commit that has been reviewed, the modules the downstream repository has adopted, local override rules, and deferred protected-file candidates.
+- **Downstream sync marker:** The `.template-sync/marker.yml` file in the downstream repository. Under `template_sync`, it records the upstream template repository, the newest upstream template commit that has been reviewed, the modules the downstream repository has adopted, local override rules, protected-file decision records, and deferred protected-file candidates.
 - **First-adoption preflight checklist:** A root `_TODO-repo-init.md` file, or an equivalent committed adoption note named by this procedure, that records manual GitHub settings and maintainer policy decisions that cannot be inferred from repository files during first-time template adoption.
 - **First-adoption state:** The resolved answers from the first-adoption preflight checklist, `.template-sync/marker.yml`, or an equivalent committed adoption note. Examples include conduct and security reporting channels, private vulnerability reporting, Discussions, expected labels, CODEOWNERS owner/team identity, default-branch protection policy, adoption mode, and any GHES host override.
-- **Adoption ledger:** A generated Markdown review artifact emitted by `.template-sync/scripts/generate_sync_candidates.py`. It summarizes manifest module assignments, marker local overrides, protected-file flags, adoption-mode posture, `_TODO-repo-init.md` checklist links, and affected validation commands. It is not authoritative state; `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable sources of truth.
+- **Adoption ledger:** A generated Markdown review artifact emitted by `.template-sync/scripts/generate_sync_candidates.py`. It summarizes manifest module assignments, marker local overrides, protected-file flags and decisions, adoption-mode posture, `_TODO-repo-init.md` checklist links, and affected validation commands. It is not authoritative state; `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable sources of truth.
 - **Adoption mode:** The preservation posture applied before editing protected files and template-derived governance, community, process, workflow, or collaboration files. Valid named modes are `minimal-preservation` and `tailored`.
 - **`minimal-preservation`:** The default adoption mode for protected files and template-derived governance, community, process, workflow, and collaboration files. Keep upstream wording and structure; limit edits to placeholder substitution, removing complete delimited sections owned by unadopted manifest modules, fixing broken links, and adding required local overrides that are recorded in `.template-sync/marker.yml`.
-- **`tailored`:** A maintainer-selected adoption mode for a specific file or file set that allows broader downstream rewriting. The maintainer MUST select `tailored` explicitly before the broader rewrite starts, and the selection MUST be recorded in `_TODO-repo-init.md`, `.template-sync/marker.yml` local overrides, the sync working notes, or the final sync summary.
+- **`tailored`:** A maintainer-selected adoption mode for a specific file or file set that allows broader downstream rewriting. The maintainer MUST select `tailored` explicitly before the broader rewrite starts. For protected files, the selection MUST be recorded in `template_sync.protected_file_decisions` with `tailored_authorization_basis`; for non-protected files, record the selection in `_TODO-repo-init.md`, `.template-sync/marker.yml` local overrides, the sync working notes, or the final sync summary.
 - **Reviewed range:** The upstream template commit range inspected during a delta sync. It is recorded as `RANGE_BASE_SHA..RANGE_HEAD_SHA`, where both endpoints are resolved upstream template commit SHAs. Full reconciliation does not use a delta range; it compares a committed downstream snapshot against the resolved upstream range head.
 - **Included module:** A module listed in the downstream sync marker under `template_sync.included_modules`.
 - **Unadopted-module activity:** Upstream activity in a known taxonomy module that is not listed in `included_modules`.
@@ -42,6 +42,7 @@ Use this procedure when a downstream repository wants to review new changes from
 - Do not overwrite downstream project identity, repository URLs, issue templates, PR templates, workflow runner choices, validation commands, README content, package metadata, or local policy without a recorded decision.
 - Do not invent contact emails, reporting channels, branch protection policy, default-branch ruleset settings, CODEOWNERS identities, label existence, Discussions state, private vulnerability reporting state, GHES hosts, adoption modes, or template-preservation policy.
 - Do not edit protected files unless the owner gives explicit, path-scoped authorization in the current task.
+- Do not edit or remove protected files until `.template-sync/marker.yml` records a matching `template_sync.protected_file_decisions` entry for the protected path and decision.
 - Do not treat `minimal-preservation` as protected-file authorization. Adoption mode limits what an authorized edit may do; it does not grant permission to edit protected files.
 - Do not weaken existing security, validation, or pre-commit expectations to make a sync easier.
 - Do not silently include or exclude unknown modules.
@@ -344,7 +345,7 @@ Downstream repositories SHOULD keep the sync marker at `.template-sync/marker.ym
 
 Marker contents are schema-backed by [`schemas/template-sync-marker.schema.json`](schemas/template-sync-marker.schema.json). The `validate-template-sync-marker` pre-commit hook validates `.template-sync/marker.yml` when that file is present; repositories without a marker are unaffected because no file matches the hook's anchored pattern. Marker changes MUST be rejected when they fail the schema. The schema's `included_modules` enum mirrors `.template-sync/manifest.yml`, and [`tests/test_template_manifest.py`](tests/test_template_manifest.py) fails if the schema enum drifts from the manifest module list.
 
-The marker may record sync-specific first-adoption state, such as adopted modules, path-specific local overrides, explicit `tailored` opt-ins for locally owned paths, and deferred protected-file candidates. It is not a general replacement for `_TODO-repo-init.md` when manual GitHub settings or maintainer policy decisions still need explicit resolution.
+The marker may record sync-specific first-adoption state, such as adopted modules, path-specific local overrides, protected-file decisions, explicit `tailored` opt-ins for protected paths, and deferred protected-file candidates. It is not a general replacement for `_TODO-repo-init.md` when manual GitHub settings or maintainer policy decisions still need explicit resolution.
 
 For example, suppose upstream changed `README.md` and `.github/workflows/terraform-ci.yml`, and the downstream repository reviewed both but adopted neither because `README.md` is locally owned and Terraform is not adopted. The sync still advances `last_reviewed_template_commit` to the resolved range head after review, because those upstream changes were inspected and intentionally skipped. A `last_adopted_template_commit` field would incorrectly imply that skipped-but-reviewed changes need to be reviewed again during the next sync.
 
@@ -352,7 +353,7 @@ If Step 4 used a first-sync delta range because the marker was missing or incomp
 
 If Step 4 selected full reconciliation, the marker still has no reviewed upstream commit at this step. You MAY initialize or update other marker fields, such as `source_repo`, `included_modules`, and local overrides chosen by the owner, but do not set `template_sync.last_reviewed_template_commit` until Step 13 records the resolved upstream range head SHA after review is complete.
 
-`local_overrides` and `deferred_protected_candidates` are explained immediately after the example.
+`local_overrides`, `protected_file_decisions`, and `deferred_protected_candidates` are explained immediately after the example.
 
 Example marker:
 
@@ -382,6 +383,17 @@ template_sync:
     - path: .github/copilot-instructions.md
       source_commit: "dddddddddddddddddddddddddddddddddddddddd"
       reason: "Adds a stack-selection clause; pending owner authorization."
+  protected_file_decisions:
+    - path: CLAUDE.md
+      adoption_mode: minimal-preservation
+      decision: MERGE
+      authorization_basis: "Owner authorized protected instruction file edits on 2026-05-27."
+      authorized_scope: "Remove unadopted stack references and fix broken links only."
+    - path: GEMINI.md
+      decision: REMOVE-LOCAL
+      authorization_basis: "Owner explicitly authorized removing GEMINI.md in issue 123."
+      authorized_scope: "GEMINI.md only; no other protected files."
+      reason: "Gemini agent not used by this downstream repository."
 ```
 
 ### Marker Semantics
@@ -390,6 +402,7 @@ template_sync:
 - `last_reviewed_template_commit` is the resolved upstream template commit SHA whose changes were most recently reviewed, regardless of how many were adopted. It MUST NOT be a branch name, tag name, or other moving ref.
 - `included_modules` is the adoption state. Anything not listed is not adopted.
 - `local_overrides` changes the starting recommendation for a path, but it MUST NOT hide upstream activity from the sync.
+- `protected_file_decisions` records the current path-scoped protected-file authorization and decision. Content adoption decisions (`TAKE` and `MERGE`) require `adoption_mode`, `authorization_basis`, and `authorized_scope`. Broad rewrites require `adoption_mode: tailored` plus `tailored_authorization_basis`. Protected-file removals require `decision: REMOVE-LOCAL`, explicit removal authorization, `authorized_scope`, and a substantive `reason`.
 - `deferred_protected_candidates` records protected-file updates that were reviewed but not applied because path-scoped owner authorization was absent.
 
 ### Local Overrides
@@ -410,10 +423,22 @@ Worked local-overrides mini scenario:
 Before editing protected files or template-derived governance, community, process, workflow, or collaboration files, record the mode for the affected file or file set:
 
 - Record the default `minimal-preservation` mode in `_TODO-repo-init.md` when that checklist exists.
-- Record path-specific `tailored` opt-ins or required local ownership exceptions in `.template-sync/marker.yml` as `local_overrides`, with a reason that names the selected mode and the local policy being preserved.
+- For protected paths, record path-specific decisions in `.template-sync/marker.yml` as `protected_file_decisions` before editing or removing the file.
+- For non-protected paths, record path-specific `tailored` opt-ins or required local ownership exceptions in `.template-sync/marker.yml` as `local_overrides`, with a reason that names the selected mode and the local policy being preserved.
 - Record the mode in the sync working notes and final sync summary when the sync does not modify `_TODO-repo-init.md` or `.template-sync/marker.yml`.
 
 Do not add ad hoc, non-schema fields to `.template-sync/marker.yml`. Use the schema-backed marker fields above, or record the mode in the checklist, working notes, or sync summary.
+
+### Protected File Decisions
+
+Use `template_sync.protected_file_decisions` for every protected file that is edited, merged, taken, skipped, removed, deferred, or sent through protected review during first adoption or later sync. Valid `decision` values are `TAKE`, `MERGE`, `SKIP`, `REMOVE-LOCAL`, `DEFER`, and `PROTECTED-REVIEW`.
+
+- `TAKE` and `MERGE` MUST include `adoption_mode`, `authorization_basis`, and `authorized_scope`.
+- `adoption_mode: tailored` MUST include `tailored_authorization_basis`; use it only for authorized broad rewrites of the named protected path or path set.
+- `SKIP`, `DEFER`, and `PROTECTED-REVIEW` MUST include `reason` and MUST NOT imply edit authorization.
+- `REMOVE-LOCAL` MUST include `authorization_basis`, `authorized_scope`, and `reason`. The `authorization_basis` MUST explicitly name the removed protected file and mention removal, deletion, or equivalent removal-specific wording. Generic wording such as "protected file edits authorized" is insufficient for removal.
+
+Path overlap with `local_overrides` is allowed only when the two records are compatible. The marker validator reports compatible overlaps side by side and fails contradictory same-path decisions. A protected path MUST NOT appear in both `protected_file_decisions` and `deferred_protected_candidates` at the same time, because one record asserts a current decision while the other asserts the change is awaiting authorization.
 
 ### Downstream adoption: Dependabot schema regression surface
 
@@ -635,7 +660,7 @@ Record the resulting retain or strip decisions per affected path in the Step 7 p
 
 ### Filtering Rules
 
-After Step 3 has fetched the template remote and Step 4 has resolved the range endpoints and confirmed reachability, and after Step 5 has a schema-valid marker with the intended `included_modules`, `local_overrides`, and `deferred_protected_candidates`, run the candidate table generator from the downstream repository root:
+After Step 3 has fetched the template remote and Step 4 has resolved the range endpoints and confirmed reachability, and after Step 5 has a schema-valid marker with the intended `included_modules`, `local_overrides`, `protected_file_decisions`, and `deferred_protected_candidates`, run the candidate table generator from the downstream repository root:
 
 ```bash
 python .template-sync/scripts/generate_sync_candidates.py --range-head RANGE_HEAD_SHA
@@ -649,7 +674,7 @@ python .template-sync/scripts/generate_sync_candidates.py --range-base RANGE_BAS
 
 If `--range-head` is omitted, the helper uses the local `template/main` ref when that ref is present. It does **not** fetch automatically; run `git fetch template` in Step 3 before relying on the default head, or pass a resolved `RANGE_HEAD_SHA`.
 
-The generator validates `.template-sync/marker.yml` and `.template-sync/manifest.yml` against the checked-in schemas before producing output. Its report header prints the exact delta command it models, `git diff --name-status -M RANGE_BASE_SHA..RANGE_HEAD_SHA --`, so maintainers can cross-check the path list directly. It also compares local `TEMPLATE_UPDATE_PROCEDURE.md` with the upstream copy at the resolved range head; when they differ, the report prints a warning that local procedure text may be stale and includes `git show RANGE_HEAD_SHA:TEMPLATE_UPDATE_PROCEDURE.md` for reviewing the current upstream procedure. It prints a Markdown table with one row per changed upstream path and columns for the matched module relation, retained/excluded status, local override status, deferred protected candidate status, protected instruction/governance-file status, and notes. The notes explicitly surface unmapped paths, unknown modules, cross-module manifest relations, manifest inline-block notes, protected-file handling, and renames. The output is a decision aid only: it does not update the marker, apply file changes, strip inline blocks, or make final per-file decisions. The manual review process in this procedure remains authoritative.
+The generator validates `.template-sync/marker.yml` and `.template-sync/manifest.yml` against the checked-in schemas before producing output. Its report header prints the exact delta command it models, `git diff --name-status -M RANGE_BASE_SHA..RANGE_HEAD_SHA --`, so maintainers can cross-check the path list directly. It also compares local `TEMPLATE_UPDATE_PROCEDURE.md` with the upstream copy at the resolved range head; when they differ, the report prints a warning that local procedure text may be stale and includes `git show RANGE_HEAD_SHA:TEMPLATE_UPDATE_PROCEDURE.md` for reviewing the current upstream procedure. It prints a Markdown table with one row per changed upstream path and columns for the matched module relation, retained/excluded status, local override status, deferred protected candidate status, protected-file decision status, protected instruction/governance-file status, and notes. The notes explicitly surface unmapped paths, unknown modules, cross-module manifest relations, manifest inline-block notes, protected-file handling, protected decision records, and renames. The output is a decision aid only: it does not update the marker, apply file changes, strip inline blocks, or make final per-file decisions. The manual review process in this procedure remains authoritative.
 
 Before Step 13 advances `template_sync.last_reviewed_template_commit`, save the exact Step 6 candidate table into the sync working notes or into an owner-chosen local file cited by those notes. To write only the rendered candidate table to a repository-contained file while preserving the full normal report on stdout, pass `--write-candidates`:
 
@@ -663,7 +688,7 @@ The `SYNC_CANDIDATE_TABLE_PATH` value MUST remain inside the repository root; th
 python .template-sync/scripts/generate_sync_candidates.py --range-base RANGE_BASE_SHA --range-head RANGE_HEAD_SHA
 ```
 
-The saved Step 6 candidate table is the source of truth for the reviewed candidate set. A rerun for the same range uses the current `.template-sync/marker.yml` values for `included_modules`, `local_overrides`, and `deferred_protected_candidates`, so its output can diverge from the saved table when Step 13 changed any of those fields even though the commit range is unchanged.
+The saved Step 6 candidate table is the source of truth for the reviewed candidate set. A rerun for the same range uses the current `.template-sync/marker.yml` values for `included_modules`, `local_overrides`, `protected_file_decisions`, and `deferred_protected_candidates`, so its output can diverge from the saved table when Step 13 changed any of those fields even though the commit range is unchanged.
 
 Create or refresh the adoption ledger during first sync and full-reconciliation syncs, and review it before editing protected files. To include the ledger in the normal delta report, pass `--ledger`; to write a generated snapshot that can be committed to the repository, pass `--write-ledger`:
 
@@ -677,7 +702,7 @@ For first-adoption or full-reconciliation work that needs the ledger before a de
 python .template-sync/scripts/generate_sync_candidates.py --ledger-only --write-ledger ADOPTION_LEDGER_PATH
 ```
 
-The `ADOPTION_LEDGER_PATH` value MUST remain inside the repository root; the helper rejects paths that escape it. The ledger is a generated review artifact. It MUST be regenerated when `.template-sync/manifest.yml`, `.template-sync/marker.yml`, `_TODO-repo-init.md`, the selected adoption mode, or the included module set changes. Do not treat a stale committed ledger as authoritative: `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable source of truth. Rows marked `manual TODO` link to `_TODO-repo-init.md` checklist lines when that file exists. Rows marked `local override` MUST show a reason from `.template-sync/marker.yml`; if a local override has no durable reason, fix the marker before relying on the ledger.
+The `ADOPTION_LEDGER_PATH` value MUST remain inside the repository root; the helper rejects paths that escape it. The ledger is a generated review artifact. It MUST be regenerated when `.template-sync/manifest.yml`, `.template-sync/marker.yml`, `_TODO-repo-init.md`, the selected adoption mode, or the included module set changes. Do not treat a stale committed ledger as authoritative: `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable source of truth. Rows marked `manual TODO` link to `_TODO-repo-init.md` checklist lines when that file exists. Rows marked `local override` MUST show a reason from `.template-sync/marker.yml`; if a local override has no durable reason, fix the marker before relying on the ledger. Protected rows with matching `protected_file_decisions` show the protected decision state, distinguish default `minimal-preservation` from authorized minimal edits and authorized tailored rewrites, and include a distinct `REMOVE-LOCAL` authorization section when protected removals are recorded.
 
 `_TODO-repo-init.md` link targets in the ledger depend on the rendering destination. When `--write-ledger` is used, the helper writes Markdown link targets relative to the saved file's directory so the links resolve correctly when the saved ledger is committed and rendered on GitHub. When the ledger is emitted only to stdout (no `--write-ledger`), the helper writes repo-root-relative link targets, which are informative when reading the ledger in a terminal but **do not** render as clickable links to repository files when pasted into a GitHub pull request or issue body — GitHub resolves relative Markdown link targets in PR/issue bodies relative to the PR/issue URL, not the repository root. For clickable rendered links, run the helper with `--write-ledger ADOPTION_LEDGER_PATH`, commit the saved file, and review it directly on GitHub.
 
@@ -700,13 +725,14 @@ If summarized unadopted-module activity appears relevant during review, the owne
 
 ## Step 7: Review Each Candidate File
 
-Every included candidate requires a row in a per-file decision table. When the Step 6 generator is used, treat its `Retained` rows as the starting candidate set and its `Excluded`, `Unmapped`, local override, deferred protected candidate, protected-file, rename, and inline-block notes as prompts for manual review and sync-summary entries. When a Step 6 adoption ledger exists, review it before editing any protected file and carry forward its protected-file flag, local-override reason, adoption-mode value, `_TODO-repo-init.md` link, and validation-command hints into the per-file decision table or sync working notes.
+Every included candidate requires a row in a per-file decision table. When the Step 6 generator is used, treat its `Retained` rows as the starting candidate set and its `Excluded`, `Unmapped`, local override, deferred protected candidate, protected-file decision, protected-file, rename, and inline-block notes as prompts for manual review and sync-summary entries. When a Step 6 adoption ledger exists, review it before editing any protected file and carry forward its protected-file flag, protected-file decision state, local-override reason, adoption-mode value, `_TODO-repo-init.md` link, and validation-command hints into the per-file decision table or sync working notes.
 
 For protected files and template-derived governance, community, process, workflow, or collaboration files, assign an adoption mode before choosing the file decision:
 
 - Use `minimal-preservation` by default. Do not prompt the maintainer repeatedly when this default applies.
 - Use `tailored` only when the maintainer explicitly selects it for the specific file or file set.
-- Record the selected mode in `_TODO-repo-init.md`, `.template-sync/marker.yml` local overrides, the sync working notes, or the final sync summary before editing the affected file.
+- For protected files, record the selected mode in `template_sync.protected_file_decisions` before editing the affected file.
+- For non-protected files, record the selected mode in `_TODO-repo-init.md`, `.template-sync/marker.yml` local overrides, the sync working notes, or the final sync summary before editing the affected file.
 
 In `minimal-preservation` mode, permitted edits are limited to:
 
@@ -831,6 +857,12 @@ The default adoption mode for protected-file candidates is `minimal-preservation
 
 Protected-file changes MAY be included in the same sync change set, whether it finalizes as a PR-ready branch or a completed local branch, only when the owner gives explicit, current-task authorization for the specific protected path or paths being changed.
 
+Before applying the change, record a matching `template_sync.protected_file_decisions` entry:
+
+- Use `decision: TAKE` or `decision: MERGE` for protected content adoption. Include `adoption_mode`, `authorization_basis`, and `authorized_scope`.
+- Use `adoption_mode: tailored` only when the owner explicitly authorized a broad rewrite, and include `tailored_authorization_basis`.
+- Use `decision: REMOVE-LOCAL` only when the owner explicitly authorized protected-file removal. Include `authorization_basis`, `authorized_scope`, and `reason`.
+
 The sync summary MUST record the authorization basis in a reviewer-verifiable form, such as:
 
 - a linked owner comment
@@ -839,11 +871,19 @@ The sync summary MUST record the authorization basis in a reviewer-verifiable fo
 
 The sync summary MUST list each protected path, the authorization basis, and the validation performed.
 
+For `REMOVE-LOCAL`, `authorization_basis` MUST explicitly name the removed file and mention removal, deletion, or equivalent removal-specific wording; generic "protected file edits authorized" wording is not enough. Reviewers MUST verify that `authorization_basis`, `authorized_scope`, and `reason` support removal before approving the PR. The validator's optional `--strict-remove-local-phrasing` flag can automate the brittle substring check when maintainers want it:
+
+```bash
+python .template-sync/scripts/validate_marker.py --require-marker --strict-remove-local-phrasing
+```
+
+Use `--remove-local-authorization-token TOKEN` one or more times, or `--remove-local-authorization-tokens remov,delet`, to tune the case-insensitive substring list. Normal upstream CI does not require this flag unless maintainers deliberately opt in.
+
 Protected-file edits MUST be placed in a separate commit from non-protected changes unless the owner's current-task authorization explicitly waives commit isolation. If commit isolation is waived, record the waiver and authorization basis in the sync summary.
 
 ### Deferred Protected Edits
 
-If authorization is absent, leave the protected file unchanged and record the candidate in `.template-sync/marker.yml` under `deferred_protected_candidates`.
+If authorization is absent, leave the protected file unchanged and record the candidate in `.template-sync/marker.yml` under `deferred_protected_candidates`. Do not also add a same-path `protected_file_decisions` entry until the owner makes a current decision for that protected path.
 
 Example:
 
@@ -897,7 +937,7 @@ Do not replace didactic examples that intentionally explain the placeholder conv
 
 Run validation appropriate to the included modules and files changed. Full template-like validation remains the safest default when the downstream repository keeps the relevant tooling.
 
-Run the marker-aware retained-state helper after file removals, retained files, `included_modules`, `local_overrides`, and `deferred_protected_candidates` reflect the intended sync result, and before finalizing the sync summary. Use `--require-marker` once the downstream repository has committed to carrying `.template-sync/marker.yml` in CI:
+Run the marker-aware retained-state helper after file removals, retained files, `included_modules`, `local_overrides`, `protected_file_decisions`, and `deferred_protected_candidates` reflect the intended sync result, and before finalizing the sync summary. Use `--require-marker` once the downstream repository has committed to carrying `.template-sync/marker.yml` in CI:
 
 ```bash
 python .template-sync/scripts/validate_marker.py --require-marker
@@ -963,8 +1003,9 @@ After all decisions are recorded and validation is complete, update `.template-s
 - Set `template_sync.last_reviewed_template_commit` to the resolved upstream range head SHA that was reviewed.
 - Keep `included_modules` current.
 - Add, update, or remove `local_overrides` only when the owner made that adoption decision.
+- Add, update, or remove `protected_file_decisions` for protected files that were taken, merged, skipped, removed locally, deferred as a decision, or sent through protected review during this sync.
 - Add or refresh `deferred_protected_candidates` for unresolved protected-file changes.
-- Preserve adoption-mode records: keep the default `minimal-preservation` record in `_TODO-repo-init.md` or the sync summary, and represent path-specific `tailored` opt-ins or required local ownership exceptions as `local_overrides` when `.template-sync/marker.yml` is the durable record.
+- Preserve adoption-mode records: keep the default `minimal-preservation` record in `_TODO-repo-init.md` or the sync summary, represent protected path-specific decisions in `protected_file_decisions`, and represent non-protected path-specific `tailored` opt-ins or required local ownership exceptions as `local_overrides` when `.template-sync/marker.yml` is the durable record.
 
 Do not set `template_sync.last_reviewed_template_commit` to a commit that was not actually reviewed through the taxonomy and per-file process. Do not store a branch name, tag name, short SHA, or other moving ref in this marker field; store the full 40-character resolved upstream template commit SHA that was reviewed.
 
@@ -997,6 +1038,7 @@ The sync summary MUST include:
 - files skipped
 - files removed locally because a module was intentionally excluded
 - protected files applied with explicit authorization, including authorization basis and any commit-isolation waiver
+- protected files removed with explicit removal authorization, authorized scope, and substantive reason
 - protected files deferred for separate authorization
 - local overrides applied during this sync, each with a brief upstream change description
 - local customizations preserved
@@ -1214,4 +1256,4 @@ Future automation MAY add:
 - a helper script that regenerates the Module Definitions and Path Mapping tables from `.template-sync/manifest.yml`
 - a higher-level dry-run reporter that combines the candidate table with validation planning without applying changes
 
-`.template-sync/manifest.yml` is authoritative for the taxonomy. `.template-sync/marker.yml` is authoritative for included modules, local overrides, and deferred protected candidates. The candidate generator and generated adoption ledger are intentionally read-only review aids; this document remains the authoritative manual procedure.
+`.template-sync/manifest.yml` is authoritative for the taxonomy. `.template-sync/marker.yml` is authoritative for included modules, local overrides, protected-file decisions, and deferred protected candidates. The candidate generator and generated adoption ledger are intentionally read-only review aids; this document remains the authoritative manual procedure.

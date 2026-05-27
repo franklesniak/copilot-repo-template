@@ -17,18 +17,26 @@ from validate_marker import (
     DEFAULT_MANIFEST_SCHEMA_PATH,
     DEFAULT_MARKER_PATH,
     DEFAULT_MARKER_SCHEMA_PATH,
+    REMOVAL_DECISION,
+    DeferredProtectedCandidate,
     LocalOverride,
     MarkerValidationError,
+    ProtectedFileDecision,
+    deferred_candidate_summary,
+    local_override_summary,
     load_json_mapping,
     load_yaml_mapping,
     normalize_manifest_pattern,
     normalize_repository_path,
     pattern_specificity,
+    parse_protected_file_decisions,
+    protected_decision_summary,
     relation_modules,
     repository_relative_path,
     resolve_repo_path,
     resolve_repo_root,
     validate_schema,
+    validate_protected_file_decisions,
 )
 
 DEFAULT_RANGE_HEAD_REF = "template/main"
@@ -128,15 +136,6 @@ class CandidateGenerationError(Exception):
 
 
 @dataclass(frozen=True)
-class DeferredProtectedCandidate:
-    """A protected path carried forward in the marker for owner authorization."""
-
-    path: str
-    source_commit: str
-    reason: str
-
-
-@dataclass(frozen=True)
 class MarkerData:
     """Marker values needed to evaluate changed upstream paths."""
 
@@ -144,6 +143,7 @@ class MarkerData:
     included_modules: frozenset[str]
     local_overrides: tuple[LocalOverride, ...]
     deferred_candidates: tuple[DeferredProtectedCandidate, ...]
+    protected_decisions: tuple[ProtectedFileDecision, ...]
 
 
 @dataclass(frozen=True)
@@ -235,6 +235,7 @@ class CandidateRow:
     retained_status: str
     local_override_status: str
     deferred_status: str
+    protected_decision_status: str
     protected_status: str
     notes: tuple[str, ...]
 
@@ -631,11 +632,19 @@ def parse_marker(marker: dict[str, Any]) -> MarkerData:
             )
         )
 
+    protected_decisions = parse_protected_file_decisions(template_sync)
+    validate_protected_file_decisions(
+        protected_decisions,
+        tuple(local_overrides),
+        tuple(deferred_candidates),
+    )
+
     return MarkerData(
         last_reviewed_template_commit=last_reviewed,
         included_modules=included_modules,
         local_overrides=tuple(local_overrides),
         deferred_candidates=tuple(deferred_candidates),
+        protected_decisions=protected_decisions,
     )
 
 
@@ -795,6 +804,18 @@ def matching_deferred_candidates_for_pattern(
     )
 
 
+def matching_protected_decisions_for_pattern(
+    pattern: str,
+    protected_decisions: tuple[ProtectedFileDecision, ...],
+) -> tuple[ProtectedFileDecision, ...]:
+    """Return protected-file decisions that apply to a manifest pattern."""
+    return tuple(
+        protected_decision
+        for protected_decision in protected_decisions
+        if manifest_pattern_matches_path(pattern, protected_decision.path)
+    )
+
+
 def matching_local_overrides(
     entry: DiffEntry,
     local_overrides: tuple[LocalOverride, ...],
@@ -821,6 +842,26 @@ def matching_deferred_candidates(
     if entry.old_path is not None:
         paths.add(entry.old_path)
     return tuple(candidate for candidate in deferred_candidates if candidate.path in paths)
+
+
+def matching_protected_decisions(
+    entry: DiffEntry,
+    protected_decisions: tuple[ProtectedFileDecision, ...],
+) -> tuple[ProtectedFileDecision, ...]:
+    """Return marker protected-file decisions that match the changed path."""
+    paths = {entry.path}
+    if entry.old_path is not None:
+        paths.add(entry.old_path)
+    return tuple(decision for decision in protected_decisions if decision.path in paths)
+
+
+def protected_decision_status(
+    protected_decisions: tuple[ProtectedFileDecision, ...],
+) -> str:
+    """Return candidate-table status text for matching protected decisions."""
+    if not protected_decisions:
+        return "None"
+    return "; ".join(protected_decision_summary(decision) for decision in protected_decisions)
 
 
 def build_candidate_row(
@@ -867,6 +908,11 @@ def build_candidate_row(
     else:
         deferred_status = "None"
 
+    protected_decisions = matching_protected_decisions(entry, marker_data.protected_decisions)
+    protected_decision_text = protected_decision_status(protected_decisions)
+    if protected_decisions:
+        notes.append("Protected file decision record present in marker.")
+
     protected_paths = [entry.path]
     if entry.old_path is not None:
         protected_paths.append(entry.old_path)
@@ -899,6 +945,7 @@ def build_candidate_row(
         retained_status=retained_status,
         local_override_status=local_override_status,
         deferred_status=deferred_status,
+        protected_decision_status=protected_decision_text,
         protected_status=protected_status,
         notes=tuple(notes),
     )
@@ -935,6 +982,65 @@ def local_override_reason(local_overrides: tuple[LocalOverride, ...]) -> str:
         f"Marker local override defaults to `{override.default_decision}`: {override.reason}"
         for override in local_overrides
     )
+
+
+def protected_decision_reason(
+    protected_decisions: tuple[ProtectedFileDecision, ...],
+    local_overrides: tuple[LocalOverride, ...] = (),
+) -> str:
+    """Return ledger reason text for matching protected-file decisions."""
+    reason_parts: list[str] = []
+    for protected_decision in protected_decisions:
+        if protected_decision.decision in {"TAKE", "MERGE"}:
+            if protected_decision.adoption_mode == "tailored":
+                reason_parts.append("Authorized tailored protected-file rewrite.")
+            else:
+                reason_parts.append("Authorized minimal-preservation protected-file edit.")
+            reason_parts.append(f"authorization_basis: {protected_decision.authorization_basis}")
+            reason_parts.append(f"authorized_scope: {protected_decision.authorized_scope}")
+            if protected_decision.tailored_authorization_basis is not None:
+                reason_parts.append(
+                    "tailored_authorization_basis: "
+                    f"{protected_decision.tailored_authorization_basis}"
+                )
+        elif protected_decision.decision == REMOVAL_DECISION:
+            reason_parts.append(
+                "Authorized protected-file removal; see REMOVE-LOCAL authorizations section."
+            )
+        else:
+            reason = protected_decision.reason or "No reason recorded."
+            reason_parts.append(f"Protected decision `{protected_decision.decision}`: {reason}")
+
+    for local_override in local_overrides:
+        reason_parts.append(f"Overlapping local override: {local_override_summary(local_override)}")
+
+    return " ".join(reason_parts)
+
+
+def protected_decision_requires_maintainer_decision(
+    protected_decisions: tuple[ProtectedFileDecision, ...],
+) -> bool:
+    """Return whether matching protected decisions still require maintainer action."""
+    return any(
+        decision.decision in {"DEFER", "PROTECTED-REVIEW"} for decision in protected_decisions
+    )
+
+
+def protected_decision_adoption_mode(
+    protected_decisions: tuple[ProtectedFileDecision, ...],
+) -> str:
+    """Return the adoption-mode ledger value for protected decisions."""
+    modes: list[str] = []
+    for protected_decision in protected_decisions:
+        if protected_decision.adoption_mode == "tailored":
+            modes.append("tailored (authorized protected-file decision)")
+        elif protected_decision.adoption_mode == "minimal-preservation":
+            modes.append("minimal-preservation (protected-file decision)")
+        elif protected_decision.decision == REMOVAL_DECISION:
+            modes.append("not applicable (authorized removal)")
+        else:
+            modes.append("not applicable")
+    return "; ".join(dict.fromkeys(modes))
 
 
 def has_trim_note(notes: tuple[str, ...]) -> bool:
@@ -1093,7 +1199,7 @@ def build_manifest_ledger_row(
     repo_root: Path,
     default_adoption_mode: str,
     ledger_output_dir: Path | None = None,
-) -> tuple[LedgerRow, tuple[LocalOverride, ...]]:
+) -> tuple[LedgerRow, tuple[LocalOverride, ...], tuple[ProtectedFileDecision, ...]]:
     """Build one adoption-ledger row from a manifest mapping."""
     modules = relation_module_names(mapping)
     local_overrides = matching_local_overrides_for_pattern(
@@ -1103,6 +1209,10 @@ def build_manifest_ledger_row(
     deferred_candidates = matching_deferred_candidates_for_pattern(
         mapping.pattern,
         marker_data.deferred_candidates,
+    )
+    protected_decisions = matching_protected_decisions_for_pattern(
+        mapping.pattern,
+        marker_data.protected_decisions,
     )
     is_protected = is_protected_manifest_pattern(mapping.pattern)
     retained = not mapping.unknown_modules and PathRelation(
@@ -1134,6 +1244,12 @@ def build_manifest_ledger_row(
             + ", ".join(sorted(mapping.unknown_modules))
             + "."
         )
+    elif protected_decisions:
+        decision = "protected decision: " + ", ".join(
+            protected_decision.decision for protected_decision in protected_decisions
+        )
+        requires_decision = protected_decision_requires_maintainer_decision(protected_decisions)
+        reason_parts.append(protected_decision_reason(protected_decisions, local_overrides))
     elif local_overrides:
         decision = "local override"
         reason_parts.append(local_override_reason(local_overrides))
@@ -1175,7 +1291,7 @@ def build_manifest_ledger_row(
             "Retained because marker included_modules satisfy the manifest relation."
         )
 
-    if is_protected and decision != "needs maintainer decision":
+    if is_protected and decision != "needs maintainer decision" and not protected_decisions:
         requires_decision = True
         reason_parts.append(
             "Protected file; explicit owner authorization is required before edits."
@@ -1191,11 +1307,15 @@ def build_manifest_ledger_row(
             reason=" ".join(reason_parts),
             protected_file="Yes" if is_protected else "No",
             requires_maintainer_decision="Yes" if requires_decision else "No",
-            adoption_mode=adoption_mode_for_modules(
-                modules,
-                local_overrides,
-                is_protected,
-                default_adoption_mode,
+            adoption_mode=(
+                adoption_mode_for_modules(
+                    modules,
+                    local_overrides,
+                    is_protected,
+                    default_adoption_mode,
+                )
+                if not protected_decisions
+                else protected_decision_adoption_mode(protected_decisions)
             ),
             todo_link=matching_todo_links(
                 path=mapping.pattern,
@@ -1209,6 +1329,7 @@ def build_manifest_ledger_row(
             validation_commands=validation_commands_for_modules(modules),
         ),
         local_overrides,
+        protected_decisions,
     )
 
 
@@ -1269,6 +1390,48 @@ def build_unmatched_local_override_row(
     )
 
 
+def build_unmatched_protected_decision_row(
+    *,
+    protected_decision: ProtectedFileDecision,
+    mappings: tuple[ManifestMapping, ...],
+    todo_items: tuple[TodoItem, ...],
+    todo_path: Path,
+    repo_root: Path,
+    ledger_output_dir: Path | None = None,
+) -> LedgerRow:
+    """Build a ledger row for a protected decision not consumed by a manifest mapping."""
+    relation = selected_relation_for_path(protected_decision.path, mappings)
+    modules = relation.requires_all | relation.requires_any if relation is not None else frozenset()
+    is_protected = is_protected_instruction_path(protected_decision.path)
+    return LedgerRow(
+        path=protected_decision.path,
+        manifest_modules=(
+            format_manifest_modules(relation.requires_all, relation.requires_any)
+            if relation is not None
+            else "unmapped"
+        ),
+        decision=f"protected decision: {protected_decision.decision}",
+        reason=protected_decision_reason((protected_decision,)),
+        protected_file="Yes" if is_protected else "No",
+        requires_maintainer_decision=(
+            "Yes"
+            if protected_decision_requires_maintainer_decision((protected_decision,))
+            else "No"
+        ),
+        adoption_mode=protected_decision_adoption_mode((protected_decision,)),
+        todo_link=matching_todo_links(
+            path=protected_decision.path,
+            modules=modules,
+            is_protected=is_protected,
+            todo_items=todo_items,
+            todo_path=todo_path,
+            repo_root=repo_root,
+            ledger_output_dir=ledger_output_dir,
+        ),
+        validation_commands=validation_commands_for_modules(modules),
+    )
+
+
 def build_manual_todo_ledger_row(
     *,
     todo_item: TodoItem,
@@ -1305,8 +1468,9 @@ def build_adoption_ledger_rows(
     """Build the generated adoption ledger rows."""
     rows: list[LedgerRow] = []
     matched_overrides: set[LocalOverride] = set()
+    matched_protected_decisions: set[ProtectedFileDecision] = set()
     for mapping in mappings:
-        row, local_overrides = build_manifest_ledger_row(
+        row, local_overrides, protected_decisions = build_manifest_ledger_row(
             mapping=mapping,
             marker_data=marker_data,
             manifest_modules=manifest_modules,
@@ -1318,6 +1482,7 @@ def build_adoption_ledger_rows(
         )
         rows.append(row)
         matched_overrides.update(local_overrides)
+        matched_protected_decisions.update(protected_decisions)
 
     for local_override in sorted(
         set(marker_data.local_overrides) - matched_overrides,
@@ -1331,6 +1496,21 @@ def build_adoption_ledger_rows(
                 todo_path=todo_path,
                 repo_root=repo_root,
                 default_adoption_mode=default_adoption_mode,
+                ledger_output_dir=ledger_output_dir,
+            )
+        )
+
+    for protected_decision in sorted(
+        set(marker_data.protected_decisions) - matched_protected_decisions,
+        key=lambda decision: decision.path,
+    ):
+        rows.append(
+            build_unmatched_protected_decision_row(
+                protected_decision=protected_decision,
+                mappings=mappings,
+                todo_items=todo_items,
+                todo_path=todo_path,
+                repo_root=repo_root,
                 ledger_output_dir=ledger_output_dir,
             )
         )
@@ -1357,9 +1537,10 @@ def format_table(rows: tuple[CandidateRow, ...]) -> str:
     """Render candidate rows as a Markdown table."""
     header = (
         "| Path | Change | Matched module relation | Retained status | Local override | "
-        "Deferred protected candidate | Protected instruction/governance file | Notes |"
+        "Deferred protected candidate | Protected file decision | "
+        "Protected instruction/governance file | Notes |"
     )
-    divider = "| --- | --- | --- | --- | --- | --- | --- | --- |"
+    divider = "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"
     rendered_rows = [header, divider]
     for row in rows:
         rendered_rows.append(
@@ -1373,6 +1554,7 @@ def format_table(rows: tuple[CandidateRow, ...]) -> str:
                     row.retained_status,
                     row.local_override_status,
                     row.deferred_status,
+                    row.protected_decision_status,
                     row.protected_status,
                     "<br>".join(row.notes) if row.notes else "None",
                 )
@@ -1413,6 +1595,74 @@ def format_ledger_table(rows: tuple[LedgerRow, ...]) -> str:
     return "\n".join(rendered_rows)
 
 
+def format_protected_decision_records(marker_data: MarkerData) -> str | None:
+    """Render protected-file decision records and overlapping marker context."""
+    if not marker_data.protected_decisions:
+        return None
+
+    overlaps_by_path = {
+        overlap.path: overlap
+        for overlap in validate_protected_file_decisions(
+            marker_data.protected_decisions,
+            marker_data.local_overrides,
+            marker_data.deferred_candidates,
+        )
+    }
+    lines = [
+        "## Protected File Decision Records",
+        "",
+        "These entries come from `template_sync.protected_file_decisions`.",
+        "",
+    ]
+    for protected_decision in sorted(
+        marker_data.protected_decisions,
+        key=lambda decision: decision.path,
+    ):
+        lines.append(f"- `{protected_decision.path}`")
+        lines.append(
+            f"  - protected_file_decisions: {protected_decision_summary(protected_decision)}"
+        )
+        overlap = overlaps_by_path.get(protected_decision.path)
+        if overlap is not None:
+            for local_override in overlap.local_overrides:
+                lines.append(f"  - local_overrides: {local_override_summary(local_override)}")
+            for candidate in overlap.deferred_candidates:
+                lines.append(
+                    "  - deferred_protected_candidates: " f"{deferred_candidate_summary(candidate)}"
+                )
+    return "\n".join(lines)
+
+
+def format_remove_local_authorizations(marker_data: MarkerData) -> str | None:
+    """Render REMOVE-LOCAL authorization details in a distinct section."""
+    remove_local_decisions = tuple(
+        protected_decision
+        for protected_decision in marker_data.protected_decisions
+        if protected_decision.decision == REMOVAL_DECISION
+    )
+    if not remove_local_decisions:
+        return None
+
+    lines = [
+        "## REMOVE-LOCAL Authorizations",
+        "",
+        (
+            "Reviewers must verify that each authorization basis names the removed "
+            "file and explicitly authorizes removal."
+        ),
+        "",
+    ]
+    for protected_decision in sorted(
+        remove_local_decisions,
+        key=lambda decision: decision.path,
+    ):
+        lines.append(f"- `{protected_decision.path}`")
+        lines.append(f"  - authorization_basis: {protected_decision.authorization_basis}")
+        lines.append(f"  - authorized_scope: {protected_decision.authorized_scope}")
+        lines.append(f"  - reason: {protected_decision.reason}")
+    return "\n".join(lines)
+
+
 def format_adoption_ledger(
     *,
     marker_path: Path,
@@ -1450,6 +1700,12 @@ def format_adoption_ledger(
         "",
         format_ledger_table(rows) if rows else "No manifest mappings or manual TODO rows found.",
     ]
+    protected_decision_records = format_protected_decision_records(marker_data)
+    if protected_decision_records is not None:
+        lines.extend(["", protected_decision_records])
+    remove_local_authorizations = format_remove_local_authorizations(marker_data)
+    if remove_local_authorizations is not None:
+        lines.extend(["", remove_local_authorizations])
     return "\n".join(lines)
 
 

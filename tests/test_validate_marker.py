@@ -19,6 +19,7 @@ SOURCE_REPO = "https://github.com/franklesniak/copilot-repo-template.git"
 FULL_SHA = "0123456789abcdef0123456789abcdef01234567"
 MODULE_DEFINITIONS = {
     "baseline": "Baseline files.",
+    "agent-instructions": "Agent instruction files.",
     "template-sync-support": "Template sync support files.",
     "python": "Python files.",
     "schema": "Schema files.",
@@ -57,6 +58,12 @@ def _manifest(version: int = 2) -> dict[str, Any]:
     ]
     path_mappings: list[dict[str, Any]] = [
         {"pattern": "README.md", "requires_all": ["baseline"]},
+        {"pattern": "CLAUDE.md", "requires_all": ["agent-instructions"]},
+        {"pattern": "GEMINI.md", "requires_all": ["agent-instructions"]},
+        {
+            "pattern": ".github/copilot-instructions.md",
+            "requires_all": ["agent-instructions"],
+        },
         {
             "pattern": ".template-sync/marker.yml",
             "requires_all": ["template-sync-support"],
@@ -116,6 +123,7 @@ def _marker(
     *,
     local_overrides: list[dict[str, str]] | None = None,
     deferred_candidates: list[dict[str, str]] | None = None,
+    protected_decisions: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Build a small schema-valid marker fixture."""
     template_sync: dict[str, Any] = {
@@ -127,6 +135,8 @@ def _marker(
         template_sync["local_overrides"] = local_overrides
     if deferred_candidates is not None:
         template_sync["deferred_protected_candidates"] = deferred_candidates
+    if protected_decisions is not None:
+        template_sync["protected_file_decisions"] = protected_decisions
     return {"template_sync": template_sync}
 
 
@@ -141,6 +151,7 @@ def _write_marker(
     *,
     local_overrides: list[dict[str, str]] | None = None,
     deferred_candidates: list[dict[str, str]] | None = None,
+    protected_decisions: list[dict[str, str]] | None = None,
 ) -> None:
     """Write the marker fixture."""
     _write_yaml(
@@ -150,6 +161,7 @@ def _write_marker(
             included_modules,
             local_overrides=local_overrides,
             deferred_candidates=deferred_candidates,
+            protected_decisions=protected_decisions,
         ),
     )
 
@@ -366,3 +378,244 @@ def test_manifest_v1_requires_all_semantics_are_consumed(tmp_path: Path) -> None
 
     assert result.returncode == 0, result.stderr
     assert "Marker-aware template sync validation passed." in result.stdout
+
+
+def test_protected_file_decisions_and_remove_local_authorizations_are_reported(
+    marker_repo: Path,
+) -> None:
+    """Protected-file decisions and removal authorizations are visible."""
+    _write_marker(
+        marker_repo,
+        ["template-sync-support"],
+        protected_decisions=[
+            {
+                "path": "CLAUDE.md",
+                "decision": "MERGE",
+                "adoption_mode": "minimal-preservation",
+                "authorization_basis": "Owner authorized protected edits on 2026-05-27.",
+                "authorized_scope": "CLAUDE.md only.",
+            },
+            {
+                "path": "GEMINI.md",
+                "decision": "REMOVE-LOCAL",
+                "authorization_basis": "Owner explicitly authorized removing GEMINI.md.",
+                "authorized_scope": "GEMINI.md only.",
+                "reason": "Gemini agent not used by this repository.",
+            },
+        ],
+    )
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "Protected file decisions:" in result.stdout
+    assert "CLAUDE.md: MERGE" in result.stdout
+    assert "REMOVE-LOCAL authorizations:" in result.stdout
+    assert "authorization_basis: Owner explicitly authorized removing GEMINI.md." in result.stdout
+    assert "authorized_scope: GEMINI.md only." in result.stdout
+    assert "reason: Gemini agent not used by this repository." in result.stdout
+
+
+def test_duplicate_protected_decision_paths_fail(marker_repo: Path) -> None:
+    """Protected-file decisions must not repeat normalized paths."""
+    _write_marker(
+        marker_repo,
+        ["template-sync-support"],
+        protected_decisions=[
+            {
+                "path": "CLAUDE.md",
+                "decision": "SKIP",
+                "reason": "Claude agent is not used.",
+            },
+            {
+                "path": "CLAUDE.md",
+                "decision": "PROTECTED-REVIEW",
+                "reason": "Owner authorization is pending.",
+            },
+        ],
+    )
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1
+    assert "Duplicate protected_file_decisions path(s): CLAUDE.md" in result.stderr
+
+
+def test_directory_style_protected_decision_path_fails(marker_repo: Path) -> None:
+    """Protected-file decisions must reference a file, not a directory."""
+    _write_marker(
+        marker_repo,
+        ["template-sync-support"],
+        protected_decisions=[
+            {
+                "path": ".github/instructions/",
+                "decision": "MERGE",
+                "adoption_mode": "minimal-preservation",
+                "authorization_basis": "Owner authorized protected edits on 2026-05-27.",
+                "authorized_scope": ".github/instructions/ only.",
+            }
+        ],
+    )
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1
+    assert "Schema validation failed for .template-sync/marker.yml" in result.stderr
+    assert (
+        ".template_sync.protected_file_decisions[0].path" in result.stderr
+        or "template_sync.protected_file_decisions[0].path" in result.stderr
+    )
+
+
+def test_directory_style_deferred_candidate_path_fails(marker_repo: Path) -> None:
+    """Deferred protected candidates must reference a file, not a directory."""
+    _write_marker(
+        marker_repo,
+        ["template-sync-support"],
+        deferred_candidates=[
+            {
+                "path": ".github/instructions/",
+                "source_commit": FULL_SHA,
+                "reason": "Protected governance directory needs explicit owner authorization.",
+            }
+        ],
+    )
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1
+    assert "Schema validation failed for .template-sync/marker.yml" in result.stderr
+    assert (
+        ".template_sync.deferred_protected_candidates[0].path" in result.stderr
+        or "template_sync.deferred_protected_candidates[0].path" in result.stderr
+    )
+
+
+def test_noncontradictory_protected_decision_local_override_overlap_is_reported(
+    marker_repo: Path,
+) -> None:
+    """Same-decision protected decisions and local overrides are shown together."""
+    _write_marker(
+        marker_repo,
+        ["template-sync-support"],
+        local_overrides=[
+            {
+                "path": "CLAUDE.md",
+                "reason": "Claude agent is downstream-owned.",
+                "default_decision": "SKIP",
+            }
+        ],
+        protected_decisions=[
+            {
+                "path": "CLAUDE.md",
+                "decision": "SKIP",
+                "reason": "Claude agent is not used.",
+            }
+        ],
+    )
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "Protected decision overlaps:" in result.stdout
+    assert "protected_file_decisions: decision=SKIP; reason=Claude agent is not used." in (
+        result.stdout
+    )
+    assert (
+        "local_overrides: path=CLAUDE.md; default_decision=SKIP; "
+        "reason=Claude agent is downstream-owned."
+    ) in result.stdout
+
+
+def test_contradictory_protected_decision_local_override_overlap_fails(
+    marker_repo: Path,
+) -> None:
+    """Different same-path protected and local override decisions are contradictory."""
+    _write_marker(
+        marker_repo,
+        ["template-sync-support"],
+        local_overrides=[
+            {
+                "path": "CLAUDE.md",
+                "reason": "Claude agent is downstream-owned.",
+                "default_decision": "SKIP",
+            }
+        ],
+        protected_decisions=[
+            {
+                "path": "CLAUDE.md",
+                "decision": "MERGE",
+                "adoption_mode": "minimal-preservation",
+                "authorization_basis": "Owner authorized protected edits on 2026-05-27.",
+                "authorized_scope": "CLAUDE.md only.",
+            }
+        ],
+    )
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1
+    assert "Contradictory protected-file marker entries:" in result.stderr
+    assert "protected_file_decisions: decision=MERGE" in result.stderr
+    assert "local_overrides: path=CLAUDE.md; default_decision=SKIP" in result.stderr
+
+
+def test_protected_decision_deferred_candidate_overlap_fails(marker_repo: Path) -> None:
+    """A current protected decision cannot also be deferred for the same path."""
+    _write_marker(
+        marker_repo,
+        ["template-sync-support"],
+        deferred_candidates=[
+            {
+                "path": "CLAUDE.md",
+                "source_commit": "89abcdef0123456789abcdef0123456789abcdef",
+                "reason": "Owner authorization is pending.",
+            }
+        ],
+        protected_decisions=[
+            {
+                "path": "CLAUDE.md",
+                "decision": "PROTECTED-REVIEW",
+                "reason": "Owner authorization is pending.",
+            }
+        ],
+    )
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1
+    assert "Contradictory protected-file marker entries:" in result.stderr
+    assert "deferred_protected_candidates: source_commit=89abcdef" in result.stderr
+
+
+def test_strict_remove_local_phrasing_is_opt_in_and_token_configurable(
+    marker_repo: Path,
+) -> None:
+    """Strict removal phrasing fails only when opted in and no token matches."""
+    _write_marker(
+        marker_repo,
+        ["template-sync-support"],
+        protected_decisions=[
+            {
+                "path": "GEMINI.md",
+                "decision": "REMOVE-LOCAL",
+                "authorization_basis": "Owner approved GEMINI.md retirement.",
+                "authorized_scope": "GEMINI.md only.",
+                "reason": "Gemini agent not used by this repository.",
+            }
+        ],
+    )
+
+    default_result = _run_validator(marker_repo)
+    strict_result = _run_validator(marker_repo, "--strict-remove-local-phrasing")
+    custom_result = _run_validator(
+        marker_repo,
+        "--strict-remove-local-phrasing",
+        "--remove-local-authorization-token",
+        "retire",
+    )
+
+    assert default_result.returncode == 0, default_result.stderr
+    assert strict_result.returncode == 1
+    assert "GEMINI.md REMOVE-LOCAL authorization_basis must contain" in strict_result.stderr
+    assert custom_result.returncode == 0, custom_result.stderr
