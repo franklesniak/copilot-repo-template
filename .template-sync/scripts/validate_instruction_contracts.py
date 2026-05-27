@@ -303,6 +303,8 @@ def parse_instruction_contract_waivers(
         raise InstructionContractValidationError("Marker must contain template_sync mapping.")
 
     waivers: list[InstructionContractWaiver] = []
+    seen_pairs: set[tuple[str, str]] = set()
+    duplicate_pairs: set[tuple[str, str]] = set()
     for raw_waiver in template_sync.get("instruction_contract_waivers", []):
         if not isinstance(raw_waiver, dict):
             raise InstructionContractValidationError(
@@ -331,6 +333,10 @@ def parse_instruction_contract_waivers(
                 "template_sync.instruction_contract_waivers[].path must reference a file, "
                 f"not a directory: {raw_path}"
             )
+        waiver_pair = (path, anchor)
+        if waiver_pair in seen_pairs:
+            duplicate_pairs.add(waiver_pair)
+        seen_pairs.add(waiver_pair)
         waivers.append(
             InstructionContractWaiver(
                 path=path,
@@ -338,6 +344,14 @@ def parse_instruction_contract_waivers(
                 reason=reason,
                 authorization_basis=authorization_basis,
             )
+        )
+    if duplicate_pairs:
+        formatted_pairs = ", ".join(
+            f"({path}, {anchor})" for path, anchor in sorted(duplicate_pairs)
+        )
+        raise InstructionContractValidationError(
+            "Duplicate template_sync.instruction_contract_waivers (path, anchor) "
+            f"pair(s): {formatted_pairs}"
         )
     return tuple(waivers)
 

@@ -271,6 +271,45 @@ def test_valid_downstream_waiver_is_reported_loudly(tmp_path: Path) -> None:
     assert "Owner authorized this waiver on 2026-05-27." in result.stdout
 
 
+def test_downstream_duplicate_waiver_pairs_fail(tmp_path: Path) -> None:
+    """Duplicate (path, anchor) waivers fail fast instead of silently de-duplicating."""
+    _write_common_contract_repo(
+        tmp_path,
+        _contracts(required_headings=["## Handling Code Review Comments"]),
+    )
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["agent-instructions"],
+            waivers=[
+                {
+                    "path": "CLAUDE.md",
+                    "anchor": "## Handling Code Review Comments",
+                    "reason": "First waiver.",
+                    "authorization_basis": "Owner authorized this waiver on 2026-05-27.",
+                },
+                {
+                    "path": "CLAUDE.md",
+                    "anchor": "## Handling Code Review Comments",
+                    "reason": "Conflicting second waiver for the same anchor.",
+                    "authorization_basis": "Owner re-authorized on 2026-05-27.",
+                },
+            ],
+        ),
+    )
+    _write_text(tmp_path, "CLAUDE.md", "# Agent Instructions\n")
+
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+
+    assert result.returncode == 1
+    assert (
+        "Duplicate template_sync.instruction_contract_waivers (path, anchor) pair(s):"
+        in result.stderr
+    )
+    assert "(CLAUDE.md, ## Handling Code Review Comments)" in result.stderr
+
+
 def test_file_absent_without_authorized_remove_local_fails(tmp_path: Path) -> None:
     """A retained contract file cannot disappear without protected-file authorization."""
     _write_common_contract_repo(
