@@ -195,6 +195,18 @@ repos:
         entry: >-
           python .template-sync/scripts/validate_instruction_contracts.py
           --mode upstream-template
+          --skip-if-marker-present
+        language: python
+        pass_filenames: false
+        always_run: true
+        additional_dependencies:
+          - jsonschema>=4.18.0
+          - PyYAML>=6.0.3
+      - id: validate-instruction-contracts-downstream
+        name: Validate downstream instruction contracts
+        entry: >-
+          python .template-sync/scripts/validate_instruction_contracts.py
+          --mode downstream
         language: python
         pass_filenames: false
         always_run: true

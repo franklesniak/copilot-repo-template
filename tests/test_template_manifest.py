@@ -146,12 +146,15 @@ SCHEMA_TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS = {
         r"files: ^\.template-sync/marker\.yml$",
         r"files: ^\.template-sync/instruction-contracts\.yml$",
         "validate-instruction-contracts-upstream",
+        "validate-instruction-contracts-downstream",
+        "--skip-if-marker-present",
     ),
     ".github/workflows/data-ci.yml": (
         "pre-commit run validate-template-sync-manifest --all-files",
         "pre-commit run validate-template-sync-marker --all-files",
         "pre-commit run validate-template-sync-instruction-contracts --all-files",
         "pre-commit run validate-instruction-contracts-upstream --all-files",
+        "pre-commit run validate-instruction-contracts-downstream --all-files",
     ),
 }
 GITHUB_PLATFORM_INLINE_BLOCK_COUNTS = {

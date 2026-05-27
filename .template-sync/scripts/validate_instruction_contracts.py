@@ -183,6 +183,16 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "treating the run as a no-op."
         ),
     )
+    parser.add_argument(
+        "--skip-if-marker-present",
+        action="store_true",
+        help=(
+            "In --mode upstream-template, exit 0 immediately without validating "
+            "when the marker file exists. Intended for shared pre-commit and CI "
+            "hooks that run upstream-template validation in the upstream template "
+            "repository but should defer to --mode downstream in downstream forks."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -431,6 +441,37 @@ def authorized_removal_for(
     return None
 
 
+def strip_fenced_code_blocks(text: str) -> str:
+    """Return ``text`` with CommonMark fenced code blocks removed.
+
+    Required anchors must appear as live Markdown content; example anchors
+    nested in a fenced code block should not satisfy the contract.
+    """
+    lines = text.splitlines()
+    out: list[str] = []
+    open_fence: str | None = None
+    for line in lines:
+        stripped = line.lstrip()
+        if open_fence is None:
+            if stripped.startswith("```") or stripped.startswith("~~~"):
+                fence_char = stripped[0]
+                run = 0
+                while run < len(stripped) and stripped[run] == fence_char:
+                    run += 1
+                if run >= 3:
+                    open_fence = fence_char * run
+                    continue
+            out.append(line)
+        else:
+            fence_char = open_fence[0]
+            run = 0
+            while run < len(stripped) and stripped[run] == fence_char:
+                run += 1
+            if run >= len(open_fence) and stripped[run:].strip() == "":
+                open_fence = None
+    return "\n".join(out)
+
+
 def heading_is_present(text: str, heading: str) -> bool:
     """Return whether ``heading`` exists as an exact Markdown heading line."""
     return any(line.strip() == heading for line in text.splitlines())
@@ -476,8 +517,9 @@ def validate_contracts(
             continue
 
         checked_contracts.append(contract)
+        scannable_text = strip_fenced_code_blocks(text)
         for heading in contract.required_headings:
-            if heading_is_present(text, heading):
+            if heading_is_present(scannable_text, heading):
                 continue
             waiver = find_waiver(waivers, contract.path, heading)
             if waiver is not None:
@@ -491,7 +533,7 @@ def validate_contracts(
                     )
                 )
         for phrase in contract.required_phrases:
-            if phrase in text:
+            if phrase in scannable_text:
                 continue
             waiver = find_waiver(waivers, contract.path, phrase)
             if waiver is not None:
@@ -611,6 +653,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.mode == "upstream-template":
             marker_relative_path = validate_marker.repository_relative_path(marker_path, repo_root)
             if marker_path.exists():
+                if args.skip_if_marker_present:
+                    print(
+                        f"--mode upstream-template skipped: {marker_relative_path} "
+                        "is present and --skip-if-marker-present was supplied."
+                    )
+                    return 0
                 warnings = (
                     "--mode upstream-template was invoked while "
                     f"{marker_relative_path} is present; use --mode downstream for "

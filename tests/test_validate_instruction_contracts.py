@@ -271,6 +271,90 @@ def test_valid_downstream_waiver_is_reported_loudly(tmp_path: Path) -> None:
     assert "Owner authorized this waiver on 2026-05-27." in result.stdout
 
 
+def test_required_heading_inside_fenced_code_block_is_not_satisfied(tmp_path: Path) -> None:
+    """A heading nested inside a fenced code block must not satisfy the contract."""
+    _write_common_contract_repo(
+        tmp_path,
+        _contracts(required_headings=["## Handling Code Review Comments"]),
+    )
+    _write_text(
+        tmp_path,
+        "CLAUDE.md",
+        "# Agent Instructions\n\n```markdown\n## Handling Code Review Comments\n```\n",
+    )
+
+    result = _run_validator(tmp_path, "--mode", "upstream-template")
+
+    assert result.returncode == 1
+    assert "CLAUDE.md: missing required heading: ## Handling Code Review Comments" in result.stdout
+
+
+def test_required_phrase_inside_fenced_code_block_is_not_satisfied(tmp_path: Path) -> None:
+    """A phrase nested inside a fenced code block must not satisfy the contract."""
+    _write_common_contract_repo(
+        tmp_path,
+        _contracts(required_phrases=["Protected-file authorization checkpoint"]),
+    )
+    _write_text(
+        tmp_path,
+        "CLAUDE.md",
+        "# Agent Instructions\n\n~~~text\nProtected-file authorization checkpoint\n~~~\n",
+    )
+
+    result = _run_validator(tmp_path, "--mode", "upstream-template")
+
+    assert result.returncode == 1
+    assert (
+        "CLAUDE.md: missing required phrase: Protected-file authorization checkpoint"
+        in result.stdout
+    )
+
+
+def test_upstream_mode_skip_if_marker_present_exits_zero_without_validating(
+    tmp_path: Path,
+) -> None:
+    """--skip-if-marker-present makes upstream-template mode a no-op downstream."""
+    _write_common_contract_repo(
+        tmp_path,
+        _contracts(required_headings=["## Handling Code Review Comments"]),
+    )
+    _write_yaml(tmp_path, ".template-sync/marker.yml", _marker(["agent-instructions"]))
+    _write_text(tmp_path, "CLAUDE.md", "# Agent Instructions\n")
+
+    result = _run_validator(
+        tmp_path,
+        "--mode",
+        "upstream-template",
+        "--skip-if-marker-present",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--mode upstream-template skipped" in result.stdout
+    assert ".template-sync/marker.yml" in result.stdout
+    assert "Instruction-contract validation failed." not in result.stdout
+
+
+def test_upstream_mode_skip_if_marker_present_runs_when_marker_absent(
+    tmp_path: Path,
+) -> None:
+    """--skip-if-marker-present has no effect when the marker is absent."""
+    _write_common_contract_repo(
+        tmp_path,
+        _contracts(required_headings=["## Handling Code Review Comments"]),
+    )
+    _write_text(tmp_path, "CLAUDE.md", "# Agent Instructions\n")
+
+    result = _run_validator(
+        tmp_path,
+        "--mode",
+        "upstream-template",
+        "--skip-if-marker-present",
+    )
+
+    assert result.returncode == 1
+    assert "CLAUDE.md: missing required heading: ## Handling Code Review Comments" in result.stdout
+
+
 def test_downstream_duplicate_waiver_pairs_fail(tmp_path: Path) -> None:
     """Duplicate (path, anchor) waivers fail fast instead of silently de-duplicating."""
     _write_common_contract_repo(

@@ -192,6 +192,9 @@ jobs:
 
       - name: Run validate-instruction-contracts-upstream
         run: pre-commit run validate-instruction-contracts-upstream --all-files
+
+      - name: Run validate-instruction-contracts-downstream
+        run: pre-commit run validate-instruction-contracts-downstream --all-files
       # template-sync: end schema-template-sync-support-only
 
       # template-sync: begin github-platform-only
