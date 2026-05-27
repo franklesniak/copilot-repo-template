@@ -287,6 +287,18 @@ The schema-example contract test ([`tests/test_schema_examples.py`](tests/test_s
 
 > **Prerequisite — `check-jsonschema` must be runnable in the pytest environment.** This test shells out to the `check-jsonschema` validator by first using the `check-jsonschema` console script when it is on `PATH`, then falling back to `python -m check_jsonschema` when the package is importable. **A skipped test is not a passing test:** if neither invocation is available, pytest still exits `0`, but no schema validation actually ran. Install it via `pip install -e ".[dev]"` (which pulls in `check-jsonschema` along with the other dev dependencies — see the `[project.optional-dependencies] dev` table in [`pyproject.toml`](pyproject.toml)) or `pip install check-jsonschema` if you only need this one tool; either path makes the package importable, and many environments also put the console script on `PATH`. **`pre-commit install --install-hooks` does NOT** install `check-jsonschema` into the pytest environment — pre-commit installs hook dependencies into its own isolated per-hook environments under `~/.cache/pre-commit/`, which satisfies the pre-commit hook but not this pytest test. To validate schemas through the pre-commit toolchain instead of through this pytest test, run `pre-commit run check-jsonschema --all-files`. Confirm the test reports collected cases (e.g., `N passed`) rather than `N skipped` to know it actually ran.
 
+#### Downstream Partial-Adoption Validation
+
+Downstream repositories that keep `.template-sync/marker.yml` after removing optional modules SHOULD validate the retained template surface with:
+
+```bash
+python .template-sync/scripts/validate_downstream_adoption.py --require-marker
+```
+
+Use the full upstream test suite (`pre-commit run --all-files` plus the relevant `pytest`, Pester, Terraform, and schema-example tests) when maintaining this template or when a downstream repository intentionally keeps the corresponding test/tool stack. Use the downstream adoption command when `.template-sync/marker.yml` is the source of truth for retained modules and excluded modules are intentionally absent. Run both when changing template-sync manifest/schema contracts or when a downstream repository keeps the upstream helper tests and wants both contract-level and test-level coverage.
+
+Omit `--require-marker` only during exploratory adoption work; without the flag, the command exits successfully with a no-marker message when `.template-sync/marker.yml` is absent.
+
 #### PowerShell Tests
 
 PowerShell tests use Pester 5.x.

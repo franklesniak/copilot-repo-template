@@ -1569,6 +1569,9 @@ def test_template_sync_helper_tests_map_to_support_and_schema_modules() -> None:
 
     assert _manifest_modules_for_path("tests/test_generate_sync_candidates.py") == expected_modules
     assert _manifest_modules_for_path("tests/test_validate_marker.py") == expected_modules
+    assert _manifest_modules_for_path("tests/test_validate_downstream_adoption.py") == (
+        expected_modules
+    )
     assert _manifest_modules_for_path("tests/test_validate_instruction_contracts.py") == (
         expected_modules
     )

@@ -341,6 +341,10 @@ template_manifest:
       requires_all:
         - template-sync-support
         - schema
+    - pattern: 'tests/test_validate_downstream_adoption.py'
+      requires_all:
+        - template-sync-support
+        - schema
     - pattern: 'tests/test_validate_instruction_contracts.py'
       requires_all:
         - template-sync-support
