@@ -309,9 +309,7 @@ def build_check_plan(
     if optional_regular_file_exists(repo_root, PLACEHOLDER_SCRIPT):
         commands.append((sys.executable, PLACEHOLDER_SCRIPT, "scan"))
 
-    if (repo_root / MARKER_PATH).exists():
-        if not optional_regular_file_exists(repo_root, MARKER_PATH):
-            raise FirstAdoptionCheckError(f"Expected a regular file: {MARKER_PATH}")
+    if optional_regular_file_exists(repo_root, MARKER_PATH):
         require_regular_script(repo_root, MARKER_VALIDATOR_SCRIPT)
         commands.append((sys.executable, MARKER_VALIDATOR_SCRIPT, "--require-marker"))
 

@@ -120,7 +120,7 @@ def test_marker_absent_does_not_run_marker_validator(tmp_path: Path) -> None:
 
     assert result == 0
     assert commands[0][-3:] == ("run", "--files", "README.md")
-    assert not any("validate_marker.py" in command for command in commands for command in command)
+    assert not any("validate_marker.py" in arg for cmd in commands for arg in cmd)
 
 
 def test_marker_present_runs_marker_validator(tmp_path: Path) -> None:
