@@ -1,15 +1,17 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.5.20260520.0
+**Version:** 1.5.20260527.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-20
+- **Last Updated:** 2026-05-27
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
+<!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
+<!-- template-sync: end markdown-reference-only -->
 
 These instructions are authoritative for all changes in this repository.
 
@@ -286,7 +288,9 @@ This repository uses modular instruction files covering both language-specific s
 - Add new instruction files for additional languages or cross-cutting rules as needed
 - Update this table to reflect the instruction files present in your project
 
+<!-- template-sync: begin terraform-reference-only -->
 > **Terraform note:** If your project does not use Terraform, remove the Terraform instruction file (`.github/instructions/terraform.instructions.md`), remove the Terraform row from the table above, and remove Terraform-related entries from the Linting and Validation Configurations and Testing Tools sections below.
+<!-- template-sync: end terraform-reference-only -->
 
 ## Agent Instruction Files
 
@@ -301,6 +305,8 @@ This repository includes agent instruction files at the repository root and unde
 | `GEMINI.md` | Gemini Code Assist, GitHub Copilot coding agent |
 
 `.github/copilot-instructions.md` remains the **canonical source of truth** for all repository rules. The agent instruction files are thin entry points: each keeps a minimal inline summary of the highest-priority shared rules for reliability and may add platform-specific guidance that does not conflict with this file.
+
+Thin entry point means "brief shared-rule summary plus platform-specific protocol," not "safe to collapse into a stub." Sections classified in an agent file as platform protocol or required protocol MUST be preserved during downstream stack pruning unless the repository owner explicitly waives that protocol for the retained agent platform.
 
 When explicitly authorized to modify high-priority shared guidance in `.github/copilot-instructions.md` (for example, canonical file location, safety rules, pre-commit expectations, validation commands, or language-instruction references), update the minimal summaries in any remaining agent files as needed. Avoid copying large shared sections into the entry point files.
 
@@ -325,17 +331,27 @@ This repository includes linting and validation tool configurations that align w
 
 **Markdown:**
 
+<!-- template-sync: begin markdown-reference-only -->
+
 ```bash
 npm run lint:md
 ```
 
+<!-- template-sync: end markdown-reference-only -->
+
 **PowerShell:**
+
+<!-- template-sync: begin powershell-reference-only -->
 
 ```powershell
 Invoke-ScriptAnalyzer -Path .\script.ps1 -Settings .\.github\linting\PSScriptAnalyzerSettings.psd1
 ```
 
+<!-- template-sync: end powershell-reference-only -->
+
 **Terraform:**
+
+<!-- template-sync: begin terraform-reference-only -->
 
 ```bash
 terraform fmt -check -recursive -diff
@@ -343,16 +359,38 @@ tflint --init
 tflint --recursive --config "$(pwd)/.tflint.hcl"
 ```
 
+<!-- template-sync: end terraform-reference-only -->
+
 **JSON, YAML, and GitHub Actions:**
+
+<!-- template-sync: begin json-reference-only -->
 
 ```bash
 pre-commit run check-json --all-files
+```
+
+<!-- template-sync: end json-reference-only -->
+<!-- template-sync: begin yaml-reference-only -->
+
+```bash
 pre-commit run check-yaml --all-files
 pre-commit run yamllint --all-files
+```
+
+<!-- template-sync: end yaml-reference-only -->
+
+```bash
 pre-commit run actionlint --all-files
+```
+
+<!-- template-sync: begin schema-reference-only -->
+
+```bash
 pre-commit run check-jsonschema --all-files
 pre-commit run check-metaschema --all-files
 ```
+
+<!-- template-sync: end schema-reference-only -->
 
 Prettier is **opt-in** and is **not** part of the default data-file toolchain. The canonical statement lives in the **Data-File Validation** subsection above; if the two ever appear to diverge, treat the canonical statement as authoritative. For the rationale, see the **Prettier Deferral for Data Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md).
 
@@ -371,26 +409,42 @@ This repository includes testing infrastructure for Python, PowerShell, Terrafor
 
 **Python:**
 
+<!-- template-sync: begin python-reference-only -->
+
 ```bash
 pytest tests/ -v --cov --cov-report=term-missing
 ```
 
+<!-- template-sync: end python-reference-only -->
+
 **PowerShell:**
+
+<!-- template-sync: begin powershell-reference-only -->
 
 ```powershell
 Invoke-Pester -Path tests/ -Output Detailed
 ```
 
+<!-- template-sync: end powershell-reference-only -->
+
 **Terraform:**
+
+<!-- template-sync: begin terraform-reference-only -->
 
 ```bash
 terraform test -verbose
 ```
 
+<!-- template-sync: end terraform-reference-only -->
+
 **JSON Schema example fixtures:**
+
+<!-- template-sync: begin schema-reference-only -->
 
 ```bash
 pytest tests/test_schema_examples.py -v
 ```
 
 `tests/test_schema_examples.py` shells out to the `check-jsonschema` validator by first using the `check-jsonschema` console script when it is on `PATH`, then falling back to `python -m check_jsonschema` when the package is importable in the pytest environment. The parametrized cases skip only when neither invocation is available (a skipped test is not a passing test — pytest still exits `0`, but no schema validation actually ran). Install it via `pip install -e ".[dev]"` or `pip install check-jsonschema` so the package is importable and, where supported by the environment, the console script is on `PATH`. To validate schemas through the pre-commit toolchain instead, run `pre-commit run check-jsonschema --all-files` for example-fixture validation against schemas and `pre-commit run check-metaschema --all-files` for project-owned schema self-validation; `pre-commit run --all-files` exercises both at once. See [`README.md`](../README.md) for the full prerequisite note.
+
+<!-- template-sync: end schema-reference-only -->

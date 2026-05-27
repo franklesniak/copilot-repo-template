@@ -76,6 +76,11 @@ template_manifest:
     - pattern: '.github/copilot-instructions.md'
       requires_all:
         - agent-instructions
+      notes: >-
+        Contains Markdown-safe *-reference-only inline blocks for optional stack
+        references in protected canonical guidance. Remove each delimited
+        reference-only block when its module is excluded while preserving
+        required shared protocol text.
     - pattern: '.github/instructions/docs.instructions.md'
       requires_all:
         - markdown
@@ -114,18 +119,43 @@ template_manifest:
     - pattern: '.cursor/rules/**'
       requires_all:
         - agent-instructions
+      notes: >-
+        Contains Markdown-safe *-reference-only inline blocks for optional stack
+        references in the protected Cursor entry point. Remove each delimited
+        reference-only block when its module is excluded while preserving
+        required shared protocol text.
     - pattern: '.hermes.md'
       requires_all:
         - agent-instructions
+      notes: >-
+        Contains Markdown-safe *-reference-only inline blocks for optional stack
+        references in the protected Hermes entry point. Remove each delimited
+        reference-only block when its module is excluded while preserving
+        required shared protocol text.
     - pattern: 'AGENTS.md'
       requires_all:
         - agent-instructions
+      notes: >-
+        Contains Markdown-safe *-reference-only inline blocks for optional stack
+        references in the protected Codex entry point. Remove each delimited
+        reference-only block when its module is excluded while preserving
+        retained Codex platform protocol.
     - pattern: 'CLAUDE.md'
       requires_all:
         - agent-instructions
+      notes: >-
+        Contains Markdown-safe *-reference-only inline blocks for optional stack
+        references in the protected Claude entry point. Remove each delimited
+        reference-only block when its module is excluded while preserving
+        retained Claude platform protocol.
     - pattern: 'GEMINI.md'
       requires_all:
         - agent-instructions
+      notes: >-
+        Contains Markdown-safe *-reference-only inline blocks for optional stack
+        references in the protected Gemini entry point. Remove each delimited
+        reference-only block when its module is excluded while preserving
+        required shared protocol text.
     - pattern: 'COPILOT_CHAT_PROMPTS.md'
       requires_all:
         - agent-instructions

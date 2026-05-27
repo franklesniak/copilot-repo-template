@@ -177,6 +177,139 @@ GITHUB_PLATFORM_SHARED_SURFACE_TOKENS = {
         "vendor.dependabot",
     ),
 }
+REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
+    "markdown-reference-only": {
+        ".github/copilot-instructions.md": 2,
+        ".cursor/rules/repository-instructions.mdc": 3,
+        ".hermes.md": 3,
+        "AGENTS.md": 3,
+        "CLAUDE.md": 3,
+        "GEMINI.md": 3,
+    },
+    "powershell-reference-only": {
+        ".github/copilot-instructions.md": 2,
+        ".cursor/rules/repository-instructions.mdc": 2,
+        ".hermes.md": 2,
+        "AGENTS.md": 2,
+        "CLAUDE.md": 2,
+        "GEMINI.md": 2,
+    },
+    "python-reference-only": {
+        ".github/copilot-instructions.md": 1,
+        ".cursor/rules/repository-instructions.mdc": 2,
+        ".hermes.md": 2,
+        "AGENTS.md": 2,
+        "CLAUDE.md": 2,
+        "GEMINI.md": 2,
+    },
+    "terraform-reference-only": {
+        ".github/copilot-instructions.md": 3,
+        ".cursor/rules/repository-instructions.mdc": 2,
+        ".hermes.md": 2,
+        "AGENTS.md": 2,
+        "CLAUDE.md": 2,
+        "GEMINI.md": 2,
+    },
+    "json-reference-only": {
+        ".github/copilot-instructions.md": 1,
+        ".cursor/rules/repository-instructions.mdc": 3,
+        ".hermes.md": 3,
+        "AGENTS.md": 3,
+        "CLAUDE.md": 3,
+        "GEMINI.md": 3,
+    },
+    "yaml-reference-only": {
+        ".github/copilot-instructions.md": 1,
+        ".cursor/rules/repository-instructions.mdc": 3,
+        ".hermes.md": 3,
+        "AGENTS.md": 3,
+        "CLAUDE.md": 3,
+        "GEMINI.md": 3,
+    },
+    "schema-reference-only": {
+        ".github/copilot-instructions.md": 2,
+        ".cursor/rules/repository-instructions.mdc": 3,
+        ".hermes.md": 3,
+        "AGENTS.md": 3,
+        "CLAUDE.md": 3,
+        "GEMINI.md": 3,
+    },
+}
+REFERENCE_ONLY_MARKER_MODULES = {
+    "markdown-reference-only": "markdown",
+    "powershell-reference-only": "powershell",
+    "python-reference-only": "python",
+    "terraform-reference-only": "terraform",
+    "json-reference-only": "json",
+    "yaml-reference-only": "yaml",
+    "schema-reference-only": "schema",
+}
+PROTECTED_ENTRY_POINT_REFERENCE_PATHS = (
+    ".cursor/rules/repository-instructions.mdc",
+    ".hermes.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+)
+PROTECTED_REFERENCE_MANIFEST_PATTERNS = {
+    ".github/copilot-instructions.md": ".github/copilot-instructions.md",
+    ".cursor/rules/repository-instructions.mdc": ".cursor/rules/**",
+    ".hermes.md": ".hermes.md",
+    "AGENTS.md": "AGENTS.md",
+    "CLAUDE.md": "CLAUDE.md",
+    "GEMINI.md": "GEMINI.md",
+}
+REFERENCE_ONLY_FORBIDDEN_ENTRY_POINT_TOKENS = {
+    "markdown-reference-only": (
+        "Documentation Writing Style",
+        "docs.instructions.md",
+        "npm run lint:md",
+    ),
+    "powershell-reference-only": (
+        "Invoke-Pester -Path tests/ -Output Detailed",
+        "powershell.instructions.md",
+    ),
+    "python-reference-only": (
+        "pytest tests/ -v --cov --cov-report=term-missing",
+        "python.instructions.md",
+    ),
+    "terraform-reference-only": (
+        "terraform fmt -check -recursive",
+        "terraform.instructions.md",
+        "terraform test -verbose",
+        "tflint --recursive",
+    ),
+    "json-reference-only": (
+        "`check-json`",
+        "json.instructions.md",
+    ),
+    "yaml-reference-only": (
+        "`check-yaml`",
+        "yaml.instructions.md",
+        "`yamllint`",
+    ),
+    "schema-reference-only": (
+        "check-jsonschema",
+        "check-metaschema",
+        "pytest tests/test_schema_examples.py -v",
+        "schemas/README.md",
+    ),
+}
+PROTECTED_PROTOCOL_HEADINGS_AFTER_REFERENCE_STRIP = {
+    "AGENTS.md": (
+        "## GitHub Plugin Usage",
+        "## PR Review Workflow (Codex-adapted)",
+    ),
+    "CLAUDE.md": (
+        "## Handling Code Review Comments",
+        "## Automated Review Loop",
+    ),
+}
+INLINE_BLOCK_MARKER_RE = re.compile(
+    r"^\s*(?:#\s*template-sync:|<!--\s*template-sync:)\s*"
+    r"(?P<kind>begin|end)\s+"
+    r"(?P<name>[a-z0-9-]+-(?:reference-)?only)\s*(?:-->)?\s*$"
+)
 REFERENCE_FILE_SUFFIXES = {".json", ".md", ".yaml", ".yml"}
 MARKDOWN_FILE_SUFFIXES = {".md", ".mdc"}
 SKIPPED_DISCOVERY_DIRS = {
@@ -683,10 +816,14 @@ def _run_git(repo_root: Path, *args: str) -> None:
     )
 
 
-def _strip_inline_blocks(relative_path: str, marker_begin: str, marker_end: str) -> str:
-    """Return file text after simulating a downstream sync without one module."""
-    path = REPO_ROOT / relative_path
-    lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+def _strip_inline_blocks_from_text(
+    text: str,
+    relative_path: str,
+    marker_begin: str,
+    marker_end: str,
+) -> str:
+    """Return ``text`` after removing one complete inline block family."""
+    lines = text.splitlines(keepends=True)
     stripped_lines: list[str] = []
     is_inside_block = False
     has_seen_block = False
@@ -715,6 +852,62 @@ def _strip_inline_blocks(relative_path: str, marker_begin: str, marker_end: str)
     assert not is_inside_block, f"{relative_path}: unclosed inline block for {marker_begin}"
     assert has_seen_block, f"{relative_path}: missing inline block for {marker_begin}"
     return "".join(stripped_lines)
+
+
+def _strip_inline_blocks(relative_path: str, marker_begin: str, marker_end: str) -> str:
+    """Return file text after simulating a downstream sync without one module."""
+    path = REPO_ROOT / relative_path
+    return _strip_inline_blocks_from_text(
+        path.read_text(encoding="utf-8"),
+        relative_path,
+        marker_begin,
+        marker_end,
+    )
+
+
+def _reference_only_marker_begin(marker_name: str) -> str:
+    """Return the Markdown-safe begin marker for a reference-only block."""
+    return f"<!-- template-sync: begin {marker_name} -->"
+
+
+def _reference_only_marker_end(marker_name: str) -> str:
+    """Return the Markdown-safe end marker for a reference-only block."""
+    return f"<!-- template-sync: end {marker_name} -->"
+
+
+def _strip_reference_only_inline_blocks(relative_path: str, marker_name: str) -> str:
+    """Return file text after stripping one reference-only marker family."""
+    return _strip_inline_blocks(
+        relative_path,
+        _reference_only_marker_begin(marker_name),
+        _reference_only_marker_end(marker_name),
+    )
+
+
+def _strip_reference_only_blocks_for_modules(
+    relative_path: str,
+    included_modules: set[str],
+) -> str:
+    """Return file text after applying reference-only module presence semantics."""
+    text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+    path_marker_counts = {
+        marker_name: path_counts[relative_path]
+        for marker_name, path_counts in REFERENCE_ONLY_INLINE_BLOCK_COUNTS.items()
+        if relative_path in path_counts
+    }
+
+    for marker_name, module_name in REFERENCE_ONLY_MARKER_MODULES.items():
+        if module_name in included_modules or marker_name not in path_marker_counts:
+            continue
+        stripped_text = _strip_inline_blocks_from_text(
+            text,
+            relative_path,
+            _reference_only_marker_begin(marker_name),
+            _reference_only_marker_end(marker_name),
+        )
+        assert stripped_text != text, f"{relative_path}: {marker_name} did not strip"
+        text = stripped_text
+    return text
 
 
 def _strip_terraform_only_inline_blocks(relative_path: str) -> str:
@@ -1392,6 +1585,57 @@ def test_dependabot_schema_regression_surface_maps_to_github_platform_and_schema
     )
 
 
+def test_template_sync_inline_markers_are_known_and_paired() -> None:
+    """Both inline marker families must use known, non-nested begin/end pairs."""
+    known_marker_names = {
+        "terraform-only",
+        "markdown-only",
+        "python-only",
+        "yaml-only",
+        "schema-only",
+        "schema-template-sync-support-only",
+        "github-platform-only",
+        *REFERENCE_ONLY_MARKER_MODULES,
+    }
+    inline_block_paths = sorted(
+        {
+            *TERRAFORM_INLINE_BLOCK_PATHS,
+            *MARKDOWN_INLINE_BLOCK_PATHS,
+            *PYTHON_INLINE_BLOCK_PATHS,
+            *YAML_INLINE_BLOCK_COUNTS,
+            *SCHEMA_INLINE_BLOCK_COUNTS,
+            *SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_BLOCK_COUNTS,
+            *GITHUB_PLATFORM_INLINE_BLOCK_COUNTS,
+            *(
+                relative_path
+                for path_counts in REFERENCE_ONLY_INLINE_BLOCK_COUNTS.values()
+                for relative_path in path_counts
+            ),
+        }
+    )
+
+    for relative_path in inline_block_paths:
+        stack: list[tuple[str, int]] = []
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        for line_number, line in enumerate(text.splitlines(), 1):
+            match = INLINE_BLOCK_MARKER_RE.match(line)
+            if match is None:
+                continue
+            marker_name = match.group("name")
+            assert marker_name in known_marker_names, f"{relative_path}:{line_number}"
+            if match.group("kind") == "begin":
+                assert not stack, f"{relative_path}:{line_number}: nested inline marker"
+                stack.append((marker_name, line_number))
+            else:
+                assert stack, f"{relative_path}:{line_number}: unmatched inline marker end"
+                begin_name, begin_line = stack.pop()
+                assert marker_name == begin_name, (
+                    f"{relative_path}:{line_number}: end marker {marker_name!r} "
+                    f"does not match begin marker {begin_name!r} from line {begin_line}"
+                )
+        assert not stack, f"{relative_path}: unclosed inline marker {stack[-1][0]!r}"
+
+
 def test_terraform_inline_blocks_are_declared_for_template_sync() -> None:
     """Terraform-only inline blocks must be paired with manifest notes."""
     mappings = _path_mapping_by_pattern()
@@ -1782,6 +2026,65 @@ def test_github_platform_sync_retains_dependabot_tooling_in_shared_surfaces() ->
         text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
         for required_token in required_tokens:
             assert required_token in text, f"{relative_path}: {required_token}"
+
+
+def test_reference_only_inline_blocks_are_declared_for_template_sync() -> None:
+    """Reference-only inline blocks must be paired with manifest notes."""
+    mappings = _path_mapping_by_pattern()
+
+    for marker_name, path_counts in REFERENCE_ONLY_INLINE_BLOCK_COUNTS.items():
+        marker_begin = _reference_only_marker_begin(marker_name)
+        marker_end = _reference_only_marker_end(marker_name)
+        for relative_path, expected_count in path_counts.items():
+            text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+            assert text.count(marker_begin) == expected_count
+            assert text.count(marker_end) == expected_count
+            _strip_reference_only_inline_blocks(relative_path, marker_name)
+
+            manifest_pattern = PROTECTED_REFERENCE_MANIFEST_PATTERNS[relative_path]
+            mapping = mappings.get(manifest_pattern)
+            assert mapping is not None, f"{manifest_pattern} must have a manifest mapping"
+            notes = mapping.get("notes")
+            assert isinstance(
+                notes,
+                str,
+            ), f"{manifest_pattern} mapping must describe reference-only inline blocks"
+            assert "*-reference-only inline blocks" in notes
+            assert "when its module is excluded" in notes
+
+
+def test_procedure_registers_reference_only_marker_family() -> None:
+    """The sync procedure must catalog every introduced reference-only marker."""
+    procedure_text = PROCEDURE_PATH.read_text(encoding="utf-8")
+
+    assert "`*-reference-only` family" in procedure_text
+    assert "same strip semantics" in procedure_text
+    for marker_name in REFERENCE_ONLY_MARKER_MODULES:
+        assert marker_name in procedure_text
+    for relative_path in PROTECTED_REFERENCE_MANIFEST_PATTERNS:
+        assert relative_path in procedure_text
+
+
+def test_reference_only_pruning_removes_entry_point_optional_stack_references() -> None:
+    """Simulated module exclusion must strip optional references from agent entries."""
+    for marker_name, forbidden_tokens in REFERENCE_ONLY_FORBIDDEN_ENTRY_POINT_TOKENS.items():
+        for relative_path in PROTECTED_ENTRY_POINT_REFERENCE_PATHS:
+            stripped_text = _strip_reference_only_inline_blocks(relative_path, marker_name)
+            for forbidden_token in forbidden_tokens:
+                assert forbidden_token not in stripped_text, f"{relative_path}: {forbidden_token}"
+
+
+def test_reference_only_pruning_preserves_platform_protocol_headings() -> None:
+    """Removing all optional references must preserve retained protocol headings."""
+    included_modules = {"agent-instructions"}
+
+    for (
+        relative_path,
+        required_headings,
+    ) in PROTECTED_PROTOCOL_HEADINGS_AFTER_REFERENCE_STRIP.items():
+        stripped_text = _strip_reference_only_blocks_for_modules(relative_path, included_modules)
+        for required_heading in required_headings:
+            assert required_heading in stripped_text, f"{relative_path}: {required_heading}"
 
 
 def test_aggregate_precommit_workflow_is_not_python_scoped() -> None:
