@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260527.2
+**Version:** 1.1.20260527.4
 
 ## Metadata
 
@@ -560,7 +560,7 @@ Manifest version 2 rows MAY also use `requires_any`: the path is included only w
 | `templates/yaml/**` | `yaml` |
 | `schemas/**` | `schema` |
 | `tests/test_schema_examples.py` | `schema` |
-| `tests/test_generate_sync_candidates.py`, `tests/test_template_manifest.py`, `tests/test_validate_marker.py`, `tests/test_validate_instruction_contracts.py` | `template-sync-support`, `schema` |
+| `tests/test_generate_sync_candidates.py`, `tests/test_template_manifest.py`, `tests/test_validate_marker.py`, `tests/test_validate_downstream_adoption.py`, `tests/test_validate_instruction_contracts.py` | `template-sync-support`, `schema` |
 | `.github/scripts/terraform_hooks.py`, `tests/test_terraform_hooks.py` | `terraform` |
 | `templates/python/**`, `pyproject.toml`, `src/copilot_repo_template/**`, `tests/*.py`, `tests/**/*.py` | `python` |
 | `templates/terraform/**`, `docs/terraform/**`, `modules/**`, `tests/**/*.tftest.hcl`, `.tflint.hcl`, `*.tf`, `*.tfvars`, `*.tftpl`, `*.tfbackend` | `terraform` |
@@ -1001,15 +1001,15 @@ Do not replace didactic examples that intentionally explain the placeholder conv
 
 Run validation appropriate to the included modules and files changed. Full template-like validation remains the safest default when the downstream repository keeps the relevant tooling.
 
-Run the marker-aware retained-state helper after file removals, retained files, `included_modules`, `local_overrides`, `protected_file_decisions`, and `deferred_protected_candidates` reflect the intended sync result, and before finalizing the sync summary. Use `--require-marker` once the downstream repository has committed to carrying `.template-sync/marker.yml` in CI:
+Run the downstream adoption validation command after file removals, retained files, `included_modules`, `local_overrides`, `protected_file_decisions`, and `deferred_protected_candidates` reflect the intended sync result, and before finalizing the sync summary. Use `--require-marker` once the downstream repository has committed to carrying `.template-sync/marker.yml` in CI:
 
 ```bash
-python .template-sync/scripts/validate_marker.py --require-marker
+python .template-sync/scripts/validate_downstream_adoption.py --require-marker
 ```
 
-Omit `--require-marker` only during initial adoption or exploratory sync work where the marker may intentionally be absent; in that mode, the helper exits zero with a clear no-marker message.
+The aggregate command composes marker schema validation, retained-file presence checks, excluded-module leftover checks, protected-file decision checks, downstream instruction-contract validation, inline-block consistency checks, and retained Markdown relative-link checks. Omit `--require-marker` only during initial adoption or exploratory sync work where the marker may intentionally be absent; in that mode, the helper exits zero with a clear no-marker message.
 
-Run instruction-contract validation for protected agent instruction protocols when the repository retains template sync support. Mode selection is explicit and has no fallback:
+Run instruction-contract validation directly when debugging protected agent instruction protocols or when validating the upstream template repository. Mode selection is explicit and has no fallback:
 
 - In the upstream template repository and upstream template CI, use `--mode upstream-template`. This validates every contract entry against the template's own protected files, does not read `.template-sync/marker.yml`, does not apply marker-derived module gating, and never fails merely because the marker is absent. If `.template-sync/marker.yml` is present, the validator emits a non-blocking warning because the caller may be validating a downstream working tree with the upstream mode.
 - In downstream repositories, use `--mode downstream`. This reads `.template-sync/marker.yml`, checks only contracts whose `requires_modules` are all present in `template_sync.included_modules`, and honors `--require-marker` with the same semantics as `validate_marker.py`: missing marker fails when `--require-marker` is set and exits zero with a clear no-marker message otherwise.
@@ -1020,7 +1020,7 @@ Upstream template validation command:
 python .template-sync/scripts/validate_instruction_contracts.py --mode upstream-template
 ```
 
-Downstream validation command once the repository carries a marker:
+Downstream instruction-contract-only validation command once the repository carries a marker:
 
 ```bash
 python .template-sync/scripts/validate_instruction_contracts.py --mode downstream --require-marker
@@ -1056,7 +1056,7 @@ git ls-files --eol -- .
 | `github-actions` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run actionlint --all-files` |
 | `github-templates` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `npm run lint:md`, `npm run lint:md:links`, and issue or PR template rendering review |
 | `template-onboarding` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, and walkthrough review for kept onboarding paths |
-| `template-sync-support` | `python .template-sync/scripts/validate_marker.py --require-marker` after marker decisions and retained files are current, `python .template-sync/scripts/validate_instruction_contracts.py --mode downstream --require-marker` when downstream marker-gated anchor validation applies, `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run validate-template-sync-manifest --all-files`, `pre-commit run validate-template-sync-marker --all-files`, `pre-commit run validate-template-sync-instruction-contracts --all-files`, and `pre-commit run validate-instruction-contracts-upstream --all-files` when the schema-template-sync-support block is kept, plus a dry-run review of the sync procedure examples |
+| `template-sync-support` | `python .template-sync/scripts/validate_downstream_adoption.py --require-marker` after marker decisions and retained files are current, `python .template-sync/scripts/validate_marker.py --require-marker` or `python .template-sync/scripts/validate_instruction_contracts.py --mode downstream --require-marker` for narrow debugging, `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run validate-template-sync-manifest --all-files`, `pre-commit run validate-template-sync-marker --all-files`, `pre-commit run validate-template-sync-instruction-contracts --all-files`, and `pre-commit run validate-instruction-contracts-upstream --all-files` when the schema-template-sync-support block is kept, plus a dry-run review of the sync procedure examples |
 | `markdown` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-json --all-files` |
 | `powershell` | `Invoke-Pester -Path tests/ -Output Detailed` |
 | `json` | `pre-commit run check-json --all-files` |
