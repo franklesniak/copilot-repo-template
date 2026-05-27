@@ -881,7 +881,7 @@ Then manually reconcile the scratch copy with the downstream file. Preserve loca
 
 ### Normalize Line Endings After `.gitattributes` Changes
 
-When the sync adopts, updates, or reintroduces `.gitattributes`, run a reviewable line-ending normalization pass after the intended `.gitattributes` content is in the working tree and before validation. Exclude unrelated local edits first so the normalization review is limited to the sync.
+When the sync adopts, updates, or reintroduces `.gitattributes`, run a reviewable line-ending normalization pass after the intended `.gitattributes` content is in the working tree and before validation. This is required when new `eol=lf` pins may change the clean-filtered content of tracked files, such as adding template-managed Markdown, PowerShell, JSON, TOML, JavaScript, or Python defaults. Exclude unrelated local edits first so the normalization review is limited to the sync.
 
 `git add --renormalize .` stages every tracked path whose clean-filtered content has changed, including substantive sync edits that happen to be unstaged, so before running it stage and commit (or stash) any substantive sync edits already in the working tree. When isolating substantive edits is impractical, restrict the renormalization pass to specific paths (for example, `git add --renormalize <path>...` for the files affected by the `.gitattributes` change) so the staged result contains only line-ending normalization.
 
@@ -894,6 +894,7 @@ git add --renormalize .
 Then inspect the staged normalization before committing it:
 
 ```bash
+git diff --check
 git diff --cached --check
 git diff --cached --name-status
 ```
