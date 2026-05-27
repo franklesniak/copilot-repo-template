@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/franklesniak/copilot-repo-template/HEAD/schemas/template-sync-marker.schema.json",
   "title": "Template Sync Marker",
-  "description": "Schema for .template-sync/marker.yml, the downstream sync marker that records reviewed template commits, adopted modules, local override decisions, protected-file decisions, and deferred protected-file candidates.",
+  "description": "Schema for .template-sync/marker.yml, the downstream sync marker that records reviewed template commits, adopted modules, local override decisions, protected-file decisions, deferred protected-file candidates, and instruction-contract waivers.",
   "type": "object",
   "required": ["template_sync"],
   "additionalProperties": false,
@@ -81,6 +81,13 @@
           "description": "Path-scoped protected-file authorization and adoption decisions for current sync work.",
           "items": {
             "$ref": "#/$defs/protectedFileDecision"
+          }
+        },
+        "instruction_contract_waivers": {
+          "type": "array",
+          "description": "Explicit waivers for missing required instruction-contract anchors in retained protected instruction files.",
+          "items": {
+            "$ref": "#/$defs/instructionContractWaiver"
           }
         }
       }
@@ -240,6 +247,25 @@
           }
         }
       ]
+    },
+    "instructionContractWaiver": {
+      "type": "object",
+      "required": ["path", "anchor", "reason", "authorization_basis"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/repositoryFilePath"
+        },
+        "anchor": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authorization_basis": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
     }
   }
 }
