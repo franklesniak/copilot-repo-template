@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260527.0
+**Version:** 1.1.20260527.1
 
 ## Metadata
 
@@ -21,7 +21,8 @@ Use this procedure when a downstream repository wants to review new changes from
 
 - **Module:** A unit in the taxonomy defined by `.template-sync/manifest.yml` and rendered in this procedure, such as `markdown`, `powershell`, or `terraform`. Procedure logic operates on modules.
 - **Stack:** Informal shorthand for a related grouping of modules. For example, a "PowerShell stack" may mean `powershell`, `markdown`, `yaml`, and `agent-instructions`, depending on what the downstream repository adopted. Stack is acceptable in prose, but sync decisions MUST be recorded in module terms.
-- **Downstream sync marker:** The `.template-sync/marker.yml` file in the downstream repository. Under `template_sync`, it records the upstream template repository, the newest upstream template commit that has been reviewed, the modules the downstream repository has adopted, local override rules, protected-file decision records, and deferred protected-file candidates.
+- **Downstream sync marker:** The `.template-sync/marker.yml` file in the downstream repository. Under `template_sync`, it records the upstream template repository, the newest upstream template commit that has been reviewed, the modules the downstream repository has adopted, local override rules, protected-file decision records, deferred protected-file candidates, and instruction-contract waivers.
+- **Instruction contract:** A machine-readable required-anchor contract in `.template-sync/instruction-contracts.yml`. Each entry names a protected instruction file, the modules that make the contract relevant downstream, and the required headings or phrases that MUST remain present unless a marker waiver or authorized protected-file removal applies.
 - **First-adoption preflight checklist:** A root `_TODO-repo-init.md` file, or an equivalent committed adoption note named by this procedure, that records manual GitHub settings and maintainer policy decisions that cannot be inferred from repository files during first-time template adoption.
 - **First-adoption state:** The resolved answers from the first-adoption preflight checklist, `.template-sync/marker.yml`, or an equivalent committed adoption note. Examples include conduct and security reporting channels, private vulnerability reporting, Discussions, expected labels, CODEOWNERS owner/team identity, default-branch protection policy, adoption mode, and any GHES host override.
 - **Adoption ledger:** A generated Markdown review artifact emitted by `.template-sync/scripts/generate_sync_candidates.py`. It summarizes manifest module assignments, marker local overrides, protected-file flags and decisions, adoption-mode posture, `_TODO-repo-init.md` checklist links, and affected validation commands. It is not authoritative state; `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable sources of truth.
@@ -345,7 +346,7 @@ Downstream repositories SHOULD keep the sync marker at `.template-sync/marker.ym
 
 Marker contents are schema-backed by [`schemas/template-sync-marker.schema.json`](schemas/template-sync-marker.schema.json). The `validate-template-sync-marker` pre-commit hook validates `.template-sync/marker.yml` when that file is present; repositories without a marker are unaffected because no file matches the hook's anchored pattern. Marker changes MUST be rejected when they fail the schema. The schema's `included_modules` enum mirrors `.template-sync/manifest.yml`, and [`tests/test_template_manifest.py`](tests/test_template_manifest.py) fails if the schema enum drifts from the manifest module list.
 
-The marker may record sync-specific first-adoption state, such as adopted modules, path-specific local overrides, protected-file decisions, explicit `tailored` opt-ins for protected paths, and deferred protected-file candidates. It is not a general replacement for `_TODO-repo-init.md` when manual GitHub settings or maintainer policy decisions still need explicit resolution.
+The marker may record sync-specific first-adoption state, such as adopted modules, path-specific local overrides, protected-file decisions, explicit `tailored` opt-ins for protected paths, deferred protected-file candidates, and instruction-contract waivers. It is not a general replacement for `_TODO-repo-init.md` when manual GitHub settings or maintainer policy decisions still need explicit resolution.
 
 For example, suppose upstream changed `README.md` and `.github/workflows/terraform-ci.yml`, and the downstream repository reviewed both but adopted neither because `README.md` is locally owned and Terraform is not adopted. The sync still advances `last_reviewed_template_commit` to the resolved range head after review, because those upstream changes were inspected and intentionally skipped. A `last_adopted_template_commit` field would incorrectly imply that skipped-but-reviewed changes need to be reviewed again during the next sync.
 
@@ -353,7 +354,7 @@ If Step 4 used a first-sync delta range because the marker was missing or incomp
 
 If Step 4 selected full reconciliation, the marker still has no reviewed upstream commit at this step. You MAY initialize or update other marker fields, such as `source_repo`, `included_modules`, and local overrides chosen by the owner, but do not set `template_sync.last_reviewed_template_commit` until Step 13 records the resolved upstream range head SHA after review is complete.
 
-`local_overrides`, `protected_file_decisions`, and `deferred_protected_candidates` are explained immediately after the example.
+`local_overrides`, `protected_file_decisions`, `deferred_protected_candidates`, and `instruction_contract_waivers` are explained immediately after the example.
 
 Example marker:
 
@@ -394,6 +395,11 @@ template_sync:
       authorization_basis: "Owner explicitly authorized removing GEMINI.md in issue 123."
       authorized_scope: "GEMINI.md only; no other protected files."
       reason: "Gemini agent not used by this downstream repository."
+  instruction_contract_waivers:
+    - path: CLAUDE.md
+      anchor: "## Handling Code Review Comments"
+      reason: "Downstream owner replaced this protocol with an equivalent local process."
+      authorization_basis: "Owner approved this CLAUDE.md anchor waiver on 2026-05-27."
 ```
 
 ### Marker Semantics
@@ -404,6 +410,20 @@ template_sync:
 - `local_overrides` changes the starting recommendation for a path, but it MUST NOT hide upstream activity from the sync.
 - `protected_file_decisions` records the current path-scoped protected-file authorization and decision. Content adoption decisions (`TAKE` and `MERGE`) require `adoption_mode`, `authorization_basis`, and `authorized_scope`. Broad rewrites require `adoption_mode: tailored` plus `tailored_authorization_basis`. Protected-file removals require `decision: REMOVE-LOCAL`, explicit removal authorization, `authorized_scope`, and a substantive `reason`.
 - `deferred_protected_candidates` records protected-file updates that were reviewed but not applied because path-scoped owner authorization was absent.
+- `instruction_contract_waivers` records explicit owner-approved waivers for missing required instruction-contract anchors. Each waiver MUST include `path`, `anchor`, `reason`, and `authorization_basis`.
+
+### Instruction Contract Waivers
+
+Use `template_sync.instruction_contract_waivers` only when a retained protected instruction file intentionally omits a required heading or phrase from `.template-sync/instruction-contracts.yml`.
+
+Each waiver entry MUST include:
+
+- `path`: the protected instruction file path.
+- `anchor`: the exact required heading or phrase being waived.
+- `reason`: why the retained downstream file intentionally omits that anchor.
+- `authorization_basis`: the owner authorization for the waiver, named consistently with `protected_file_decisions[].authorization_basis`.
+
+A valid waiver MAY allow `python .template-sync/scripts/validate_instruction_contracts.py --mode downstream` to exit successfully, but the validator MUST report `passed with waivers` and list each applied waiver. A waiver is not protected-file edit or removal authorization; edits and removals still require the matching `protected_file_decisions` records described below.
 
 ### Local Overrides
 
@@ -499,6 +519,7 @@ Manifest version 2 rows MAY also use `requires_any`: the path is included only w
 | --- | --- |
 | `.template-sync/marker.yml` | `template-sync-support` |
 | `.template-sync/manifest.yml` | `template-sync-support` |
+| `.template-sync/instruction-contracts.yml` | `template-sync-support` |
 | `.template-sync/scripts/**` | `template-sync-support` |
 | `.github/copilot-instructions.md` | `agent-instructions` |
 | `.github/instructions/docs.instructions.md` | `markdown`, `agent-instructions` |
@@ -539,7 +560,7 @@ Manifest version 2 rows MAY also use `requires_any`: the path is included only w
 | `templates/yaml/**` | `yaml` |
 | `schemas/**` | `schema` |
 | `tests/test_schema_examples.py` | `schema` |
-| `tests/test_generate_sync_candidates.py`, `tests/test_template_manifest.py`, `tests/test_validate_marker.py` | `template-sync-support`, `schema` |
+| `tests/test_generate_sync_candidates.py`, `tests/test_template_manifest.py`, `tests/test_validate_marker.py`, `tests/test_validate_instruction_contracts.py` | `template-sync-support`, `schema` |
 | `.github/scripts/terraform_hooks.py`, `tests/test_terraform_hooks.py` | `terraform` |
 | `templates/python/**`, `pyproject.toml`, `src/copilot_repo_template/**`, `tests/*.py`, `tests/**/*.py` | `python` |
 | `templates/terraform/**`, `docs/terraform/**`, `modules/**`, `tests/**/*.tftest.hcl`, `.tflint.hcl`, `*.tf`, `*.tfvars`, `*.tftpl`, `*.tfbackend` | `terraform` |
@@ -628,7 +649,7 @@ The current `schema-only` inline blocks live in:
 
 The current `schema-template-sync-support-only` inline blocks live in:
 
-- `.pre-commit-config.yaml` for the `validate-template-sync-manifest` and `validate-template-sync-marker` hooks.
+- `.pre-commit-config.yaml` for the `validate-template-sync-manifest`, `validate-template-sync-marker`, `validate-template-sync-instruction-contracts`, and `validate-instruction-contracts-upstream` hooks.
 - `.github/workflows/data-ci.yml` for template sync validation hook-list documentation and the dedicated template sync validation alias steps.
 
 The current `github-platform-only` inline blocks live in:
@@ -650,7 +671,7 @@ After stripping `yaml-only` blocks, a downstream repository that excludes `yaml`
 
 After stripping `schema-only` blocks, a downstream repository that excludes `schema` should be able to run `pre-commit run --all-files` and the retained data-file workflow without retaining schema example validators or `check-metaschema` hooks.
 
-After stripping `schema-template-sync-support-only` blocks, a downstream repository that excludes either `schema` or `template-sync-support` should be able to run `pre-commit run --all-files` and the retained data-file workflow without invoking template sync manifest or marker validators.
+After stripping `schema-template-sync-support-only` blocks, a downstream repository that excludes either `schema` or `template-sync-support` should be able to run `pre-commit run --all-files` and the retained data-file workflow without invoking template sync manifest, marker, or instruction-contract validators.
 
 After stripping `github-platform-only` blocks, a downstream repository that excludes `github-platform` should be able to run `pre-commit run --all-files` and the retained data-file workflow without retaining Dependabot validation hooks or invoking a missing `validate-dependabot-config` hook.
 
@@ -945,6 +966,25 @@ python .template-sync/scripts/validate_marker.py --require-marker
 
 Omit `--require-marker` only during initial adoption or exploratory sync work where the marker may intentionally be absent; in that mode, the helper exits zero with a clear no-marker message.
 
+Run instruction-contract validation for protected agent instruction protocols when the repository retains template sync support. Mode selection is explicit and has no fallback:
+
+- In the upstream template repository and upstream template CI, use `--mode upstream-template`. This validates every contract entry against the template's own protected files, does not read `.template-sync/marker.yml`, does not apply marker-derived module gating, and never fails merely because the marker is absent. If `.template-sync/marker.yml` is present, the validator emits a non-blocking warning because the caller may be validating a downstream working tree with the upstream mode.
+- In downstream repositories, use `--mode downstream`. This reads `.template-sync/marker.yml`, checks only contracts whose `requires_modules` are all present in `template_sync.included_modules`, and honors `--require-marker` with the same semantics as `validate_marker.py`: missing marker fails when `--require-marker` is set and exits zero with a clear no-marker message otherwise.
+
+Upstream template validation command:
+
+```bash
+python .template-sync/scripts/validate_instruction_contracts.py --mode upstream-template
+```
+
+Downstream validation command once the repository carries a marker:
+
+```bash
+python .template-sync/scripts/validate_instruction_contracts.py --mode downstream --require-marker
+```
+
+In downstream mode, an absent contracted protected file is skipped only when `template_sync.protected_file_decisions` records an authorized `REMOVE-LOCAL` decision for that path and the file is absent from the working tree; the validator reports the skip as an authorized removal. Otherwise, absent files and missing anchors fail with the exact file and heading or phrase. A matching `template_sync.instruction_contract_waivers` entry can waive a missing anchor, but successful output says `passed with waivers` and lists the waiver instead of reporting ordinary success.
+
 The manifest concrete-pattern integrity check has two modes. In the upstream template repository, where `.template-sync/marker.yml` is intentionally absent, `pytest tests/test_template_manifest.py -v` uses upstream-template mode: every concrete manifest path MUST resolve to a Git-tracked file unless it is explicitly allowlisted. In a downstream repository that carries `.template-sync/marker.yml`, the same test uses downstream-marker mode: it reads `template_sync.included_modules` and `template_sync.local_overrides`, checks only concrete paths retained by the marker's module relation, skips local overrides, treats untracked non-ignored files as present, and does not treat ignored scratch or cache files as retained-template files.
 
 Before module-specific validators, check for whitespace errors and unresolved conflict markers:
@@ -973,12 +1013,12 @@ git ls-files --eol -- .
 | `github-actions` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run actionlint --all-files` |
 | `github-templates` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `npm run lint:md`, `npm run lint:md:links`, and issue or PR template rendering review |
 | `template-onboarding` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, and walkthrough review for kept onboarding paths |
-| `template-sync-support` | `python .template-sync/scripts/validate_marker.py --require-marker` after marker decisions and retained files are current, `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run validate-template-sync-manifest --all-files` and `pre-commit run validate-template-sync-marker --all-files` when the schema-template-sync-support block is kept, and a dry-run review of the sync procedure examples |
+| `template-sync-support` | `python .template-sync/scripts/validate_marker.py --require-marker` after marker decisions and retained files are current, `python .template-sync/scripts/validate_instruction_contracts.py --mode downstream --require-marker` when downstream marker-gated anchor validation applies, `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run validate-template-sync-manifest --all-files`, `pre-commit run validate-template-sync-marker --all-files`, `pre-commit run validate-template-sync-instruction-contracts --all-files`, and `pre-commit run validate-instruction-contracts-upstream --all-files` when the schema-template-sync-support block is kept, plus a dry-run review of the sync procedure examples |
 | `markdown` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-json --all-files` |
 | `powershell` | `Invoke-Pester -Path tests/ -Output Detailed` |
 | `json` | `pre-commit run check-json --all-files` |
 | `yaml` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files` |
-| `schema` | `pre-commit run validate-example-config-valid-examples --all-files`, `pre-commit run validate-template-sync-marker-valid-examples --all-files`, `pre-commit run validate-example-config-schema --all-files`, `pre-commit run validate-template-sync-manifest-schema --all-files`, `pre-commit run validate-template-sync-marker-schema --all-files`, and `pytest tests/test_schema_examples.py -v` after schema or schema-example changes |
+| `schema` | `pre-commit run validate-example-config-valid-examples --all-files`, `pre-commit run validate-template-sync-marker-valid-examples --all-files`, `pre-commit run validate-template-sync-instruction-contracts-valid-examples --all-files`, `pre-commit run validate-example-config-schema --all-files`, `pre-commit run validate-template-sync-manifest-schema --all-files`, `pre-commit run validate-template-sync-marker-schema --all-files`, `pre-commit run validate-template-sync-instruction-contracts-schema --all-files`, and `pytest tests/test_schema_examples.py -v` after schema or schema-example changes |
 | `python` | `pytest tests/ -v --cov --cov-report=term-missing`, `pre-commit run check-toml --all-files` |
 | `terraform` | `terraform fmt -check -recursive`, `tflint --recursive`, `terraform test -verbose`, `pytest tests/test_terraform_hooks.py -v` after terraform-hook script changes |
 

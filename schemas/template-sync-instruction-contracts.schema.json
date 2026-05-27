@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/franklesniak/copilot-repo-template/HEAD/schemas/template-sync-instruction-contracts.schema.json",
+  "title": "Template Sync Instruction Contracts",
+  "description": "Schema for .template-sync/instruction-contracts.yml, the required-anchor contract that protects platform-specific agent instruction protocols during upstream template validation and downstream marker-gated sync validation.",
+  "type": "object",
+  "required": ["instruction_contracts"],
+  "additionalProperties": false,
+  "properties": {
+    "instruction_contracts": {
+      "type": "array",
+      "description": "Required heading and phrase anchors for protected instruction files.",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/instructionContract"
+      }
+    }
+  },
+  "$defs": {
+    "moduleName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "repositoryFilePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(/|$))(?!.*//)(?!.*/$).+$"
+    },
+    "anchorList": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      }
+    },
+    "instructionContract": {
+      "type": "object",
+      "required": ["path", "requires_modules"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/repositoryFilePath"
+        },
+        "requires_modules": {
+          "type": "array",
+          "description": "All template modules that must be retained before the downstream validator applies this contract entry.",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/moduleName"
+          }
+        },
+        "required_headings": {
+          "$ref": "#/$defs/anchorList"
+        },
+        "required_phrases": {
+          "$ref": "#/$defs/anchorList"
+        }
+      },
+      "anyOf": [
+        {
+          "required": ["required_headings"]
+        },
+        {
+          "required": ["required_phrases"]
+        }
+      ]
+    }
+  }
+}

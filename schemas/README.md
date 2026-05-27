@@ -6,8 +6,8 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-23
-- **Scope:** Conventions for JSON Schemas that describe load-bearing JSON and YAML files in this repository, the template sync manifest and marker schemas, plus a clearly removable worked example (`example-config.schema.json` with valid and invalid example data) wired into pre-commit and data CI to demonstrate the schema-validation pipeline end to end.
+- **Last Updated:** 2026-05-27
+- **Scope:** Conventions for JSON Schemas that describe load-bearing JSON and YAML files in this repository, the template sync manifest, marker, and instruction-contract schemas, plus a clearly removable worked example (`example-config.schema.json` with valid and invalid example data) wired into pre-commit and data CI to demonstrate the schema-validation pipeline end to end.
 - **Related:** [JSON Authoring Standards](../.github/instructions/json.instructions.md), [YAML Authoring Standards](../.github/instructions/yaml.instructions.md), [Repository Copilot Instructions](../.github/copilot-instructions.md), [Template Design Decisions — Schema Location at Repository Root](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-location-at-repository-root), [Template Design Decisions — Schema Validation Tiers](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-validation-tiers), [Template Design Decisions — Built-in Schema Validation for Real Load-Bearing Configuration Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files), [Template Design Decisions — `additionalProperties` Policy](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-additionalproperties-policy), [Template Design Decisions — Testing Beyond Linting for JSON/YAML](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-testing-beyond-linting-for-jsonyaml)
 
 ## Purpose
@@ -65,7 +65,7 @@ Schemas whose root type is `object` SHOULD define:
 
 ## Validation
 
-Schema-backed files are validated by pre-commit and the dedicated data-file CI workflow ([`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml)). This template ships a worked example (see [Worked Example](#worked-example) below) so the validation pipeline is exercised end to end out of the box, and it ships production schemas for the template sync manifest and marker (see [Template Sync Manifest Schema](#template-sync-manifest-schema) and [Template Sync Marker Schema](#template-sync-marker-schema)). Downstream repositories that do not use schema-backed data files SHOULD remove the worked example using the [Downstream Removal Checklist](#downstream-removal-checklist). See the JSON authoring standards for the schema-validation policy and tier guidance.
+Schema-backed files are validated by pre-commit and the dedicated data-file CI workflow ([`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml)). This template ships a worked example (see [Worked Example](#worked-example) below) so the validation pipeline is exercised end to end out of the box, and it ships production schemas for the template sync manifest, marker, and instruction contracts (see [Template Sync Manifest Schema](#template-sync-manifest-schema), [Template Sync Marker Schema](#template-sync-marker-schema), and [Template Sync Instruction Contracts Schema](#template-sync-instruction-contracts-schema)). Downstream repositories that do not use schema-backed data files SHOULD remove the worked example using the [Downstream Removal Checklist](#downstream-removal-checklist). See the JSON authoring standards for the schema-validation policy and tier guidance.
 
 ### Schema Categories
 
@@ -76,7 +76,7 @@ This repository distinguishes two schema categories. The distinction matters for
    - MAY include valid and invalid example fixtures under `schemas/examples/<schema-name>/{valid,invalid}/`.
    - Tested by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py), which auto-discovers schema/example pairs and asserts that valid examples pass and invalid examples fail.
    - Wired into pre-commit by adding a `check-jsonschema` hook that points at the schema with `--schemafile schemas/<name>.schema.json` and an anchored `files:` pattern matching the file family the schema covers.
-   - The [Worked Example](#worked-example) below is the canonical illustration of this category. The [Template Sync Manifest Schema](#template-sync-manifest-schema) and [Template Sync Marker Schema](#template-sync-marker-schema) are the production schema-backed contracts this repository uses for downstream sync metadata.
+   - The [Worked Example](#worked-example) below is the canonical illustration of this category. The [Template Sync Manifest Schema](#template-sync-manifest-schema), [Template Sync Marker Schema](#template-sync-marker-schema), and [Template Sync Instruction Contracts Schema](#template-sync-instruction-contracts-schema) are the production schema-backed contracts this repository uses for downstream sync metadata and required-anchor validation.
 
 2. **External built-in schemas.**
    - Referenced through `check-jsonschema --builtin-schema vendor.<name>` against schemas that ship inside the pinned `check-jsonschema` release.
@@ -104,6 +104,7 @@ The following project-owned file families are validated by default through `chec
 | --- | --- |
 | [`.template-sync/manifest.yml`](../.template-sync/manifest.yml) | [`template-sync-manifest.schema.json`](./template-sync-manifest.schema.json) |
 | `.template-sync/marker.yml` when present | [`template-sync-marker.schema.json`](./template-sync-marker.schema.json) |
+| [`.template-sync/instruction-contracts.yml`](../.template-sync/instruction-contracts.yml) | [`template-sync-instruction-contracts.schema.json`](./template-sync-instruction-contracts.schema.json) |
 
 ### File-Family Hooks
 
@@ -242,6 +243,8 @@ Downstream repositories that intentionally do not retain machine-assisted future
 
 [`template-sync-marker.schema.json`](./template-sync-marker.schema.json) defines the shape of the downstream sync marker at `.template-sync/marker.yml`. The schema validates marker contents only; marker placement is enforced by the `Validate template sync marker` hook's `files:` pattern in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml).
 
+The marker schema includes `template_sync.instruction_contract_waivers` for explicit waivers of missing required instruction-contract anchors. Each waiver requires `path`, `anchor`, `reason`, and `authorization_basis`; the instruction-contract validator reports applied waivers as `passed with waivers` rather than ordinary success.
+
 How the template sync marker contract is validated:
 
 - The marker file is validated by the `Validate template sync marker` `check-jsonschema` hook when `.template-sync/marker.yml` is present. Repositories without a marker are unaffected because no file matches the hook's anchored pattern.
@@ -251,6 +254,20 @@ How the template sync marker contract is validated:
 - [`tests/test_template_manifest.py`](../tests/test_template_manifest.py) checks that the baked `included_modules` enum in the marker schema matches the module names in [`.template-sync/manifest.yml`](../.template-sync/manifest.yml).
 
 Marker changes MUST be rejected when they fail this schema. Downstream repositories that use the sync procedure SHOULD keep `.template-sync/marker.yml`, `schemas/template-sync-marker.schema.json`, the matching pre-commit hooks, and the marker examples or an equivalent validation path.
+
+## Template Sync Instruction Contracts Schema
+
+[`template-sync-instruction-contracts.schema.json`](./template-sync-instruction-contracts.schema.json) defines the shape of [`.template-sync/instruction-contracts.yml`](../.template-sync/instruction-contracts.yml), which records required headings and phrases for protected instruction files. The contract file lets the upstream template and downstream repositories detect accidental removal of platform-specific agent protocols that would otherwise still pass file-presence validation.
+
+How the instruction-contract contract is validated:
+
+- The contract file is validated by the `Validate template sync instruction contracts` `check-jsonschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) and by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+- Valid instruction-contract fixtures under [`examples/template-sync-instruction-contracts/valid/`](./examples/template-sync-instruction-contracts/valid/) are validated by the `Validate template sync instruction contract valid examples` `check-jsonschema` hook and by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+- Invalid instruction-contract fixtures under [`examples/template-sync-instruction-contracts/invalid/`](./examples/template-sync-instruction-contracts/invalid/) are exercised by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py), which asserts that each invalid example is rejected.
+- The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate template-sync-instruction-contracts schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+- Required anchors are enforced by [`validate_instruction_contracts.py`](../.template-sync/scripts/validate_instruction_contracts.py). Upstream template CI invokes `--mode upstream-template`; downstream repositories SHOULD invoke `--mode downstream`, with `--require-marker` when the marker is required in CI.
+
+Downstream repositories that use the sync procedure SHOULD keep `.template-sync/instruction-contracts.yml`, `schemas/template-sync-instruction-contracts.schema.json`, the matching pre-commit hooks, and the instruction-contract examples or an equivalent validation path.
 
 ### Downstream Removal Checklist
 

@@ -112,18 +112,22 @@ SCHEMA_SHARED_SURFACE_TOKENS = {
     ".pre-commit-config.yaml": (
         "validate-example-config-valid-examples",
         "validate-template-sync-marker-valid-examples",
+        "validate-template-sync-instruction-contracts-valid-examples",
         "validate-example-config-schema",
         "validate-template-sync-manifest-schema",
         "validate-template-sync-marker-schema",
+        "validate-template-sync-instruction-contracts-schema",
         "check-metaschema",
         "schemas/example-config.schema.json",
     ),
     ".github/workflows/data-ci.yml": (
         "pre-commit run validate-example-config-valid-examples --all-files",
         "pre-commit run validate-template-sync-marker-valid-examples --all-files",
+        "pre-commit run validate-template-sync-instruction-contracts-valid-examples --all-files",
         "pre-commit run validate-example-config-schema --all-files",
         "pre-commit run validate-template-sync-manifest-schema --all-files",
         "pre-commit run validate-template-sync-marker-schema --all-files",
+        "pre-commit run validate-template-sync-instruction-contracts-schema --all-files",
     ),
 }
 SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_BLOCK_COUNTS = {
@@ -140,10 +144,14 @@ SCHEMA_TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS = {
     ".pre-commit-config.yaml": (
         r"files: ^\.template-sync/manifest\.yml$",
         r"files: ^\.template-sync/marker\.yml$",
+        r"files: ^\.template-sync/instruction-contracts\.yml$",
+        "validate-instruction-contracts-upstream",
     ),
     ".github/workflows/data-ci.yml": (
         "pre-commit run validate-template-sync-manifest --all-files",
         "pre-commit run validate-template-sync-marker --all-files",
+        "pre-commit run validate-template-sync-instruction-contracts --all-files",
+        "pre-commit run validate-instruction-contracts-upstream --all-files",
     ),
 }
 GITHUB_PLATFORM_INLINE_BLOCK_COUNTS = {
@@ -1365,6 +1373,9 @@ def test_template_sync_helper_tests_map_to_support_and_schema_modules() -> None:
 
     assert _manifest_modules_for_path("tests/test_generate_sync_candidates.py") == expected_modules
     assert _manifest_modules_for_path("tests/test_validate_marker.py") == expected_modules
+    assert _manifest_modules_for_path("tests/test_validate_instruction_contracts.py") == (
+        expected_modules
+    )
 
 
 def test_dependabot_schema_regression_surface_maps_to_github_platform_and_schema() -> None:
