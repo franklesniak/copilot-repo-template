@@ -611,14 +611,50 @@ Create `_TODO-repo-init.md` from this example and replace bracketed notes only a
 ```markdown
 # Repository Initialization Checklist
 
-This file records first-adoption decisions for this downstream repository. It is downstream-owned state and is excluded from upstream template sync candidate review.
+This file records first-adoption decisions for this downstream repository. It is downstream-owned state, not an upstream template file, and is excluded from upstream template sync candidate review.
+
+Keep unresolved items in this file until the maintainer completes them through the GitHub UI, an authorized GitHub connector, a safe API call, or a later maintainer action. Do not create this file in the upstream template repository unless the template manifest and sync procedure are deliberately changed to handle it.
 
 ## Discoverable Repository State
 
-- [ ] Repository owner/name recorded: `OWNER/REPO`
-- [ ] Repository default branch recorded: `main` unless changed
-- [ ] Existing `SECURITY.md`, `CODE_OF_CONDUCT.md`, `.github/CODEOWNERS`, and issue-template files reviewed
-- [ ] Existing `.template-sync/marker.yml` or adoption note checked before asking any repeated questions
+- [ ] Repository owner/name recorded from the GitHub URL or Git remote: `OWNER/REPO`
+- [ ] Repository visibility recorded: `[public, private, or internal]`
+- [ ] Repository default branch recorded from GitHub or `git remote show origin`: `[main or other branch]`
+- [ ] Existing `SECURITY.md`, `CODE_OF_CONDUCT.md`, `.github/CODEOWNERS`, issue templates, PR template, and `.github/dependabot.yml` reviewed before replacement.
+- [ ] Existing `.template-sync/marker.yml`, `_TODO-repo-init.md`, or equivalent adoption note checked before asking repeated questions.
+- [ ] Existing labels reviewed in GitHub under **Issues** > **Labels**.
+- [ ] Existing Discussions state reviewed in GitHub under **Settings** > **General** > **Features**.
+- [ ] Existing repository rulesets or branch protection reviewed in GitHub under **Settings** > **Rules**.
+
+## Manual GitHub Settings
+
+These settings may be completed through the GitHub UI even when `gh` is unavailable. If a GitHub connector or approved API call is used instead, record the action and evidence in the item.
+
+- [ ] Private vulnerability reporting decision: `[enable, leave disabled, or not available]`
+  - UI path: open **Settings** > **Code security and analysis**, then review **Private vulnerability reporting**.
+  - After enabling, verify the **Security** tab and `SECURITY.md` private-reporting links.
+  - Docs: [Configuring private vulnerability reporting for a repository](https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configuring-private-vulnerability-reporting-for-a-repository). If this link breaks, search `private vulnerability reporting repository` on `docs.github.com`.
+  - Evidence: `[date, actor, screenshot/link, connector result, or maintainer note]`
+- [ ] GitHub Discussions decision: `[enable or leave disabled]`
+  - UI path: open **Settings** > **General** > **Features**, then review **Discussions**.
+  - If enabled, verify the repository **Discussions** tab appears and decide whether issue templates should point users there.
+  - Docs: [Enabling or disabling GitHub Discussions for a repository](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/enabling-or-disabling-github-discussions-for-a-repository). If this link breaks, search `enable GitHub Discussions repository` on `docs.github.com`.
+  - Evidence: `[date, actor, screenshot/link, connector result, or maintainer note]`
+- [ ] Labels decision, including `triage`: `[create, skip, or already present]`
+  - UI path: open **Issues** > **Labels**, then create or edit labels required by issue templates and local triage policy.
+  - Minimum template label to review: `triage` with description `Needs triage` and color `d4c5f9`, unless the maintainer chooses a different triage label.
+  - Docs: [Managing labels](https://docs.github.com/en/issues/using-labels-and-milestones-to-track-work/managing-labels). If this link breaks, search `manage labels GitHub issues` on `docs.github.com`.
+  - Evidence: `[date, actor, labels created/skipped, connector result, or maintainer note]`
+- [ ] Default branch decision: `[keep current default, rename, or defer]`
+  - UI path: open **Settings** > **Branches**, then review the default branch selector before changing it.
+  - If renaming, update local clones, open PR bases, branch protection or rulesets, documentation, and CI references.
+  - Docs: [Changing the default branch](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-branches-in-your-repository/changing-the-default-branch). If this link breaks, search `change default branch GitHub repository` on `docs.github.com`.
+  - Evidence: `[date, actor, old branch, new branch, connector result, or maintainer note]`
+- [ ] Repository ruleset or branch-protection decision for the default branch: `[create ruleset, use classic branch protection, leave unchanged, or defer]`
+  - UI path: open **Settings** > **Rules** > **Rulesets**, then create or review rules for branch names such as `main` or the recorded default branch.
+  - Review required status checks, pull request review requirements, force-push restrictions, deletion restrictions, bypass roles, and enforcement mode.
+  - Docs: [Creating rulesets for a repository](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository). If this link breaks, search `create repository ruleset GitHub` on `docs.github.com`.
+  - Evidence: `[date, actor, ruleset name/link, connector result, or maintainer note]`
 
 ## Maintainer Policy Decisions
 
@@ -628,17 +664,25 @@ This file records first-adoption decisions for this downstream repository. It is
 - [ ] Adoption mode for protected and template-derived governance, community, process, workflow, and collaboration files: `minimal-preservation` by default; list any specific `tailored` opt-ins.
 - [ ] GHES host override: `[none or github.company.com]`
 
-## Manual GitHub Settings
+## Protected-File Adoption Decisions
 
-- [ ] Private vulnerability reporting: `[enable, leave disabled, or not available for private repository]`; if enabled, confirm `SECURITY.md` links afterward.
-- [ ] GitHub Discussions: `[enable or leave disabled]`.
-- [ ] Expected labels, including `triage`: `[create, skip, or already present]`.
-- [ ] Default-branch protection or ruleset for `main` (or your default branch): `[enable per organization or maintainer policy, or leave unchanged]`.
+- [ ] Protected instruction files identified before editing: `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, `.cursor/rules/*.mdc`, `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`.
+- [ ] Protected-file edits authorized by maintainer: `[none, path-scoped authorization, or deferred]`
+- [ ] Protected-file removals authorized by maintainer: `[none, path-scoped authorization, or deferred]`
+- [ ] `.template-sync/marker.yml` protected-file decisions updated if template sync support is retained.
 
-## Resolution Log
+## Unresolved Settings
 
-- [ ] All items above are resolved before dependent files are considered finalized.
-- Resolution evidence: `[commit, PR, maintainer note, or link]`
+- [ ] Items that must be completed later:
+  - `[setting or policy decision]` - owner: `[person/team]`; target date or trigger: `[date/event]`; dependency: `[file, workflow, or GitHub setting]`
+- [ ] Dependent files that must not be considered finalized until the unresolved items are complete:
+  - `[path]` depends on `[setting or policy decision]`
+
+## Resolution Evidence
+
+- [ ] All items above are resolved or intentionally deferred before dependent files are considered finalized.
+- [ ] Evidence captured for every resolved GitHub setting: `[commit, PR, screenshot/link, connector result, API response note, or maintainer note]`
+- [ ] Deferred items copied into the adoption PR description, sync summary, issue, or other maintainer-owned follow-up.
 ```
 
 Downstream work may assume a checklist item is complete only after it is recorded as resolved in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or the equivalent committed adoption note named by the adoption procedure.
