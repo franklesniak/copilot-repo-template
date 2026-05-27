@@ -275,7 +275,8 @@ def load_json_mapping(path: Path, repo_root: Path) -> dict[str, Any]:
         parsed = json.loads(path.read_text(encoding="utf-8"))
     except OSError as error:
         relative_path = repository_relative_path(path, repo_root)
-        raise MarkerValidationError(f"Unable to read {relative_path}: {error}") from error
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        raise MarkerValidationError(f"Unable to read {relative_path}: {error_summary}") from error
     except json.JSONDecodeError as error:
         relative_path = repository_relative_path(path, repo_root)
         raise MarkerValidationError(f"Invalid JSON in {relative_path}: {error}") from error
@@ -291,7 +292,8 @@ def load_yaml_mapping(path: Path, repo_root: Path) -> dict[str, Any]:
         parsed = yaml.safe_load(path.read_text(encoding="utf-8"))
     except OSError as error:
         relative_path = repository_relative_path(path, repo_root)
-        raise MarkerValidationError(f"Unable to read {relative_path}: {error}") from error
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        raise MarkerValidationError(f"Unable to read {relative_path}: {error_summary}") from error
     except yaml.YAMLError as error:
         relative_path = repository_relative_path(path, repo_root)
         raise MarkerValidationError(f"Invalid YAML in {relative_path}: {error}") from error
