@@ -36,6 +36,21 @@ testdata/**                   text eol=lf
 *.yml                         text eol=lf
 *.yaml                        text eol=lf
 
+# Template-managed text formats: pin LF to prevent broad CRLF churn
+# during downstream adoption, stack pruning, and repeated cross-platform
+# edits of repository-managed documentation, scripts, and configuration.
+*.md                          text eol=lf
+*.mdc                         text eol=lf
+*.ps1                         text eol=lf
+*.psd1                        text eol=lf
+*.psm1                        text eol=lf
+*.json                        text eol=lf
+*.jsonc                       text eol=lf
+*.toml                        text eol=lf
+*.js                          text eol=lf
+*.mjs                         text eol=lf
+*.py                          text eol=lf
+
 # Binary overrides: prevent the broad rules above (or any default
 # text-detection) from treating these common binary file types as text.
 # The `binary` macro expands to `-text -diff`.
