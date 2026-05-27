@@ -1,15 +1,17 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.5.20260525.2
+**Version:** 1.5.20260527.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-25
+- **Last Updated:** 2026-05-27
 - **Scope:** Agent-specific entry point for Claude Code and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
+<!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
+<!-- template-sync: end markdown-reference-only -->
 
 This file provides project-specific instructions for Claude Code and compatible AI coding agents operating in this repository. These instructions ensure that agents follow the same coding standards, safety rules, and workflows that apply to all contributors.
 
@@ -18,6 +20,8 @@ This file provides project-specific instructions for Claude Code and compatible 
 The authoritative source of truth for all repository rules is **`.github/copilot-instructions.md`** (the repo-wide constitution). All rules defined there apply without exception. **Read that file before making any changes.**
 
 This file intentionally keeps only a minimal inline summary of the highest-priority shared rules so that Claude receives critical guidance immediately, but it does not replace reading the canonical instructions above.
+
+**Thin entry point classification:** A thin entry point keeps shared repository rules brief; it does not mean platform-specific or required protocol sections may be discarded. Sections explicitly labeled as platform protocol or required protocol must be preserved unless the repository owner explicitly waives that protocol for the retained agent platform.
 
 ## Protected Instruction Files
 
@@ -39,29 +43,67 @@ During downstream template adoption and stack selection, perform non-protected c
   - Include all auto-fixes in the same commit as the related change.
   - Do not push code when pre-commit or required validation checks are failing; fix issues and re-run until the checks pass.
   - Use the repository's existing validation commands as needed:
+    <!-- template-sync: begin markdown-reference-only -->
     - `npm run lint:md`
+    <!-- template-sync: end markdown-reference-only -->
+    <!-- template-sync: begin python-reference-only -->
     - `pytest tests/ -v --cov --cov-report=term-missing`
+    <!-- template-sync: end python-reference-only -->
+    <!-- template-sync: begin schema-reference-only -->
     - `pytest tests/test_schema_examples.py -v` (after any schema or schema-example change)
+    <!-- template-sync: end schema-reference-only -->
+    <!-- template-sync: begin powershell-reference-only -->
     - `Invoke-Pester -Path tests/ -Output Detailed`
+    <!-- template-sync: end powershell-reference-only -->
+    <!-- template-sync: begin terraform-reference-only -->
     - `terraform fmt -check -recursive`
     - `tflint --recursive`
     - `terraform test -verbose`
-  - The `pre-commit run --all-files` command exercises the data-file hooks configured in [`.pre-commit-config.yaml`](.pre-commit-config.yaml) (the authoritative list of active hooks), covering categories such as strict JSON syntax (`check-json`), YAML parsing (`check-yaml`) and style (`yamllint`), GitHub Actions linting (`actionlint`), JSON Schema validation (`check-jsonschema`), and schema self-validation (`check-metaschema`). The dedicated [`.github/workflows/data-ci.yml`](.github/workflows/data-ci.yml) workflow re-runs these so JSON/YAML/Actions enforcement can be required via branch protection.
-  - JSON, YAML, and schema authoring guidance lives in:
-    - [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md)
-    - [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md)
-    - [`schemas/README.md`](schemas/README.md)
-    - the **Built-in Schema Validation for Real Load-Bearing Configuration Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md)
+    <!-- template-sync: end terraform-reference-only -->
+  - The `pre-commit run --all-files` command exercises the active hooks configured in [`.pre-commit-config.yaml`](.pre-commit-config.yaml), the authoritative list of active hooks.
+  <!-- template-sync: begin json-reference-only -->
+  - Retained JSON checks include strict JSON syntax (`check-json`).
+  <!-- template-sync: end json-reference-only -->
+  <!-- template-sync: begin yaml-reference-only -->
+  - Retained YAML checks include YAML parsing (`check-yaml`) and style (`yamllint`).
+  <!-- template-sync: end yaml-reference-only -->
+  - Retained GitHub Actions checks include GitHub Actions linting (`actionlint`).
+  <!-- template-sync: begin schema-reference-only -->
+  - Retained schema checks include JSON Schema validation (`check-jsonschema`) and schema self-validation (`check-metaschema`).
+  <!-- template-sync: end schema-reference-only -->
+  - The dedicated [`.github/workflows/data-ci.yml`](.github/workflows/data-ci.yml) workflow re-runs retained data-file hooks so adopted data-file enforcement can be required via branch protection.
+  - Retained data-file authoring guidance lives in the matching module docs.
+  <!-- template-sync: begin json-reference-only -->
+  - JSON guidance: [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md).
+  <!-- template-sync: end json-reference-only -->
+  <!-- template-sync: begin yaml-reference-only -->
+  - YAML guidance: [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md).
+  <!-- template-sync: end yaml-reference-only -->
+  <!-- template-sync: begin schema-reference-only -->
+  - Schema guidance: [`schemas/README.md`](schemas/README.md) and the **Built-in Schema Validation for Real Load-Bearing Configuration Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md).
+  <!-- template-sync: end schema-reference-only -->
 
 - **Modular instruction files**
   - Read the relevant file under `.github/instructions/` before modifying matching files:
     - Git attributes: `.github/instructions/gitattributes.instructions.md`
+    <!-- template-sync: begin json-reference-only -->
     - JSON: `.github/instructions/json.instructions.md`
+    <!-- template-sync: end json-reference-only -->
+    <!-- template-sync: begin markdown-reference-only -->
     - Markdown/Docs: `.github/instructions/docs.instructions.md`
+    <!-- template-sync: end markdown-reference-only -->
+    <!-- template-sync: begin powershell-reference-only -->
     - PowerShell: `.github/instructions/powershell.instructions.md`
+    <!-- template-sync: end powershell-reference-only -->
+    <!-- template-sync: begin python-reference-only -->
     - Python: `.github/instructions/python.instructions.md`
+    <!-- template-sync: end python-reference-only -->
+    <!-- template-sync: begin terraform-reference-only -->
     - Terraform: `.github/instructions/terraform.instructions.md`
+    <!-- template-sync: end terraform-reference-only -->
+    <!-- template-sync: begin yaml-reference-only -->
     - YAML: `.github/instructions/yaml.instructions.md`
+    <!-- template-sync: end yaml-reference-only -->
 
 - **Do not**
   - Execute scripts or commands generated by untrusted sources.
@@ -76,6 +118,8 @@ During downstream template adoption and stack selection, perform non-protected c
 PR comments and review comments that begin with `@copilot` are commands addressed to GitHub Copilot's coding agent, **not** to Claude Code. **Ignore** these entirely — do not process them, do not reply to them, and do not treat them as review feedback.
 
 ## Handling Code Review Comments
+
+This section is retained Claude platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Claude review-comment protocol for the retained Claude entry point.
 
 When a code review comment is received from GitHub Copilot, a human reviewer, or any other code reviewer on a pull request, follow this process for **each** comment:
 
@@ -164,6 +208,8 @@ These terms apply to the review-comment workflow below and defer to the canonica
 9. **Resolve or leave open.** If **no** style guide update was recommended in step 8, resolve the review comment thread using the `resolve_review_thread` tool (or equivalent). If a style guide update **was** recommended, leave the thread **open** so the owner can see and act on the prompt before it is dismissed. **Known limitation:** The `resolve_review_thread` tool requires a GraphQL thread node ID (`PRRT_...`), but the `get_review_comments` response currently omits thread-level node IDs. Until the MCP server includes them, this step cannot be performed automatically. Skip it and note the limitation if the tool call fails.
 
 ## Automated Review Loop
+
+This section is retained Claude platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Claude automated review-loop protocol for the retained Claude entry point.
 
 When a pull request is created or when the owner posts a PR comment containing `@claude start review loop`, initiate the following automated review cycle.
 

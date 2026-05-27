@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260527.1
+**Version:** 1.1.20260527.2
 
 ## Metadata
 
@@ -589,7 +589,9 @@ Retained Markdown documents, meaning `.md` or `.mdc` paths whose most-specific m
 
 ### Inline Module Blocks
 
-Some retained files contain module-owned blocks delimited by YAML comments. The current marker forms are:
+Some retained files contain module-owned blocks delimited by YAML comments or Markdown-safe HTML comments. The `*-only` family is for configuration or workflow blocks owned by an optional module. The `*-reference-only` family is for textual references to an optional module inside a retained protected or shared document. Both families use the same strip semantics: if any module named by the marker is absent from `included_modules`, remove the complete block including the begin and end marker lines.
+
+The current `*-only` marker forms are:
 
 ```yaml
 # template-sync: begin terraform-only
@@ -621,13 +623,50 @@ Some retained files contain module-owned blocks delimited by YAML comments. The 
 # template-sync: end github-platform-only
 ```
 
+The current `*-reference-only` marker forms are Markdown-safe HTML comments:
+
+```markdown
+<!-- template-sync: begin markdown-reference-only -->
+...
+<!-- template-sync: end markdown-reference-only -->
+
+<!-- template-sync: begin powershell-reference-only -->
+...
+<!-- template-sync: end powershell-reference-only -->
+
+<!-- template-sync: begin python-reference-only -->
+...
+<!-- template-sync: end python-reference-only -->
+
+<!-- template-sync: begin terraform-reference-only -->
+...
+<!-- template-sync: end terraform-reference-only -->
+
+<!-- template-sync: begin json-reference-only -->
+...
+<!-- template-sync: end json-reference-only -->
+
+<!-- template-sync: begin yaml-reference-only -->
+...
+<!-- template-sync: end yaml-reference-only -->
+
+<!-- template-sync: begin schema-reference-only -->
+...
+<!-- template-sync: end schema-reference-only -->
+```
+
 These inline blocks let a downstream repository keep the containing baseline or cross-module file while removing toolchain assumptions for a module it did not adopt. During Step 6, after path mapping decides whether the containing file itself is in scope, apply these rules:
 
 1. If every module named by an inline-block marker is present in `included_modules`, retain those blocks unchanged unless the per-file review records a separate `MERGE` decision.
 2. If any module named by an inline-block marker is absent from `included_modules`, remove each complete block for that marker, including the begin and end marker lines, before accepting or merging the containing file.
 3. Treat unmatched, nested, or unknown inline-block markers as an explicit sync question for the owner; do not silently keep or drop the affected block.
 
-A marker naming multiple modules, for example `schema-template-sync-support-only`, is retained only when every module named in the marker is present in `included_modules`, and is stripped when any one of them is absent.
+A marker naming multiple modules, for example `schema-template-sync-support-only`, is retained only when every module named in the marker is present in `included_modules`, and is stripped when any one of them is absent. A reference-only marker, for example `python-reference-only`, follows the same rule and is stripped when the corresponding module is absent.
+
+The current `markdown-reference-only`, `powershell-reference-only`, `python-reference-only`, `terraform-reference-only`, `json-reference-only`, `yaml-reference-only`, and `schema-reference-only` inline blocks live in:
+
+- `.github/copilot-instructions.md` for removable optional-stack references in protected canonical guidance.
+- `.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` for removable optional-stack references in protected agent entry-point summaries.
 
 The current `python-only` inline block lives in:
 
@@ -758,11 +797,15 @@ For protected files and template-derived governance, community, process, workflo
 In `minimal-preservation` mode, permitted edits are limited to:
 
 - substituting repository placeholders such as `OWNER/REPO`, confirmed contacts, confirmed owner/team names, and GHES hosts
-- removing complete delimited sections owned by unadopted manifest modules, such as a `# template-sync: begin terraform-only` block when the `terraform` module is excluded
+- removing complete delimited sections owned by unadopted manifest modules, such as a `# template-sync: begin terraform-only` block or an `<!-- template-sync: begin python-reference-only -->` block when the corresponding module is excluded
 - fixing links that would otherwise be broken after placeholder substitution, module removal, or path deletion
 - adding required local overrides or local ownership records in `.template-sync/marker.yml`
 
 In `minimal-preservation` mode, do not shorten or restructure instruction files for style, paraphrase protected prose, rewrite community or workflow files merely to sound more project-specific, or remove rules that still apply to adopted modules.
+
+For example, when a downstream repository excludes Python but retains Codex instructions, a minimal-preservation edit MAY remove complete `python-reference-only` blocks from `AGENTS.md` while keeping `## GitHub Plugin Usage` and `## PR Review Workflow (Codex-adapted)` unchanged. The same edit MUST NOT collapse `AGENTS.md` into a short generic summary or remove the retained Codex platform protocol merely because the file is described as a thin entry point.
+
+For example, when a downstream repository excludes Terraform but retains Claude instructions, a minimal-preservation edit MAY remove complete `terraform-reference-only` blocks from `CLAUDE.md` while keeping `## Handling Code Review Comments` and `## Automated Review Loop` unchanged. The same edit MUST NOT delete or rewrite the Claude review loop unless a protected-file decision records an explicit owner waiver for that protocol.
 
 Adoption mode applies in addition to protected-file authorization. Selecting `minimal-preservation` does not by itself authorize editing `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, root agent files, or other protected instruction files.
 
