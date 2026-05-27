@@ -333,6 +333,9 @@ template_manifest:
       requires_all:
         - template-sync-support
         - schema
+    - pattern: 'tests/test_run_first_adoption_checks.*'
+      requires_all:
+        - template-sync-support
     - pattern: 'tests/test_template_manifest.py'
       requires_all:
         - template-sync-support

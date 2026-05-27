@@ -1,14 +1,14 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260527.4
+**Version:** 1.1.20260527.5
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-05-27
-- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the human-readable view of the template sync manifest, protected-file decision records, the marker-aware retained-state validation helper command, the sync candidate table generator, and the generated adoption ledger review artifact. Does not define an automated sync tool.
+- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, first-adoption working-tree validation, the human-readable view of the template sync manifest, protected-file decision records, the marker-aware retained-state validation helper command, the sync candidate table generator, and the generated adoption ledger review artifact. Does not define an automated sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
 ## Purpose
@@ -25,6 +25,7 @@ Use this procedure when a downstream repository wants to review new changes from
 - **Instruction contract:** A machine-readable required-anchor contract in `.template-sync/instruction-contracts.yml`. Each entry names a protected instruction file, the modules that make the contract relevant downstream, and the required headings or phrases that MUST remain present unless a marker waiver or authorized protected-file removal applies.
 - **First-adoption preflight checklist:** A root `_TODO-repo-init.md` file, or an equivalent committed adoption note named by this procedure, that records manual GitHub settings and maintainer policy decisions that cannot be inferred from repository files during first-time template adoption.
 - **First-adoption state:** The resolved answers from the first-adoption preflight checklist, `.template-sync/marker.yml`, or an equivalent committed adoption note. Examples include conduct and security reporting channels, private vulnerability reporting, Discussions, expected labels, CODEOWNERS owner/team identity, default-branch protection policy, adoption mode, and any GHES host override.
+- **First-adoption working-tree validation runner:** The `.template-sync/scripts/run_first_adoption_checks.py` helper used before the first adoption commit. It collects tracked and untracked non-ignored regular files using `git ls-files --cached --others --exclude-standard`, runs chunked `pre-commit run --files ...` commands against that file list, and runs the placeholder scan, marker validation, and Markdown package scripts when the supporting files are present.
 - **Adoption ledger:** A generated Markdown review artifact emitted by `.template-sync/scripts/generate_sync_candidates.py`. It summarizes manifest module assignments, marker local overrides, protected-file flags and decisions, adoption-mode posture, `_TODO-repo-init.md` checklist links, and affected validation commands. It is not authoritative state; `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable sources of truth.
 - **Adoption mode:** The preservation posture applied before editing protected files and template-derived governance, community, process, workflow, or collaboration files. Valid named modes are `minimal-preservation` and `tailored`.
 - **`minimal-preservation`:** The default adoption mode for protected files and template-derived governance, community, process, workflow, and collaboration files. Keep upstream wording and structure; limit edits to placeholder substitution, removing complete delimited sections owned by unadopted manifest modules, fixing broken links, and adding required local overrides that are recorded in `.template-sync/marker.yml`.
@@ -560,7 +561,9 @@ Manifest version 2 rows MAY also use `requires_any`: the path is included only w
 | `templates/yaml/**` | `yaml` |
 | `schemas/**` | `schema` |
 | `tests/test_schema_examples.py` | `schema` |
-| `tests/test_generate_sync_candidates.py`, `tests/test_template_manifest.py`, `tests/test_validate_marker.py`, `tests/test_validate_downstream_adoption.py`, `tests/test_validate_instruction_contracts.py` | `template-sync-support`, `schema` |
+| `tests/test_generate_sync_candidates.py` | `template-sync-support`, `schema` |
+| `tests/test_run_first_adoption_checks.*` | `template-sync-support` |
+| `tests/test_template_manifest.py`, `tests/test_validate_marker.py`, `tests/test_validate_downstream_adoption.py`, `tests/test_validate_instruction_contracts.py` | `template-sync-support`, `schema` |
 | `.github/scripts/terraform_hooks.py`, `tests/test_terraform_hooks.py` | `terraform` |
 | `templates/python/**`, `pyproject.toml`, `src/copilot_repo_template/**`, `tests/*.py`, `tests/**/*.py` | `python` |
 | `templates/terraform/**`, `docs/terraform/**`, `modules/**`, `tests/**/*.tftest.hcl`, `.tflint.hcl`, `*.tf`, `*.tfvars`, `*.tftpl`, `*.tfbackend` | `terraform` |
@@ -1001,6 +1004,14 @@ Do not replace didactic examples that intentionally explain the placeholder conv
 
 Run validation appropriate to the included modules and files changed. Full template-like validation remains the safest default when the downstream repository keeps the relevant tooling.
 
+During first adoption, run the working-tree validation runner before the first adoption commit when the helper is present:
+
+```bash
+python .template-sync/scripts/run_first_adoption_checks.py
+```
+
+This helper is different from `pre-commit run --all-files`: it uses `git ls-files --cached --others --exclude-standard` to include newly copied, untracked, non-ignored files before they are committed, then invokes `pre-commit run --files ...` against that explicit file list. If the `pre-commit` console script is not on PATH, it uses the equivalent `python -m pre_commit run --files ...` form. It prints every command before running it, chunks large pre-commit file lists to avoid command-line length limits, and also runs the placeholder scan, marker validation, and supported Markdown npm scripts when those files are present. Continue to run `pre-commit run --all-files` before committing after the adopted files are tracked.
+
 Run the downstream adoption validation command after file removals, retained files, `included_modules`, `local_overrides`, `protected_file_decisions`, and `deferred_protected_candidates` reflect the intended sync result, and before finalizing the sync summary. Use `--require-marker` once the downstream repository has committed to carrying `.template-sync/marker.yml` in CI:
 
 ```bash
@@ -1056,7 +1067,7 @@ git ls-files --eol -- .
 | `github-actions` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run actionlint --all-files` |
 | `github-templates` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `npm run lint:md`, `npm run lint:md:links`, and issue or PR template rendering review |
 | `template-onboarding` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, and walkthrough review for kept onboarding paths |
-| `template-sync-support` | `python .template-sync/scripts/validate_downstream_adoption.py --require-marker` after marker decisions and retained files are current, `python .template-sync/scripts/validate_marker.py --require-marker` or `python .template-sync/scripts/validate_instruction_contracts.py --mode downstream --require-marker` for narrow debugging, `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run validate-template-sync-manifest --all-files`, `pre-commit run validate-template-sync-marker --all-files`, `pre-commit run validate-template-sync-instruction-contracts --all-files`, and `pre-commit run validate-instruction-contracts-upstream --all-files` when the schema-template-sync-support block is kept, plus a dry-run review of the sync procedure examples |
+| `template-sync-support` | `python .template-sync/scripts/run_first_adoption_checks.py` before the first adoption commit when validating copied files that may still be untracked, `python .template-sync/scripts/validate_downstream_adoption.py --require-marker` after marker decisions and retained files are current, `python .template-sync/scripts/validate_marker.py --require-marker` or `python .template-sync/scripts/validate_instruction_contracts.py --mode downstream --require-marker` for narrow debugging, `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run validate-template-sync-manifest --all-files`, `pre-commit run validate-template-sync-marker --all-files`, `pre-commit run validate-template-sync-instruction-contracts --all-files`, and `pre-commit run validate-instruction-contracts-upstream --all-files` when the schema-template-sync-support block is kept, plus a dry-run review of the sync procedure examples |
 | `markdown` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-json --all-files` |
 | `powershell` | `Invoke-Pester -Path tests/ -Output Detailed` |
 | `json` | `pre-commit run check-json --all-files` |
@@ -1065,7 +1076,7 @@ git ls-files --eol -- .
 | `python` | `pytest tests/ -v --cov --cov-report=term-missing`, `pre-commit run check-toml --all-files` |
 | `terraform` | `terraform fmt -check -recursive`, `tflint --recursive`, `terraform test -verbose`, `pytest tests/test_terraform_hooks.py -v` after terraform-hook script changes |
 
-Run `pre-commit run --all-files` before committing when the downstream repository uses pre-commit. If a repository intentionally removed a module and its validation tooling, record that in the sync summary rather than reintroducing validation commands blindly.
+Run `pre-commit run --all-files` before committing when the downstream repository uses pre-commit. During first adoption, run `python .template-sync/scripts/run_first_adoption_checks.py` before that first commit when the helper is present, because `pre-commit run --all-files` primarily evaluates tracked files and may miss copied but untracked non-ignored adoption files. If a repository intentionally removed a module and its validation tooling, record that in the sync summary rather than reintroducing validation commands blindly.
 
 ### Validation Triage
 
