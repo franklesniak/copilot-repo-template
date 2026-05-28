@@ -600,9 +600,11 @@ This command:
 
 Before editing files whose contents depend on maintainer choices, create a root `_TODO-repo-init.md` checklist in the downstream repository. Discovery and non-content setup may happen before this checklist exists, but agents and maintainers MUST NOT invent contact emails, reporting channels, branch protection policy, or GitHub repository settings to continue setup.
 
+When governance, security, community, CODEOWNERS, issue-template, PR-template, or other template-derived file content depends on unknown owner policy, ask the owner a concrete question before finalizing that file. The checklist records the answer or deferral state; it does not replace asking, and generated or adopted files MUST NOT ship unresolved placeholders or misleading policy defaults.
+
 This preflight is for first-time template adoption only. Do not recreate it or re-ask resolved questions during later template syncs when the answers are already recorded in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or an equivalent committed adoption note named by the adoption procedure.
 
-Use repository files and Git metadata for discoverable facts, such as the repository name, default branch, current placeholder values, and existing files. Use the checklist for manual GitHub settings and maintainer policy decisions that cannot be inferred safely from files, such as private vulnerability reporting, Discussions, branch protection, label availability, conduct reporting, security reporting, CODEOWNERS identity, GHES host override, and any explicit opt-in to broader rewriting of template-derived files.
+Use repository files and Git metadata for discoverable facts, such as the repository name, default branch, current placeholder values, and existing files. Use the checklist for manual GitHub settings and maintainer policy decisions that cannot be inferred safely from files, such as private vulnerability reporting, Discussions, branch protection, label availability, conduct reporting, security reporting, CODEOWNERS identity, GHES host override, and any explicit opt-in to broader rewriting of template-derived files. The checklist also tracks protected-file adoption decisions, unresolved settings with deferral states, and resolution evidence.
 
 The default adoption mode for protected files and template-derived governance, community, process, workflow, and collaboration files is `minimal-preservation`: keep upstream wording and structure, substitute placeholders, trim sections owned by unadopted manifest modules, fix broken links, and record required local overrides in `.template-sync/marker.yml` when template sync support is retained. Select `tailored` only when the maintainer explicitly wants broader downstream rewriting for a specific file or file set. Record that choice before editing so agents do not repeatedly prompt when the default applies.
 
@@ -615,11 +617,13 @@ This file records first-adoption decisions for this downstream repository. It is
 
 Keep unresolved items in this file until the maintainer completes them through the GitHub UI, an authorized GitHub connector, a safe API call, or a later maintainer action. Do not create this file in the upstream template repository unless the template manifest and sync procedure are deliberately changed to handle it.
 
+When a template-derived file depends on unknown governance, security, community, CODEOWNERS, issue-template, PR-template, or other owner policy, ask the owner a concrete question before finalizing that file. Record unresolved dependent-file items only after the question and the dependent file/status impact are identified.
+
 ## Discoverable Repository State
 
 - [ ] Repository owner/name recorded from the GitHub URL or Git remote: `OWNER/REPO`
 - [ ] Repository visibility recorded: `[public, private, or internal]`
-- [ ] Repository default branch recorded from GitHub or `git remote show origin`: `[main or other branch]`
+- [ ] Repository default branch recorded neutrally from GitHub or `git remote show origin`: `[recorded default branch]`
 - [ ] Existing `SECURITY.md`, `CODE_OF_CONDUCT.md`, `.github/CODEOWNERS`, issue templates, PR template, and `.github/dependabot.yml` reviewed before replacement.
 - [ ] Existing `.template-sync/marker.yml`, `_TODO-repo-init.md`, or equivalent adoption note checked before asking repeated questions.
 - [ ] Existing labels reviewed in GitHub under **Issues** > **Labels**.
@@ -645,8 +649,9 @@ These settings may be completed through the GitHub UI even when `gh` is unavaila
   - Minimum template label to review: `triage` with description `Needs triage` and color `d4c5f9`, unless the maintainer chooses a different triage label.
   - Docs: [Managing labels](https://docs.github.com/en/issues/using-labels-and-milestones-to-track-work/managing-labels). If this link breaks, search `manage labels GitHub issues` on `docs.github.com`.
   - Evidence: `[date, actor, labels created/skipped, connector result, or maintainer note]`
-- [ ] Default branch decision: `[keep current default, rename, or defer]`
+- [ ] Default branch decision: `[keep recorded default branch, rename, or defer]`
   - UI path: open **Settings** > **Branches**, then review the default branch selector before changing it.
+  - If the recorded default branch is not `main`, surface that as repository state and ask whether to keep or rename it without implying it is wrong.
   - If renaming, update local clones, open PR bases, branch protection or rulesets, documentation, and CI references.
   - Docs: [Changing the default branch](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-branches-in-your-repository/changing-the-default-branch). If this link breaks, search `change default branch GitHub repository` on `docs.github.com`.
   - Evidence: `[date, actor, old branch, new branch, connector result, or maintainer note]`
@@ -658,9 +663,10 @@ These settings may be completed through the GitHub UI even when `gh` is unavaila
 
 ## Maintainer Policy Decisions
 
-- [ ] Code of Conduct reporting contact method: `[confirmed contact method]`
-- [ ] Security vulnerability reporting channel: `[private vulnerability reporting, monitored email, or both]`
+- [ ] Code of Conduct reporting contact method: `[explicit contact email/address, repository-maintainer profile contact, another maintainer-approved contact path, or intentionally deferred (dependent file status recorded)]`
+- [ ] Security vulnerability reporting channel: `[private vulnerability reporting, monitored email, both, or intentionally deferred (dependent file status recorded)]`
 - [ ] CODEOWNERS owner/team identity: `[@user or @org/team]`
+- [ ] Label-dependent issue-template behavior: `[use template labels, choose alternate labels, remove label metadata, or intentionally deferred (dependent file status recorded)]`
 - [ ] Adoption mode for protected and template-derived governance, community, process, workflow, and collaboration files: `minimal-preservation` by default; list any specific `tailored` opt-ins.
 - [ ] GHES host override: `[none or github.company.com]`
 
@@ -673,19 +679,27 @@ These settings may be completed through the GitHub UI even when `gh` is unavaila
 
 ## Unresolved Settings
 
+Tag each unresolved item with exactly one deferral state:
+
+- `not yet asked`: the concrete owner question is identified but has not been asked.
+- `asked and deferred`: the owner was asked and intentionally deferred the answer; dependent-file status is recorded.
+- `unavailable through current safe tooling / manual review required`: the answer could not be determined through current safe tooling and requires owner or manual reviewer action.
+
 - [ ] Items that must be completed later:
-  - `[setting or policy decision]` - owner: `[person/team]`; target date or trigger: `[date/event]`; dependency: `[file, workflow, or GitHub setting]`
+  - Question: `[concrete owner question]`; state: `[not yet asked, asked and deferred, or unavailable through current safe tooling / manual review required]`; owner: `[person/team]`; target date or trigger: `[date/event]`; dependency: `[file, workflow, or GitHub setting]`; dependent-file status: `[not finalized, blocked, placeholder removed, local default withheld, or other concrete status]`
 - [ ] Dependent files that must not be considered finalized until the unresolved items are complete:
-  - `[path]` depends on `[setting or policy decision]`
+  - `[path]` depends on `[concrete owner question]`; state: `[same deferral state used above]`; status: `[dependent-file status]`
 
 ## Resolution Evidence
 
-- [ ] All items above are resolved or intentionally deferred before dependent files are considered finalized.
-- [ ] Evidence captured for every resolved GitHub setting: `[commit, PR, screenshot/link, connector result, API response note, or maintainer note]`
-- [ ] Deferred items copied into the adoption PR description, sync summary, issue, or other maintainer-owned follow-up.
+- [ ] Every unresolved dependent-file item was recorded only after the concrete owner question and dependent file/status impact were identified.
+- [ ] Dependent files are finalized only after their policy questions are resolved, or after the owner intentionally chooses `asked and deferred` and the dependent-file status avoids placeholders and misleading defaults.
+- [ ] No generated or adopted file ships unresolved placeholders or misleading policy defaults.
+- [ ] Evidence captured for every resolved GitHub setting or policy decision: `[commit, PR, screenshot/link, connector result, API response note, or maintainer note]`
+- [ ] Deferred items copied into the adoption PR description, sync summary, issue, or other maintainer-owned follow-up with their deferral state.
 ```
 
-Downstream work may assume a checklist item is complete only after it is recorded as resolved in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or the equivalent committed adoption note named by the adoption procedure.
+Downstream work may assume a checklist item is complete only after it is recorded as resolved, or after the owner intentionally chooses `asked and deferred` with dependent-file status, in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or the equivalent committed adoption note named by the adoption procedure. Items tagged `not yet asked` or `unavailable through current safe tooling / manual review required` keep dependent files unfinalized.
 
 ---
 
