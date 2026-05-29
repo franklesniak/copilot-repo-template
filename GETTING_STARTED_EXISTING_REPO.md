@@ -19,6 +19,9 @@ This guide walks you through adopting features from `franklesniak/copilot-repo-t
 - [Planning Your Adoption](#planning-your-adoption)
   - [Feature Decision Matrix](#feature-decision-matrix)
   - [First-Adoption Preflight Checklist](#first-adoption-preflight-checklist)
+  - [Structural Convention Assessment](#structural-convention-assessment)
+  - [Required Structural Alignment Catalog](#required-structural-alignment-catalog)
+  - [Post-Adoption Issue Drafting](#post-adoption-issue-drafting)
   - [Stack Selection Cleanup Checklist](#stack-selection-cleanup-checklist)
   - [Recommended Adoption Order](#recommended-adoption-order)
   - [Repo Layout Examples](#repo-layout-examples)
@@ -326,6 +329,121 @@ Tag each unresolved item with exactly one deferral state:
 ```
 
 Downstream work may assume a checklist item is complete only after it is recorded as resolved, or after the owner intentionally chooses `asked and deferred` with dependent-file status, in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or the equivalent committed adoption note named by the adoption procedure. Items tagged `not yet asked` or `unavailable through current safe tooling / manual review required` keep dependent files unfinalized.
+
+### Structural Convention Assessment
+
+Run this assessment before copying, moving, renaming, or deleting structure during first adoption. The assessment is a scope-control tool: it separates structure that must change for selected template modules to work from modernization that can wait.
+
+Inspect at least these repository surfaces:
+
+- Source layout: package roots, module directories, generated source, and language-specific source conventions.
+- Test layout: test roots, naming conventions, fixture adjacency, and paths referenced by CI, coverage, or package metadata.
+- Fixture and data layout: schema examples, test fixtures, sample configuration, seed data, and generated data outputs.
+- License filename: root license file name and whether the repository platform recognizes it without extra configuration.
+- CI layout: `.github/workflows/`, workflow names, workflow roots, action inputs, matrix assumptions, and path filters.
+- Package and tooling metadata: `package.json`, `pyproject.toml`, `.pre-commit-config.yaml`, `.yamllint.yml`, `.markdownlint.jsonc`, `.tflint.hcl`, and other retained tool entry points.
+- Docs location: README, contributing docs, runbooks, ADRs, generated docs, and command references.
+- Generated-output patterns: ignored build outputs, generated reports, lock files, schema examples, and cache directories.
+- Language-specific conventions: the repository's established ecosystem norms for test names, module roots, fixture placement, lock files, and config locations.
+- Template-module assumptions: retained modules from the [Stack Selection Cleanup Checklist](#stack-selection-cleanup-checklist), the module taxonomy in [TEMPLATE_UPDATE_PROCEDURE.md](TEMPLATE_UPDATE_PROCEDURE.md#step-6-use-the-authoritative-module-taxonomy), and any `.template-sync/marker.yml` local overrides or protected-file decisions.
+
+For each structural question, list the realistic options and score them from 1 to 5 against this lightweight rubric:
+
+| Criterion | Score 1 | Score 5 |
+| --- | --- | --- |
+| Runtime compatibility | Breaks or risks runtime behavior | Preserves runtime behavior |
+| User ergonomics | Makes normal commands harder or surprising | Keeps commands discoverable and familiar |
+| Ecosystem-convention alignment | Conflicts with common conventions for the stack | Matches common conventions for the stack |
+| Template compatibility | Requires repeated local exceptions or broken retained tooling | Works with retained template modules and validators |
+| Validation/test readiness | Leaves CI, tests, or linters ambiguous | Keeps validation paths executable and documented |
+| Migration burden | Requires broad moves, rewrites, or user retraining | Is small, reversible, or already mostly true |
+| Documentation burden | Requires many docs to change or risks stale commands | Keeps user-facing docs easy to update |
+| Blast radius | Touches unrelated ownership or behavior | Stays limited to the adoption boundary |
+
+Classify every convention finding with exactly one classification:
+
+| Classification | Use when | Adoption disposition |
+| --- | --- | --- |
+| **Required for selected template modules** | A retained module, platform feature, validator, or instruction contract cannot work correctly without the structure. | Include the change in adoption or update the retained tool/workflow to the downstream path before adoption is complete. |
+| **Strongly recommended during adoption** | The structure is not strictly required, but changing it now materially reduces confusion, drift, or follow-up churn. | Include only when the migration burden and blast radius are low enough for the adoption change. |
+| **Post-adoption follow-up** | The change is modernization, cleanup, or repository improvement that is useful but not required for template adoption. | Draft a follow-up issue using [Post-Adoption Issue Drafting](#post-adoption-issue-drafting). |
+| **Intentionally not recommended** | The downstream layout is better for the repository, or the template convention would create churn without enough benefit. | Record the rationale and, when template sync support is retained, capture durable path-specific treatment in `.template-sync/marker.yml` local overrides. |
+
+Post-adoption modernization MUST NOT be bundled into template adoption unless the repository owner explicitly authorizes that modernization in the adoption scope. A high rubric score for modernization does not make it adoption scope by itself.
+
+### Required Structural Alignment Catalog
+
+Required structural alignment means a path, filename, directory, or command shape that must exist, or must be explicitly remapped, for a selected template module, repository platform feature, validator, or retained instruction contract to work. It is different from optional modernization or preference-based cleanup.
+
+Use this catalog with the [Stack Selection Cleanup Checklist](#stack-selection-cleanup-checklist). The checklist tells you which module families remain; this catalog tells you which retained structures must either align or be recorded as intentional deviations.
+
+| Category | Required alignment examples | Required vs. recommended boundary |
+| --- | --- | --- |
+| Platform-recognized root files | A standard root `LICENSE` filename when relying on repository-platform license detection; community-health files at platform-recognized paths when those files are adopted. | Required when platform detection or template links depend on the standard path. Recommended when the existing alternate path is already linked and platform behavior is not needed. |
+| Test roots expected by CI | `tests/`, `tests/PowerShell/`, Terraform test paths, schema example fixtures, or other roots referenced by retained workflows, package metadata, or pre-commit hooks. | Required when retained validation invokes those paths. Deferred when test reorganization is cleanup and every retained command already points at the downstream path. |
+| Template sync marker and schema support | `.template-sync/marker.yml`, `.template-sync/manifest.yml`, instruction contracts, schemas, and validation scripts retained by `template-sync-support`. | Required when future template sync support is retained. Not required when the downstream repository deliberately excludes the module and records that choice. |
+| Workflow and config locations | `.github/workflows/**`, `.pre-commit-config.yaml`, `.yamllint.yml`, `.markdownlint.jsonc`, `package.json` scripts, schema files, and other locations consumed by retained validators. | Required when the tool or platform only reads the conventional path, or when the retained workflow references that path. Recommended when a tool supports an explicit alternate path and the alternate path is already documented. |
+| Instruction-contract files | `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, root agent files, and `.cursor/rules/**` retained by the `agent-instructions` module. | Required when retained instruction-contract validation expects the file and no authorized removal or waiver exists. Protected-file authorization is still required before changing protected instruction files. |
+| Documentation command references | README, contributing docs, runbooks, issue templates, PR templates, and onboarding docs that name adopted commands or paths. | Required whenever adopted structure changes a user-facing command, workflow name, path, prerequisite, or validation step. |
+
+For any move or rename, record which reason applies:
+
+- **Required for platform/template compatibility:** The retained platform feature, validator, workflow, template-sync support, or instruction contract expects the path. Move or rename during adoption, or update the retained consumer to the downstream path and document the mapping.
+- **Recommended by convention:** The ecosystem normally expects the path, but retained tooling already works with the downstream layout. Include only when the change is low-risk and owner-approved for adoption scope.
+- **Deferred as post-adoption cleanup:** The change is useful modernization but not needed for the adopted template modules. Draft a follow-up issue instead of bundling it.
+
+When a downstream repository intentionally keeps a different layout, record the deviation through `.template-sync/marker.yml` `local_overrides` if template sync support is retained. Use the existing local-override mechanism described in [TEMPLATE_UPDATE_PROCEDURE.md](TEMPLATE_UPDATE_PROCEDURE.md#local-overrides); do not invent a second override file or hidden exception list. The override reason should name the local layout decision, the affected path, and the default future sync disposition.
+
+Line-ending and `.gitattributes` effects are separate from content moves. If adoption changes `.gitattributes` or introduces new EOL attributes for retained files, follow the Step 8 normalization guidance in [TEMPLATE_UPDATE_PROCEDURE.md](TEMPLATE_UPDATE_PROCEDURE.md#normalize-line-endings-after-gitattributes-changes) and record normalization separately from structural moves or content edits.
+
+Whenever adopted structure changes a user-facing command, update the affected docs and workflows in the same adoption change. Examples include changing a test root referenced by CI, moving schema examples, renaming workflow files, changing package scripts, or replacing a copied template command with the downstream repository's command.
+
+### Post-Adoption Issue Drafting
+
+When a structural finding is classified as **Post-adoption follow-up**, draft one or more GitHub Issue descriptions before finalizing adoption. Each draft should be sized for a sophisticated coding agent: self-contained enough to implement without rediscovering adoption context, but narrow enough to review as a normal PR.
+
+Each drafted issue MUST:
+
+- Assume template adoption is already complete.
+- Be self-contained to one repository and require no cloning, inspecting, or accessing another repository.
+- Include scope, non-goals, acceptance criteria, validation steps, and notes on preserving downstream behavior.
+- Include a step to bump `Last Updated` and synchronize any `**Version:**` line for every touched file that carries that metadata.
+- State whether protected instruction files are in scope; if they are, require explicit maintainer authorization before editing them.
+- Avoid bundling unrelated modernization. Post-adoption modernization MUST NOT be folded back into template adoption unless the owner explicitly authorizes it.
+
+Use this issue-draft skeleton and replace the bracketed text with repository-specific content:
+
+```markdown
+## Context
+
+Template adoption is complete. This issue handles one deferred structural follow-up in this repository only.
+
+## Scope
+
+- [Specific paths, commands, or workflow roots to change]
+- [Downstream behavior that must be preserved]
+
+## Non-Goals
+
+- Do not revisit template adoption decisions.
+- Do not change unrelated structure or formatting.
+
+## Acceptance Criteria
+
+- [Observable result 1]
+- [Observable result 2]
+- Any touched file with `Last Updated` or `**Version:**` metadata has that metadata synchronized.
+
+## Validation
+
+- [Command or manual check 1]
+- [Command or manual check 2]
+
+## Preservation Notes
+
+- Preserve [runtime behavior, user command, CI behavior, or local policy].
+- If protected instruction files become necessary, stop and obtain explicit maintainer authorization before editing them.
+```
 
 ### Stack Selection Cleanup Checklist
 
@@ -1945,7 +2063,19 @@ python .template-sync/scripts/run_first_adoption_checks.py
 
 Expected result: The helper prints every command before it runs it and validates tracked plus untracked non-ignored regular files. It differs from `pre-commit run --all-files` because it builds its file list from `git ls-files --cached --others --exclude-standard`, then runs `pre-commit run --files ...` against that list so newly copied adoption files are checked before they are committed. If the `pre-commit` console script is not on PATH, it uses the equivalent `python -m pre_commit run --files ...` form. When the supporting files are present, it also runs the placeholder scan, marker validation, and Markdown package scripts such as `npm run lint:md` and `npm run lint:md:links`.
 
-**3. Template sync marker check (if `.template-sync/marker.yml` is adopted):**
+**3. Structural consistency checks:**
+
+Before finalizing adoption, confirm that retained modules agree about test roots, workflow roots, and command paths:
+
+- Every retained workflow under `.github/workflows/` invokes paths that exist in the downstream repository or have been intentionally updated to the downstream layout.
+- Every retained test command points at the retained test root, such as `tests/`, `tests/PowerShell/`, Terraform test directories, or schema example fixtures.
+- Every retained package, pre-commit, schema, markdown, YAML, or Terraform validator points at config files that still exist after stack cleanup.
+- Every adopted command shown in README, CONTRIBUTING, runbooks, issue templates, PR templates, or onboarding docs matches the retained workflow and test-root layout.
+- Every required structural change from the [Required Structural Alignment Catalog](#required-structural-alignment-catalog) is either implemented, remapped in the relevant workflow/tool config, or recorded as an intentional `.template-sync/marker.yml` local override when template sync support is retained.
+
+Expected result: no retained workflow, validator, package script, or user-facing command points at a removed test root, deleted workflow root, or unadopted module path. Record any remaining modernization as post-adoption issue drafts rather than bundling it into adoption.
+
+**4. Template sync marker check (if `.template-sync/marker.yml` is adopted):**
 
 ```bash
 python .template-sync/scripts/validate_marker.py --require-marker
@@ -1953,7 +2083,7 @@ python .template-sync/scripts/validate_marker.py --require-marker
 
 Expected result: The helper reports no retained-template inconsistencies. It validates `.template-sync/marker.yml` and `.template-sync/manifest.yml` against the checked-in schemas, reports leftover files from excluded modules, reports missing concrete files for included modules, and lists deferred protected-file candidates without failing solely because they exist.
 
-**4. Instruction contract check (if template sync support and agent instruction files are adopted):**
+**5. Instruction contract check (if template sync support and agent instruction files are adopted):**
 
 ```bash
 python .template-sync/scripts/validate_instruction_contracts.py --mode downstream --require-marker
@@ -1961,7 +2091,7 @@ python .template-sync/scripts/validate_instruction_contracts.py --mode downstrea
 
 Expected result: The helper checks required headings and phrases only for contracts whose `requires_modules` are retained by `.template-sync/marker.yml`. Missing anchors fail with the exact file and anchor unless a visible `template_sync.instruction_contract_waivers` entry applies, and absent protected files are skipped only when `.template-sync/marker.yml` records an authorized `REMOVE-LOCAL` decision for that path.
 
-**5. Template sync candidate table (when performing a future sync):**
+**6. Template sync candidate table (when performing a future sync):**
 
 After fetching the template remote and resolving the upstream range head, use the generator to create the first-pass Markdown decision aid:
 
@@ -1977,7 +2107,7 @@ python .template-sync/scripts/generate_sync_candidates.py --range-base RANGE_BAS
 
 Expected result: The helper validates `.template-sync/marker.yml` and `.template-sync/manifest.yml`, evaluates `RANGE_BASE_SHA..RANGE_HEAD_SHA`, and prints a Markdown table that flags retained/excluded paths, local overrides, deferred protected candidates, protected instruction/governance files, unmapped paths, unknown modules, cross-module mappings, inline-block notes, and renames. It is read-only and does not replace the manual review process in [TEMPLATE_UPDATE_PROCEDURE.md](TEMPLATE_UPDATE_PROCEDURE.md).
 
-**6. Markdown linting (if adopted):**
+**7. Markdown linting (if adopted):**
 
 ```bash
 npm run lint:md
@@ -1985,7 +2115,7 @@ npm run lint:md
 
 Expected result: No errors, or only warnings you've chosen to accept.
 
-**7. Push to feature branch:**
+**8. Push to feature branch:**
 
 ```bash
 git add .
@@ -1993,13 +2123,13 @@ git commit -m "feat: adopt template configurations from copilot-repo-template"
 git push origin feature/adopt-template-features
 ```
 
-**8. Verify CI workflows:**
+**9. Verify CI workflows:**
 
 - Navigate to your repository's **Actions** tab
 - Check that all adopted workflows run
 - Fix any failures before merging
 
-**9. Test issue templates (if adopted):**
+**10. Test issue templates (if adopted):**
 
 - Navigate to **Issues** → **New Issue**
 - Verify all templates appear correctly
@@ -2007,7 +2137,7 @@ git push origin feature/adopt-template-features
 - Verify links in the template chooser (`config.yml`) work
 - Close test issues without saving (or delete after testing)
 
-**10. Test PR template (if adopted):**
+**11. Test PR template (if adopted):**
 
 - Open a test pull request (can be against your feature branch)
 - Verify the template renders correctly with all sections
@@ -2389,11 +2519,14 @@ Before considering adoption complete, verify:
 - [ ] Conflicting configurations have been merged, not overwritten
 - [ ] Unused language files have been removed (e.g., PowerShell instructions if not using PowerShell)
 - [ ] `.github/TEMPLATE_DESIGN_DECISIONS.md` reviewed (keep for reference or delete after review)
+- [ ] Structural convention findings classified as required, strongly recommended, post-adoption follow-up, or intentionally not recommended
+- [ ] Required structural changes implemented, remapped, or recorded as intentional `.template-sync/marker.yml` local overrides
 
 ### Functionality
 
 - [ ] Pre-commit runs successfully (`pre-commit run --all-files`)
 - [ ] First-adoption working-tree validation passes (`python .template-sync/scripts/run_first_adoption_checks.py`) before the first adoption commit, so untracked non-ignored files are checked
+- [ ] Retained test roots, workflow roots, package scripts, and validator config paths are consistent with the adopted structure
 - [ ] Template sync marker validation passes (`python .template-sync/scripts/validate_marker.py --require-marker`) if `.template-sync/marker.yml` is adopted
 - [ ] Template sync candidate generation is available for future syncs (`python .template-sync/scripts/generate_sync_candidates.py --range-head RANGE_HEAD_SHA`) after fetching and choosing a reviewed range
 - [ ] Markdown linting passes (`npm run lint:md`)
@@ -2406,6 +2539,7 @@ Before considering adoption complete, verify:
 
 - [ ] CONTRIBUTING.md updated with new development requirements
 - [ ] README.md updated if setup steps changed
+- [ ] Post-adoption follow-up issues drafted for deferred modernization and cleanup
 - [ ] Team notified of new tooling/workflows
 
 ---
