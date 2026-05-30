@@ -1,14 +1,14 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260528.0
+**Version:** 1.1.20260530.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-28
-- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, first-adoption working-tree validation, the human-readable view of the template sync manifest, protected-file decision records, the marker-aware retained-state validation helper command, the sync candidate table generator, and the generated adoption ledger review artifact. Does not define an automated sync tool.
+- **Last Updated:** 2026-05-30
+- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, first-adoption structural convention assessment, first-adoption working-tree validation, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the sync candidate table generator, post-adoption issue drafting, and the generated adoption ledger review artifact. Does not define an automated sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
 ## Purpose
@@ -25,6 +25,9 @@ Use this procedure when a downstream repository wants to review new changes from
 - **Instruction contract:** A machine-readable required-anchor contract in `.template-sync/instruction-contracts.yml`. Each entry names a protected instruction file, the modules that make the contract relevant downstream, and the required headings or phrases that MUST remain present unless a marker waiver or authorized protected-file removal applies.
 - **First-adoption preflight checklist:** A root `_TODO-repo-init.md` file, or an equivalent committed adoption note named by this procedure, that records manual GitHub settings and maintainer policy decisions that cannot be inferred from repository files during first-time template adoption.
 - **First-adoption state:** The resolved answers from the first-adoption preflight checklist, `.template-sync/marker.yml`, or an equivalent committed adoption note. Examples include conduct and security reporting channels, private vulnerability reporting, Discussions, expected labels, CODEOWNERS owner/team identity, default-branch protection policy, adoption mode, and any GHES host override.
+- **Structural convention finding:** A first-adoption observation about repository layout, path conventions, retained workflow or validator roots, template-module assumptions, or modernization opportunities discovered through the structural convention assessment in [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md#structural-convention-assessment).
+- **Required structural alignment:** A path, filename, directory, or command shape that must exist, or must be explicitly remapped, for a selected template module, repository platform feature, validator, or retained instruction contract to work.
+- **Post-adoption issue draft:** A self-contained GitHub Issue description for deferred modernization or cleanup after template adoption is complete. Each draft is scoped to one repository and includes scope, non-goals, acceptance criteria, validation, and preservation notes.
 - **First-adoption working-tree validation runner:** The `.template-sync/scripts/run_first_adoption_checks.py` helper used before the first adoption commit. It collects tracked and untracked non-ignored regular files using `git ls-files --cached --others --exclude-standard`, runs chunked `pre-commit run --files ...` commands against that file list, and runs the placeholder scan, marker validation, and Markdown package scripts when the supporting files are present.
 - **Adoption ledger:** A generated Markdown review artifact emitted by `.template-sync/scripts/generate_sync_candidates.py`. It summarizes manifest module assignments, marker local overrides, protected-file flags and decisions, adoption-mode posture, `_TODO-repo-init.md` checklist links, and affected validation commands. It is not authoritative state; `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable sources of truth.
 - **Adoption mode:** The preservation posture applied before editing protected files and template-derived governance, community, process, workflow, or collaboration files. Valid named modes are `minimal-preservation` and `tailored`.
@@ -35,7 +38,7 @@ Use this procedure when a downstream repository wants to review new changes from
 - **Unadopted-module activity:** Upstream activity in a known taxonomy module that is not listed in `included_modules`.
 - **Unknown module:** A module name introduced by a newer upstream manifest or procedure that the downstream marker does not recognize. Unknown modules MUST be surfaced for explicit owner decision.
 - **Protected file:** A governance or instruction file that requires explicit owner authorization before editing.
-- **Sync working notes:** Temporary notes maintained while applying this procedure. They MAY be a scratch document, a draft PR body, or another local checklist, but they are not the final sync summary. They MUST capture the first-adoption preflight disposition and any unresolved `_TODO-repo-init.md` manual GitHub settings when applicable, the range mode, range endpoints or reconciliation command, range-base rationale, saved Step 6 candidate table or table citation, saved adoption ledger location or ledger citation, unmapped paths, per-file decisions, protected-file dispositions, line-ending normalization actions, validation results, validation issue classifications, finalization mode, and open questions as those facts are discovered. Step 14 turns these working notes into the final sync summary.
+- **Sync working notes:** Temporary notes maintained while applying this procedure. They MAY be a scratch document, a draft PR body, or another local checklist, but they are not the final sync summary. They MUST capture the first-adoption preflight disposition and any unresolved `_TODO-repo-init.md` manual GitHub settings when applicable, structural convention findings and their required/strongly recommended/post-adoption/not-recommended classifications when first adoption applies, required structural changes, the range mode, range endpoints or reconciliation command, range-base rationale, saved Step 6 candidate table or table citation, saved adoption ledger location or ledger citation, unmapped paths, per-file decisions, protected-file dispositions, line-ending normalization actions, validation results, validation issue classifications, post-adoption issue drafts, finalization mode, and open questions as those facts are discovered. Step 14 turns these working notes into the final sync summary.
 - **Sync summary:** The final owner-facing record created in Step 14 from the sync working notes. Depending on the finalization mode, it MAY be a PR description, a committed summary artifact, a local handoff note, or a dry-run report. It is the durable review artifact for modes that commit a branch or open a PR; working-tree inspection and dry-run modes MUST still present it clearly before stopping.
 
 ## Safety Rules
@@ -52,7 +55,7 @@ Use this procedure when a downstream repository wants to review new changes from
 
 ## Procedure Overview
 
-At the start of the procedure, determine whether the first-adoption preflight gate below applies. If it applies, generate or update the checklist before any content edits whose correctness depends on unresolved adoption answers. Before editing protected files or template-derived governance, community, process, workflow, or collaboration files, create or review the adoption ledger and record the applicable adoption mode. Use `minimal-preservation` when no explicit maintainer selection exists.
+At the start of the procedure, determine whether the first-adoption preflight gate below applies. If it applies, generate or update the checklist before any content edits whose correctness depends on unresolved adoption answers, and run the structural convention assessment from [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md#structural-convention-assessment). Before editing protected files or template-derived governance, community, process, workflow, or collaboration files, create or review the adoption ledger and record the applicable adoption mode. Use `minimal-preservation` when no explicit maintainer selection exists.
 
 1. Create a dedicated sync branch.
 2. Add this template repository as a `template` remote if it is not already present.
@@ -76,6 +79,8 @@ Independent substeps, such as inspecting unrelated candidate files or collecting
 Run this gate only when the downstream repository is receiving template contents for the first time, or when the repository is missing recorded first-adoption state that affects the files under review. Normal initialized delta syncs MUST NOT re-trigger this gate when `_TODO-repo-init.md`, `.template-sync/marker.yml`, or an equivalent committed adoption note already records the relevant answers.
 
 If the gate applies, generate or update root `_TODO-repo-init.md` before editing files whose content depends on unresolved adoption answers. Discovery, manifest inspection, range selection, and non-content setup may still happen before the checklist is complete. The checklist is downstream-owned state, not an upstream template file, and is excluded from upstream sync candidate review.
+
+When the gate applies, run the structural convention assessment in [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md#structural-convention-assessment) and carry the findings into the first-adoption working notes. Each finding MUST be classified as required for selected template modules, strongly recommended during adoption, post-adoption follow-up, or intentionally not recommended. Required structural changes MUST be implemented or explicitly remapped before adoption is finalized. Post-adoption modernization MUST be drafted as issue follow-up and MUST NOT be bundled into template adoption unless the owner explicitly authorizes it.
 
 When governance, security, community, CODEOWNERS, issue-template, PR-template, or other template-derived file content depends on unknown owner policy, the agent MUST ask the owner a concrete question before finalizing that file. The gate is a decision point and evidence record, not a substitute for asking. Generated or adopted files MUST NOT ship unresolved placeholders or misleading policy defaults.
 
@@ -417,6 +422,9 @@ Before moving to Step 5, the sync working notes MUST contain:
 - Reachability check result, when using a delta range
 - Diff command or full-reconciliation enumeration command used
 - First-adoption preflight disposition: not applicable, already resolved with record path, generated or updated with unresolved items, or blocked pending owner answers
+- Structural convention findings and their required/strongly recommended/post-adoption/not-recommended classifications, when first adoption applies
+- Required structural changes, including whether each change was implemented or remapped in retained tooling, plus any intentional `.template-sync/marker.yml` local override recorded in addition for a deliberate downstream deviation
+- Post-adoption issue drafts or draft locations for deferred structural modernization, when first adoption applies
 - Local-only noise excluded by the full-reconciliation pre-filter, when applicable
 - Candidate inline module blocks discovered in changed files, when applicable. Retain or strip decisions for these blocks belong to Step 6 once path mapping has run; record them per file in the Step 7 decision notes and the sync summary.
 - Any uncertainty that should be carried into the sync summary
@@ -436,6 +444,9 @@ Example sync working-notes block:
 - Reachability check: passed
 - Enumeration command: `git diff --name-status -M 1111111111111111111111111111111111111111..2222222222222222222222222222222222222222 --`
 - First-adoption preflight: not applicable; first-adoption state was already recorded
+- Structural convention findings: not applicable for this initialized delta sync
+- Required structural changes: none
+- Post-adoption issue drafts: none
 - Local-only noise: not applicable
 - Candidate inline module blocks: none discovered in changed files
 - Uncertainty: none
@@ -1162,6 +1173,13 @@ When `.gitattributes` changed or line-ending normalization occurred, verify the 
 git ls-files --eol -- .
 ```
 
+Before module-specific validators, verify structural consistency for retained modules:
+
+- Retained workflows under `.github/workflows/` MUST invoke test roots, source roots, config files, and scripts that exist after stack selection and structural alignment.
+- Retained test commands MUST point at the downstream repository's actual test roots, such as `tests/`, `tests/PowerShell/`, Terraform test directories, or schema example fixture directories.
+- Retained package scripts, pre-commit hooks, schema validators, and markdown/YAML/Terraform linters MUST point at config files that still exist after excluded modules are removed.
+- User-facing docs MUST match any adopted structural change that alters commands, workflow names, test paths, or validation prerequisites.
+
 | Module | Example validation |
 | --- | --- |
 | `baseline` | `pre-commit run --all-files` |
@@ -1226,6 +1244,9 @@ The sync summary MUST include:
 - finalization mode
 - first-adoption preflight record and unresolved items, when applicable
 - unresolved `_TODO-repo-init.md` manual GitHub settings, each with owner, next action, and evidence or follow-up location, when applicable
+- structural convention findings and their required/strongly recommended/post-adoption/not-recommended classifications, when first adoption applies
+- required structural changes, including whether each was implemented or remapped, plus any intentional local override recorded in addition for a deliberate downstream deviation
+- post-adoption issue drafts or their committed handoff location
 - adoption mode record for protected files and template-derived governance, community, process, workflow, or collaboration files
 - upstream template commit range reviewed
 - included modules
@@ -1255,6 +1276,9 @@ Example summary skeleton:
 **Finalization mode:** PR-ready branch
 **First-adoption preflight:** not applicable; existing `_TODO-repo-init.md` and `.template-sync/marker.yml` recorded resolved adoption answers.
 **Unresolved `_TODO-repo-init.md` settings:** none
+**Structural convention findings:** not applicable for this initialized delta sync
+**Required structural changes:** none
+**Post-adoption issue drafts:** none
 **Adoption mode:** `minimal-preservation` by default for protected files and template-derived governance, community, process, workflow, and collaboration files; `README.md` has a path-specific `tailored` local override.
 **Upstream range reviewed:** `1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
 **Included modules:** baseline, agent-instructions, github-actions, github-templates, markdown, powershell, template-sync-support
@@ -1426,6 +1450,9 @@ Invoke-Pester -Path tests/ -Output Detailed
 **Finalization mode:** PR-ready branch
 **First-adoption preflight:** not applicable; existing `_TODO-repo-init.md` and `.template-sync/marker.yml` recorded resolved adoption answers.
 **Unresolved `_TODO-repo-init.md` settings:** none
+**Structural convention findings:** not applicable for this initialized delta sync
+**Required structural changes:** none
+**Post-adoption issue drafts:** none
 **Adoption mode:** `minimal-preservation` by default for protected files and template-derived governance, community, process, workflow, and collaboration files; `README.md` uses a path-specific `tailored` local override.
 **Upstream range reviewed:** `1111111111111111111111111111111111111111..2222222222222222222222222222222222222222`
 **Included modules:** baseline, agent-instructions, github-actions, github-templates, markdown, powershell, template-sync-support
