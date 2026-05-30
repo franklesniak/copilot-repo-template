@@ -12,6 +12,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, NoReturn
+from urllib.parse import urlsplit, urlunsplit
 
 from validate_marker import (
     DEFAULT_MANIFEST_PATH,
@@ -1434,18 +1435,42 @@ def parse_git_remotes(repo_root: Path) -> tuple[RemoteInfo, ...]:
     return tuple(remotes)
 
 
+def is_github_host(host: str | None) -> bool:
+    """Return whether ``host`` is ``github.com`` or a ``github.com`` subdomain."""
+    if not host:
+        return False
+    host = host.lower()
+    return host == "github.com" or host.endswith(".github.com")
+
+
 def infer_repository_name(remotes: tuple[RemoteInfo, ...]) -> str | None:
-    """Infer ``owner/name`` from a configured GitHub-style remote URL."""
+    """Infer ``owner/name`` from a configured GitHub remote URL.
+
+    The GitHub host is matched against the parsed URL authority (or the SCP-style
+    host), never an arbitrary substring, so look-alike hosts such as
+    ``notgithub.com`` or ``github.com.example.com`` are not misclassified as
+    GitHub remotes.
+    """
     for remote in remotes:
-        normalized_url = remote.url.removesuffix(".git")
-        patterns = (
-            r"github(?:\.[^/:]+)?[:/](?P<owner>[^/]+)/(?P<repo>[^/]+)$",
-            r"git@[^:]+:(?P<owner>[^/]+)/(?P<repo>[^/]+)$",
-        )
-        for pattern in patterns:
-            match = re.search(pattern, normalized_url)
-            if match is not None:
-                return f"{match.group('owner')}/{match.group('repo')}"
+        if "://" in remote.url:
+            try:
+                parsed = urlsplit(remote.url)
+            except ValueError:
+                continue
+            host, path = parsed.hostname, parsed.path
+        else:
+            scp_match = re.match(r"^(?:[^@/]+@)?(?P<host>[^/:]+):(?P<path>.+)$", remote.url)
+            if scp_match is None:
+                continue
+            host, path = scp_match.group("host"), scp_match.group("path")
+        if not is_github_host(host):
+            continue
+        segments = [segment for segment in path.split("/") if segment]
+        if len(segments) < 2:
+            continue
+        owner, repo = segments[0], segments[1].removesuffix(".git")
+        if owner and repo:
+            return f"{owner}/{repo}"
     return None
 
 
@@ -2274,12 +2299,25 @@ def format_limited_path_list(paths: tuple[str, ...], empty_text: str, *, limit: 
     return ", ".join(visible)
 
 
-def redact_remote_url(url: str) -> str:
-    """Redact embedded user-info credentials from a remote URL for display."""
-    match = re.match(r"(?P<scheme>[A-Za-z][A-Za-z0-9+.\-]*://)(?P<userinfo>[^/@]+)@", url)
-    if match is None:
-        return url
-    return f"{match.group('scheme')}***@{url[match.end():]}"
+def redact_url_userinfo(value: str) -> str:
+    """Redact URL user-info before displaying a URL-like value.
+
+    Handles both ``scheme://userinfo@host`` and scheme-relative ``//userinfo@host``
+    forms. SCP-style remotes such as ``git@github.com:org/repo`` have no URL
+    authority and are returned unchanged.
+    """
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        # Unparseable input (for example, a malformed IPv6 authority): redact
+        # defensively instead of risking a leak by returning the raw value.
+        if "@" not in value:
+            return value
+        return f"***@{value.rsplit('@', maxsplit=1)[1]}"
+    if not parsed.netloc or "@" not in parsed.netloc:
+        return value
+    safe_netloc = f"***@{parsed.netloc.rsplit('@', maxsplit=1)[1]}"
+    return urlunsplit((parsed.scheme, safe_netloc, parsed.path, parsed.query, parsed.fragment))
 
 
 def format_remotes(remotes: tuple[RemoteInfo, ...]) -> str:
@@ -2287,7 +2325,8 @@ def format_remotes(remotes: tuple[RemoteInfo, ...]) -> str:
     if not remotes:
         return "none found"
     return "; ".join(
-        f"`{remote.name}` {remote.purpose}: `{redact_remote_url(remote.url)}`" for remote in remotes
+        f"`{remote.name}` {remote.purpose}: `{redact_url_userinfo(remote.url)}`"
+        for remote in remotes
     )
 
 

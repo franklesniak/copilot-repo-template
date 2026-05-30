@@ -747,6 +747,11 @@ def test_format_remotes_redacts_embedded_credentials() -> None:
             purpose="push",
         ),
         sync_candidates.RemoteInfo(
+            name="scheme-relative",
+            url="//ghp_schemerelative@github.com/example/project.git",
+            purpose="fetch",
+        ),
+        sync_candidates.RemoteInfo(
             name="ssh",
             url="git@github.com:example/project.git",
             purpose="push",
@@ -757,10 +762,64 @@ def test_format_remotes_redacts_embedded_credentials() -> None:
 
     assert "ghp_secrettoken" not in rendered
     assert "ghp_anothersecret" not in rendered
+    assert "ghp_schemerelative" not in rendered
     assert "maintainer:" not in rendered
     assert "https://***@github.com/example/project.git" in rendered
+    # Scheme-relative authorities must also be redacted, not just scheme:// URLs.
+    assert "//***@github.com/example/project.git" in rendered
     # SCP-style SSH URLs cannot embed a password and are preserved verbatim.
     assert "git@github.com:example/project.git" in rendered
+
+
+def test_redact_url_userinfo_handles_url_forms() -> None:
+    """The canonical redactor covers scheme, scheme-relative, SCP, and malformed forms."""
+    redact = sync_candidates.redact_url_userinfo
+
+    assert (
+        redact("https://maintainer:token@github.com/org/repo.git")
+        == "https://***@github.com/org/repo.git"
+    )
+    assert (
+        redact("https://ghp_token@github.com/org/repo.git") == "https://***@github.com/org/repo.git"
+    )
+    # Scheme-relative authority must also be redacted.
+    assert redact("//user:token@host/path") == "//***@host/path"
+    # SCP-style SSH remotes have no URL authority and are preserved.
+    assert redact("git@github.com:org/repo.git") == "git@github.com:org/repo.git"
+    # No user-info: unchanged.
+    assert redact("https://github.com/org/repo.git") == "https://github.com/org/repo.git"
+    # Unparseable authority (malformed IPv6): fail-safe redaction that drops the scheme.
+    assert redact("https://user:secret@[::1/path") == "***@[::1/path"
+
+
+def test_infer_repository_name_anchors_github_host() -> None:
+    """Owner/name inference matches the URL authority, not any github substring."""
+
+    def infer(url: str) -> str | None:
+        return sync_candidates.infer_repository_name(
+            (sync_candidates.RemoteInfo(name="origin", url=url, purpose="fetch"),)
+        )
+
+    # Genuine GitHub remotes (scheme, SCP, user-info, and subdomain) resolve.
+    assert infer("https://github.com/example/project.git") == "example/project"
+    assert infer("git@github.com:example/project.git") == "example/project"
+    assert infer("https://user:token@github.com/example/project") == "example/project"
+    assert infer("https://team.github.com/example/project.git") == "example/project"
+    # Look-alike or unrelated hosts MUST NOT be misclassified as GitHub.
+    assert infer("https://notgithub.com/example/project.git") is None
+    assert infer("https://github.com.evil.com/example/project.git") is None
+    assert infer("git@gitlab.com:example/project.git") is None
+
+    # The first genuine GitHub remote wins even if a look-alike precedes it.
+    remotes = (
+        sync_candidates.RemoteInfo(
+            name="decoy", url="https://notgithub.com/decoy/repo.git", purpose="fetch"
+        ),
+        sync_candidates.RemoteInfo(
+            name="origin", url="https://github.com/example/project.git", purpose="fetch"
+        ),
+    )
+    assert sync_candidates.infer_repository_name(remotes) == "example/project"
 
 
 def test_github_metadata_handles_non_object_json(tmp_path: Path) -> None:
