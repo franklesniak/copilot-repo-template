@@ -7,7 +7,7 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.5.20260530.0
+**Version:** 1.5.20260530.1
 
 ## Metadata
 
@@ -212,7 +212,7 @@ except json.JSONDecodeError as error:
 
 - When rendering Git remote URLs, URL-form connection strings, or other `scheme://userinfo@host/path` values into user-facing output, using the same surfaces described for the `OSError` guidance above (CLI output written to stdout/stderr, generated reports, warnings emitted to a user-visible terminal, or text intended to be copied, pasted, shared, or quoted), code **MUST** redact the entire URL user-info component before display. The user-info component can be `user`, `user:password`, or a bare token. Replace `userinfo@` with a redaction marker such as `***@` while preserving the scheme, host, port, path, query string, and fragment unless those other components are independently known to contain secrets. For example, `https://maintainer:token@github.com/org/repo.git` should render as `https://***@github.com/org/repo.git`.
 - SCP-style SSH remotes such as `git@github.com:org/repo.git` **MAY** be left intact because they are not URI-authority URLs and cannot embed a password in the same `scheme://userinfo@host` form.
-- This rule covers URL user-info redaction only. It does not authorize preserving known secrets elsewhere in a value, such as secret query parameters. Known credentials, tokens, passwords, and secrets must still be omitted or redacted under the repo-wide no-secrets rule.
+- This rule covers URL user-info redaction only. It does not authorize preserving known secrets elsewhere in a value, such as secret query parameters. Known credentials, tokens, passwords, and secrets **MUST** still be omitted or redacted under the repo-wide no-secrets rule.
 
 Compliant example:
 
@@ -222,7 +222,14 @@ from urllib.parse import urlsplit, urlunsplit
 
 def redact_url_userinfo(value: str) -> str:
     """Redact URL user-info before displaying a URL-like value."""
-    parsed = urlsplit(value)
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        # Unparseable input (for example, malformed IPv6): redact defensively
+        # instead of risking a leak by returning the raw value.
+        if "@" not in value:
+            return value
+        return f"***@{value.rsplit('@', maxsplit=1)[1]}"
     if not parsed.scheme or not parsed.netloc or "@" not in parsed.netloc:
         return value
 
@@ -235,6 +242,7 @@ assert (
     == "https://***@github.com/org/repo.git"
 )
 assert redact_url_userinfo("git@github.com:org/repo.git") == "git@github.com:org/repo.git"
+assert redact_url_userinfo("https://user:secret@[::1/path") == "***@[::1/path"
 ```
 
 ## Data Modeling
