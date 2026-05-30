@@ -7,13 +7,13 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.5.20260524.1
+**Version:** 1.5.20260530.4
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-24
+- **Last Updated:** 2026-05-30
 - **Scope:** Defines Python coding standards for all Python files in this repository, including modules, scripts, tests, and tooling. Covers style, structure, error handling, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -207,6 +207,45 @@ except json.JSONDecodeError as error:
 
 - **MUST** use `logging` for non-test code.  **MUST NOT** use `print` except in CLI entrypoints.
 - Logging messages **MUST** be human-actionable and **SHOULD** include identifiers/paths when relevant.
+
+### Secrets in User-Facing Output
+
+- When rendering Git remote URLs, URL-form connection strings, or other `scheme://userinfo@host/path` (or scheme-relative `//userinfo@host/path`) values into user-facing output, using the same surfaces described for the `OSError` guidance above (CLI output written to stdout/stderr, generated reports, warnings emitted to a user-visible terminal, or text intended to be copied, pasted, shared, or quoted), code **MUST** redact the entire URL user-info component before display. The user-info component can be `user`, `user:password`, or a bare token. Replace `userinfo@` with a redaction marker such as `***@` while preserving the scheme, host, port, path, query string, and fragment unless those other components are independently known to contain secrets. For example, `https://maintainer:token@github.com/org/repo.git` should render as `https://***@github.com/org/repo.git`.
+- If a value cannot be parsed safely (for example, a malformed IPv6 authority that raises `ValueError`), prefer fail-safe redaction over returning the raw value — redact the user-info even when that drops non-secret components such as the scheme.
+- SCP-style SSH remotes such as `git@github.com:org/repo.git` **MAY** be left intact because they are not URI-authority URLs and cannot embed a password in the same `scheme://userinfo@host` form.
+- This rule covers URL user-info redaction only. It does not authorize preserving known secrets elsewhere in a value, such as secret query parameters. Known credentials, tokens, passwords, and secrets **MUST** still be omitted or redacted under the repo-wide no-secrets rule.
+
+Compliant example:
+
+```python
+from urllib.parse import urlsplit, urlunsplit
+
+
+def redact_url_userinfo(value: str) -> str:
+    """Redact URL user-info before displaying a URL-like value."""
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        # Unparseable input (for example, malformed IPv6): redact defensively
+        # instead of risking a leak by returning the raw value.
+        if "@" not in value:
+            return value
+        return f"***@{value.rsplit('@', maxsplit=1)[1]}"
+    if not parsed.netloc or "@" not in parsed.netloc:
+        return value
+
+    safe_netloc = f"***@{parsed.netloc.rsplit('@', maxsplit=1)[1]}"
+    return urlunsplit((parsed.scheme, safe_netloc, parsed.path, parsed.query, parsed.fragment))
+
+
+assert (
+    redact_url_userinfo("https://maintainer:token@github.com/org/repo.git")
+    == "https://***@github.com/org/repo.git"
+)
+assert redact_url_userinfo("git@github.com:org/repo.git") == "git@github.com:org/repo.git"
+assert redact_url_userinfo("https://user:secret@[::1/path") == "***@[::1/path"
+assert redact_url_userinfo("//user:token@host/path") == "//***@host/path"
+```
 
 ## Data Modeling
 
