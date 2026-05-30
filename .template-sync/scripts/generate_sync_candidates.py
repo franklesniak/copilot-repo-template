@@ -1337,16 +1337,31 @@ def load_preflight_inputs(
     return parse_marker(marker), manifest_modules, mappings
 
 
+def path_has_symlink_component(repo_root: Path, relative_path: str) -> bool:
+    """Return whether any component of ``relative_path`` under ``repo_root`` is a symlink.
+
+    Walks the components from ``repo_root`` downward using ``is_symlink`` (an lstat that
+    does not follow the final component) and stops at the first symlink, so a symlinked
+    ancestor is detected without ever following it or statting its external target.
+    """
+    current = repo_root
+    for part in Path(relative_path).parts:
+        current = current / part
+        if current.is_symlink():
+            return True
+    return False
+
+
 def repository_path_exists(repo_root: Path, relative_path: str) -> bool:
     """Return whether a non-symlink path exists inside ``repo_root``."""
-    path = repo_root / relative_path
-    if path.is_symlink() or not path.exists():
+    if path_has_symlink_component(repo_root, relative_path):
         return False
+    path = repo_root / relative_path
     try:
         path.resolve().relative_to(repo_root.resolve())
     except (OSError, ValueError):
         return False
-    return True
+    return path.exists()
 
 
 def iter_repo_files(repo_root: Path) -> tuple[Path, ...]:
@@ -1395,14 +1410,16 @@ def list_directory_files(
     suffixes: tuple[str, ...],
 ) -> tuple[str, ...]:
     """Return immediate files in a repository directory that match ``suffixes``."""
-    directory = repo_root / relative_dir
-    if directory.is_symlink() or not directory.is_dir():
+    if path_has_symlink_component(repo_root, relative_dir):
         return ()
 
     trusted_root = repo_root.resolve()
+    directory = repo_root / relative_dir
     try:
         directory.resolve().relative_to(trusted_root)
     except (OSError, ValueError):
+        return ()
+    if not directory.is_dir():
         return ()
 
     paths: list[str] = []

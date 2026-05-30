@@ -867,6 +867,44 @@ def test_list_directory_files_skips_symlinked_ancestor(tmp_path: Path, monkeypat
     assert result == ()
 
 
+def test_path_has_symlink_component_detects_symlinked_ancestor(tmp_path: Path) -> None:
+    """A symlinked ancestor (or leaf) is detected; fully real paths pass."""
+    repo_root = tmp_path / "repo"
+    (repo_root / "real" / "nested").mkdir(parents=True)
+    (repo_root / "real" / "nested" / "file.txt").write_text("x\n", encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    # `.github` is a symlink whose target lives outside the repo root.
+    (repo_root / ".github").symlink_to(outside, target_is_directory=True)
+
+    # A symlinked ancestor and a symlinked leaf are both rejected.
+    assert sync_candidates.path_has_symlink_component(repo_root, ".github/workflows") is True
+    assert sync_candidates.path_has_symlink_component(repo_root, ".github") is True
+    # Fully real paths are accepted whether or not they exist.
+    assert sync_candidates.path_has_symlink_component(repo_root, "real/nested") is False
+    assert sync_candidates.path_has_symlink_component(repo_root, "real/nested/file.txt") is False
+    assert sync_candidates.path_has_symlink_component(repo_root, "does/not/exist") is False
+
+
+def test_repository_path_exists_rejects_symlinked_ancestor(tmp_path: Path) -> None:
+    """A path reached through a symlinked ancestor is not treated as a repo path."""
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "config.yml").write_text("name: leak\n", encoding="utf-8")
+    # `.github` is a symlink whose target lives outside the repo root.
+    (repo_root / ".github").symlink_to(outside, target_is_directory=True)
+
+    # The file exists *through* the symlink, but must be rejected as out-of-boundary.
+    assert sync_candidates.repository_path_exists(repo_root, ".github/config.yml") is False
+
+    # A genuine in-repo file is accepted.
+    (repo_root / "real").mkdir()
+    (repo_root / "real" / "in_repo.yml").write_text("ok\n", encoding="utf-8")
+    assert sync_candidates.repository_path_exists(repo_root, "real/in_repo.yml") is True
+
+
 def test_unmapped_paths_are_flagged(tmp_path: Path) -> None:
     """Changed paths outside the manifest surface as owner-review items."""
     _init_repo(tmp_path)
