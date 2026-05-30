@@ -375,7 +375,7 @@ Post-adoption modernization MUST NOT be bundled into template adoption unless th
 
 Required structural alignment means a path, filename, directory, or command shape that must exist, or must be explicitly remapped, for a selected template module, repository platform feature, validator, or retained instruction contract to work. It is different from optional modernization or preference-based cleanup.
 
-Use this catalog with the [Stack Selection Cleanup Checklist](#stack-selection-cleanup-checklist). The checklist tells you which module families remain; this catalog tells you which retained structures must either align or be recorded as intentional deviations.
+Use this catalog with the [Stack Selection Cleanup Checklist](#stack-selection-cleanup-checklist). The checklist tells you which module families remain; this catalog tells you which retained structures must align or be explicitly remapped to keep working, with any intentional deviation additionally recorded.
 
 | Category | Required alignment examples | Required vs. recommended boundary |
 | --- | --- | --- |
@@ -422,6 +422,7 @@ Template adoption is complete. This issue handles one deferred structural follow
 
 - [Specific paths, commands, or workflow roots to change]
 - [Downstream behavior that must be preserved]
+- Protected instruction files in scope: [yes/no]. If yes, obtain explicit maintainer authorization before editing them.
 
 ## Non-Goals
 
