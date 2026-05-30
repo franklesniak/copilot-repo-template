@@ -2071,7 +2071,7 @@ Before finalizing adoption, confirm that retained modules agree about test roots
 - Every retained test command points at the retained test root, such as `tests/`, `tests/PowerShell/`, Terraform test directories, or schema example fixtures.
 - Every retained package, pre-commit, schema, markdown, YAML, or Terraform validator points at config files that still exist after stack cleanup.
 - Every adopted command shown in README, CONTRIBUTING, runbooks, issue templates, PR templates, or onboarding docs matches the retained workflow and test-root layout.
-- Every required structural change from the [Required Structural Alignment Catalog](#required-structural-alignment-catalog) is either implemented, remapped in the relevant workflow/tool config, or recorded as an intentional `.template-sync/marker.yml` local override when template sync support is retained.
+- Every required structural change from the [Required Structural Alignment Catalog](#required-structural-alignment-catalog) is implemented or remapped in the relevant workflow/tool config. When the downstream path intentionally deviates and template sync support is retained, that deviation is additionally recorded as an intentional `.template-sync/marker.yml` local override.
 
 Expected result: no retained workflow, validator, package script, or user-facing command points at a removed test root, deleted workflow root, or unadopted module path. Record any remaining modernization as post-adoption issue drafts rather than bundling it into adoption.
 
@@ -2520,7 +2520,7 @@ Before considering adoption complete, verify:
 - [ ] Unused language files have been removed (e.g., PowerShell instructions if not using PowerShell)
 - [ ] `.github/TEMPLATE_DESIGN_DECISIONS.md` reviewed (keep for reference or delete after review)
 - [ ] Structural convention findings classified as required, strongly recommended, post-adoption follow-up, or intentionally not recommended
-- [ ] Required structural changes implemented, remapped, or recorded as intentional `.template-sync/marker.yml` local overrides
+- [ ] Required structural changes implemented or remapped, with intentional `.template-sync/marker.yml` local overrides recorded in addition for deliberate downstream deviations
 
 ### Functionality
 

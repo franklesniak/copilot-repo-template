@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260529.0
+**Version:** 1.1.20260530.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-29
+- **Last Updated:** 2026-05-30
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, first-adoption structural convention assessment, first-adoption working-tree validation, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the sync candidate table generator, post-adoption issue drafting, and the generated adoption ledger review artifact. Does not define an automated sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -423,7 +423,7 @@ Before moving to Step 5, the sync working notes MUST contain:
 - Diff command or full-reconciliation enumeration command used
 - First-adoption preflight disposition: not applicable, already resolved with record path, generated or updated with unresolved items, or blocked pending owner answers
 - Structural convention findings and their required/strongly recommended/post-adoption/not-recommended classifications, when first adoption applies
-- Required structural changes, including whether each change was implemented, remapped in retained tooling, or recorded as an intentional `.template-sync/marker.yml` local override
+- Required structural changes, including whether each change was implemented or remapped in retained tooling, plus any intentional `.template-sync/marker.yml` local override recorded in addition for a deliberate downstream deviation
 - Post-adoption issue drafts or draft locations for deferred structural modernization, when first adoption applies
 - Local-only noise excluded by the full-reconciliation pre-filter, when applicable
 - Candidate inline module blocks discovered in changed files, when applicable. Retain or strip decisions for these blocks belong to Step 6 once path mapping has run; record them per file in the Step 7 decision notes and the sync summary.
@@ -1245,7 +1245,7 @@ The sync summary MUST include:
 - first-adoption preflight record and unresolved items, when applicable
 - unresolved `_TODO-repo-init.md` manual GitHub settings, each with owner, next action, and evidence or follow-up location, when applicable
 - structural convention findings and their required/strongly recommended/post-adoption/not-recommended classifications, when first adoption applies
-- required structural changes, including whether each was implemented, remapped, or recorded as an intentional local override
+- required structural changes, including whether each was implemented or remapped, plus any intentional local override recorded in addition for a deliberate downstream deviation
 - post-adoption issue drafts or their committed handoff location
 - adoption mode record for protected files and template-derived governance, community, process, workflow, or collaboration files
 - upstream template commit range reviewed
