@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
+import json
 import os
 import re
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, Callable, NoReturn
 
 from validate_marker import (
     DEFAULT_MANIFEST_PATH,
@@ -42,6 +43,27 @@ from validate_marker import (
 DEFAULT_RANGE_HEAD_REF = "template/main"
 DEFAULT_TODO_PATH = "_TODO-repo-init.md"
 TEMPLATE_UPDATE_PROCEDURE_PATH = "TEMPLATE_UPDATE_PROCEDURE.md"
+GITHUB_METADATA_MANUAL_SETTINGS = (
+    "private vulnerability reporting",
+    "repository rulesets or classic branch protection",
+    "required status checks",
+    "bypass roles",
+)
+DISCOVERY_SKIP_DIRS = frozenset(
+    {
+        ".git",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".terraform",
+        ".venv",
+        "__pycache__",
+        "build",
+        "dist",
+        "node_modules",
+        "venv",
+    }
+)
 PROTECTED_EXACT_PATHS = frozenset(
     {
         ".github/copilot-instructions.md",
@@ -264,6 +286,53 @@ class LedgerRow:
     validation_commands: str
 
 
+@dataclass(frozen=True)
+class RemoteInfo:
+    """One configured Git remote discovered from local repository state."""
+
+    name: str
+    url: str
+    purpose: str
+
+
+@dataclass(frozen=True)
+class GitHubMetadata:
+    """Optional GitHub metadata discovered only after explicit opt-in."""
+
+    requested: bool
+    available: bool
+    source: str
+    repository: str | None = None
+    visibility: str | None = None
+    default_branch: str | None = None
+    discussions_enabled: str | None = None
+    labels: tuple[str, ...] = ()
+    error: str | None = None
+
+
+@dataclass(frozen=True)
+class RepositoryDiscovery:
+    """Read-only local repository state for the first-adoption preflight report."""
+
+    owner_name: str | None
+    remotes: tuple[RemoteInfo, ...]
+    current_branch: str | None
+    likely_default_branch: str | None
+    working_tree_entries: tuple[str, ...]
+    workflows: tuple[str, ...]
+    issue_templates: tuple[str, ...]
+    pr_templates: tuple[str, ...]
+    security_files: tuple[str, ...]
+    agent_instruction_files: tuple[str, ...]
+    tooling_stacks: tuple[str, ...]
+    marker_present: bool
+    adoption_note_present: bool
+    github_metadata: GitHubMetadata
+
+
+CommandRunner = Callable[[Path, list[str]], subprocess.CompletedProcess[str]]
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
@@ -349,6 +418,17 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "candidate table is not available."
         ),
     )
+    ledger_mode_group.add_argument(
+        "--preflight",
+        "--questionnaire",
+        action="store_true",
+        dest="preflight",
+        help=(
+            "Emit a read-only first-adoption preflight report, maintainer "
+            "questionnaire, _TODO-repo-init.md starter, and reused adoption ledger. "
+            "This mode skips git range inspection and never writes files."
+        ),
+    )
     parser.add_argument(
         "--write-ledger",
         default=None,
@@ -375,6 +455,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "in the generated ledger. Default: minimal-preservation"
         ),
     )
+    parser.add_argument(
+        "--include-github-metadata",
+        action="store_true",
+        help=(
+            "Opt in to read-only GitHub metadata lookup through the gh CLI for the "
+            "preflight report. Without this flag, GitHub-only settings are labeled "
+            "manual review required."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -392,6 +481,31 @@ def run_git(
         detail = result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}"
         raise CandidateGenerationError(f"git {' '.join(args)} failed: {detail}")
     return result
+
+
+def run_command(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run a read-only discovery command in ``repo_root``."""
+    return subprocess.run(
+        command,
+        cwd=repo_root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def command_detail(result: subprocess.CompletedProcess[str]) -> str:
+    """Return a short diagnostic string from a command result."""
+    for stream_text in (result.stderr, result.stdout):
+        for line in stream_text.splitlines():
+            if line.strip():
+                return line.strip()
+    return f"exit {result.returncode}"
+
+
+def os_error_summary(error: OSError) -> str:
+    """Return an OSError summary that avoids exposing implicit filesystem paths."""
+    return f"{type(error).__name__}: {error.strerror or 'I/O error'}"
 
 
 def git_ref_exists(repo_root: Path, raw_ref: str) -> bool:
@@ -1189,6 +1303,433 @@ def load_todo_items(todo_path: Path, repo_root: Path) -> tuple[TodoItem, ...]:
     return tuple(items)
 
 
+def empty_marker_data() -> MarkerData:
+    """Return marker data for repositories that have not created a marker yet."""
+    return MarkerData(
+        last_reviewed_template_commit=None,
+        included_modules=frozenset(),
+        local_overrides=(),
+        deferred_candidates=(),
+        protected_decisions=(),
+    )
+
+
+def load_preflight_inputs(
+    repo_root: Path,
+    marker_path: Path,
+    manifest_path: Path,
+    marker_schema_path: Path,
+    manifest_schema_path: Path,
+) -> tuple[MarkerData, frozenset[str], tuple[ManifestMapping, ...]]:
+    """Load manifest state and optional marker state for preflight reporting."""
+    manifest = load_yaml_mapping(manifest_path, repo_root)
+    manifest_schema = load_json_mapping(manifest_schema_path, repo_root)
+    validate_schema(manifest, manifest_schema, manifest_path, repo_root)
+    manifest_modules, mappings = parse_manifest(manifest)
+
+    if not marker_path.exists():
+        return empty_marker_data(), manifest_modules, mappings
+
+    marker = load_yaml_mapping(marker_path, repo_root)
+    marker_schema = load_json_mapping(marker_schema_path, repo_root)
+    validate_schema(marker, marker_schema, marker_path, repo_root)
+    return parse_marker(marker), manifest_modules, mappings
+
+
+def repository_path_exists(repo_root: Path, relative_path: str) -> bool:
+    """Return whether a non-symlink path exists inside ``repo_root``."""
+    path = repo_root / relative_path
+    if path.is_symlink() or not path.exists():
+        return False
+    try:
+        path.resolve().relative_to(repo_root.resolve())
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def iter_repo_files(repo_root: Path) -> tuple[Path, ...]:
+    """Return regular repository files without following symlinks."""
+    trusted_root = repo_root.resolve()
+    discovered: list[Path] = []
+    for dirpath, dirnames, filenames in os.walk(repo_root, followlinks=False):
+        current_dir = Path(dirpath)
+        kept_dirs: list[str] = []
+        for dirname in dirnames:
+            child_dir = current_dir / dirname
+            if dirname in DISCOVERY_SKIP_DIRS or child_dir.is_symlink():
+                continue
+            try:
+                child_dir.resolve().relative_to(trusted_root)
+            except (OSError, ValueError):
+                continue
+            kept_dirs.append(dirname)
+        dirnames[:] = kept_dirs
+
+        for filename in filenames:
+            child_file = current_dir / filename
+            if child_file.is_symlink() or not child_file.is_file():
+                continue
+            try:
+                child_file.resolve().relative_to(trusted_root)
+            except (OSError, ValueError):
+                continue
+            discovered.append(child_file)
+    return tuple(sorted(discovered))
+
+
+def relative_file_set(repo_root: Path) -> frozenset[str]:
+    """Return repository-relative file paths for stack discovery."""
+    return frozenset(path.relative_to(repo_root).as_posix() for path in iter_repo_files(repo_root))
+
+
+def list_existing_paths(repo_root: Path, candidates: tuple[str, ...]) -> tuple[str, ...]:
+    """Return candidate paths that exist as non-symlink repository paths."""
+    return tuple(path for path in candidates if repository_path_exists(repo_root, path))
+
+
+def list_directory_files(
+    repo_root: Path,
+    relative_dir: str,
+    suffixes: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Return immediate files in a repository directory that match ``suffixes``."""
+    directory = repo_root / relative_dir
+    if directory.is_symlink() or not directory.is_dir():
+        return ()
+
+    paths: list[str] = []
+    for child in sorted(directory.iterdir()):
+        if child.is_symlink() or not child.is_file():
+            continue
+        if suffixes and child.suffix.lower() not in suffixes:
+            continue
+        try:
+            child.resolve().relative_to(repo_root.resolve())
+        except (OSError, ValueError):
+            continue
+        paths.append(child.relative_to(repo_root).as_posix())
+    return tuple(paths)
+
+
+def parse_git_remotes(repo_root: Path) -> tuple[RemoteInfo, ...]:
+    """Return configured Git remotes from local config."""
+    result = run_git(repo_root, ["remote", "-v"], check=False)
+    if result.returncode != 0:
+        return ()
+
+    remotes: list[RemoteInfo] = []
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        purpose = parts[2].strip("()")
+        remotes.append(RemoteInfo(name=parts[0], url=parts[1], purpose=purpose))
+    return tuple(remotes)
+
+
+def infer_repository_name(remotes: tuple[RemoteInfo, ...]) -> str | None:
+    """Infer ``owner/name`` from a configured GitHub-style remote URL."""
+    for remote in remotes:
+        normalized_url = remote.url.removesuffix(".git")
+        patterns = (
+            r"github(?:\.[^/:]+)?[:/](?P<owner>[^/]+)/(?P<repo>[^/]+)$",
+            r"git@[^:]+:(?P<owner>[^/]+)/(?P<repo>[^/]+)$",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, normalized_url)
+            if match is not None:
+                return f"{match.group('owner')}/{match.group('repo')}"
+    return None
+
+
+def discover_github_metadata(
+    repo_root: Path,
+    owner_name: str | None,
+    *,
+    include_metadata: bool,
+    command_runner: CommandRunner = run_command,
+) -> GitHubMetadata:
+    """Optionally discover GitHub metadata through explicit read-only ``gh`` calls."""
+    if not include_metadata:
+        return GitHubMetadata(
+            requested=False,
+            available=False,
+            source="not requested",
+        )
+
+    if owner_name is None:
+        return GitHubMetadata(
+            requested=True,
+            available=False,
+            source="gh",
+            error="Repository owner/name could not be inferred from local remotes.",
+        )
+
+    try:
+        repo_result = command_runner(
+            repo_root,
+            [
+                "gh",
+                "repo",
+                "view",
+                owner_name,
+                "--json",
+                "nameWithOwner,visibility,defaultBranchRef,hasDiscussionsEnabled",
+            ],
+        )
+    except OSError as error:
+        return GitHubMetadata(
+            requested=True,
+            available=False,
+            source="gh",
+            error=os_error_summary(error),
+        )
+
+    if repo_result.returncode != 0:
+        return GitHubMetadata(
+            requested=True,
+            available=False,
+            source="gh",
+            error=command_detail(repo_result),
+        )
+
+    try:
+        payload = json.loads(repo_result.stdout)
+    except json.JSONDecodeError as error:
+        return GitHubMetadata(
+            requested=True,
+            available=False,
+            source="gh",
+            error=f"Unable to parse gh repo view JSON: {error.msg}",
+        )
+
+    default_branch_ref = payload.get("defaultBranchRef")
+    default_branch = None
+    if isinstance(default_branch_ref, dict) and isinstance(default_branch_ref.get("name"), str):
+        default_branch = default_branch_ref["name"]
+
+    labels: tuple[str, ...] = ()
+    labels_error: str | None = None
+    try:
+        labels_result = command_runner(
+            repo_root,
+            [
+                "gh",
+                "label",
+                "list",
+                "--repo",
+                owner_name,
+                "--limit",
+                "100",
+                "--json",
+                "name",
+            ],
+        )
+    except OSError as error:
+        labels_error = os_error_summary(error)
+    else:
+        if labels_result.returncode == 0:
+            try:
+                raw_labels = json.loads(labels_result.stdout)
+            except json.JSONDecodeError as error:
+                labels_error = f"Unable to parse gh label list JSON: {error.msg}"
+            else:
+                if isinstance(raw_labels, list):
+                    labels = tuple(
+                        sorted(
+                            label["name"]
+                            for label in raw_labels
+                            if isinstance(label, dict) and isinstance(label.get("name"), str)
+                        )
+                    )
+        else:
+            labels_error = command_detail(labels_result)
+
+    discussions_value = payload.get("hasDiscussionsEnabled")
+    discussions_enabled = None
+    if isinstance(discussions_value, bool):
+        discussions_enabled = "enabled" if discussions_value else "disabled"
+
+    metadata_error = (
+        f"Label metadata unavailable: {labels_error}" if labels_error is not None else None
+    )
+    return GitHubMetadata(
+        requested=True,
+        available=True,
+        source="gh",
+        repository=(
+            payload["nameWithOwner"] if isinstance(payload.get("nameWithOwner"), str) else None
+        ),
+        visibility=payload["visibility"] if isinstance(payload.get("visibility"), str) else None,
+        default_branch=default_branch,
+        discussions_enabled=discussions_enabled,
+        labels=labels,
+        error=metadata_error,
+    )
+
+
+def current_branch(repo_root: Path) -> str | None:
+    """Return the current branch name, or detached HEAD when applicable."""
+    result = run_git(repo_root, ["branch", "--show-current"], check=False)
+    branch = result.stdout.strip()
+    if result.returncode == 0 and branch:
+        return branch
+
+    detached = run_git(repo_root, ["rev-parse", "--short", "HEAD"], check=False)
+    if detached.returncode == 0 and detached.stdout.strip():
+        return f"detached at {detached.stdout.strip()}"
+    return None
+
+
+def likely_default_branch(repo_root: Path, github_metadata: GitHubMetadata) -> str | None:
+    """Return the likely default branch from local remote refs or metadata."""
+    result = run_git(
+        repo_root,
+        ["symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"],
+        check=False,
+    )
+    remote_head = result.stdout.strip()
+    if result.returncode == 0 and remote_head:
+        return remote_head.split("/", maxsplit=1)[-1]
+    return github_metadata.default_branch
+
+
+def working_tree_entries(repo_root: Path) -> tuple[str, ...]:
+    """Return porcelain working-tree entries."""
+    result = run_git(repo_root, ["status", "--short"], check=False)
+    if result.returncode != 0:
+        return (f"status unavailable: {command_detail(result)}",)
+    return tuple(line for line in result.stdout.splitlines() if line.strip())
+
+
+def discover_workflows(repo_root: Path) -> tuple[str, ...]:
+    """Return existing GitHub Actions workflow files."""
+    return list_directory_files(repo_root, ".github/workflows", (".yml", ".yaml"))
+
+
+def discover_issue_templates(repo_root: Path) -> tuple[str, ...]:
+    """Return existing issue-template files."""
+    direct_templates = list_existing_paths(repo_root, (".github/ISSUE_TEMPLATE.md",))
+    directory_templates = list_directory_files(
+        repo_root,
+        ".github/ISSUE_TEMPLATE",
+        (".md", ".yml", ".yaml"),
+    )
+    return tuple(sorted((*direct_templates, *directory_templates)))
+
+
+def discover_pr_templates(repo_root: Path) -> tuple[str, ...]:
+    """Return existing pull-request template files."""
+    direct_templates = list_existing_paths(repo_root, (".github/pull_request_template.md",))
+    directory_templates = list_directory_files(
+        repo_root,
+        ".github/PULL_REQUEST_TEMPLATE",
+        (".md",),
+    )
+    return tuple(sorted((*direct_templates, *directory_templates)))
+
+
+def discover_security_files(repo_root: Path) -> tuple[str, ...]:
+    """Return existing governance and community-health files relevant to preflight."""
+    return list_existing_paths(
+        repo_root,
+        (
+            "SECURITY.md",
+            ".github/SECURITY.md",
+            "CODE_OF_CONDUCT.md",
+            ".github/CODE_OF_CONDUCT.md",
+            "CODEOWNERS",
+            ".github/CODEOWNERS",
+            "docs/CODEOWNERS",
+            ".github/dependabot.yml",
+        ),
+    )
+
+
+def discover_agent_instruction_files(repo_root: Path) -> tuple[str, ...]:
+    """Return existing agent-instruction and modular instruction files."""
+    direct_files = list_existing_paths(repo_root, tuple(sorted(PROTECTED_EXACT_PATHS)))
+    modular_files = list_directory_files(repo_root, ".github/instructions", (".md",))
+    cursor_rules = list_directory_files(repo_root, ".cursor/rules", (".mdc",))
+    return tuple(sorted((*direct_files, *modular_files, *cursor_rules)))
+
+
+def discover_tooling_stacks(repo_root: Path, workflows: tuple[str, ...]) -> tuple[str, ...]:
+    """Infer language and tooling stacks from local files without owner decisions."""
+    files = relative_file_set(repo_root)
+    stacks: list[str] = []
+
+    def add_stack(name: str, condition: bool) -> None:
+        if condition:
+            stacks.append(name)
+
+    add_stack("GitHub Actions", bool(workflows))
+    add_stack("Markdown", any(path.endswith(".md") or path.endswith(".mdc") for path in files))
+    add_stack("Node/npm", "package.json" in files or "package-lock.json" in files)
+    add_stack(
+        "Python",
+        any(path.endswith(".py") for path in files)
+        or any(path in files for path in ("pyproject.toml", "requirements.txt", "setup.py")),
+    )
+    add_stack("PowerShell", any(path.endswith(".ps1") or path.endswith(".psd1") for path in files))
+    add_stack(
+        "Terraform",
+        any(
+            path.endswith((".tf", ".tfvars", ".tftest.hcl", ".tf.json", ".tftpl", ".tfbackend"))
+            for path in files
+        )
+        or ".tflint.hcl" in files,
+    )
+    add_stack("JSON", any(path.endswith((".json", ".jsonc")) for path in files))
+    add_stack("YAML", any(path.endswith((".yml", ".yaml")) for path in files))
+    add_stack(
+        "JSON Schema",
+        any(path.startswith("schemas/") and path.endswith(".schema.json") for path in files),
+    )
+    add_stack(
+        "Template sync support",
+        any(path.startswith(".template-sync/") for path in files),
+    )
+    return tuple(stacks)
+
+
+def discover_repository_state(
+    *,
+    repo_root: Path,
+    marker_path: Path,
+    todo_path: Path,
+    include_github_metadata: bool,
+    command_runner: CommandRunner = run_command,
+) -> RepositoryDiscovery:
+    """Discover read-only repository state for the preflight report."""
+    remotes = parse_git_remotes(repo_root)
+    owner_name = infer_repository_name(remotes)
+    github_metadata = discover_github_metadata(
+        repo_root,
+        owner_name,
+        include_metadata=include_github_metadata,
+        command_runner=command_runner,
+    )
+    workflows = discover_workflows(repo_root)
+    return RepositoryDiscovery(
+        owner_name=github_metadata.repository or owner_name,
+        remotes=remotes,
+        current_branch=current_branch(repo_root),
+        likely_default_branch=likely_default_branch(repo_root, github_metadata),
+        working_tree_entries=working_tree_entries(repo_root),
+        workflows=workflows,
+        issue_templates=discover_issue_templates(repo_root),
+        pr_templates=discover_pr_templates(repo_root),
+        security_files=discover_security_files(repo_root),
+        agent_instruction_files=discover_agent_instruction_files(repo_root),
+        tooling_stacks=discover_tooling_stacks(repo_root, workflows),
+        marker_present=marker_path.exists(),
+        adoption_note_present=todo_path.exists(),
+        github_metadata=github_metadata,
+    )
+
+
 def build_manifest_ledger_row(
     *,
     mapping: ManifestMapping,
@@ -1709,6 +2250,491 @@ def format_adoption_ledger(
     return "\n".join(lines)
 
 
+def format_limited_path_list(paths: tuple[str, ...], empty_text: str, *, limit: int = 8) -> str:
+    """Return a compact Markdown list of repository paths."""
+    if not paths:
+        return empty_text
+    visible = [f"`{path}`" for path in paths[:limit]]
+    if len(paths) > limit:
+        visible.append(f"{len(paths) - limit} more")
+    return ", ".join(visible)
+
+
+def format_remotes(remotes: tuple[RemoteInfo, ...]) -> str:
+    """Return a compact remote summary."""
+    if not remotes:
+        return "none found"
+    return "; ".join(f"`{remote.name}` {remote.purpose}: `{remote.url}`" for remote in remotes)
+
+
+def format_working_tree(entries: tuple[str, ...]) -> str:
+    """Return a compact working-tree summary."""
+    if not entries:
+        return "clean"
+    visible = entries[:8]
+    suffix = f"; {len(entries) - len(visible)} more" if len(entries) > len(visible) else ""
+    return f"{len(entries)} changed or untracked path(s): " + "; ".join(visible) + suffix
+
+
+def format_github_metadata(metadata: GitHubMetadata) -> str:
+    """Return a Markdown bullet list for optional GitHub metadata."""
+    manual_settings = ", ".join(GITHUB_METADATA_MANUAL_SETTINGS)
+    if not metadata.requested:
+        return "\n".join(
+            [
+                (
+                    "- GitHub metadata: not requested; run with "
+                    "`--include-github-metadata` to opt in to read-only `gh` lookups."
+                ),
+                f"- GitHub-only settings requiring manual review: {manual_settings}.",
+            ]
+        )
+    if not metadata.available:
+        detail = f" ({metadata.error})" if metadata.error is not None else ""
+        return "\n".join(
+            [
+                f"- GitHub metadata: unavailable through `{metadata.source}`{detail}.",
+                f"- GitHub-only settings requiring manual review: {manual_settings}.",
+            ]
+        )
+
+    labels = format_limited_path_list(metadata.labels, "none returned", limit=12)
+    lines = [
+        f"- GitHub metadata source: `{metadata.source}`",
+        f"- GitHub repository: `{metadata.repository or 'unknown'}`",
+        f"- Visibility: `{metadata.visibility or 'unknown'}`",
+        f"- Default branch from GitHub: `{metadata.default_branch or 'unknown'}`",
+        f"- Discussions: `{metadata.discussions_enabled or 'unknown'}`",
+        f"- Labels returned by GitHub: {labels}",
+        f"- GitHub-only settings requiring manual review: {manual_settings}.",
+    ]
+    if metadata.error is not None:
+        lines.append(f"- Partial metadata warning: {metadata.error}")
+    return "\n".join(lines)
+
+
+def format_marker_summary(marker_data: MarkerData, marker_present: bool) -> str:
+    """Return a compact marker-state summary."""
+    if not marker_present:
+        return "not found; selected modules and protected-file decisions are unrecorded"
+    included_modules = (
+        ", ".join(f"`{module}`" for module in sorted(marker_data.included_modules)) or "none"
+    )
+    return (
+        "found; included modules: "
+        f"{included_modules}; local overrides: {len(marker_data.local_overrides)}; "
+        f"deferred protected candidates: {len(marker_data.deferred_candidates)}; "
+        f"protected-file decisions: {len(marker_data.protected_decisions)}"
+    )
+
+
+def format_module_selection_aid(
+    manifest_modules: frozenset[str],
+    marker_data: MarkerData,
+) -> str:
+    """Render a module-selection decision aid without recomputing path decisions."""
+    lines = [
+        "| Module | Current marker selection | First-adoption action |",
+        "| --- | --- | --- |",
+    ]
+    for module in sorted(manifest_modules):
+        selected = "selected" if module in marker_data.included_modules else "not selected"
+        action = (
+            "confirm retained module scope"
+            if module in marker_data.included_modules
+            else "decide whether this module is adopted"
+        )
+        lines.append(f"| {module} | {selected} | {action} |")
+    return "\n".join(lines)
+
+
+def format_protected_authorization_questions(rows: tuple[LedgerRow, ...]) -> str:
+    """Render protected-file authorization questions from reused ledger rows."""
+    protected_rows = tuple(row for row in rows if row.protected_file == "Yes")
+    if not protected_rows:
+        return "No protected instruction/governance paths were flagged by the adoption ledger."
+
+    lines: list[str] = []
+    for row in protected_rows:
+        if row.requires_maintainer_decision == "Yes":
+            lines.append(
+                "- [ ] Does the maintainer authorize the selected action for "
+                f"`{row.path}`? Ledger decision: `{row.decision}`; adoption mode: "
+                f"`{row.adoption_mode}`; reason: {row.reason}"
+            )
+        else:
+            lines.append(
+                "- [ ] Verify the recorded protected-file authorization for "
+                f"`{row.path}` remains valid. Ledger decision: `{row.decision}`; "
+                f"adoption mode: `{row.adoption_mode}`."
+            )
+    return "\n".join(lines)
+
+
+def format_structural_alignment_candidates(discovery: RepositoryDiscovery) -> str:
+    """Render structural-alignment candidates discovered during preflight."""
+    candidates: list[str] = []
+    if not discovery.adoption_note_present:
+        candidates.append(
+            "Create or update `_TODO-repo-init.md` before finalizing files that depend on "
+            "manual GitHub settings or maintainer policy."
+        )
+    if not discovery.marker_present:
+        candidates.append(
+            "Create `.template-sync/marker.yml` if future template sync support is retained; "
+            "record selected modules, local overrides, and protected-file decisions there."
+        )
+    if discovery.workflows:
+        candidates.append(
+            "Confirm retained workflow files under `.github/workflows/` still point at the "
+            "downstream repository's actual validation commands and paths."
+        )
+    if discovery.agent_instruction_files:
+        candidates.append(
+            "Classify protected instruction files before editing them and record any "
+            "authorized protected-file decisions."
+        )
+    if "Terraform" in discovery.tooling_stacks:
+        candidates.append(
+            "Confirm Terraform module/test roots and `.tflint.hcl` paths match retained "
+            "Terraform workflow and pre-commit hooks."
+        )
+    if "Python" in discovery.tooling_stacks:
+        candidates.append(
+            "Confirm Python source, test, and packaging paths match retained Python CI and "
+            "pre-commit hooks, or document downstream path remaps."
+        )
+    if not candidates:
+        return "No structural-alignment candidates were detected from local files."
+    return "\n".join(f"- [ ] {candidate}" for candidate in candidates)
+
+
+def validation_plan_suggestions(rows: tuple[LedgerRow, ...]) -> tuple[str, ...]:
+    """Return validation suggestions from ledger rows and first-adoption helpers."""
+    commands = [
+        "python .template-sync/scripts/run_first_adoption_checks.py",
+        "pre-commit run --all-files",
+    ]
+    for row in rows:
+        for command in row.validation_commands.split("<br>"):
+            if command and command != "manual review" and command not in commands:
+                commands.append(command)
+    return tuple(commands)
+
+
+def format_validation_plan(rows: tuple[LedgerRow, ...]) -> str:
+    """Render validation-plan suggestions for the preflight report."""
+    return "\n".join(f"- [ ] `{command}`" for command in validation_plan_suggestions(rows))
+
+
+def format_maintainer_questionnaire(discovery: RepositoryDiscovery) -> str:
+    """Render maintainer questions for policy values that must not be guessed."""
+    default_branch = discovery.likely_default_branch or "[recorded default branch]"
+    return "\n".join(
+        [
+            "- [ ] Which manifest modules should this repository retain?",
+            "- [ ] Which contact path should `CODE_OF_CONDUCT.md` publish?",
+            "- [ ] Which vulnerability reporting channel should `SECURITY.md` publish?",
+            "- [ ] Which CODEOWNERS owner or team should be used?",
+            "- [ ] Should template issue labels be used, remapped, or removed?",
+            "- [ ] Should GitHub Discussions be enabled or left disabled?",
+            "- [ ] Should private vulnerability reporting be enabled, left disabled, or marked "
+            "not available?",
+            f"- [ ] Should the default branch remain `{default_branch}`, be renamed, or be deferred?",
+            "- [ ] Should the default branch use a ruleset, classic branch protection, or no "
+            "new protection?",
+            "- [ ] Is there a GHES host override, or should `github.com` remain the expected host?",
+            "- [ ] Are protected instruction-file edits authorized, deferred, or out of scope?",
+            "- [ ] Are any protected instruction-file removals authorized?",
+            "- [ ] Are any template-derived files explicitly approved for `tailored` adoption mode?",
+            "- [ ] Which structural findings are required for adoption and which become "
+            "post-adoption issues?",
+        ]
+    )
+
+
+def format_todo_starter(
+    discovery: RepositoryDiscovery,
+    marker_data: MarkerData,
+) -> str:
+    """Render starter content for ``_TODO-repo-init.md``."""
+    owner_name = discovery.owner_name or "OWNER/REPO"
+    default_branch = discovery.likely_default_branch or "[recorded default branch]"
+    visibility = discovery.github_metadata.visibility or "[public, private, or internal]"
+    marker_status = "found" if discovery.marker_present else "not found"
+    adoption_note_status = "found" if discovery.adoption_note_present else "not found"
+    included_modules = (
+        ", ".join(sorted(marker_data.included_modules))
+        if marker_data.included_modules
+        else "[selected modules]"
+    )
+
+    return "\n".join(
+        [
+            "# Repository Initialization Checklist",
+            "",
+            (
+                "This file records first-adoption decisions for this downstream repository. "
+                "It is downstream-owned state, not an upstream template file."
+            ),
+            "",
+            "## Discoverable Repository State",
+            "",
+            f"- [ ] Repository owner/name recorded: `{owner_name}`",
+            f"- [ ] Repository visibility recorded: `{visibility}`",
+            f"- [ ] Repository default branch recorded: `{default_branch}`",
+            "- [ ] Existing governance, security, CODEOWNERS, issue-template, PR-template, "
+            "and Dependabot files reviewed before replacement.",
+            (
+                "- [ ] Existing `.template-sync/marker.yml`, `_TODO-repo-init.md`, or "
+                "equivalent adoption note checked before asking repeated questions "
+                f"(marker: {marker_status}; checklist: {adoption_note_status})."
+            ),
+            f"- [ ] Included module candidates reviewed: `{included_modules}`",
+            "",
+            "## Manual GitHub Settings",
+            "",
+            (
+                "- [ ] Private vulnerability reporting decision: "
+                "`[enable, leave disabled, or not available]`"
+            ),
+            "- [ ] GitHub Discussions decision: `[enable or leave disabled]`",
+            "- [ ] Labels decision, including `triage`: `[create, skip, or already present]`",
+            (
+                "- [ ] Default branch decision: "
+                "`[keep recorded default branch, rename, or defer]`"
+            ),
+            (
+                "- [ ] Repository ruleset or branch-protection decision: "
+                "`[create ruleset, use classic branch protection, leave unchanged, or defer]`"
+            ),
+            "",
+            "## Maintainer Policy Decisions",
+            "",
+            (
+                "- [ ] Code of Conduct reporting contact method: "
+                "`[explicit contact, profile contact, approved alternate, or deferred]`"
+            ),
+            (
+                "- [ ] Security vulnerability reporting channel: "
+                "`[private vulnerability reporting, monitored email, both, or deferred]`"
+            ),
+            "- [ ] CODEOWNERS owner/team identity: `[@user or @org/team]`",
+            (
+                "- [ ] Label-dependent issue-template behavior: "
+                "`[use labels, remap labels, remove labels, or deferred]`"
+            ),
+            (
+                "- [ ] Adoption mode for protected and template-derived files: "
+                "`minimal-preservation` by default; list any `tailored` opt-ins."
+            ),
+            "- [ ] GHES host override: `[none or github.company.com]`",
+            "",
+            "## Protected-File Adoption Decisions",
+            "",
+            (
+                "- [ ] Protected instruction files identified before editing: "
+                "`.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, "
+                "`.cursor/rules/*.mdc`, `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and "
+                "`GEMINI.md`."
+            ),
+            "- [ ] Protected-file edits authorized by maintainer: `[none, path-scoped, or deferred]`",
+            (
+                "- [ ] Protected-file removals authorized by maintainer: "
+                "`[none, path-scoped, or deferred]`"
+            ),
+            (
+                "- [ ] `.template-sync/marker.yml` protected-file decisions updated if "
+                "template sync support is retained."
+            ),
+            "",
+            "## Unresolved Settings",
+            "",
+            (
+                "- [ ] Items that must be completed later: Question: `[concrete owner "
+                "question]`; state: `[not yet asked, asked and deferred, or unavailable "
+                "through current safe tooling / manual review required]`; dependency: "
+                "`[file, workflow, or GitHub setting]`; dependent-file status: "
+                "`[not finalized, blocked, placeholder removed, local default withheld, "
+                "or other concrete status]`"
+            ),
+            "",
+            "## Resolution Evidence",
+            "",
+            "- [ ] No generated or adopted file ships unresolved placeholders or misleading defaults.",
+            (
+                "- [ ] Evidence captured for every resolved GitHub setting or policy decision: "
+                "`[commit, PR, screenshot/link, connector result, API response note, or "
+                "maintainer note]`"
+            ),
+            "- [ ] Deferred items copied into the adoption PR description, sync summary, or issue.",
+        ]
+    )
+
+
+def format_issue_draft_skeletons() -> str:
+    """Render copyable post-adoption issue draft skeletons."""
+    return "\n".join(
+        [
+            "```markdown",
+            "## Structural Follow-Up",
+            "",
+            "### Context",
+            "",
+            "Template adoption is complete. This issue handles one deferred structural "
+            "follow-up in this repository only.",
+            "",
+            "### Scope",
+            "",
+            "- [Specific paths, commands, or workflow roots to change]",
+            "- Protected instruction files in scope: [yes/no].",
+            "",
+            "### Non-Goals",
+            "",
+            "- Do not revisit template adoption decisions.",
+            "- Do not change unrelated structure or formatting.",
+            "",
+            "### Acceptance Criteria",
+            "",
+            "- [Observable result]",
+            "- Any touched file with `Last Updated` or `**Version:**` metadata is synchronized.",
+            "",
+            "### Validation",
+            "",
+            "- [Command or manual check]",
+            "",
+            "## Policy Follow-Up",
+            "",
+            "### Context",
+            "",
+            "A first-adoption policy decision was deferred and must be resolved before the "
+            "dependent file is final.",
+            "",
+            "### Scope",
+            "",
+            "- Decision: [concrete maintainer question]",
+            "- Dependent files/settings: [paths or GitHub setting]",
+            "",
+            "### Acceptance Criteria",
+            "",
+            "- The decision is recorded in `_TODO-repo-init.md`, `.template-sync/marker.yml`, "
+            "or an equivalent committed adoption note.",
+            "- Dependent files no longer contain unresolved placeholders or misleading defaults.",
+            "",
+            "### Validation",
+            "",
+            "- [Command or manual check]",
+            "```",
+        ]
+    )
+
+
+def format_preflight_report(
+    *,
+    marker_path: Path,
+    manifest_path: Path,
+    todo_path: Path,
+    repo_root: Path,
+    marker_data: MarkerData,
+    manifest_modules: frozenset[str],
+    discovery: RepositoryDiscovery,
+    ledger_rows: tuple[LedgerRow, ...],
+    ledger_document: str,
+) -> str:
+    """Render the read-only first-adoption preflight report."""
+    marker_relative = repository_relative_path(marker_path, repo_root)
+    manifest_relative = repository_relative_path(manifest_path, repo_root)
+    todo_relative = repository_relative_path(todo_path, repo_root)
+
+    lines = [
+        "# First-Adoption Preflight Report",
+        "",
+        (
+            "Read-only planning artifact. This mode inspects local repository state, "
+            "optionally reads GitHub metadata only when explicitly requested, and does "
+            "not write files or modify repository settings."
+        ),
+        "",
+        "## Repository Discovery",
+        "",
+        f"- Repository owner/name: `{discovery.owner_name or 'unknown'}`",
+        f"- Remotes: {format_remotes(discovery.remotes)}",
+        f"- Current branch: `{discovery.current_branch or 'unknown'}`",
+        f"- Likely default branch: `{discovery.likely_default_branch or 'manual review required'}`",
+        f"- Working tree: {format_working_tree(discovery.working_tree_entries)}",
+        f"- Workflows: {format_limited_path_list(discovery.workflows, 'none found')}",
+        (
+            "- Issue templates: "
+            f"{format_limited_path_list(discovery.issue_templates, 'none found')}"
+        ),
+        f"- PR templates: {format_limited_path_list(discovery.pr_templates, 'none found')}",
+        (
+            "- Security/conduct/CODEOWNERS files: "
+            f"{format_limited_path_list(discovery.security_files, 'none found')}"
+        ),
+        (
+            "- Agent instruction files: "
+            f"{format_limited_path_list(discovery.agent_instruction_files, 'none found')}"
+        ),
+        (
+            "- Language/tooling stacks inferred from local files: "
+            + (", ".join(discovery.tooling_stacks) if discovery.tooling_stacks else "none found")
+        ),
+        f"- Marker: `{marker_relative}` ({format_marker_summary(marker_data, discovery.marker_present)})",
+        (
+            f"- First-adoption checklist: `{todo_relative}` "
+            f"({'found' if discovery.adoption_note_present else 'not found'})"
+        ),
+        "",
+        format_github_metadata(discovery.github_metadata),
+        "",
+        "## Maintainer Questionnaire",
+        "",
+        format_maintainer_questionnaire(discovery),
+        "",
+        "## `_TODO-repo-init.md` Starter",
+        "",
+        "```markdown",
+        format_todo_starter(discovery, marker_data),
+        "```",
+        "",
+        "## Module-Selection Decision Aid",
+        "",
+        (
+            "Use this table to choose marker `included_modules`. The adoption ledger "
+            "below remains the reused path-level decision view."
+        ),
+        "",
+        format_module_selection_aid(manifest_modules, marker_data),
+        "",
+        "## Protected-File Authorization Questions",
+        "",
+        format_protected_authorization_questions(ledger_rows),
+        "",
+        "## Required Structural Alignment Candidates",
+        "",
+        format_structural_alignment_candidates(discovery),
+        "",
+        "## Post-Adoption Issue Draft Skeletons",
+        "",
+        format_issue_draft_skeletons(),
+        "",
+        "## Validation Plan Suggestions",
+        "",
+        format_validation_plan(ledger_rows),
+        "",
+        "## Reused Adoption Ledger",
+        "",
+        (
+            f"The following section is rendered by the existing adoption-ledger helpers from "
+            f"`{manifest_relative}` and `{marker_relative}`."
+        ),
+        "",
+        ledger_document,
+    ]
+    return "\n".join(lines)
+
+
 def write_candidate_table(repo_root: Path, output_path: Path, candidate_table: str) -> None:
     """Write the rendered candidate table to a repository-contained path."""
     try:
@@ -1855,6 +2881,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.ledger_only and args.write_candidates is not None:
             raise CandidateGenerationError("--write-candidates cannot be used with --ledger-only.")
+        if args.preflight and args.write_candidates is not None:
+            raise CandidateGenerationError("--write-candidates cannot be used with --preflight.")
+        if args.preflight and args.write_ledger is not None:
+            raise CandidateGenerationError("--write-ledger cannot be used with --preflight.")
+        if args.include_github_metadata and not args.preflight:
+            raise CandidateGenerationError(
+                "--include-github-metadata can only be used with --preflight."
+            )
 
         repo_root = resolve_repo_root(args.repo_root)
         marker_path = resolve_repo_path(repo_root, args.marker)
@@ -1872,6 +2906,54 @@ def main(argv: list[str] | None = None) -> int:
             if args.write_ledger is not None
             else None
         )
+
+        if args.preflight:
+            marker_data, manifest_modules, mappings = load_preflight_inputs(
+                repo_root=repo_root,
+                marker_path=marker_path,
+                manifest_path=manifest_path,
+                marker_schema_path=marker_schema_path,
+                manifest_schema_path=manifest_schema_path,
+            )
+            todo_items = load_todo_items(todo_path, repo_root)
+            ledger_rows = build_adoption_ledger_rows(
+                marker_data=marker_data,
+                manifest_modules=manifest_modules,
+                mappings=mappings,
+                todo_items=todo_items,
+                todo_path=todo_path,
+                repo_root=repo_root,
+                default_adoption_mode=args.adoption_mode,
+            )
+            ledger_document = format_adoption_ledger(
+                marker_path=marker_path,
+                manifest_path=manifest_path,
+                todo_path=todo_path,
+                repo_root=repo_root,
+                marker_data=marker_data,
+                rows=ledger_rows,
+                default_adoption_mode=args.adoption_mode,
+            )
+            discovery = discover_repository_state(
+                repo_root=repo_root,
+                marker_path=marker_path,
+                todo_path=todo_path,
+                include_github_metadata=args.include_github_metadata,
+            )
+            print(
+                format_preflight_report(
+                    marker_path=marker_path,
+                    manifest_path=manifest_path,
+                    todo_path=todo_path,
+                    repo_root=repo_root,
+                    marker_data=marker_data,
+                    manifest_modules=manifest_modules,
+                    discovery=discovery,
+                    ledger_rows=ledger_rows,
+                    ledger_document=ledger_document,
+                )
+            )
+            return 0
 
         marker_data, manifest_modules, mappings = load_and_validate_inputs(
             repo_root=repo_root,

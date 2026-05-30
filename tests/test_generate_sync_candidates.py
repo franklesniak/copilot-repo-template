@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib.util
+import json
 import shutil
 import subprocess
 import sys
@@ -12,6 +14,7 @@ import yaml  # type: ignore[import-untyped]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "generate_sync_candidates.py"
+SCRIPT_DIR = SCRIPT_PATH.parent
 MARKER_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-marker.schema.json"
 MANIFEST_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-manifest.schema.json"
 SOURCE_REPO = "https://github.com/franklesniak/copilot-repo-template.git"
@@ -26,6 +29,15 @@ MODULE_DEFINITIONS = {
     "yaml": "YAML files.",
     "schema": "Schema files.",
 }
+
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+SCRIPT_SPEC = importlib.util.spec_from_file_location("generate_sync_candidates", SCRIPT_PATH)
+if SCRIPT_SPEC is None or SCRIPT_SPEC.loader is None:
+    raise RuntimeError(f"Unable to load sync candidate helper module from {SCRIPT_PATH}")
+sync_candidates = importlib.util.module_from_spec(SCRIPT_SPEC)
+sys.modules[SCRIPT_SPEC.name] = sync_candidates
+SCRIPT_SPEC.loader.exec_module(sync_candidates)
 
 
 def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -579,6 +591,146 @@ def test_ledger_flag_appends_ledger_after_candidate_table(tmp_path: Path) -> Non
     assert result.stdout.index("# Template Sync Candidate Table") < result.stdout.index(
         "# Template Adoption Ledger"
     )
+
+
+def test_preflight_without_marker_reports_questionnaire_and_reused_ledger(
+    tmp_path: Path,
+) -> None:
+    """The read-only preflight mode works before a marker is created."""
+    _init_repo(tmp_path)
+
+    result = _run_generator(tmp_path, "--preflight")
+
+    assert result.returncode == 0, result.stderr
+    assert "# First-Adoption Preflight Report" in result.stdout
+    assert "Read-only planning artifact." in result.stdout
+    assert "Marker: `.template-sync/marker.yml` (not found;" in result.stdout
+    assert "GitHub metadata: not requested" in result.stdout
+    assert "Which vulnerability reporting channel should `SECURITY.md` publish?" in result.stdout
+    assert "## `_TODO-repo-init.md` Starter" in result.stdout
+    assert "state: `[not yet asked, asked and deferred, or unavailable" in result.stdout
+    assert "## Reused Adoption Ledger" in result.stdout
+    assert "# Template Adoption Ledger" in result.stdout
+    assert (
+        "| .github/copilot-instructions.md | all: agent-instructions | "
+        "needs maintainer decision | Protected path is not retained by included modules"
+    ) in result.stdout
+    assert "No range base was provided" not in result.stderr
+
+
+def test_questionnaire_alias_with_marker_reports_protected_questions(
+    tmp_path: Path,
+) -> None:
+    """`--questionnaire` aliases preflight and reuses protected ledger decisions."""
+    _init_repo(tmp_path)
+    _git(tmp_path, "remote", "add", "origin", "https://github.com/example/project.git")
+    _write_text(tmp_path, ".github/copilot-instructions.md", "instructions\n")
+    _write_text(tmp_path, "_TODO-repo-init.md", "- [ ] Existing adoption note\n")
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["agent-instructions", "baseline"], last_reviewed_template_commit=None),
+    )
+
+    result = _run_generator(tmp_path, "--questionnaire")
+
+    assert result.returncode == 0, result.stderr
+    assert "Repository owner/name: `example/project`" in result.stdout
+    assert (
+        "Marker: `.template-sync/marker.yml` (found; included modules: "
+        "`agent-instructions`, `baseline`;"
+    ) in result.stdout
+    assert "First-adoption checklist: `_TODO-repo-init.md` (found)" in result.stdout
+    assert "Agent instruction files: `.github/copilot-instructions.md`" in result.stdout
+    assert (
+        "Does the maintainer authorize the selected action for "
+        "`.github/copilot-instructions.md`?"
+    ) in result.stdout
+    assert (
+        "| .github/copilot-instructions.md | all: agent-instructions | "
+        "needs maintainer decision | Protected retained path requires explicit owner "
+        "authorization."
+    ) in result.stdout
+
+
+def test_preflight_rejects_write_flags(tmp_path: Path) -> None:
+    """Preflight remains read-only even though ledger mode can write snapshots."""
+    _init_repo(tmp_path)
+
+    result = _run_generator(tmp_path, "--preflight", "--write-ledger", "ledger.md")
+
+    assert result.returncode == 1
+    assert "--write-ledger cannot be used with --preflight." in result.stderr
+
+
+def test_github_metadata_not_requested_skips_provider(tmp_path: Path) -> None:
+    """GitHub-only metadata lookup is not attempted without explicit opt-in."""
+    calls: list[list[str]] = []
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="{}", stderr="")
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "example/project",
+        include_metadata=False,
+        command_runner=runner,
+    )
+
+    assert calls == []
+    assert metadata.requested is False
+    assert metadata.available is False
+    assert metadata.source == "not requested"
+
+
+def test_github_metadata_provider_reports_visible_values(tmp_path: Path) -> None:
+    """The optional GitHub metadata provider can be mocked without network access."""
+    calls: list[list[str]] = []
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        if command[:3] == ["gh", "repo", "view"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        "nameWithOwner": "example/project",
+                        "visibility": "PUBLIC",
+                        "defaultBranchRef": {"name": "main"},
+                        "hasDiscussionsEnabled": True,
+                    }
+                ),
+                stderr="",
+            )
+        if command[:3] == ["gh", "label", "list"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps([{"name": "triage"}, {"name": "bug"}]),
+                stderr="",
+            )
+        raise AssertionError(f"Unexpected command: {command}")
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "example/project",
+        include_metadata=True,
+        command_runner=runner,
+    )
+
+    assert [command[:3] for command in calls] == [
+        ["gh", "repo", "view"],
+        ["gh", "label", "list"],
+    ]
+    assert metadata.requested is True
+    assert metadata.available is True
+    assert metadata.repository == "example/project"
+    assert metadata.visibility == "PUBLIC"
+    assert metadata.default_branch == "main"
+    assert metadata.discussions_enabled == "enabled"
+    assert metadata.labels == ("bug", "triage")
 
 
 def test_unmapped_paths_are_flagged(tmp_path: Path) -> None:

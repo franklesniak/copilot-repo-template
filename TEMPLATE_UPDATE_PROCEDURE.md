@@ -1,14 +1,14 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260530.0
+**Version:** 1.1.20260530.1
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-05-30
-- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, first-adoption structural convention assessment, first-adoption working-tree validation, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the sync candidate table generator, post-adoption issue drafting, and the generated adoption ledger review artifact. Does not define an automated sync tool.
+- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the read-only first-adoption preflight/questionnaire mode, first-adoption structural convention assessment, first-adoption working-tree validation, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the sync candidate table generator, post-adoption issue drafting, and the generated adoption ledger review artifact. Does not define an automated sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
 ## Purpose
@@ -79,6 +79,14 @@ Independent substeps, such as inspecting unrelated candidate files or collecting
 Run this gate only when the downstream repository is receiving template contents for the first time, or when the repository is missing recorded first-adoption state that affects the files under review. Normal initialized delta syncs MUST NOT re-trigger this gate when `_TODO-repo-init.md`, `.template-sync/marker.yml`, or an equivalent committed adoption note already records the relevant answers.
 
 If the gate applies, generate or update root `_TODO-repo-init.md` before editing files whose content depends on unresolved adoption answers. Discovery, manifest inspection, range selection, and non-content setup may still happen before the checklist is complete. The checklist is downstream-owned state, not an upstream template file, and is excluded from upstream sync candidate review.
+
+When `.template-sync/scripts/generate_sync_candidates.py`, `.template-sync/scripts/validate_marker.py`, `.template-sync/manifest.yml`, and the template-sync schemas are available, run the read-only preflight/questionnaire mode before finalizing the checklist or policy-dependent files:
+
+```bash
+python .template-sync/scripts/generate_sync_candidates.py --preflight
+```
+
+Use `--include-github-metadata` only after the maintainer explicitly opts in to read-only GitHub metadata discovery through the `gh` CLI. Without that opt-in, GitHub-only settings remain manual-review items in the generated report.
 
 When the gate applies, run the structural convention assessment in [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md#structural-convention-assessment) and carry the findings into the first-adoption working notes. Each finding MUST be classified as required for selected template modules, strongly recommended during adoption, post-adoption follow-up, or intentionally not recommended. Required structural changes MUST be implemented or explicitly remapped before adoption is finalized. Post-adoption modernization MUST be drafted as issue follow-up and MUST NOT be bundled into template adoption unless the owner explicitly authorizes it.
 
