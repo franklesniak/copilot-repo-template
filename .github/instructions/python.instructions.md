@@ -7,7 +7,7 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.5.20260530.2
+**Version:** 1.5.20260530.3
 
 ## Metadata
 
@@ -231,7 +231,7 @@ def redact_url_userinfo(value: str) -> str:
         if "@" not in value:
             return value
         return f"***@{value.rsplit('@', maxsplit=1)[1]}"
-    if not parsed.scheme or not parsed.netloc or "@" not in parsed.netloc:
+    if not parsed.netloc or "@" not in parsed.netloc:
         return value
 
     safe_netloc = f"***@{parsed.netloc.rsplit('@', maxsplit=1)[1]}"
@@ -244,6 +244,7 @@ assert (
 )
 assert redact_url_userinfo("git@github.com:org/repo.git") == "git@github.com:org/repo.git"
 assert redact_url_userinfo("https://user:secret@[::1/path") == "***@[::1/path"
+assert redact_url_userinfo("//user:token@host/path") == "//***@host/path"
 ```
 
 ## Data Modeling
