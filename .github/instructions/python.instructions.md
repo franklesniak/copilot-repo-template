@@ -7,7 +7,7 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.5.20260530.4
+**Version:** 1.5.20260530.5
 
 ## Metadata
 
@@ -306,6 +306,85 @@ assert "expected output content" in output
 - **SHOULD** avoid quadratic algorithms in obvious hot paths (parsers, matchers, large loops).
 - **MUST** validate untrusted input at boundaries; **MUST NOT** use `eval`.
 - **MUST** escape serialized output appropriately for its output context before embedding it into markup, templates, or generated documents. For example, `json.dumps()` output embedded in an inline HTML `<script>` block **MUST** escape `</` sequences (for example, `<\/`) so user-controlled data cannot terminate the script tag and enable XSS. Use framework-provided escaping utilities when available.
+
+### Host Matching
+
+When detecting, allow-listing, routing, selecting credentials, controlling network access, or otherwise making a security-relevant decision based on a host taken from a URL-like value, Git remote string, or explicitly accepted bare host value, code **MUST** compare against a parsed, validated, and normalized host component. Code **MUST NOT** compare against the raw input string.
+
+When a value is expected to already be a bare host, code **MUST** validate that it conforms exactly to the accepted bare-host grammar. Unless that grammar explicitly allows the component, the value must not contain a scheme, user-info, port, path, query string, or fragment. Do not trust a bare-host input merely because it contains the allowed host text.
+
+For URL and scheme-relative input, obtain the host from `urllib.parse.urlsplit(value).hostname`, not from `.netloc` and not from the raw input string. The `.hostname` property excludes user-info and port and returns a lowercased host when a host is present. Code **MUST** treat parse failures, missing hosts, and otherwise unparseable input as non-matches; fail closed.
+
+Code **MUST** use an exact host match by default. Dot-boundary suffix matching, such as `host == allowed or host.endswith("." + allowed)`, **MAY** be used only when subdomains of the allowed DNS name are intentionally trusted, and **MUST NOT** be used for IP literals. IP literals must be parsed and compared exactly, for example with `ipaddress`, before using any DNS suffix-matching helper.
+
+Code **MUST NOT** substring-match or regex-match the raw URL, raw Git remote string, raw `netloc`, or other unparsed host-containing text. Non-compliant patterns include `re.search(r"example\.com", value)`, `"example.com" in value`, and `value.endswith("example.com")`. Using a parser, including a grammar-anchored small regex, `str.split`, or `urllib.parse`, to extract the structured host before comparison is different and acceptable only when that parser recognizes the intended input grammar; extract the host first, then decide trust by exact or dot-boundary comparison of that host.
+
+For SCP-style Git remotes of the form `[user@]host:path`, such as `git@github.com:org/repo.git` or `git@github.com:/srv/org/repo.git`, recognize the SCP shape deliberately and extract the host after the optional `user@` and before the host/path separator colon. Code **MUST NOT** treat a `scheme://` URL, a string with a leading scheme token followed by `:` such as `https:example.com/path`, a local filesystem path, or a Windows drive path such as `C:\repo` as an SCP remote. If an implementation supports bracketed IPv6 SCP remotes, it **MUST** parse that grammar explicitly rather than splitting on the first colon inside the IPv6 literal.
+
+Implementations **SHOULD** normalize both the parsed input host and the allow-listed host before comparison. For DNS names, lowercase both sides and handle trailing-dot absolute DNS names consistently, either by normalizing a trailing absolute-name dot on both sides or by rejecting such inputs. If non-ASCII hostnames are supported, convert both sides to one canonical IDNA form before matching; otherwise reject non-ASCII hostnames before matching.
+
+Host matching does not replace other URL validation. Code that depends on scheme, port, path, query string, user-info, or other URL components **MUST** validate those components separately.
+
+Compliant example:
+
+```python
+from urllib.parse import urlsplit
+
+ALLOWED_DNS_HOST = "example.com"
+
+
+def normalize_dns_host(host: str) -> str:
+    """Lowercase a DNS host and normalize one trailing absolute-name dot."""
+    return host.lower().removesuffix(".")
+
+
+def dns_host_matches(
+    host: str,
+    allowed_host: str,
+    *,
+    include_subdomains: bool = False,
+) -> bool:
+    """Match DNS host names: exact by default; opt in before trusting subdomains."""
+    normalized_host = normalize_dns_host(host)
+    normalized_allowed = normalize_dns_host(allowed_host)
+
+    if normalized_host == normalized_allowed:
+        return True
+    return include_subdomains and normalized_host.endswith(f".{normalized_allowed}")
+
+
+def is_allowed_url(value: str) -> bool:
+    """Return True only when value's URL authority host is allow-listed."""
+    try:
+        host = urlsplit(value).hostname
+    except ValueError:
+        return False
+    if host is None:
+        return False
+    return dns_host_matches(host, ALLOWED_DNS_HOST)
+
+
+assert is_allowed_url("https://example.com/repo.git") is True
+assert is_allowed_url("//example.com/repo.git") is True
+assert is_allowed_url("https://notexample.com/repo.git") is False
+assert is_allowed_url("https://example.com.evil.com/repo.git") is False
+assert is_allowed_url("https://example.com@evil.com/repo.git") is False
+assert dns_host_matches("api.example.com", "example.com") is False
+assert dns_host_matches("api.example.com", "example.com", include_subdomains=True) is True
+```
+
+Non-compliant counter-example:
+
+```python
+import re
+
+
+# WRONG: a substring/regex match against the raw string trusts look-alike and
+# user-info-confusion hosts such as notexample.com, example.com.evil.com, and
+# https://example.com@evil.com/repo.git.
+def is_allowed_url(value: str) -> bool:
+    return re.search(r"example\.com", value) is not None
+```
 
 ## Package Versioning
 
