@@ -733,6 +733,81 @@ def test_github_metadata_provider_reports_visible_values(tmp_path: Path) -> None
     assert metadata.labels == ("bug", "triage")
 
 
+def test_format_remotes_redacts_embedded_credentials() -> None:
+    """Remote URLs with embedded user-info are redacted in the report."""
+    remotes = (
+        sync_candidates.RemoteInfo(
+            name="origin",
+            url="https://maintainer:ghp_secrettoken@github.com/example/project.git",
+            purpose="fetch",
+        ),
+        sync_candidates.RemoteInfo(
+            name="bare-token",
+            url="https://ghp_anothersecret@github.com/example/project.git",
+            purpose="push",
+        ),
+        sync_candidates.RemoteInfo(
+            name="ssh",
+            url="git@github.com:example/project.git",
+            purpose="push",
+        ),
+    )
+
+    rendered = sync_candidates.format_remotes(remotes)
+
+    assert "ghp_secrettoken" not in rendered
+    assert "ghp_anothersecret" not in rendered
+    assert "maintainer:" not in rendered
+    assert "https://***@github.com/example/project.git" in rendered
+    # SCP-style SSH URLs cannot embed a password and are preserved verbatim.
+    assert "git@github.com:example/project.git" in rendered
+
+
+def test_github_metadata_handles_non_object_json(tmp_path: Path) -> None:
+    """Non-object JSON from gh repo view is reported as unavailable, not a crash."""
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 0, stdout="null", stderr="")
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "example/project",
+        include_metadata=True,
+        command_runner=runner,
+    )
+
+    assert metadata.requested is True
+    assert metadata.available is False
+    assert metadata.error is not None
+    assert "non-object" in metadata.error
+
+
+def test_list_directory_files_skips_symlinked_ancestor(tmp_path: Path, monkeypatch: Any) -> None:
+    """A symlinked ancestor directory is not iterated outside the repo root."""
+    outside = tmp_path / "outside" / "workflows"
+    outside.mkdir(parents=True)
+    (outside / "leak.yml").write_text("name: leak\n", encoding="utf-8")
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    # `.github` is a symlink whose target lives outside the repo root.
+    (repo_root / ".github").symlink_to(tmp_path / "outside", target_is_directory=True)
+
+    escaping_dir = (repo_root / ".github" / "workflows").resolve()
+    original_iterdir = Path.iterdir
+
+    def guarded_iterdir(self: Path) -> Any:
+        if self.resolve() == escaping_dir:
+            raise AssertionError(f"iterated outside repo root: {self}")
+        return original_iterdir(self)
+
+    monkeypatch.setattr(Path, "iterdir", guarded_iterdir)
+
+    result = sync_candidates.list_directory_files(repo_root, ".github/workflows", (".yml", ".yaml"))
+
+    assert result == ()
+
+
 def test_unmapped_paths_are_flagged(tmp_path: Path) -> None:
     """Changed paths outside the manifest surface as owner-review items."""
     _init_repo(tmp_path)

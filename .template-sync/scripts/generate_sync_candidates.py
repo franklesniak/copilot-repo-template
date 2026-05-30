@@ -1398,6 +1398,12 @@ def list_directory_files(
     if directory.is_symlink() or not directory.is_dir():
         return ()
 
+    trusted_root = repo_root.resolve()
+    try:
+        directory.resolve().relative_to(trusted_root)
+    except (OSError, ValueError):
+        return ()
+
     paths: list[str] = []
     for child in sorted(directory.iterdir()):
         if child.is_symlink() or not child.is_file():
@@ -1405,7 +1411,7 @@ def list_directory_files(
         if suffixes and child.suffix.lower() not in suffixes:
             continue
         try:
-            child.resolve().relative_to(repo_root.resolve())
+            child.resolve().relative_to(trusted_root)
         except (OSError, ValueError):
             continue
         paths.append(child.relative_to(repo_root).as_posix())
@@ -1502,6 +1508,14 @@ def discover_github_metadata(
             available=False,
             source="gh",
             error=f"Unable to parse gh repo view JSON: {error.msg}",
+        )
+
+    if not isinstance(payload, dict):
+        return GitHubMetadata(
+            requested=True,
+            available=False,
+            source="gh",
+            error="gh repo view returned a non-object JSON payload.",
         )
 
     default_branch_ref = payload.get("defaultBranchRef")
@@ -2260,11 +2274,21 @@ def format_limited_path_list(paths: tuple[str, ...], empty_text: str, *, limit: 
     return ", ".join(visible)
 
 
+def redact_remote_url(url: str) -> str:
+    """Redact embedded user-info credentials from a remote URL for display."""
+    match = re.match(r"(?P<scheme>[A-Za-z][A-Za-z0-9+.\-]*://)(?P<userinfo>[^/@]+)@", url)
+    if match is None:
+        return url
+    return f"{match.group('scheme')}***@{url[match.end():]}"
+
+
 def format_remotes(remotes: tuple[RemoteInfo, ...]) -> str:
     """Return a compact remote summary."""
     if not remotes:
         return "none found"
-    return "; ".join(f"`{remote.name}` {remote.purpose}: `{remote.url}`" for remote in remotes)
+    return "; ".join(
+        f"`{remote.name}` {remote.purpose}: `{redact_remote_url(remote.url)}`" for remote in remotes
+    )
 
 
 def format_working_tree(entries: tuple[str, ...]) -> str:
