@@ -7,13 +7,13 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.5.20260530.5
+**Version:** 1.5.20260531.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-30
+- **Last Updated:** 2026-05-31
 - **Scope:** Defines Python coding standards for all Python files in this repository, including modules, scripts, tests, and tooling. Covers style, structure, error handling, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -298,6 +298,44 @@ result = _run_generator(...)
 output = (tmp_path / "out.txt").read_text(encoding="utf-8")  # masks generator failures
 assert result.returncode == 0, result.stderr
 assert "expected output content" in output
+```
+
+- When a test asserts that a token, entry, path, module name, or similar value appears in a specific labeled section of multi-section or otherwise structured command/CLI output, the test **MUST** assert against the parsed or isolated target section, or use an equivalent assertion that disambiguates placement. A bare whole-output substring check, such as `assert "python" in result.stdout`, does not establish that the value appears in the intended section, so it is insufficient to prove section membership: the value may legitimately appear in another section. Whole-output substring checks remain acceptable when the asserted contract is global output presence rather than placement within a specific section.
+
+Compliant example:
+
+```python
+def _section_entries(output: str, heading: str) -> set[str]:
+    """Return bullet entries rendered under a named output section."""
+    entries: set[str] = set()
+    in_section = False
+
+    for line in output.splitlines():
+        if line and not line.startswith(" ") and line.endswith(":"):
+            in_section = line == f"{heading}:"
+            continue
+        if in_section and line.startswith("  - "):
+            entries.add(line.removeprefix("  - ").strip())
+
+    return entries
+
+
+result = _run_tool(...)
+assert result.returncode == 0, result.stderr
+
+excluded_modules = _section_entries(result.stdout, "Excluded modules")
+retained_modules = _section_entries(result.stdout, "Retained modules")
+
+assert "python" in excluded_modules
+assert "python" not in retained_modules
+```
+
+Non-compliant counter-example:
+
+```python
+result = _run_tool(...)
+assert result.returncode == 0, result.stderr
+assert "python" in result.stdout  # Does not prove "python" is under "Excluded modules".
 ```
 
 ## Performance and Safety

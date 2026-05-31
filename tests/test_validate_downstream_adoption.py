@@ -97,18 +97,18 @@ def _run_validator(repo_root: Path, *extra_args: str) -> subprocess.CompletedPro
     )
 
 
-def _section_modules(stdout: str, header: str) -> list[str]:
-    """Return the ``- entry`` items printed under a named report section."""
-    modules: list[str] = []
+def _section_entries(output: str, heading: str) -> set[str]:
+    """Return bullet entries rendered under a named output section."""
+    entries: set[str] = set()
     in_section = False
-    for raw_line in stdout.splitlines():
-        line = raw_line.strip()
-        if line.endswith(":") and not line.startswith("- "):
-            in_section = line == f"{header}:"
+
+    for line in output.splitlines():
+        if line and not line.startswith(" ") and line.endswith(":"):
+            in_section = line == f"{heading}:"
             continue
-        if in_section and line.startswith("- "):
-            modules.append(line[len("- ") :])
-    return modules
+        if in_section and line.startswith("  - "):
+            entries.add(line.removeprefix("  - ").strip())
+    return entries
 
 
 def _manifest() -> dict[str, Any]:
@@ -281,9 +281,15 @@ def test_partial_downstream_adoption_without_python_project_files_passes(
     assert result.returncode == 0, result.stderr
     assert "Downstream adoption validation passed." in result.stdout
     assert "Retained modules:" in result.stdout
-    assert "template-sync-support" in result.stdout
     assert "Excluded modules:" in result.stdout
-    assert "python" in result.stdout
+
+    retained_modules = _section_entries(result.stdout, "Retained modules")
+    excluded_modules = _section_entries(result.stdout, "Excluded modules")
+
+    assert "template-sync-support" in retained_modules
+    assert "template-sync-support" not in excluded_modules
+    assert "python" in excluded_modules
+    assert "python" not in retained_modules
     assert not (tmp_path / "pyproject.toml").exists()
     assert not (tmp_path / "src" / "copilot_repo_template").exists()
 
@@ -333,8 +339,8 @@ def test_template_sync_support_without_schema_keeps_runtime_schemas(tmp_path: Pa
 
     assert result.returncode == 0, result.stderr
     assert "Downstream adoption validation passed." in result.stdout
-    retained = _section_modules(result.stdout, "Retained modules")
-    excluded = _section_modules(result.stdout, "Excluded modules")
+    retained = _section_entries(result.stdout, "Retained modules")
+    excluded = _section_entries(result.stdout, "Excluded modules")
     assert "template-sync-support" in retained
     assert "schema" in excluded
     assert "schema" not in retained
