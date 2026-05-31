@@ -3,13 +3,13 @@
 
 This file contains ready-to-use prompts for AI coding agents, including GitHub Copilot Chat, to help you analyze and adopt template features into an existing repository.
 
-The prompts are operator aids. [GETTING_STARTED_EXISTING_REPO.md](GETTING_STARTED_EXISTING_REPO.md) and [TEMPLATE_UPDATE_PROCEDURE.md](TEMPLATE_UPDATE_PROCEDURE.md) remain the authoritative adoption procedure and template-sync procedure.
+The prompts are operator aids. [GETTING_STARTED_EXISTING_REPO.md](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md) and [TEMPLATE_UPDATE_PROCEDURE.md](TEMPLATE_UPDATE_PROCEDURE.md) remain the authoritative adoption procedure and template-sync procedure.
 
 ## Prerequisites
 
 - You have an existing repository where you want to adopt template features.
 - You have access to GitHub Copilot Chat or another AI coding agent with repository access.
-- You have read through [GETTING_STARTED_EXISTING_REPO.md](GETTING_STARTED_EXISTING_REPO.md) to understand what the template provides.
+- You have read through [GETTING_STARTED_EXISTING_REPO.md](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md) to understand what the template provides.
 
 ## Model Recommendation
 
