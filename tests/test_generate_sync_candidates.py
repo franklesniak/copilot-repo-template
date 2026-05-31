@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib.util
+import json
 import shutil
 import subprocess
 import sys
@@ -12,6 +14,7 @@ import yaml  # type: ignore[import-untyped]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "generate_sync_candidates.py"
+SCRIPT_DIR = SCRIPT_PATH.parent
 MARKER_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-marker.schema.json"
 MANIFEST_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-manifest.schema.json"
 SOURCE_REPO = "https://github.com/franklesniak/copilot-repo-template.git"
@@ -26,6 +29,15 @@ MODULE_DEFINITIONS = {
     "yaml": "YAML files.",
     "schema": "Schema files.",
 }
+
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+SCRIPT_SPEC = importlib.util.spec_from_file_location("generate_sync_candidates", SCRIPT_PATH)
+if SCRIPT_SPEC is None or SCRIPT_SPEC.loader is None:
+    raise RuntimeError(f"Unable to load sync candidate helper module from {SCRIPT_PATH}")
+sync_candidates = importlib.util.module_from_spec(SCRIPT_SPEC)
+sys.modules[SCRIPT_SPEC.name] = sync_candidates
+SCRIPT_SPEC.loader.exec_module(sync_candidates)
 
 
 def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -579,6 +591,318 @@ def test_ledger_flag_appends_ledger_after_candidate_table(tmp_path: Path) -> Non
     assert result.stdout.index("# Template Sync Candidate Table") < result.stdout.index(
         "# Template Adoption Ledger"
     )
+
+
+def test_preflight_without_marker_reports_questionnaire_and_reused_ledger(
+    tmp_path: Path,
+) -> None:
+    """The read-only preflight mode works before a marker is created."""
+    _init_repo(tmp_path)
+
+    result = _run_generator(tmp_path, "--preflight")
+
+    assert result.returncode == 0, result.stderr
+    assert "# First-Adoption Preflight Report" in result.stdout
+    assert "Read-only planning artifact." in result.stdout
+    assert "Marker: `.template-sync/marker.yml` (not found;" in result.stdout
+    assert "GitHub metadata: not requested" in result.stdout
+    assert "Which vulnerability reporting channel should `SECURITY.md` publish?" in result.stdout
+    assert "## `_TODO-repo-init.md` Starter" in result.stdout
+    assert "state: `[not yet asked, asked and deferred, or unavailable" in result.stdout
+    assert "## Reused Adoption Ledger" in result.stdout
+    assert "# Template Adoption Ledger" in result.stdout
+    assert (
+        "| .github/copilot-instructions.md | all: agent-instructions | "
+        "needs maintainer decision | Protected path is not retained by included modules"
+    ) in result.stdout
+    assert "No range base was provided" not in result.stderr
+
+
+def test_questionnaire_alias_with_marker_reports_protected_questions(
+    tmp_path: Path,
+) -> None:
+    """`--questionnaire` aliases preflight and reuses protected ledger decisions."""
+    _init_repo(tmp_path)
+    _git(tmp_path, "remote", "add", "origin", "https://github.com/example/project.git")
+    _write_text(tmp_path, ".github/copilot-instructions.md", "instructions\n")
+    _write_text(tmp_path, "_TODO-repo-init.md", "- [ ] Existing adoption note\n")
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["agent-instructions", "baseline"], last_reviewed_template_commit=None),
+    )
+
+    result = _run_generator(tmp_path, "--questionnaire")
+
+    assert result.returncode == 0, result.stderr
+    assert "Repository owner/name: `example/project`" in result.stdout
+    assert (
+        "Marker: `.template-sync/marker.yml` (found; included modules: "
+        "`agent-instructions`, `baseline`;"
+    ) in result.stdout
+    assert "First-adoption checklist: `_TODO-repo-init.md` (found)" in result.stdout
+    assert "Agent instruction files: `.github/copilot-instructions.md`" in result.stdout
+    assert (
+        "Does the maintainer authorize the selected action for "
+        "`.github/copilot-instructions.md`?"
+    ) in result.stdout
+    assert (
+        "| .github/copilot-instructions.md | all: agent-instructions | "
+        "needs maintainer decision | Protected retained path requires explicit owner "
+        "authorization."
+    ) in result.stdout
+
+
+def test_preflight_rejects_write_flags(tmp_path: Path) -> None:
+    """Preflight remains read-only even though ledger mode can write snapshots."""
+    _init_repo(tmp_path)
+
+    result = _run_generator(tmp_path, "--preflight", "--write-ledger", "ledger.md")
+
+    assert result.returncode == 1
+    assert "--write-ledger cannot be used with --preflight." in result.stderr
+
+
+def test_github_metadata_not_requested_skips_provider(tmp_path: Path) -> None:
+    """GitHub-only metadata lookup is not attempted without explicit opt-in."""
+    calls: list[list[str]] = []
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout="{}", stderr="")
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "example/project",
+        include_metadata=False,
+        command_runner=runner,
+    )
+
+    assert calls == []
+    assert metadata.requested is False
+    assert metadata.available is False
+    assert metadata.source == "not requested"
+
+
+def test_github_metadata_provider_reports_visible_values(tmp_path: Path) -> None:
+    """The optional GitHub metadata provider can be mocked without network access."""
+    calls: list[list[str]] = []
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(command)
+        if command[:3] == ["gh", "repo", "view"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        "nameWithOwner": "example/project",
+                        "visibility": "PUBLIC",
+                        "defaultBranchRef": {"name": "main"},
+                        "hasDiscussionsEnabled": True,
+                    }
+                ),
+                stderr="",
+            )
+        if command[:3] == ["gh", "label", "list"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps([{"name": "triage"}, {"name": "bug"}]),
+                stderr="",
+            )
+        raise AssertionError(f"Unexpected command: {command}")
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "example/project",
+        include_metadata=True,
+        command_runner=runner,
+    )
+
+    assert [command[:3] for command in calls] == [
+        ["gh", "repo", "view"],
+        ["gh", "label", "list"],
+    ]
+    assert metadata.requested is True
+    assert metadata.available is True
+    assert metadata.repository == "example/project"
+    assert metadata.visibility == "PUBLIC"
+    assert metadata.default_branch == "main"
+    assert metadata.discussions_enabled == "enabled"
+    assert metadata.labels == ("bug", "triage")
+
+
+def test_format_remotes_redacts_embedded_credentials() -> None:
+    """Remote URLs with embedded user-info are redacted in the report."""
+    remotes = (
+        sync_candidates.RemoteInfo(
+            name="origin",
+            url="https://maintainer:ghp_secrettoken@github.com/example/project.git",
+            purpose="fetch",
+        ),
+        sync_candidates.RemoteInfo(
+            name="bare-token",
+            url="https://ghp_anothersecret@github.com/example/project.git",
+            purpose="push",
+        ),
+        sync_candidates.RemoteInfo(
+            name="scheme-relative",
+            url="//ghp_schemerelative@github.com/example/project.git",
+            purpose="fetch",
+        ),
+        sync_candidates.RemoteInfo(
+            name="ssh",
+            url="git@github.com:example/project.git",
+            purpose="push",
+        ),
+    )
+
+    rendered = sync_candidates.format_remotes(remotes)
+
+    assert "ghp_secrettoken" not in rendered
+    assert "ghp_anothersecret" not in rendered
+    assert "ghp_schemerelative" not in rendered
+    assert "maintainer:" not in rendered
+    assert "https://***@github.com/example/project.git" in rendered
+    # Scheme-relative authorities must also be redacted, not just scheme:// URLs.
+    assert "//***@github.com/example/project.git" in rendered
+    # SCP-style SSH URLs cannot embed a password and are preserved verbatim.
+    assert "git@github.com:example/project.git" in rendered
+
+
+def test_redact_url_userinfo_handles_url_forms() -> None:
+    """The canonical redactor covers scheme, scheme-relative, SCP, and malformed forms."""
+    redact = sync_candidates.redact_url_userinfo
+
+    assert (
+        redact("https://maintainer:token@github.com/org/repo.git")
+        == "https://***@github.com/org/repo.git"
+    )
+    assert (
+        redact("https://ghp_token@github.com/org/repo.git") == "https://***@github.com/org/repo.git"
+    )
+    # Scheme-relative authority must also be redacted.
+    assert redact("//user:token@host/path") == "//***@host/path"
+    # SCP-style SSH remotes have no URL authority and are preserved.
+    assert redact("git@github.com:org/repo.git") == "git@github.com:org/repo.git"
+    # No user-info: unchanged.
+    assert redact("https://github.com/org/repo.git") == "https://github.com/org/repo.git"
+    # Unparseable authority (malformed IPv6): fail-safe redaction that drops the scheme.
+    assert redact("https://user:secret@[::1/path") == "***@[::1/path"
+
+
+def test_infer_repository_name_anchors_github_host() -> None:
+    """Owner/name inference matches the URL authority, not any github substring."""
+
+    def infer(url: str) -> str | None:
+        return sync_candidates.infer_repository_name(
+            (sync_candidates.RemoteInfo(name="origin", url=url, purpose="fetch"),)
+        )
+
+    # Genuine GitHub remotes (scheme, SCP, user-info, and subdomain) resolve.
+    assert infer("https://github.com/example/project.git") == "example/project"
+    assert infer("git@github.com:example/project.git") == "example/project"
+    assert infer("https://user:token@github.com/example/project") == "example/project"
+    assert infer("https://team.github.com/example/project.git") == "example/project"
+    # Look-alike or unrelated hosts MUST NOT be misclassified as GitHub.
+    assert infer("https://notgithub.com/example/project.git") is None
+    assert infer("https://github.com.evil.com/example/project.git") is None
+    assert infer("git@gitlab.com:example/project.git") is None
+
+    # The first genuine GitHub remote wins even if a look-alike precedes it.
+    remotes = (
+        sync_candidates.RemoteInfo(
+            name="decoy", url="https://notgithub.com/decoy/repo.git", purpose="fetch"
+        ),
+        sync_candidates.RemoteInfo(
+            name="origin", url="https://github.com/example/project.git", purpose="fetch"
+        ),
+    )
+    assert sync_candidates.infer_repository_name(remotes) == "example/project"
+
+
+def test_github_metadata_handles_non_object_json(tmp_path: Path) -> None:
+    """Non-object JSON from gh repo view is reported as unavailable, not a crash."""
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 0, stdout="null", stderr="")
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "example/project",
+        include_metadata=True,
+        command_runner=runner,
+    )
+
+    assert metadata.requested is True
+    assert metadata.available is False
+    assert metadata.error is not None
+    assert "non-object" in metadata.error
+
+
+def test_list_directory_files_skips_symlinked_ancestor(tmp_path: Path, monkeypatch: Any) -> None:
+    """A symlinked ancestor directory is not iterated outside the repo root."""
+    outside = tmp_path / "outside" / "workflows"
+    outside.mkdir(parents=True)
+    (outside / "leak.yml").write_text("name: leak\n", encoding="utf-8")
+
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    # `.github` is a symlink whose target lives outside the repo root.
+    (repo_root / ".github").symlink_to(tmp_path / "outside", target_is_directory=True)
+
+    escaping_dir = (repo_root / ".github" / "workflows").resolve()
+    original_iterdir = Path.iterdir
+
+    def guarded_iterdir(self: Path) -> Any:
+        if self.resolve() == escaping_dir:
+            raise AssertionError(f"iterated outside repo root: {self}")
+        return original_iterdir(self)
+
+    monkeypatch.setattr(Path, "iterdir", guarded_iterdir)
+
+    result = sync_candidates.list_directory_files(repo_root, ".github/workflows", (".yml", ".yaml"))
+
+    assert result == ()
+
+
+def test_path_has_symlink_component_detects_symlinked_ancestor(tmp_path: Path) -> None:
+    """A symlinked ancestor (or leaf) is detected; fully real paths pass."""
+    repo_root = tmp_path / "repo"
+    (repo_root / "real" / "nested").mkdir(parents=True)
+    (repo_root / "real" / "nested" / "file.txt").write_text("x\n", encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    # `.github` is a symlink whose target lives outside the repo root.
+    (repo_root / ".github").symlink_to(outside, target_is_directory=True)
+
+    # A symlinked ancestor and a symlinked leaf are both rejected.
+    assert sync_candidates.path_has_symlink_component(repo_root, ".github/workflows") is True
+    assert sync_candidates.path_has_symlink_component(repo_root, ".github") is True
+    # Fully real paths are accepted whether or not they exist.
+    assert sync_candidates.path_has_symlink_component(repo_root, "real/nested") is False
+    assert sync_candidates.path_has_symlink_component(repo_root, "real/nested/file.txt") is False
+    assert sync_candidates.path_has_symlink_component(repo_root, "does/not/exist") is False
+
+
+def test_repository_path_exists_rejects_symlinked_ancestor(tmp_path: Path) -> None:
+    """A path reached through a symlinked ancestor is not treated as a repo path."""
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "config.yml").write_text("name: leak\n", encoding="utf-8")
+    # `.github` is a symlink whose target lives outside the repo root.
+    (repo_root / ".github").symlink_to(outside, target_is_directory=True)
+
+    # The file exists *through* the symlink, but must be rejected as out-of-boundary.
+    assert sync_candidates.repository_path_exists(repo_root, ".github/config.yml") is False
+
+    # A genuine in-repo file is accepted.
+    (repo_root / "real").mkdir()
+    (repo_root / "real" / "in_repo.yml").write_text("ok\n", encoding="utf-8")
+    assert sync_candidates.repository_path_exists(repo_root, "real/in_repo.yml") is True
 
 
 def test_unmapped_paths_are_flagged(tmp_path: Path) -> None:

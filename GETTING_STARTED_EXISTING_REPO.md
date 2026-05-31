@@ -101,7 +101,7 @@ This template repository includes several features you can adopt individually or
 | **Pre-commit Hooks** | Automated code quality checks before commits |
 | **Linting Configurations** | Pre-configured settings for markdownlint, PSScriptAnalyzer, TFLint, and yamllint |
 | **Data-File Validation** | JSON, YAML, GitHub Actions, and JSON Schema example validation through pre-commit and `data-ci.yml` |
-| **Template Sync Support** | `.template-sync/marker.yml`, `.template-sync/manifest.yml`, `.template-sync/instruction-contracts.yml`, the first-adoption working-tree runner, the marker-aware retained-state and instruction-contract validation helpers, and the candidate table generator for future template syncs |
+| **Template Sync Support** | `.template-sync/marker.yml`, `.template-sync/manifest.yml`, `.template-sync/instruction-contracts.yml`, the first-adoption working-tree runner, the marker-aware retained-state and instruction-contract validation helpers, and the candidate table generator with read-only first-adoption preflight/questionnaire and future-sync ledger modes |
 | **Dependabot** | Automated dependency update monitoring |
 | **CODEOWNERS** | Automatic reviewer assignment for pull requests |
 | **Multi-Agent Support** | Instruction files for Cursor Agent, Hermes Agent, Claude Code, OpenAI Codex CLI, and Gemini Code Assist |
@@ -205,7 +205,7 @@ Use this matrix to decide which features to adopt based on complexity and depend
 | VS Code Settings | `.vscode/settings.json` | None | Low |
 | Markdown Linting | `.markdownlint.jsonc`, `package.json`, npm scripts | Node.js | Medium |
 | Pre-commit Hooks | `.pre-commit-config.yaml`, `.github/scripts/terraform_hooks.py` if retaining Terraform hooks | Python, pre-commit; Terraform and TFLint for Terraform hooks | Medium |
-| Template Sync Support | `.template-sync/marker.yml`, `.template-sync/manifest.yml`, `.template-sync/instruction-contracts.yml`, `.template-sync/scripts/run_first_adoption_checks.py`, `.template-sync/scripts/validate_marker.py`, `.template-sync/scripts/validate_instruction_contracts.py`, `.template-sync/scripts/generate_sync_candidates.py`, `schemas/template-sync-marker.schema.json`, `schemas/template-sync-manifest.schema.json`, `schemas/template-sync-instruction-contracts.schema.json` | Python and schema validation dependencies | Medium |
+| Template Sync Support | `.template-sync/marker.yml`, `.template-sync/manifest.yml`, `.template-sync/instruction-contracts.yml`, `.template-sync/scripts/run_first_adoption_checks.py`, `.template-sync/scripts/validate_marker.py`, `.template-sync/scripts/validate_instruction_contracts.py`, `.template-sync/scripts/generate_sync_candidates.py` (`--preflight` / `--questionnaire`, `--ledger`, `--ledger-only`), `schemas/template-sync-marker.schema.json`, `schemas/template-sync-manifest.schema.json`, `schemas/template-sync-instruction-contracts.schema.json` | Python and schema validation dependencies | Medium |
 | PowerShell CI Workflow | `.github/workflows/powershell-ci.yml` | PowerShell, Pester | Medium |
 | PSScriptAnalyzer Config | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell | Low |
 | Python CI Workflow | `.github/workflows/python-ci.yml` | Python project structure | High |
@@ -214,6 +214,14 @@ Use this matrix to decide which features to adopt based on complexity and depend
 ### First-Adoption Preflight Checklist
 
 When this is the first import of template content into an existing repository, create or update a root `_TODO-repo-init.md` checklist before adopting template files whose contents depend on unresolved maintainer choices. If the repository already records these answers in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or an equivalent committed adoption note named by a prior adoption procedure, carry those answers forward and do not re-ask resolved questions.
+
+After copying `.template-sync/manifest.yml`, `.template-sync/scripts/generate_sync_candidates.py`, `.template-sync/scripts/validate_marker.py`, and the template-sync schemas, run the read-only preflight mode before finalizing `_TODO-repo-init.md` or policy-dependent files:
+
+```bash
+python .template-sync/scripts/generate_sync_candidates.py --preflight
+```
+
+Use `--include-github-metadata` only when the maintainer explicitly opts in to read-only GitHub metadata lookup through the `gh` CLI. Without that flag, the report labels GitHub-only settings as manual-review items instead of guessing.
 
 Use the concrete `_TODO-repo-init.md` example in [GETTING_STARTED_NEW_REPO.md](GETTING_STARTED_NEW_REPO.md#first-adoption-preflight-checklist) and keep only the items that are unresolved for this repository. Discovery may inspect files and Git metadata first, but agents and maintainers MUST NOT invent contact emails, reporting channels, branch protection policy, CODEOWNERS identities, GHES hosts, label availability, GitHub repository settings, or adoption modes beyond the documented default.
 
