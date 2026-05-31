@@ -124,10 +124,7 @@ VALIDATION_COMMANDS_BY_MODULE = {
     ),
     "schema": (
         "pre-commit run validate-example-config-valid-examples --all-files",
-        "pre-commit run validate-template-sync-marker-valid-examples --all-files",
         "pre-commit run validate-example-config-schema --all-files",
-        "pre-commit run validate-template-sync-manifest-schema --all-files",
-        "pre-commit run validate-template-sync-marker-schema --all-files",
         "pytest tests/test_schema_examples.py -v",
     ),
     "template-onboarding": (
@@ -137,8 +134,18 @@ VALIDATION_COMMANDS_BY_MODULE = {
     ),
     "template-sync-support": (
         "python .template-sync/scripts/validate_marker.py --require-marker",
+        "python .template-sync/scripts/validate_instruction_contracts.py --mode downstream --require-marker",
+        "pre-commit run validate-template-sync-marker-valid-examples --all-files",
+        "pre-commit run validate-template-sync-instruction-contracts-valid-examples --all-files",
+        "pre-commit run validate-template-sync-manifest-schema --all-files",
+        "pre-commit run validate-template-sync-marker-schema --all-files",
+        "pre-commit run validate-template-sync-instruction-contracts-schema --all-files",
         "pre-commit run validate-template-sync-manifest --all-files",
         "pre-commit run validate-template-sync-marker --all-files",
+        "pre-commit run validate-template-sync-instruction-contracts --all-files",
+        "pre-commit run validate-instruction-contracts-upstream --all-files",
+        "pre-commit run validate-instruction-contracts-downstream --all-files",
+        "pytest tests/test_schema_examples.py -v",
     ),
     "terraform": (
         "terraform fmt -check -recursive -diff",

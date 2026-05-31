@@ -111,37 +111,27 @@ SCHEMA_INLINE_MARKER_END = "# template-sync: end schema-only"
 SCHEMA_SHARED_SURFACE_TOKENS = {
     ".pre-commit-config.yaml": (
         "validate-example-config-valid-examples",
-        "validate-template-sync-marker-valid-examples",
-        "validate-template-sync-instruction-contracts-valid-examples",
         "validate-example-config-schema",
-        "validate-template-sync-manifest-schema",
-        "validate-template-sync-marker-schema",
-        "validate-template-sync-instruction-contracts-schema",
-        "check-metaschema",
         "schemas/example-config.schema.json",
     ),
     ".github/workflows/data-ci.yml": (
         "pre-commit run validate-example-config-valid-examples --all-files",
-        "pre-commit run validate-template-sync-marker-valid-examples --all-files",
-        "pre-commit run validate-template-sync-instruction-contracts-valid-examples --all-files",
         "pre-commit run validate-example-config-schema --all-files",
-        "pre-commit run validate-template-sync-manifest-schema --all-files",
-        "pre-commit run validate-template-sync-marker-schema --all-files",
-        "pre-commit run validate-template-sync-instruction-contracts-schema --all-files",
     ),
 }
-SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_BLOCK_COUNTS = {
+TEMPLATE_SYNC_SUPPORT_INLINE_BLOCK_COUNTS = {
     ".pre-commit-config.yaml": 1,
     ".github/workflows/data-ci.yml": 2,
 }
-SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_BEGIN = (
-    "# template-sync: begin schema-template-sync-support-only"
-)
-SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_END = (
-    "# template-sync: end schema-template-sync-support-only"
-)
-SCHEMA_TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS = {
+TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_BEGIN = "# template-sync: begin template-sync-support-only"
+TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_END = "# template-sync: end template-sync-support-only"
+TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS = {
     ".pre-commit-config.yaml": (
+        "validate-template-sync-marker-valid-examples",
+        "validate-template-sync-instruction-contracts-valid-examples",
+        "validate-template-sync-manifest-schema",
+        "validate-template-sync-marker-schema",
+        "validate-template-sync-instruction-contracts-schema",
         r"files: ^\.template-sync/manifest\.yml$",
         r"files: ^\.template-sync/marker\.yml$",
         r"files: ^\.template-sync/instruction-contracts\.yml$",
@@ -150,6 +140,11 @@ SCHEMA_TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS = {
         "--skip-if-marker-present",
     ),
     ".github/workflows/data-ci.yml": (
+        "pre-commit run validate-template-sync-marker-valid-examples --all-files",
+        "pre-commit run validate-template-sync-instruction-contracts-valid-examples --all-files",
+        "pre-commit run validate-template-sync-manifest-schema --all-files",
+        "pre-commit run validate-template-sync-marker-schema --all-files",
+        "pre-commit run validate-template-sync-instruction-contracts-schema --all-files",
         "pre-commit run validate-template-sync-manifest --all-files",
         "pre-commit run validate-template-sync-marker --all-files",
         "pre-commit run validate-template-sync-instruction-contracts --all-files",
@@ -955,12 +950,12 @@ def _strip_schema_only_inline_blocks(relative_path: str) -> str:
     )
 
 
-def _strip_schema_template_sync_support_only_inline_blocks(relative_path: str) -> str:
-    """Return file text after simulating a sync without all combined modules."""
+def _strip_template_sync_support_only_inline_blocks(relative_path: str) -> str:
+    """Return file text after simulating a sync without template sync support."""
     return _strip_inline_blocks(
         relative_path,
-        SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_BEGIN,
-        SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_END,
+        TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_BEGIN,
+        TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_END,
     )
 
 
@@ -973,14 +968,14 @@ def _strip_github_platform_only_inline_blocks(relative_path: str) -> str:
     )
 
 
-def _strip_schema_template_sync_support_blocks_for_modules(
+def _strip_template_sync_support_blocks_for_modules(
     relative_path: str,
     included_modules: set[str],
 ) -> str:
-    """Return file text after applying combined-marker module presence semantics."""
-    if {"schema", "template-sync-support"}.issubset(included_modules):
+    """Return file text after applying template-sync-support marker semantics."""
+    if "template-sync-support" in included_modules:
         return (REPO_ROOT / relative_path).read_text(encoding="utf-8")
-    return _strip_schema_template_sync_support_only_inline_blocks(relative_path)
+    return _strip_template_sync_support_only_inline_blocks(relative_path)
 
 
 def _extract_table_after_heading(markdown_text: str, heading: str) -> list[list[str]]:
@@ -1247,7 +1242,7 @@ def test_template_manifest_schema_accepts_version_2_requires_any() -> None:
         {
             "pattern": ".github/workflows/data-ci.yml",
             "requires_all": ["github-actions"],
-            "requires_any": ["json", "yaml", "schema"],
+            "requires_any": ["json", "yaml", "schema", "template-sync-support"],
         },
     )
 
@@ -1295,14 +1290,23 @@ def test_template_manifest_schema_rejects_malformed_relation_combinations() -> N
 
 
 def test_template_manifest_data_ci_mapping_uses_v2_boolean_semantics() -> None:
-    """The data-file workflow must require GitHub Actions plus one data module."""
+    """The data-file workflow must require GitHub Actions plus one owning module."""
     data_ci_mapping = _path_mapping_by_pattern()[".github/workflows/data-ci.yml"]
 
     assert _relation_modules(data_ci_mapping, "requires_all") == ("github-actions",)
-    assert _relation_modules(data_ci_mapping, "requires_any") == ("json", "yaml", "schema")
+    assert _relation_modules(data_ci_mapping, "requires_any") == (
+        "json",
+        "yaml",
+        "schema",
+        "template-sync-support",
+    )
     assert _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "json"})
     assert _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "yaml"})
     assert _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "schema"})
+    assert _path_mapping_matches_modules(
+        data_ci_mapping,
+        {"github-actions", "template-sync-support"},
+    )
     assert not _path_mapping_matches_modules(data_ci_mapping, {"github-actions"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"yaml", "schema"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "terraform"})
@@ -1393,7 +1397,7 @@ def test_downstream_marker_concrete_integrity_skips_excluded_and_overridden_patt
             {
                 "pattern": ".github/workflows/data-ci.yml",
                 "requires_all": ["github-actions"],
-                "requires_any": ["yaml", "schema"],
+                "requires_any": ["yaml", "schema", "template-sync-support"],
             },
             {
                 "pattern": "tests/fixtures/dependabot/auto-assignment.yml",
@@ -1441,7 +1445,7 @@ def test_downstream_marker_concrete_integrity_flags_missing_retained_patterns(
             {
                 "pattern": ".github/workflows/data-ci.yml",
                 "requires_all": ["github-actions"],
-                "requires_any": ["yaml", "schema"],
+                "requires_any": ["yaml", "schema", "template-sync-support"],
             },
         ]
     )
@@ -1563,9 +1567,9 @@ def test_template_manifest_flags_unmapped_tracked_files(tmp_path: Path) -> None:
     assert unmapped_paths == ["unmapped.txt"]
 
 
-def test_template_sync_helper_tests_map_to_support_and_schema_modules() -> None:
+def test_template_sync_helper_tests_map_to_support_module() -> None:
     """Top-level template-sync helper tests must have explicit manifest mappings."""
-    expected_modules = ("template-sync-support", "schema")
+    expected_modules = ("template-sync-support",)
 
     assert _manifest_modules_for_path("tests/test_generate_sync_candidates.py") == expected_modules
     assert _manifest_modules_for_path("tests/test_run_first_adoption_checks.py") == (
@@ -1578,6 +1582,15 @@ def test_template_sync_helper_tests_map_to_support_and_schema_modules() -> None:
     assert _manifest_modules_for_path("tests/test_validate_instruction_contracts.py") == (
         expected_modules
     )
+
+
+def test_schema_example_tests_map_to_schema_or_template_sync_support() -> None:
+    """Schema example tests must survive either owned example-fixture surface."""
+    mapping = _path_mapping_by_pattern().get("tests/test_schema_examples.py")
+
+    assert mapping is not None
+    assert _relation_modules(mapping, "requires_all") == ()
+    assert _relation_modules(mapping, "requires_any") == ("schema", "template-sync-support")
 
 
 def test_dependabot_schema_regression_surface_maps_to_github_platform_and_schema() -> None:
@@ -1599,7 +1612,7 @@ def test_template_sync_inline_markers_are_known_and_paired() -> None:
         "python-only",
         "yaml-only",
         "schema-only",
-        "schema-template-sync-support-only",
+        "template-sync-support-only",
         "github-platform-only",
         *REFERENCE_ONLY_MARKER_MODULES,
     }
@@ -1610,7 +1623,7 @@ def test_template_sync_inline_markers_are_known_and_paired() -> None:
             *PYTHON_INLINE_BLOCK_PATHS,
             *YAML_INLINE_BLOCK_COUNTS,
             *SCHEMA_INLINE_BLOCK_COUNTS,
-            *SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_BLOCK_COUNTS,
+            *TEMPLATE_SYNC_SUPPORT_INLINE_BLOCK_COUNTS,
             *GITHUB_PLATFORM_INLINE_BLOCK_COUNTS,
             *(
                 relative_path
@@ -1900,28 +1913,27 @@ def test_schema_sync_retains_schema_tooling_in_shared_surfaces() -> None:
             assert required_token in text, f"{relative_path}: {required_token}"
 
 
-def test_schema_template_sync_support_inline_blocks_are_declared() -> None:
-    """Combined schema/template-sync blocks must be paired with manifest notes."""
+def test_template_sync_support_inline_blocks_are_declared() -> None:
+    """Template-sync-support-only blocks must be paired with manifest notes."""
     mappings = _path_mapping_by_pattern()
 
-    for relative_path, expected_count in SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_BLOCK_COUNTS.items():
+    for relative_path, expected_count in TEMPLATE_SYNC_SUPPORT_INLINE_BLOCK_COUNTS.items():
         text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
-        assert text.count(SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_BEGIN) == expected_count
-        assert text.count(SCHEMA_TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_END) == expected_count
-        _strip_schema_template_sync_support_only_inline_blocks(relative_path)
+        assert text.count(TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_BEGIN) == expected_count
+        assert text.count(TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_END) == expected_count
+        _strip_template_sync_support_only_inline_blocks(relative_path)
 
         mapping = mappings.get(relative_path)
         assert mapping is not None, f"{relative_path} must have a manifest mapping"
         notes = mapping.get("notes")
         assert isinstance(notes, str), f"{relative_path} mapping must describe inline blocks"
-        assert "Schema-template-sync-support-only inline block" in notes
-        assert "schema or template-sync-support module is excluded" in notes
+        assert "Template-sync-support-only inline block" in notes
+        assert "template-sync-support module is excluded" in notes
 
 
-def test_sync_missing_schema_or_template_sync_support_strips_combined_tooling() -> None:
-    """Combined blocks must be removed when either required module is absent."""
-    module_sets_missing_one_or_more = (
-        {"template-sync-support"},
+def test_sync_missing_template_sync_support_strips_support_tooling() -> None:
+    """Template sync support blocks must be removed when support is absent."""
+    module_sets_missing_support = (
         {"schema"},
         set(),
     )
@@ -1929,9 +1941,9 @@ def test_sync_missing_schema_or_template_sync_support_strips_combined_tooling() 
     for (
         relative_path,
         forbidden_tokens,
-    ) in SCHEMA_TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS.items():
-        for included_modules in module_sets_missing_one_or_more:
-            stripped_text = _strip_schema_template_sync_support_blocks_for_modules(
+    ) in TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS.items():
+        for included_modules in module_sets_missing_support:
+            stripped_text = _strip_template_sync_support_blocks_for_modules(
                 relative_path,
                 included_modules,
             )
@@ -1941,17 +1953,16 @@ def test_sync_missing_schema_or_template_sync_support_strips_combined_tooling() 
                 ), f"{relative_path}: {sorted(included_modules)}: {forbidden_token}"
 
 
-def test_sync_missing_schema_or_template_sync_support_leaves_valid_yaml() -> None:
-    """Stripping combined blocks must not corrupt the host YAML document."""
-    module_sets_missing_one_or_more = (
-        {"template-sync-support"},
+def test_sync_missing_template_sync_support_leaves_valid_yaml() -> None:
+    """Stripping template sync support blocks must not corrupt the host YAML document."""
+    module_sets_missing_support = (
         {"schema"},
         set(),
     )
 
-    for relative_path in SCHEMA_TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS:
-        for included_modules in module_sets_missing_one_or_more:
-            stripped_text = _strip_schema_template_sync_support_blocks_for_modules(
+    for relative_path in TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS:
+        for included_modules in module_sets_missing_support:
+            stripped_text = _strip_template_sync_support_blocks_for_modules(
                 relative_path,
                 included_modules,
             )
@@ -1967,15 +1978,15 @@ def test_sync_missing_schema_or_template_sync_support_leaves_valid_yaml() -> Non
             )
 
 
-def test_schema_template_sync_support_sync_retains_combined_tooling() -> None:
-    """A sync with both modules must keep combined validation blocks."""
-    included_modules = {"schema", "template-sync-support"}
+def test_template_sync_support_sync_retains_support_tooling() -> None:
+    """A sync with template sync support must keep support validation blocks."""
+    included_modules = {"template-sync-support"}
 
     for (
         relative_path,
         required_tokens,
-    ) in SCHEMA_TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS.items():
-        text = _strip_schema_template_sync_support_blocks_for_modules(
+    ) in TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS.items():
+        text = _strip_template_sync_support_blocks_for_modules(
             relative_path,
             included_modules,
         )
@@ -2107,7 +2118,7 @@ def test_repeated_precommit_repos_share_rev() -> None:
     ``.pre-commit-config.yaml`` declares the same external repository more than
     once when its hooks are split across template-sync modules (for example,
     ``python-jsonschema/check-jsonschema`` appears under the schema-only,
-    schema-template-sync-support-only, and GitHub-platform blocks). Dependabot's
+    template-sync-support-only, and GitHub-platform blocks). Dependabot's
     ``pre-commit`` ecosystem and manual edits both target each ``rev:`` line
     independently, so this test asserts that every entry for the same repository
     remains pinned to the same revision and surfaces any drift between them.

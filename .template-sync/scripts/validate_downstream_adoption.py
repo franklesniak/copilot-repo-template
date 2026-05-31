@@ -33,6 +33,7 @@ INLINE_BLOCK_MODULES = {
     "python-only": frozenset({"python"}),
     "yaml-only": frozenset({"yaml"}),
     "schema-only": frozenset({"schema"}),
+    "template-sync-support-only": frozenset({"template-sync-support"}),
     "schema-template-sync-support-only": frozenset({"schema", "template-sync-support"}),
     "github-platform-only": frozenset({"github-platform"}),
     "markdown-reference-only": frozenset({"markdown"}),
@@ -271,7 +272,7 @@ def retained_support_file_failures(repo_root: Path, included_modules: set[str]) 
     required_paths: list[str] = []
     if "template-sync-support" in included_modules:
         required_paths.extend(REQUIRED_TEMPLATE_SYNC_SUPPORT_FILES)
-    if {"schema", "template-sync-support"}.issubset(included_modules):
+    if "template-sync-support" in included_modules:
         required_paths.extend(REQUIRED_TEMPLATE_SYNC_SCHEMA_FILES)
 
     failures: list[str] = []

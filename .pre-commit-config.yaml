@@ -85,24 +85,19 @@ repos:
   #   A. Project-owned schema example validation
   #      Validates the valid example data files under
   #      `schemas/examples/example-config/valid/` against the worked-example
-  #      schema at `schemas/example-config.schema.json`, and the valid
-  #      marker examples under `schemas/examples/template-sync-marker/valid/`
-  #      against `schemas/template-sync-marker.schema.json`, and the valid
-  #      instruction-contract examples under
-  #      `schemas/examples/template-sync-instruction-contracts/valid/` against
-  #      `schemas/template-sync-instruction-contracts.schema.json`. See
-  #      `schemas/README.md` for schema documentation and downstream-removal
-  #      guidance.
+  #      schema at `schemas/example-config.schema.json`. See `schemas/README.md`
+  #      for schema documentation and downstream-removal guidance.
   #
-  #      Invalid example data files under `schemas/examples/*/invalid/` are
-  #      intentionally NOT wired into a normal pre-commit hook because they
-  #      are expected to fail validation. They are exercised by
-  #      `tests/test_schema_examples.py`, which auto-discovers schema/example
-  #      pairs and asserts that valid examples pass and invalid examples fail.
+  #      Invalid example data files under
+  #      `schemas/examples/example-config/invalid/` are intentionally NOT wired
+  #      into a normal pre-commit hook because they are expected to fail
+  #      validation. They are exercised by `tests/test_schema_examples.py`,
+  #      which auto-discovers schema/example pairs and asserts that valid
+  #      examples pass and invalid examples fail.
   #
   #   B. Schema self-validation
-  #      Validates project-owned schemas against their declared JSON Schema
-  #      Draft 2020-12 metaschema using `check-metaschema`.
+  #      Validates the worked-example schema against its declared JSON Schema
+  #      Draft 2020-12 metaschema.
   - repo: https://github.com/python-jsonschema/check-jsonschema
     rev: "0.37.2"
     hooks:
@@ -113,6 +108,36 @@ repos:
         args:
           - --schemafile
           - schemas/example-config.schema.json
+      - id: check-metaschema
+        alias: validate-example-config-schema
+        name: Self-validate example-config schema
+        files: ^schemas/example-config\.schema\.json$
+  # template-sync: end schema-only
+
+  # template-sync: begin template-sync-support-only
+  # Template sync support validation:
+  #
+  #   A. Template sync schema example validation
+  #      Validates the valid marker examples under
+  #      `schemas/examples/template-sync-marker/valid/` against
+  #      `schemas/template-sync-marker.schema.json`, and the valid
+  #      instruction-contract examples under
+  #      `schemas/examples/template-sync-instruction-contracts/valid/` against
+  #      `schemas/template-sync-instruction-contracts.schema.json`. See
+  #      `schemas/README.md` for template sync schema documentation.
+  #
+  #      Invalid template sync example data files under the matching
+  #      `schemas/examples/template-sync-*/invalid/` directories are
+  #      intentionally NOT wired into a normal pre-commit hook because they are
+  #      expected to fail validation. They are exercised by
+  #      `tests/test_schema_examples.py`.
+  #
+  #   B. Template sync runtime schema self-validation
+  #      Validates the schemas loaded by `.template-sync/scripts/` at runtime
+  #      against their declared JSON Schema Draft 2020-12 metaschema.
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: "0.37.2"
+    hooks:
       - id: check-jsonschema
         alias: validate-template-sync-marker-valid-examples
         name: Validate template sync marker valid examples
@@ -128,10 +153,6 @@ repos:
           - --schemafile
           - schemas/template-sync-instruction-contracts.schema.json
       - id: check-metaschema
-        alias: validate-example-config-schema
-        name: Self-validate example-config schema
-        files: ^schemas/example-config\.schema\.json$
-      - id: check-metaschema
         alias: validate-template-sync-manifest-schema
         name: Self-validate template-sync-manifest schema
         files: ^schemas/template-sync-manifest\.schema\.json$
@@ -143,23 +164,21 @@ repos:
         alias: validate-template-sync-instruction-contracts-schema
         name: Self-validate template-sync-instruction-contracts schema
         files: ^schemas/template-sync-instruction-contracts\.schema\.json$
-  # template-sync: end schema-only
 
-  # template-sync: begin schema-template-sync-support-only
-  # Joint schema + template-sync-support validation:
+  # Template sync live-file validation:
   #
-  #   A. Template sync manifest validation
+  #   C. Template sync manifest validation
   #      Validates `.template-sync/manifest.yml` against
   #      `schemas/template-sync-manifest.schema.json`. The manifest is the
   #      source-of-truth module taxonomy for downstream template syncs.
   #
-  #   B. Template sync marker validation
+  #   D. Template sync marker validation
   #      Validates `.template-sync/marker.yml` against
   #      `schemas/template-sync-marker.schema.json`. This repository does not
   #      need to carry a marker, but downstream repositories that adopt one
   #      get validation automatically when the marker file is present.
   #
-  #   C. Instruction contract validation
+  #   E. Instruction contract validation
   #      Validates `.template-sync/instruction-contracts.yml` against
   #      `schemas/template-sync-instruction-contracts.schema.json`, then runs
   #      the upstream-template required-anchor validator against the template's
@@ -213,7 +232,7 @@ repos:
         additional_dependencies:
           - jsonschema>=4.18.0
           - PyYAML>=6.0.3
-  # template-sync: end schema-template-sync-support-only
+  # template-sync: end template-sync-support-only
 
   # template-sync: begin github-platform-only
   # GitHub platform schema validation:

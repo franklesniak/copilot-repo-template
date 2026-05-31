@@ -219,23 +219,24 @@ template_manifest:
         - json
         - yaml
         - schema
+        - template-sync-support
       notes: >-
         Contains YAML-only inline blocks for yamllint-specific documentation and
         the dedicated yamllint CI step. Contains Schema-only inline blocks for
-        schema example validation, schema self-validation documentation, and
-        alias-based CI steps. Contains Schema-template-sync-support-only inline
-        blocks for template sync manifest, marker, and instruction-contract
-        validation documentation and alias-based CI steps. Contains a
+        worked-example schema validation documentation and alias-based CI steps.
+        Contains Template-sync-support-only inline blocks for template sync
+        schema example validation, runtime schema self-validation, manifest,
+        marker, and instruction-contract validation documentation and
+        alias-based CI steps. Contains a
         github-platform-only inline block for Dependabot validation
         documentation and the dedicated Dependabot validation step. Remove the
         delimited YAML blocks when the yaml module is excluded, remove the
         delimited Schema-only inline blocks when the schema module is excluded,
-        and remove the delimited
-        Schema-template-sync-support-only inline blocks when the schema or
-        template-sync-support module is excluded. Remove the delimited
+        and remove the delimited Template-sync-support-only inline blocks when
+        the template-sync-support module is excluded. Remove the delimited
         github-platform-only inline block when the github-platform module is
         excluded. Retain this workflow only when github-actions is adopted and
-        at least one data-file module is adopted.
+        at least one data-file or template-sync-support module is adopted.
     - pattern: '.github/workflows/check-placeholders.yml'
       requires_all:
         - baseline
@@ -259,17 +260,17 @@ template_manifest:
       notes: >-
         Contains a YAML-only inline block for yamllint, a Python-only inline
         block for Python project hooks, a Schema-only inline block for schema
-        example validators and schema self-validation hooks, a
-        Schema-template-sync-support-only inline block for template sync
-        manifest, marker, and instruction-contract validators, a
+        worked-example validators and schema self-validation hooks, a
+        Template-sync-support-only inline block for template sync schema example
+        validators, runtime schema self-validation hooks, manifest, marker, and
+        instruction-contract validators, a
         github-platform-only inline block for Dependabot configuration
         validation, a Markdown-only inline block for markdownlint-cli2, and a
         Terraform-only inline block for repo-local Terraform hooks. Remove the
         delimited YAML block when the yaml module is excluded, remove the
         delimited Python block when the python module is excluded, remove the
         delimited Schema-only inline block when the schema module is excluded,
-        remove the delimited
-        Schema-template-sync-support-only inline block when the schema or
+        remove the delimited Template-sync-support-only inline block when the
         template-sync-support module is excluded, remove the delimited
         github-platform-only inline block when the github-platform module is
         excluded, remove the delimited Markdown block when the markdown module
@@ -323,35 +324,46 @@ template_manifest:
     - pattern: 'templates/yaml/**'
       requires_all:
         - yaml
+    - pattern: 'schemas/template-sync-manifest.schema.json'
+      requires_all:
+        - template-sync-support
+    - pattern: 'schemas/template-sync-marker.schema.json'
+      requires_all:
+        - template-sync-support
+    - pattern: 'schemas/template-sync-instruction-contracts.schema.json'
+      requires_all:
+        - template-sync-support
+    - pattern: 'schemas/examples/template-sync-marker/**'
+      requires_all:
+        - template-sync-support
+    - pattern: 'schemas/examples/template-sync-instruction-contracts/**'
+      requires_all:
+        - template-sync-support
     - pattern: 'schemas/**'
       requires_all:
         - schema
     - pattern: 'tests/test_schema_examples.py'
-      requires_all:
+      requires_any:
         - schema
+        - template-sync-support
     - pattern: 'tests/test_generate_sync_candidates.py'
       requires_all:
         - template-sync-support
-        - schema
     - pattern: 'tests/test_run_first_adoption_checks.*'
       requires_all:
         - template-sync-support
     - pattern: 'tests/test_template_manifest.py'
       requires_all:
         - template-sync-support
-        - schema
     - pattern: 'tests/test_validate_marker.py'
       requires_all:
         - template-sync-support
-        - schema
     - pattern: 'tests/test_validate_downstream_adoption.py'
       requires_all:
         - template-sync-support
-        - schema
     - pattern: 'tests/test_validate_instruction_contracts.py'
       requires_all:
         - template-sync-support
-        - schema
     - pattern: '.github/scripts/terraform_hooks.py'
       requires_all:
         - terraform
