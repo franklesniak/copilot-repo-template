@@ -215,6 +215,8 @@ Use this matrix to decide which features to adopt based on complexity and depend
 
 When this is the first import of template content into an existing repository, create or update a root `_TODO-repo-init.md` checklist before adopting template files whose contents depend on unresolved maintainer choices. If the repository already records these answers in `_TODO-repo-init.md`, `.template-sync/marker.yml`, or an equivalent committed adoption note named by a prior adoption procedure, carry those answers forward and do not re-ask resolved questions.
 
+If you want an AI coding agent to help run this discovery step, use [Prompt 0: Existing Repository Adoption Preflight](COPILOT_CHAT_PROMPTS.md#prompt-0-existing-repository-adoption-preflight) in `COPILOT_CHAT_PROMPTS.md`. The prompt is an operator aid for collecting preflight facts and questions; this guide and [TEMPLATE_UPDATE_PROCEDURE.md](TEMPLATE_UPDATE_PROCEDURE.md) remain the authoritative adoption and sync procedures.
+
 After copying `.template-sync/manifest.yml`, `.template-sync/scripts/generate_sync_candidates.py`, `.template-sync/scripts/validate_marker.py`, and the template-sync schemas, run the read-only preflight mode before finalizing `_TODO-repo-init.md` or policy-dependent files:
 
 ```bash
