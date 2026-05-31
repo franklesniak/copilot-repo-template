@@ -272,7 +272,6 @@ def retained_support_file_failures(repo_root: Path, included_modules: set[str]) 
     required_paths: list[str] = []
     if "template-sync-support" in included_modules:
         required_paths.extend(REQUIRED_TEMPLATE_SYNC_SUPPORT_FILES)
-    if "template-sync-support" in included_modules:
         required_paths.extend(REQUIRED_TEMPLATE_SYNC_SCHEMA_FILES)
 
     failures: list[str] = []

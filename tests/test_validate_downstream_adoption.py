@@ -97,6 +97,20 @@ def _run_validator(repo_root: Path, *extra_args: str) -> subprocess.CompletedPro
     )
 
 
+def _section_modules(stdout: str, header: str) -> list[str]:
+    """Return the ``- entry`` items printed under a named report section."""
+    modules: list[str] = []
+    in_section = False
+    for raw_line in stdout.splitlines():
+        line = raw_line.strip()
+        if line.endswith(":") and not line.startswith("- "):
+            in_section = line == f"{header}:"
+            continue
+        if in_section and line.startswith("- "):
+            modules.append(line[len("- ") :])
+    return modules
+
+
 def _manifest() -> dict[str, Any]:
     """Build a schema-valid manifest fixture with retained and excluded modules."""
     return {
@@ -319,8 +333,11 @@ def test_template_sync_support_without_schema_keeps_runtime_schemas(tmp_path: Pa
 
     assert result.returncode == 0, result.stderr
     assert "Downstream adoption validation passed." in result.stdout
-    assert "template-sync-support" in result.stdout
-    assert "schema" in result.stdout
+    retained = _section_modules(result.stdout, "Retained modules")
+    excluded = _section_modules(result.stdout, "Excluded modules")
+    assert "template-sync-support" in retained
+    assert "schema" in excluded
+    assert "schema" not in retained
 
 
 def test_excluded_inline_block_leftover_is_reported(tmp_path: Path) -> None:
