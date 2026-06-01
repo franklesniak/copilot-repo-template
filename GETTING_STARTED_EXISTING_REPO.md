@@ -314,6 +314,10 @@ These settings may be completed through the GitHub UI even when `gh` is unavaila
 - [ ] Protected instruction files identified before editing: `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, `.cursor/rules/*.mdc`, `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`.
 - [ ] Protected-file edits authorized by maintainer: `[none, path-scoped authorization, or deferred]`
 - [ ] Protected-file removals authorized by maintainer: `[none, path-scoped authorization, or deferred]`
+- [ ] Protected-file authorization bundle selected: `[full selected-agent bundle, Copilot + Codex only, Copilot + Claude Code only, defer all protected files, or path-by-path tailored selection]`
+- [ ] `.github/instructions/*.instructions.md` scope expanded to concrete retained-module instruction files: `[list concrete paths]`
+- [ ] Copy-ready maintainer authorization wording captured for each authorized protected edit or removal and mapped to marker fields (`authorization_basis`, `authorized_scope`, and `tailored_authorization_basis` for `tailored` records).
+- [ ] Unselected protected agent files recorded separately as `[SKIP, REMOVE-LOCAL, DEFER, PROTECTED-REVIEW, or left untouched with rationale]`; smaller bundle selection alone does not authorize deletion.
 - [ ] `.template-sync/marker.yml` protected-file decisions updated if template sync support is retained.
 
 ## Unresolved Settings
@@ -1054,6 +1058,60 @@ The template treats `.github/copilot-instructions.md`, `.github/instructions/**`
 9. Remove references to deleted tools, workflows, hooks, and validation commands.
 10. Bump `Last Updated` and `Version` metadata where those fields exist.
 11. Avoid ephemeral implementation-stage language in durable governance docs.
+
+Use this copy-ready checklist for step 4 before creating marker records. Maintainer wording MAY use globs for readability, but implementation MUST expand every glob to concrete protected paths before editing, removing, skipping, deferring, or sending files through protected review. Do not write a glob such as `.github/instructions/*.instructions.md` into `template_sync.protected_file_decisions[].path`; expand it to the concrete instruction files for retained modules. For example, include `.github/instructions/docs.instructions.md` only when the Markdown module is retained, `.github/instructions/yaml.instructions.md` only when the YAML module is retained, and so on. The bundle scope is the retained-module instruction files, not every optional language instruction file in the template.
+
+`minimal-preservation` is the default protected-file adoption mode, but it still requires explicit maintainer authorization before any protected path is edited. Under `minimal-preservation`, the authorized edit scope is limited to placeholder substitution, removal of unadopted-module sections, link fixes, and recorded local overrides required by the downstream repository. It does not authorize broad rewriting, new policy, or structural redesign.
+
+1. **Full selected-agent bundle (`minimal-preservation`)**
+
+   Use this bundle when the repository is retaining the full selected protected agent set. Copy-ready maintainer wording:
+
+   ```text
+   I authorize minimal-preservation TAKE or MERGE edits for this protected instruction-file bundle: .github/copilot-instructions.md; the concrete .github/instructions/*.instructions.md files for retained modules; .cursor/rules/repository-instructions.mdc; .hermes.md; AGENTS.md; CLAUDE.md; and GEMINI.md. Authorized scope: substitute repository placeholders, remove unadopted-module sections, fix links affected by retained stack selection, and record required local overrides; no broad rewriting is authorized.
+   ```
+
+   Record one concrete `template_sync.protected_file_decisions` entry per retained path with `decision: TAKE` or `decision: MERGE`, `adoption_mode: minimal-preservation`, the copied sentence as `authorization_basis`, and the "Authorized scope" sentence as `authorized_scope`.
+
+2. **Copilot + Codex only (`minimal-preservation`)**
+
+   Use this bundle when the repository is retaining GitHub Copilot guidance and Codex guidance but not other protected agent entry points. Copy-ready maintainer wording:
+
+   ```text
+   I authorize minimal-preservation TAKE or MERGE edits for this Copilot + Codex protected instruction-file bundle: .github/copilot-instructions.md; the concrete .github/instructions/*.instructions.md files for retained modules; and AGENTS.md. Authorized scope: substitute repository placeholders, remove unadopted-module sections, fix links affected by retained stack selection, preserve required Codex platform protocol, and record required local overrides; no broad rewriting is authorized.
+   ```
+
+   Record one concrete `template_sync.protected_file_decisions` entry per retained path with the same `TAKE` or `MERGE` fields described above. Excluding `.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `CLAUDE.md`, or `GEMINI.md` from this smaller bundle does not authorize deletion. Removal requires a separate `REMOVE-LOCAL` record with removal-specific maintainer wording, `authorized_scope`, and `reason`; deferral or protected review requires a separate `DEFER` or `PROTECTED-REVIEW` record with `reason`; a deliberate no-action decision requires a separate `SKIP` record with `reason`.
+
+3. **Copilot + Claude Code only (`minimal-preservation`)**
+
+   Use this bundle when the repository is retaining GitHub Copilot guidance and Claude Code guidance but not other protected agent entry points. Copy-ready maintainer wording:
+
+   ```text
+   I authorize minimal-preservation TAKE or MERGE edits for this Copilot + Claude Code protected instruction-file bundle: .github/copilot-instructions.md; the concrete .github/instructions/*.instructions.md files for retained modules; and CLAUDE.md. Authorized scope: substitute repository placeholders, remove unadopted-module sections, fix links affected by retained stack selection, preserve required Claude Code platform protocol, and record required local overrides; no broad rewriting is authorized.
+   ```
+
+   Record one concrete `template_sync.protected_file_decisions` entry per retained path with the same `TAKE` or `MERGE` fields described above. Excluding `.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `AGENTS.md`, or `GEMINI.md` from this smaller bundle does not authorize deletion. Removal requires a separate `REMOVE-LOCAL` record with removal-specific maintainer wording, `authorized_scope`, and `reason`; deferral or protected review requires a separate `DEFER` or `PROTECTED-REVIEW` record with `reason`; a deliberate no-action decision requires a separate `SKIP` record with `reason`.
+
+4. **Defer all protected files**
+
+   Use this bundle when the maintainer wants the non-protected adoption work to proceed but wants protected files reviewed later. Copy-ready maintainer wording:
+
+   ```text
+   I do not authorize protected instruction-file edits or removals for this adoption round. Defer all protected-file candidates for explicit later review.
+   ```
+
+   Do not create `TAKE`, `MERGE`, or `REMOVE-LOCAL` records from this wording. If template sync support is retained, record each concrete protected candidate with `decision: DEFER` or `decision: PROTECTED-REVIEW` and a substantive `reason` that cites the maintainer deferral.
+
+5. **Path-by-path tailored selection**
+
+   Use this bundle when the maintainer wants broader rewriting for specific protected files. Copy-ready maintainer wording:
+
+   ```text
+   For [concrete protected path], I authorize [TAKE or MERGE] in tailored adoption mode. Authorization basis: [maintainer-approved reason this file may be edited]. Authorized scope: [exact permitted rewrite, bounded to this file]. Tailored authorization basis: [maintainer-approved reason minimal-preservation is insufficient]. This authorization applies only to [concrete protected path] and no other protected file.
+   ```
+
+   Record one concrete marker entry per path with `adoption_mode: tailored`, `authorization_basis`, `authorized_scope`, and `tailored_authorization_basis`. Any path not named by a tailored authorization remains outside that authorization and needs its own `TAKE`, `MERGE`, `SKIP`, `REMOVE-LOCAL`, `DEFER`, or `PROTECTED-REVIEW` record before action.
 
 ### Main Instructions File
 
