@@ -3,10 +3,14 @@
 # Purpose: Automatically monitor and create PRs for dependency updates
 #
 # This configuration monitors:
-#   - npm (package.json) - Node.js dependencies for dev tooling
+#   - npm (package.json) - Markdown tooling dependencies, not a Node app
 #   - pip (pyproject.toml) - Python dependencies
 #   - GitHub Actions (workflows) - Action version updates
 #   - pre-commit (.pre-commit-config.yaml) - Pre-commit hook updates
+#
+# Tailoring note: this file is owned by the github-platform module, but each
+# ecosystem should be kept only when its scanned manifest/config/workflow
+# surface is retained. See GETTING_STARTED_EXISTING_REPO.md#dependabot.
 #
 # Update schedule: Weekly (reduces PR noise while maintaining currency)
 #
@@ -38,7 +42,7 @@
 
 version: 2
 updates:
-  # npm dependencies (package.json)
+  # npm dependencies for Markdown tooling (package.json)
   - package-ecosystem: "npm"
     directory: "/"
     schedule:

@@ -687,36 +687,60 @@ The CODEOWNERS file automatically assigns reviewers to pull requests based on fi
 
 ### Dependabot
 
-Dependabot automatically creates pull requests to update your dependencies.
+Dependabot automatically creates pull requests to update retained dependency and automation surfaces.
 
 **Location:** `.github/dependabot.yml`
+
+`.github/dependabot.yml` itself is owned by the `github-platform` module in
+[`.template-sync/manifest.yml`](.template-sync/manifest.yml). The ecosystem
+entries inside it scan files owned by other modules. Use the manifest as the
+source of truth for file/module ownership, then keep each ecosystem only when
+the scanned manifest, lock file, configuration file, or workflow surface remains
+in your adopted repository. Remove any ecosystem whose scanned surface was not
+retained.
+
+The [Stack Selection Cleanup Checklist](#stack-selection-cleanup-checklist)
+calls out stack-level cleanup for the `pip` ecosystem and any downstream
+Terraform ecosystem. Use this matrix for the per-ecosystem keep/remove decision:
+
+| Dependabot ecosystem | Scanned file or surface | Target surface module | Keep by default |
+| --- | --- | --- | --- |
+| `npm` | `package.json` | `markdown` (Markdown tooling, not a Node application) | When the `markdown` module and `package.json` are retained |
+| `pip` | `pyproject.toml` or another Python dependency manifest | `python` | Only when the `python` module or a Python dependency manifest is retained |
+| `github-actions` | `.github/workflows/**` | `github-actions` | When any workflows are retained |
+| `pre-commit` | `.pre-commit-config.yaml` | `baseline` | When `.pre-commit-config.yaml` is retained |
+| `terraform` | Terraform sources | `terraform` | Only when the `terraform` module is retained and a Terraform Dependabot ecosystem is added downstream; this template does not ship one by default |
 
 **Steps:**
 
 1. **If you don't have a dependabot.yml file:**
    - Copy `.github/dependabot.yml` from the template
-   - Remove ecosystems you don't use:
-     - Remove the `npm` section if you don't use Node.js
-     - Remove the `pip` section if you don't use Python
-     - Keep the `github-actions` section (recommended for all repositories)
+   - Remove ecosystem entries for scanned surfaces you did not retain
+   - Keep the template's grouping strategy for any ecosystem you retain unless
+     your repository already has a different update grouping policy
 
 2. **If you already have a dependabot.yml file:**
    - Review the template's grouping strategy (groups minor/patch updates)
    - Consider adopting the commit message prefix convention (`chore(deps)`)
-   - Merge any ecosystems you want to add
+   - Merge only the ecosystem entries whose scanned surfaces you retained
 
-**Example: Dependabot for a Python-only project:**
+**Example: recommended tailored config for a non-Python repository that retains
+Markdown tooling, GitHub Actions workflows, and pre-commit:**
+
+This example removes `pip` because no Python dependency manifest is retained,
+keeps `npm` for Markdown tooling, and keeps `pre-commit` because
+`.pre-commit-config.yaml` remains present.
 
 ```yaml
 version: 2
 updates:
-  # Python dependencies (pyproject.toml)
-  - package-ecosystem: "pip"
+  # Markdown tooling dependencies (package.json)
+  - package-ecosystem: "npm"
     directory: "/"
     schedule:
       interval: "weekly"
     groups:
-      pip-minor-patch:
+      npm-minor-patch:
         patterns:
           - "*"
         update-types:
@@ -733,6 +757,22 @@ updates:
       interval: "weekly"
     groups:
       actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    commit-message:
+      prefix: "chore(deps)"
+    open-pull-requests-limit: 10
+
+  # Pre-commit hooks (.pre-commit-config.yaml)
+  - package-ecosystem: "pre-commit"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      pre-commit-minor-patch:
         patterns:
           - "*"
         update-types:
