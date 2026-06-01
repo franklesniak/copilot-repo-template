@@ -667,7 +667,7 @@ Template adoption is complete. Baseline validation is in place, so this issue co
 - Updated call sites preserve inputs, outputs, errors, logging, and exit codes.
 - Tests cover the shared helper and demonstrate that at least one updated call site still follows existing behavior.
 - The pull request documents any duplicate code intentionally left separate because its behavior differs.
-- Any touched file with `Last Updated` or `**Version:**` metadata has that metadata synchronized.
+- Any touched file with `Last Updated` or `**Version:**` metadata has `Last Updated` bumped and any `**Version:**` line synchronized.
 
 ## Validation
 
