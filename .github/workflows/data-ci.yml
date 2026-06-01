@@ -17,17 +17,21 @@
 # template-sync: begin schema-only
 #   - validate-example-config-valid-examples
 #                         — JSON Schema validation for valid example-config
-#                           fixtures under `schemas/examples/`.
-#   - validate-template-sync-marker-valid-examples
-#                         — JSON Schema validation for valid template-sync
-#                           marker fixtures under `schemas/examples/`.
-#   - validate-template-sync-instruction-contracts-valid-examples
-#                         — JSON Schema validation for valid template-sync
-#                           instruction-contract fixtures under
-#                           `schemas/examples/`.
+#                           fixtures under
+#                           `schemas/examples/example-config/`.
 #   - validate-example-config-schema
 #                         — JSON Schema metaschema validation for the
 #                           example-config schema.
+# template-sync: end schema-only
+# template-sync: begin template-sync-support-only
+#   - validate-template-sync-marker-valid-examples
+#                         — JSON Schema validation for valid template-sync
+#                           marker fixtures under
+#                           `schemas/examples/template-sync-marker/`.
+#   - validate-template-sync-instruction-contracts-valid-examples
+#                         — JSON Schema validation for valid template-sync
+#                           instruction-contract fixtures under
+#                           `schemas/examples/template-sync-instruction-contracts/`.
 #   - validate-template-sync-manifest-schema
 #                         — JSON Schema metaschema validation for the
 #                           template sync manifest schema.
@@ -37,8 +41,6 @@
 #   - validate-template-sync-instruction-contracts-schema
 #                         — JSON Schema metaschema validation for the
 #                           template sync instruction contracts schema.
-# template-sync: end schema-only
-# template-sync: begin schema-template-sync-support-only
 #   - validate-template-sync-manifest
 #                         — JSON Schema validation for
 #                           `.template-sync/manifest.yml`.
@@ -51,7 +53,10 @@
 #   - validate-instruction-contracts-upstream
 #                         — Required-anchor validation for the upstream
 #                           template's protected instruction files.
-# template-sync: end schema-template-sync-support-only
+#   - validate-instruction-contracts-downstream
+#                         — Required-anchor validation for downstream retained
+#                           protected instruction files.
+# template-sync: end template-sync-support-only
 # template-sync: begin github-platform-only
 #   - validate-dependabot-config
 #                         — JSON Schema validation for `.github/dependabot.yml`
@@ -161,14 +166,16 @@ jobs:
       - name: Run validate-example-config-valid-examples
         run: pre-commit run validate-example-config-valid-examples --all-files
 
+      - name: Run validate-example-config-schema
+        run: pre-commit run validate-example-config-schema --all-files
+      # template-sync: end schema-only
+
+      # template-sync: begin template-sync-support-only
       - name: Run validate-template-sync-marker-valid-examples
         run: pre-commit run validate-template-sync-marker-valid-examples --all-files
 
       - name: Run validate-template-sync-instruction-contracts-valid-examples
         run: pre-commit run validate-template-sync-instruction-contracts-valid-examples --all-files
-
-      - name: Run validate-example-config-schema
-        run: pre-commit run validate-example-config-schema --all-files
 
       - name: Run validate-template-sync-manifest-schema
         run: pre-commit run validate-template-sync-manifest-schema --all-files
@@ -178,9 +185,7 @@ jobs:
 
       - name: Run validate-template-sync-instruction-contracts-schema
         run: pre-commit run validate-template-sync-instruction-contracts-schema --all-files
-      # template-sync: end schema-only
 
-      # template-sync: begin schema-template-sync-support-only
       - name: Run validate-template-sync-manifest
         run: pre-commit run validate-template-sync-manifest --all-files
 
@@ -195,7 +200,7 @@ jobs:
 
       - name: Run validate-instruction-contracts-downstream
         run: pre-commit run validate-instruction-contracts-downstream --all-files
-      # template-sync: end schema-template-sync-support-only
+      # template-sync: end template-sync-support-only
 
       # template-sync: begin github-platform-only
       - name: Run validate-dependabot-config

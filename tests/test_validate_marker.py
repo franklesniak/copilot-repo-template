@@ -102,7 +102,7 @@ def _manifest(version: int = 2) -> dict[str, Any]:
             {
                 "pattern": ".github/workflows/data-ci.yml",
                 "requires_all": ["github-actions"],
-                "requires_any": ["yaml", "schema"],
+                "requires_any": ["yaml", "schema", "template-sync-support"],
             }
         )
         filtering["requires_any_semantics"] = "OR"

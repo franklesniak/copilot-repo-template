@@ -129,7 +129,7 @@ def _manifest(
             {
                 "pattern": ".github/workflows/data-ci.yml",
                 "requires_all": ["github-actions"],
-                "requires_any": ["json", "yaml", "schema"],
+                "requires_any": ["json", "yaml", "schema", "template-sync-support"],
             }
         )
         filtering["requires_any_semantics"] = "OR"
@@ -262,7 +262,10 @@ def test_normal_mixed_change_set_reports_marker_and_manifest_decisions(tmp_path:
     assert result.returncode == 0, result.stderr
     assert f"git diff --name-status -M {base_sha}..{head_sha} --" in result.stdout
     assert "| README.md | Modified | requires all: baseline | Retained |" in result.stdout
-    assert "requires all: github-actions; requires any: json, schema, yaml" in result.stdout
+    assert (
+        "requires all: github-actions; requires any: json, schema, template-sync-support, yaml"
+        in result.stdout
+    )
     assert "Cross-module manifest relation matched." in result.stdout
     assert (
         "| templates/python/app.py | Modified | requires all: python | Excluded |" in result.stdout

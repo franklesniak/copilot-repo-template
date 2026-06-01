@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260530.1
+**Version:** 1.1.20260531.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-30
+- **Last Updated:** 2026-05-31
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the read-only first-adoption preflight/questionnaire mode, first-adoption structural convention assessment, first-adoption working-tree validation, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the sync candidate table generator, post-adoption issue drafting, and the generated adoption ledger review artifact. Does not define an automated sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -667,7 +667,7 @@ Manifest version 2 rows MAY also use `requires_any`: the path is included only w
 | `.github/workflows/python-ci.yml` | `python`, `github-actions` |
 | `.github/workflows/precommit-ci.yml` | `baseline`, `github-actions` |
 | `.github/workflows/terraform-ci.yml` | `terraform`, `github-actions` |
-| `.github/workflows/data-ci.yml` | `github-actions`, plus one of `json`, `yaml`, `schema` |
+| `.github/workflows/data-ci.yml` | `github-actions`, plus one of `json`, `yaml`, `schema`, `template-sync-support` |
 | `.github/workflows/check-placeholders.yml` | `baseline`, `github-actions` |
 | `.github/scripts/replace-template-placeholders.py` | `baseline` |
 | `.github/workflows/auto-fix-precommit.yml` | `baseline`, `github-actions` |
@@ -680,11 +680,13 @@ Manifest version 2 rows MAY also use `requires_any`: the path is included only w
 | `templates/powershell/**`, `tests/PowerShell/**`, `.github/linting/PSScriptAnalyzerSettings.psd1`, `src/tools/*.ps1` | `powershell` |
 | `templates/json/**` | `json` |
 | `templates/yaml/**` | `yaml` |
+| `schemas/template-sync-manifest.schema.json`, `schemas/template-sync-marker.schema.json`, `schemas/template-sync-instruction-contracts.schema.json` | `template-sync-support` |
+| `schemas/examples/template-sync-marker/**`, `schemas/examples/template-sync-instruction-contracts/**` | `template-sync-support` |
 | `schemas/**` | `schema` |
-| `tests/test_schema_examples.py` | `schema` |
-| `tests/test_generate_sync_candidates.py` | `template-sync-support`, `schema` |
+| `tests/test_schema_examples.py` | one of `schema`, `template-sync-support` |
+| `tests/test_generate_sync_candidates.py` | `template-sync-support` |
 | `tests/test_run_first_adoption_checks.*` | `template-sync-support` |
-| `tests/test_template_manifest.py`, `tests/test_validate_marker.py`, `tests/test_validate_downstream_adoption.py`, `tests/test_validate_instruction_contracts.py` | `template-sync-support`, `schema` |
+| `tests/test_template_manifest.py`, `tests/test_validate_marker.py`, `tests/test_validate_downstream_adoption.py`, `tests/test_validate_instruction_contracts.py` | `template-sync-support` |
 | `.github/scripts/terraform_hooks.py`, `tests/test_terraform_hooks.py` | `terraform` |
 | `templates/python/**`, `pyproject.toml`, `src/copilot_repo_template/**`, `tests/*.py`, `tests/**/*.py` | `python` |
 | `templates/terraform/**`, `docs/terraform/**`, `modules/**`, `tests/**/*.tftest.hcl`, `.tflint.hcl`, `*.tf`, `*.tfvars`, `*.tftpl`, `*.tfbackend` | `terraform` |
@@ -738,9 +740,9 @@ The current `*-only` marker forms are:
 # ...
 # template-sync: end schema-only
 
-# template-sync: begin schema-template-sync-support-only
+# template-sync: begin template-sync-support-only
 # ...
-# template-sync: end schema-template-sync-support-only
+# template-sync: end template-sync-support-only
 
 # template-sync: begin github-platform-only
 # ...
@@ -785,7 +787,7 @@ These inline blocks let a downstream repository keep the containing baseline or 
 2. If any module named by an inline-block marker is absent from `included_modules`, remove each complete block for that marker, including the begin and end marker lines, before accepting or merging the containing file.
 3. Treat unmatched, nested, or unknown inline-block markers as an explicit sync question for the owner; do not silently keep or drop the affected block.
 
-A marker naming multiple modules, for example `schema-template-sync-support-only`, is retained only when every module named in the marker is present in `included_modules`, and is stripped when any one of them is absent. A reference-only marker, for example `python-reference-only`, follows the same rule and is stripped when the corresponding module is absent.
+If a marker names multiple modules, it is retained only when every module named in the marker is present in `included_modules`, and is stripped when any one of them is absent. A reference-only marker, for example `python-reference-only`, follows the same rule and is stripped when the corresponding module is absent.
 
 The current `markdown-reference-only`, `powershell-reference-only`, `python-reference-only`, `terraform-reference-only`, `json-reference-only`, `yaml-reference-only`, and `schema-reference-only` inline blocks live in:
 
@@ -807,13 +809,13 @@ The current `yaml-only` inline blocks live in:
 
 The current `schema-only` inline blocks live in:
 
-- `.pre-commit-config.yaml` for schema example validators and `check-metaschema` schema self-validation hooks.
-- `.github/workflows/data-ci.yml` for schema validation hook-list documentation and the dedicated schema validation alias steps.
+- `.pre-commit-config.yaml` for worked-example schema validators and the `check-metaschema` schema self-validation hook.
+- `.github/workflows/data-ci.yml` for worked-example schema validation hook-list documentation and dedicated schema validation alias steps.
 
-The current `schema-template-sync-support-only` inline blocks live in:
+The current `template-sync-support-only` inline blocks live in:
 
-- `.pre-commit-config.yaml` for the `validate-template-sync-manifest`, `validate-template-sync-marker`, `validate-template-sync-instruction-contracts`, and `validate-instruction-contracts-upstream` hooks.
-- `.github/workflows/data-ci.yml` for template sync validation hook-list documentation and the dedicated template sync validation alias steps.
+- `.pre-commit-config.yaml` for template sync schema example validators, runtime schema self-validation hooks, the `validate-template-sync-manifest`, `validate-template-sync-marker`, `validate-template-sync-instruction-contracts`, `validate-instruction-contracts-upstream`, and `validate-instruction-contracts-downstream` hooks.
+- `.github/workflows/data-ci.yml` for template sync schema example validation, runtime schema self-validation, live template sync validation hook-list documentation, and the dedicated template sync validation alias steps.
 
 The current `github-platform-only` inline blocks live in:
 
@@ -832,9 +834,9 @@ After stripping `markdown-only` blocks, a downstream repository that excludes `m
 
 After stripping `yaml-only` blocks, a downstream repository that excludes `yaml` should be able to run `pre-commit run --all-files` and the retained data-file workflow without retaining `.yamllint.yml` or invoking a missing `yamllint` hook.
 
-After stripping `schema-only` blocks, a downstream repository that excludes `schema` should be able to run `pre-commit run --all-files` and the retained data-file workflow without retaining schema example validators or `check-metaschema` hooks.
+After stripping `schema-only` blocks, a downstream repository that excludes `schema` should be able to run `pre-commit run --all-files` and the retained data-file workflow without retaining worked-example schema validators or the worked-example `check-metaschema` hook.
 
-After stripping `schema-template-sync-support-only` blocks, a downstream repository that excludes either `schema` or `template-sync-support` should be able to run `pre-commit run --all-files` and the retained data-file workflow without invoking template sync manifest, marker, or instruction-contract validators.
+After stripping `template-sync-support-only` blocks, a downstream repository that excludes `template-sync-support` should be able to run `pre-commit run --all-files` and the retained data-file workflow without invoking template sync schema example validators, runtime schema self-validation hooks, manifest validators, marker validators, or instruction-contract validators.
 
 After stripping `github-platform-only` blocks, a downstream repository that excludes `github-platform` should be able to run `pre-commit run --all-files` and the retained data-file workflow without retaining Dependabot validation hooks or invoking a missing `validate-dependabot-config` hook.
 
@@ -1196,12 +1198,12 @@ Before module-specific validators, verify structural consistency for retained mo
 | `github-actions` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run actionlint --all-files` |
 | `github-templates` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `npm run lint:md`, `npm run lint:md:links`, and issue or PR template rendering review |
 | `template-onboarding` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, and walkthrough review for kept onboarding paths |
-| `template-sync-support` | `python .template-sync/scripts/run_first_adoption_checks.py` before the first adoption commit when validating copied files that may still be untracked, `python .template-sync/scripts/validate_downstream_adoption.py --require-marker` after marker decisions and retained files are current, `python .template-sync/scripts/validate_marker.py --require-marker` or `python .template-sync/scripts/validate_instruction_contracts.py --mode downstream --require-marker` for narrow debugging, `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run validate-template-sync-manifest --all-files`, `pre-commit run validate-template-sync-marker --all-files`, `pre-commit run validate-template-sync-instruction-contracts --all-files`, and `pre-commit run validate-instruction-contracts-upstream --all-files` when the schema-template-sync-support block is kept, plus a dry-run review of the sync procedure examples |
+| `template-sync-support` | `python .template-sync/scripts/run_first_adoption_checks.py` before the first adoption commit when validating copied files that may still be untracked, `python .template-sync/scripts/validate_downstream_adoption.py --require-marker` after marker decisions and retained files are current, `python .template-sync/scripts/validate_marker.py --require-marker` or `python .template-sync/scripts/validate_instruction_contracts.py --mode downstream --require-marker` for narrow debugging, `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run validate-template-sync-marker-valid-examples --all-files`, `pre-commit run validate-template-sync-instruction-contracts-valid-examples --all-files`, `pre-commit run validate-template-sync-manifest-schema --all-files`, `pre-commit run validate-template-sync-marker-schema --all-files`, `pre-commit run validate-template-sync-instruction-contracts-schema --all-files`, `pre-commit run validate-template-sync-manifest --all-files`, `pre-commit run validate-template-sync-marker --all-files`, `pre-commit run validate-template-sync-instruction-contracts --all-files`, `pre-commit run validate-instruction-contracts-upstream --all-files`, `pre-commit run validate-instruction-contracts-downstream --all-files`, and `pytest tests/test_schema_examples.py -v` after template-sync schema example changes, plus a dry-run review of the sync procedure examples |
 | `markdown` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-json --all-files` |
 | `powershell` | `Invoke-Pester -Path tests/ -Output Detailed` |
 | `json` | `pre-commit run check-json --all-files` |
 | `yaml` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files` |
-| `schema` | `pre-commit run validate-example-config-valid-examples --all-files`, `pre-commit run validate-template-sync-marker-valid-examples --all-files`, `pre-commit run validate-template-sync-instruction-contracts-valid-examples --all-files`, `pre-commit run validate-example-config-schema --all-files`, `pre-commit run validate-template-sync-manifest-schema --all-files`, `pre-commit run validate-template-sync-marker-schema --all-files`, `pre-commit run validate-template-sync-instruction-contracts-schema --all-files`, and `pytest tests/test_schema_examples.py -v` after schema or schema-example changes |
+| `schema` | `pre-commit run validate-example-config-valid-examples --all-files`, `pre-commit run validate-example-config-schema --all-files`, and `pytest tests/test_schema_examples.py -v` after worked-example schema or schema-example changes |
 | `python` | `pytest tests/ -v --cov --cov-report=term-missing`, `pre-commit run check-toml --all-files` |
 | `terraform` | `terraform fmt -check -recursive`, `tflint --recursive`, `terraform test -verbose`, `pytest tests/test_terraform_hooks.py -v` after terraform-hook script changes |
 

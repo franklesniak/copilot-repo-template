@@ -108,7 +108,6 @@ def _section_entries(output: str, heading: str) -> set[str]:
             continue
         if in_section and line.startswith("  - "):
             entries.add(line.removeprefix("  - ").strip())
-
     return entries
 
 
@@ -142,10 +141,22 @@ def _manifest() -> dict[str, Any]:
                 {
                     "pattern": ".github/workflows/data-ci.yml",
                     "requires_all": ["github-actions"],
-                    "requires_any": ["yaml", "schema"],
+                    "requires_any": ["yaml", "schema", "template-sync-support"],
                 },
                 {"pattern": ".github/ISSUE_TEMPLATE/**", "requires_all": ["github-templates"]},
                 {"pattern": ".yamllint.yml", "requires_all": ["yaml"]},
+                {
+                    "pattern": "schemas/template-sync-manifest.schema.json",
+                    "requires_all": ["template-sync-support"],
+                },
+                {
+                    "pattern": "schemas/template-sync-marker.schema.json",
+                    "requires_all": ["template-sync-support"],
+                },
+                {
+                    "pattern": "schemas/template-sync-instruction-contracts.schema.json",
+                    "requires_all": ["template-sync-support"],
+                },
                 {"pattern": "schemas/**", "requires_all": ["schema"]},
                 {"pattern": "templates/powershell/**", "requires_all": ["powershell"]},
                 {"pattern": "templates/json/**", "requires_all": ["json"]},
@@ -308,7 +319,7 @@ def test_retained_template_sync_helper_scripts_are_required(tmp_path: Path) -> N
 
 
 def test_retained_template_sync_schema_contracts_are_required(tmp_path: Path) -> None:
-    """Retained template-sync support plus schema requires schema contracts."""
+    """Retained template-sync support requires its runtime schema contracts."""
     _write_common_downstream_repo(tmp_path)
     (tmp_path / "schemas" / "template-sync-instruction-contracts.schema.json").unlink()
 
@@ -317,6 +328,22 @@ def test_retained_template_sync_schema_contracts_are_required(tmp_path: Path) ->
     assert result.returncode == 1
     assert "Retained template-sync support file is missing" in result.stdout
     assert "schemas/template-sync-instruction-contracts.schema.json" in result.stdout
+
+
+def test_template_sync_support_without_schema_keeps_runtime_schemas(tmp_path: Path) -> None:
+    """Template sync support does not require the general schema module."""
+    retained_modules = [module for module in PARTIAL_MODULES if module != "schema"]
+    _write_common_downstream_repo(tmp_path, marker=_marker(retained_modules))
+
+    result = _run_validator(tmp_path, "--require-marker")
+
+    assert result.returncode == 0, result.stderr
+    assert "Downstream adoption validation passed." in result.stdout
+    retained = _section_entries(result.stdout, "Retained modules")
+    excluded = _section_entries(result.stdout, "Excluded modules")
+    assert "template-sync-support" in retained
+    assert "schema" in excluded
+    assert "schema" not in retained
 
 
 def test_excluded_inline_block_leftover_is_reported(tmp_path: Path) -> None:
