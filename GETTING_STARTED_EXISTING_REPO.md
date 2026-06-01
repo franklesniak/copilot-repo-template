@@ -447,7 +447,7 @@ Template adoption is complete. This issue handles one deferred structural follow
 
 - [Observable result 1]
 - [Observable result 2]
-- Any touched file with `Last Updated` or `**Version:**` metadata has that metadata synchronized.
+- Any touched file with `Last Updated` or `**Version:**` metadata has `Last Updated` bumped and any `**Version:**` line synchronized.
 
 ## Validation
 
@@ -457,6 +457,228 @@ Template adoption is complete. This issue handles one deferred structural follow
 ## Preservation Notes
 
 - Preserve [runtime behavior, user command, CI behavior, or local policy].
+- If protected instruction files become necessary, stop and obtain explicit maintainer authorization before editing them.
+```
+
+#### Worked Examples
+
+The following examples use the same issue-draft skeleton fields above. Copy the example that matches the deferred follow-up, then edit only the repository-specific details that differ.
+
+##### Rename Default Branch to `main`
+
+```markdown
+## Context
+
+Template adoption is complete. This issue handles the deferred decision to rename this repository's default branch to `main`, if the maintainer confirms that rename is still intended.
+
+## Scope
+
+- Confirm the repository's current default branch from GitHub settings or `git remote show origin` before proposing or making any branch rename.
+- Confirm maintainer intent to rename the default branch to `main` before any GitHub setting, connector, API, or local branch action.
+- Use the default-branch decision item in the [First-Adoption Preflight Checklist](#first-adoption-preflight-checklist) as the coordination checklist, including local clones, open PR bases, branch protection or rulesets, documentation, and CI references.
+- Update repository-local references to the renamed branch after the GitHub default-branch change is maintainer-authorized and complete.
+- Protected instruction files in scope: no. If a branch-name reference in a protected instruction file must change, obtain explicit maintainer authorization before editing it.
+
+## Non-Goals
+
+- Do not rename the default branch before the current branch, maintainer intent, and downstream coordination plan are confirmed.
+- Do not change repository rulesets, branch protections, CI behavior, or required checks except where the branch rename requires a target-branch update.
+- Do not revisit template adoption decisions.
+- Do not change unrelated structure or formatting.
+
+## Acceptance Criteria
+
+- The current default branch and maintainer-approved target branch are recorded in the issue or pull request before any rename occurs.
+- Open PR bases, branch protection or rulesets, CI references, documentation links, and local-clone communication have been reviewed using the First-Adoption Preflight Checklist default-branch item as the source of truth.
+- The GitHub default branch is renamed to `main` only through a maintainer-authorized GitHub UI, connector, or API action.
+- Repository-local references that must follow the rename are updated in the same pull request or explicitly recorded as separate follow-up work.
+- Any touched file with `Last Updated` or `**Version:**` metadata has `Last Updated` bumped and any `**Version:**` line synchronized.
+
+## Validation
+
+- Verify the repository default branch in GitHub settings after the maintainer-authorized change.
+- Verify open pull requests target the intended base branch or have been intentionally retargeted.
+- Run the repository's retained CI, lint, and documentation validation commands affected by the rename.
+- Search the repository for stale references to the previous default branch and document any intentionally retained historical references.
+
+## Preservation Notes
+
+- Preserve existing branch history, open pull request content, release references, and contributor access.
+- Preserve existing ruleset or branch-protection intent while updating only the branch target needed for the rename.
+- If protected instruction files become necessary, stop and obtain explicit maintainer authorization before editing them.
+```
+
+##### Configure Repository Rulesets After CI Exists
+
+```markdown
+## Context
+
+Template adoption is complete. CI now exists in this repository, so this issue handles the deferred setup of repository rulesets for the default branch.
+
+## Scope
+
+- Review the current GitHub rulesets documentation, including [Creating rulesets for a repository](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository), before proposing settings.
+- Inventory the repository's current CI workflow names, required status checks, review expectations, force-push policy, deletion policy, bypass roles, and enforcement mode.
+- Configure or document a repository ruleset for the current default branch only after the maintainer authorizes the GitHub UI, connector, or API action that changes repository settings.
+- Protected instruction files in scope: no. If ruleset policy must be documented in a protected instruction file, obtain explicit maintainer authorization before editing it.
+
+## Non-Goals
+
+- Do not imply that a coding agent may change GitHub settings without maintainer authorization.
+- Do not replace classic branch protection unless the maintainer explicitly chooses that migration path.
+- Do not add new CI jobs solely to satisfy a ruleset.
+- Do not revisit template adoption decisions.
+- Do not change unrelated structure or formatting.
+
+## Acceptance Criteria
+
+- The proposed ruleset targets the current default branch and references the repository's actual CI check names.
+- The ruleset plan identifies required status checks, pull request review requirements, force-push restrictions, deletion restrictions, bypass roles, and enforcement mode.
+- Any GitHub settings change is performed only through a maintainer-authorized GitHub UI, connector, or API action.
+- The issue or pull request links to current GitHub rulesets documentation rather than branch-protection-only guidance.
+- Any touched file with `Last Updated` or `**Version:**` metadata has `Last Updated` bumped and any `**Version:**` line synchronized.
+
+## Validation
+
+- Verify the ruleset appears under **Settings** > **Rules** > **Rulesets** with the intended target branch and enforcement mode.
+- Verify required checks in the ruleset exactly match the current CI check names shown by a pull request or workflow run.
+- Open or inspect a pull request targeting the default branch to confirm the expected ruleset checks are visible.
+
+## Preservation Notes
+
+- Preserve existing collaborator access, bypass expectations, and release workflow unless the maintainer explicitly approves a change.
+- Preserve existing CI workflow behavior; this issue configures repository policy around CI that already exists.
+- If protected instruction files become necessary, stop and obtain explicit maintainer authorization before editing them.
+```
+
+##### Reorganize a Script-Heavy Repository After Adoption
+
+```markdown
+## Context
+
+Template adoption is complete. This issue handles the deferred cleanup of a script-heavy repository whose root-level or mixed-location scripts should be reorganized after baseline validation is stable.
+
+## Scope
+
+- Move repository-owned utility scripts into a consistent `scripts/` or language-specific subdirectory chosen for this repository.
+- Update workflows, package scripts, pre-commit hook entries, documentation commands, and test references that invoke the moved scripts.
+- Keep script names, command-line arguments, outputs, exit codes, and working-directory assumptions compatible unless a breaking change is explicitly documented and approved.
+- Protected instruction files in scope: no. If a protected instruction file references the old script layout, obtain explicit maintainer authorization before editing it.
+
+## Non-Goals
+
+- Do not rewrite script behavior while moving files.
+- Do not introduce a new task runner or major dependency.
+- Do not reorganize application source code unrelated to the scripts.
+- Do not revisit template adoption decisions.
+- Do not change unrelated structure or formatting.
+
+## Acceptance Criteria
+
+- Scripts covered by this issue live in the chosen script directory and no retained workflow or documented command points to the old path.
+- Existing script invocations continue to work through updated paths or intentionally retained compatibility wrappers.
+- CI, pre-commit hooks, package scripts, and developer documentation reference the same script paths.
+- The pull request lists any intentionally retained compatibility wrappers and when they may be removed.
+- Any touched file with `Last Updated` or `**Version:**` metadata has `Last Updated` bumped and any `**Version:**` line synchronized.
+
+## Validation
+
+- Run the repository's retained pre-commit checks that invoke or inspect scripts.
+- Run each moved script's documented command from the repository root.
+- Run the retained CI-equivalent commands for workflows that call the moved scripts.
+- Search the repository for stale references to old script paths.
+
+## Preservation Notes
+
+- Preserve existing command behavior for contributors and CI.
+- Preserve file permissions, line endings, shell targets, and PowerShell compatibility requirements for moved scripts.
+- If protected instruction files become necessary, stop and obtain explicit maintainer authorization before editing them.
+```
+
+##### Add Tests After Adopting CI
+
+```markdown
+## Context
+
+Template adoption is complete. CI now provides a stable validation surface, so this issue adds tests for existing repository behavior without changing that behavior.
+
+## Scope
+
+- Add focused tests for existing scripts, helpers, schemas, or configuration behavior that the repository already relies on.
+- Place tests under the repository's retained test root and use the test framework already adopted by the repository.
+- Wire the test command into existing CI only when the adopted CI does not already run that test root.
+- Protected instruction files in scope: no. If test guidance in a protected instruction file must change, obtain explicit maintainer authorization before editing it.
+
+## Non-Goals
+
+- Do not change runtime behavior to make tests easier to write.
+- Do not add a new test framework when an adopted framework already covers the repository's retained stack.
+- Do not broaden CI beyond the behavior covered by these tests.
+- Do not revisit template adoption decisions.
+- Do not change unrelated structure or formatting.
+
+## Acceptance Criteria
+
+- New tests cover the selected existing behavior with at least one passing case and one failure or edge case where applicable.
+- The tests run from the repository root with the documented retained test command.
+- CI runs the new tests or the issue records the maintainer-approved reason they remain local-only.
+- Test fixtures do not contain secrets, private identifiers, or environment-specific absolute paths.
+- Any touched file with `Last Updated` or `**Version:**` metadata has `Last Updated` bumped and any `**Version:**` line synchronized.
+
+## Validation
+
+- Run the retained test command for the affected stack.
+- Run pre-commit checks that apply to the added tests and fixtures.
+- Confirm CI configuration invokes the same test command when CI integration is in scope.
+
+## Preservation Notes
+
+- Preserve existing behavior; tests should characterize current expectations before any later refactor changes them.
+- Preserve existing test-root and fixture conventions unless the maintainer approves a structural change.
+- If protected instruction files become necessary, stop and obtain explicit maintainer authorization before editing them.
+```
+
+##### Consolidate Duplicated Helper Code After Baseline Validation
+
+```markdown
+## Context
+
+Template adoption is complete. Baseline validation is in place, so this issue consolidates duplicated helper code that was intentionally left alone during adoption.
+
+## Scope
+
+- Identify duplicated helper logic within this repository's scripts, tests, workflows, or small support modules.
+- Extract a shared helper in the repository's existing language and directory conventions.
+- Update each duplicate call site to use the shared helper without changing observable behavior.
+- Add or update tests for the shared helper and at least one representative call site.
+- Protected instruction files in scope: no. If helper usage guidance in a protected instruction file must change, obtain explicit maintainer authorization before editing it.
+
+## Non-Goals
+
+- Do not redesign the surrounding workflow, command-line interface, or module architecture.
+- Do not introduce a new package, build system, or major dependency for the shared helper.
+- Do not consolidate code that has intentionally different behavior.
+- Do not revisit template adoption decisions.
+- Do not change unrelated structure or formatting.
+
+## Acceptance Criteria
+
+- Duplicate helper logic is replaced by one shared implementation in the repository's existing helper location.
+- Updated call sites preserve inputs, outputs, errors, logging, and exit codes.
+- Tests cover the shared helper and demonstrate that at least one updated call site still follows existing behavior.
+- The pull request documents any duplicate code intentionally left separate because its behavior differs.
+- Any touched file with `Last Updated` or `**Version:**` metadata has `Last Updated` bumped and any `**Version:**` line synchronized.
+
+## Validation
+
+- Run the retained test command for the affected helper and call sites.
+- Run pre-commit checks that apply to the changed language and documentation files.
+- Run or inspect the affected scripts, workflow steps, or commands to confirm they call the shared helper.
+
+## Preservation Notes
+
+- Preserve current user-facing commands, CI behavior, validation output, and local policy.
+- Preserve compatibility with the repository's supported shells, runtimes, and operating systems.
 - If protected instruction files become necessary, stop and obtain explicit maintainer authorization before editing them.
 ```
 
