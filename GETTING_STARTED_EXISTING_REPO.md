@@ -314,7 +314,7 @@ These settings may be completed through the GitHub UI even when `gh` is unavaila
 - [ ] Protected instruction files identified before editing: `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, `.cursor/rules/*.mdc`, `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`.
 - [ ] Protected-file edits authorized by maintainer: `[none, path-scoped authorization, or deferred]`
 - [ ] Protected-file removals authorized by maintainer: `[none, path-scoped authorization, or deferred]`
-- [ ] Protected-file authorization bundle selected: `[full selected-agent bundle, Copilot + Codex only, defer all protected files, or path-by-path tailored selection]`
+- [ ] Protected-file authorization bundle selected: `[full selected-agent bundle, Copilot + Codex only, Copilot + Claude Code only, defer all protected files, or path-by-path tailored selection]`
 - [ ] `.github/instructions/*.instructions.md` scope expanded to concrete retained-module instruction files: `[list concrete paths]`
 - [ ] Copy-ready maintainer authorization wording captured for each authorized protected edit or removal and mapped to marker fields (`authorization_basis`, `authorized_scope`, and `tailored_authorization_basis` for `tailored` records).
 - [ ] Unselected protected agent files recorded separately as `[SKIP, REMOVE-LOCAL, DEFER, PROTECTED-REVIEW, or left untouched with rationale]`; smaller bundle selection alone does not authorize deletion.
@@ -1083,7 +1083,17 @@ Use this copy-ready checklist for step 4 before creating marker records. Maintai
 
    Record one concrete `template_sync.protected_file_decisions` entry per retained path with the same `TAKE` or `MERGE` fields described above. Excluding `.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `CLAUDE.md`, or `GEMINI.md` from this smaller bundle does not authorize deletion. Removal requires a separate `REMOVE-LOCAL` record with removal-specific maintainer wording, `authorized_scope`, and `reason`; deferral or protected review requires a separate `DEFER` or `PROTECTED-REVIEW` record with `reason`; a deliberate no-action decision requires a separate `SKIP` record with `reason`.
 
-3. **Defer all protected files**
+3. **Copilot + Claude Code only (`minimal-preservation`)**
+
+   Use this bundle when the repository is retaining GitHub Copilot guidance and Claude Code guidance but not other protected agent entry points. Copy-ready maintainer wording:
+
+   ```text
+   I authorize minimal-preservation TAKE or MERGE edits for this Copilot + Claude Code protected instruction-file bundle: .github/copilot-instructions.md; the concrete .github/instructions/*.instructions.md files for retained modules; and CLAUDE.md. Authorized scope: substitute repository placeholders, remove unadopted-module sections, fix links affected by retained stack selection, preserve required Claude Code platform protocol, and record required local overrides; no broad rewriting is authorized.
+   ```
+
+   Record one concrete `template_sync.protected_file_decisions` entry per retained path with the same `TAKE` or `MERGE` fields described above. Excluding `.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `AGENTS.md`, or `GEMINI.md` from this smaller bundle does not authorize deletion. Removal requires a separate `REMOVE-LOCAL` record with removal-specific maintainer wording, `authorized_scope`, and `reason`; deferral or protected review requires a separate `DEFER` or `PROTECTED-REVIEW` record with `reason`; a deliberate no-action decision requires a separate `SKIP` record with `reason`.
+
+4. **Defer all protected files**
 
    Use this bundle when the maintainer wants the non-protected adoption work to proceed but wants protected files reviewed later. Copy-ready maintainer wording:
 
@@ -1093,7 +1103,7 @@ Use this copy-ready checklist for step 4 before creating marker records. Maintai
 
    Do not create `TAKE`, `MERGE`, or `REMOVE-LOCAL` records from this wording. If template sync support is retained, record each concrete protected candidate with `decision: DEFER` or `decision: PROTECTED-REVIEW` and a substantive `reason` that cites the maintainer deferral.
 
-4. **Path-by-path tailored selection**
+5. **Path-by-path tailored selection**
 
    Use this bundle when the maintainer wants broader rewriting for specific protected files. Copy-ready maintainer wording:
 
