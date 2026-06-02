@@ -587,6 +587,41 @@ def placeholder_requested(args: argparse.Namespace) -> bool:
     return any(getattr(args, destination) is not None for destination in PLACEHOLDER_DESTS)
 
 
+HELPER_FAILURE_OUTPUT_LINE_LIMIT = 20
+
+
+def summarize_helper_failure(
+    *,
+    returncode: int,
+    stdout: str,
+    stderr: str,
+    line_limit: int = HELPER_FAILURE_OUTPUT_LINE_LIMIT,
+) -> str:
+    """Return a bounded, path-safe placeholder-helper failure summary.
+
+    The helper reports findings and ``PlaceholderError`` messages using
+    repository-relative paths and only operates on the temporary staging tree,
+    so a bounded tail of its captured ``stdout``/``stderr`` is safe to surface
+    and lets the operator diagnose the failure without rerunning. Each stream is
+    truncated to its most recent ``line_limit`` lines to keep the message
+    minimal.
+    """
+    message_parts = [f"Placeholder helper failed with exit code {returncode}."]
+    for label, stream in (("stdout", stdout), ("stderr", stderr)):
+        lines = stream.splitlines()
+        if not lines:
+            continue
+        shown = lines[-line_limit:]
+        if len(lines) > len(shown):
+            message_parts.append(
+                f"Helper {label} (showing last {len(shown)} of {len(lines)} lines):"
+            )
+        else:
+            message_parts.append(f"Helper {label}:")
+        message_parts.extend(shown)
+    return "\n".join(message_parts)
+
+
 def run_placeholder_helper(
     *,
     args: argparse.Namespace,
@@ -676,7 +711,13 @@ def run_placeholder_helper(
         if line:
             summary.placeholder_notes.append(f"stderr: {line}")
     if result.returncode != 0:
-        raise MaterializationError("Placeholder helper failed; see placeholder summary output.")
+        raise MaterializationError(
+            summarize_helper_failure(
+                returncode=result.returncode,
+                stdout=result.stdout,
+                stderr=result.stderr,
+            )
+        )
     if not summary.placeholder_related:
         summary.placeholder_notes.append("no approved placeholders were replaced")
 

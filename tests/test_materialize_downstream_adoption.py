@@ -558,3 +558,40 @@ def test_format_cli_error_preserves_domain_error_message() -> None:
     error = materializer.MaterializationError("safe domain message")
 
     assert materializer.format_cli_error(error) == "safe domain message"
+
+
+def test_summarize_helper_failure_includes_exit_code_and_output() -> None:
+    """The failure summary surfaces the exit code and the helper's findings."""
+    summary = materializer.summarize_helper_failure(
+        returncode=1,
+        stdout="Placeholder scan found issues:\n  - README.md:12: forbidden: x (bad)",
+        stderr="ERROR: boom",
+    )
+
+    assert "exit code 1" in summary
+    assert "README.md:12: forbidden: x (bad)" in summary
+    assert "ERROR: boom" in summary
+
+
+def test_summarize_helper_failure_bounds_output_lines() -> None:
+    """Long helper streams are truncated to the most recent lines."""
+    stdout = "\n".join(f"line {index}" for index in range(50))
+
+    summary = materializer.summarize_helper_failure(
+        returncode=2,
+        stdout=stdout,
+        stderr="",
+        line_limit=10,
+    )
+
+    assert "line 49" in summary
+    assert "line 39" not in summary
+    assert "showing last 10 of 50 lines" in summary
+
+
+def test_summarize_helper_failure_handles_empty_output() -> None:
+    """With no captured output, only the exit-code line is returned."""
+    assert (
+        materializer.summarize_helper_failure(returncode=3, stdout="", stderr="")
+        == "Placeholder helper failed with exit code 3."
+    )
