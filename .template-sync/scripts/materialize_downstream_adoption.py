@@ -54,7 +54,6 @@ PLACEHOLDER_HELPER_PATH = ".github/scripts/replace-template-placeholders.py"
 ADOPTION_MODES = ("minimal-preservation", "tailored")
 TEMPLATE_TAKE_DECISION = "TAKE"
 TEMPLATE_SKIP_DECISION = "SKIP"
-RECORDED_UNRESOLVED_DECISIONS = frozenset({"MERGE", "DEFER", "PROTECTED-REVIEW", REMOVAL_DECISION})
 PLACEHOLDER_DESTS = (
     "repository",
     "github_host",
@@ -841,6 +840,12 @@ def reconcile_staged_files(
         )
         staged_bytes = staged_path.read_bytes()
         target_exists = target_path.exists()
+        if target_exists and not target_path.is_file():
+            raise MaterializationError(
+                f"Cannot reconcile {relative_path}: the target path exists but is not a "
+                "regular file (for example a directory or a symlink to one). Resolve the "
+                "conflict in the downstream repository, then rerun."
+            )
         target_bytes = target_path.read_bytes() if target_exists else None
         is_identical = target_bytes == staged_bytes if target_exists else False
         is_protected = is_protected_instruction_path(relative_path)

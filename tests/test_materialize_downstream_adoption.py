@@ -595,3 +595,27 @@ def test_summarize_helper_failure_handles_empty_output() -> None:
         materializer.summarize_helper_failure(returncode=3, stdout="", stderr="")
         == "Placeholder helper failed with exit code 3."
     )
+
+
+def test_non_regular_target_path_is_reported_with_repo_relative_path(tmp_path: Path) -> None:
+    """A directory where a staged file would land aborts with an actionable, path-named error."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(template_root, [{"pattern": "README.md", "requires_all": ["baseline"]}])
+    write_file(template_root / "README.md", "template readme\n")
+    # The downstream repository has a directory where the staged file would land.
+    (target_root / "README.md").mkdir()
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+    )
+
+    assert result.returncode == 1, result.stdout
+    assert "README.md" in result.stderr
+    assert "not a regular file" in result.stderr
