@@ -299,6 +299,32 @@ Use the full upstream test suite (`pre-commit run --all-files` plus the relevant
 
 Omit `--require-marker` only during exploratory adoption work; without the flag, the command exits successfully with a no-marker message when `.template-sync/marker.yml` is absent.
 
+For cleanup planning, generate a read-only excluded-module report:
+
+```bash
+python .template-sync/scripts/report_excluded_module_references.py
+```
+
+The report uses a schema-valid `.template-sync/marker.yml` by default. During pre-marker planning, provide the retained modules explicitly and repeat the flag for each retained module:
+
+```bash
+python .template-sync/scripts/report_excluded_module_references.py --included-module baseline --included-module agent-instructions
+```
+
+Do not combine marker-derived state with `--included-module`; the command rejects ambiguous module sources. Findings are informational and do not make the command fail. The command exits nonzero only for runtime or input failures, such as an invalid manifest, invalid marker, unsafe path, unreadable required file, or unknown explicit module.
+
+Report categories are deterministic so downstream cleanup notes can be compared across runs:
+
+- `required_cleanup`
+- `optional_reference_only_cleanup`
+- `protected_file_authorization_needed`
+- `local_override_recorded`
+- `deferred_decision_recorded`
+- `documented_reference_only_retention`
+- `likely_false_positive_documented_reference`
+
+The deterministic false-positive category is limited to documented references that do not point at local retained files, such as upstream-template blob links or general validation commands that may still apply to retained configuration files. Use the report to identify cleanup scope across manifest-owned paths, retained cross-module files, template-sync inline blocks, validation commands, workflows, pre-commit hooks, Dependabot ecosystems, Markdown links, and protected instruction paths; continue to use `validate_downstream_adoption.py` as the pass/fail validation gate.
+
 #### PowerShell Tests
 
 PowerShell tests use Pester 5.x.

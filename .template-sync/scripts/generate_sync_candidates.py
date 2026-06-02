@@ -2783,13 +2783,22 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 0
 
-        marker_data, manifest_modules, mappings = load_and_validate_inputs(
-            repo_root=repo_root,
-            marker_path=marker_path,
-            manifest_path=manifest_path,
-            marker_schema_path=marker_schema_path,
-            manifest_schema_path=manifest_schema_path,
-        )
+        if args.ledger_only and not marker_path.exists():
+            marker_data, manifest_modules, mappings = load_preflight_inputs(
+                repo_root=repo_root,
+                marker_path=marker_path,
+                manifest_path=manifest_path,
+                marker_schema_path=marker_schema_path,
+                manifest_schema_path=manifest_schema_path,
+            )
+        else:
+            marker_data, manifest_modules, mappings = load_and_validate_inputs(
+                repo_root=repo_root,
+                marker_path=marker_path,
+                manifest_path=manifest_path,
+                marker_schema_path=marker_schema_path,
+                manifest_schema_path=manifest_schema_path,
+            )
         ledger_document = None
         if args.ledger or args.ledger_only or write_ledger_path is not None:
             todo_items = load_todo_items(todo_path, repo_root)
