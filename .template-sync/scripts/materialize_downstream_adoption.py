@@ -29,7 +29,6 @@ from template_sync_materialization_helpers import (  # noqa: E402
     ManifestMapping,
     MarkerDecisionData,
     ProtectedFileDecision,
-    RepositoryPathError,
     TemplateSyncMaterializationError,
     classify_repository_file,
     is_protected_instruction_path,
@@ -1157,10 +1156,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         summary = materialize(args)
     except (
         MaterializationError,
-        RepositoryPathError,
         TemplateSyncMaterializationError,
         OSError,
-        shutil.Error,
     ) as error:
         print(f"ERROR: {format_cli_error(error)}", file=sys.stderr)
         return EXIT_RUNTIME_FAILURE
