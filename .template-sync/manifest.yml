@@ -349,6 +349,9 @@ template_manifest:
     - pattern: 'tests/test_generate_sync_candidates.py'
       requires_all:
         - template-sync-support
+    - pattern: 'tests/test_materialize_downstream_adoption.*'
+      requires_all:
+        - template-sync-support
     - pattern: 'tests/test_run_first_adoption_checks.*'
       requires_all:
         - template-sync-support
