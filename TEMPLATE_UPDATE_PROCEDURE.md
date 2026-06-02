@@ -1,14 +1,14 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260602.0
+**Version:** 1.1.20260602.1
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-06-02
-- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the read-only first-adoption preflight/questionnaire mode, first-adoption structural convention assessment, first-adoption working-tree validation, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the sync candidate table generator, post-adoption issue drafting, and the generated adoption ledger review artifact. Does not define an automated sync tool.
+- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the read-only first-adoption preflight/questionnaire mode, one-shot first-adoption materialization, first-adoption structural convention assessment, first-adoption working-tree validation, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the sync candidate table generator, post-adoption issue drafting, and the generated adoption ledger review artifact. Does not define an automated ongoing upstream sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
 ## Purpose
@@ -16,6 +16,8 @@
 Downstream template updates are a selective review process, not a raw merge. A downstream repository may have removed optional modules, customized project identity, changed workflows, or retained only part of the language/tooling guidance from this template. The goal of this procedure is to review later upstream template changes deterministically, adopt only relevant improvements, and preserve downstream ownership decisions.
 
 Use this procedure when a downstream repository wants to review new changes from `franklesniak/copilot-repo-template` after initial adoption. The procedure is suitable for a repository owner or for a coding agent operating under owner direction.
+
+For the first import into an existing repository, the separate one-shot materialization command can copy retained template-managed files into a target working tree. A non-empty target is expected to surface conflicts for pre-existing files such as `README.md`, `LICENSE`, and `.gitignore`. Treat those as per-path adoption decisions recorded through `local_overrides`, `protected_file_decisions`, or deferred protected candidates, not as runtime/tool failures.
 
 ## Terminology
 
@@ -28,6 +30,7 @@ Use this procedure when a downstream repository wants to review new changes from
 - **Structural convention finding:** A first-adoption observation about repository layout, path conventions, retained workflow or validator roots, template-module assumptions, or modernization opportunities discovered through the structural convention assessment in [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md#structural-convention-assessment).
 - **Required structural alignment:** A path, filename, directory, or command shape that must exist, or must be explicitly remapped, for a selected template module, repository platform feature, validator, or retained instruction contract to work.
 - **Post-adoption issue draft:** A self-contained GitHub Issue description for deferred modernization or cleanup after template adoption is complete. Each draft is scoped to one repository and includes scope, non-goals, acceptance criteria, validation, and preservation notes.
+- **First-adoption materialization command:** The `.template-sync/scripts/materialize_downstream_adoption.py` one-shot helper used during first adoption to stage retained manifest-owned template files, prune inline blocks for excluded modules, optionally run approved placeholder replacement against the staging tree, and reconcile non-conflicting staged files into a target working tree. It is a write-once adoption helper, not an automated ongoing upstream sync tool.
 - **First-adoption working-tree validation runner:** The `.template-sync/scripts/run_first_adoption_checks.py` helper used before the first adoption commit. It collects tracked and untracked non-ignored regular files using `git ls-files --cached --others --exclude-standard`, runs chunked `pre-commit run --files ...` commands against that file list, and runs the placeholder scan, marker validation, and Markdown package scripts when the supporting files are present.
 - **Adoption ledger:** A generated Markdown review artifact emitted by `.template-sync/scripts/generate_sync_candidates.py`. It summarizes manifest module assignments, marker local overrides, protected-file flags and decisions, adoption-mode posture, `_TODO-repo-init.md` checklist links, and affected validation commands. It is not authoritative state; `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable sources of truth.
 - **Adoption mode:** The preservation posture applied before editing protected files and template-derived governance, community, process, workflow, or collaboration files. Valid named modes are `minimal-preservation` and `tailored`.
@@ -684,7 +687,7 @@ Manifest version 2 rows MAY also use `requires_any`: the path is included only w
 | `schemas/examples/template-sync-marker/**`, `schemas/examples/template-sync-instruction-contracts/**` | `template-sync-support` |
 | `schemas/**` | `schema` |
 | `tests/test_schema_examples.py` | one of `schema`, `template-sync-support` |
-| `tests/test_generate_sync_candidates.py` | `template-sync-support` |
+| `tests/test_generate_sync_candidates.py`, `tests/test_materialize_downstream_adoption.*` | `template-sync-support` |
 | `tests/test_run_first_adoption_checks.*` | `template-sync-support` |
 | `tests/test_template_manifest.py`, `tests/test_template_sync_materialization_helpers.py`, `tests/test_validate_marker.py`, `tests/test_validate_downstream_adoption.py`, `tests/test_validate_instruction_contracts.py` | `template-sync-support` |
 | `.github/scripts/terraform_hooks.py`, `tests/test_terraform_hooks.py` | `terraform` |
@@ -1135,6 +1138,14 @@ python .template-sync/scripts/run_first_adoption_checks.py
 ```
 
 This helper is different from `pre-commit run --all-files`: it uses `git ls-files --cached --others --exclude-standard` to include newly copied, untracked, non-ignored files before they are committed, then invokes `pre-commit run --files ...` against that explicit file list. If the `pre-commit` console script is not on PATH, it uses the equivalent `python -m pre_commit run --files ...` form. It prints every command before running it, chunks large pre-commit file lists to avoid command-line length limits, and also runs the placeholder scan, marker validation, and supported Markdown npm scripts when those files are present. Continue to run `pre-commit run --all-files` before committing after the adopted files are tracked.
+
+When first-adoption materialization is used, inspect the command surface first:
+
+```bash
+python .template-sync/scripts/materialize_downstream_adoption.py --help
+```
+
+The materialization command writes non-conflicting retained files, reports conflicting paths as a separate actionable section, and uses exit code `2` for unrecorded conflicts by default. Existing downstream files such as `README.md`, `LICENSE`, and `.gitignore` commonly conflict during first adoption; resolve them with path-scoped `local_overrides`, `protected_file_decisions`, or deferred protected candidates rather than treating the run as a runtime failure.
 
 Run the downstream adoption validation command after file removals, retained files, `included_modules`, `local_overrides`, `protected_file_decisions`, and `deferred_protected_candidates` reflect the intended sync result, and before finalizing the sync summary. Use `--require-marker` once the downstream repository has committed to carrying `.template-sync/marker.yml` in CI:
 

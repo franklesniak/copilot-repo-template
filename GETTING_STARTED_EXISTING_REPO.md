@@ -205,7 +205,7 @@ Use this matrix to decide which features to adopt based on complexity and depend
 | VS Code Settings | `.vscode/settings.json` | None | Low |
 | Markdown Linting | `.markdownlint.jsonc`, `package.json`, npm scripts | Node.js | Medium |
 | Pre-commit Hooks | `.pre-commit-config.yaml`, `.github/scripts/terraform_hooks.py` if retaining Terraform hooks | Python, pre-commit; Terraform and TFLint for Terraform hooks | Medium |
-| Template Sync Support | `.template-sync/marker.yml`, `.template-sync/manifest.yml`, `.template-sync/instruction-contracts.yml`, `.template-sync/scripts/run_first_adoption_checks.py`, `.template-sync/scripts/validate_marker.py`, `.template-sync/scripts/validate_instruction_contracts.py`, `.template-sync/scripts/generate_sync_candidates.py` (`--preflight` / `--questionnaire`, `--ledger`, `--ledger-only`), `schemas/template-sync-marker.schema.json`, `schemas/template-sync-manifest.schema.json`, `schemas/template-sync-instruction-contracts.schema.json` | Python and schema validation dependencies | Medium |
+| Template Sync Support | `.template-sync/marker.yml`, `.template-sync/manifest.yml`, `.template-sync/instruction-contracts.yml`, `.template-sync/scripts/materialize_downstream_adoption.py`, `.template-sync/scripts/run_first_adoption_checks.py`, `.template-sync/scripts/validate_marker.py`, `.template-sync/scripts/validate_instruction_contracts.py`, `.template-sync/scripts/generate_sync_candidates.py` (`--preflight` / `--questionnaire`, `--ledger`, `--ledger-only`), `schemas/template-sync-marker.schema.json`, `schemas/template-sync-manifest.schema.json`, `schemas/template-sync-instruction-contracts.schema.json` | Python and schema validation dependencies | Medium |
 | PowerShell CI Workflow | `.github/workflows/powershell-ci.yml` | PowerShell, Pester | Medium |
 | PSScriptAnalyzer Config | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell | Low |
 | Python CI Workflow | `.github/workflows/python-ci.yml` | Python project structure | High |
@@ -224,6 +224,14 @@ python .template-sync/scripts/generate_sync_candidates.py --preflight
 ```
 
 Use `--include-github-metadata` only when the maintainer explicitly opts in to read-only GitHub metadata lookup through the `gh` CLI. Without that flag, the report labels GitHub-only settings as manual-review items instead of guessing.
+
+After retained modules, source repository, reviewed template commit, and protected-file decisions are known, you may run the one-shot materialization helper against a target working tree:
+
+```bash
+python .template-sync/scripts/materialize_downstream_adoption.py --help
+```
+
+The helper copies only retained manifest-owned files, removes inline blocks for excluded modules, optionally reuses the approved placeholder replacement helper against a staging tree, and refuses to overwrite non-identical existing target files unless a path-scoped decision authorizes or records the conflict. In a non-empty repository, conflicts for existing files such as `README.md`, `LICENSE`, and `.gitignore` are expected first-adoption decisions. Resolve them per path through `template_sync.local_overrides`, `template_sync.protected_file_decisions`, or `template_sync.deferred_protected_candidates`; they are not runtime/tool failures.
 
 Use the concrete `_TODO-repo-init.md` example in [GETTING_STARTED_NEW_REPO.md](GETTING_STARTED_NEW_REPO.md#first-adoption-preflight-checklist) and keep only the items that are unresolved for this repository. Discovery may inspect files and Git metadata first, but agents and maintainers MUST NOT invent contact emails, reporting channels, branch protection policy, CODEOWNERS identities, GHES hosts, label availability, GitHub repository settings, or adoption modes beyond the documented default.
 
