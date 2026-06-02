@@ -330,6 +330,19 @@ def test_marker_excluding_optional_modules_reports_cleanup_scope(tmp_path: Path)
     assert "python | manifest-owned paths:" in result.stdout
     assert "workflow files/jobs: .github/workflows/python-ci.yml" in result.stdout
 
+    # Inline-block markers live on their own lines, so the scope scan must match
+    # per line; a whole-file regex match would miss every retained cross-module
+    # reference and inline-block family below.
+    excluded_scopes = _section_entries(result.stdout, "Excluded module scopes")
+    python_scope = next(
+        (line for line in excluded_scopes if line.startswith("python | ")),
+        "",
+    )
+    assert (
+        "retained cross-module paths: .pre-commit-config.yaml; AGENTS.md" in python_scope
+    ), python_scope
+    assert "inline block families: python-only; python-reference-only" in python_scope, python_scope
+
     assert any(
         line.startswith(
             "manifest-owned-path | required_cleanup | json | " "templates/json/example.json |"

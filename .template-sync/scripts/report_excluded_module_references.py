@@ -429,9 +429,11 @@ def build_scope_lines(repo_root: Path, state: ReportState) -> tuple[str, ...]:
             text = resolve_repo_path(repo_root, relative_path).read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        for marker_name in INLINE_BLOCK_MARKER_RE.findall(text):
-            # ``findall`` returns tuples because the regex has multiple groups.
-            name = marker_name[1] if isinstance(marker_name, tuple) else marker_name
+        for line in text.splitlines():
+            match = INLINE_BLOCK_MARKER_RE.match(line)
+            if match is None:
+                continue
+            name = match.group("name")
             required_modules = inline_block_module_requirement(name)
             if required_modules is None:
                 continue
