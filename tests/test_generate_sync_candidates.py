@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml  # type: ignore[import-untyped]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -70,6 +71,14 @@ def _write_yaml(repo_root: Path, relative_path: str, data: dict[str, Any]) -> No
     path = repo_root / relative_path
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+
+def _symlink_or_skip(link_path: Path, target_path: Path) -> None:
+    """Create a directory symlink, or skip when the platform refuses it."""
+    try:
+        link_path.symlink_to(target_path, target_is_directory=True)
+    except OSError as error:
+        pytest.skip(f"Symlink creation unavailable in this environment: {error}")
 
 
 def _copy_schemas(repo_root: Path) -> None:
@@ -853,7 +862,7 @@ def test_list_directory_files_skips_symlinked_ancestor(tmp_path: Path, monkeypat
     repo_root = tmp_path / "repo"
     repo_root.mkdir()
     # `.github` is a symlink whose target lives outside the repo root.
-    (repo_root / ".github").symlink_to(tmp_path / "outside", target_is_directory=True)
+    _symlink_or_skip(repo_root / ".github", tmp_path / "outside")
 
     escaping_dir = (repo_root / ".github" / "workflows").resolve()
     original_iterdir = Path.iterdir
@@ -878,7 +887,7 @@ def test_path_has_symlink_component_detects_symlinked_ancestor(tmp_path: Path) -
     outside = tmp_path / "outside"
     outside.mkdir()
     # `.github` is a symlink whose target lives outside the repo root.
-    (repo_root / ".github").symlink_to(outside, target_is_directory=True)
+    _symlink_or_skip(repo_root / ".github", outside)
 
     # A symlinked ancestor and a symlinked leaf are both rejected.
     assert sync_candidates.path_has_symlink_component(repo_root, ".github/workflows") is True
@@ -897,7 +906,7 @@ def test_repository_path_exists_rejects_symlinked_ancestor(tmp_path: Path) -> No
     outside.mkdir()
     (outside / "config.yml").write_text("name: leak\n", encoding="utf-8")
     # `.github` is a symlink whose target lives outside the repo root.
-    (repo_root / ".github").symlink_to(outside, target_is_directory=True)
+    _symlink_or_skip(repo_root / ".github", outside)
 
     # The file exists *through* the symlink, but must be rejected as out-of-boundary.
     assert sync_candidates.repository_path_exists(repo_root, ".github/config.yml") is False

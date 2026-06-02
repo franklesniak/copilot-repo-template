@@ -16,11 +16,13 @@ from typing import Any, Iterable, Mapping
 from urllib.parse import unquote, urlsplit
 
 import jsonschema
+import pytest
 import yaml  # type: ignore[import-untyped]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_PATH = REPO_ROOT / ".template-sync" / "manifest.yml"
 VALIDATE_MARKER_PATH = REPO_ROOT / ".template-sync" / "scripts" / "validate_marker.py"
+TEMPLATE_SYNC_SCRIPT_DIR = VALIDATE_MARKER_PATH.parent
 MANIFEST_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-manifest.schema.json"
 MARKER_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-marker.schema.json"
 PROCEDURE_PATH = REPO_ROOT / "TEMPLATE_UPDATE_PROCEDURE.md"
@@ -35,6 +37,21 @@ COPY_READY_REFERENCE_FILES = (
     REPO_ROOT / ".github" / "instructions" / "json.instructions.md",
     REPO_ROOT / ".github" / "instructions" / "yaml.instructions.md",
 )
+
+if str(TEMPLATE_SYNC_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(TEMPLATE_SYNC_SCRIPT_DIR))
+
+from template_sync_materialization_helpers import (  # noqa: E402
+    INLINE_BLOCK_MARKER_RE,
+    MismatchedInlineBlockError,
+    MissingExpectedInlineBlockError,
+    NestedInlineBlockError,
+    UnclosedInlineBlockError,
+    UnknownInlineBlockMarkerError,
+    UnmatchedInlineBlockEndError,
+    remove_inline_block_family,
+)
+
 TERRAFORM_INLINE_BLOCK_PATHS = (
     ".pre-commit-config.yaml",
     ".github/workflows/auto-fix-precommit.yml",
@@ -300,11 +317,6 @@ PROTECTED_PROTOCOL_HEADINGS_AFTER_REFERENCE_STRIP = {
         "## Automated Review Loop",
     ),
 }
-INLINE_BLOCK_MARKER_RE = re.compile(
-    r"^\s*(?:#\s*template-sync:|<!--\s*template-sync:)\s*"
-    r"(?P<kind>begin|end)\s+"
-    r"(?P<name>[a-z0-9-]+-(?:reference-)?only)\s*(?:-->)?\s*$"
-)
 REFERENCE_FILE_SUFFIXES = {".json", ".md", ".yaml", ".yml"}
 MARKDOWN_FILE_SUFFIXES = {".md", ".mdc"}
 SKIPPED_DISCOVERY_DIRS = {
@@ -811,6 +823,25 @@ def _run_git(repo_root: Path, *args: str) -> None:
     )
 
 
+def _marker_name_from_expected_pair(
+    relative_path: str,
+    marker_begin: str,
+    marker_end: str,
+) -> str:
+    """Return the shared marker family name represented by one begin/end pair."""
+    begin_match = INLINE_BLOCK_MARKER_RE.match(marker_begin)
+    end_match = INLINE_BLOCK_MARKER_RE.match(marker_end)
+    assert begin_match is not None, f"{relative_path}: invalid begin marker {marker_begin!r}"
+    assert end_match is not None, f"{relative_path}: invalid end marker {marker_end!r}"
+    assert begin_match.group("kind") == "begin", f"{relative_path}: expected begin marker"
+    assert end_match.group("kind") == "end", f"{relative_path}: expected end marker"
+    assert begin_match.group("name") == end_match.group("name"), (
+        f"{relative_path}: marker pair names differ: "
+        f"{begin_match.group('name')} != {end_match.group('name')}"
+    )
+    return begin_match.group("name")
+
+
 def _strip_inline_blocks_from_text(
     text: str,
     relative_path: str,
@@ -818,35 +849,11 @@ def _strip_inline_blocks_from_text(
     marker_end: str,
 ) -> str:
     """Return ``text`` after removing one complete inline block family."""
-    lines = text.splitlines(keepends=True)
-    stripped_lines: list[str] = []
-    is_inside_block = False
-    has_seen_block = False
-
-    for line_number, line in enumerate(lines, 1):
-        stripped_line = line.strip()
-
-        if stripped_line == marker_begin:
-            assert (
-                not is_inside_block
-            ), f"{relative_path}:{line_number}: nested inline block for {marker_begin}"
-            is_inside_block = True
-            has_seen_block = True
-            continue
-
-        if stripped_line == marker_end:
-            assert (
-                is_inside_block
-            ), f"{relative_path}:{line_number}: unmatched inline block end marker"
-            is_inside_block = False
-            continue
-
-        if not is_inside_block:
-            stripped_lines.append(line)
-
-    assert not is_inside_block, f"{relative_path}: unclosed inline block for {marker_begin}"
-    assert has_seen_block, f"{relative_path}: missing inline block for {marker_begin}"
-    return "".join(stripped_lines)
+    return remove_inline_block_family(
+        text,
+        _marker_name_from_expected_pair(relative_path, marker_begin, marker_end),
+        relative_path=relative_path,
+    )
 
 
 def _strip_inline_blocks(relative_path: str, marker_begin: str, marker_end: str) -> str:
@@ -976,6 +983,50 @@ def _strip_template_sync_support_blocks_for_modules(
     if "template-sync-support" in included_modules:
         return (REPO_ROOT / relative_path).read_text(encoding="utf-8")
     return _strip_template_sync_support_only_inline_blocks(relative_path)
+
+
+def test_shared_inline_block_strip_reports_typed_marker_errors() -> None:
+    """The shared inline-block helper must reject malformed marker families explicitly."""
+    cases = (
+        (
+            UnknownInlineBlockMarkerError,
+            "# template-sync: begin unknown-only\nx\n# template-sync: end unknown-only\n",
+        ),
+        (
+            NestedInlineBlockError,
+            (
+                "# template-sync: begin python-only\n"
+                "# template-sync: begin yaml-only\n"
+                "x\n"
+                "# template-sync: end yaml-only\n"
+                "# template-sync: end python-only\n"
+            ),
+        ),
+        (
+            MismatchedInlineBlockError,
+            "# template-sync: begin python-only\nx\n# template-sync: end yaml-only\n",
+        ),
+        (
+            UnclosedInlineBlockError,
+            "# template-sync: begin python-only\nx\n",
+        ),
+        (
+            UnmatchedInlineBlockEndError,
+            "x\n# template-sync: end python-only\n",
+        ),
+        (
+            MissingExpectedInlineBlockError,
+            "x\n",
+        ),
+    )
+
+    for error_type, text in cases:
+        with pytest.raises(error_type):
+            remove_inline_block_family(
+                text,
+                "python-only",
+                relative_path="fixture.txt",
+            )
 
 
 def _extract_table_after_heading(markdown_text: str, heading: str) -> list[list[str]]:
@@ -1568,20 +1619,20 @@ def test_template_manifest_flags_unmapped_tracked_files(tmp_path: Path) -> None:
 
 
 def test_template_sync_helper_tests_map_to_support_module() -> None:
-    """Top-level template-sync helper tests must have explicit manifest mappings."""
+    """Tracked tests matching template-sync helpers must map to support."""
     expected_modules = ("template-sync-support",)
+    tracked_paths = set(_git_tracked_paths(REPO_ROOT))
+    helper_test_paths = sorted(
+        test_path
+        for helper_path in tracked_paths
+        if helper_path.startswith(".template-sync/scripts/") and helper_path.endswith(".py")
+        for test_path in (f"tests/test_{Path(helper_path).stem}.py",)
+        if test_path in tracked_paths
+    )
 
-    assert _manifest_modules_for_path("tests/test_generate_sync_candidates.py") == expected_modules
-    assert _manifest_modules_for_path("tests/test_run_first_adoption_checks.py") == (
-        "template-sync-support",
-    )
-    assert _manifest_modules_for_path("tests/test_validate_marker.py") == expected_modules
-    assert _manifest_modules_for_path("tests/test_validate_downstream_adoption.py") == (
-        expected_modules
-    )
-    assert _manifest_modules_for_path("tests/test_validate_instruction_contracts.py") == (
-        expected_modules
-    )
+    assert helper_test_paths
+    for helper_test_path in helper_test_paths:
+        assert _manifest_modules_for_path(helper_test_path) == expected_modules
 
 
 def test_schema_example_tests_map_to_schema_or_template_sync_support() -> None:

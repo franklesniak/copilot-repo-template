@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import fnmatch
 import json
 import os
 import re
@@ -14,29 +13,40 @@ from pathlib import Path
 from typing import Any, Callable, NoReturn
 from urllib.parse import urlsplit, urlunsplit
 
-from validate_marker import (
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from template_sync_materialization_helpers import (  # noqa: E402
     DEFAULT_MANIFEST_PATH,
     DEFAULT_MANIFEST_SCHEMA_PATH,
     DEFAULT_MARKER_PATH,
     DEFAULT_MARKER_SCHEMA_PATH,
     REMOVAL_DECISION,
     DeferredProtectedCandidate,
+    ManifestMapping,
     LocalOverride,
-    MarkerValidationError,
+    PathRelation,
+    PROTECTED_EXACT_PATHS,
     ProtectedFileDecision,
+    TemplateSyncMaterializationError as MarkerValidationError,
     deferred_candidate_summary,
+    has_wildcard,
+    is_protected_instruction_path,
+    is_protected_manifest_pattern,
     local_override_summary,
     load_json_mapping,
     load_yaml_mapping,
-    normalize_manifest_pattern,
-    normalize_repository_path,
-    pattern_specificity,
-    parse_protected_file_decisions,
+    manifest_pattern_matches_path,
+    parse_manifest_mappings,
+    parse_marker_decision_data,
+    path_has_symlink_component,
     protected_decision_summary,
-    relation_modules,
+    repository_path_exists,
     repository_relative_path,
     resolve_repo_path,
     resolve_repo_root,
+    selected_relation_for_path,
     validate_schema,
     validate_protected_file_decisions,
 )
@@ -64,19 +74,6 @@ DISCOVERY_SKIP_DIRS = frozenset(
         "node_modules",
         "venv",
     }
-)
-PROTECTED_EXACT_PATHS = frozenset(
-    {
-        ".github/copilot-instructions.md",
-        ".hermes.md",
-        "AGENTS.md",
-        "CLAUDE.md",
-        "GEMINI.md",
-    }
-)
-PROTECTED_GLOB_PATTERNS = (
-    ".github/instructions/**",
-    ".cursor/rules/**",
 )
 ADOPTION_MODE_MODULES = frozenset(
     {
@@ -174,51 +171,6 @@ class MarkerData:
     local_overrides: tuple[LocalOverride, ...]
     deferred_candidates: tuple[DeferredProtectedCandidate, ...]
     protected_decisions: tuple[ProtectedFileDecision, ...]
-
-
-@dataclass(frozen=True)
-class ManifestMapping:
-    """One manifest path mapping row."""
-
-    pattern: str
-    requires_all: frozenset[str]
-    requires_any: frozenset[str]
-    notes: str | None
-    unknown_modules: frozenset[str]
-
-
-@dataclass(frozen=True)
-class PathRelation:
-    """The manifest module relation selected for a changed path."""
-
-    patterns: tuple[str, ...]
-    requires_all: frozenset[str]
-    requires_any: frozenset[str]
-    notes: tuple[str, ...]
-    unknown_modules: frozenset[str]
-
-    @property
-    def is_cross_module(self) -> bool:
-        """Return whether the relation spans multiple module concerns."""
-        return bool(self.requires_any) or len(self.requires_all | self.requires_any) > 1
-
-    @property
-    def description(self) -> str:
-        """Return a compact relation description for Markdown output."""
-        parts: list[str] = []
-        if self.requires_all:
-            parts.append("requires all: " + ", ".join(sorted(self.requires_all)))
-        if self.requires_any:
-            parts.append("requires any: " + ", ".join(sorted(self.requires_any)))
-        return "; ".join(parts) if parts else "no module relation"
-
-    def is_retained_by(self, included_modules: frozenset[str]) -> bool:
-        """Return whether marker modules satisfy this relation."""
-        if not self.requires_all.issubset(included_modules):
-            return False
-        if self.requires_any and not self.requires_any.intersection(included_modules):
-            return False
-        return True
 
 
 @dataclass(frozen=True)
@@ -681,177 +633,23 @@ def stale_procedure_warning(repo_root: Path, range_head_sha: str) -> str | None:
 
 def parse_marker(marker: dict[str, Any]) -> MarkerData:
     """Extract marker fields needed for candidate generation."""
-    template_sync = marker.get("template_sync")
-    if not isinstance(template_sync, dict):
-        raise CandidateGenerationError("Marker must contain template_sync mapping.")
-
-    last_reviewed = template_sync.get("last_reviewed_template_commit")
-    if last_reviewed is not None and not isinstance(last_reviewed, str):
-        raise CandidateGenerationError(
-            "template_sync.last_reviewed_template_commit must be a string when present."
-        )
-
-    raw_included_modules = template_sync.get("included_modules")
-    if not isinstance(raw_included_modules, list) or not all(
-        isinstance(module, str) for module in raw_included_modules
-    ):
-        raise CandidateGenerationError("template_sync.included_modules must be a list of strings.")
-    included_modules = frozenset(raw_included_modules)
-
-    local_overrides: list[LocalOverride] = []
-    for raw_override in template_sync.get("local_overrides", []):
-        if not isinstance(raw_override, dict):
-            raise CandidateGenerationError("Each local override must be a mapping.")
-        raw_path = raw_override.get("path")
-        default_decision = raw_override.get("default_decision")
-        reason = raw_override.get("reason")
-        if (
-            not isinstance(raw_path, str)
-            or not isinstance(default_decision, str)
-            or not isinstance(reason, str)
-        ):
-            raise CandidateGenerationError(
-                "Each local override must define string path, default_decision, and reason."
-            )
-        normalized_path, is_directory = normalize_repository_path(
-            raw_path,
-            "template_sync.local_overrides[].path",
-        )
-        local_overrides.append(
-            LocalOverride(
-                path=normalized_path,
-                default_decision=default_decision,
-                reason=reason,
-                is_directory=is_directory,
-            )
-        )
-
-    deferred_candidates: list[DeferredProtectedCandidate] = []
-    for raw_candidate in template_sync.get("deferred_protected_candidates", []):
-        if not isinstance(raw_candidate, dict):
-            raise CandidateGenerationError("Each deferred protected candidate must be a mapping.")
-        raw_path = raw_candidate.get("path")
-        source_commit = raw_candidate.get("source_commit")
-        reason = raw_candidate.get("reason")
-        if (
-            not isinstance(raw_path, str)
-            or not isinstance(source_commit, str)
-            or not isinstance(reason, str)
-        ):
-            raise CandidateGenerationError(
-                "Each deferred protected candidate must define string path, source_commit, "
-                "and reason."
-            )
-        normalized_path, _is_directory = normalize_repository_path(
-            raw_path,
-            "template_sync.deferred_protected_candidates[].path",
-        )
-        deferred_candidates.append(
-            DeferredProtectedCandidate(
-                path=normalized_path,
-                source_commit=source_commit,
-                reason=reason,
-            )
-        )
-
-    protected_decisions = parse_protected_file_decisions(template_sync)
-    validate_protected_file_decisions(
-        protected_decisions,
-        tuple(local_overrides),
-        tuple(deferred_candidates),
+    marker_data = parse_marker_decision_data(
+        marker,
+        validate_protected_decision_integrity=True,
     )
 
     return MarkerData(
-        last_reviewed_template_commit=last_reviewed,
-        included_modules=included_modules,
-        local_overrides=tuple(local_overrides),
-        deferred_candidates=tuple(deferred_candidates),
-        protected_decisions=protected_decisions,
+        last_reviewed_template_commit=marker_data.last_reviewed_template_commit,
+        included_modules=marker_data.included_modules,
+        local_overrides=marker_data.local_overrides,
+        deferred_candidates=marker_data.deferred_candidates,
+        protected_decisions=marker_data.protected_decisions,
     )
 
 
 def parse_manifest(manifest: dict[str, Any]) -> tuple[frozenset[str], tuple[ManifestMapping, ...]]:
     """Extract manifest modules and mapping rows without making owner decisions."""
-    template_manifest = manifest.get("template_manifest")
-    if not isinstance(template_manifest, dict):
-        raise CandidateGenerationError("Manifest must contain template_manifest mapping.")
-
-    raw_modules = template_manifest.get("modules")
-    if not isinstance(raw_modules, list):
-        raise CandidateGenerationError("template_manifest.modules must be a list.")
-
-    module_names: set[str] = set()
-    for raw_module in raw_modules:
-        if not isinstance(raw_module, dict) or not isinstance(raw_module.get("name"), str):
-            raise CandidateGenerationError("Every manifest module must define a string name.")
-        module_names.add(raw_module["name"])
-
-    raw_path_mappings = template_manifest.get("path_mappings")
-    if not isinstance(raw_path_mappings, list):
-        raise CandidateGenerationError("template_manifest.path_mappings must be a list.")
-
-    mappings: list[ManifestMapping] = []
-    for raw_mapping in raw_path_mappings:
-        if not isinstance(raw_mapping, dict):
-            raise CandidateGenerationError("Every path mapping must be a mapping.")
-        raw_pattern = raw_mapping.get("pattern")
-        if not isinstance(raw_pattern, str):
-            raise CandidateGenerationError("Every path mapping must define a string pattern.")
-        notes = raw_mapping.get("notes")
-        if notes is not None and not isinstance(notes, str):
-            raise CandidateGenerationError(f"{raw_pattern} notes must be a string.")
-
-        requires_all = relation_modules(raw_mapping, "requires_all")
-        requires_any = relation_modules(raw_mapping, "requires_any")
-        referenced_modules = requires_all | requires_any
-        mappings.append(
-            ManifestMapping(
-                pattern=normalize_manifest_pattern(raw_pattern),
-                requires_all=requires_all,
-                requires_any=requires_any,
-                notes=notes,
-                unknown_modules=frozenset(referenced_modules - module_names),
-            )
-        )
-
-    return frozenset(module_names), tuple(mappings)
-
-
-def selected_relation_for_path(
-    relative_path: str,
-    mappings: tuple[ManifestMapping, ...],
-) -> PathRelation | None:
-    """Return the best manifest relation for ``relative_path``."""
-    matches: list[tuple[tuple[int, int, int], ManifestMapping]] = []
-    for mapping in mappings:
-        if fnmatch.fnmatchcase(relative_path, mapping.pattern):
-            matches.append((pattern_specificity(mapping.pattern), mapping))
-
-    if not matches:
-        return None
-
-    best_specificity = max(specificity for specificity, _mapping in matches)
-    selected = [mapping for specificity, mapping in matches if specificity == best_specificity]
-    patterns: list[str] = []
-    requires_all: set[str] = set()
-    requires_any: set[str] = set()
-    notes: list[str] = []
-    unknown_modules: set[str] = set()
-    for mapping in selected:
-        patterns.append(mapping.pattern)
-        requires_all.update(mapping.requires_all)
-        requires_any.update(mapping.requires_any)
-        unknown_modules.update(mapping.unknown_modules)
-        if mapping.notes:
-            notes.append(mapping.notes)
-
-    return PathRelation(
-        patterns=tuple(patterns),
-        requires_all=frozenset(requires_all),
-        requires_any=frozenset(requires_any),
-        notes=tuple(notes),
-        unknown_modules=frozenset(unknown_modules),
-    )
+    return parse_manifest_mappings(manifest, reject_unknown_modules=False)
 
 
 def describe_relation(relation: PathRelation | None) -> str:
@@ -864,36 +662,6 @@ def relations_match(left: PathRelation | None, right: PathRelation | None) -> bo
     if left is None or right is None:
         return left is None and right is None
     return left.requires_all == right.requires_all and left.requires_any == right.requires_any
-
-
-def is_protected_instruction_path(relative_path: str) -> bool:
-    """Return whether ``relative_path`` is a protected instruction/governance file."""
-    if relative_path in PROTECTED_EXACT_PATHS:
-        return True
-    return any(fnmatch.fnmatchcase(relative_path, pattern) for pattern in PROTECTED_GLOB_PATTERNS)
-
-
-def has_wildcard(pattern: str) -> bool:
-    """Return whether ``pattern`` contains shell-style wildcard syntax."""
-    return any(wildcard in pattern for wildcard in "*?[")
-
-
-def is_protected_manifest_pattern(pattern: str) -> bool:
-    """Return whether a manifest pattern names protected instruction paths."""
-    if not has_wildcard(pattern):
-        return is_protected_instruction_path(pattern)
-    if pattern in PROTECTED_GLOB_PATTERNS:
-        return True
-    if pattern.startswith(".github/instructions/") or pattern.startswith(".cursor/rules/"):
-        return True
-    return any(fnmatch.fnmatchcase(path, pattern) for path in PROTECTED_EXACT_PATHS)
-
-
-def manifest_pattern_matches_path(pattern: str, relative_path: str) -> bool:
-    """Return whether a manifest pattern could cover ``relative_path``."""
-    if has_wildcard(pattern):
-        return fnmatch.fnmatchcase(relative_path, pattern)
-    return pattern == relative_path
 
 
 def matching_local_overrides_for_pattern(
@@ -1342,33 +1110,6 @@ def load_preflight_inputs(
     marker_schema = load_json_mapping(marker_schema_path, repo_root)
     validate_schema(marker, marker_schema, marker_path, repo_root)
     return parse_marker(marker), manifest_modules, mappings
-
-
-def path_has_symlink_component(repo_root: Path, relative_path: str) -> bool:
-    """Return whether any component of ``relative_path`` under ``repo_root`` is a symlink.
-
-    Walks the components from ``repo_root`` downward using ``is_symlink`` (an lstat that
-    does not follow the final component) and stops at the first symlink, so a symlinked
-    ancestor is detected without ever following it or statting its external target.
-    """
-    current = repo_root
-    for part in Path(relative_path).parts:
-        current = current / part
-        if current.is_symlink():
-            return True
-    return False
-
-
-def repository_path_exists(repo_root: Path, relative_path: str) -> bool:
-    """Return whether a non-symlink path exists inside ``repo_root``."""
-    if path_has_symlink_component(repo_root, relative_path):
-        return False
-    path = repo_root / relative_path
-    try:
-        path.resolve().relative_to(repo_root.resolve())
-    except (OSError, ValueError):
-        return False
-    return path.exists()
 
 
 def iter_repo_files(repo_root: Path) -> tuple[Path, ...]:
