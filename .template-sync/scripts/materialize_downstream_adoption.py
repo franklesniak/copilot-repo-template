@@ -1074,6 +1074,19 @@ def materialize(args: argparse.Namespace) -> Summary:
     return summary
 
 
+def format_cli_error(error: Exception) -> str:
+    """Return a user-facing error message that never leaks filesystem paths.
+
+    ``OSError`` and its subclasses (including ``shutil.Error``) render their
+    default string form with the offending absolute local path, so summarize
+    them through :func:`os_error_summary`. Domain errors already carry
+    intentional, path-safe messages and are returned unchanged.
+    """
+    if isinstance(error, OSError):
+        return os_error_summary(error)
+    return f"{error}"
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the materialization CLI."""
     args = parse_args(argv)
@@ -1086,7 +1099,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         OSError,
         shutil.Error,
     ) as error:
-        print(f"ERROR: {error}", file=sys.stderr)
+        print(f"ERROR: {format_cli_error(error)}", file=sys.stderr)
         return EXIT_RUNTIME_FAILURE
 
     print_summary(summary)

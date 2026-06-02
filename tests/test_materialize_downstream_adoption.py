@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import shutil
 import subprocess
 import sys
@@ -12,8 +13,20 @@ import yaml  # type: ignore[import-untyped]
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "materialize_downstream_adoption.py"
+SCRIPT_DIR = SCRIPT_PATH.parent
 SOURCE_REPO = "https://github.com/franklesniak/copilot-repo-template.git"
 FULL_SHA = "0123456789abcdef0123456789abcdef01234567"
+
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+_MODULE_SPEC = importlib.util.spec_from_file_location(
+    "materialize_downstream_adoption", SCRIPT_PATH
+)
+if _MODULE_SPEC is None or _MODULE_SPEC.loader is None:
+    raise RuntimeError(f"Unable to load materializer module from {SCRIPT_PATH}")
+materializer = importlib.util.module_from_spec(_MODULE_SPEC)
+sys.modules[_MODULE_SPEC.name] = materializer
+_MODULE_SPEC.loader.exec_module(materializer)
 
 
 def write_file(path: Path, content: str) -> None:
@@ -516,3 +529,32 @@ def test_decisions_file_path_traversal_is_rejected(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert "--decisions-file must not contain traversal segments" in result.stderr
+
+
+def test_format_cli_error_summarizes_oserror_without_path() -> None:
+    """OSError output is summarized via os_error_summary and omits the path."""
+    secret_path = "/home/secret-user/private/secret.key"
+    error = FileNotFoundError(2, "No such file or directory", secret_path)
+
+    message = materializer.format_cli_error(error)
+
+    assert message == "FileNotFoundError: No such file or directory"
+    assert secret_path not in message
+
+
+def test_format_cli_error_summarizes_shutil_error_without_paths() -> None:
+    """shutil.Error (an OSError subclass) is summarized without its path tuples."""
+    secret_path = "/home/secret-user/private"
+    error = shutil.Error([(f"{secret_path}/a", f"{secret_path}/b", "boom")])
+
+    message = materializer.format_cli_error(error)
+
+    assert secret_path not in message
+    assert message == "Error: I/O error"
+
+
+def test_format_cli_error_preserves_domain_error_message() -> None:
+    """Domain errors already carry path-safe messages and are returned verbatim."""
+    error = materializer.MaterializationError("safe domain message")
+
+    assert materializer.format_cli_error(error) == "safe domain message"
