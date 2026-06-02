@@ -355,6 +355,9 @@ template_manifest:
     - pattern: 'tests/test_template_manifest.py'
       requires_all:
         - template-sync-support
+    - pattern: 'tests/test_template_sync_materialization_helpers.py'
+      requires_all:
+        - template-sync-support
     - pattern: 'tests/test_validate_marker.py'
       requires_all:
         - template-sync-support

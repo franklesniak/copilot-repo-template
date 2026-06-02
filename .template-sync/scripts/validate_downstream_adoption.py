@@ -13,37 +13,19 @@ from urllib.parse import unquote, urlsplit
 
 import validate_instruction_contracts
 import validate_marker
+from template_sync_materialization_helpers import (
+    INLINE_BLOCK_MARKER_RE,
+    inline_block_module_requirement,
+)
 
 DEFAULT_CONTRACTS_PATH = validate_instruction_contracts.DEFAULT_CONTRACTS_PATH
 DEFAULT_CONTRACTS_SCHEMA_PATH = validate_instruction_contracts.DEFAULT_CONTRACTS_SCHEMA_PATH
 MARKDOWN_FILE_SUFFIXES = frozenset({".md", ".mdc"})
-INLINE_BLOCK_MARKER_RE = re.compile(
-    r"^\s*(?:#\s*template-sync:|<!--\s*template-sync:)\s*"
-    r"(?P<kind>begin|end)\s+"
-    r"(?P<name>[a-z0-9-]+-(?:reference-)?only)\s*(?:-->)?\s*$"
-)
 MARKDOWN_FENCE_RE = re.compile(r"^(?: {0,3}>)* {0,3}(?P<fence>`{3,}|~{3,})")
 MARKDOWN_INLINE_LINK_RE = re.compile(
     r"(?<!!)\[[^\]\n]+\]\((?P<target><[^>\n]+>|[^)\s\n]+)(?:\s+[^)\n]*)?\)"
 )
 MARKDOWN_REFERENCE_DEFINITION_RE = re.compile(r"^ {0,3}\[[^\]\n]+\]:\s+(?P<target><[^>\n]+>|\S+)")
-INLINE_BLOCK_MODULES = {
-    "terraform-only": frozenset({"terraform"}),
-    "markdown-only": frozenset({"markdown"}),
-    "python-only": frozenset({"python"}),
-    "yaml-only": frozenset({"yaml"}),
-    "schema-only": frozenset({"schema"}),
-    "template-sync-support-only": frozenset({"template-sync-support"}),
-    "schema-template-sync-support-only": frozenset({"schema", "template-sync-support"}),
-    "github-platform-only": frozenset({"github-platform"}),
-    "markdown-reference-only": frozenset({"markdown"}),
-    "powershell-reference-only": frozenset({"powershell"}),
-    "python-reference-only": frozenset({"python"}),
-    "terraform-reference-only": frozenset({"terraform"}),
-    "json-reference-only": frozenset({"json"}),
-    "yaml-reference-only": frozenset({"yaml"}),
-    "schema-reference-only": frozenset({"schema"}),
-}
 REQUIRED_TEMPLATE_SYNC_SUPPORT_FILES = (
     ".template-sync/scripts/validate_marker.py",
     ".template-sync/scripts/validate_instruction_contracts.py",
@@ -372,11 +354,6 @@ def iter_present_safe_files(repo_root: Path) -> tuple[str, ...]:
     present_paths = set(validate_marker.git_present_paths(repo_root))
     repository_files, _skipped_symlinks = validate_marker.iter_safe_repository_files(repo_root)
     return tuple(path for path in repository_files if path in present_paths)
-
-
-def inline_block_module_requirement(marker_name: str) -> frozenset[str] | None:
-    """Return the module requirement for a known inline marker family."""
-    return INLINE_BLOCK_MODULES.get(marker_name)
 
 
 def validate_inline_blocks(
