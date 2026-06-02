@@ -512,3 +512,32 @@ def test_invalid_explicit_module_is_runtime_failure(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert "not defined by the manifest" in result.stderr
+
+
+def test_dependabot_local_override_keeps_ecosystem_from_stale(tmp_path: Path) -> None:
+    """A locally overridden scanned file keeps its Dependabot ecosystem non-stale."""
+    _write_common_repo(
+        tmp_path,
+        marker=_marker(
+            local_overrides=[
+                {
+                    "path": "pyproject.toml",
+                    "reason": "Downstream keeps Python packaging metadata as a local file.",
+                    "default_decision": "SKIP",
+                }
+            ],
+        ),
+    )
+    _write_text(tmp_path, "pyproject.toml", '[project]\nname = "downstream"\n')
+
+    result = _run_report(tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    findings = _finding_lines(result.stdout)
+    # The pip ecosystem maps to the excluded ``python`` module, but the retained
+    # pyproject.toml is an intentional local override, so the ecosystem entry is
+    # still justified and must not be reported as stale.
+    assert not any(
+        line.startswith("dependabot-ecosystem.stale | required_cleanup | python |")
+        for line in findings
+    )

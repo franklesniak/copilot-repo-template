@@ -784,14 +784,24 @@ def dependency_file_is_retained_or_present(
     dependency_path: str,
     state: ReportState,
 ) -> bool:
-    """Return whether a Dependabot-scanned path exists and is retained."""
+    """Return whether a Dependabot-scanned path is retained or intentionally kept.
+
+    A path qualifies when the selected modules retain it or when it is present
+    but covered by a marker local override. An overridden file is intentionally
+    kept downstream, so it can still justify its Dependabot ecosystem entry and
+    must not make that ecosystem look stale.
+    """
     if dependency_path.endswith("/"):
         prefix = dependency_path.lstrip("/")
         return any(
-            path.startswith(prefix) and retained_path(path, state) for path in state.safe_files
+            path.startswith(prefix)
+            and (retained_path(path, state) or is_locally_overridden(path, state.local_overrides))
+            for path in state.safe_files
         )
     normalized = dependency_path.lstrip("/")
-    return normalized in state.present_files and retained_path(normalized, state)
+    return normalized in state.present_files and (
+        retained_path(normalized, state) or is_locally_overridden(normalized, state.local_overrides)
+    )
 
 
 def retained_path(relative_path: str, state: ReportState) -> bool:
