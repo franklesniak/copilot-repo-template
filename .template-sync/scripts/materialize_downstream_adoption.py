@@ -483,7 +483,12 @@ def validate_computed_marker(
         field_name="marker schema path",
     )
     schema = load_json_mapping(schema_path, template_root)
-    validate_schema(marker_document, schema, schema_path, template_root)
+    marker_path = resolve_safe_repository_target_path(
+        template_root,
+        DEFAULT_MARKER_PATH,
+        field_name="marker path",
+    )
+    validate_schema(marker_document, schema, marker_path, template_root)
     parse_marker_decision_data(marker_document, validate_protected_decision_integrity=True)
 
 
@@ -818,6 +823,22 @@ def write_staged_bytes(target_path: Path, bytes_content: bytes) -> None:
     target_path.write_bytes(bytes_content)
 
 
+def ensure_regular_target(target_path: Path, relative_path: str) -> None:
+    """Raise an actionable error when an existing target path is not a regular file.
+
+    A directory or symlink where a regular file is expected would otherwise surface
+    later as a path-stripped ``IsADirectoryError`` from a read or write. Failing here
+    with the repository-relative ``relative_path`` lets the adopter resolve the
+    conflict safely.
+    """
+    if target_path.exists() and not target_path.is_file():
+        raise MaterializationError(
+            f"Cannot reconcile {relative_path}: the target path exists but is not a "
+            "regular file (for example a directory or a symlink to one). Resolve the "
+            "conflict in the downstream repository, then rerun."
+        )
+
+
 def reconcile_staged_files(
     *,
     staging_root: Path,
@@ -839,13 +860,8 @@ def reconcile_staged_files(
             field_name="target path",
         )
         staged_bytes = staged_path.read_bytes()
+        ensure_regular_target(target_path, relative_path)
         target_exists = target_path.exists()
-        if target_exists and not target_path.is_file():
-            raise MaterializationError(
-                f"Cannot reconcile {relative_path}: the target path exists but is not a "
-                "regular file (for example a directory or a symlink to one). Resolve the "
-                "conflict in the downstream repository, then rerun."
-            )
         target_bytes = target_path.read_bytes() if target_exists else None
         is_identical = target_bytes == staged_bytes if target_exists else False
         is_protected = is_protected_instruction_path(relative_path)
@@ -978,6 +994,7 @@ def reconcile_marker(
         DEFAULT_MARKER_PATH,
         field_name="marker path",
     )
+    ensure_regular_target(marker_path, DEFAULT_MARKER_PATH)
     marker_bytes = computed_marker_text.encode("utf-8")
     existing_bytes = marker_path.read_bytes() if marker_path.exists() else None
     if existing_bytes == marker_bytes:

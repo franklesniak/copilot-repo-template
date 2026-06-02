@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml  # type: ignore[import-untyped]
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -619,3 +620,37 @@ def test_non_regular_target_path_is_reported_with_repo_relative_path(tmp_path: P
     assert result.returncode == 1, result.stdout
     assert "README.md" in result.stderr
     assert "not a regular file" in result.stderr
+
+
+def test_validate_computed_marker_error_names_marker_document_not_schema() -> None:
+    """A computed-marker schema failure is reported against the marker document path."""
+    with pytest.raises(materializer.TemplateSyncMaterializationError) as excinfo:
+        materializer.validate_computed_marker({"template_sync": {}}, template_root=REPO_ROOT)
+
+    message = str(excinfo.value)
+    assert ".template-sync/marker.yml" in message
+    assert "schema.json" not in message
+
+
+def test_ensure_regular_target_rejects_non_regular_path_with_repo_relative_path(
+    tmp_path: Path,
+) -> None:
+    """A directory where a regular file is expected raises naming the repo-relative path."""
+    conflict = tmp_path / ".template-sync" / "marker.yml"
+    conflict.mkdir(parents=True)
+
+    with pytest.raises(materializer.MaterializationError) as excinfo:
+        materializer.ensure_regular_target(conflict, ".template-sync/marker.yml")
+
+    message = str(excinfo.value)
+    assert ".template-sync/marker.yml" in message
+    assert "not a regular file" in message
+
+
+def test_ensure_regular_target_allows_regular_file_and_missing_path(tmp_path: Path) -> None:
+    """Regular files and missing paths pass the guard without raising."""
+    regular = tmp_path / "file.txt"
+    regular.write_text("content", encoding="utf-8")
+
+    materializer.ensure_regular_target(regular, "file.txt")
+    materializer.ensure_regular_target(tmp_path / "missing.txt", "missing.txt")
