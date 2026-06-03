@@ -536,6 +536,19 @@ def test_ledger_only_reports_manifest_marker_and_todo_decisions(tmp_path: Path) 
     assert "| `_TODO-repo-init.md` link |" in written_ledger
 
 
+def test_ledger_only_without_marker_uses_empty_marker_data(tmp_path: Path) -> None:
+    """The upstream template can render a ledger before a marker exists."""
+    _init_repo(tmp_path)
+
+    result = _run_generator(tmp_path, "--ledger-only")
+
+    assert result.returncode == 0, result.stderr
+    assert "# Template Adoption Ledger" in result.stdout
+    assert "- Marker: `.template-sync/marker.yml`" in result.stdout
+    assert "- Included modules: none" in result.stdout
+    assert "No range base was provided" not in result.stderr
+
+
 def test_write_ledger_rejects_paths_outside_repository(tmp_path: Path) -> None:
     """The ledger snapshot path uses the existing repo-root traversal guard."""
     _init_repo(tmp_path)
