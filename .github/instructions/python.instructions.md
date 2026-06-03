@@ -357,13 +357,13 @@ Compliant example:
 
 ```python
 line_pattern = re.compile(r"\w+")
-tokens = [line for line in text.splitlines() if line_pattern.fullmatch(line)]
+word_lines = [line for line in text.splitlines() if line_pattern.fullmatch(line)]
 ```
 
 Non-compliant counter-example:
 
 ```python
-tokens = re.findall(r"^(\w+)$", text)
+word_lines = re.findall(r"^(\w+)$", text)
 ```
 
 ### Host Matching
