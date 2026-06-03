@@ -49,9 +49,11 @@ from template_sync_materialization_helpers import (  # noqa: E402
     validate_schema,
 )
 
-MARKDOWN_FILE_SUFFIXES = frozenset({".md", ".mdc"})
 REFERENCE_LINK_FILE_SUFFIXES = frozenset({".md", ".mdc", ".yml", ".yaml"})
-MARKDOWN_FENCE_RE = re.compile(r"^(?: {0,3}>)* {0,3}(?P<fence>`{3,}|~{3,})")
+# Allow arbitrary leading whitespace so fences are recognized inside YAML
+# block scalars (for example issue-form ``value: |`` Markdown), not only in
+# Markdown indented up to three spaces.
+MARKDOWN_FENCE_RE = re.compile(r"^(?: {0,3}>)* *(?P<fence>`{3,}|~{3,})")
 MARKDOWN_INLINE_LINK_RE = re.compile(
     r"(?<!!)\[[^\]\n]+\]\((?P<target><[^>\n]+>|[^)\s\n]+)(?:\s+[^)\n]*)?\)"
 )
@@ -662,7 +664,10 @@ def link_targets_outside_fences(path: Path) -> tuple[tuple[int, str], ...]:
 
     for line_number, line in enumerate(lines, 1):
         fence_match = MARKDOWN_FENCE_RE.match(line)
-        if path.suffix in MARKDOWN_FILE_SUFFIXES and fence_match is not None:
+        # Fence handling applies to every reference-link file, including YAML
+        # (REFERENCE_LINK_FILE_SUFFIXES), so links inside fenced code blocks in
+        # YAML-embedded Markdown are not mistaken for live references.
+        if fence_match is not None:
             fence = fence_match.group("fence")
             if active_fence is None:
                 active_fence = fence

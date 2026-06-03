@@ -581,3 +581,40 @@ def test_dependabot_github_actions_directory_surface_is_detected(tmp_path: Path)
         line.startswith("dependabot-ecosystem.stale | required_cleanup | github-actions |")
         for line in findings
     )
+
+
+def test_yaml_embedded_fenced_links_are_skipped(tmp_path: Path) -> None:
+    """Links inside fenced code blocks in YAML-embedded Markdown are ignored."""
+    _write_common_repo(tmp_path)
+    _write_text(
+        tmp_path,
+        ".github/ISSUE_TEMPLATE/fenced_example.yml",
+        (
+            "name: Fenced Example\n"
+            "description: Example with fenced Markdown\n"
+            "body:\n"
+            "  - type: markdown\n"
+            "    attributes:\n"
+            "      value: |\n"
+            "        Outside fence: [schema](../../schemas/example-config.schema.json).\n"
+            "        ```\n"
+            "        Inside fence: [json](../../templates/json/example.json).\n"
+            "        ```\n"
+        ),
+    )
+
+    result = _run_report(tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    findings = _finding_lines(result.stdout)
+    # The link outside the (indented) fenced block is still reported.
+    assert any(
+        line.startswith(
+            "markdown-link.excluded-target | required_cleanup | schema | "
+            ".github/ISSUE_TEMPLATE/fenced_example.yml:7 |"
+        )
+        for line in findings
+    )
+    # The link inside the fenced block must be ignored even though the file is
+    # YAML and the fence is indented inside a ``value: |`` block.
+    assert not any(".github/ISSUE_TEMPLATE/fenced_example.yml:9" in line for line in findings)
