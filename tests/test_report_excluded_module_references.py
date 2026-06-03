@@ -541,3 +541,43 @@ def test_dependabot_local_override_keeps_ecosystem_from_stale(tmp_path: Path) ->
         line.startswith("dependabot-ecosystem.stale | required_cleanup | python |")
         for line in findings
     )
+
+
+def test_dependabot_github_actions_directory_surface_is_detected(tmp_path: Path) -> None:
+    """A retained workflow keeps the github-actions ecosystem from being stale."""
+    marker = {
+        "template_sync": {
+            "source_repo": SOURCE_REPO,
+            "last_reviewed_template_commit": FULL_SHA,
+            "included_modules": [
+                "baseline",
+                "agent-instructions",
+                "github-platform",
+                "github-templates",
+                "markdown",
+                "template-sync-support",
+                "yaml",
+            ],
+            "local_overrides": [
+                {
+                    "path": ".github/workflows/data-ci.yml",
+                    "reason": "Downstream keeps the data-file CI workflow.",
+                    "default_decision": "SKIP",
+                }
+            ],
+        }
+    }
+    _write_common_repo(tmp_path, marker=marker)
+
+    result = _run_report(tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    findings = _finding_lines(result.stdout)
+    # github-actions is excluded, but a workflow under the ".github/workflows/"
+    # directory surface is retained (here via override), so the ecosystem entry
+    # is still justified. The scanned surface must be matched as a directory
+    # prefix, not as a literal file path that is never present.
+    assert not any(
+        line.startswith("dependabot-ecosystem.stale | required_cleanup | github-actions |")
+        for line in findings
+    )

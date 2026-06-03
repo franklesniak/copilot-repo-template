@@ -62,7 +62,9 @@ UPSTREAM_BLOB_PREFIX = "/franklesniak/copilot-repo-template/blob/HEAD/"
 DEPENDABOT_ECOSYSTEM_MODULES = {
     "npm": ("markdown", ("package.json", "package-lock.json")),
     "pip": ("python", ("pyproject.toml", "requirements.txt", "setup.py", "setup.cfg")),
-    "github-actions": ("github-actions", (".github/workflows",)),
+    # Directory surfaces end with "/" so the prefix branch of
+    # dependency_file_is_retained_or_present() treats them as directories.
+    "github-actions": ("github-actions", (".github/workflows/",)),
     "pre-commit": ("baseline", (".pre-commit-config.yaml",)),
 }
 GENERAL_VALIDATION_REFERENCES = {
