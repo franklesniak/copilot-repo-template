@@ -2396,11 +2396,19 @@ Expected result: All hooks should pass, or you should understand and have addres
 
 **2. First-adoption working-tree check (recommended before the first adoption commit):**
 
+Inspect the planned validation surface first:
+
+```bash
+python .template-sync/scripts/run_first_adoption_checks.py --plan-only
+```
+
+Then run the planned checks:
+
 ```bash
 python .template-sync/scripts/run_first_adoption_checks.py
 ```
 
-Expected result: The helper prints every command before it runs it and validates tracked plus untracked non-ignored regular files. It differs from `pre-commit run --all-files` because it builds its file list from `git ls-files --cached --others --exclude-standard`, then runs `pre-commit run --files ...` against that list so newly copied adoption files are checked before they are committed. If the `pre-commit` console script is not on PATH, it uses the equivalent `python -m pre_commit run --files ...` form. When the supporting files are present, it also runs the placeholder scan, marker validation, and Markdown package scripts such as `npm run lint:md` and `npm run lint:md:links`.
+Expected result: `--plan-only` prints the Git-visible file collection result, explanatory notes, and the deterministic numbered command plan without running validation commands. The normal run prints the same command plan before the first validation command starts, warns that cold pre-commit hook environment bootstrapping may be slow, then validates tracked plus untracked non-ignored regular files. It differs from `pre-commit run --all-files` because it builds its file list from `git ls-files --cached --others --exclude-standard`, then runs `pre-commit run --files ...` against that list so newly copied adoption files are checked before they are committed. Each planned command reports its group label, index, UTC start and end timestamps, elapsed time, and exit status; the run also reports total elapsed time and continues through the full plan so multiple failures are reported together. If the `pre-commit` console script is not on PATH, it uses the equivalent `python -m pre_commit run --files ...` form. When the supporting files are present, it also runs the placeholder scan, marker validation, and Markdown package scripts such as `npm run lint:md` and `npm run lint:md:links`.
 
 **3. Structural consistency checks:**
 
