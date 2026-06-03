@@ -7,13 +7,13 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.5.20260531.0
+**Version:** 1.6.20260603.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-31
+- **Last Updated:** 2026-06-03
 - **Scope:** Defines Python coding standards for all Python files in this repository, including modules, scripts, tests, and tooling. Covers style, structure, error handling, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -344,6 +344,27 @@ assert "python" in result.stdout  # Does not prove "python" is under "Excluded m
 - **SHOULD** avoid quadratic algorithms in obvious hot paths (parsers, matchers, large loops).
 - **MUST** validate untrusted input at boundaries; **MUST NOT** use `eval`.
 - **MUST** escape serialized output appropriately for its output context before embedding it into markup, templates, or generated documents. For example, `json.dumps()` output embedded in an inline HTML `<script>` block **MUST** escape `</` sequences (for example, `<\/`) so user-controlled data cannot terminate the script tag and enable XSS. Use framework-provided escaping utilities when available.
+
+### Regular Expressions
+
+When scanning multi-line text for a pattern intended to match each line independently, code **MUST** make line boundaries explicit. Either iterate line by line, such as over `str.splitlines()`, and apply `re.Pattern.match()`, `re.Pattern.search()`, or `re.Pattern.fullmatch()` as appropriate, or use `re.MULTILINE` for the regex operation. When matching whole lines with `fullmatch()`, keep candidate strings free of trailing newlines because `fullmatch()` requires the entire string, including any `\n`, to match; `str.splitlines()` already provides lines without their line terminators.
+
+Code **MUST NOT** use `re.findall()` or `re.finditer()` over a whole multi-line string with `^` or `$` anchors for per-line matching unless `re.MULTILINE` is used for the regex operation. Without `re.MULTILINE`, `^` matches only at the start of the input and `$` matches only at its end, or immediately before a newline at the end of the input. The scan can therefore silently produce a wrong result: typically no matches when the pattern is anchored on both sides (`^...$`), or only the first or last line when it is anchored on just one side. A pattern whose intended match really is the whole string is acceptable.
+
+Code that consumes `re.findall()` results **MUST** account for the pattern's capturing groups: no capturing groups yields a list of full-match strings, one capturing group yields that group's strings, and two or more capturing groups yield a list of tuples. Use non-capturing groups `(?:...)` for grouping that should not change the result shape, or use `re.finditer()` with explicit `match.group(...)` access when match context or a stable result shape matters.
+
+Compliant example:
+
+```python
+line_pattern = re.compile(r"\w+")
+tokens = [line for line in text.splitlines() if line_pattern.fullmatch(line)]
+```
+
+Non-compliant counter-example:
+
+```python
+tokens = re.findall(r"^(\w+)$", text)
+```
 
 ### Host Matching
 
