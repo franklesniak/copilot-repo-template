@@ -396,7 +396,7 @@ def print_file_collection(
 ) -> None:
     """Print a deterministic summary of Git-visible file discovery."""
     print(
-        f"Collected {len(collection.files)} tracked or untracked non-ignored " "regular file(s).",
+        f"Collected {len(collection.files)} tracked or untracked non-ignored regular file(s).",
         file=stdout,
         flush=True,
     )
