@@ -7,13 +7,13 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.6.20260603.0
+**Version:** 1.6.20260604.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-03
+- **Last Updated:** 2026-06-04
 - **Scope:** Defines Python coding standards for all Python files in this repository, including modules, scripts, tests, and tooling. Covers style, structure, error handling, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -37,6 +37,7 @@ This baseline is not dogma.  When external constraints require modern Python (e.
 - **[All]** **MUST** follow PEP 8/PEP 257; line length target **<= 100** (**MAY** exceed for URLs/long strings when readability wins).
 - **[All]** **MUST** keep formatting tool-friendly: **MUST NOT** hand-align with extra whitespace.
 - **[All]** **SHOULD** use f-strings for interpolation; **SHOULD NOT** use `%` or `.format()` formatting except when required.
+- **[All]** **SHOULD NOT** rely on same-line implicit concatenation of adjacent string literals such as `f"a " "b"` or `"a" "b"`, and **SHOULD NOT** mix an f-string with an adjacent plain literal on the same line; a missing comma silently concatenates instead of erroring. Prefer one f-string or plain literal, and reserve adjacency for intentional multi-line wrapping described below.
 - **[All]** **MUST NOT** include trailing whitespace; files **MUST** end with a single newline.
 
 ### Naming and Structure
@@ -138,6 +139,24 @@ from pathlib import Path
 # import third_party_package  # Third-party imports go here
 
 from myproject.core.models import Requirement
+```
+
+### String Literal Concatenation
+
+Code **SHOULD** prefer a single f-string or plain string literal when readable. Same-line adjacency that can hide a likely missing comma **SHOULD NOT** be used, including adjacent f-string and plain-literal fragments on the same line.
+
+When a string exceeds the 100-character line target or readability requires splitting, code **MAY** wrap intentional implicit concatenation in explicit parentheses with each fragment on its own line and clearly delimited. When interpolation is involved, keep wrapped fragments homogeneous, such as all f-strings. Code **MAY** also use explicit construction such as `"".join(...)` when that is clearer. Intentional, clearly delimited multi-line implicit concatenation purely for line length is acceptable; wrapping is an option, not a requirement, and long strings **MAY** remain on one line when readability wins.
+
+Compliant example:
+
+```python
+message = f"Collected {n} items found."
+```
+
+Non-compliant counter-example:
+
+```python
+message = f"Collected {n} items " "found."
 ```
 
 ## Naming Conventions
