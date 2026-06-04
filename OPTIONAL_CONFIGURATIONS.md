@@ -3043,6 +3043,26 @@ The workflow consists of two jobs:
 
 The workflow uses automatic detection, so you don't need to configure anything if you have PowerShell files—it just works.
 
+### Choosing the PSScriptAnalyzer Gate Mode
+
+The lint job reads `PSSCRIPTANALYZER_GATE_MODE` before deciding whether analyzer findings fail CI. Supported values are:
+
+- `strict` (default): Error, Warning, and unknown-severity findings fail CI. Information findings are annotated only.
+- `first-adoption`: Error and unknown-severity findings fail CI. Warning and Information findings are annotated as tracked debt without failing the lint job.
+
+Missing, empty, or unrecognized values resolve to `strict`. This keeps the template default strict even when a downstream repository removes or misconfigures the environment variable.
+
+Use `first-adoption` only for existing repositories that already have PSScriptAnalyzer warning debt at the moment they adopt the workflow:
+
+```yaml
+jobs:
+  powershell-lint:
+    env:
+      PSSCRIPTANALYZER_GATE_MODE: first-adoption
+```
+
+When this mode is enabled, record the warning debt in `_TODO-repo-init.md` during first adoption, or in one or more post-adoption issues after the repository is initialized. Include the CI summary counts, affected rules, owner, and expected removal date. Return `PSSCRIPTANALYZER_GATE_MODE` to `strict` after Warning findings are remediated. Do not change `.github/linting/PSScriptAnalyzerSettings.psd1` merely to make first-adoption mode work.
+
 ### Customizing Pester Test Paths
 
 By default, Pester tests are run from the `tests/` directory. To use a different directory, modify the `$config.Run.Path` setting in the "Run Pester tests" step:
@@ -3099,12 +3119,14 @@ on:
       - "**/*.ps1"
       - ".github/workflows/powershell-ci.yml"
       - ".github/linting/PSScriptAnalyzerSettings.psd1"
+      - "src/tools/*.ps1"
   pull_request:
     branches: ["**"]
     paths:
       - "**/*.ps1"
       - ".github/workflows/powershell-ci.yml"
       - ".github/linting/PSScriptAnalyzerSettings.psd1"
+      - "src/tools/*.ps1"
 ```
 
 > **Note:** Include configuration files in the path filter to ensure the workflow runs when linting rules or the workflow itself changes.
@@ -3441,6 +3463,8 @@ The default configuration enforces Error and Warning severity:
 ```powershell
 Severity = @('Error', 'Warning')
 ```
+
+The separate `PSSCRIPTANALYZER_GATE_MODE` workflow setting controls which reported severities fail CI. It does not change which severities PSScriptAnalyzer reports. With the default settings above, Information findings do not appear unless a downstream repository explicitly adds `Information` to the settings.
 
 **To include informational messages:**
 
