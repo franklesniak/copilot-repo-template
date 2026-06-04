@@ -1,14 +1,14 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260603.1
+**Version:** 1.1.20260604.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-03
-- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the read-only first-adoption preflight/questionnaire mode, one-shot first-adoption materialization, first-adoption structural convention assessment, first-adoption working-tree validation, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, and the generated adoption ledger review artifact. Does not define an automated ongoing upstream sync tool.
+- **Last Updated:** 2026-06-04
+- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the read-only first-adoption preflight/questionnaire mode, one-shot first-adoption materialization, first-adoption structural convention assessment, first-adoption working-tree validation, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
 ## Purpose
@@ -33,6 +33,7 @@ For the first import into an existing repository, the separate one-shot material
 - **First-adoption materialization command:** The `.template-sync/scripts/materialize_downstream_adoption.py` one-shot helper used during first adoption to stage retained manifest-owned template files, prune inline blocks for excluded modules, optionally run approved placeholder replacement against the staging tree, and reconcile non-conflicting staged files into a target working tree. It is a write-once adoption helper, not an automated ongoing upstream sync tool.
 - **First-adoption working-tree validation runner:** The `.template-sync/scripts/run_first_adoption_checks.py` helper used before the first adoption commit. It collects tracked and untracked non-ignored regular files using `git ls-files --cached --others --exclude-standard`, prints a deterministic numbered command plan, runs chunked `pre-commit run --files ...` commands against that file list, and runs the placeholder scan, marker validation, and Markdown package scripts when the supporting files are present. Its `--plan-only` mode prints discovery results, notes, and the command plan without running validation commands. Normal execution prints UTC start and end timestamps, elapsed time, group label, index, and exit status for each planned command, then prints total elapsed time for the run.
 - **Adoption ledger:** A generated Markdown review artifact emitted by `.template-sync/scripts/generate_sync_candidates.py`. It summarizes manifest module assignments, marker local overrides, protected-file flags and decisions, adoption-mode posture, `_TODO-repo-init.md` checklist links, and affected validation commands. It is not authoritative state; `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable sources of truth.
+- **Adoption summary:** A concise Markdown review artifact emitted by `.template-sync/scripts/generate_sync_candidates.py --summary` for PR descriptions. It summarizes included and excluded modules, protected-file decision records, local overrides, unresolved maintainer decisions, machine-interpretable manual TODO items, and retained-module validation commands. It is not the detailed path-level review artifact; use the adoption ledger for protected-file and per-path review details.
 - **Adoption mode:** The preservation posture applied before editing protected files and template-derived governance, community, process, workflow, or collaboration files. Valid named modes are `minimal-preservation` and `tailored`.
 - **`minimal-preservation`:** The default adoption mode for protected files and template-derived governance, community, process, workflow, and collaboration files. Keep upstream wording and structure; limit edits to placeholder substitution, removing complete delimited sections owned by unadopted manifest modules, fixing broken links, and adding required local overrides that are recorded in `.template-sync/marker.yml`.
 - **`tailored`:** A maintainer-selected adoption mode for a specific file or file set that allows broader downstream rewriting. The maintainer MUST select `tailored` explicitly before the broader rewrite starts. For protected files, the selection MUST be recorded in `template_sync.protected_file_decisions` with `tailored_authorization_basis`; for non-protected files, record the selection in `_TODO-repo-init.md`, `.template-sync/marker.yml` local overrides, the sync working notes, or the final sync summary.
@@ -65,7 +66,7 @@ At the start of the procedure, determine whether the first-adoption preflight ga
 3. Fetch upstream template changes without merging.
 4. Identify the upstream commit range under review with rename detection.
 5. Initialize or update `.template-sync/marker.yml`.
-6. Filter upstream changes through the authoritative module taxonomy and create or refresh the adoption ledger.
+6. Filter upstream changes through the authoritative module taxonomy and create or refresh the adoption ledger or concise adoption summary.
 7. Review every candidate file with an explicit adoption mode and decision.
 8. Perform manual merges using an ignored scratch location when needed, and normalize line endings after `.gitattributes` changes.
 9. Handle protected files through authorization or deferral.
@@ -890,6 +891,14 @@ For first-adoption or full-reconciliation work that needs the ledger before a de
 ```bash
 python .template-sync/scripts/generate_sync_candidates.py --ledger-only --write-ledger ADOPTION_LEDGER_PATH
 ```
+
+For a PR-description-ready summary after `.template-sync/marker.yml` and any `_TODO-repo-init.md` state are current, emit the concise adoption summary and skip git range inspection:
+
+```bash
+python .template-sync/scripts/generate_sync_candidates.py --summary
+```
+
+Use `--summary` for the final adoption PR body or owner handoff when maintainers need the high-level module set, protected-file decisions, local overrides, unresolved decisions, manual TODOs, and retained-module validation commands in a compact form. Use `--ledger` or `--ledger-only` for the detailed path-level review artifact, especially before editing protected files, auditing local overrides, or reviewing `_TODO-repo-init.md` checklist links. The summary is a standalone mode and cannot be combined with `--ledger`, `--ledger-only`, or `--preflight`. The summary is deterministic and pasteable, but it is not authoritative state and it does not replace the full ledger when protected-file review details are needed.
 
 The `ADOPTION_LEDGER_PATH` value MUST remain inside the repository root; the helper rejects paths that escape it. The ledger is a generated review artifact. It MUST be regenerated when `.template-sync/manifest.yml`, `.template-sync/marker.yml`, `_TODO-repo-init.md`, the selected adoption mode, or the included module set changes. Do not treat a stale committed ledger as authoritative: `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable source of truth. Rows marked `manual TODO` link to `_TODO-repo-init.md` checklist lines when that file exists. Rows marked `local override` MUST show a reason from `.template-sync/marker.yml`; if a local override has no durable reason, fix the marker before relying on the ledger. Protected rows with matching `protected_file_decisions` show the protected decision state, distinguish default `minimal-preservation` from authorized minimal edits and authorized tailored rewrites, and include a distinct `REMOVE-LOCAL` authorization section when protected removals are recorded.
 

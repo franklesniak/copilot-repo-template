@@ -618,6 +618,214 @@ def test_ledger_flag_appends_ledger_after_candidate_table(tmp_path: Path) -> Non
     )
 
 
+def test_summary_reports_clean_adoption_without_unresolved_decisions(tmp_path: Path) -> None:
+    """A clean marker produces a concise PR-description-ready summary."""
+    _init_repo(tmp_path)
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["agent-instructions", "baseline"],
+            last_reviewed_template_commit=None,
+            protected_decisions=[
+                {
+                    "path": ".github/copilot-instructions.md",
+                    "decision": "MERGE",
+                    "adoption_mode": "minimal-preservation",
+                    "authorization_basis": "Owner authorized protected edits on 2026-06-04.",
+                    "authorized_scope": ".github/copilot-instructions.md only.",
+                }
+            ],
+        ),
+    )
+    _write_text(
+        tmp_path,
+        "_TODO-repo-init.md",
+        (
+            "# Repository Initialization Checklist\n"
+            "\n"
+            "## Manual GitHub Settings\n"
+            "\n"
+            "- [x] Private vulnerability reporting decision recorded.\n"
+            "\n"
+            "## Maintainer Policy Decisions\n"
+            "\n"
+            "- [x] Adoption mode recorded.\n"
+            "\n"
+            "## Protected-File Adoption Decisions\n"
+            "\n"
+            "- [x] Protected-file edits authorized by maintainer.\n"
+            "\n"
+            "## Unresolved Settings\n"
+            "\n"
+            "- [x] No unresolved settings remain.\n"
+        ),
+    )
+
+    result = _run_generator(tmp_path, "--summary")
+
+    assert result.returncode == 0, result.stderr
+    assert "# Template Adoption Summary" in result.stdout
+    assert "# Template Adoption Ledger" not in result.stdout
+    assert "## Included Modules" in result.stdout
+    assert "- `agent-instructions`" in result.stdout
+    assert "- `baseline`" in result.stdout
+    assert "## Excluded Modules" in result.stdout
+    assert "- `python`" in result.stdout
+    assert (
+        "| .github/copilot-instructions.md | MERGE | minimal-preservation | authorized |"
+        in result.stdout
+    )
+    assert (
+        "- Unresolved maintainer decisions remain in available machine-readable state: No."
+        in result.stdout
+    )
+    assert "No unchecked items in machine-interpretable checklist sections." in result.stdout
+    assert "python .template-sync/scripts/run_first_adoption_checks.py" in result.stdout
+    assert "pytest tests/ -v --cov --cov-report=term-missing" not in result.stdout
+
+
+def test_summary_reports_deferred_overrides_and_documented_todo_items(
+    tmp_path: Path,
+) -> None:
+    """Deferred marker records and documented unchecked TODOs remain visible."""
+    _init_repo(tmp_path)
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["baseline"],
+            last_reviewed_template_commit=None,
+            local_overrides=[
+                {
+                    "path": "README.md",
+                    "reason": "Owner has not chosen the downstream README treatment.",
+                    "default_decision": "DEFER",
+                }
+            ],
+            deferred_candidates=[
+                {
+                    "path": ".github/copilot-instructions.md",
+                    "source_commit": "a" * 40,
+                    "reason": "Awaiting protected-file authorization.",
+                }
+            ],
+        ),
+    )
+    _write_text(
+        tmp_path,
+        "_TODO-repo-init.md",
+        (
+            "# Repository Initialization Checklist\n"
+            "\n"
+            "## Discoverable Repository State\n"
+            "\n"
+            "- [ ] Repository owner/name recorded from Git remote.\n"
+            "\n"
+            "## Maintainer Policy Decisions\n"
+            "\n"
+            "- [ ] Security vulnerability reporting channel selected.\n"
+            "\n"
+            "## Resolution Evidence\n"
+            "\n"
+            "- [ ] Evidence captured for resolved settings.\n"
+        ),
+    )
+
+    result = _run_generator(tmp_path, "--summary")
+
+    assert result.returncode == 0, result.stderr
+    assert "| README.md | DEFER | Owner has not chosen the downstream README treatment. |" in (
+        result.stdout
+    )
+    assert (
+        "`README.md`: local override; Marker local override defaults to `DEFER`: "
+        "Owner has not chosen the downstream README treatment."
+    ) in result.stdout
+    assert "Deferred protected candidate: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" in result.stdout
+    assert (
+        "- Unresolved maintainer decisions remain in available machine-readable state: Yes."
+        in result.stdout
+    )
+    assert (
+        "- Maintainer Policy Decisions: Security vulnerability reporting channel selected. "
+        "(`_TODO-repo-init.md` line 9)"
+    ) in result.stdout
+    assert (
+        "- Discoverable Repository State: Repository owner/name recorded from Git remote. "
+        "(`_TODO-repo-init.md` line 5)"
+    ) in result.stdout
+
+
+def test_summary_reports_protected_file_removal_authorization(tmp_path: Path) -> None:
+    """REMOVE-LOCAL protected decisions keep authorization fields in the summary."""
+    _init_repo(tmp_path)
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["agent-instructions"],
+            last_reviewed_template_commit=None,
+            protected_decisions=[
+                {
+                    "path": "GEMINI.md",
+                    "decision": "REMOVE-LOCAL",
+                    "authorization_basis": "Owner explicitly authorized removing GEMINI.md.",
+                    "authorized_scope": "GEMINI.md only.",
+                    "reason": "Gemini agent not used by this repository.",
+                }
+            ],
+        ),
+    )
+
+    result = _run_generator(tmp_path, "--summary")
+
+    assert result.returncode == 0, result.stderr
+    assert (
+        "| GEMINI.md | REMOVE-LOCAL | not recorded | authorized | "
+        "Owner explicitly authorized removing GEMINI.md. | GEMINI.md only. | "
+        "not recorded | Gemini agent not used by this repository. |"
+    ) in result.stdout
+
+
+def test_summary_reports_non_interpretable_todo_without_inferring_tasks(
+    tmp_path: Path,
+) -> None:
+    """A non-document-shaped TODO file is reported but not parsed as policy state."""
+    _init_repo(tmp_path)
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["baseline"], last_reviewed_template_commit=None),
+    )
+    _write_text(tmp_path, "_TODO-repo-init.md", "- [ ] Random local cleanup task\n")
+
+    result = _run_generator(tmp_path, "--summary")
+
+    assert result.returncode == 0, result.stderr
+    assert "found; not machine-interpretable" in result.stdout
+    assert (
+        "`_TODO-repo-init.md` is present but not machine-interpretable; "
+        "unchecked items were not parsed."
+    ) in result.stdout
+    assert "manual review is required" in result.stdout
+    assert "Random local cleanup task" not in result.stdout
+
+
+@pytest.mark.parametrize("mode_flag", ["--ledger", "--ledger-only", "--preflight"])
+def test_summary_is_mutually_exclusive_with_other_review_modes(
+    tmp_path: Path,
+    mode_flag: str,
+) -> None:
+    """`--summary` is part of the existing mutually-exclusive mode group."""
+    _init_repo(tmp_path)
+
+    result = _run_generator(tmp_path, "--summary", mode_flag)
+
+    assert result.returncode == 2
+    assert "not allowed with argument" in result.stderr
+
+
 def test_preflight_without_marker_reports_questionnaire_and_reused_ledger(
     tmp_path: Path,
 ) -> None:

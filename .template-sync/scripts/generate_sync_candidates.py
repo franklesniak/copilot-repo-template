@@ -92,6 +92,22 @@ INLINE_TRIM_NOTE_KEYWORDS = (
     "delimited",
     "strip",
 )
+TODO_KNOWN_SECTIONS = (
+    "Discoverable Repository State",
+    "Manual GitHub Settings",
+    "Maintainer Policy Decisions",
+    "Protected-File Adoption Decisions",
+    "Unresolved Settings",
+    "Resolution Evidence",
+)
+TODO_DECISION_SECTIONS = frozenset(
+    {
+        "Manual GitHub Settings",
+        "Maintainer Policy Decisions",
+        "Protected-File Adoption Decisions",
+        "Unresolved Settings",
+    }
+)
 TODO_LINK_LIMIT = 3
 VALIDATION_COMMANDS_BY_MODULE = {
     "agent-instructions": (
@@ -229,6 +245,24 @@ class TodoItem:
     line_number: int
     text: str
     is_complete: bool
+
+
+@dataclass(frozen=True)
+class SummaryTodoItem:
+    """One machine-interpretable unchecked checklist item for the concise summary."""
+
+    line_number: int
+    section: str
+    text: str
+
+
+@dataclass(frozen=True)
+class SummaryTodoState:
+    """Machine-interpretability state for the first-adoption checklist summary."""
+
+    exists: bool
+    is_interpretable: bool
+    unchecked_items: tuple[SummaryTodoItem, ...]
 
 
 @dataclass(frozen=True)
@@ -376,6 +410,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "Emit only the generated adoption ledger and skip git range inspection. "
             "Use this for first-adoption or full-reconciliation review when a delta "
             "candidate table is not available."
+        ),
+    )
+    ledger_mode_group.add_argument(
+        "--summary",
+        action="store_true",
+        help=(
+            "Emit a concise deterministic template adoption summary for PR "
+            "descriptions and skip git range inspection."
         ),
     )
     ledger_mode_group.add_argument(
@@ -1077,6 +1119,61 @@ def load_todo_items(todo_path: Path, repo_root: Path) -> tuple[TodoItem, ...]:
             )
         )
     return tuple(items)
+
+
+def load_summary_todo_state(todo_path: Path, repo_root: Path) -> SummaryTodoState:
+    """Load unchecked checklist items only from the documented TODO shape."""
+    if not todo_path.exists():
+        return SummaryTodoState(exists=False, is_interpretable=True, unchecked_items=())
+    try:
+        lines = todo_path.read_text(encoding="utf-8").splitlines()
+    except OSError as error:
+        todo_relative = repository_relative_path(todo_path, repo_root)
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        raise CandidateGenerationError(
+            f"Unable to read adoption checklist {todo_relative}: {error_summary}"
+        ) from error
+
+    has_documented_title = any(
+        line.strip() == "# Repository Initialization Checklist" for line in lines
+    )
+    current_section: str | None = None
+    found_known_section = False
+    unchecked_items: list[SummaryTodoItem] = []
+    known_sections = frozenset(TODO_KNOWN_SECTIONS)
+
+    for line_number, line in enumerate(lines, start=1):
+        heading_match = re.match(r"^##\s+(?P<section>.+?)\s*$", line)
+        if heading_match is not None:
+            section = heading_match.group("section")
+            current_section = section if section in known_sections else None
+            found_known_section = found_known_section or current_section is not None
+            continue
+
+        if current_section is None:
+            continue
+
+        task_match = re.match(
+            r"^\s*[-*]\s+\[(?P<status>[ xX])\]\s+(?P<text>.+?)\s*$",
+            line,
+        )
+        if task_match is None or task_match.group("status").lower() == "x":
+            continue
+
+        unchecked_items.append(
+            SummaryTodoItem(
+                line_number=line_number,
+                section=current_section,
+                text=task_match.group("text"),
+            )
+        )
+
+    is_interpretable = has_documented_title and found_known_section
+    return SummaryTodoState(
+        exists=True,
+        is_interpretable=is_interpretable,
+        unchecked_items=tuple(unchecked_items) if is_interpretable else (),
+    )
 
 
 def empty_marker_data() -> MarkerData:
@@ -2054,6 +2151,318 @@ def format_adoption_ledger(
     return "\n".join(lines)
 
 
+def format_summary_module_list(modules: frozenset[str]) -> str:
+    """Render a deterministic bullet list of module names."""
+    if not modules:
+        return "- None"
+    return "\n".join(f"- `{module}`" for module in sorted(modules))
+
+
+def protected_decision_authorization_status(protected_decision: ProtectedFileDecision) -> str:
+    """Return concise authorization status for one protected-file decision."""
+    if protected_decision.decision in {"TAKE", "MERGE", REMOVAL_DECISION}:
+        missing_fields: list[str] = []
+        if protected_decision.authorization_basis is None:
+            missing_fields.append("authorization_basis")
+        if protected_decision.authorized_scope is None:
+            missing_fields.append("authorized_scope")
+        if (
+            protected_decision.adoption_mode == "tailored"
+            and protected_decision.tailored_authorization_basis is None
+        ):
+            missing_fields.append("tailored_authorization_basis")
+        if missing_fields:
+            return "missing " + ", ".join(missing_fields)
+        return "authorized"
+
+    if protected_decision.decision in {"DEFER", "PROTECTED-REVIEW"}:
+        return "deferred"
+
+    return "not applicable"
+
+
+def format_summary_protected_decisions(marker_data: MarkerData) -> str:
+    """Render protected-file decisions for the concise adoption summary."""
+    if not marker_data.protected_decisions:
+        return "None recorded."
+
+    header = (
+        "| Path | Decision | Adoption mode | Authorization status | Authorization basis | "
+        "Authorized scope | Tailored authorization basis | Reason |"
+    )
+    divider = "| --- | --- | --- | --- | --- | --- | --- | --- |"
+    lines = [header, divider]
+    for protected_decision in sorted(
+        marker_data.protected_decisions,
+        key=lambda decision: decision.path,
+    ):
+        lines.append(
+            "| "
+            + " | ".join(
+                markdown_cell(cell)
+                for cell in (
+                    protected_decision.path,
+                    protected_decision.decision,
+                    protected_decision.adoption_mode or "not recorded",
+                    protected_decision_authorization_status(protected_decision),
+                    protected_decision.authorization_basis or "not recorded",
+                    protected_decision.authorized_scope or "not recorded",
+                    protected_decision.tailored_authorization_basis or "not recorded",
+                    protected_decision.reason or "not recorded",
+                )
+            )
+            + " |"
+        )
+    return "\n".join(lines)
+
+
+def format_summary_local_overrides(marker_data: MarkerData) -> str:
+    """Render marker local overrides for the concise adoption summary."""
+    if not marker_data.local_overrides:
+        return "None recorded."
+
+    lines = [
+        "| Path | Default decision | Reason |",
+        "| --- | --- | --- |",
+    ]
+    for local_override in sorted(
+        marker_data.local_overrides,
+        key=lambda override: override.path,
+    ):
+        display_path = local_override.path + ("/" if local_override.is_directory else "")
+        lines.append(
+            "| "
+            + " | ".join(
+                markdown_cell(cell)
+                for cell in (
+                    display_path,
+                    local_override.default_decision,
+                    local_override.reason,
+                )
+            )
+            + " |"
+        )
+    return "\n".join(lines)
+
+
+def format_summary_manual_todo_items(
+    *,
+    todo_state: SummaryTodoState,
+    todo_path: Path,
+    repo_root: Path,
+) -> str:
+    """Render machine-interpretable unchecked TODO items for the summary."""
+    todo_relative = repository_relative_path(todo_path, repo_root)
+    if not todo_state.exists:
+        return f"`{todo_relative}` not found."
+    if not todo_state.is_interpretable:
+        return (
+            f"`{todo_relative}` is present but not machine-interpretable; "
+            "unchecked items were not parsed."
+        )
+    if not todo_state.unchecked_items:
+        return "No unchecked items in machine-interpretable checklist sections."
+
+    lines: list[str] = []
+    for section in TODO_KNOWN_SECTIONS:
+        for item in todo_state.unchecked_items:
+            if item.section == section:
+                lines.append(
+                    f"- {section}: {item.text} " + f"(`{todo_relative}` line {item.line_number})"
+                )
+    return "\n".join(lines)
+
+
+def append_unique_summary_item(
+    items: list[str],
+    seen_items: set[str],
+    item: str,
+) -> None:
+    """Append one summary item while preserving deterministic first occurrence."""
+    if item in seen_items:
+        return
+    seen_items.add(item)
+    items.append(item)
+
+
+def format_summary_unresolved_decisions(
+    *,
+    rows: tuple[LedgerRow, ...],
+    marker_data: MarkerData,
+    todo_state: SummaryTodoState,
+    todo_path: Path,
+    repo_root: Path,
+) -> str:
+    """Render unresolved maintainer decisions from available machine-readable state."""
+    todo_relative = repository_relative_path(todo_path, repo_root)
+    unresolved: list[str] = []
+    seen_unresolved: set[str] = set()
+
+    for row in rows:
+        if row.requires_maintainer_decision == "Yes" and row.decision != "manual TODO":
+            append_unique_summary_item(
+                unresolved,
+                seen_unresolved,
+                f"`{row.path}`: {row.decision}; {row.reason}",
+            )
+
+    for candidate in sorted(
+        marker_data.deferred_candidates,
+        key=lambda item: (item.path, item.source_commit),
+    ):
+        if not any(candidate.reason in row.reason for row in rows):
+            append_unique_summary_item(
+                unresolved,
+                seen_unresolved,
+                (
+                    f"`{candidate.path}`: deferred protected candidate from "
+                    f"`{candidate.source_commit}`; {candidate.reason}"
+                ),
+            )
+
+    if todo_state.exists and not todo_state.is_interpretable:
+        append_unique_summary_item(
+            unresolved,
+            seen_unresolved,
+            (
+                f"`{todo_relative}` is present but not machine-interpretable; "
+                "manual review is required."
+            ),
+        )
+    elif todo_state.is_interpretable:
+        for item in todo_state.unchecked_items:
+            if item.section in TODO_DECISION_SECTIONS:
+                append_unique_summary_item(
+                    unresolved,
+                    seen_unresolved,
+                    (
+                        f"`{todo_relative}` line {item.line_number}: "
+                        + f"{item.section}: {item.text}"
+                    ),
+                )
+
+    if unresolved:
+        return "\n".join(
+            [
+                "- Unresolved maintainer decisions remain in available "
+                "machine-readable state: Yes.",
+                *(f"- {item}" for item in unresolved),
+            ]
+        )
+
+    return "\n".join(
+        [
+            "- Unresolved maintainer decisions remain in available machine-readable state: No.",
+            (
+                "- No unresolved decisions were found in marker data, protected-file "
+                "decisions, deferred protected candidates, local overrides, or "
+                "machine-interpretable TODO state."
+            ),
+        ]
+    )
+
+
+def summary_validation_commands(marker_data: MarkerData) -> tuple[str, ...]:
+    """Return validation commands for retained modules in summary order."""
+    commands = [
+        "python .template-sync/scripts/run_first_adoption_checks.py",
+        "pre-commit run --all-files",
+    ]
+    for command in validation_commands_for_modules(marker_data.included_modules).split("<br>"):
+        if command and command != "manual review" and command not in commands:
+            commands.append(command)
+    return tuple(commands)
+
+
+def format_summary_validation_commands(marker_data: MarkerData) -> str:
+    """Render retained-module validation commands for the concise summary."""
+    return "\n".join(f"- `{command}`" for command in summary_validation_commands(marker_data))
+
+
+def format_todo_summary_status(todo_state: SummaryTodoState) -> str:
+    """Return a short machine-interpretability status for the TODO file."""
+    if not todo_state.exists:
+        return "not found"
+    if not todo_state.is_interpretable:
+        return "found; not machine-interpretable"
+    return "found; machine-interpretable"
+
+
+def format_adoption_summary(
+    *,
+    marker_path: Path,
+    manifest_path: Path,
+    todo_path: Path,
+    repo_root: Path,
+    marker_data: MarkerData,
+    manifest_modules: frozenset[str],
+    rows: tuple[LedgerRow, ...],
+    todo_state: SummaryTodoState,
+    default_adoption_mode: str,
+) -> str:
+    """Render a concise deterministic template adoption summary."""
+    marker_relative = repository_relative_path(marker_path, repo_root)
+    manifest_relative = repository_relative_path(manifest_path, repo_root)
+    todo_relative = repository_relative_path(todo_path, repo_root)
+    marker_status = "found" if marker_path.exists() else "not found"
+    excluded_modules = manifest_modules - marker_data.included_modules
+
+    return "\n".join(
+        [
+            "# Template Adoption Summary",
+            "",
+            (
+                "Concise deterministic review artifact for adoption PR descriptions. "
+                "`--ledger-only` remains the detailed path-level review artifact; "
+                f"`{manifest_relative}` and `{marker_relative}` remain authoritative."
+            ),
+            "",
+            f"- Marker: `{marker_relative}` ({marker_status})",
+            f"- Manifest: `{manifest_relative}`",
+            f"- First-adoption checklist: `{todo_relative}` ({format_todo_summary_status(todo_state)})",
+            f"- Default adoption mode: `{default_adoption_mode}`",
+            "",
+            "## Included Modules",
+            "",
+            format_summary_module_list(marker_data.included_modules),
+            "",
+            "## Excluded Modules",
+            "",
+            format_summary_module_list(excluded_modules),
+            "",
+            "## Protected-File Decisions",
+            "",
+            format_summary_protected_decisions(marker_data),
+            "",
+            "## Local Overrides",
+            "",
+            format_summary_local_overrides(marker_data),
+            "",
+            "## Unresolved Maintainer Decisions",
+            "",
+            format_summary_unresolved_decisions(
+                rows=rows,
+                marker_data=marker_data,
+                todo_state=todo_state,
+                todo_path=todo_path,
+                repo_root=repo_root,
+            ),
+            "",
+            "## Manual TODO Items",
+            "",
+            format_summary_manual_todo_items(
+                todo_state=todo_state,
+                todo_path=todo_path,
+                repo_root=repo_root,
+            ),
+            "",
+            "## Validation Commands",
+            "",
+            format_summary_validation_commands(marker_data),
+        ]
+    )
+
+
 def format_limited_path_list(paths: tuple[str, ...], empty_text: str, *, limit: int = 8) -> str:
     """Return a compact Markdown list of repository paths."""
     if not paths:
@@ -2709,6 +3118,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.ledger_only and args.write_candidates is not None:
             raise CandidateGenerationError("--write-candidates cannot be used with --ledger-only.")
+        if args.summary and args.write_candidates is not None:
+            raise CandidateGenerationError("--write-candidates cannot be used with --summary.")
+        if args.summary and args.write_ledger is not None:
+            raise CandidateGenerationError("--write-ledger cannot be used with --summary.")
         if args.preflight and args.write_candidates is not None:
             raise CandidateGenerationError("--write-candidates cannot be used with --preflight.")
         if args.preflight and args.write_ledger is not None:
@@ -2779,6 +3192,48 @@ def main(argv: list[str] | None = None) -> int:
                     discovery=discovery,
                     ledger_rows=ledger_rows,
                     ledger_document=ledger_document,
+                )
+            )
+            return 0
+
+        if args.summary:
+            if marker_path.exists():
+                marker_data, manifest_modules, mappings = load_and_validate_inputs(
+                    repo_root=repo_root,
+                    marker_path=marker_path,
+                    manifest_path=manifest_path,
+                    marker_schema_path=marker_schema_path,
+                    manifest_schema_path=manifest_schema_path,
+                )
+            else:
+                marker_data, manifest_modules, mappings = load_preflight_inputs(
+                    repo_root=repo_root,
+                    marker_path=marker_path,
+                    manifest_path=manifest_path,
+                    marker_schema_path=marker_schema_path,
+                    manifest_schema_path=manifest_schema_path,
+                )
+            todo_state = load_summary_todo_state(todo_path, repo_root)
+            summary_rows = build_adoption_ledger_rows(
+                marker_data=marker_data,
+                manifest_modules=manifest_modules,
+                mappings=mappings,
+                todo_items=(),
+                todo_path=todo_path,
+                repo_root=repo_root,
+                default_adoption_mode=args.adoption_mode,
+            )
+            print(
+                format_adoption_summary(
+                    marker_path=marker_path,
+                    manifest_path=manifest_path,
+                    todo_path=todo_path,
+                    repo_root=repo_root,
+                    marker_data=marker_data,
+                    manifest_modules=manifest_modules,
+                    rows=summary_rows,
+                    todo_state=todo_state,
+                    default_adoption_mode=args.adoption_mode,
                 )
             )
             return 0
