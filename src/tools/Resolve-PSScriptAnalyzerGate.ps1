@@ -225,7 +225,8 @@ function ConvertTo-RepositoryRelativePath {
     # forward slashes for a stable comparison and output.
     #
     # .PARAMETER Path
-    # The path to convert. Null and empty values are returned unchanged.
+    # The path to convert. A null path is returned as an empty string;
+    # an empty or whitespace-only path is returned unchanged.
     #
     # .PARAMETER RepositoryRoot
     # The repository root to make the path relative to. Null and empty roots
@@ -262,6 +263,10 @@ function ConvertTo-RepositoryRelativePath {
     )
 
     Set-StrictMode -Version Latest
+
+    if ($null -eq $Path) {
+        return ''
+    }
 
     $strPath = [string]$Path
     if ([string]::IsNullOrWhiteSpace($strPath)) {
