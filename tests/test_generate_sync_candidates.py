@@ -225,6 +225,21 @@ def _run_generator(repo_root: Path, *extra_args: str) -> subprocess.CompletedPro
     )
 
 
+def _summary_section_modules(output: str, heading: str) -> set[str]:
+    """Return the backtick-quoted module names rendered under a `## <heading>` section."""
+    modules: set[str] = set()
+    in_section = False
+    for line in output.splitlines():
+        if line.startswith("## "):
+            in_section = line == f"## {heading}"
+            continue
+        if in_section:
+            stripped = line.strip()
+            if stripped.startswith("- `") and stripped.endswith("`"):
+                modules.add(stripped.removeprefix("- `").removesuffix("`"))
+    return modules
+
+
 def test_no_changes_reports_empty_range(tmp_path: Path) -> None:
     """A clean reviewed range produces a clear empty report."""
     _init_repo(tmp_path)
@@ -668,10 +683,14 @@ def test_summary_reports_clean_adoption_without_unresolved_decisions(tmp_path: P
     assert "# Template Adoption Summary" in result.stdout
     assert "# Template Adoption Ledger" not in result.stdout
     assert "## Included Modules" in result.stdout
-    assert "- `agent-instructions`" in result.stdout
-    assert "- `baseline`" in result.stdout
     assert "## Excluded Modules" in result.stdout
-    assert "- `python`" in result.stdout
+    included_modules = _summary_section_modules(result.stdout, "Included Modules")
+    excluded_modules = _summary_section_modules(result.stdout, "Excluded Modules")
+    assert "agent-instructions" in included_modules
+    assert "baseline" in included_modules
+    assert "agent-instructions" not in excluded_modules
+    assert "python" in excluded_modules
+    assert "python" not in included_modules
     assert (
         "| .github/copilot-instructions.md | MERGE | minimal-preservation | authorized |"
         in result.stdout
@@ -754,6 +773,45 @@ def test_summary_reports_deferred_overrides_and_documented_todo_items(
     assert (
         "- Discoverable Repository State: Repository owner/name recorded from Git remote. "
         "(`_TODO-repo-init.md` line 5)"
+    ) in result.stdout
+
+
+def test_summary_surfaces_deferred_candidate_unmatched_by_manifest_rows(
+    tmp_path: Path,
+) -> None:
+    """Deferred candidates sharing a templated reason are deduplicated by path, not text."""
+    _init_repo(tmp_path)
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["agent-instructions", "baseline"],
+            last_reviewed_template_commit=None,
+            deferred_candidates=[
+                {
+                    "path": ".github/copilot-instructions.md",
+                    "source_commit": "a" * 40,
+                    "reason": "Awaiting protected-file authorization.",
+                },
+                {
+                    "path": "AGENTS.md",
+                    "source_commit": "b" * 40,
+                    "reason": "Awaiting protected-file authorization.",
+                },
+            ],
+        ),
+    )
+
+    result = _run_generator(tmp_path, "--summary")
+
+    assert result.returncode == 0, result.stderr
+    # The manifest-matched candidate is surfaced via its ledger row.
+    assert "Deferred protected candidate: " + "a" * 40 in result.stdout
+    # The candidate whose path matches no deferred-candidate ledger row must still be
+    # surfaced even though it shares the templated reason text of the matched one.
+    assert (
+        "`AGENTS.md`: deferred protected candidate from `" + "b" * 40 + "`; "
+        "Awaiting protected-file authorization."
     ) in result.stdout
 
 

@@ -2287,6 +2287,27 @@ def append_unique_summary_item(
     items.append(item)
 
 
+def deferred_candidate_rendered_in_rows(
+    candidate: DeferredProtectedCandidate,
+    rows: tuple[LedgerRow, ...],
+) -> bool:
+    """Return True when a deferred-candidate ledger row already covers this candidate.
+
+    A deferred protected candidate is folded into a manifest ledger row only when that
+    row takes the deferred-candidate branch, which embeds ``Deferred protected
+    candidate:`` in the row reason and matches the candidate through the row's manifest
+    pattern. Matching on the candidate path via the manifest pattern, rather than
+    substring-matching the reason text, avoids suppressing distinct candidates that
+    merely share a templated reason such as ``Awaiting protected-file authorization.``.
+    """
+    return any(
+        row.requires_maintainer_decision == "Yes"
+        and "Deferred protected candidate:" in row.reason
+        and manifest_pattern_matches_path(row.path, candidate.path)
+        for row in rows
+    )
+
+
 def format_summary_unresolved_decisions(
     *,
     rows: tuple[LedgerRow, ...],
@@ -2312,7 +2333,7 @@ def format_summary_unresolved_decisions(
         marker_data.deferred_candidates,
         key=lambda item: (item.path, item.source_commit),
     ):
-        if not any(candidate.reason in row.reason for row in rows):
+        if not deferred_candidate_rendered_in_rows(candidate, rows):
             append_unique_summary_item(
                 unresolved,
                 seen_unresolved,
