@@ -1134,9 +1134,11 @@ def load_summary_todo_state(todo_path: Path, repo_root: Path) -> SummaryTodoStat
             f"Unable to read adoption checklist {todo_relative}: {error_summary}"
         ) from error
 
-    has_documented_title = any(
-        line.strip() == "# Repository Initialization Checklist" for line in lines
+    first_content_line = next(
+        (line.strip() for line in lines if line.strip()),
+        None,
     )
+    has_documented_title = first_content_line == "# Repository Initialization Checklist"
     current_section: str | None = None
     found_known_section = False
     unchecked_items: list[SummaryTodoItem] = []

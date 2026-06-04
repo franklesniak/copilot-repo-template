@@ -812,6 +812,42 @@ def test_summary_reports_non_interpretable_todo_without_inferring_tasks(
     assert "Random local cleanup task" not in result.stdout
 
 
+def test_summary_rejects_todo_when_title_is_not_first_content_line(
+    tmp_path: Path,
+) -> None:
+    """A documented H1 that appears after preamble is not treated as interpretable."""
+    _init_repo(tmp_path)
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["baseline"], last_reviewed_template_commit=None),
+    )
+    _write_text(
+        tmp_path,
+        "_TODO-repo-init.md",
+        (
+            "Downstream preamble that is not the documented title.\n"
+            "\n"
+            "# Repository Initialization Checklist\n"
+            "\n"
+            "## Maintainer Policy Decisions\n"
+            "\n"
+            "- [ ] Security vulnerability reporting channel selected.\n"
+        ),
+    )
+
+    result = _run_generator(tmp_path, "--summary")
+
+    assert result.returncode == 0, result.stderr
+    assert "found; not machine-interpretable" in result.stdout
+    assert (
+        "`_TODO-repo-init.md` is present but not machine-interpretable; "
+        "unchecked items were not parsed."
+    ) in result.stdout
+    assert "manual review is required" in result.stdout
+    assert "Security vulnerability reporting channel selected." not in result.stdout
+
+
 @pytest.mark.parametrize("mode_flag", ["--ledger", "--ledger-only", "--preflight"])
 def test_summary_is_mutually_exclusive_with_other_review_modes(
     tmp_path: Path,
