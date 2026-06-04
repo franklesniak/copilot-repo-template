@@ -280,8 +280,8 @@ function Resolve-PSScriptAnalyzerGate {
         $arrAnalyzerFinding = @($AnalyzerFinding)
     }
 
-    $arrNormalizedFinding = [System.Collections.Generic.List[pscustomobject]]::new()
-    $arrAnnotationCommand = [System.Collections.Generic.List[string]]::new()
+    $listNormalizedFinding = [System.Collections.Generic.List[pscustomobject]]::new()
+    $listAnnotationCommand = [System.Collections.Generic.List[string]]::new()
 
     $intErrorCount = 0
     $intWarningCount = 0
@@ -379,26 +379,26 @@ function Resolve-PSScriptAnalyzerGate {
 
         $strAnnotationMessage = '[{0}] {1} - {2}' -f $strDisplaySeverity, $strRuleName, $strMessage
 
-        $arrAnnotationField = [System.Collections.Generic.List[string]]::new()
+        $listAnnotationField = [System.Collections.Generic.List[string]]::new()
         if (-not [string]::IsNullOrWhiteSpace($strScriptPath)) {
-            $arrAnnotationField.Add(('file={0}' -f (ConvertTo-GitHubAnnotationField -Value $strScriptPath)))
+            $listAnnotationField.Add(('file={0}' -f (ConvertTo-GitHubAnnotationField -Value $strScriptPath)))
         }
         if ($intLine -gt 0) {
-            $arrAnnotationField.Add(('line={0}' -f $intLine))
+            $listAnnotationField.Add(('line={0}' -f $intLine))
         }
         if ($intColumn -gt 0) {
-            $arrAnnotationField.Add(('col={0}' -f $intColumn))
+            $listAnnotationField.Add(('col={0}' -f $intColumn))
         }
 
         $strEscapedAnnotationMessage = ConvertTo-GitHubAnnotationMessage -Value $strAnnotationMessage
-        if ($arrAnnotationField.Count -gt 0) {
-            $strAnnotationField = $arrAnnotationField.ToArray() -join ','
-            $arrAnnotationCommand.Add(('::{0} {1}::{2}' -f $strAnnotationLevel, $strAnnotationField, $strEscapedAnnotationMessage))
+        if ($listAnnotationField.Count -gt 0) {
+            $strAnnotationField = $listAnnotationField.ToArray() -join ','
+            $listAnnotationCommand.Add(('::{0} {1}::{2}' -f $strAnnotationLevel, $strAnnotationField, $strEscapedAnnotationMessage))
         } else {
-            $arrAnnotationCommand.Add(('::{0}::{1}' -f $strAnnotationLevel, $strEscapedAnnotationMessage))
+            $listAnnotationCommand.Add(('::{0}::{1}' -f $strAnnotationLevel, $strEscapedAnnotationMessage))
         }
 
-        $arrNormalizedFinding.Add(
+        $listNormalizedFinding.Add(
             [pscustomobject]@{
                 Severity = $strNormalizedSeverity
                 OriginalSeverity = $strOriginalSeverity
@@ -414,7 +414,7 @@ function Resolve-PSScriptAnalyzerGate {
         )
     }
 
-    $intTotalCount = $arrNormalizedFinding.Count
+    $intTotalCount = $listNormalizedFinding.Count
     $boolShouldFail = ($intBlockingCount -gt 0)
 
     $objSummary = [pscustomobject]@{
@@ -427,38 +427,38 @@ function Resolve-PSScriptAnalyzerGate {
         DebtCount = $intDebtCount
     }
 
-    $arrSummaryLine = [System.Collections.Generic.List[string]]::new()
-    $arrSummaryLine.Add(('PSScriptAnalyzer gate mode: {0}.' -f $strResolvedMode))
+    $listSummaryLine = [System.Collections.Generic.List[string]]::new()
+    $listSummaryLine.Add(('PSScriptAnalyzer gate mode: {0}.' -f $strResolvedMode))
 
     if ($intTotalCount -eq 0) {
-        $arrSummaryLine.Add('No PSScriptAnalyzer findings were reported.')
-        $arrSummaryLine.Add('Result: pass.')
+        $listSummaryLine.Add('No PSScriptAnalyzer findings were reported.')
+        $listSummaryLine.Add('Result: pass.')
     } else {
         $strFindingSummary = 'Findings: {0} total; {1} Error; {2} Warning; {3} Information; {4} unknown severity.' -f $intTotalCount, $intErrorCount, $intWarningCount, $intInformationCount, $intUnknownSeverityCount
-        $arrSummaryLine.Add($strFindingSummary)
+        $listSummaryLine.Add($strFindingSummary)
 
         if ($strResolvedMode -eq 'first-adoption') {
             if ($intDebtCount -gt 0) {
                 $strWarningDebtSummary = 'Warning debt: {0} Warning and {1} Information finding(s) are annotated as tracked debt.' -f $intWarningCount, $intInformationCount
-                $arrSummaryLine.Add($strWarningDebtSummary)
-                $arrSummaryLine.Add(
+                $listSummaryLine.Add($strWarningDebtSummary)
+                $listSummaryLine.Add(
                     'Record warning debt in _TODO-repo-init.md or a post-adoption issue, then return PSSCRIPTANALYZER_GATE_MODE to strict after the debt is remediated.'
                 )
             } else {
-                $arrSummaryLine.Add('Warning debt: none.')
+                $listSummaryLine.Add('Warning debt: none.')
             }
 
             if ($boolShouldFail) {
-                $arrSummaryLine.Add('Result: fail because Error or unknown-severity findings are present.')
+                $listSummaryLine.Add('Result: fail because Error or unknown-severity findings are present.')
             } else {
-                $arrSummaryLine.Add('Result: pass; Warning and Information findings were annotated without failing first-adoption mode.')
+                $listSummaryLine.Add('Result: pass; Warning and Information findings were annotated without failing first-adoption mode.')
             }
         } else {
-            $arrSummaryLine.Add('Strict gate: Error, Warning, and unknown-severity findings fail CI; Information findings are annotation-only.')
+            $listSummaryLine.Add('Strict gate: Error, Warning, and unknown-severity findings fail CI; Information findings are annotation-only.')
             if ($boolShouldFail) {
-                $arrSummaryLine.Add('Result: fail because blocking findings are present.')
+                $listSummaryLine.Add('Result: fail because blocking findings are present.')
             } else {
-                $arrSummaryLine.Add('Result: pass.')
+                $listSummaryLine.Add('Result: pass.')
             }
         }
     }
@@ -467,8 +467,8 @@ function Resolve-PSScriptAnalyzerGate {
         Mode = $strResolvedMode
         ShouldFail = $boolShouldFail
         Summary = $objSummary
-        SummaryLines = [string[]]$arrSummaryLine.ToArray()
-        AnnotationCommands = [string[]]$arrAnnotationCommand.ToArray()
-        Findings = [object[]]$arrNormalizedFinding.ToArray()
+        SummaryLines = [string[]]$listSummaryLine.ToArray()
+        AnnotationCommands = [string[]]$listAnnotationCommand.ToArray()
+        Findings = [object[]]$listNormalizedFinding.ToArray()
     }
 }

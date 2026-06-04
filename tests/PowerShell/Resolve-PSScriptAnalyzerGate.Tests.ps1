@@ -202,6 +202,7 @@ Describe "Resolve-PSScriptAnalyzerGate" {
             $objResult.ShouldFail | Should -BeFalse
             $objResult.Summary.BlockingCount | Should -Be 0
             $objResult.Summary.DebtCount | Should -Be 1
+            $objResult.Findings.Count | Should -Be 1
             $objResult.Findings[0].TrackedDebt | Should -BeTrue
         }
 
@@ -216,6 +217,7 @@ Describe "Resolve-PSScriptAnalyzerGate" {
             $objResult.ShouldFail | Should -BeFalse
             $objResult.Summary.BlockingCount | Should -Be 0
             $objResult.Summary.DebtCount | Should -Be 1
+            $objResult.Findings.Count | Should -Be 1
             $objResult.Findings[0].TrackedDebt | Should -BeTrue
         }
 
@@ -248,6 +250,7 @@ Describe "Resolve-PSScriptAnalyzerGate" {
 
             # Assert
             $objResult.ShouldFail | Should -BeTrue
+            $objResult.Findings.Count | Should -Be 1
             $objResult.Findings[0].Severity | Should -Be 'Unknown'
         }
 
@@ -266,6 +269,7 @@ Describe "Resolve-PSScriptAnalyzerGate" {
 
             # Assert
             $objResult.ShouldFail | Should -BeTrue
+            $objResult.Findings.Count | Should -Be 1
             $objResult.Findings[0].Severity | Should -Be 'Unknown'
         }
     }
