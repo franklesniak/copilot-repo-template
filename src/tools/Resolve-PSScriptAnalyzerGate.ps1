@@ -22,7 +22,10 @@ function ConvertTo-GitHubAnnotationField {
     # [string] The escaped annotation field value.
     #
     # .NOTES
-    # Private/internal helper.
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
     # Version: 1.0.20260604.0
     # Positional parameters are not supported.
     #
@@ -72,7 +75,10 @@ function ConvertTo-GitHubAnnotationMessage {
     # [string] The escaped annotation message.
     #
     # .NOTES
-    # Private/internal helper.
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
     # Version: 1.0.20260604.0
     # Positional parameters are not supported.
     #
@@ -123,7 +129,10 @@ function Get-PSScriptAnalyzerFindingProperty {
     # [object] The property value, or null when the property is absent.
     #
     # .NOTES
-    # Private/internal helper.
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
     # Version: 1.0.20260604.0
     # Positional parameters are not supported.
     #
@@ -175,7 +184,10 @@ function ConvertTo-PSScriptAnalyzerPositiveInteger {
     # [int] A positive integer, or 0 when the value is not a positive integer.
     #
     # .NOTES
-    # Private/internal helper.
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
     # Version: 1.0.20260604.0
     # Positional parameters are not supported.
     #
@@ -268,7 +280,7 @@ function Resolve-PSScriptAnalyzerGate {
         $arrAnalyzerFinding = @($AnalyzerFinding)
     }
 
-    $arrNormalizedFinding = [System.Collections.Generic.List[object]]::new()
+    $arrNormalizedFinding = [System.Collections.Generic.List[pscustomobject]]::new()
     $arrAnnotationCommand = [System.Collections.Generic.List[string]]::new()
 
     $intErrorCount = 0

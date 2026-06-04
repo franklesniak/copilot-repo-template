@@ -92,7 +92,7 @@ jobs:
           $analyzerFindings = @()
 
           foreach ($file in $ps1Files) {
-            Write-Host "Analyzing: $($file.FullName)"
+            Write-Output "Analyzing: $($file.FullName)"
             $analyzerFindings += @(
               Invoke-ScriptAnalyzer -Path $file.FullName -Settings $settingsPath
             )
@@ -103,20 +103,20 @@ jobs:
             -AnalyzerFinding $analyzerFindings
 
           foreach ($annotationCommand in $gateResult.AnnotationCommands) {
-            Write-Host $annotationCommand
+            Write-Output $annotationCommand
           }
 
-          Write-Host ""
+          Write-Output ""
           foreach ($summaryLine in $gateResult.SummaryLines) {
-            Write-Host $summaryLine
+            Write-Output $summaryLine
           }
 
           if ($gateResult.ShouldFail) {
-            Write-Host "::error::PSScriptAnalyzer gate failed. See annotations and summary above."
+            Write-Output "::error::PSScriptAnalyzer gate failed. See annotations and summary above."
             exit 1
           }
 
-          Write-Host "PowerShell lint gate passed."
+          Write-Output "PowerShell lint gate passed."
 
       - name: Skip - No PowerShell files
         if: steps.find-ps1.outputs.found != 'true'

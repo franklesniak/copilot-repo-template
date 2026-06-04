@@ -41,7 +41,10 @@ BeforeAll {
         # [pscustomobject] A synthetic analyzer finding.
         #
         # .NOTES
-        # Private/internal helper.
+        # PRIVATE/INTERNAL HELPER - This function is not part of the public
+        # API surface. Parameters, return shape, and positional contract may
+        # change without notice.
+        #
         # Version: 1.0.20260604.0
         # Positional parameters are not supported.
         #
