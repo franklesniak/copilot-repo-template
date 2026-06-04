@@ -326,4 +326,32 @@ Describe "Resolve-PSScriptAnalyzerGate" {
             ($objResult.SummaryLines -join "`n") | Should -Match 'Result: fail'
         }
     }
+
+    Context "When normalizing annotation paths" {
+        It "Makes an absolute ScriptPath relative to the repository root" {
+            # Arrange
+            $strRepositoryRoot = '/home/runner/work/repo/repo'
+            $objFinding = Get-SyntheticAnalyzerFinding -Severity 'Warning' -ScriptPath "$strRepositoryRoot/src/tools/Demo.ps1"
+
+            # Act
+            $objResult = Resolve-PSScriptAnalyzerGate -Mode 'strict' -RepositoryRoot $strRepositoryRoot -AnalyzerFinding @($objFinding)
+
+            # Assert
+            $objResult.Findings.Count | Should -Be 1
+            $objResult.Findings[0].ScriptPath | Should -Be 'src/tools/Demo.ps1'
+            ($objResult.AnnotationCommands -join "`n") | Should -Match 'file=src/tools/Demo\.ps1'
+        }
+
+        It "Leaves a ScriptPath unchanged when it is outside the repository root" {
+            # Arrange
+            $objFinding = Get-SyntheticAnalyzerFinding -Severity 'Warning' -ScriptPath '/var/other/Demo.ps1'
+
+            # Act
+            $objResult = Resolve-PSScriptAnalyzerGate -Mode 'strict' -RepositoryRoot '/home/runner/work/repo/repo' -AnalyzerFinding @($objFinding)
+
+            # Assert
+            $objResult.Findings.Count | Should -Be 1
+            $objResult.Findings[0].ScriptPath | Should -Be '/var/other/Demo.ps1'
+        }
+    }
 }

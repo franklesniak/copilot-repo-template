@@ -89,13 +89,13 @@ jobs:
           $ps1Files = Get-ChildItem -LiteralPath $env:GITHUB_WORKSPACE -Filter "*.ps1" -Recurse -File |
             Where-Object { $_.FullName -notmatch "node_modules" }
 
-          $analyzerFindings = @()
+          $analyzerFindings = [System.Collections.Generic.List[object]]::new()
 
           foreach ($file in $ps1Files) {
             Write-Output "Analyzing: $($file.FullName)"
-            $analyzerFindings += @(
+            $analyzerFindings.AddRange(@(
               Invoke-ScriptAnalyzer -Path $file.FullName -Settings $settingsPath
-            )
+            ))
           }
 
           $gateResult = Resolve-PSScriptAnalyzerGate `

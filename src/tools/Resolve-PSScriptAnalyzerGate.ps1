@@ -213,6 +213,78 @@ function ConvertTo-PSScriptAnalyzerPositiveInteger {
     return $intParsedValue
 }
 
+function ConvertTo-RepositoryRelativePath {
+    # .SYNOPSIS
+    # Converts an absolute path to a repository-relative path.
+    #
+    # .DESCRIPTION
+    # When a repository root is provided and the path is located beneath it, the
+    # leading root prefix is removed so GitHub Actions annotations reference a
+    # repository-relative file. Paths that are empty, lack a root, or fall
+    # outside the root are returned unchanged. Backslashes are normalized to
+    # forward slashes for a stable comparison and output.
+    #
+    # .PARAMETER Path
+    # The path to convert. Null and empty values are returned unchanged.
+    #
+    # .PARAMETER RepositoryRoot
+    # The repository root to make the path relative to. Null and empty roots
+    # leave the path unchanged.
+    #
+    # .EXAMPLE
+    # ConvertTo-RepositoryRelativePath -Path '/runner/repo/src/a.ps1' -RepositoryRoot '/runner/repo'
+    # # Returns src/a.ps1
+    #
+    # .INPUTS
+    # None. This function does not accept pipeline input.
+    #
+    # .OUTPUTS
+    # [string] The repository-relative path, or the original path when it cannot
+    # be made relative.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
+    # Version: 1.0.20260604.0
+    # Positional parameters are not supported.
+    #
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string])]
+    param(
+        [AllowNull()]
+        [object]$Path,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$RepositoryRoot
+    )
+
+    Set-StrictMode -Version Latest
+
+    $strPath = [string]$Path
+    if ([string]::IsNullOrWhiteSpace($strPath)) {
+        return $strPath
+    }
+    if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
+        return $strPath
+    }
+
+    $strNormalizedPath = $strPath.Replace('\', '/')
+    $strNormalizedRoot = $RepositoryRoot.Replace('\', '/').TrimEnd('/')
+    if ($strNormalizedRoot.Length -eq 0) {
+        return $strPath
+    }
+
+    $strRootPrefix = $strNormalizedRoot + '/'
+    if ($strNormalizedPath.StartsWith($strRootPrefix, [System.StringComparison]::Ordinal)) {
+        return $strNormalizedPath.Substring($strRootPrefix.Length)
+    }
+
+    return $strPath
+}
+
 function Resolve-PSScriptAnalyzerGate {
     # .SYNOPSIS
     # Resolves PSScriptAnalyzer findings into a CI gate decision.
@@ -234,6 +306,11 @@ function Resolve-PSScriptAnalyzerGate {
     #
     # .PARAMETER AnalyzerFinding
     # The PSScriptAnalyzer findings to evaluate.
+    #
+    # .PARAMETER RepositoryRoot
+    # Optional repository root used to render annotation file paths relative to
+    # the repository. Defaults to the GITHUB_WORKSPACE environment variable so
+    # GitHub Actions annotations link to the correct file.
     #
     # .EXAMPLE
     # $objGate = Resolve-PSScriptAnalyzerGate -Mode 'first-adoption' -AnalyzerFinding $arrFinding
@@ -260,7 +337,11 @@ function Resolve-PSScriptAnalyzerGate {
         [string]$Mode,
 
         [AllowNull()]
-        [object[]]$AnalyzerFinding
+        [object[]]$AnalyzerFinding,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$RepositoryRoot = $env:GITHUB_WORKSPACE
     )
 
     Set-StrictMode -Version Latest
@@ -364,6 +445,7 @@ function Resolve-PSScriptAnalyzerGate {
         if ([string]::IsNullOrWhiteSpace($strScriptPath)) {
             $strScriptPath = [string](Get-PSScriptAnalyzerFindingProperty -Finding $objFinding -Name 'FileName')
         }
+        $strScriptPath = ConvertTo-RepositoryRelativePath -Path $strScriptPath -RepositoryRoot $RepositoryRoot
 
         $intLine = ConvertTo-PSScriptAnalyzerPositiveInteger -Value (
             Get-PSScriptAnalyzerFindingProperty -Finding $objFinding -Name 'Line'
