@@ -12,6 +12,7 @@
 #   - .github/workflows/powershell-ci.yml (this file)
 #   - .github/instructions/powershell.instructions.md
 #   - .github/linting/PSScriptAnalyzerSettings.psd1
+#   - src/tools/Resolve-PSScriptAnalyzerGate.ps1 (PSScriptAnalyzer gate-mode helper)
 #   - tests/PowerShell/ directory
 #   - templates/powershell/ directory
 #

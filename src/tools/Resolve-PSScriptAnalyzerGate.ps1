@@ -222,7 +222,8 @@ function ConvertTo-RepositoryRelativePath {
     # leading root prefix is removed so GitHub Actions annotations reference a
     # repository-relative file. Paths that are empty, lack a root, or fall
     # outside the root are returned unchanged. Backslashes are normalized to
-    # forward slashes for a stable comparison and output.
+    # forward slashes for the prefix comparison and in the repository-relative
+    # result; a path returned unchanged keeps its original separators.
     #
     # .PARAMETER Path
     # The path to convert. A null path is returned as an empty string;
