@@ -17,6 +17,10 @@
 #
 # Configuration:
 #   - Linting: .github/linting/PSScriptAnalyzerSettings.psd1
+#   - Analyzer gate mode: PSSCRIPTANALYZER_GATE_MODE
+#       - strict: fail Error, Warning, and unknown-severity findings
+#       - first-adoption: fail Error and unknown-severity findings, but
+#         annotate Warning and Information findings as temporary debt
 #   - Testing: Pester configuration is inline in the workflow steps below
 #
 # Template Repository Consideration:
@@ -41,6 +45,11 @@ jobs:
   powershell-lint:
     name: Lint (PSScriptAnalyzer)
     runs-on: ubuntu-latest
+    env:
+      # Keep strict as the template default. Existing repositories with
+      # warning debt may temporarily opt into first-adoption and should record
+      # that debt before tightening this value back to strict.
+      PSSCRIPTANALYZER_GATE_MODE: strict
 
     steps:
       - name: Checkout repository
@@ -73,39 +82,41 @@ jobs:
         if: steps.find-ps1.outputs.found == 'true'
         shell: pwsh
         run: |
-          $settingsPath = ".github/linting/PSScriptAnalyzerSettings.psd1"
-          $ps1Files = Get-ChildItem -Path . -Filter "*.ps1" -Recurse -File |
+          $settingsPath = Join-Path -Path $env:GITHUB_WORKSPACE -ChildPath ".github/linting/PSScriptAnalyzerSettings.psd1"
+          $gateHelperPath = Join-Path -Path $env:GITHUB_WORKSPACE -ChildPath "src/tools/Resolve-PSScriptAnalyzerGate.ps1"
+          . $gateHelperPath
+
+          $ps1Files = Get-ChildItem -LiteralPath $env:GITHUB_WORKSPACE -Filter "*.ps1" -Recurse -File |
             Where-Object { $_.FullName -notmatch "node_modules" }
 
-          $hasErrors = $false
+          $analyzerFindings = @()
 
           foreach ($file in $ps1Files) {
             Write-Host "Analyzing: $($file.FullName)"
-            $results = Invoke-ScriptAnalyzer -Path $file.FullName -Settings $settingsPath
-
-            if ($results) {
-              $hasErrors = $true
-              foreach ($result in $results) {
-                $severity = $result.Severity
-                $message = "$($file.Name):$($result.Line):$($result.Column): [$severity] $($result.RuleName) - $($result.Message)"
-
-                if ($severity -eq 'Error') {
-                  Write-Host "::error file=$($file.FullName),line=$($result.Line),col=$($result.Column)::$($result.RuleName) - $($result.Message)"
-                } else {
-                  Write-Host "::warning file=$($file.FullName),line=$($result.Line),col=$($result.Column)::$($result.RuleName) - $($result.Message)"
-                }
-              }
-            }
+            $analyzerFindings += @(
+              Invoke-ScriptAnalyzer -Path $file.FullName -Settings $settingsPath
+            )
           }
 
-          if ($hasErrors) {
-            Write-Host ""
-            Write-Host "::error::PSScriptAnalyzer found issues. See above for details."
+          $gateResult = Resolve-PSScriptAnalyzerGate `
+            -Mode $env:PSSCRIPTANALYZER_GATE_MODE `
+            -AnalyzerFinding $analyzerFindings
+
+          foreach ($annotationCommand in $gateResult.AnnotationCommands) {
+            Write-Host $annotationCommand
+          }
+
+          Write-Host ""
+          foreach ($summaryLine in $gateResult.SummaryLines) {
+            Write-Host $summaryLine
+          }
+
+          if ($gateResult.ShouldFail) {
+            Write-Host "::error::PSScriptAnalyzer gate failed. See annotations and summary above."
             exit 1
-          } else {
-            Write-Host ""
-            Write-Host "All PowerShell files passed linting."
           }
+
+          Write-Host "PowerShell lint gate passed."
 
       - name: Skip - No PowerShell files
         if: steps.find-ps1.outputs.found != 'true'
