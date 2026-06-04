@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260603.0
+**Version:** 1.1.20260603.1
 
 ## Metadata
 
@@ -31,7 +31,7 @@ For the first import into an existing repository, the separate one-shot material
 - **Required structural alignment:** A path, filename, directory, or command shape that must exist, or must be explicitly remapped, for a selected template module, repository platform feature, validator, or retained instruction contract to work.
 - **Post-adoption issue draft:** A self-contained GitHub Issue description for deferred modernization or cleanup after template adoption is complete. Each draft is scoped to one repository and includes scope, non-goals, acceptance criteria, validation, and preservation notes.
 - **First-adoption materialization command:** The `.template-sync/scripts/materialize_downstream_adoption.py` one-shot helper used during first adoption to stage retained manifest-owned template files, prune inline blocks for excluded modules, optionally run approved placeholder replacement against the staging tree, and reconcile non-conflicting staged files into a target working tree. It is a write-once adoption helper, not an automated ongoing upstream sync tool.
-- **First-adoption working-tree validation runner:** The `.template-sync/scripts/run_first_adoption_checks.py` helper used before the first adoption commit. It collects tracked and untracked non-ignored regular files using `git ls-files --cached --others --exclude-standard`, runs chunked `pre-commit run --files ...` commands against that file list, and runs the placeholder scan, marker validation, and Markdown package scripts when the supporting files are present.
+- **First-adoption working-tree validation runner:** The `.template-sync/scripts/run_first_adoption_checks.py` helper used before the first adoption commit. It collects tracked and untracked non-ignored regular files using `git ls-files --cached --others --exclude-standard`, prints a deterministic numbered command plan, runs chunked `pre-commit run --files ...` commands against that file list, and runs the placeholder scan, marker validation, and Markdown package scripts when the supporting files are present. Its `--plan-only` mode prints discovery results, notes, and the command plan without running validation commands. Normal execution prints UTC start and end timestamps, elapsed time, group label, index, and exit status for each planned command, then prints total elapsed time for the run.
 - **Adoption ledger:** A generated Markdown review artifact emitted by `.template-sync/scripts/generate_sync_candidates.py`. It summarizes manifest module assignments, marker local overrides, protected-file flags and decisions, adoption-mode posture, `_TODO-repo-init.md` checklist links, and affected validation commands. It is not authoritative state; `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable sources of truth.
 - **Adoption mode:** The preservation posture applied before editing protected files and template-derived governance, community, process, workflow, or collaboration files. Valid named modes are `minimal-preservation` and `tailored`.
 - **`minimal-preservation`:** The default adoption mode for protected files and template-derived governance, community, process, workflow, and collaboration files. Keep upstream wording and structure; limit edits to placeholder substitution, removing complete delimited sections owned by unadopted manifest modules, fixing broken links, and adding required local overrides that are recorded in `.template-sync/marker.yml`.
@@ -1134,10 +1134,14 @@ Run validation appropriate to the included modules and files changed. Full templ
 During first adoption, run the working-tree validation runner before the first adoption commit when the helper is present:
 
 ```bash
+python .template-sync/scripts/run_first_adoption_checks.py --plan-only
+```
+
+```bash
 python .template-sync/scripts/run_first_adoption_checks.py
 ```
 
-This helper is different from `pre-commit run --all-files`: it uses `git ls-files --cached --others --exclude-standard` to include newly copied, untracked, non-ignored files before they are committed, then invokes `pre-commit run --files ...` against that explicit file list. If the `pre-commit` console script is not on PATH, it uses the equivalent `python -m pre_commit run --files ...` form. It prints every command before running it, chunks large pre-commit file lists to avoid command-line length limits, and also runs the placeholder scan, marker validation, and supported Markdown npm scripts when those files are present. Continue to run `pre-commit run --all-files` before committing after the adopted files are tracked.
+This helper is different from `pre-commit run --all-files`: it uses `git ls-files --cached --others --exclude-standard` to include newly copied, untracked, non-ignored files before they are committed, then invokes `pre-commit run --files ...` against that explicit file list. Use `--plan-only` to inspect the deterministic file collection result, explanatory notes, and numbered command plan without running pre-commit, placeholder scans, marker validation, npm scripts, or other validation commands. In normal execution, the helper prints the full command plan before the first validation command starts, warns that cold pre-commit hook environment bootstrapping may be slow, chunks large pre-commit file lists to avoid command-line length limits, and prints each command's group label, index, UTC start and end timestamps, elapsed time, and exit status. It continues through the whole plan, reports multiple failures together, prints total elapsed time, and also runs the placeholder scan, marker validation, and supported Markdown npm scripts when those files are present. If the `pre-commit` console script is not on PATH, it uses the equivalent `python -m pre_commit run --files ...` form. Continue to run `pre-commit run --all-files` before committing after the adopted files are tracked.
 
 When first-adoption materialization is used, inspect the command surface first:
 

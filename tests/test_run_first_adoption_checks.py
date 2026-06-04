@@ -6,6 +6,7 @@ import importlib.util
 import io
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -54,6 +55,34 @@ def _recording_runner(records: list[tuple[str, ...]]):
     return run
 
 
+def _utc_time(second: int) -> datetime:
+    """Return a deterministic UTC timestamp for timing assertions."""
+    return datetime(2026, 6, 3, 12, 0, second, tzinfo=timezone.utc)
+
+
+def _queued_time_source(*timestamps: datetime):
+    """Return a time source that consumes a fixed sequence of timestamps."""
+    remaining_timestamps = list(timestamps)
+
+    def now() -> datetime:
+        assert remaining_timestamps, "No queued timestamp remains."
+        return remaining_timestamps.pop(0)
+
+    return now
+
+
+def _incrementing_time_source():
+    """Return a deterministic time source that advances one second per read."""
+    current_timestamp = [_utc_time(0)]
+
+    def now() -> datetime:
+        timestamp = current_timestamp[0]
+        current_timestamp[0] = timestamp + timedelta(seconds=1)
+        return timestamp
+
+    return now
+
+
 def test_no_file_repository_exits_without_validation_commands(tmp_path: Path) -> None:
     """An empty Git repository exits cleanly with a useful no-file message."""
     _run_git(tmp_path, "init")
@@ -70,6 +99,41 @@ def test_no_file_repository_exits_without_validation_commands(tmp_path: Path) ->
     assert commands == []
     assert "No tracked or untracked non-ignored regular files found" in stdout.getvalue()
     assert "No first-adoption checks were available to run." in stdout.getvalue()
+
+
+def test_check_plan_assigns_stable_group_labels(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Planned validation commands carry stable group labels."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    monkeypatch.setattr(first_adoption, "default_npm_executable", lambda: "npm")
+    _write_text(tmp_path, "README.md")
+    _write_text(tmp_path, ".github/scripts/replace-template-placeholders.py")
+    _write_text(tmp_path, ".template-sync/marker.yml", "included_modules:\n  - markdown\n")
+    _write_text(tmp_path, ".template-sync/scripts/validate_marker.py")
+    _write_text(
+        tmp_path,
+        "package.json",
+        '{"scripts":{"lint:md":"markdownlint .","lint:md:nested":"markdownlint ."}}\n',
+    )
+
+    plan = first_adoption.build_check_plan(tmp_path, ("README.md",))
+
+    assert [command.group_label for command in plan.commands] == [
+        "pre-commit",
+        "placeholder-scan",
+        "marker-validation",
+        "markdown-script",
+        "markdown-script",
+    ]
+    assert plan.commands[0].command == ("pre-commit", "run", "--files", "README.md")
+    assert plan.commands[-2].command == ("npm", "run", "lint:md")
+    assert plan.commands[-1].command == ("npm", "run", "lint:md:nested")
 
 
 def test_tracked_only_files_are_collected(tmp_path: Path) -> None:
@@ -106,6 +170,48 @@ def test_ignored_files_are_not_collected(tmp_path: Path) -> None:
     assert collection.files == (".gitignore",)
 
 
+def test_plan_only_prints_collection_notes_and_plan_without_running(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Plan-only mode prints discovery and plan details without validation commands."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+    _write_text(tmp_path, ".template-sync/marker.yml", "included_modules:\n  - markdown\n")
+    _write_text(tmp_path, ".template-sync/scripts/validate_marker.py")
+    commands: list[tuple[str, ...]] = []
+    stdout = io.StringIO()
+
+    result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        plan_only=True,
+        command_runner=_recording_runner(commands),
+        time_source=_queued_time_source(_utc_time(0), _utc_time(2)),
+        stdout=stdout,
+    )
+
+    output = stdout.getvalue()
+    assert result == 0
+    assert commands == []
+    assert "Collected 3 tracked or untracked non-ignored regular file(s)." in output
+    assert "Git-visible regular file(s):" in output
+    assert "  - .template-sync/marker.yml" in output
+    assert "  - .template-sync/scripts/validate_marker.py" in output
+    assert "  - README.md" in output
+    assert "Markdown module appears retained" in output
+    assert "Planned validation commands (2):" in output
+    assert "  1. [pre-commit] pre-commit run --files" in output
+    assert "  2. [marker-validation]" in output
+    assert "Plan-only mode: validation commands were not run." in output
+    assert "Total elapsed time: 2.000s" in output
+    assert "Command 1/2 [pre-commit] start time" not in output
+
+
 def test_marker_absent_does_not_run_marker_validator(tmp_path: Path) -> None:
     """Marker validation is skipped when no downstream marker exists."""
     _run_git(tmp_path, "init")
@@ -121,6 +227,50 @@ def test_marker_absent_does_not_run_marker_validator(tmp_path: Path) -> None:
     assert result == 0
     assert commands[0][-3:] == ("run", "--files", "README.md")
     assert not any("validate_marker.py" in arg for cmd in commands for arg in cmd)
+
+
+def test_timing_output_uses_injected_time_source_and_prints_cold_start_guidance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Command timing and total elapsed output are deterministic in tests."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+    _write_text(tmp_path, ".github/scripts/replace-template-placeholders.py")
+    commands: list[tuple[str, ...]] = []
+    stdout = io.StringIO()
+
+    result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        command_runner=_recording_runner(commands),
+        time_source=_queued_time_source(
+            _utc_time(0),
+            _utc_time(5),
+            _utc_time(9),
+            _utc_time(10),
+            _utc_time(13),
+            _utc_time(20),
+        ),
+        stdout=stdout,
+    )
+
+    output = stdout.getvalue()
+    assert result == 0
+    assert len(commands) == 2
+    assert "Planned validation commands (2):" in output
+    assert "Cold pre-commit hook environment bootstrapping may take several minutes" in output
+    assert "Command 1/2 [pre-commit] start time (UTC): 2026-06-03T12:00:05Z" in output
+    assert "Command 1/2 [pre-commit] completed with exit code 0" in output
+    assert "Command 1/2 [pre-commit] end time (UTC): 2026-06-03T12:00:09Z" in output
+    assert "Command 1/2 [pre-commit] elapsed time: 4.000s" in output
+    assert "Command 2/2 [placeholder-scan] start time (UTC): 2026-06-03T12:00:10Z" in output
+    assert "Command 2/2 [placeholder-scan] elapsed time: 3.000s" in output
+    assert "Total elapsed time: 20.000s" in output
 
 
 def test_marker_present_runs_marker_validator(tmp_path: Path) -> None:
@@ -144,6 +294,47 @@ def test_marker_present_runs_marker_validator(tmp_path: Path) -> None:
         "--require-marker",
     )
     assert ".template-sync/marker.yml" in commands[0]
+
+
+def test_multiple_failures_are_reported_by_default(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The runner continues through the plan and reports every failing command."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+    _write_text(tmp_path, ".github/scripts/replace-template-placeholders.py")
+    return_codes = [7, 3]
+    records: list[tuple[str, ...]] = []
+
+    def run(command: list[str] | tuple[str, ...], _repo_root: Path) -> int:
+        records.append(tuple(command))
+        return return_codes.pop(0)
+
+    stdout = io.StringIO()
+
+    result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        command_runner=run,
+        time_source=_incrementing_time_source(),
+        stdout=stdout,
+    )
+
+    output = stdout.getvalue()
+    assert result == 1
+    assert len(records) == 2
+    assert "Command 1/2 [pre-commit] completed with exit code 7" in output
+    assert "Command 2/2 [placeholder-scan] completed with exit code 3" in output
+    assert "First-adoption checks failed:" in output
+    assert "  - pre-commit: pre-commit run --files" in output
+    assert "exited with 7" in output
+    assert "  - placeholder-scan:" in output
+    assert "exited with 3" in output
 
 
 def test_placeholder_script_runs_when_present(tmp_path: Path) -> None:
