@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260604.0
+**Version:** 1.1.20260604.1
 
 ## Metadata
 
@@ -66,7 +66,7 @@ At the start of the procedure, determine whether the first-adoption preflight ga
 3. Fetch upstream template changes without merging.
 4. Identify the upstream commit range under review with rename detection.
 5. Initialize or update `.template-sync/marker.yml`.
-6. Filter upstream changes through the authoritative module taxonomy and create or refresh the adoption ledger or concise adoption summary.
+6. Filter upstream changes through the authoritative module taxonomy and create or refresh the adoption ledger.
 7. Review every candidate file with an explicit adoption mode and decision.
 8. Perform manual merges using an ignored scratch location when needed, and normalize line endings after `.gitattributes` changes.
 9. Handle protected files through authorization or deferral.
