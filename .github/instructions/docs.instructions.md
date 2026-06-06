@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.5.20260526.0
+**Version:** 1.6.20260606.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-26
+- **Last Updated:** 2026-06-06
 - **Scope:** Defines documentation standards for Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) files in this repository, including specs, design docs, runbooks, ADRs, instruction files, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -163,6 +163,16 @@ This subsection applies to Tier 1 documents and to any other document that inten
   - Per-file `<!-- markdownlint-disable RULE -->` directives MUST NOT contradict the configuration in `.markdownlint.jsonc`; their purpose is portability, not local override.
   - When a contributor wants an additional rule disabled, update `.markdownlint.jsonc` first. Per-file directives are only for mirroring repo-wide configuration where default enforcement would harm portability.
 - Code-fence info strings MUST contain only a single language tag (e.g., `powershell`, `text`, `json`, `bash`). Do NOT embed file paths, URLs, or other metadata in the info string (for example, `powershell name=src/Foo.ps1 url=https://...#L1-L9` is not allowed). To cite the source of a code excerpt, place a line of the form ``Source: [`relative/path` (lines <start>-<end>)](relative/path#L<start>-L<end>).`` in prose immediately above the fence (for example, ``Source: [`src/Foo.ps1` (lines 1-9)](src/Foo.ps1#L1-L9).``). This keeps the language tag standard, preserves syntax highlighting across Markdown renderers, and reinforces the existing rule to avoid raw URLs in prose.
+
+#### Reproducible source citations
+
+Committed Markdown documentation, including analysis write-ups, research notes, review artifacts, and other durable Markdown records, **MUST** cite only sources another reader can inspect or reproduce from repository contents or clearly linked public references. This is the Markdown-specific application of the [Repository Self-Containment](../copilot-instructions.md#repository-self-containment) rule, not a separate source-of-truth rule.
+
+When citing sources or evidence, Markdown authors **MUST NOT** use machine-local or ephemeral filesystem paths outside the repository, including temporary caches, agent work directories, per-host checkout directories, or tool cache paths. Authors **MUST NOT** use internal-only session/tool routes, including agent-internal skill names, session-scoped MCP resources, local connector aliases, or other non-public helper routes, as authoritative sources or evidence. Instead, cite stable sources such as repo-relative paths to committed files, canonical public documentation, or upstream repository references, following this file's existing link conventions.
+
+This rule applies when a path or route is used as a citation, source, or evidence reference. It does not ban legitimate path examples, command examples, repo-relative links, or environment-specific paths when those paths are the documented subject.
+
+Where a claim rests on a local check, describe the check generically and reproducibly, for example, "local CLI help output confirmed ..." or "local validation output confirmed ...", without naming ephemeral paths or session-only tooling.
 
 #### Fenced code blocks inside list items
 
