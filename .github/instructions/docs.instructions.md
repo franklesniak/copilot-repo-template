@@ -166,7 +166,7 @@ This subsection applies to Tier 1 documents and to any other document that inten
 
 #### Reproducible source citations
 
-Committed Markdown documentation, including analysis write-ups, research notes, review artifacts, and other durable Markdown records, **MUST** cite only sources another reader can inspect or reproduce from repository contents or clearly linked public references. This is the Markdown-specific application of the [Repository Self-Containment](../copilot-instructions.md#repository-self-containment) rule, not a separate source-of-truth rule.
+When committed Markdown documentation, including analysis write-ups, research notes, review artifacts, and other durable Markdown records, cites sources or evidence, it **MUST** cite only sources another reader can inspect or reproduce from repository contents or clearly linked public references. This is the Markdown-specific application of the [Repository Self-Containment](../copilot-instructions.md#repository-self-containment) rule, not a separate source-of-truth rule.
 
 When citing sources or evidence, Markdown authors **MUST NOT** use machine-local or ephemeral filesystem paths outside the repository, including temporary caches, agent work directories, per-host checkout directories, or tool cache paths. Authors **MUST NOT** use internal-only session/tool routes, including agent-internal skill names, session-scoped MCP resources, local connector aliases, or other non-public helper routes, as authoritative sources or evidence. Instead, cite stable sources such as repo-relative paths to committed files, canonical public documentation, or upstream repository references, following this file's existing link conventions.
 
