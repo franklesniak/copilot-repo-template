@@ -75,7 +75,7 @@ Use file inspection and Git metadata only for discoverable repository state. Rec
 | Enable private vulnerability reporting | Manual GitHub setting | Public repositories may enable it under Settings > Security. After enabling, update `.github/ISSUE_TEMPLATE/config.yml` and `SECURITY.md` to use the direct advisory-reporting path if desired. |
 | Configure default-branch protection or rulesets | Manual GitHub setting plus maintainer policy | Enable protection for the repository default branch, normally `main`, according to maintainer or organization policy. Do not infer required checks or approval counts from this template. |
 | Choose Code of Conduct reporting contact | Maintainer policy decision | Replace `[INSERT CONTACT METHOD]` in `CODE_OF_CONDUCT.md` only with a confirmed monitored channel. |
-| Choose security reporting channel | Maintainer policy decision | Replace `[security contact email]`, remove the email path, or use private vulnerability reporting only after the maintainer confirms the intended channel. |
+| Choose security reporting channel | Maintainer policy decision | Select `github-private-only`, `contact-only`, or `both` and provide a monitored security contact when the selected mode includes contact-based reporting. |
 | Choose CODEOWNERS owner/team identity | Maintainer policy decision | Replace `@OWNER` with the confirmed user or team. Organization team slugs must be confirmed by the repository owner or maintainers. |
 | Choose adoption mode for template-derived files | Maintainer policy decision | Use `minimal-preservation` by default for protected files and template-derived governance, community, process, workflow, and collaboration files. Record explicit `tailored` opt-ins for named files or file sets before broader rewriting. Use `.template-sync/marker.yml` `local_overrides` for path-specific sync defaults when future sync support is adopted. |
 | Record a GHES host override | Maintainer policy decision | Replace `github.com` in absolute template URLs only when the repository is hosted on the confirmed GitHub Enterprise Server host. |
@@ -159,25 +159,24 @@ If you prefer not to enable Discussions but want to redirect support questions a
 
 ### Security Link URL Customization
 
-The `config.yml` file includes a security contact link that points to `/security` by default:
+The placeholder helper renders the `config.yml` security contact link to point at `SECURITY.md` for **every** security reporting mode:
 
 ```yaml
-- name: 🔒 Security Vulnerabilities
-  url: https://github.com/OWNER/REPO/security
-  about: Report security issues privately (do not open a public issue). Private vulnerability reporting is only available for public repositories.
+- name: Security Vulnerabilities
+  url: https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md
+  about: Report security issues privately using the instructions in SECURITY.md. Do not open a public issue.
 ```
 
-After enabling private vulnerability reporting in your repository, prefer the direct vulnerability reporting form:
+`SECURITY.md` is always reachable and is itself rendered from the selected mode, so it documents the appropriate reporting path:
 
-```yaml
-- name: 🔒 Security Vulnerabilities
-  url: https://github.com/OWNER/REPO/security/advisories/new
-  about: Report security issues privately (do not open a public issue). Private vulnerability reporting is only available for public repositories.
-```
+- `github-private-only` and `both` render the GitHub private vulnerability reporting form (and, for `both`, a security contact) inside `SECURITY.md`.
+- `contact-only` renders the security contact instructions inside `SECURITY.md`.
 
-> **Important:** Private vulnerability reporting is only available for **public repositories**. If your repository is private, security reporters must use email contact as specified in your `SECURITY.md` file.
+Pointing the issue chooser at `SECURITY.md` keeps the link working throughout the repository lifecycle: a direct advisory-form link cannot receive reports until a maintainer enables private vulnerability reporting, so the chooser would otherwise send reporters to a non-functional page on newly created or private repositories.
+
+> **Important:** Private vulnerability reporting is only available for **public repositories** and must be enabled in GitHub settings before the direct advisory form (linked from `SECURITY.md`) can receive reports. Private repositories or public repositories that do not enable the feature should use `contact-only` or `both` with a monitored security contact.
 >
-> **See:** [Security Configuration](#security-configuration) for instructions on enabling private vulnerability reporting and updating this URL.
+> **See:** [Security Configuration](#security-configuration) for instructions on enabling private vulnerability reporting.
 
 ### Bug Report Template Customization
 
@@ -587,17 +586,15 @@ Private vulnerability reporting allows security researchers to report vulnerabil
 1. Go to **Settings** > **Security** > **Private vulnerability reporting**
 2. Click **Enable**
 
-**Optional:** After enabling, you can update the security link in `.github/ISSUE_TEMPLATE/config.yml` for a more direct path:
+**Optional:** After enabling, run the placeholder helper with `--security-reporting-mode github-private-only` or `--security-reporting-mode both` so `SECURITY.md`, `.github/ISSUE_TEMPLATE/config.yml`, and `.github/ISSUE_TEMPLATE/bug_report.yml` are rendered consistently for the selected mode. The rendered `SECURITY.md` links to the private vulnerability reporting form:
 
-```yaml
-# Change from:
-url: https://github.com/OWNER/REPO/security
-
-# To:
-url: https://github.com/OWNER/REPO/security/advisories/new
+```text
+https://github.com/OWNER/REPO/security/advisories/new
 ```
 
-Update `SECURITY.md` at the same time so it names private vulnerability reporting as the preferred path when the feature is enabled. If you keep an email fallback, use a monitored project or organization address. Do not use a `users.noreply.github.com` address as a real security contact channel.
+The issue-template chooser link always points at `SECURITY.md` (see [Security Link URL Customization](#security-link-url-customization)), which is always reachable and surfaces this advisory form once enabled — so you do not edit `config.yml` to use the advisory URL directly.
+
+If you keep a contact fallback, use a monitored project or organization contact method. Do not use a `users.noreply.github.com` address as a real security contact channel.
 
 ### Customizing Supported Versions
 
@@ -2949,7 +2946,7 @@ rm -f .github/workflows/auto-fix-precommit.yml
 
 **File:** `.github/workflows/check-placeholders.yml`
 
-The placeholder check workflow verifies that template placeholders (`OWNER/REPO`, `@OWNER`, `[security contact email]`) have been replaced. Treat it as transitional adoption tooling, not a permanent requirement for every downstream repository.
+The placeholder check workflow verifies that template placeholders (`OWNER/REPO`, `@OWNER`, `[security contact email]` when retained by the selected security reporting mode) have been replaced. Treat it as transitional adoption tooling, not a permanent requirement for every downstream repository.
 
 ### Understanding the Workflow
 

@@ -54,10 +54,11 @@ body:
         ## Thank you for reporting a bug!
         Please fill out the form below to help us investigate and resolve the issue.
 
-        ⚠️ **Security Notice:** If you are reporting a security vulnerability, do NOT use this form.
-        Please report security issues privately via the repository's
+        **Security Notice:** If you are reporting a security vulnerability, do NOT use this form.
+        Report it through the repository's
         [private vulnerability reporting form](https://github.com/OWNER/REPO/security/advisories/new)
-        if enabled, the [Security tab](https://github.com/OWNER/REPO/security), or
+        after maintainers have enabled private vulnerability reporting in GitHub settings.
+        If that form is unavailable, review
         [SECURITY.md](https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md).
 
   - type: checkboxes
@@ -77,7 +78,7 @@ body:
           required: true
         - label: I have tested on the latest version or main branch
           required: false
-        - label: This is NOT a security vulnerability (report those privately via SECURITY.md)
+        - label: This is NOT a security vulnerability (report those using SECURITY.md or the private reporting form)
           required: true
         # CUSTOMIZE: Remove if your project doesn't accept community contributions
         - label: I am willing to submit a pull request to fix this issue
@@ -348,9 +349,9 @@ body:
       description: >-
         Select the severity level that best describes the impact from your perspective.
         Note: This is your self-assessment; maintainers may adjust during triage.
-        ⚠️ For security vulnerabilities, do NOT use this form. Report privately
-        via the private vulnerability reporting form if enabled, the Security tab,
-        or SECURITY.md.
+        For security vulnerabilities, do NOT use this form. Report privately
+        via the private vulnerability reporting form after maintainers enable it
+        in GitHub settings, or review SECURITY.md.
       options:
         - Critical (system crash, data loss)
         - High (major feature broken, no workaround)

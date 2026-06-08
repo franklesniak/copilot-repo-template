@@ -874,13 +874,14 @@ If your existing repository lacks Python project structure and you want to adopt
 
 These files can be copied directly with minimal modifications.
 
-After copying any placeholder-bearing template files, prefer the helper in `.github/scripts/replace-template-placeholders.py` over ad hoc global find/replace. It replaces only the approved template placeholders and GitHub URL shapes, supports `--github-host` for GitHub Enterprise Server URL contexts, and scans afterward for unresolved placeholders and common broad-replacement corruption such as mutated `REPORT`, `REPOSITORY`, or `REPOSITORIES` text.
+After copying any placeholder-bearing template files, prefer the helper in `.github/scripts/replace-template-placeholders.py` over ad hoc global find/replace. It replaces only the approved template placeholders and GitHub URL shapes, supports `--security-reporting-mode` (`github-private-only`, `contact-only`, or `both`), supports `--github-host` for GitHub Enterprise Server URL contexts, and scans afterward for unresolved placeholders and common broad-replacement corruption such as mutated `REPORT`, `REPOSITORY`, or `REPOSITORIES` text.
 
 Example after copying the helper and the files you intend to adopt:
 
 ```bash
 python .github/scripts/replace-template-placeholders.py replace \
     --repository "your-username/your-repo-name" \
+    --security-reporting-mode "both" \
     --security-contact "security@example.com" \
     --conduct-contact "conduct@example.com" \
     --codeowners-owner "@your-username" \
@@ -1027,18 +1028,18 @@ The security policy tells users how to report security vulnerabilities.
 
 1. **If you don't have a SECURITY.md file:**
    - Copy `SECURITY.md` from the template to your repository root
-   - Replace `[security contact email]` with your email address
-   - Clear the security-contact `TODO: Replace` marker after the contact is configured
-   - Replace `OWNER/REPO` in the direct private-reporting URL `https://github.com/OWNER/REPO/security/advisories/new` with your repository's `owner/repo` (so the URL points at your repo, not the template)
+   - Choose `--security-reporting-mode github-private-only`, `contact-only`, or `both` when running the placeholder helper
+   - Provide `--security-contact` for `contact-only` or `both`; omit it for `github-private-only`
+   - Provide `--conduct-contact` when `CODE_OF_CONDUCT.md` is retained and no security contact is supplied
+   - Replace `OWNER/REPO` in the direct private-reporting URL `https://github.com/OWNER/REPO/security/advisories/new` with your repository's `owner/repo` when the selected mode includes GitHub private vulnerability reporting
      - **GHES only:** also replace `github.com` with your GHES host in that URL
-   - Or remove the email option and use only GitHub Security Advisories (for public repositories)
-   - If private vulnerability reporting is enabled, prefer the direct reporting URL `https://github.com/OWNER/REPO/security/advisories/new`
+   - Enable private vulnerability reporting in GitHub settings before relying on `github-private-only` or the GitHub private-reporting half of `both`
 
 2. **If you already have a SECURITY.md file:**
    - Review the template's structure for ideas
    - Consider adding sections you may be missing (response timeline, disclosure policy)
 
-> **Note:** Private vulnerability reporting via GitHub Security Advisories is only available for **public repositories**. If your repository is private, you must provide an email contact in SECURITY.md. Use a dedicated security email (e.g., `security@your-domain.com`) rather than a personal email when possible, and do not use a `users.noreply.github.com` address as a real security intake channel.
+> **Note:** Private vulnerability reporting via GitHub Security Advisories is only available for **public repositories**. If your repository is private, use `contact-only` or `both` with a monitored security contact in `SECURITY.md`; do not use a `users.noreply.github.com` address as a real security intake channel.
 
 ### LICENSE File
 
@@ -1124,7 +1125,7 @@ If your repository doesn't have issue templates, adopt the full set:
    url: https://github.com/your-username/your-repo/blob/HEAD/CONTRIBUTING.md
    ```
 
-3. **Update `bug_report.yml`:** Replace `OWNER/REPO` placeholders in the security-notice URLs (the private vulnerability reporting form, Security tab, and `SECURITY.md` links). These URLs use the same `https://github.com/OWNER/REPO/...` form as `config.yml`. If you also adopt and keep `.github/workflows/check-placeholders.yml` (an optional adoption step), CI will fail until this substitution is made; if you do not adopt that workflow or you remove it after initial setup, no CI guardrail catches a missed substitution and you must verify the replacement manually.
+3. **Update `bug_report.yml`:** Replace `OWNER/REPO` placeholders in the security-notice URLs selected by your security reporting mode. These URLs use the same `https://github.com/OWNER/REPO/...` form as `config.yml`. If you also adopt and keep `.github/workflows/check-placeholders.yml` (an optional adoption step), CI will fail until this substitution is made; if you do not adopt that workflow or you remove it after initial setup, no CI guardrail catches a missed substitution and you must verify the replacement manually.
 
    **GHES adopters:** In both `config.yml` and `bug_report.yml`, also replace `github.com` with your GHES host (e.g., `github.company.com`). The host substitution is not validated by `.github/workflows/check-placeholders.yml`, but inline YAML comments above the affected blocks (in both files) note the requirement.
 

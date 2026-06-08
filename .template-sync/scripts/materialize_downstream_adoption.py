@@ -59,8 +59,10 @@ PLACEHOLDER_DESTS = (
     "codeowners_owner",
     "conduct_contact",
     "security_contact",
+    "security_reporting_mode",
     "vscode_title",
 )
+SECURITY_REPORTING_MODES = ("github-private-only", "contact-only", "both")
 MARKER_COPY_FIELDS = (
     "local_overrides",
     "protected_file_decisions",
@@ -214,7 +216,17 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--security-contact",
         default=None,
-        help="Replacement security contact email or intake address.",
+        help="Replacement security contact method or intake address.",
+    )
+    parser.add_argument(
+        "--security-reporting-mode",
+        choices=SECURITY_REPORTING_MODES,
+        default=None,
+        help=(
+            "Security reporting mode: github-private-only, contact-only, or both. "
+            "Omitting this while supplying --security-contact preserves the "
+            "backward-compatible both mode."
+        ),
     )
     parser.add_argument(
         "--vscode-title",
@@ -646,10 +658,8 @@ def run_placeholder_helper(
             "Placeholder inputs were supplied, but the template-root placeholder "
             f"helper is unavailable at {PLACEHOLDER_HELPER_PATH}."
         )
-    if args.repository is None or args.security_contact is None:
-        raise MaterializationError(
-            "Placeholder replacement requires --repository and --security-contact."
-        )
+    if args.repository is None:
+        raise MaterializationError("Placeholder replacement requires --repository.")
 
     command = [
         sys.executable,
@@ -659,13 +669,13 @@ def run_placeholder_helper(
         str(staging_root),
         "--repository",
         args.repository,
-        "--security-contact",
-        args.security_contact,
     ]
     optional_pairs = (
         ("--github-host", args.github_host),
         ("--codeowners-owner", args.codeowners_owner),
         ("--conduct-contact", args.conduct_contact),
+        ("--security-contact", args.security_contact),
+        ("--security-reporting-mode", args.security_reporting_mode),
         ("--vscode-title", args.vscode_title),
     )
     for flag, value in optional_pairs:
