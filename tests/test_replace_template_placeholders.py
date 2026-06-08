@@ -402,6 +402,10 @@ def test_security_reporting_modes_render_consistent_surfaces(
     assert "[security contact email]" not in security_text
     assert "TODO: Replace" not in security_text
 
+    # Regression: the rendered reporting section must keep a blank line before the
+    # following heading so downstream markdownlint (MD022/MD032) does not fail.
+    assert "\n\n### What to Include" in security_text
+
     if expected_mode == "contact-only":
         assert "security@example.com" in security_text
         assert contact_link["url"] == "https://github.com/octo/widget/blob/HEAD/SECURITY.md"

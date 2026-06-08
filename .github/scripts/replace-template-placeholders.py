@@ -406,7 +406,10 @@ def replace_security_reporting_section(
     end = text.find(end_marker, start)
     if start == -1 or end == -1:
         return text, 0
-    replacement = build_security_reporting_section(context).rstrip("\n")
+    # Keep a single trailing newline so the rendered section is separated from the
+    # following `### What to Include` heading by a blank line (the end_marker begins
+    # with "\n"). Without it, downstream markdownlint fails MD022/MD032.
+    replacement = build_security_reporting_section(context).rstrip("\n") + "\n"
     return f"{text[:start]}{replacement}{text[end:]}", 1
 
 
