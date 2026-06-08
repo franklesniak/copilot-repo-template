@@ -29,6 +29,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     load_validated_marker_decision_data,
     parse_manifest_mappings,
     remove_inline_block_family,
+    remove_inline_blocks_for_modules,
     resolve_safe_repository_target_path,
     selected_relation_for_path,
 )
@@ -201,6 +202,39 @@ def test_inline_block_removal_preserves_blank_line_hygiene() -> None:
     assert (
         remove_inline_block_family(text, "python-only", relative_path="fixture.yml")
         == "top\n\n\nbottom\n"
+    )
+
+
+def test_inline_block_removal_trims_markdown_fence_trailing_blank_run() -> None:
+    """Stripped blocks do not leave MD012-hostile trailing blanks in Markdown fences."""
+    text = (
+        "```markdown\n"
+        "<!-- template-sync: begin markdown-reference-only -->\n"
+        "retained\n"
+        "<!-- template-sync: end markdown-reference-only -->\n"
+        "\n"
+        "<!-- template-sync: begin python-reference-only -->\n"
+        "removed\n"
+        "<!-- template-sync: end python-reference-only -->\n"
+        "\n"
+        "<!-- template-sync: begin terraform-reference-only -->\n"
+        "removed\n"
+        "<!-- template-sync: end terraform-reference-only -->\n"
+        "\n"
+        "```\n"
+    )
+
+    assert (
+        remove_inline_blocks_for_modules(
+            text,
+            {"markdown"},
+            relative_path="fixture.md",
+        )
+        == "```markdown\n"
+        "<!-- template-sync: begin markdown-reference-only -->\n"
+        "retained\n"
+        "<!-- template-sync: end markdown-reference-only -->\n"
+        "```\n"
     )
 
 

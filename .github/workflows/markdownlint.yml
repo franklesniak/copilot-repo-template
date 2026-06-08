@@ -34,8 +34,24 @@ jobs:
           cache: 'npm'
           cache-dependency-path: package-lock.json
 
+      # Python is required so the generated-output nested-Markdown regression can
+      # materialize TEMPLATE_UPDATE_PROCEDURE.md and run the real nested linter.
+      # The Node tooling installed below provides that test's prerequisites; the
+      # Python CI workflow runs pytest without node_modules, so the test would
+      # otherwise silently skip there and leave the behavior unenforced.
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
       - name: Install dependencies
         run: npm ci --ignore-scripts
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
 
       - name: Run markdownlint on outer files
         id: lint-outer
@@ -52,8 +68,13 @@ jobs:
         continue-on-error: true
         run: npm run lint:md:links
 
+      - name: Lint materialized generated output (nested Markdown)
+        id: lint-generated
+        continue-on-error: true
+        run: pytest tests/test_materialize_downstream_adoption.py -k passes_nested_markdown_lint -v
+
       - name: Check linting results
-        if: steps.lint-outer.outcome == 'failure' || steps.lint-nested.outcome == 'failure' || steps.lint-links.outcome == 'failure'
+        if: steps.lint-outer.outcome == 'failure' || steps.lint-nested.outcome == 'failure' || steps.lint-links.outcome == 'failure' || steps.lint-generated.outcome == 'failure'
         run: |
           echo "::error::Markdown checks failed. Check the logs above for details."
           exit 1
