@@ -31,6 +31,7 @@ ISSUE_692_NO_PYTHON_MODULES = (
     "markdown",
     "powershell",
 )
+ISSUE_693_PARTIAL_DOC_MODULES = ISSUE_692_NO_PYTHON_MODULES
 FULL_TEMPLATE_MODULES = (
     "baseline",
     "agent-instructions",
@@ -49,6 +50,75 @@ FULL_TEMPLATE_MODULES = (
 )
 DEPENDABOT_NO_PYTHON_ECOSYSTEMS = {"github-actions", "npm", "pre-commit"}
 DEPENDABOT_FULL_ECOSYSTEMS = DEPENDABOT_NO_PYTHON_ECOSYSTEMS | {"pip"}
+ISSUE_693_BASELINE_DOCS = ("README.md", "CONTRIBUTING.md")
+ISSUE_693_EXCLUDED_DOC_REFERENCES = {
+    "README.md": (
+        "pyproject.toml",
+        ".github/workflows/python-ci.yml",
+        ".github/workflows/terraform-ci.yml",
+        ".github/instructions/python.instructions.md",
+        ".github/instructions/terraform.instructions.md",
+        ".github/instructions/json.instructions.md",
+        ".github/instructions/yaml.instructions.md",
+        ".tflint.hcl",
+        ".yamllint.yml",
+        "templates/python/",
+        "templates/terraform/",
+        "templates/json/",
+        "templates/yaml/",
+        "schemas/README.md",
+        "schemas/example-config",
+        "pre-commit run yamllint --all-files",
+        "terraform test -verbose",
+        "TFLint",
+    ),
+    "CONTRIBUTING.md": (
+        "Python Version Requirements",
+        "pyproject.toml",
+        ".github/workflows/python-ci.yml",
+        ".github/workflows/terraform-ci.yml",
+        ".github/instructions/python.instructions.md",
+        ".github/instructions/terraform.instructions.md",
+        ".github/instructions/json.instructions.md",
+        ".github/instructions/yaml.instructions.md",
+        ".tflint.hcl",
+        ".yamllint.yml",
+        "schemas/README.md",
+        "schemas/example-config",
+        "pytest tests/ -v --cov --cov-report=term-missing",
+        "mypy src/ tests/",
+        "terraform-fmt",
+        "terraform-validate",
+        "terraform-tflint",
+        "terraform_version",
+        "tflint_version",
+        "TFLint",
+    ),
+}
+ISSUE_693_RETAINED_DOC_REFERENCES = {
+    "README.md": (
+        "npm run lint:md",
+        "Invoke-Pester -Path tests/ -Output Detailed",
+        "python .template-sync/scripts/validate_downstream_adoption.py --require-marker",
+        "`check-json`",
+        "`check-yaml`",
+        "`actionlint`",
+        "`check-jsonschema`",
+        "`check-metaschema`",
+    ),
+    "CONTRIBUTING.md": (
+        "pre-commit run --all-files",
+        "npm run lint:md",
+        "Invoke-Pester -Path tests/ -Output Detailed",
+        "python .template-sync/scripts/validate_downstream_adoption.py --require-marker",
+        "`check-json`",
+        "`check-yaml`",
+        "`actionlint`",
+        "`check-jsonschema`",
+        "`check-metaschema`",
+        "secrets",
+    ),
+}
 NESTED_MARKDOWN_LINT_NODE_MODULES = (
     "glob",
     "jsonc-parser",
@@ -448,6 +518,63 @@ def test_materialized_template_update_procedure_passes_nested_markdown_lint(
     )
 
     assert lint_result.returncode == 0, lint_result.stdout + lint_result.stderr
+
+
+@pytest.mark.parametrize("relative_path", ISSUE_693_BASELINE_DOCS)
+def test_materialized_partial_adoption_strips_shared_baseline_doc_stale_references(
+    tmp_path: Path,
+    relative_path: str,
+) -> None:
+    """Partial materialization strips excluded-stack prose from each shared baseline doc."""
+    target_root = tmp_path / "partial-docs"
+    target_root.mkdir()
+    module_args = [
+        argument
+        for module_name in ISSUE_693_PARTIAL_DOC_MODULES
+        for argument in ("--included-module", module_name)
+    ]
+
+    result = run_materialize(
+        REPO_ROOT,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--last-reviewed-template-commit",
+        FULL_SHA,
+        "--repository",
+        "octocat/hello-world",
+        "--security-contact",
+        "security@example.com",
+        "--allow-conflicts",
+        *module_args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    generated_path = target_root / relative_path
+    assert generated_path.is_file(), result.stdout
+    generated_text = read_file(generated_path)
+
+    for retained_token in ISSUE_693_RETAINED_DOC_REFERENCES[relative_path]:
+        assert retained_token in generated_text, f"{relative_path}: {retained_token}"
+    for excluded_token in ISSUE_693_EXCLUDED_DOC_REFERENCES[relative_path]:
+        assert excluded_token not in generated_text, f"{relative_path}: {excluded_token}"
+
+    subprocess.run(
+        ["git", "init", "-q"],
+        cwd=target_root,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    report_result = run_excluded_module_report(target_root, ISSUE_693_PARTIAL_DOC_MODULES)
+
+    assert report_result.returncode == 0, report_result.stderr
+    for report_line in report_result.stdout.splitlines():
+        if f"| {relative_path}" not in report_line:
+            continue
+        assert "required_cleanup" not in report_line, report_line
+        assert "markdown-link.excluded-target" not in report_line, report_line
 
 
 def test_materialized_no_python_adoption_prunes_dependabot_pip_ecosystem(

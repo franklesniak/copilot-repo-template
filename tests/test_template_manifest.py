@@ -222,6 +222,8 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "AGENTS.md": 2,
         "CLAUDE.md": 2,
         "GEMINI.md": 2,
+        "README.md": 6,
+        "CONTRIBUTING.md": 9,
     },
     "terraform-reference-only": {
         ".github/copilot-instructions.md": 3,
@@ -230,6 +232,8 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "AGENTS.md": 2,
         "CLAUDE.md": 2,
         "GEMINI.md": 2,
+        "README.md": 6,
+        "CONTRIBUTING.md": 6,
     },
     "json-reference-only": {
         ".github/copilot-instructions.md": 1,
@@ -238,6 +242,8 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "AGENTS.md": 3,
         "CLAUDE.md": 3,
         "GEMINI.md": 3,
+        "README.md": 3,
+        "CONTRIBUTING.md": 2,
     },
     "yaml-reference-only": {
         ".github/copilot-instructions.md": 1,
@@ -246,6 +252,8 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "AGENTS.md": 3,
         "CLAUDE.md": 3,
         "GEMINI.md": 3,
+        "README.md": 8,
+        "CONTRIBUTING.md": 5,
     },
     "schema-reference-only": {
         ".github/copilot-instructions.md": 2,
@@ -254,6 +262,8 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "AGENTS.md": 3,
         "CLAUDE.md": 3,
         "GEMINI.md": 3,
+        "README.md": 4,
+        "CONTRIBUTING.md": 2,
     },
 }
 REFERENCE_ONLY_MARKER_MODULES = {
@@ -272,13 +282,15 @@ PROTECTED_ENTRY_POINT_REFERENCE_PATHS = (
     "CLAUDE.md",
     "GEMINI.md",
 )
-PROTECTED_REFERENCE_MANIFEST_PATTERNS = {
+REFERENCE_ONLY_MANIFEST_PATTERNS = {
     ".github/copilot-instructions.md": ".github/copilot-instructions.md",
     ".cursor/rules/repository-instructions.mdc": ".cursor/rules/**",
     ".hermes.md": ".hermes.md",
     "AGENTS.md": "AGENTS.md",
     "CLAUDE.md": "CLAUDE.md",
     "GEMINI.md": "GEMINI.md",
+    "README.md": "README.md",
+    "CONTRIBUTING.md": "CONTRIBUTING.md",
 }
 REFERENCE_ONLY_FORBIDDEN_ENTRY_POINT_TOKENS = {
     "markdown-reference-only": (
@@ -2118,7 +2130,7 @@ def test_reference_only_inline_blocks_are_declared_for_template_sync() -> None:
             assert text.count(marker_end) == expected_count
             _strip_reference_only_inline_blocks(relative_path, marker_name)
 
-            manifest_pattern = PROTECTED_REFERENCE_MANIFEST_PATTERNS[relative_path]
+            manifest_pattern = REFERENCE_ONLY_MANIFEST_PATTERNS[relative_path]
             mapping = mappings.get(manifest_pattern)
             assert mapping is not None, f"{manifest_pattern} must have a manifest mapping"
             notes = mapping.get("notes")
@@ -2138,7 +2150,7 @@ def test_procedure_registers_reference_only_marker_family() -> None:
     assert "same strip semantics" in procedure_text
     for marker_name in REFERENCE_ONLY_MARKER_MODULES:
         assert marker_name in procedure_text
-    for relative_path in PROTECTED_REFERENCE_MANIFEST_PATTERNS:
+    for relative_path in REFERENCE_ONLY_MANIFEST_PATTERNS:
         assert relative_path in procedure_text
 
 

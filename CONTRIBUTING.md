@@ -17,33 +17,21 @@ See README.md Template Setup Checklist for adoption instructions.
 See [OPTIONAL_CONFIGURATIONS.md](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md) for detailed customization guidance.
 -->
 
-Thank you for your interest in contributing! This document provides guidelines for contributing to this repository.
+Thank you for your interest in contributing. This document describes the retained contributor workflow, validation expectations, and pull-request readiness checks for this repository.
 
+<!-- template-sync: begin python-reference-only -->
 ## Python Version Requirements
 
-**Important:** Contributors and maintainers must use a Python version that is **currently receiving bugfixes** from the Python core team. This template currently supports Python 3.13 and 3.14.
+Contributors and maintainers working with Python project code must use a Python version that is **currently receiving bugfixes** from the Python core team. This template currently supports Python 3.13 and 3.14.
 
-### Why This Matters
-
-- Python versions in "security fix only" phase are **not publicly installable** with security updates—they require building from source with manually applied patches
-- This policy ensures all contributors can install and use the same Python version with current security updates
-- It maintains consistency across development environments and CI
-
-### Current Requirements
-
-This project requires a Python version that is currently in "bugfix" status according to the Python core team.
-
-See the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page for current version status.
+This project requires a Python version that is currently in "bugfix" status according to the Python core team. See the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page for current version status.
 
 As of May 2026, this repository's active Python support window is Python 3.13 through Python 3.14. The root `pyproject.toml`, Python CI matrix, Black target versions, and contributor guidance should move together when the upstream bugfix window changes.
 
-> **Template adopters:** Customize this section based on your project's specific Python version requirements. You may specify a minimum version (e.g., "Python 3.11+") or reference your project's own support policy.
-
-### When to Update
-
-Check the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page annually (typically around October when new Python versions are released). Update the supported Python version window when upstream support changes. See [Reviewing Python Version Requirements](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/TEMPLATE_MAINTENANCE.md#reviewing-python-version-requirements) for the maintainer checklist of files to update in sync.
+Check the [Python Developer's Guide - Versions](https://devguide.python.org/versions/) page annually, typically around October when new Python versions are released. See [Reviewing Python Version Requirements](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/TEMPLATE_MAINTENANCE.md#reviewing-python-version-requirements) for the maintainer checklist of files to update in sync.
 
 **Do not default to or require unsupported Python versions in code, documentation, or configuration files.**
+<!-- template-sync: end python-reference-only -->
 
 ## Development Setup
 
@@ -56,50 +44,120 @@ git clone https://github.com/OWNER/REPO.git
 cd REPO
 ```
 
-### 2. Install Node.js Dependencies (for Markdown linting)
+### 2. Install Node.js Dependencies
+
+Install Node.js dependencies for Markdown linting scripts:
 
 ```bash
 npm install
 ```
 
-This installs Node.js dependencies for markdown linting scripts. Git hooks are managed by pre-commit (see step 4 below).
+Git hooks are managed by pre-commit.
 
-### Git Hooks
+<!-- template-sync: begin python-reference-only -->
+### 3. Install Python When Working With Python Code
+
+Ensure you have a supported Python version available:
+
+```bash
+python --version
+```
+<!-- template-sync: end python-reference-only -->
+
+### 4. Install Pre-commit
+
+Install `pre-commit` globally or through `pipx`:
+
+```bash
+pip install pre-commit
+```
+
+```bash
+pipx install pre-commit
+```
+
+`pre-commit` manages isolated hook environments, so it does not need to be installed as a project runtime dependency.
+
+### 5. Install Git Hooks
+
+```bash
+pre-commit install
+```
+
+### 6. Run Pre-commit Manually
+
+```bash
+pre-commit run --all-files
+pre-commit run
+```
+
+Run the all-files form before opening a pull request.
+
+## Git Hooks
 
 This repository uses pre-commit for git hooks. Configured hooks include:
 
-- **Formatting**: Black (Python), trailing whitespace, end-of-file fixer
-- **Linting**: Ruff (Python), markdownlint (Markdown)
-- **Data-file validation**: `check-json` (strict `.json` files only — see note below), `check-yaml`, `yamllint` (configured by `.yamllint.yml`), `actionlint` (GitHub Actions workflows)
-- **Schema validation**: `check-jsonschema` and `check-metaschema` for the template's worked-example schema (`schemas/example-config.schema.json`) and its valid example data under `schemas/examples/example-config/valid/`; downstream repositories MAY add additional `check-jsonschema` hook entries for their own schema-backed file families. See [`schemas/README.md`](schemas/README.md) for the worked example and the canonical downstream removal checklist.
-- **Terraform validation**: repo-local Python hooks run `terraform fmt -check -recursive -diff`, directory-based `terraform init -backend=false` plus `terraform validate`, and `tflint --init` plus recursive TFLint with `.tflint.hcl`.
-- **Safety**: Large file detection
+- **Formatting:** trailing whitespace and end-of-file fixes.
+- **Markdown linting:** markdownlint and local Markdown link validation.
+- **PowerShell linting:** PSScriptAnalyzer with repository settings.
+<!-- template-sync: begin python-reference-only -->
+- **Python formatting and linting:** Black and Ruff.
+<!-- template-sync: end python-reference-only -->
+- **Data-file validation:** `check-json` for strict `.json` files, `check-yaml`, and `actionlint` for GitHub Actions workflows.
+<!-- template-sync: begin yaml-reference-only -->
+- **YAML style validation:** `yamllint` configured by `.yamllint.yml`.
+<!-- template-sync: end yaml-reference-only -->
+- **Schema validation:** `check-jsonschema` and `check-metaschema` for retained schema-backed configuration, including template-sync schemas.
+<!-- template-sync: begin schema-reference-only -->
+- **Worked-example schema validation:** `check-jsonschema` and `check-metaschema` also cover the worked-example schema and its valid fixtures. See [`schemas/README.md`](schemas/README.md) for the worked example and downstream removal checklist.
+<!-- template-sync: end schema-reference-only -->
+<!-- template-sync: begin terraform-reference-only -->
+- **Terraform validation:** repo-local hooks run Terraform format, validation, and TFLint checks.
+<!-- template-sync: end terraform-reference-only -->
+- **Safety:** large file detection.
 
-> **`check-json` validates strict `.json` only.** It does **not** validate `.jsonc`. JSONC files are allowed only when the consuming tool supports JSONC; downstream repositories that need stricter `.jsonc` enforcement should add **JSONC-aware tooling** rather than retrofitting `check-json`. See [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md) for the full JSON/JSONC dialect policy and [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md) for YAML authoring standards.
->
-> **`actionlint` first-run-on-restricted-networks caveat.** The `actionlint` pre-commit hook builds the `actionlint` binary from source on first install, which downloads a Go toolchain. On networks that block Go module downloads (corporate proxies, air-gapped environments), the first-run install can fail. CI is the shared enforcement environment, so contributors who hit a network restriction locally can rely on CI to enforce this hook. The same caveat is documented inline in `.pre-commit-config.yaml` and in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md).
->
-> **Terraform tool prerequisite.** The Terraform hooks are repo-local Python wrappers and do not require Bash. They do require HashiCorp Terraform (`terraform`) when Terraform format or validation targets are present, and TFLint (`tflint`) when Terraform lint targets are present. Install Terraform from [HashiCorp's official install guide](https://developer.hashicorp.com/terraform/install) and TFLint from the [TFLint installation guide](https://github.com/terraform-linters/tflint#installation), then restart your shell so both executables are on PATH. On Windows, native PowerShell is supported; download the Windows binaries and add them to PATH, or use Chocolatey (`choco install terraform` and `choco install tflint`) if your organization uses it.
+**`check-json` validates strict `.json` only.** It does **not** validate `.jsonc`. JSONC files are allowed only when the consuming tool supports JSONC; downstream repositories that need stricter `.jsonc` enforcement should add JSONC-aware tooling rather than retrofitting `check-json`.
 
-If you need to bypass hooks temporarily (not recommended):
+<!-- template-sync: begin json-reference-only -->
+See [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md) for the full JSON/JSONC dialect policy.
+<!-- template-sync: end json-reference-only -->
+<!-- template-sync: begin yaml-reference-only -->
+See [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md) for YAML authoring standards.
+<!-- template-sync: end yaml-reference-only -->
+
+**`actionlint` first-run-on-restricted-networks caveat.** The `actionlint` pre-commit hook builds the `actionlint` binary from source on first install, which downloads a Go toolchain. On networks that block Go module downloads, the first-run install can fail. CI is the shared enforcement environment, so contributors who hit a network restriction locally can rely on CI to enforce this hook. The same caveat is documented inline in `.pre-commit-config.yaml` and in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md).
+
+<!-- template-sync: begin terraform-reference-only -->
+**Terraform tool prerequisite.** Terraform hooks require HashiCorp Terraform (`terraform`) when Terraform format or validation targets are present, and TFLint (`tflint`) when Terraform lint targets are present. Install Terraform from [HashiCorp's official install guide](https://developer.hashicorp.com/terraform/install) and TFLint from the [TFLint installation guide](https://github.com/terraform-linters/tflint#installation), then restart your shell so both executables are on PATH.
+<!-- template-sync: end terraform-reference-only -->
+
+If you need to bypass hooks temporarily, which is not recommended:
 
 ```bash
 git commit --no-verify -m "your message"
 ```
 
+## Manual Validation
+
 ### Markdown Linting
 
-Run markdown linting manually:
-
 ```bash
-npm run lint:md           # Lint all markdown files
-npm run lint:md:links     # Validate local markdown links and headings
-npm run lint:md:nested    # Lint nested markdown blocks in docs
+npm run lint:md
+npm run lint:md:links
+npm run lint:md:nested
 ```
 
+### PowerShell Validation
+
+```powershell
+Invoke-ScriptAnalyzer -Path .\script.ps1 -Settings .\.github\linting\PSScriptAnalyzerSettings.psd1
+Invoke-Pester -Path tests/ -Output Detailed
+```
+
+<!-- template-sync: begin terraform-reference-only -->
 ### Terraform Validation
 
-Run the Terraform pre-commit hooks manually when changing Terraform files or `.tflint.hcl`:
+Run the Terraform pre-commit hooks manually when changing Terraform files or `.tflint.hcl`.
 
 **Windows PowerShell:**
 
@@ -117,117 +175,92 @@ pre-commit run terraform-validate --all-files
 pre-commit run terraform-tflint --all-files
 ```
 
-The hooks mirror Terraform CI: format checks run from the repository root, validation runs only in directories containing `.tf` or `.tf.json` files, and TFLint uses the repository-root `.tflint.hcl` path.
+The hooks mirror Terraform CI: format checks run from the repository root, validation runs only in directories containing Terraform files, and TFLint uses the repository-root `.tflint.hcl` path.
+<!-- template-sync: end terraform-reference-only -->
 
-### 3. Install Python (if working with Python code)
+### Template-Sync Validation
 
-Ensure you have a Python version that is currently receiving bugfixes (see [Python Version Requirements](#python-version-requirements) above):
+When template-sync support is retained, use the downstream validator after module pruning or marker changes:
 
 ```bash
-python --version  # Should be Python 3.13 or 3.14 while this policy applies
+python .template-sync/scripts/validate_downstream_adoption.py --require-marker
 ```
 
-### 4. Install pre-commit (Globally)
-
-**Important:** `pre-commit` is intentionally **NOT** included as a project dev dependency. Install it globally:
-
-#### Option 1: Using pip (recommended for most users)
+For cleanup planning, run the excluded-module reporter:
 
 ```bash
-pip install pre-commit
-```
-
-#### Option 2: Using pipx (recommended for tool isolation)
-
-```bash
-pipx install pre-commit
-```
-
-#### Why Not a Dev Dependency?
-
-- `pre-commit` is a **development tool**, not a project runtime or test dependency
-- It manages its own isolated environments for hooks (including Python tools like Black and Ruff)
-- Installing it globally or via `pipx` keeps it separate from project dependencies
-- This is the standard practice in the Python community
-- CI workflows install `pre-commit` separately in their own steps
-
-### 5. Install Pre-commit Hooks
-
-After installing `pre-commit` globally, set up the hooks in your local repository:
-
-```bash
-pre-commit install
-```
-
-This configures Git to automatically run pre-commit hooks before each commit.
-
-### 6. Run Pre-commit Manually
-
-To run all pre-commit hooks on all files (recommended before submitting a PR):
-
-```bash
-pre-commit run --all-files
-```
-
-To run pre-commit on staged files only:
-
-```bash
-pre-commit run
+python .template-sync/scripts/report_excluded_module_references.py
 ```
 
 ## Code Quality Standards
 
 ### Pre-commit Discipline
 
-**⚠️ CRITICAL: Always run pre-commit checks before committing code.**
+**Always run pre-commit checks before committing code.**
 
-Pre-commit hooks are NOT optional. They enforce:
+Pre-commit hooks are not optional. They enforce:
 
-- Code formatting (Black for Python, markdownlint for Markdown)
-- Linting (Ruff for Python)
-- Terraform formatting, validation, and TFLint checks when Terraform files are present
-- Trailing whitespace removal
-- End-of-file fixes
-- Data-file validation (`check-json` for strict `.json`, `check-yaml`, `yamllint`, `actionlint` for GitHub Actions)
-- Schema validation (`check-jsonschema`) for schema-backed file families where configured
+- Formatting and end-of-file hygiene.
+- Markdown linting and local Markdown link validation.
+- PowerShell linting.
+<!-- template-sync: begin python-reference-only -->
+- Python formatting and linting.
+<!-- template-sync: end python-reference-only -->
+<!-- template-sync: begin terraform-reference-only -->
+- Terraform formatting, validation, and linting when Terraform files are present.
+<!-- template-sync: end terraform-reference-only -->
+- Data-file validation for strict `.json`, YAML parsing, and GitHub Actions workflows.
+<!-- template-sync: begin yaml-reference-only -->
+- YAML style validation through `yamllint`.
+<!-- template-sync: end yaml-reference-only -->
+- Schema validation for retained schema-backed file families.
 
 > **Network and dialect notes:**
 >
-> - First-run hook setup may require network access (for example, `actionlint` downloads a Go toolchain on first install; see the restricted-networks caveat above).
-> - `check-json` validates strict `.json` files only and does **not** validate `.jsonc`. Use **JSONC-aware tooling** if `.jsonc` files in your project warrant stricter enforcement.
-> - CI runs the same hooks and is the shared enforcement environment; auto-fixes produced by the hooks **must** be committed with the related change (do not push code that fails pre-commit and rely on a follow-up "fix formatting" commit).
+> - First-run hook setup may require network access.
+> - `check-json` validates strict `.json` files only and does **not** validate `.jsonc`.
+> - CI runs the same hooks and is the shared enforcement environment.
+> - Auto-fixes produced by hooks **must** be committed with the related change.
 
-See `.pre-commit-config.yaml` for the complete list of configured hooks. See [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md) and [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md) for the JSON and YAML authoring policies that these hooks enforce.
+See `.pre-commit-config.yaml` for the complete list of configured hooks.
 
 **Workflow:**
 
-1. Make your code changes
-2. Run `pre-commit run --all-files`
-3. Review and commit ALL auto-fixes as part of your change
-4. Push to GitHub
+1. Make your code changes.
+2. Run `pre-commit run --all-files`.
+3. Review and commit all auto-fixes as part of your change.
+4. Push to GitHub.
 
 **If pre-commit CI fails:**
 
-1. Pull the latest branch
-2. Run `pre-commit run --all-files` locally
-3. Integrate the auto-fixes into the commit that introduced the change (for example, `git commit --amend` for the most recent commit, or `git commit --fixup=<sha>` followed by `git rebase -i --autosquash` for an earlier commit). Do **not** create a separate "Apply pre-commit auto-fixes" commit — auto-fixes belong in the same commit as the related change.
-4. Push again (force-push is required when amending or rewriting history on a branch you have already pushed)
+1. Pull the latest branch.
+2. Run `pre-commit run --all-files` locally.
+3. Integrate the auto-fixes into the commit that introduced the change.
+4. Push again.
 
-**CI is a safety net, not a substitute for local checks.**
+CI is a safety net, not a substitute for local checks.
 
 ### Language-Specific Guidelines
 
-This repository includes comprehensive coding standards for multiple languages and data file formats:
+This repository includes coding standards for retained languages and data file formats:
 
-- **Python:** `.github/instructions/python.instructions.md`
-- **PowerShell:** `.github/instructions/powershell.instructions.md`
-- **Terraform:** `.github/instructions/terraform.instructions.md`
-- **Markdown/Documentation:** `.github/instructions/docs.instructions.md`
-- **JSON/JSONC:** `.github/instructions/json.instructions.md`
-- **YAML:** `.github/instructions/yaml.instructions.md`
-- **Git attributes:** `.github/instructions/gitattributes.instructions.md`
+- **Markdown/Documentation:** [`.github/instructions/docs.instructions.md`](.github/instructions/docs.instructions.md)
+- **PowerShell:** [`.github/instructions/powershell.instructions.md`](.github/instructions/powershell.instructions.md)
+- **Git attributes:** [`.github/instructions/gitattributes.instructions.md`](.github/instructions/gitattributes.instructions.md)
+<!-- template-sync: begin python-reference-only -->
+- **Python:** [`.github/instructions/python.instructions.md`](.github/instructions/python.instructions.md)
+<!-- template-sync: end python-reference-only -->
+<!-- template-sync: begin terraform-reference-only -->
+- **Terraform:** [`.github/instructions/terraform.instructions.md`](.github/instructions/terraform.instructions.md)
+<!-- template-sync: end terraform-reference-only -->
+<!-- template-sync: begin json-reference-only -->
+- **JSON/JSONC:** [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md)
+<!-- template-sync: end json-reference-only -->
+<!-- template-sync: begin yaml-reference-only -->
+- **YAML:** [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md)
+<!-- template-sync: end yaml-reference-only -->
 
-These standards apply to all contributions and are enforced by the repository's pre-commit hooks and CI workflows. AI coding agents (such as GitHub Copilot, Claude Code, Codex, and Gemini) are configured to read these instruction files when generating or editing code, but enforcement of the standards on every commit comes from the tooling listed above, not from any individual agent.
+These standards apply to all contributions in the retained file families and are enforced by the repository's pre-commit hooks and CI workflows.
 
 ### Template Taxonomy Updates
 
@@ -235,42 +268,50 @@ When a change adds, removes, renames, moves, or changes the primary purpose of a
 
 ### Data-File and Schema Validation
 
-JSON, YAML, and GitHub Actions workflow files are first-class file types in this template. Contributor expectations:
+Data files and GitHub Actions workflow files are first-class validation surfaces. Contributor expectations:
 
 - Run `pre-commit run --all-files` before opening a PR.
-- JSON files **must** pass `check-json` (strict `.json` only — `.jsonc` is intentionally not validated; see the dialect note above).
-- YAML files **must** pass `check-yaml` and `yamllint` (configured by `.yamllint.yml`).
-- GitHub Actions workflow files **must** pass `actionlint`.
-- Schema-backed files **must** pass `check-jsonschema` (and the schema itself **must** pass `check-metaschema` where wired).
-- The schema example contracts under `schemas/examples/<schema>/{valid,invalid}/` are tested by [`tests/test_schema_examples.py`](tests/test_schema_examples.py); when changing a schema or its example fixtures, run `pytest tests/test_schema_examples.py -v` to confirm the contract still holds.
+- Strict `.json` files must pass `check-json`; `.jsonc` is intentionally not validated by that hook.
+- YAML files must pass `check-yaml`.
+<!-- template-sync: begin yaml-reference-only -->
+- YAML files must also pass `yamllint` when the YAML module is retained.
+<!-- template-sync: end yaml-reference-only -->
+- GitHub Actions workflow files must pass `actionlint`.
+- Schema-backed files must pass `check-jsonschema`, and retained schemas must pass `check-metaschema` where configured.
+<!-- template-sync: begin schema-reference-only -->
+- The worked-example schema contracts under `schemas/examples/<schema>/{valid,invalid}/` are tested by [`tests/test_schema_examples.py`](tests/test_schema_examples.py); when changing a schema or its example fixtures, run `pytest tests/test_schema_examples.py -v`.
 
 See [`schemas/README.md`](schemas/README.md) for schema conventions and the canonical downstream removal checklist for the worked example.
+<!-- template-sync: end schema-reference-only -->
 
 ### CI Workflows
 
-This repository includes several GitHub Actions workflows that run automatically:
+This repository includes retained GitHub Actions workflows that run automatically:
 
 | Workflow | File | Purpose |
 | --- | --- | --- |
-| Pre-commit CI | `.github/workflows/precommit-ci.yml` | Runs the aggregate `pre-commit run --all-files` gate over every hook in `.pre-commit-config.yaml` |
-| Python CI | `.github/workflows/python-ci.yml` | Runs mypy (type checking) and pytest on Python files |
-| Auto-fix Pre-commit | `.github/workflows/auto-fix-precommit.yml` | Automatically commits pre-commit auto-fixes on pushes to `copilot/**` branches authored by `copilot-swe-agent[bot]` (optional) |
-| Markdown Lint | `.github/workflows/markdownlint.yml` | Validates markdown formatting |
-| PowerShell CI | `.github/workflows/powershell-ci.yml` | Runs PSScriptAnalyzer on PowerShell files |
-| Data CI | `.github/workflows/data-ci.yml` | Runs `check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, and `check-metaschema` against JSON/YAML/GitHub Actions data files |
+| Pre-commit CI | `.github/workflows/precommit-ci.yml` | Runs the aggregate `pre-commit run --all-files` gate over every hook in `.pre-commit-config.yaml`. |
+| Auto-fix Pre-commit | `.github/workflows/auto-fix-precommit.yml` | Automatically commits pre-commit auto-fixes on Copilot-agent branches when the workflow conditions match. |
+| Markdown Lint | `.github/workflows/markdownlint.yml` | Validates Markdown formatting and local links. |
+| PowerShell CI | `.github/workflows/powershell-ci.yml` | Runs PSScriptAnalyzer and Pester on PowerShell files. |
+| Data CI | `.github/workflows/data-ci.yml` | Runs retained data-file, GitHub Actions, template-sync, and schema validation hooks. |
+<!-- template-sync: begin python-reference-only -->
+| Python CI | `.github/workflows/python-ci.yml` | Runs type checking and pytest on Python files. |
+<!-- template-sync: end python-reference-only -->
+<!-- template-sync: begin terraform-reference-only -->
+| Terraform CI | `.github/workflows/terraform-ci.yml` | Runs Terraform format, validate, lint, test, and security checks. |
+<!-- template-sync: end terraform-reference-only -->
 
-The **Auto-fix Pre-commit** workflow is scoped specifically to the GitHub Copilot Coding Agent: it triggers only on pushes to `copilot/**` branches authored by `copilot-swe-agent[bot]`, and automatically commits any pre-commit auto-fixes back onto that branch. Human-authored PRs and PRs on non-`copilot/**` branches are not affected; their authors must run `pre-commit run --all-files` locally and integrate the fixes themselves before pushing.
+The **Auto-fix Pre-commit** workflow is scoped specifically to the GitHub Copilot Coding Agent. Human-authored PRs and PRs on non-`copilot/**` branches are not affected; their authors must run `pre-commit run --all-files` locally and integrate the fixes themselves before pushing.
 
 ### Workflow Version Pinning
 
 When editing files under `.github/workflows/`, follow the [**Workflow Version Pinning**](.github/copilot-instructions.md#workflow-version-pinning) rule in the repo-wide constitution. In short:
 
-- Keep third-party action versions directly in `uses:` lines (for example, `actions/checkout@v6`) so Dependabot can update them.
-- Do **not** mirror a `uses:` version into a workflow-level `env:` variable, comment, cache key, file path, or shell literal — Dependabot will not rewrite those mirrors, and they will silently drift.
-- For tool versions that Dependabot does not manage (for example, `terraform_version` or `tflint_version` passed to setup actions), a workflow-level `env:` value is a fine single source of truth across multiple steps.
+- Keep third-party action versions directly in `uses:` lines so Dependabot can update them.
+- Do **not** mirror a `uses:` version into a workflow-level `env:` variable, comment, cache key, file path, or shell literal.
+- For tool versions that Dependabot does not manage, a workflow-level `env:` value is a fine single source of truth across multiple steps.
 - If a Dependabot-managed dependency genuinely cannot be expressed without duplication, add a narrowly scoped `.github/dependabot.yml` `ignore:` entry with a YAML comment explaining why.
-
-See the deep link above for the full rule, including the wrapper-action vs. installed-tool distinction and concrete examples from this repository.
 
 ## Making Changes
 
@@ -282,7 +323,7 @@ git checkout -b your-feature-branch
 
 ### 2. Make Your Changes
 
-Follow the coding standards for the language(s) you're working with.
+Follow the coding standards for the language or file type you are changing.
 
 ### 3. Run Pre-commit Hooks
 
@@ -294,36 +335,32 @@ Fix any issues that are reported.
 
 ### 4. Run Tests
 
-Before submitting a pull request, ensure all tests pass locally.
+Before submitting a pull request, ensure the retained test suites pass locally.
 
+<!-- template-sync: begin python-reference-only -->
 #### Python Tests
 
 ```bash
-# Install dev dependencies
 pip install -e ".[dev]"
-
-# Run tests with coverage
 pytest tests/ -v --cov --cov-report=term-missing
-
-# Run type checks
 mypy src/ tests/
 ```
+<!-- template-sync: end python-reference-only -->
 
 #### PowerShell Tests
 
 ```powershell
-# Install Pester if not already installed
 Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser
-
-# Run all Pester tests
 Invoke-Pester -Path tests/ -Output Detailed
 ```
 
 #### Test Requirements
 
-- **Python:** New functionality should include pytest tests in `tests/`
-- **PowerShell:** New functions should include Pester tests in `tests/PowerShell/`
-- All tests must pass on the CI matrix (Ubuntu, Windows, macOS)
+- PowerShell changes should include Pester tests in `tests/PowerShell/`.
+<!-- template-sync: begin python-reference-only -->
+- Python changes should include pytest tests in `tests/`.
+<!-- template-sync: end python-reference-only -->
+- Retained test suites must pass on the applicable CI matrix.
 
 ### 5. Commit Your Changes
 
@@ -348,11 +385,14 @@ Open a PR on GitHub and fill out the PR template checklist.
 
 When submitting a pull request:
 
-- [ ] Confirm Python version policy (if applicable) complies with the bugfix support window
-- [ ] Confirm `pre-commit run --all-files` passes locally
-- [ ] Include tests for new functionality
-- [ ] Update documentation as needed
-- [ ] Ensure all CI checks pass
+<!-- template-sync: begin python-reference-only -->
+- [ ] Confirm the Python version policy applies when Python project code is changed.
+<!-- template-sync: end python-reference-only -->
+- [ ] Confirm `pre-commit run --all-files` passes locally.
+- [ ] Include tests for new functionality.
+- [ ] Update documentation as needed.
+- [ ] Ensure all CI checks pass.
+- [ ] Confirm no secrets, credentials, tokens, or connection strings were committed.
 
 ## Questions or Issues?
 
@@ -360,9 +400,9 @@ If you have questions or encounter issues:
 
 <!-- CUSTOMIZE: Replace `OWNER/REPO` with your organization and repository name -->
 
-1. Check existing [Issues](https://github.com/OWNER/REPO/issues)
-2. Review the documentation in `.github/instructions/`
-3. Open a new issue with a clear description of the problem
+1. Check existing [Issues](https://github.com/OWNER/REPO/issues).
+2. Review the retained documentation in `.github/instructions/`.
+3. Open a new issue with a clear description of the problem.
 
 ## License
 
@@ -382,39 +422,3 @@ See the [OPTIONAL_CONFIGURATIONS.md "License Customization" section](https://git
 -->
 
 By contributing to this project, you agree that your contributions will be licensed under the same license as the project (MIT License).
-
-## For Template Users
-
-<!--
-TEMPLATE ADOPTERS: This entire section is meta-documentation about the template itself.
-After you've reviewed and understood this content, you should:
-- Option A: Remove this entire section (recommended for most downstream projects)
-- Option B: Keep it if your project is also a template
-- Option C: Move relevant content to your own project documentation
-
-See [OPTIONAL_CONFIGURATIONS.md](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md) for detailed guidance on CONTRIBUTING.md customization.
--->
-
-This repository is a template designed for projects that use GitHub Copilot for AI-assisted development.
-
-### Understanding the Instruction Files
-
-The `.github/instructions/` directory contains coding standards that guide GitHub Copilot's code generation:
-
-- **`docs.instructions.md`** - Documentation and Markdown writing standards
-- **`powershell.instructions.md`** - PowerShell coding conventions (OTBS style, v1.0 compatibility patterns)
-- **`python.instructions.md`** - Python coding standards (PEP 8, type hints, testing patterns)
-
-These instruction files are automatically applied by GitHub Copilot based on the file patterns specified in each file's front matter.
-
-### Customizing for Your Project
-
-You can customize these instruction files for your project's specific conventions:
-
-1. Edit the instruction files to match your team's coding standards
-2. Remove instruction files for languages you don't use
-3. Add new instruction files for additional languages as needed
-
-### First-Time Setup Validation
-
-After creating a new repository from this template, see the [Validation and Testing](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md#validation-and-testing) section for guidance on verifying your setup.

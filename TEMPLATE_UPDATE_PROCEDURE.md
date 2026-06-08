@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260608.0
+**Version:** 1.1.20260608.1
 
 ## Metadata
 
@@ -797,6 +797,7 @@ The current `markdown-reference-only`, `powershell-reference-only`, `python-refe
 
 - `.github/copilot-instructions.md` for removable optional-stack references in protected canonical guidance.
 - `.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` for removable optional-stack references in protected agent entry-point summaries.
+- `README.md` and `CONTRIBUTING.md` for removable optional-stack references in shared baseline contributor-facing documentation.
 
 The current `python-only` inline block lives in:
 

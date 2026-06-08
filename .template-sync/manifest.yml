@@ -428,6 +428,13 @@ template_manifest:
     - pattern: 'README.md'
       requires_all:
         - baseline
+      notes: >-
+        Contains Markdown-safe *-reference-only inline blocks for optional stack
+        sections, rows, prose, and links in the shared baseline README. Remove
+        each delimited reference-only block when its module is excluded while
+        preserving retained baseline guidance and any retained Markdown,
+        PowerShell, GitHub platform, GitHub Actions, GitHub templates, and
+        template-sync support guidance.
     - pattern: 'TEMPLATE_UPDATE_PROCEDURE.md'
       requires_all:
         - template-sync-support
@@ -449,6 +456,13 @@ template_manifest:
     - pattern: 'CONTRIBUTING.md'
       requires_all:
         - baseline
+      notes: >-
+        Contains Markdown-safe *-reference-only inline blocks for optional stack
+        contributor guidance, validation commands, workflow rows, and links in
+        the shared baseline contributing guide. Remove each delimited
+        reference-only block when its module is excluded while preserving
+        retained pre-commit, no-secrets, pull-request, template-sync support,
+        and retained language/tooling guidance.
     - pattern: 'SECURITY.md'
       requires_all:
         - baseline
