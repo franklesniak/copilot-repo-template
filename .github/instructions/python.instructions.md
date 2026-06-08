@@ -7,13 +7,13 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.6.20260604.0
+**Version:** 1.6.20260608.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-04
+- **Last Updated:** 2026-06-08
 - **Scope:** Defines Python coding standards for all Python files in this repository, including modules, scripts, tests, and tooling. Covers style, structure, error handling, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -294,6 +294,10 @@ assert redact_url_userinfo("//user:token@host/path") == "//***@host/path"
 - Non-trivial logic **MUST** have tests.
 - Tests **MUST** be deterministic and **MUST NOT** depend on network unless explicitly marked/integration-only.
 - **SHOULD** use table-driven tests for parsing/validation logic.
+- A test that calls `pytest.skip()` or uses `@pytest.mark.skipif` because an external, provisionable prerequisite is unavailable, such as a Node toolchain, `node_modules`, a compiled binary, or another language runtime, **MUST** have at least one CI path that provisions that prerequisite and exercises the protected behavior without taking the skip. Otherwise CI can pass while the behavior the test is meant to protect remains unenforced.
+- This requirement covers prerequisites that CI can reasonably install, build, or otherwise provision. It does **NOT** apply to skips that gate on local or platform capabilities CI cannot reasonably provide on every runner, such as symlink creation support in a particular OS or filesystem environment. Such skips **SHOULD** still describe the missing capability in the skip reason.
+- When the prerequisite belongs to another toolchain already provisioned by an existing workflow, such as the Node setup plus `npm ci` in [`.github/workflows/markdownlint.yml`](../workflows/markdownlint.yml), the regression **SHOULD** run in the workflow or job that owns or already provisions that prerequisite rather than adding a redundant install to an unrelated job, as long as that CI path exercises the non-skipped behavior.
+- A PR that adds such a conditionally skipped test **SHOULD** identify the CI workflow or job that exercises the non-skipped path so reviewers can confirm the behavior is actually enforced.
 - Tests **SHOULD NOT** read from or monkeypatch private (single-underscore-prefixed) attributes or methods of production classes.
 - When a test needs to substitute collaborators or inject fixtures that production code would normally build internally, production code **SHOULD** expose a narrow public seam (for example, a keyword-only `__init__` parameter or another explicit injection point) rather than relying on tests to monkeypatch private internals.
 - Production call sites **SHOULD** use the default behavior of that seam unless an override is intentionally required.
