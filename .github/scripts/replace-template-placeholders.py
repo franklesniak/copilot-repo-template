@@ -351,47 +351,47 @@ def build_security_reporting_section(context: ReplacementContext) -> str:
         "- Contact: [security contact email]\n"
     )
     private_lines = (
-        "### GitHub Private Vulnerability Reporting\n\n"
-        "> **Maintainers:** Enable private vulnerability reporting in GitHub settings "
+        f"### GitHub Private Vulnerability Reporting\n\n"
+        f"> **Maintainers:** Enable private vulnerability reporting in GitHub settings "
         f"before relying on the direct reporting link: `{direct_url}`.\n\n"
-        "Use GitHub Security Advisories through the "
+        f"Use GitHub Security Advisories through the "
         f"[private vulnerability reporting form]({direct_url}) after maintainers have "
-        "enabled private vulnerability reporting for this repository.\n"
+        f"enabled private vulnerability reporting for this repository.\n"
     )
 
     if context.security_reporting_mode == "github-private-only":
         return (
-            "## Reporting a Vulnerability\n\n"
-            "**Please do NOT report security vulnerabilities through public GitHub issues.**\n\n"
-            "If you discover a security vulnerability in this project, report it privately "
-            "using GitHub private vulnerability reporting.\n\n"
+            f"## Reporting a Vulnerability\n\n"
+            f"**Please do NOT report security vulnerabilities through public GitHub issues.**\n\n"
+            f"If you discover a security vulnerability in this project, report it privately "
+            f"using GitHub private vulnerability reporting.\n\n"
             f"{private_lines}"
         )
     if context.security_reporting_mode == "contact-only":
         return (
-            "## Reporting a Vulnerability\n\n"
-            "**Please do NOT report security vulnerabilities through public GitHub issues.**\n\n"
-            "If you discover a security vulnerability in this project, report it privately "
-            "using the contact method below.\n\n"
+            f"## Reporting a Vulnerability\n\n"
+            f"**Please do NOT report security vulnerabilities through public GitHub issues.**\n\n"
+            f"If you discover a security vulnerability in this project, report it privately "
+            f"using the contact method below.\n\n"
             f"{contact_lines}"
         )
     return (
-        "## Reporting a Vulnerability\n\n"
-        "**Please do NOT report security vulnerabilities through public GitHub issues.**\n\n"
-        "If you discover a security vulnerability in this project, report it privately "
-        "using one of the following methods:\n\n"
-        "### Option 1: GitHub Private Vulnerability Reporting\n\n"
-        "> **Maintainers:** Enable private vulnerability reporting in GitHub settings "
+        f"## Reporting a Vulnerability\n\n"
+        f"**Please do NOT report security vulnerabilities through public GitHub issues.**\n\n"
+        f"If you discover a security vulnerability in this project, report it privately "
+        f"using one of the following methods:\n\n"
+        f"### Option 1: GitHub Private Vulnerability Reporting\n\n"
+        f"> **Maintainers:** Enable private vulnerability reporting in GitHub settings "
         f"before relying on the direct reporting link: `{direct_url}`.\n\n"
-        "Use GitHub Security Advisories through the "
+        f"Use GitHub Security Advisories through the "
         f"[private vulnerability reporting form]({direct_url}) after maintainers have "
-        "enabled private vulnerability reporting for this repository. If that form is "
-        "unavailable, use the security contact option below.\n\n"
-        "### Option 2: Security Contact\n\n"
-        "Contact the maintainers directly at:\n\n"
-        "<!-- TODO: Replace with your security contact email -->\n"
-        "<!-- Do not use a users.noreply.github.com address as a security intake channel. -->\n"
-        "- Contact: [security contact email]\n"
+        f"enabled private vulnerability reporting for this repository. If that form is "
+        f"unavailable, use the security contact option below.\n\n"
+        f"### Option 2: Security Contact\n\n"
+        f"Contact the maintainers directly at:\n\n"
+        f"<!-- TODO: Replace with your security contact email -->\n"
+        f"<!-- Do not use a users.noreply.github.com address as a security intake channel. -->\n"
+        f"- Contact: [security contact email]\n"
     )
 
 
