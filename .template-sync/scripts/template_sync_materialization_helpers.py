@@ -51,6 +51,9 @@ INLINE_BLOCK_MARKER_RE = re.compile(
     r"(?P<kind>begin|end)\s+"
     r"(?P<name>[a-z0-9-]+-(?:reference-)?only)\s*(?:-->)?\s*$"
 )
+CODE_FENCE_OPEN_RE = re.compile(r"^(?P<indent> {0,3})(?P<fence>`{3,}|~{3,})(?P<info>.*)$")
+CODE_FENCE_CLOSE_RE = re.compile(r"^(?P<indent> {0,3})(?P<fence>`{3,}|~{3,})\s*$")
+MARKDOWN_FENCE_INFO = frozenset({"markdown", "md"})
 INLINE_BLOCK_MODULES = {
     "terraform-only": frozenset({"terraform"}),
     "markdown-only": frozenset({"markdown"}),
@@ -1169,12 +1172,60 @@ def html_inline_marker(marker_name: str, kind: str) -> str:
     return f"<!-- template-sync: {kind} {marker_name} -->"
 
 
+def is_markdown_fence_info(info: str) -> bool:
+    """Return whether a code-fence info string names Markdown content."""
+    language = info.strip().split(maxsplit=1)[0].lower() if info.strip() else ""
+    return language in MARKDOWN_FENCE_INFO
+
+
+def matching_code_fence_close(line: str, fence_character: str, minimum_length: int) -> bool:
+    """Return whether ``line`` closes the active fenced code block."""
+    match = CODE_FENCE_CLOSE_RE.match(line)
+    if match is None:
+        return False
+    fence = match.group("fence")
+    return fence.startswith(fence_character) and len(fence) >= minimum_length
+
+
+def trim_trailing_blank_lines(lines: list[str], blank_run: int, maximum: int) -> int:
+    """Trim a trailing blank-line run in ``lines`` to ``maximum`` entries."""
+    while blank_run > maximum and lines and not lines[-1].strip():
+        lines.pop()
+        blank_run -= 1
+    return blank_run
+
+
 def apply_blank_line_hygiene(text: str, *, max_consecutive_blank_lines: int = 2) -> str:
     """Collapse excessive blank-line runs after inline-block removal."""
     hygienic_lines: list[str] = []
     blank_run = 0
+    active_fence: tuple[str, int, bool] | None = None
+    fence_boundary_blank_lines = max(0, max_consecutive_blank_lines - 1)
+
     for line in text.splitlines(keepends=True):
         if line.strip():
+            if active_fence is not None:
+                fence_character, fence_length, is_markdown_fence = active_fence
+                if matching_code_fence_close(line, fence_character, fence_length):
+                    if is_markdown_fence:
+                        blank_run = trim_trailing_blank_lines(
+                            hygienic_lines,
+                            blank_run,
+                            fence_boundary_blank_lines,
+                        )
+                    active_fence = None
+                hygienic_lines.append(line)
+                blank_run = 0
+                continue
+
+            open_match = CODE_FENCE_OPEN_RE.match(line)
+            if open_match is not None:
+                fence = open_match.group("fence")
+                active_fence = (
+                    fence[0],
+                    len(fence),
+                    is_markdown_fence_info(open_match.group("info")),
+                )
             blank_run = 0
             hygienic_lines.append(line)
             continue

@@ -15,8 +15,15 @@ import yaml  # type: ignore[import-untyped]
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "materialize_downstream_adoption.py"
 SCRIPT_DIR = SCRIPT_PATH.parent
+NESTED_MARKDOWN_LINT_PATH = REPO_ROOT / ".github" / "scripts" / "lint-nested-markdown.js"
 SOURCE_REPO = "https://github.com/franklesniak/copilot-repo-template.git"
 FULL_SHA = "0123456789abcdef0123456789abcdef01234567"
+NESTED_MARKDOWN_LINT_NODE_MODULES = (
+    "glob",
+    "jsonc-parser",
+    "markdown-it",
+    "markdownlint",
+)
 
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
@@ -44,6 +51,16 @@ def write_yaml(path: Path, data: dict[str, Any]) -> None:
 def read_file(path: Path) -> str:
     """Read a UTF-8 fixture file."""
     return path.read_text(encoding="utf-8")
+
+
+def nested_markdown_lint_prerequisites_available() -> bool:
+    """Return whether the Node-based nested Markdown linter can run locally."""
+    if shutil.which("node") is None:
+        return False
+    return all(
+        (REPO_ROOT / "node_modules" / module_name).exists()
+        for module_name in NESTED_MARKDOWN_LINT_NODE_MODULES
+    )
 
 
 def prepare_template(
@@ -177,6 +194,86 @@ def test_retained_files_excluded_files_inline_blocks_and_unmapped_paths(
     assert not (target_root / "templates" / "python" / "app.py").exists()
     assert "templates/python/app.py" in result.stdout
     assert "UNMAPPED.txt" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("included_modules", "case_name"),
+    [
+        pytest.param(
+            (
+                "baseline",
+                "agent-instructions",
+                "github-platform",
+                "github-actions",
+                "github-templates",
+                "template-sync-support",
+                "markdown",
+                "powershell",
+            ),
+            "issue-690-powershell-retained",
+            id="issue-690-powershell-retained",
+        ),
+        pytest.param(
+            (
+                "baseline",
+                "agent-instructions",
+                "github-platform",
+                "github-actions",
+                "github-templates",
+                "template-sync-support",
+                "markdown",
+            ),
+            "powershell-reference-stripped",
+            id="powershell-reference-stripped",
+        ),
+    ],
+)
+def test_materialized_template_update_procedure_passes_nested_markdown_lint(
+    tmp_path: Path,
+    included_modules: tuple[str, ...],
+    case_name: str,
+) -> None:
+    """Partial materialization produces a nested-lint-clean sync procedure."""
+    if not nested_markdown_lint_prerequisites_available():
+        pytest.skip("Run npm ci --ignore-scripts before this generated-output lint test.")
+
+    target_root = tmp_path / case_name
+    target_root.mkdir()
+    module_args = [
+        argument
+        for module_name in included_modules
+        for argument in ("--included-module", module_name)
+    ]
+
+    result = run_materialize(
+        REPO_ROOT,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--last-reviewed-template-commit",
+        FULL_SHA,
+        "--repository",
+        "octocat/hello-world",
+        "--security-contact",
+        "security@example.com",
+        "--allow-conflicts",
+        *module_args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    generated_procedure = target_root / "TEMPLATE_UPDATE_PROCEDURE.md"
+    assert generated_procedure.is_file(), result.stdout
+
+    lint_result = subprocess.run(
+        ["node", str(NESTED_MARKDOWN_LINT_PATH), str(generated_procedure)],
+        cwd=REPO_ROOT,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    assert lint_result.returncode == 0, lint_result.stdout + lint_result.stderr
 
 
 def test_unrecorded_conflict_exits_two_and_allow_conflicts_does_not_advance_marker(
