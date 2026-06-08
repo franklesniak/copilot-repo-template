@@ -159,30 +159,24 @@ If you prefer not to enable Discussions but want to redirect support questions a
 
 ### Security Link URL Customization
 
-The placeholder helper renders the `config.yml` security contact link from the selected security reporting mode:
-
-- `github-private-only` and `both` point to the direct private vulnerability reporting form.
-- `contact-only` points to `SECURITY.md` so reporters see the contact instructions instead of a GitHub private-reporting form.
-
-For GitHub private vulnerability reporting modes, the generated link uses:
-
-```yaml
-- name: Security Vulnerabilities
-  url: https://github.com/OWNER/REPO/security/advisories/new
-  about: Report security issues privately. Maintainers must enable private vulnerability reporting before relying on this link.
-```
-
-For contact-only mode, the generated link uses:
+The placeholder helper renders the `config.yml` security contact link to point at `SECURITY.md` for **every** security reporting mode:
 
 ```yaml
 - name: Security Vulnerabilities
   url: https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md
-  about: Report security issues using the private contact instructions in SECURITY.md. Do not open a public issue.
+  about: Report security issues privately using the instructions in SECURITY.md. Do not open a public issue.
 ```
 
-> **Important:** Private vulnerability reporting is only available for **public repositories** and must be enabled in GitHub settings before the direct form can receive reports. Private repositories or public repositories that do not enable the feature should use `contact-only` or `both` with a monitored security contact.
+`SECURITY.md` is always reachable and is itself rendered from the selected mode, so it documents the appropriate reporting path:
+
+- `github-private-only` and `both` render the GitHub private vulnerability reporting form (and, for `both`, a security contact) inside `SECURITY.md`.
+- `contact-only` renders the security contact instructions inside `SECURITY.md`.
+
+Pointing the issue chooser at `SECURITY.md` keeps the link working throughout the repository lifecycle: a direct advisory-form link cannot receive reports until a maintainer enables private vulnerability reporting, so the chooser would otherwise send reporters to a non-functional page on newly created or private repositories.
+
+> **Important:** Private vulnerability reporting is only available for **public repositories** and must be enabled in GitHub settings before the direct advisory form (linked from `SECURITY.md`) can receive reports. Private repositories or public repositories that do not enable the feature should use `contact-only` or `both` with a monitored security contact.
 >
-> **See:** [Security Configuration](#security-configuration) for instructions on enabling private vulnerability reporting and updating this URL.
+> **See:** [Security Configuration](#security-configuration) for instructions on enabling private vulnerability reporting.
 
 ### Bug Report Template Customization
 

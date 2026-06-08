@@ -417,12 +417,14 @@ def test_security_reporting_modes_render_consistent_surfaces(
         assert "security@example.com" not in security_text
         assert "Security Contact" not in security_text
         assert "Contact:" not in security_text
-        assert contact_link["url"] == "https://github.com/octo/widget/security/advisories/new"
+        # The issue chooser link always points at SECURITY.md (always reachable),
+        # even though SECURITY.md itself renders the advisory form for this mode.
+        assert contact_link["url"] == "https://github.com/octo/widget/blob/HEAD/SECURITY.md"
         assert "GitHub Security Advisories" in security_text
         assert "private vulnerability reporting" in combined_security_surfaces
     else:
         assert "security@example.com" in security_text
-        assert contact_link["url"] == "https://github.com/octo/widget/security/advisories/new"
+        assert contact_link["url"] == "https://github.com/octo/widget/blob/HEAD/SECURITY.md"
         assert "GitHub Security Advisories" in security_text
         assert "private vulnerability reporting" in combined_security_surfaces
 
@@ -432,7 +434,7 @@ def test_security_reporting_modes_render_consistent_surfaces(
     [
         pytest.param(
             ["--security-reporting-mode", "github-private-only"],
-            "/security/advisories/new",
+            "/blob/HEAD/SECURITY.md",
             id="github-private-only",
         ),
         pytest.param(
@@ -447,7 +449,7 @@ def test_security_reporting_modes_render_consistent_surfaces(
         ),
         pytest.param(
             ["--security-reporting-mode", "both", "--security-contact", "security@example.com"],
-            "/security/advisories/new",
+            "/blob/HEAD/SECURITY.md",
             id="both",
         ),
     ],

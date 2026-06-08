@@ -30,11 +30,11 @@ contact_links:
   # =============================================================================
   # CUSTOMIZE: Replace `OWNER/REPO` with your org/repo name.
   # GHES users must also replace github.com with their GHES host.
-  # Private vulnerability reporting must be enabled in GitHub settings
-  # before this direct advisory-reporting URL can receive reports.
+  # The issue chooser links to SECURITY.md, which is always reachable and
+  # documents the reporting path for the configured security reporting mode.
   - name: Security Vulnerabilities
-    url: https://github.com/OWNER/REPO/security/advisories/new
-    about: Report security issues privately. Maintainers must enable private vulnerability reporting before relying on this link.
+    url: https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md
+    about: Report security issues privately using the instructions in SECURITY.md. Do not open a public issue.
 
   # =============================================================================
   # DISCUSSIONS LINK (OPTIONAL)

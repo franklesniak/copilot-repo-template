@@ -607,13 +607,13 @@ def test_placeholder_replacement_reuses_helper_and_missing_helper_fails(
         pytest.param(
             ["--security-contact", "security@example.com"],
             "both",
-            "https://github.com/octo/widget/security/advisories/new",
+            "https://github.com/octo/widget/blob/HEAD/SECURITY.md",
             id="omitted-mode-backward-compatible-both",
         ),
         pytest.param(
             ["--security-reporting-mode", "both", "--security-contact", "security@example.com"],
             "both",
-            "https://github.com/octo/widget/security/advisories/new",
+            "https://github.com/octo/widget/blob/HEAD/SECURITY.md",
             id="explicit-both",
         ),
         pytest.param(
@@ -630,7 +630,7 @@ def test_placeholder_replacement_reuses_helper_and_missing_helper_fails(
         pytest.param(
             ["--security-reporting-mode", "github-private-only"],
             "github-private-only",
-            "https://github.com/octo/widget/security/advisories/new",
+            "https://github.com/octo/widget/blob/HEAD/SECURITY.md",
             id="github-private-only",
         ),
     ],
@@ -729,7 +729,7 @@ def test_materialized_security_reporting_mode_preserves_github_host(
     assert result.returncode == 0, result.stderr
     config = load_yaml(target_root / ".github" / "ISSUE_TEMPLATE" / "config.yml")
     contact_link = security_contact_link(config)
-    assert contact_link["url"] == "https://github.company.com/octo/widget/security/advisories/new"
+    assert contact_link["url"] == "https://github.company.com/octo/widget/blob/HEAD/SECURITY.md"
     for relative_path in (
         "SECURITY.md",
         ".github/ISSUE_TEMPLATE/config.yml",

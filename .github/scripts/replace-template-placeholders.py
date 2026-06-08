@@ -414,35 +414,29 @@ def replace_security_reporting_section(
 
 
 def build_config_security_block(context: ReplacementContext) -> str:
-    """Build the rendered issue-template contact link security block."""
-    if context.security_reporting_mode == "contact-only":
-        url = "https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md"
-        about = (
-            "Report security issues using the private contact instructions in "
-            "SECURITY.md. Do not open a public issue."
-        )
-        details = (
-            "  # Security reports are handled through SECURITY.md in this mode.\n"
-            "  # Keep this link pointed at the policy file unless you intentionally\n"
-            "  # replace it with a validated external contact URL.\n"
-        )
-    else:
-        url = "https://github.com/OWNER/REPO/security/advisories/new"
-        about = (
-            "Report security issues privately. Maintainers must enable private "
-            "vulnerability reporting before relying on this link."
-        )
-        details = (
-            "  # Private vulnerability reporting must be enabled in GitHub settings\n"
-            "  # before this direct advisory-reporting URL can receive reports.\n"
-        )
+    """Build the rendered issue-template contact link security block.
+
+    The issue chooser link always points to ``SECURITY.md`` regardless of the
+    selected reporting mode. ``SECURITY.md`` is always reachable and is itself
+    rendered per mode, so it documents the appropriate reporting path. Linking
+    the chooser directly at the GitHub advisory form would send reporters to a
+    page that cannot receive reports until a maintainer enables private
+    vulnerability reporting; ``SECURITY.md`` avoids that dead end.
+    """
+    del context  # Mode controls SECURITY.md content, not the chooser link target.
+    url = "https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md"
+    about = (
+        "Report security issues privately using the instructions in "
+        "SECURITY.md. Do not open a public issue."
+    )
     return (
         "  # =============================================================================\n"
         "  # SECURITY LINK CONFIGURATION\n"
         "  # =============================================================================\n"
         "  # CUSTOMIZE: Replace `OWNER/REPO` with your org/repo name.\n"
         "  # GHES users must also replace github.com with their GHES host.\n"
-        f"{details}"
+        "  # The issue chooser links to SECURITY.md, which is always reachable and\n"
+        "  # documents the reporting path for the configured security reporting mode.\n"
         "  - name: Security Vulnerabilities\n"
         f"    url: {url}\n"
         f"    about: {about}\n\n"
