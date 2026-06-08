@@ -103,7 +103,7 @@ class ReplacementContext:
     vscode_title: str
 
     @property
-    def security_todo_replacement(self) -> str | None:
+    def security_todo_replacement(self) -> str:
         """Return the replacement for the security-contact TODO marker."""
         if self.security_contact is None:
             return "<!-- Security contact intentionally omitted by reporting mode -->"

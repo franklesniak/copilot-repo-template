@@ -586,11 +586,13 @@ Private vulnerability reporting allows security researchers to report vulnerabil
 1. Go to **Settings** > **Security** > **Private vulnerability reporting**
 2. Click **Enable**
 
-**Optional:** After enabling, use `--security-reporting-mode github-private-only` or `--security-reporting-mode both` when running the placeholder helper so `.github/ISSUE_TEMPLATE/config.yml`, `.github/ISSUE_TEMPLATE/bug_report.yml`, and `SECURITY.md` stay consistent:
+**Optional:** After enabling, run the placeholder helper with `--security-reporting-mode github-private-only` or `--security-reporting-mode both` so `SECURITY.md`, `.github/ISSUE_TEMPLATE/config.yml`, and `.github/ISSUE_TEMPLATE/bug_report.yml` render the private-reporting path consistently. The rendered `SECURITY.md` links to the private vulnerability reporting form:
 
-```yaml
-url: https://github.com/OWNER/REPO/security/advisories/new
+```text
+https://github.com/OWNER/REPO/security/advisories/new
 ```
+
+The issue-template chooser link always points at `SECURITY.md` (see [Security Link URL Customization](#security-link-url-customization)), which is always reachable and surfaces this advisory form once enabled — so you do not edit `config.yml` to use the advisory URL directly.
 
 If you keep a contact fallback, use a monitored project or organization contact method. Do not use a `users.noreply.github.com` address as a real security contact channel.
 
