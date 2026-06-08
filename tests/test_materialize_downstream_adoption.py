@@ -14,10 +14,41 @@ import yaml  # type: ignore[import-untyped]
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "materialize_downstream_adoption.py"
+REPORT_SCRIPT_PATH = (
+    REPO_ROOT / ".template-sync" / "scripts" / "report_excluded_module_references.py"
+)
 SCRIPT_DIR = SCRIPT_PATH.parent
 NESTED_MARKDOWN_LINT_PATH = REPO_ROOT / ".github" / "scripts" / "lint-nested-markdown.js"
 SOURCE_REPO = "https://github.com/franklesniak/copilot-repo-template.git"
 FULL_SHA = "0123456789abcdef0123456789abcdef01234567"
+ISSUE_692_NO_PYTHON_MODULES = (
+    "baseline",
+    "agent-instructions",
+    "github-platform",
+    "github-actions",
+    "github-templates",
+    "template-sync-support",
+    "markdown",
+    "powershell",
+)
+FULL_TEMPLATE_MODULES = (
+    "baseline",
+    "agent-instructions",
+    "github-platform",
+    "github-actions",
+    "github-templates",
+    "template-onboarding",
+    "template-sync-support",
+    "markdown",
+    "powershell",
+    "json",
+    "yaml",
+    "schema",
+    "python",
+    "terraform",
+)
+DEPENDABOT_NO_PYTHON_ECOSYSTEMS = {"github-actions", "npm", "pre-commit"}
+DEPENDABOT_FULL_ECOSYSTEMS = DEPENDABOT_NO_PYTHON_ECOSYSTEMS | {"pip"}
 NESTED_MARKDOWN_LINT_NODE_MODULES = (
     "glob",
     "jsonc-parser",
@@ -68,6 +99,16 @@ def nested_markdown_lint_prerequisites_available() -> bool:
         (REPO_ROOT / "node_modules" / module_name).exists()
         for module_name in NESTED_MARKDOWN_LINT_NODE_MODULES
     )
+
+
+def check_jsonschema_command() -> list[str] | None:
+    """Resolve a ``check-jsonschema`` command for optional generated YAML validation."""
+    executable = shutil.which("check-jsonschema")
+    if executable is not None:
+        return [executable]
+    if importlib.util.find_spec("check_jsonschema") is not None:
+        return [sys.executable, "-m", "check_jsonschema"]
+    return None
 
 
 def prepare_template(
@@ -152,6 +193,43 @@ def load_yaml(path: Path) -> object:
     return yaml.safe_load(read_file(path))
 
 
+def dependabot_update_ecosystems(path: Path) -> set[str]:
+    """Return Dependabot package ecosystems from a generated config."""
+    document = load_yaml(path)
+    assert isinstance(document, dict)
+    updates = document.get("updates")
+    assert isinstance(updates, list)
+    ecosystems: set[str] = set()
+    for update in updates:
+        assert isinstance(update, dict)
+        ecosystem = update.get("package-ecosystem")
+        assert isinstance(ecosystem, str)
+        ecosystems.add(ecosystem)
+    return ecosystems
+
+
+def validate_dependabot_vendor_schema(path: Path) -> None:
+    """Validate generated Dependabot YAML against the built-in schema when available."""
+    validator_command = check_jsonschema_command()
+    if validator_command is None:
+        return
+
+    result = subprocess.run(
+        [
+            *validator_command,
+            "--builtin-schema",
+            "vendor.dependabot",
+            str(path),
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def security_contact_link(config: object) -> dict[str, object]:
     """Return the security contact link from parsed issue-template config."""
     assert isinstance(config, dict)
@@ -191,6 +269,31 @@ def run_materialize(
             "--target-root",
             str(target_root),
             *args,
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+
+def run_excluded_module_report(
+    repo_root: Path,
+    included_modules: tuple[str, ...],
+) -> subprocess.CompletedProcess[str]:
+    """Run the excluded-module reporter against a fixture repository."""
+    module_args = [
+        argument
+        for module_name in included_modules
+        for argument in ("--included-module", module_name)
+    ]
+    return subprocess.run(
+        [
+            sys.executable,
+            str(REPORT_SCRIPT_PATH),
+            "--repo-root",
+            str(repo_root),
+            *module_args,
         ],
         check=False,
         stdout=subprocess.PIPE,
@@ -345,6 +448,87 @@ def test_materialized_template_update_procedure_passes_nested_markdown_lint(
     )
 
     assert lint_result.returncode == 0, lint_result.stdout + lint_result.stderr
+
+
+def test_materialized_no_python_adoption_prunes_dependabot_pip_ecosystem(
+    tmp_path: Path,
+) -> None:
+    """No-Python materialization keeps only ecosystems with retained surfaces."""
+    target_root = tmp_path / "no-python"
+    target_root.mkdir()
+    module_args = [
+        argument
+        for module_name in ISSUE_692_NO_PYTHON_MODULES
+        for argument in ("--included-module", module_name)
+    ]
+
+    result = run_materialize(
+        REPO_ROOT,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--last-reviewed-template-commit",
+        FULL_SHA,
+        "--allow-conflicts",
+        *module_args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    dependabot_path = target_root / ".github" / "dependabot.yml"
+    assert dependabot_path.is_file(), result.stdout
+
+    dependabot_text = read_file(dependabot_path)
+    assert "pip (pyproject.toml) - Python dependencies" not in dependabot_text
+    assert 'package-ecosystem: "pip"' not in dependabot_text
+    assert "pip-minor-patch" not in dependabot_text
+    assert "npm (package.json) - Markdown tooling dependencies" in dependabot_text
+    assert "GitHub Actions (workflows) - Action version updates" in dependabot_text
+    assert "pre-commit (.pre-commit-config.yaml) - Pre-commit hook updates" in dependabot_text
+    assert dependabot_update_ecosystems(dependabot_path) == DEPENDABOT_NO_PYTHON_ECOSYSTEMS
+    validate_dependabot_vendor_schema(dependabot_path)
+
+    subprocess.run(
+        ["git", "init"],
+        cwd=target_root,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    report_result = run_excluded_module_report(target_root, ISSUE_692_NO_PYTHON_MODULES)
+
+    assert report_result.returncode == 0, report_result.stderr
+    assert "dependabot-ecosystem.stale | required_cleanup | python |" not in report_result.stdout
+
+
+def test_materialized_full_adoption_keeps_all_dependabot_ecosystems(
+    tmp_path: Path,
+) -> None:
+    """Full materialization keeps every default Dependabot ecosystem."""
+    target_root = tmp_path / "full"
+    target_root.mkdir()
+    module_args = [
+        argument
+        for module_name in FULL_TEMPLATE_MODULES
+        for argument in ("--included-module", module_name)
+    ]
+
+    result = run_materialize(
+        REPO_ROOT,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--last-reviewed-template-commit",
+        FULL_SHA,
+        "--allow-conflicts",
+        *module_args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    dependabot_path = target_root / ".github" / "dependabot.yml"
+    assert dependabot_path.is_file(), result.stdout
+    assert dependabot_update_ecosystems(dependabot_path) == DEPENDABOT_FULL_ECOSYSTEMS
+    validate_dependabot_vendor_schema(dependabot_path)
 
 
 def test_unrecorded_conflict_exits_two_and_allow_conflicts_does_not_advance_marker(
