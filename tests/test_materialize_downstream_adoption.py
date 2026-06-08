@@ -53,6 +53,13 @@ def read_file(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def copy_template_file(template_root: Path, relative_path: str) -> None:
+    """Copy a repository template file into a fixture template root."""
+    destination = template_root / relative_path
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(REPO_ROOT / relative_path, destination)
+
+
 def nested_markdown_lint_prerequisites_available() -> bool:
     """Return whether the Node-based nested Markdown linter can run locally."""
     if shutil.which("node") is None:
@@ -119,6 +126,56 @@ def prepare_template(
         )
 
 
+def prepare_security_reporting_template(template_root: Path) -> None:
+    """Create a fixture template with the security-reporting placeholder surfaces."""
+    prepare_template(
+        template_root,
+        [
+            {"pattern": "SECURITY.md", "requires_all": ["baseline"]},
+            {"pattern": "CODE_OF_CONDUCT.md", "requires_all": ["baseline"]},
+            {"pattern": ".github/ISSUE_TEMPLATE/config.yml", "requires_all": ["baseline"]},
+            {"pattern": ".github/ISSUE_TEMPLATE/bug_report.yml", "requires_all": ["baseline"]},
+        ],
+        include_placeholder_helper=True,
+    )
+    for relative_path in (
+        "SECURITY.md",
+        "CODE_OF_CONDUCT.md",
+        ".github/ISSUE_TEMPLATE/config.yml",
+        ".github/ISSUE_TEMPLATE/bug_report.yml",
+    ):
+        copy_template_file(template_root, relative_path)
+
+
+def load_yaml(path: Path) -> object:
+    """Load generated YAML after asserting it parses."""
+    return yaml.safe_load(read_file(path))
+
+
+def security_contact_link(config: object) -> dict[str, object]:
+    """Return the security contact link from parsed issue-template config."""
+    assert isinstance(config, dict)
+    contact_links = config["contact_links"]
+    assert isinstance(contact_links, list)
+    for contact_link in contact_links:
+        assert isinstance(contact_link, dict)
+        if contact_link.get("name") == "Security Vulnerabilities":
+            return contact_link
+    raise AssertionError("Security Vulnerabilities contact link not found")
+
+
+def assert_issue_form_shape(bug_report: object) -> None:
+    """Assert the generated bug-report issue form has the expected structure."""
+    assert isinstance(bug_report, dict)
+    body = bug_report["body"]
+    assert isinstance(body, list)
+    assert body
+    for item in body:
+        assert isinstance(item, dict)
+        assert isinstance(item.get("type"), str)
+        assert isinstance(item.get("attributes"), dict)
+
+
 def run_materialize(
     template_root: Path,
     target_root: Path,
@@ -154,6 +211,20 @@ def marker_document(
     }
     template_sync.update(template_sync_fields)
     return {"template_sync": template_sync}
+
+
+def test_materializer_help_documents_security_reporting_modes(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The materializer help output documents every supported reporting mode."""
+    with pytest.raises(SystemExit) as error:
+        materializer.parse_args(["--help"])
+
+    captured = capsys.readouterr()
+    assert error.value.code == 0
+    assert "github-private-only" in captured.out
+    assert "contact-only" in captured.out
+    assert "both" in captured.out
 
 
 def test_retained_files_excluded_files_inline_blocks_and_unmapped_paths(
@@ -528,6 +599,168 @@ def test_placeholder_replacement_reuses_helper_and_missing_helper_fails(
 
     assert missing_result.returncode == 1
     assert "placeholder helper is unavailable" in missing_result.stderr
+
+
+@pytest.mark.parametrize(
+    ("mode_args", "expected_mode", "expected_url"),
+    [
+        pytest.param(
+            ["--security-contact", "security@example.com"],
+            "both",
+            "https://github.com/octo/widget/security/advisories/new",
+            id="omitted-mode-backward-compatible-both",
+        ),
+        pytest.param(
+            ["--security-reporting-mode", "both", "--security-contact", "security@example.com"],
+            "both",
+            "https://github.com/octo/widget/security/advisories/new",
+            id="explicit-both",
+        ),
+        pytest.param(
+            [
+                "--security-reporting-mode",
+                "contact-only",
+                "--security-contact",
+                "security@example.com",
+            ],
+            "contact-only",
+            "https://github.com/octo/widget/blob/HEAD/SECURITY.md",
+            id="contact-only",
+        ),
+        pytest.param(
+            ["--security-reporting-mode", "github-private-only"],
+            "github-private-only",
+            "https://github.com/octo/widget/security/advisories/new",
+            id="github-private-only",
+        ),
+    ],
+)
+def test_materializes_security_reporting_modes(
+    tmp_path: Path,
+    mode_args: list[str],
+    expected_mode: str,
+    expected_url: str,
+) -> None:
+    """Materialization passes supported security reporting modes to the helper."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_security_reporting_template(template_root)
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--repository",
+        "octo/widget",
+        "--conduct-contact",
+        "conduct@example.com",
+        *mode_args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Placeholder scan passed" in result.stdout
+    assert "conduct@example.com" in read_file(target_root / "CODE_OF_CONDUCT.md")
+    assert "[INSERT CONTACT METHOD]" not in read_file(target_root / "CODE_OF_CONDUCT.md")
+
+    config = load_yaml(target_root / ".github" / "ISSUE_TEMPLATE" / "config.yml")
+    contact_link = security_contact_link(config)
+    assert contact_link["url"] == expected_url
+    assert_issue_form_shape(
+        load_yaml(target_root / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml")
+    )
+
+    security_text = read_file(target_root / "SECURITY.md")
+    combined_security_surfaces = "\n".join(
+        (
+            security_text,
+            read_file(target_root / ".github" / "ISSUE_TEMPLATE" / "config.yml"),
+            read_file(target_root / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml"),
+        )
+    )
+    assert "[security contact email]" not in security_text
+    assert "TODO: Replace" not in security_text
+
+    if expected_mode == "contact-only":
+        assert "security@example.com" in security_text
+        assert "/security/advisories/new" not in combined_security_surfaces
+        assert "GitHub Security Advisories" not in combined_security_surfaces
+        assert "private vulnerability reporting" not in combined_security_surfaces
+    elif expected_mode == "github-private-only":
+        assert "security@example.com" not in security_text
+        assert "Security Contact" not in security_text
+        assert "GitHub Security Advisories" in security_text
+        assert "private vulnerability reporting" in combined_security_surfaces
+    else:
+        assert "security@example.com" in security_text
+        assert "GitHub Security Advisories" in security_text
+        assert "private vulnerability reporting" in combined_security_surfaces
+
+
+def test_materialized_security_reporting_mode_preserves_github_host(
+    tmp_path: Path,
+) -> None:
+    """Materialized security-mode URLs honor --github-host for GHES adoption."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_security_reporting_template(template_root)
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--repository",
+        "octo/widget",
+        "--security-reporting-mode",
+        "github-private-only",
+        "--conduct-contact",
+        "conduct@example.com",
+        "--github-host",
+        "github.company.com",
+    )
+
+    assert result.returncode == 0, result.stderr
+    config = load_yaml(target_root / ".github" / "ISSUE_TEMPLATE" / "config.yml")
+    contact_link = security_contact_link(config)
+    assert contact_link["url"] == "https://github.company.com/octo/widget/security/advisories/new"
+    for relative_path in (
+        "SECURITY.md",
+        ".github/ISSUE_TEMPLATE/config.yml",
+        ".github/ISSUE_TEMPLATE/bug_report.yml",
+    ):
+        text = read_file(target_root / relative_path)
+        assert "https://github.com/octo/widget" not in text
+
+
+def test_materializer_rejects_missing_security_mode_and_contact_when_placeholders_run(
+    tmp_path: Path,
+) -> None:
+    """Supplying repository replacement without mode or contact fails clearly."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_security_reporting_template(template_root)
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--repository",
+        "octo/widget",
+    )
+
+    assert result.returncode == 1
+    assert "Either --security-reporting-mode or --security-contact is required" in result.stderr
 
 
 def test_byte_only_files_are_not_sent_to_placeholder_helper(tmp_path: Path) -> None:

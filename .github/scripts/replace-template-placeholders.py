@@ -42,6 +42,8 @@ APPROVED_GITHUB_URL_SUFFIXES = (
     "#support",
     "",
 )
+SECURITY_REPORTING_MODES = ("github-private-only", "contact-only", "both")
+SECURITY_CONTACT_REQUIRED_MODES = frozenset({"contact-only", "both"})
 TOKEN_REPLACEMENT_SPECS = (
     ("owner-repo token", "OWNER/REPO", OWNER_REPO_TOKEN_PATHS, "repository"),
     ("codeowners owner", "@OWNER", (".github/CODEOWNERS",), "codeowners_owner"),
@@ -95,13 +97,16 @@ class ReplacementContext:
     repository: str
     github_host: str
     codeowners_owner: str
-    conduct_contact: str
-    security_contact: str
+    conduct_contact: str | None
+    security_contact: str | None
+    security_reporting_mode: str
     vscode_title: str
 
     @property
-    def security_todo_replacement(self) -> str:
+    def security_todo_replacement(self) -> str | None:
         """Return the replacement for the security-contact TODO marker."""
+        if self.security_contact is None:
+            return "<!-- Security contact intentionally omitted by reporting mode -->"
         return "<!-- Security contact configured -->"
 
 
@@ -186,6 +191,29 @@ def validate_non_empty(value: str, field_name: str) -> str:
     if not value.strip():
         raise PlaceholderError(f"{field_name} must not be empty.")
     return value
+
+
+def validate_security_reporting_mode(security_reporting_mode: str) -> str:
+    """Validate a security-reporting mode name."""
+    if security_reporting_mode not in SECURITY_REPORTING_MODES:
+        quoted_modes = ", ".join(SECURITY_REPORTING_MODES)
+        raise PlaceholderError(f"--security-reporting-mode must be one of: {quoted_modes}.")
+    return security_reporting_mode
+
+
+def resolve_security_reporting_mode(
+    *,
+    security_reporting_mode: str | None,
+    security_contact: str | None,
+) -> str:
+    """Resolve explicit and backward-compatible security-reporting mode input."""
+    if security_reporting_mode is None:
+        if security_contact is None:
+            raise PlaceholderError(
+                "Either --security-reporting-mode or --security-contact is required."
+            )
+        return "both"
+    return validate_security_reporting_mode(security_reporting_mode)
 
 
 def resolve_repo_root(raw_repo_root: str | None) -> Path:
@@ -274,21 +302,317 @@ def build_replacement_context(
     codeowners_owner: str | None = None,
     conduct_contact: str | None = None,
     security_contact: str | None = None,
+    security_reporting_mode: str | None = None,
     vscode_title: str | None = None,
 ) -> ReplacementContext:
     """Return validated replacement values for the helper."""
     owner, repo = parse_repository(repository)
-    validated_security_contact = validate_non_empty(security_contact or "", "--security-contact")
+    validated_security_contact = (
+        validate_non_empty(security_contact, "--security-contact")
+        if security_contact is not None
+        else None
+    )
+    resolved_security_reporting_mode = resolve_security_reporting_mode(
+        security_reporting_mode=security_reporting_mode,
+        security_contact=validated_security_contact,
+    )
+    if (
+        resolved_security_reporting_mode in SECURITY_CONTACT_REQUIRED_MODES
+        and validated_security_contact is None
+    ):
+        raise PlaceholderError(
+            "--security-contact is required when --security-reporting-mode is "
+            f"{resolved_security_reporting_mode}."
+        )
+    validated_conduct_contact = (
+        validate_non_empty(conduct_contact, "--conduct-contact")
+        if conduct_contact is not None
+        else validated_security_contact
+    )
     return ReplacementContext(
         repository=repository,
         github_host=validate_github_host(github_host),
         codeowners_owner=validate_codeowners_owner(codeowners_owner or f"@{owner}"),
-        conduct_contact=validate_non_empty(
-            conduct_contact or validated_security_contact, "--conduct-contact"
-        ),
+        conduct_contact=validated_conduct_contact,
         security_contact=validated_security_contact,
+        security_reporting_mode=resolved_security_reporting_mode,
         vscode_title=validate_non_empty(vscode_title or repo, "--vscode-title"),
     )
+
+
+def build_security_reporting_section(context: ReplacementContext) -> str:
+    """Build the rendered SECURITY.md reporting section for the selected mode."""
+    direct_url = "https://github.com/OWNER/REPO/security/advisories/new"
+    contact_lines = (
+        "### Security Contact\n\n"
+        "Contact the maintainers directly at:\n\n"
+        "<!-- TODO: Replace with your security contact email -->\n"
+        "<!-- Do not use a users.noreply.github.com address as a security intake channel. -->\n"
+        "- Contact: [security contact email]\n"
+    )
+    private_lines = (
+        "### GitHub Private Vulnerability Reporting\n\n"
+        "> **Maintainers:** Enable private vulnerability reporting in GitHub settings "
+        f"before relying on the direct reporting link: `{direct_url}`.\n\n"
+        "Use GitHub Security Advisories through the "
+        f"[private vulnerability reporting form]({direct_url}) after maintainers have "
+        "enabled private vulnerability reporting for this repository.\n"
+    )
+
+    if context.security_reporting_mode == "github-private-only":
+        return (
+            "## Reporting a Vulnerability\n\n"
+            "**Please do NOT report security vulnerabilities through public GitHub issues.**\n\n"
+            "If you discover a security vulnerability in this project, report it privately "
+            "using GitHub private vulnerability reporting.\n\n"
+            f"{private_lines}"
+        )
+    if context.security_reporting_mode == "contact-only":
+        return (
+            "## Reporting a Vulnerability\n\n"
+            "**Please do NOT report security vulnerabilities through public GitHub issues.**\n\n"
+            "If you discover a security vulnerability in this project, report it privately "
+            "using the contact method below.\n\n"
+            f"{contact_lines}"
+        )
+    return (
+        "## Reporting a Vulnerability\n\n"
+        "**Please do NOT report security vulnerabilities through public GitHub issues.**\n\n"
+        "If you discover a security vulnerability in this project, report it privately "
+        "using one of the following methods:\n\n"
+        "### Option 1: GitHub Private Vulnerability Reporting\n\n"
+        "> **Maintainers:** Enable private vulnerability reporting in GitHub settings "
+        f"before relying on the direct reporting link: `{direct_url}`.\n\n"
+        "Use GitHub Security Advisories through the "
+        f"[private vulnerability reporting form]({direct_url}) after maintainers have "
+        "enabled private vulnerability reporting for this repository. If that form is "
+        "unavailable, use the security contact option below.\n\n"
+        "### Option 2: Security Contact\n\n"
+        "Contact the maintainers directly at:\n\n"
+        "<!-- TODO: Replace with your security contact email -->\n"
+        "<!-- Do not use a users.noreply.github.com address as a security intake channel. -->\n"
+        "- Contact: [security contact email]\n"
+    )
+
+
+def replace_security_reporting_section(
+    text: str,
+    context: ReplacementContext,
+) -> tuple[str, int]:
+    """Replace the SECURITY.md reporting section when the template shape is present."""
+    start_marker = "## Reporting a Vulnerability"
+    end_marker = "\n### What to Include"
+    start = text.find(start_marker)
+    end = text.find(end_marker, start)
+    if start == -1 or end == -1:
+        return text, 0
+    replacement = build_security_reporting_section(context).rstrip("\n")
+    return f"{text[:start]}{replacement}{text[end:]}", 1
+
+
+def build_config_security_block(context: ReplacementContext) -> str:
+    """Build the rendered issue-template contact link security block."""
+    if context.security_reporting_mode == "contact-only":
+        url = "https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md"
+        about = (
+            "Report security issues using the private contact instructions in "
+            "SECURITY.md. Do not open a public issue."
+        )
+        details = (
+            "  # Security reports are handled through SECURITY.md in this mode.\n"
+            "  # Keep this link pointed at the policy file unless you intentionally\n"
+            "  # replace it with a validated external contact URL.\n"
+        )
+    else:
+        url = "https://github.com/OWNER/REPO/security/advisories/new"
+        about = (
+            "Report security issues privately. Maintainers must enable private "
+            "vulnerability reporting before relying on this link."
+        )
+        details = (
+            "  # Private vulnerability reporting must be enabled in GitHub settings\n"
+            "  # before this direct advisory-reporting URL can receive reports.\n"
+        )
+    return (
+        "  # =============================================================================\n"
+        "  # SECURITY LINK CONFIGURATION\n"
+        "  # =============================================================================\n"
+        "  # CUSTOMIZE: Replace `OWNER/REPO` with your org/repo name.\n"
+        "  # GHES users must also replace github.com with their GHES host.\n"
+        f"{details}"
+        "  - name: Security Vulnerabilities\n"
+        f"    url: {url}\n"
+        f"    about: {about}\n\n"
+    )
+
+
+def replace_config_security_block(
+    text: str,
+    context: ReplacementContext,
+) -> tuple[str, int]:
+    """Replace the issue-template config security contact-link block."""
+    heading = "  # SECURITY LINK CONFIGURATION\n"
+    next_heading = "  # DISCUSSIONS LINK (OPTIONAL)\n"
+    heading_index = text.find(heading)
+    next_heading_index = text.find(next_heading, heading_index)
+    if heading_index == -1 or next_heading_index == -1:
+        return text, 0
+    start = text.rfind(
+        "  # =============================================================================",
+        0,
+        heading_index,
+    )
+    end = text.rfind(
+        "  # =============================================================================",
+        0,
+        next_heading_index,
+    )
+    if start == -1 or end == -1:
+        return text, 0
+    return f"{text[:start]}{build_config_security_block(context)}{text[end:]}", 1
+
+
+def bug_security_notice(context: ReplacementContext) -> str:
+    """Return the bug-report top-of-form security notice for the selected mode."""
+    if context.security_reporting_mode == "contact-only":
+        return (
+            "        **Security Notice:** If you are reporting a security vulnerability, "
+            "do NOT use this form.\n"
+            "        Report it using the private contact instructions in\n"
+            "        [SECURITY.md](https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md)."
+        )
+    return (
+        "        **Security Notice:** If you are reporting a security vulnerability, "
+        "do NOT use this form.\n"
+        "        Report it through the repository's\n"
+        "        [private vulnerability reporting form](https://github.com/OWNER/REPO/security/advisories/new)\n"
+        "        after maintainers have enabled private vulnerability reporting in GitHub settings.\n"
+        "        If that form is unavailable, review\n"
+        "        [SECURITY.md](https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md)."
+    )
+
+
+def bug_security_checkbox_label(context: ReplacementContext) -> str:
+    """Return the bug-report security pre-flight checkbox label."""
+    if context.security_reporting_mode == "contact-only":
+        return (
+            "        - label: This is NOT a security vulnerability "
+            "(report those using SECURITY.md)"
+        )
+    return (
+        "        - label: This is NOT a security vulnerability "
+        "(report those using SECURITY.md or the private reporting form)"
+    )
+
+
+def bug_severity_security_notice(context: ReplacementContext) -> str:
+    """Return the bug-report severity-field security notice."""
+    if context.security_reporting_mode == "contact-only":
+        return (
+            "        For security vulnerabilities, do NOT use this form. Report privately\n"
+            "        using the contact instructions in SECURITY.md."
+        )
+    return (
+        "        For security vulnerabilities, do NOT use this form. Report privately\n"
+        "        via the private vulnerability reporting form after maintainers enable it\n"
+        "        in GitHub settings, or review SECURITY.md."
+    )
+
+
+def find_line_start(text: str, needle: str) -> int:
+    """Return the start offset of the line containing ``needle``, or ``-1``."""
+    index = text.find(needle)
+    if index == -1:
+        return -1
+    return text.rfind("\n", 0, index) + 1
+
+
+def replace_bug_report_security_notice(
+    text: str,
+    context: ReplacementContext,
+) -> tuple[str, int]:
+    """Replace the bug-report top security warning."""
+    start = find_line_start(text, "**Security Notice:**")
+    end = text.find("\n\n  - type: checkboxes", start)
+    if start == -1 or end == -1:
+        return text, 0
+    return f"{text[:start]}{bug_security_notice(context)}{text[end:]}", 1
+
+
+def replace_bug_report_checkbox_label(
+    text: str,
+    context: ReplacementContext,
+) -> tuple[str, int]:
+    """Replace the bug-report security checkbox label."""
+    pattern = re.compile(
+        r"        - label: This is NOT a security vulnerability \(report those .+\)"
+    )
+    updated, count = pattern.subn(bug_security_checkbox_label(context), text)
+    return updated, count
+
+
+def replace_bug_report_severity_notice(
+    text: str,
+    context: ReplacementContext,
+) -> tuple[str, int]:
+    """Replace the bug-report severity-field security warning."""
+    start = find_line_start(text, "For security vulnerabilities, do NOT use this form.")
+    end = text.find("\n      options:", start)
+    if start == -1 or end == -1:
+        return text, 0
+    return f"{text[:start]}{bug_severity_security_notice(context)}{text[end:]}", 1
+
+
+def render_security_reporting_mode(
+    file_texts: dict[str, str],
+    context: ReplacementContext,
+) -> tuple[ReplacementRecord, ...]:
+    """Render known security-reporting surfaces for the selected mode."""
+    renderers = {
+        "SECURITY.md": (replace_security_reporting_section,),
+        ".github/ISSUE_TEMPLATE/config.yml": (replace_config_security_block,),
+        ".github/ISSUE_TEMPLATE/bug_report.yml": (
+            replace_bug_report_security_notice,
+            replace_bug_report_checkbox_label,
+            replace_bug_report_severity_notice,
+        ),
+    }
+    records: list[ReplacementRecord] = []
+    for relative_path, path_renderers in renderers.items():
+        if relative_path not in file_texts:
+            continue
+        text = file_texts[relative_path]
+        replacement_count = 0
+        for renderer in path_renderers:
+            text, count = renderer(text, context)
+            replacement_count += count
+        if replacement_count:
+            file_texts[relative_path] = text
+            records.append(
+                ReplacementRecord(
+                    path=relative_path,
+                    rule_name=f"security reporting mode {context.security_reporting_mode}",
+                    count=replacement_count,
+                )
+            )
+    return tuple(records)
+
+
+def validate_context_against_retained_files(
+    file_texts: dict[str, str],
+    context: ReplacementContext,
+) -> None:
+    """Validate placeholder values that depend on retained file presence."""
+    code_of_conduct = file_texts.get("CODE_OF_CONDUCT.md")
+    if (
+        code_of_conduct is not None
+        and "[INSERT CONTACT METHOD]" in code_of_conduct
+        and context.conduct_contact is None
+    ):
+        raise PlaceholderError(
+            "CODE_OF_CONDUCT.md contains [INSERT CONTACT METHOD]; provide "
+            "--conduct-contact when --security-contact is omitted."
+        )
 
 
 def build_replacement_rules(context: ReplacementContext) -> tuple[ReplacementRule, ...]:
@@ -309,6 +633,8 @@ def build_replacement_rules(context: ReplacementContext) -> tuple[ReplacementRul
 
     for name, placeholder, paths, attribute_name in TOKEN_REPLACEMENT_SPECS:
         replacement = getattr(context, attribute_name)
+        if replacement is None:
+            continue
         replace = (
             replace_owner_repo_token(context.repository)
             if placeholder == "OWNER/REPO"
@@ -335,6 +661,17 @@ def replace_placeholders(
     records: list[ReplacementRecord] = []
     rules = build_replacement_rules(context)
     files_by_path: dict[str, tuple[Path, str]] = {}
+    for relative_path in GITHUB_URL_TOKEN_PATHS:
+        files_by_path[relative_path] = (
+            resolve_repo_path(repo_root, relative_path),
+            relative_path,
+        )
+    for _name, _placeholder, paths, _attribute_name in TOKEN_REPLACEMENT_SPECS:
+        for relative_path in paths:
+            files_by_path[relative_path] = (
+                resolve_repo_path(repo_root, relative_path),
+                relative_path,
+            )
     for rule in rules:
         for relative_path in rule.paths:
             files_by_path[relative_path] = (
@@ -349,6 +686,9 @@ def replace_placeholders(
         if not path.is_file():
             raise PlaceholderError(f"{display_path}: expected a regular file.")
         file_texts[relative_path] = read_text(path, display_path)
+
+    validate_context_against_retained_files(file_texts, context)
+    records.extend(render_security_reporting_mode(file_texts, context))
 
     for rule in rules:
         for relative_path in rule.paths:
@@ -547,12 +887,28 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     replace_parser.add_argument(
         "--conduct-contact",
         default=None,
-        help="replacement Code of Conduct contact method; defaults to --security-contact",
+        help=(
+            "replacement Code of Conduct contact method; defaults to "
+            "--security-contact when supplied"
+        ),
     )
     replace_parser.add_argument(
         "--security-contact",
-        required=True,
-        help="replacement security contact email or intake address",
+        default=None,
+        help=(
+            "replacement security contact method; required for contact-only and "
+            "both security reporting modes"
+        ),
+    )
+    replace_parser.add_argument(
+        "--security-reporting-mode",
+        choices=SECURITY_REPORTING_MODES,
+        default=None,
+        help=(
+            "security reporting mode: github-private-only, contact-only, or both; "
+            "omitting this while supplying --security-contact preserves the "
+            "backward-compatible both mode"
+        ),
     )
     replace_parser.add_argument(
         "--vscode-title",
@@ -602,6 +958,7 @@ def run_replace(args: argparse.Namespace) -> int:
         codeowners_owner=args.codeowners_owner,
         conduct_contact=args.conduct_contact,
         security_contact=args.security_contact,
+        security_reporting_mode=args.security_reporting_mode,
         vscode_title=args.vscode_title,
     )
     records = replace_placeholders(repo_root=repo_root, context=context, dry_run=args.dry_run)

@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import importlib.util
+import shutil
 import sys
 from pathlib import Path
 
 import pytest
+import yaml  # type: ignore[import-untyped]
 
-SCRIPT_PATH = (
-    Path(__file__).resolve().parents[1] / ".github" / "scripts" / "replace-template-placeholders.py"
-)
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SCRIPT_PATH = REPO_ROOT / ".github" / "scripts" / "replace-template-placeholders.py"
 SCRIPT_SPEC = importlib.util.spec_from_file_location("replace_template_placeholders", SCRIPT_PATH)
 if SCRIPT_SPEC is None or SCRIPT_SPEC.loader is None:
     raise RuntimeError(f"Unable to load placeholder helper module from {SCRIPT_PATH}")
@@ -43,6 +44,48 @@ def build_context(**overrides: object) -> object:
     }
     values.update(overrides)
     return placeholder_helper.build_replacement_context(**values)
+
+
+def copy_security_reporting_fixture(repo_root: Path) -> None:
+    """Copy the repository's security-reporting template surfaces into a fixture."""
+    for relative_path in (
+        "SECURITY.md",
+        "CODE_OF_CONDUCT.md",
+        ".github/ISSUE_TEMPLATE/config.yml",
+        ".github/ISSUE_TEMPLATE/bug_report.yml",
+    ):
+        destination = repo_root / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPO_ROOT / relative_path, destination)
+
+
+def load_yaml(path: Path) -> object:
+    """Load a YAML fixture after asserting it parses."""
+    return yaml.safe_load(read_file(path))
+
+
+def security_contact_link(config: object) -> dict[str, object]:
+    """Return the security contact link from parsed issue-template config."""
+    assert isinstance(config, dict)
+    contact_links = config["contact_links"]
+    assert isinstance(contact_links, list)
+    for contact_link in contact_links:
+        assert isinstance(contact_link, dict)
+        if contact_link.get("name") == "Security Vulnerabilities":
+            return contact_link
+    raise AssertionError("Security Vulnerabilities contact link not found")
+
+
+def assert_issue_form_shape(bug_report: object) -> None:
+    """Assert the rendered bug-report issue form has the expected structure."""
+    assert isinstance(bug_report, dict)
+    body = bug_report["body"]
+    assert isinstance(body, list)
+    assert body
+    for item in body:
+        assert isinstance(item, dict)
+        assert isinstance(item.get("type"), str)
+        assert isinstance(item.get("attributes"), dict)
 
 
 def test_approved_placeholder_replacement_does_not_mutate_normal_words(tmp_path: Path) -> None:
@@ -257,19 +300,213 @@ def test_helper_defines_expected_allowlist_without_standalone_repo_token() -> No
     assert "REPO" not in token_placeholders
 
 
-def test_cli_rejects_missing_security_contact(
+def test_replace_help_documents_security_reporting_modes(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The replace help output documents every supported reporting mode."""
+    with pytest.raises(SystemExit) as error:
+        placeholder_helper.main(["replace", "--help"])
+
+    captured = capsys.readouterr()
+    assert error.value.code == 0
+    assert "github-private-only" in captured.out
+    assert "contact-only" in captured.out
+    assert "both" in captured.out
+
+
+def test_cli_rejects_missing_security_mode_and_contact(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """argparse rejects a missing required security contact."""
-    with pytest.raises(SystemExit) as error:
-        placeholder_helper.main(
-            ["replace", "--repository", "octo/widget", "--repo-root", str(tmp_path)]
-        )
+    """The helper rejects ambiguous reporting configuration."""
+    result = placeholder_helper.main(
+        ["replace", "--repository", "octo/widget", "--repo-root", str(tmp_path)]
+    )
 
     captured = capsys.readouterr()
-    assert error.value.code == 2
-    assert "security-contact" in captured.err
+    assert result == 1
+    assert "Either --security-reporting-mode or --security-contact is required" in captured.err
+
+
+@pytest.mark.parametrize(
+    ("mode_args", "expected_mode"),
+    [
+        pytest.param(
+            ["--security-contact", "security@example.com"],
+            "both",
+            id="omitted-mode-backward-compatible-both",
+        ),
+        pytest.param(
+            [
+                "--security-reporting-mode",
+                "both",
+                "--security-contact",
+                "security@example.com",
+            ],
+            "both",
+            id="explicit-both",
+        ),
+        pytest.param(
+            [
+                "--security-reporting-mode",
+                "contact-only",
+                "--security-contact",
+                "security@example.com",
+            ],
+            "contact-only",
+            id="contact-only",
+        ),
+        pytest.param(
+            ["--security-reporting-mode", "github-private-only"],
+            "github-private-only",
+            id="github-private-only",
+        ),
+    ],
+)
+def test_security_reporting_modes_render_consistent_surfaces(
+    tmp_path: Path,
+    mode_args: list[str],
+    expected_mode: str,
+) -> None:
+    """Security reporting modes render SECURITY.md and issue templates consistently."""
+    copy_security_reporting_fixture(tmp_path)
+
+    result = placeholder_helper.main(
+        [
+            "replace",
+            "--repo-root",
+            str(tmp_path),
+            "--repository",
+            "octo/widget",
+            "--conduct-contact",
+            "conduct@example.com",
+            *mode_args,
+        ]
+    )
+
+    assert result == 0
+    assert placeholder_helper.scan_repository(tmp_path, repository="octo/widget") == ()
+    assert "[INSERT CONTACT METHOD]" not in read_file(tmp_path / "CODE_OF_CONDUCT.md")
+    assert "conduct@example.com" in read_file(tmp_path / "CODE_OF_CONDUCT.md")
+
+    config = load_yaml(tmp_path / ".github" / "ISSUE_TEMPLATE" / "config.yml")
+    contact_link = security_contact_link(config)
+    assert set(contact_link) == {"name", "url", "about"}
+    assert_issue_form_shape(load_yaml(tmp_path / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml"))
+
+    security_text = read_file(tmp_path / "SECURITY.md")
+    config_text = read_file(tmp_path / ".github" / "ISSUE_TEMPLATE" / "config.yml")
+    bug_text = read_file(tmp_path / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml")
+    combined_security_surfaces = "\n".join((security_text, config_text, bug_text))
+
+    assert "[security contact email]" not in security_text
+    assert "TODO: Replace" not in security_text
+
+    if expected_mode == "contact-only":
+        assert "security@example.com" in security_text
+        assert contact_link["url"] == "https://github.com/octo/widget/blob/HEAD/SECURITY.md"
+        assert "/security/advisories/new" not in combined_security_surfaces
+        assert "GitHub Security Advisories" not in combined_security_surfaces
+        assert "private vulnerability reporting" not in combined_security_surfaces
+        assert "private reporting form" not in combined_security_surfaces
+    elif expected_mode == "github-private-only":
+        assert "security@example.com" not in security_text
+        assert "Security Contact" not in security_text
+        assert "Contact:" not in security_text
+        assert contact_link["url"] == "https://github.com/octo/widget/security/advisories/new"
+        assert "GitHub Security Advisories" in security_text
+        assert "private vulnerability reporting" in combined_security_surfaces
+    else:
+        assert "security@example.com" in security_text
+        assert contact_link["url"] == "https://github.com/octo/widget/security/advisories/new"
+        assert "GitHub Security Advisories" in security_text
+        assert "private vulnerability reporting" in combined_security_surfaces
+
+
+@pytest.mark.parametrize(
+    ("mode_args", "expected_fragment"),
+    [
+        pytest.param(
+            ["--security-reporting-mode", "github-private-only"],
+            "/security/advisories/new",
+            id="github-private-only",
+        ),
+        pytest.param(
+            [
+                "--security-reporting-mode",
+                "contact-only",
+                "--security-contact",
+                "security@example.com",
+            ],
+            "/blob/HEAD/SECURITY.md",
+            id="contact-only",
+        ),
+        pytest.param(
+            ["--security-reporting-mode", "both", "--security-contact", "security@example.com"],
+            "/security/advisories/new",
+            id="both",
+        ),
+    ],
+)
+def test_security_reporting_modes_preserve_github_host_override(
+    tmp_path: Path,
+    mode_args: list[str],
+    expected_fragment: str,
+) -> None:
+    """GHES host substitution works for every security reporting mode."""
+    copy_security_reporting_fixture(tmp_path)
+
+    result = placeholder_helper.main(
+        [
+            "replace",
+            "--repo-root",
+            str(tmp_path),
+            "--repository",
+            "octo/widget",
+            "--github-host",
+            "github.company.com",
+            "--conduct-contact",
+            "conduct@example.com",
+            *mode_args,
+        ]
+    )
+
+    assert result == 0
+    config = load_yaml(tmp_path / ".github" / "ISSUE_TEMPLATE" / "config.yml")
+    contact_link = security_contact_link(config)
+    assert contact_link["url"] == f"https://github.company.com/octo/widget{expected_fragment}"
+    for relative_path in (
+        "SECURITY.md",
+        ".github/ISSUE_TEMPLATE/config.yml",
+        ".github/ISSUE_TEMPLATE/bug_report.yml",
+    ):
+        text = read_file(tmp_path / relative_path)
+        assert "https://github.com/octo/widget" not in text
+    assert placeholder_helper.scan_repository(tmp_path, repository="octo/widget") == ()
+
+
+def test_github_private_only_requires_conduct_contact_when_code_of_conduct_retained(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A missing security contact is not silently reused for Code of Conduct contact."""
+    copy_security_reporting_fixture(tmp_path)
+
+    result = placeholder_helper.main(
+        [
+            "replace",
+            "--repo-root",
+            str(tmp_path),
+            "--repository",
+            "octo/widget",
+            "--security-reporting-mode",
+            "github-private-only",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "CODE_OF_CONDUCT.md contains [INSERT CONTACT METHOD]" in captured.err
 
 
 @pytest.mark.parametrize(

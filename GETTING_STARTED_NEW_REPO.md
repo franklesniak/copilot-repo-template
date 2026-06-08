@@ -712,13 +712,13 @@ This template uses placeholder values that you **must** replace with your actual
 | File | Placeholders to Replace |
 | --- | --- |
 | `.github/ISSUE_TEMPLATE/config.yml` | `OWNER/REPO` (appears in URLs twice) |
-| `.github/ISSUE_TEMPLATE/bug_report.yml` | `OWNER/REPO` (appears in three security-notice URLs) |
+| `.github/ISSUE_TEMPLATE/bug_report.yml` | `OWNER/REPO` (appears in security-notice URLs) |
 | `.github/pull_request_template.md` | `OWNER/REPO` (appears in the contributing-guidelines link) |
 | `.github/CODEOWNERS` | `@OWNER` (appears four times) |
 | `CODE_OF_CONDUCT.md` | `[INSERT CONTACT METHOD]` (enforcement contact for code of conduct violations) |
 | `CONTRIBUTING.md` | `OWNER/REPO` (appears in clone URL and issues URL) |
 | `LICENSE` | `Frank Lesniak` (copyright holder name — replace with your name or organization) |
-| `SECURITY.md` | `[security contact email]`, the security-contact `TODO: Replace` marker, and the `OWNER/REPO` placeholder in the direct private-reporting URL |
+| `SECURITY.md` | `[security contact email]` and the security-contact `TODO: Replace` marker when using contact-based reporting, plus the `OWNER/REPO` placeholder in the direct private-reporting URL when using GitHub private vulnerability reporting |
 | `.vscode/settings.json` | `window.title` value (replace with your repository name) |
 
 ### What the Placeholders Mean
@@ -729,7 +729,7 @@ This template uses placeholder values that you **must** replace with your actual
 - **`@OWNER`:** GitHub username with @ prefix for CODEOWNERS file (e.g., `@franklesniak`)
 - **`Frank Lesniak`:** The template author's name in the LICENSE file. Replace with your name or organization name (the copyright holder for your project).
 - **`[INSERT CONTACT METHOD]`:** A method for reporting code of conduct violations (e.g., an email address, a form URL, or instructions to contact maintainers). This should be actively monitored and capable of receiving sensitive reports.
-- **`[security contact email]`:** An email address for receiving security vulnerability reports
+- **`[security contact email]`:** A monitored security contact method used when your selected security-reporting mode includes contact-based reporting
 - **`window.title` in `.vscode/settings.json`:** The VS Code window title that appears in the title bar when working in this repository. Replace the instruction text with your repository name for easy identification.
 
 > **GHES adopters:** The absolute URLs in `.github/ISSUE_TEMPLATE/config.yml`, `.github/ISSUE_TEMPLATE/bug_report.yml`, `.github/pull_request_template.md`, `CONTRIBUTING.md`, and `SECURITY.md` are all `https://github.com/OWNER/REPO`-prefixed (variants include `https://github.com/OWNER/REPO/blob/HEAD/<path>` for file targets, `https://github.com/OWNER/REPO/security` and `https://github.com/OWNER/REPO/issues` for non-file repo targets, `https://github.com/OWNER/REPO/security/advisories/new` for the private vulnerability reporting form in `bug_report.yml` and `SECURITY.md`, and `https://github.com/OWNER/REPO.git` for the clone URL in `CONTRIBUTING.md`). The `github.com` host is the assumed default and is **not** validated by `.github/workflows/check-placeholders.yml`. If your repository is hosted on GitHub Enterprise Server, you **MUST** replace `github.com` with your GHES host (e.g., `github.company.com`) in all five files in addition to substituting `OWNER/REPO`; otherwise the clone, issues, security, and contributing-guidelines links will point off-instance to GitHub.com. The recommended helper below supports this with `--github-host` and limits host substitution to approved template URL contexts.
@@ -738,6 +738,12 @@ This template uses placeholder values that you **must** replace with your actual
 
 Prefer the repository helper over ad hoc global find/replace. It replaces only the exact placeholder tokens and approved `https://github.com/OWNER/REPO...` URL shapes defined in `.github/scripts/replace-template-placeholders.py`, then scans for unresolved placeholders and common corruption patterns such as mutated `REPORT`, `REPOSITORY`, and `REPOSITORIES` text.
 
+Choose a security reporting mode before running the helper:
+
+- `both` keeps GitHub private vulnerability reporting guidance and a contact method. This is also the backward-compatible behavior when `--security-reporting-mode` is omitted and `--security-contact` is supplied.
+- `contact-only` keeps the contact method and removes GitHub private vulnerability reporting guidance.
+- `github-private-only` keeps GitHub private vulnerability reporting guidance and removes the security contact section. If you keep `CODE_OF_CONDUCT.md`, still pass an explicit `--conduct-contact`.
+
 Run one of these commands from the repository root after replacing the example values.
 
 **Windows (PowerShell):**
@@ -745,6 +751,7 @@ Run one of these commands from the repository root after replacing the example v
 ```powershell
 python .github/scripts/replace-template-placeholders.py replace `
     --repository "your-username/your-repo-name" `
+    --security-reporting-mode "both" `
     --security-contact "security@example.com" `
     --conduct-contact "conduct@example.com" `
     --codeowners-owner "@your-username" `
@@ -756,6 +763,7 @@ python .github/scripts/replace-template-placeholders.py replace `
 ```bash
 python3 .github/scripts/replace-template-placeholders.py replace \
     --repository "your-username/your-repo-name" \
+    --security-reporting-mode "both" \
     --security-contact "security@example.com" \
     --conduct-contact "conduct@example.com" \
     --codeowners-owner "@your-username" \
@@ -768,7 +776,7 @@ The helper does not edit `LICENSE`, because `Frank Lesniak` is not a pattern-bas
 
 ### Option B: Exact Find and Replace Fallbacks
 
-The platform-specific commands below remain available as visible fallbacks. Keep them scoped to the exact placeholders shown here; do not run a broad replacement for `REPO`, because that can corrupt normal words such as `REPORT`, `REPOSITORY`, and `REPOSITORIES`. For GHES host substitution, prefer Option A with `--github-host`. If you use Option B on GHES, run the *GHES Host Substitution (GHES Adopters Only)* commands below after the platform-specific commands; they rewrite only the approved `https://github.com/OWNER/REPO...` URLs the template emits, never every `github.com` occurrence in a file. Option B's commands also use a single contact value (the security email) for both the `[INSERT CONTACT METHOD]` Code of Conduct placeholder and the `[security contact email]` placeholder; if you want a distinct Code of Conduct contact, prefer Option A with `--conduct-contact`, or edit the `CODE_OF_CONDUCT.md` line in the commands below to use a different value.
+The platform-specific commands below remain available as visible fallbacks. Keep them scoped to the exact placeholders shown here; do not run a broad replacement for `REPO`, because that can corrupt normal words such as `REPORT`, `REPOSITORY`, and `REPOSITORIES`. For GHES host substitution, prefer Option A with `--github-host`. If you use Option B on GHES, run the *GHES Host Substitution (GHES Adopters Only)* commands below after the platform-specific commands; they rewrite only the approved `https://github.com/OWNER/REPO...` URLs the template emits, never every `github.com` occurrence in a file. Option B's commands assume contact-based security reporting and use a single contact value for both the `[INSERT CONTACT METHOD]` Code of Conduct placeholder and the `[security contact email]` placeholder; if you want `github-private-only` or a distinct Code of Conduct contact, prefer Option A.
 
 #### Windows (PowerShell)
 
@@ -798,10 +806,10 @@ $SecurityEmail = "security@example.com"
 # Replace @OWNER in CODEOWNERS (note the @ prefix)
 (Get-Content ".github/CODEOWNERS" -Raw -Encoding UTF8).Replace('@OWNER', "@$Owner") | Set-Content ".github/CODEOWNERS" -Encoding UTF8
 
-# Replace contact method placeholder in CODE_OF_CONDUCT.md (uses security email; change if different contact preferred)
+# Replace contact method placeholder in CODE_OF_CONDUCT.md (uses the security contact; change if different contact preferred)
 (Get-Content "CODE_OF_CONDUCT.md" -Raw -Encoding UTF8).Replace('[INSERT CONTACT METHOD]', $SecurityEmail) | Set-Content "CODE_OF_CONDUCT.md" -Encoding UTF8
 
-# Replace security email placeholder in SECURITY.md
+# Replace security contact placeholder in SECURITY.md
 (Get-Content "SECURITY.md" -Raw -Encoding UTF8).Replace('[security contact email]', $SecurityEmail) | Set-Content "SECURITY.md" -Encoding UTF8
 
 # Clear the security-contact TODO marker in SECURITY.md (replaces the whole HTML comment line so SECURITY.md text stays accurate)
@@ -853,7 +861,7 @@ sed -i "s|@OWNER|@$OWNER|g" .github/CODEOWNERS
 # Replace contact method placeholder in CODE_OF_CONDUCT.md
 sed -i "s|\[INSERT CONTACT METHOD\]|$SECURITY_EMAIL|g" CODE_OF_CONDUCT.md
 
-# Replace security email placeholder in SECURITY.md
+# Replace security contact placeholder in SECURITY.md
 sed -i "s|\[security contact email\]|$SECURITY_EMAIL|g" SECURITY.md
 
 # Clear the security-contact TODO marker in SECURITY.md (replaces the whole HTML comment line so SECURITY.md text stays accurate)
@@ -888,7 +896,7 @@ sed -i '' "s|@OWNER|@$OWNER|g" .github/CODEOWNERS
 # Replace contact method placeholder in CODE_OF_CONDUCT.md
 sed -i '' "s|\[INSERT CONTACT METHOD\]|$SECURITY_EMAIL|g" CODE_OF_CONDUCT.md
 
-# Replace security email placeholder in SECURITY.md
+# Replace security contact placeholder in SECURITY.md
 sed -i '' "s|\[security contact email\]|$SECURITY_EMAIL|g" SECURITY.md
 
 # Clear the security-contact TODO marker in SECURITY.md (replaces the whole HTML comment line so SECURITY.md text stays accurate)
@@ -958,8 +966,8 @@ If you prefer, you can open each file in a text editor and manually find and rep
 
 2. **`.github/ISSUE_TEMPLATE/bug_report.yml`:**
    - Find: `OWNER/REPO`
-   - Replace with: `your-username/your-repo-name` (appears in three security-notice URLs: `…/security/advisories/new`, `…/security`, and `…/blob/HEAD/SECURITY.md`)
-   - **GHES only:** also replace `github.com` with your GHES host (in the same three URLs)
+   - Replace with: `your-username/your-repo-name` (appears in the security-notice URLs selected by your security reporting mode)
+   - **GHES only:** also replace `github.com` with your GHES host (in the same security-notice URLs)
 
 3. **`.github/pull_request_template.md`:**
    - Find: `OWNER/REPO`
@@ -1012,21 +1020,15 @@ The `.github/CODEOWNERS` file defines who is automatically requested to review p
 
 For example, if your GitHub username is `janedoe`, replace `@OWNER` with `@janedoe`.
 
-### Understanding the Security Email Placeholder
+### Understanding Security Reporting Modes
 
-The `[security contact email]` placeholder in `SECURITY.md` should be replaced with an email address that:
+The helper's `--security-reporting-mode` option controls how `SECURITY.md`, `.github/ISSUE_TEMPLATE/config.yml`, and `.github/ISSUE_TEMPLATE/bug_report.yml` are rendered:
 
-- Is actively monitored
-- Can receive sensitive security reports
-- Is not publicly visible (unlike GitHub issues)
-- Is not a `users.noreply.github.com` address, because those addresses are not reliable monitored intake channels
+- `both`: keeps GitHub private vulnerability reporting guidance and a monitored security contact method.
+- `contact-only`: keeps the monitored security contact method and removes GitHub private vulnerability reporting guidance.
+- `github-private-only`: keeps GitHub private vulnerability reporting guidance and removes the security contact section.
 
-If you prefer not to use email, you can:
-
-1. Remove the email section entirely from `SECURITY.md`
-2. Enable private vulnerability reporting for a public repository
-3. Prefer the direct private reporting URL, `https://github.com/OWNER/REPO/security/advisories/new`, once the feature is enabled
-4. Keep only the GitHub Security Advisories option (see [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md) for details)
+Use `--security-contact` only for `both` or `contact-only`. The contact value should be actively monitored, able to receive sensitive security reports, and must not be a `users.noreply.github.com` address. Before relying on `github-private-only`, enable private vulnerability reporting in GitHub repository settings.
 
 ---
 
@@ -2560,7 +2562,7 @@ pre-commit --version
 
 - `OWNER/REPO` with `your-username/your-repo-name`
 - `@OWNER` with `@your-username`
-- `[security contact email]` with your actual email or remove the email option
+- `[security contact email]` with your monitored security contact, or rerun the helper with `--security-reporting-mode github-private-only` if you intentionally use GitHub private vulnerability reporting only
 
 ### Permission Errors
 

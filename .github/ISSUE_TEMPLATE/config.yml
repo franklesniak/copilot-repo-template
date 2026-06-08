@@ -28,37 +28,13 @@ contact_links:
   # =============================================================================
   # SECURITY LINK CONFIGURATION
   # =============================================================================
-  # CUSTOMIZE: Update the URL below by replacing `OWNER/REPO` with your org/repo name.
-  #
-  # IMPORTANT: Private vulnerability reporting is ONLY available for PUBLIC repositories.
-  # If your repository is private:
-  # - This link will NOT provide a "Report a vulnerability" option to external users
-  # - You MUST provide an email contact in SECURITY.md for security reports
-  # - Consider removing or commenting out this link if it would confuse reporters
-  # See .github/TEMPLATE_DESIGN_DECISIONS.md for detailed guidance on private vs. public repos.
-  #
-  # Trade-off notes on Security link target options:
-  # - Option A: /security (used here) - Broad compatibility; general entry point that
-  #   usually exists. May not lead directly to submission flow if not configured.
-  # - Option B: /security/advisories/new - Best UX if enabled; direct private reporting UI.
-  #   Can 404 if advisories/private reporting aren't enabled (common in new repos).
-  # - Option C: blob/HEAD/SECURITY.md - Always works if the file exists; communicates policy
-  #   but is not a submission endpoint.
-  #
-  # Recommended: Keep /security as the transitional default while setting up the
-  # repository. After enabling private vulnerability reporting (public repos
-  # only), prefer /security/advisories/new so reporters land directly on the
-  # private reporting form.
-  #
-  # TO ENABLE PRIVATE VULNERABILITY REPORTING (PUBLIC REPOSITORIES ONLY):
-  # 1. Go to Settings → Security → Private vulnerability reporting
-  # 2. Enable the feature
-  # 3. Full documentation:
-  #    https://docs.github.com/en/code-security/how-tos/report-and-fix-vulnerabilities/configure-vulnerability-reporting/configuring-private-vulnerability-reporting-for-a-repository
-  # =============================================================================
-  - name: 🔒 Security Vulnerabilities
-    url: https://github.com/OWNER/REPO/security
-    about: Report security issues privately (do not open a public issue). Private vulnerability reporting is only available for public repositories.
+  # CUSTOMIZE: Replace `OWNER/REPO` with your org/repo name.
+  # GHES users must also replace github.com with their GHES host.
+  # Private vulnerability reporting must be enabled in GitHub settings
+  # before this direct advisory-reporting URL can receive reports.
+  - name: Security Vulnerabilities
+    url: https://github.com/OWNER/REPO/security/advisories/new
+    about: Report security issues privately. Maintainers must enable private vulnerability reporting before relying on this link.
 
   # =============================================================================
   # DISCUSSIONS LINK (OPTIONAL)
