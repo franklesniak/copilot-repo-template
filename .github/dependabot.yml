@@ -4,7 +4,9 @@
 #
 # This configuration monitors:
 #   - npm (package.json) - Markdown tooling dependencies, not a Node app
+# template-sync: begin python-only
 #   - pip (pyproject.toml) - Python dependencies
+# template-sync: end python-only
 #   - GitHub Actions (workflows) - Action version updates
 #   - pre-commit (.pre-commit-config.yaml) - Pre-commit hook updates
 #
@@ -58,6 +60,7 @@ updates:
       prefix: "chore(deps)"
     open-pull-requests-limit: 10
 
+  # template-sync: begin python-only
   # Python dependencies (pyproject.toml)
   - package-ecosystem: "pip"
     directory: "/"
@@ -73,6 +76,7 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     open-pull-requests-limit: 10
+  # template-sync: end python-only
 
   # GitHub Actions (workflows)
   - package-ecosystem: "github-actions"

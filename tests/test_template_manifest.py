@@ -90,7 +90,10 @@ MARKDOWN_SHARED_SURFACE_TOKENS = {
         "id: markdownlint-cli2",
     ),
 }
-PYTHON_INLINE_BLOCK_PATHS = (".pre-commit-config.yaml",)
+PYTHON_INLINE_BLOCK_COUNTS = {
+    ".pre-commit-config.yaml": 1,
+    ".github/dependabot.yml": 2,
+}
 PYTHON_INLINE_MARKER_BEGIN = "# template-sync: begin python-only"
 PYTHON_INLINE_MARKER_END = "# template-sync: end python-only"
 PYTHON_SHARED_SURFACE_TOKENS = {
@@ -99,6 +102,12 @@ PYTHON_SHARED_SURFACE_TOKENS = {
         "id: black",
         "https://github.com/astral-sh/ruff-pre-commit",
         "id: ruff-check",
+    ),
+    ".github/dependabot.yml": (
+        "pip (pyproject.toml) - Python dependencies",
+        "# Python dependencies (pyproject.toml)",
+        'package-ecosystem: "pip"',
+        "pip-minor-patch",
     ),
 }
 YAML_INLINE_BLOCK_COUNTS = {
@@ -1671,7 +1680,7 @@ def test_template_sync_inline_markers_are_known_and_paired() -> None:
         {
             *TERRAFORM_INLINE_BLOCK_PATHS,
             *MARKDOWN_INLINE_BLOCK_PATHS,
-            *PYTHON_INLINE_BLOCK_PATHS,
+            *PYTHON_INLINE_BLOCK_COUNTS,
             *YAML_INLINE_BLOCK_COUNTS,
             *SCHEMA_INLINE_BLOCK_COUNTS,
             *TEMPLATE_SYNC_SUPPORT_INLINE_BLOCK_COUNTS,
@@ -1818,10 +1827,10 @@ def test_python_inline_blocks_are_declared_for_template_sync() -> None:
     """Python-only inline blocks must be paired with manifest notes."""
     mappings = _path_mapping_by_pattern()
 
-    for relative_path in PYTHON_INLINE_BLOCK_PATHS:
+    for relative_path, expected_count in PYTHON_INLINE_BLOCK_COUNTS.items():
         text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
-        assert text.count(PYTHON_INLINE_MARKER_BEGIN) == 1
-        assert text.count(PYTHON_INLINE_MARKER_END) == 1
+        assert text.count(PYTHON_INLINE_MARKER_BEGIN) == expected_count
+        assert text.count(PYTHON_INLINE_MARKER_END) == expected_count
         _strip_python_only_inline_blocks(relative_path)
 
         mapping = mappings.get(relative_path)

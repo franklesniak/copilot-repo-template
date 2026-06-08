@@ -180,6 +180,10 @@ template_manifest:
     - pattern: '.github/dependabot.yml'
       requires_all:
         - github-platform
+      notes: >-
+        Contains Python-only inline blocks for the pip ecosystem header and
+        update block. Remove the delimited blocks when the python module is
+        excluded so Dependabot only monitors retained dependency surfaces.
     - pattern: 'tests/test_dependabot_schema.py'
       requires_all:
         - github-platform
