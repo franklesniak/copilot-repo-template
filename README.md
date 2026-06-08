@@ -67,7 +67,7 @@ Core retained surfaces include:
 - `.markdownlint.jsonc`, `.remarkrc.mjs`, and `.remarkignore` - Markdown linting and link-check configuration.
 - `.pre-commit-config.yaml` - aggregate pre-commit hook configuration.
 - `.template-sync/` - template-sync marker, manifest, and helper scripts when template-sync support is retained.
-- `schemas/template-sync-*.schema.json` and matching `schemas/examples/template-sync-*` fixtures - template-sync schema contracts.
+- `schemas/template-sync-*.schema.json` - template-sync schema contracts, with matching `schemas/examples/template-sync-*` fixtures where provided.
 - `templates/markdown/` - Markdown linting starter configuration.
 - `templates/powershell/` - PowerShell starter test content.
 - `tests/` - retained helper tests and PowerShell tests.

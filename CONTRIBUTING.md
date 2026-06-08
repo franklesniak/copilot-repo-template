@@ -55,7 +55,7 @@ npm install
 Git hooks are managed by pre-commit.
 
 <!-- template-sync: begin python-reference-only -->
-### 3. Install Python When Working With Python Code
+### Optional: Install Python When Working With Python Code
 
 Ensure you have a supported Python version available:
 
@@ -64,7 +64,7 @@ python --version
 ```
 <!-- template-sync: end python-reference-only -->
 
-### 4. Install Pre-commit
+### 3. Install Pre-commit
 
 Install `pre-commit` globally or through `pipx`:
 
@@ -78,13 +78,13 @@ pipx install pre-commit
 
 `pre-commit` manages isolated hook environments, so it does not need to be installed as a project runtime dependency.
 
-### 5. Install Git Hooks
+### 4. Install Git Hooks
 
 ```bash
 pre-commit install
 ```
 
-### 6. Run Pre-commit Manually
+### 5. Run Pre-commit Manually
 
 ```bash
 pre-commit run --all-files
