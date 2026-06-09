@@ -14,6 +14,7 @@ from urllib.parse import unquote, urlsplit
 import validate_instruction_contracts
 import validate_marker
 from template_sync_materialization_helpers import (
+    INLINE_BLOCK_ANY_MODULES,
     INLINE_BLOCK_MARKER_RE,
     inline_block_module_requirement,
 )
@@ -394,6 +395,21 @@ def validate_inline_blocks(
                         message=f"Unknown template-sync inline marker family: {marker_name}",
                     )
                 )
+            elif marker_name in INLINE_BLOCK_ANY_MODULES:
+                # OR-retention: the block is valid while at least one named module
+                # is included, and is stale only when every named module is excluded.
+                if module_requirement.isdisjoint(included_modules):
+                    excluded = ", ".join(sorted(module_requirement))
+                    failures.append(
+                        InlineBlockFailure(
+                            path=relative_path,
+                            line_number=line_number,
+                            message=(
+                                f"Inline block {marker_name} remains but requires at "
+                                f"least one of the excluded module(s): {excluded}"
+                            ),
+                        )
+                    )
             elif not module_requirement.issubset(included_modules):
                 excluded = ", ".join(sorted(module_requirement - included_modules))
                 failures.append(

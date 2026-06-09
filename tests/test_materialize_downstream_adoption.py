@@ -31,6 +31,7 @@ ISSUE_692_NO_PYTHON_MODULES = (
     "markdown",
     "powershell",
 )
+ISSUE_693_PARTIAL_DOC_MODULES = ISSUE_692_NO_PYTHON_MODULES
 FULL_TEMPLATE_MODULES = (
     "baseline",
     "agent-instructions",
@@ -49,6 +50,95 @@ FULL_TEMPLATE_MODULES = (
 )
 DEPENDABOT_NO_PYTHON_ECOSYSTEMS = {"github-actions", "npm", "pre-commit"}
 DEPENDABOT_FULL_ECOSYSTEMS = DEPENDABOT_NO_PYTHON_ECOSYSTEMS | {"pip"}
+ISSUE_693_BASELINE_DOCS = ("README.md", "CONTRIBUTING.md")
+# Base module set with no data-file modules (json, yaml, schema) and no
+# template-sync-support, used to exercise the OR-group data-ci-reference-only and
+# the single-module template-sync-support-reference-only blocks.
+NO_DATA_NO_TEMPLATE_SYNC_MODULES = (
+    "baseline",
+    "agent-instructions",
+    "github-platform",
+    "github-actions",
+    "github-templates",
+    "markdown",
+    "powershell",
+)
+# References that exist only inside the template-sync-support-reference-only block
+# in README.md.
+TEMPLATE_SYNC_SUPPORT_README_REFERENCES = (
+    "`.template-sync/`",
+    "schemas/template-sync-",
+    "validate_downstream_adoption.py",
+)
+ISSUE_693_EXCLUDED_DOC_REFERENCES = {
+    "README.md": (
+        "pyproject.toml",
+        ".github/workflows/python-ci.yml",
+        ".github/workflows/terraform-ci.yml",
+        ".github/instructions/python.instructions.md",
+        ".github/instructions/terraform.instructions.md",
+        ".github/instructions/json.instructions.md",
+        ".github/instructions/yaml.instructions.md",
+        ".tflint.hcl",
+        ".yamllint.yml",
+        "templates/python/",
+        "templates/terraform/",
+        "templates/json/",
+        "templates/yaml/",
+        "schemas/README.md",
+        "schemas/example-config",
+        "pre-commit run yamllint --all-files",
+        "terraform test -verbose",
+        "TFLint",
+    ),
+    "CONTRIBUTING.md": (
+        "Python Version Requirements",
+        "pyproject.toml",
+        ".github/workflows/python-ci.yml",
+        ".github/workflows/terraform-ci.yml",
+        ".github/instructions/python.instructions.md",
+        ".github/instructions/terraform.instructions.md",
+        ".github/instructions/json.instructions.md",
+        ".github/instructions/yaml.instructions.md",
+        ".tflint.hcl",
+        ".yamllint.yml",
+        "schemas/README.md",
+        "schemas/example-config",
+        "pytest tests/ -v --cov --cov-report=term-missing",
+        "mypy src/ tests/",
+        "terraform-fmt",
+        "terraform-validate",
+        "terraform-tflint",
+        "terraform_version",
+        "tflint_version",
+        "TFLint",
+    ),
+}
+ISSUE_693_RETAINED_DOC_REFERENCES = {
+    "README.md": (
+        "npm run lint:md",
+        "Invoke-Pester -Path tests/ -Output Detailed",
+        "python .template-sync/scripts/validate_downstream_adoption.py --require-marker",
+        "`check-json`",
+        "`check-yaml`",
+        "`actionlint`",
+        "`check-jsonschema`",
+        "`check-metaschema`",
+    ),
+    "CONTRIBUTING.md": (
+        "pre-commit run --all-files",
+        "a working Python 3 interpreter is required",
+        "npm run lint:md",
+        "Invoke-Pester -Path tests/ -Output Detailed",
+        "python .template-sync/scripts/validate_downstream_adoption.py --require-marker",
+        "`check-json`",
+        "`check-yaml`",
+        "`actionlint`",
+        "`check-jsonschema`",
+        "`check-metaschema`",
+        "secrets",
+    ),
+}
 NESTED_MARKDOWN_LINT_NODE_MODULES = (
     "glob",
     "jsonc-parser",
@@ -448,6 +538,255 @@ def test_materialized_template_update_procedure_passes_nested_markdown_lint(
     )
 
     assert lint_result.returncode == 0, lint_result.stdout + lint_result.stderr
+
+
+@pytest.mark.parametrize("relative_path", ISSUE_693_BASELINE_DOCS)
+def test_materialized_partial_adoption_strips_shared_baseline_doc_stale_references(
+    tmp_path: Path,
+    relative_path: str,
+) -> None:
+    """Partial materialization strips excluded-stack prose from each shared baseline doc."""
+    target_root = tmp_path / "partial-docs"
+    target_root.mkdir()
+    module_args = [
+        argument
+        for module_name in ISSUE_693_PARTIAL_DOC_MODULES
+        for argument in ("--included-module", module_name)
+    ]
+
+    result = run_materialize(
+        REPO_ROOT,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--last-reviewed-template-commit",
+        FULL_SHA,
+        "--repository",
+        "octocat/hello-world",
+        "--security-contact",
+        "security@example.com",
+        "--allow-conflicts",
+        *module_args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    generated_path = target_root / relative_path
+    assert generated_path.is_file(), result.stdout
+    generated_text = read_file(generated_path)
+
+    for retained_token in ISSUE_693_RETAINED_DOC_REFERENCES[relative_path]:
+        assert retained_token in generated_text, f"{relative_path}: {retained_token}"
+    for excluded_token in ISSUE_693_EXCLUDED_DOC_REFERENCES[relative_path]:
+        assert excluded_token not in generated_text, f"{relative_path}: {excluded_token}"
+
+    subprocess.run(
+        ["git", "init", "-q"],
+        cwd=target_root,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    report_result = run_excluded_module_report(target_root, ISSUE_693_PARTIAL_DOC_MODULES)
+
+    assert report_result.returncode == 0, report_result.stderr
+    matched_report_row = False
+    for report_line in report_result.stdout.splitlines():
+        if f"| {relative_path}" not in report_line:
+            continue
+        matched_report_row = True
+        assert "required_cleanup" not in report_line, report_line
+        assert "markdown-link.excluded-target" not in report_line, report_line
+    assert matched_report_row, (
+        f"excluded-module report produced no row mentioning {relative_path}; "
+        "the report format may have changed, leaving the cleanup assertions "
+        "above vacuous"
+    )
+
+
+@pytest.mark.parametrize("template_sync_support_included", [False, True])
+def test_materialized_readme_template_sync_support_reference_block(
+    tmp_path: Path,
+    template_sync_support_included: bool,
+) -> None:
+    """README template-sync surface rows materialize only when support is adopted."""
+    target_root = tmp_path / "readme-template-sync"
+    target_root.mkdir()
+    included_modules = NO_DATA_NO_TEMPLATE_SYNC_MODULES
+    if template_sync_support_included:
+        included_modules = (*included_modules, "template-sync-support")
+    module_args = [
+        argument
+        for module_name in included_modules
+        for argument in ("--included-module", module_name)
+    ]
+
+    result = run_materialize(
+        REPO_ROOT,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--last-reviewed-template-commit",
+        FULL_SHA,
+        "--repository",
+        "octocat/hello-world",
+        "--security-contact",
+        "security@example.com",
+        "--allow-conflicts",
+        *module_args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    generated_path = target_root / "README.md"
+    assert generated_path.is_file(), result.stdout
+    generated_text = read_file(generated_path)
+
+    for reference in TEMPLATE_SYNC_SUPPORT_README_REFERENCES:
+        if template_sync_support_included:
+            assert reference in generated_text, reference
+        else:
+            assert reference not in generated_text, reference
+
+
+@pytest.mark.parametrize("template_sync_support_included", [False, True])
+def test_materialized_contributing_template_sync_support_reference_block(
+    tmp_path: Path,
+    template_sync_support_included: bool,
+) -> None:
+    """CONTRIBUTING template-sync surface materializes only when support is adopted."""
+    target_root = tmp_path / "contributing-template-sync"
+    target_root.mkdir()
+    included_modules = NO_DATA_NO_TEMPLATE_SYNC_MODULES
+    if template_sync_support_included:
+        included_modules = (*included_modules, "template-sync-support")
+    module_args = [
+        argument
+        for module_name in included_modules
+        for argument in ("--included-module", module_name)
+    ]
+
+    result = run_materialize(
+        REPO_ROOT,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--last-reviewed-template-commit",
+        FULL_SHA,
+        "--repository",
+        "octocat/hello-world",
+        "--security-contact",
+        "security@example.com",
+        "--allow-conflicts",
+        *module_args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    generated_path = target_root / "CONTRIBUTING.md"
+    assert generated_path.is_file(), result.stdout
+    generated_text = read_file(generated_path)
+
+    if template_sync_support_included:
+        assert "validate_downstream_adoption.py" in generated_text
+    else:
+        assert "validate_downstream_adoption.py" not in generated_text
+
+
+@pytest.mark.parametrize(
+    ("included_data_module", "expect_data_ci_row"),
+    [
+        pytest.param(None, False, id="all-data-modules-excluded"),
+        pytest.param("json", True, id="json-included"),
+    ],
+)
+def test_materialized_contributing_data_ci_reference_block(
+    tmp_path: Path,
+    included_data_module: str | None,
+    expect_data_ci_row: bool,
+) -> None:
+    """The Data CI row materializes when any OR-group data module is adopted."""
+    target_root = tmp_path / "contributing-data-ci"
+    target_root.mkdir()
+    included_modules = NO_DATA_NO_TEMPLATE_SYNC_MODULES
+    if included_data_module is not None:
+        included_modules = (*included_modules, included_data_module)
+    module_args = [
+        argument
+        for module_name in included_modules
+        for argument in ("--included-module", module_name)
+    ]
+
+    result = run_materialize(
+        REPO_ROOT,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--last-reviewed-template-commit",
+        FULL_SHA,
+        "--repository",
+        "octocat/hello-world",
+        "--security-contact",
+        "security@example.com",
+        "--allow-conflicts",
+        *module_args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    generated_path = target_root / "CONTRIBUTING.md"
+    assert generated_path.is_file(), result.stdout
+    generated_text = read_file(generated_path)
+
+    if expect_data_ci_row:
+        assert "**Data CI**" in generated_text
+        assert ".github/workflows/data-ci.yml" in generated_text
+    else:
+        assert "**Data CI**" not in generated_text
+        assert ".github/workflows/data-ci.yml" not in generated_text
+
+
+def test_excluded_module_report_retains_or_group_block_without_cleanup(
+    tmp_path: Path,
+) -> None:
+    """An OR-group reference-only block retained via one member is not flagged for cleanup."""
+    target_root = tmp_path / "or-group-report"
+    target_root.mkdir()
+    included_modules = (*NO_DATA_NO_TEMPLATE_SYNC_MODULES, "template-sync-support")
+    module_args = [
+        argument
+        for module_name in included_modules
+        for argument in ("--included-module", module_name)
+    ]
+
+    result = run_materialize(
+        REPO_ROOT,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--last-reviewed-template-commit",
+        FULL_SHA,
+        "--repository",
+        "octocat/hello-world",
+        "--security-contact",
+        "security@example.com",
+        "--allow-conflicts",
+        *module_args,
+    )
+    assert result.returncode == 0, result.stderr
+
+    subprocess.run(
+        ["git", "init", "-q"],
+        cwd=target_root,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    report_result = run_excluded_module_report(target_root, included_modules)
+    assert report_result.returncode == 0, report_result.stderr
+    # data-ci.yml is materialized because template-sync-support is retained, so the
+    # OR-group data-ci-reference-only block must not surface anywhere in the report
+    # (neither a cleanup finding nor an excluded-module scope row) for the excluded
+    # json/yaml/schema members.
+    assert "data-ci-reference-only" not in report_result.stdout, report_result.stdout
 
 
 def test_materialized_no_python_adoption_prunes_dependabot_pip_ecosystem(

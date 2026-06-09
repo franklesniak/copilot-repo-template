@@ -54,6 +54,11 @@ INLINE_BLOCK_MARKER_RE = re.compile(
 CODE_FENCE_OPEN_RE = re.compile(r"^(?P<indent> {0,3})(?P<fence>`{3,}|~{3,})(?P<info>.*)$")
 CODE_FENCE_CLOSE_RE = re.compile(r"^(?P<indent> {0,3})(?P<fence>`{3,}|~{3,})\s*$")
 MARKDOWN_FENCE_INFO = frozenset({"markdown", "md"})
+# AND-retention markers. A block in this family is retained only when *every*
+# module it names is present in ``included_modules``; it is stripped when *any*
+# named module is excluded (see ``remove_inline_blocks_for_modules``). This is
+# the default inline-block semantics and covers both the ``*-only`` toolchain
+# blocks and the single-module ``*-reference-only`` documentation blocks.
 INLINE_BLOCK_MODULES = {
     "terraform-only": frozenset({"terraform"}),
     "markdown-only": frozenset({"markdown"}),
@@ -70,6 +75,18 @@ INLINE_BLOCK_MODULES = {
     "json-reference-only": frozenset({"json"}),
     "yaml-reference-only": frozenset({"yaml"}),
     "schema-reference-only": frozenset({"schema"}),
+    "template-sync-support-reference-only": frozenset({"template-sync-support"}),
+}
+# OR-retention (ANY) markers. A block in this family is retained when *at least
+# one* module it names is present in ``included_modules``; it is stripped only
+# when the included modules are disjoint from the marker's module set (i.e.
+# *none* of the named modules is included). This mirrors a manifest
+# ``requires_any`` relation, so it can guard prose that documents a file which
+# is itself materialized under OR semantics (for example the data-file CI
+# workflow row, whose file requires ``github-actions`` plus any one of
+# ``json``, ``yaml``, ``schema``, ``template-sync-support``).
+INLINE_BLOCK_ANY_MODULES = {
+    "data-ci-reference-only": frozenset({"json", "yaml", "schema", "template-sync-support"}),
 }
 
 
@@ -1131,9 +1148,22 @@ def classify_repository_file(repo_root: Path, raw_path: str) -> RepositoryFileCl
     )
 
 
+def is_known_inline_block_marker(marker_name: str) -> bool:
+    """Return whether a marker family is recognized under AND or ANY retention."""
+    return marker_name in INLINE_BLOCK_MODULES or marker_name in INLINE_BLOCK_ANY_MODULES
+
+
 def inline_block_module_requirement(marker_name: str) -> frozenset[str] | None:
-    """Return the module requirement for a known inline marker family."""
-    return INLINE_BLOCK_MODULES.get(marker_name)
+    """Return the module set for a known inline marker family, or ``None``.
+
+    The returned set is the same for AND-retention (``INLINE_BLOCK_MODULES``) and
+    ANY-retention (``INLINE_BLOCK_ANY_MODULES``) markers; callers that need to
+    distinguish the two semantics consult ``INLINE_BLOCK_ANY_MODULES`` directly.
+    """
+    requirement = INLINE_BLOCK_MODULES.get(marker_name)
+    if requirement is not None:
+        return requirement
+    return INLINE_BLOCK_ANY_MODULES.get(marker_name)
 
 
 def parse_inline_block_marker(
@@ -1147,7 +1177,7 @@ def parse_inline_block_marker(
     if match is None:
         return None
     marker_name = match.group("name")
-    if marker_name not in INLINE_BLOCK_MODULES:
+    if not is_known_inline_block_marker(marker_name):
         raise UnknownInlineBlockMarkerError(
             f"Unknown template-sync inline marker family: {marker_name}",
             relative_path=relative_path,
@@ -1244,7 +1274,7 @@ def remove_inline_block_family(
     preserve_blank_line_hygiene: bool = True,
 ) -> str:
     """Return ``text`` after removing one complete inline block marker family."""
-    if marker_name not in INLINE_BLOCK_MODULES:
+    if not is_known_inline_block_marker(marker_name):
         raise UnknownInlineBlockMarkerError(
             f"Unknown template-sync inline marker family: {marker_name}",
             relative_path=relative_path,
@@ -1331,11 +1361,29 @@ def remove_inline_blocks_for_modules(
     *,
     relative_path: str,
 ) -> str:
-    """Remove inline marker families whose module requirements are excluded."""
+    """Remove inline marker families whose module requirements are excluded.
+
+    AND-retention families (``INLINE_BLOCK_MODULES``) are stripped when *any*
+    required module is excluded. ANY-retention families
+    (``INLINE_BLOCK_ANY_MODULES``) are stripped only when the included modules are
+    disjoint from the marker's module set, that is when *none* of the named
+    modules is included.
+    """
     result = text
     included_module_set = set(included_modules)
     for marker_name, required_modules in INLINE_BLOCK_MODULES.items():
         if required_modules.issubset(included_module_set):
+            continue
+        if marker_name not in result:
+            continue
+        result = remove_inline_block_family(
+            result,
+            marker_name,
+            relative_path=relative_path,
+            require_seen=False,
+        )
+    for marker_name, required_modules in INLINE_BLOCK_ANY_MODULES.items():
+        if not included_module_set.isdisjoint(required_modules):
             continue
         if marker_name not in result:
             continue

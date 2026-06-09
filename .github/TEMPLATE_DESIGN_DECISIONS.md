@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-27
+- **Last Updated:** 2026-06-09
 - **Scope:** Durable design-decision record for this repository template, including rationale for GitHub configuration, instruction files, validation policy, template structure, maintenance conventions, and the documentation-tier inventory below.
 - **Related:** [Repository Copilot Instructions](copilot-instructions.md), [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -30,7 +30,7 @@ This document records design decisions made during the creation and maintenance 
 - [Agent Instruction Files](#agent-instruction-files)
   - [Multi-Agent Instruction Files at Repository Root](#design-decision-multi-agent-instruction-files-at-repository-root)
   - [Agent Files as Minimal Entry-Point Summaries (Not Canonical)](#design-decision-agent-files-as-minimal-entry-point-summaries-not-canonical)
-  - [Reference-Only Template-Sync Blocks for Protected Agent Text](#design-decision-reference-only-template-sync-blocks-for-protected-agent-text)
+  - [Reference-Only Template-Sync Blocks for Retained Shared Documents](#design-decision-reference-only-template-sync-blocks-for-retained-shared-documents)
 - [Data File Standards (JSON/YAML)](#data-file-standards-jsonyaml)
   - [Parity Status](#parity-status)
   - [Dedicated JSON and YAML Instruction Files](#design-decision-dedicated-json-and-yaml-instruction-files)
@@ -487,25 +487,25 @@ Agent instruction files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are minimal entr
 - Con: Rule changes require updating multiple files
 - Con: No automated enforcement that alignment reviews happen after shared-rule changes
 
-### Design Decision: Reference-Only Template-Sync Blocks for Protected Agent Text
+### Design Decision: Reference-Only Template-Sync Blocks for Retained Shared Documents
 
-Protected instruction files may contain `*-reference-only` template-sync blocks around optional-stack references. These blocks coexist with the older `*-only` family instead of replacing it.
+Retained shared documents may contain `*-reference-only` template-sync blocks around optional-stack references. These blocks coexist with the older `*-only` family instead of replacing it.
 
 **Rationale:**
 
-1. **Different ownership shape**: `*-only` blocks wrap owned configuration or workflow content, such as hooks and CI steps. `*-reference-only` blocks wrap prose that merely mentions optional stacks inside retained protected files.
+1. **Different ownership shape**: `*-only` blocks wrap owned configuration or workflow content, such as hooks and CI steps. `*-reference-only` blocks wrap prose, table rows, list items, and links that merely mention optional stacks inside retained protected files or shared baseline docs.
 
 2. **Safer stack pruning**: Downstream adopters can remove Python, Terraform, PowerShell, JSON, YAML, schema, or Markdown references without deleting unrelated required or platform-specific protocol text.
 
-3. **Protocol preservation**: Agent entry points can remain thin summaries while retaining platform protocol sections, such as Claude review-loop rules and Codex GitHub-plugin/PR-review rules.
+3. **Protocol and baseline preservation**: Agent entry points can remain thin summaries while retaining platform protocol sections, such as Claude review-loop rules and Codex GitHub-plugin/PR-review rules. Baseline docs such as `README.md` and `CONTRIBUTING.md` can keep pre-commit, Markdown, PowerShell, GitHub, no-secrets, PR-readiness, and template-sync guidance while removing references to excluded optional stacks.
 
-**Decision:** Use `*-reference-only` only for textual optional-stack references in retained documents. Continue to use `*-only` for module-owned configuration, workflow, or validation blocks. Both families strip when the corresponding module is absent, but tests must prove protected-file pruning removes only the reference blocks and preserves required protocol headings.
+**Decision:** Use `*-reference-only` only for textual optional-stack references in retained documents. Continue to use `*-only` for module-owned configuration, workflow, or validation blocks. Both families strip when the corresponding module is absent, but tests must prove protected-file pruning removes only the reference blocks and preserves required protocol headings, and shared baseline doc pruning removes excluded-stack prose without dropping retained contributor-facing guidance.
 
 **Alternatives considered:**
 
 1. **Reuse `*-only` for prose references:** Rejected because it hides the difference between owned module configuration and incidental textual references, making downstream review less precise.
 
-2. **Do not mark protected-file references:** Rejected because downstream repositories that exclude optional stacks would need broad protected-file rewrites, increasing the risk of deleting retained platform protocol.
+2. **Do not mark protected-file or baseline-doc references:** Rejected because downstream repositories that exclude optional stacks would need broad protected-file and contributor-doc rewrites, increasing the risk of deleting retained platform protocol or baseline contributor guidance.
 
 ---
 

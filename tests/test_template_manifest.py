@@ -222,6 +222,8 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "AGENTS.md": 2,
         "CLAUDE.md": 2,
         "GEMINI.md": 2,
+        "README.md": 6,
+        "CONTRIBUTING.md": 9,
     },
     "terraform-reference-only": {
         ".github/copilot-instructions.md": 3,
@@ -230,6 +232,8 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "AGENTS.md": 2,
         "CLAUDE.md": 2,
         "GEMINI.md": 2,
+        "README.md": 6,
+        "CONTRIBUTING.md": 6,
     },
     "json-reference-only": {
         ".github/copilot-instructions.md": 1,
@@ -238,6 +242,8 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "AGENTS.md": 3,
         "CLAUDE.md": 3,
         "GEMINI.md": 3,
+        "README.md": 3,
+        "CONTRIBUTING.md": 2,
     },
     "yaml-reference-only": {
         ".github/copilot-instructions.md": 1,
@@ -246,6 +252,8 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "AGENTS.md": 3,
         "CLAUDE.md": 3,
         "GEMINI.md": 3,
+        "README.md": 8,
+        "CONTRIBUTING.md": 5,
     },
     "schema-reference-only": {
         ".github/copilot-instructions.md": 2,
@@ -254,8 +262,20 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "AGENTS.md": 3,
         "CLAUDE.md": 3,
         "GEMINI.md": 3,
+        "README.md": 4,
+        "CONTRIBUTING.md": 2,
+    },
+    "template-sync-support-reference-only": {
+        "README.md": 2,
+        "CONTRIBUTING.md": 1,
+    },
+    "data-ci-reference-only": {
+        "README.md": 1,
+        "CONTRIBUTING.md": 1,
     },
 }
+# Single-module AND-retention reference-only markers. Each block is stripped when
+# its one named module is excluded.
 REFERENCE_ONLY_MARKER_MODULES = {
     "markdown-reference-only": "markdown",
     "powershell-reference-only": "powershell",
@@ -264,6 +284,13 @@ REFERENCE_ONLY_MARKER_MODULES = {
     "json-reference-only": "json",
     "yaml-reference-only": "yaml",
     "schema-reference-only": "schema",
+    "template-sync-support-reference-only": "template-sync-support",
+}
+# OR-retention (ANY) reference-only markers. Each block is retained when at least
+# one named module is included and stripped only when all of them are excluded;
+# this mirrors the manifest ``requires_any`` relation for the guarded file.
+ANY_REFERENCE_ONLY_MARKER_MODULES = {
+    "data-ci-reference-only": ("json", "yaml", "schema", "template-sync-support"),
 }
 PROTECTED_ENTRY_POINT_REFERENCE_PATHS = (
     ".cursor/rules/repository-instructions.mdc",
@@ -272,13 +299,15 @@ PROTECTED_ENTRY_POINT_REFERENCE_PATHS = (
     "CLAUDE.md",
     "GEMINI.md",
 )
-PROTECTED_REFERENCE_MANIFEST_PATTERNS = {
+REFERENCE_ONLY_MANIFEST_PATTERNS = {
     ".github/copilot-instructions.md": ".github/copilot-instructions.md",
     ".cursor/rules/repository-instructions.mdc": ".cursor/rules/**",
     ".hermes.md": ".hermes.md",
     "AGENTS.md": "AGENTS.md",
     "CLAUDE.md": "CLAUDE.md",
     "GEMINI.md": "GEMINI.md",
+    "README.md": "README.md",
+    "CONTRIBUTING.md": "CONTRIBUTING.md",
 }
 REFERENCE_ONLY_FORBIDDEN_ENTRY_POINT_TOKENS = {
     "markdown-reference-only": (
@@ -1675,6 +1704,7 @@ def test_template_sync_inline_markers_are_known_and_paired() -> None:
         "template-sync-support-only",
         "github-platform-only",
         *REFERENCE_ONLY_MARKER_MODULES,
+        *ANY_REFERENCE_ONLY_MARKER_MODULES,
     }
     inline_block_paths = sorted(
         {
@@ -2118,7 +2148,7 @@ def test_reference_only_inline_blocks_are_declared_for_template_sync() -> None:
             assert text.count(marker_end) == expected_count
             _strip_reference_only_inline_blocks(relative_path, marker_name)
 
-            manifest_pattern = PROTECTED_REFERENCE_MANIFEST_PATTERNS[relative_path]
+            manifest_pattern = REFERENCE_ONLY_MANIFEST_PATTERNS[relative_path]
             mapping = mappings.get(manifest_pattern)
             assert mapping is not None, f"{manifest_pattern} must have a manifest mapping"
             notes = mapping.get("notes")
@@ -2138,8 +2168,41 @@ def test_procedure_registers_reference_only_marker_family() -> None:
     assert "same strip semantics" in procedure_text
     for marker_name in REFERENCE_ONLY_MARKER_MODULES:
         assert marker_name in procedure_text
-    for relative_path in PROTECTED_REFERENCE_MANIFEST_PATTERNS:
+    for marker_name in ANY_REFERENCE_ONLY_MARKER_MODULES:
+        assert marker_name in procedure_text
+    for relative_path in REFERENCE_ONLY_MANIFEST_PATTERNS:
         assert relative_path in procedure_text
+
+
+def test_template_sync_markers_do_not_break_markdown_tables() -> None:
+    """Template-sync marker lines must not sit between GFM table rows.
+
+    GitHub-flavored Markdown tables require contiguous ``| ... |`` lines. A
+    standalone HTML-comment marker between two table rows terminates the table,
+    so the rows after it render as literal paragraph text. ``markdownlint`` does
+    not catch this, so guard the shared baseline docs structurally: a marker is
+    inside a table only when both its nearest non-blank neighbors are table rows.
+    """
+    table_row = re.compile(r"^\s*\|")
+    marker = re.compile(r"^\s*<!--\s*template-sync:")
+    for relative_path in ("README.md", "CONTRIBUTING.md"):
+        lines = (REPO_ROOT / relative_path).read_text(encoding="utf-8").split("\n")
+        for index, line in enumerate(lines):
+            if not marker.match(line):
+                continue
+            previous = index - 1
+            while previous >= 0 and not lines[previous].strip():
+                previous -= 1
+            following = index + 1
+            while following < len(lines) and not lines[following].strip():
+                following += 1
+            prev_is_row = previous >= 0 and bool(table_row.match(lines[previous]))
+            next_is_row = following < len(lines) and bool(table_row.match(lines[following]))
+            assert not (prev_is_row and next_is_row), (
+                f"{relative_path}:{index + 1}: template-sync marker sits between GFM table "
+                "rows, which breaks table rendering. Use a bullet list or another "
+                "marker-safe layout instead."
+            )
 
 
 def test_reference_only_pruning_removes_entry_point_optional_stack_references() -> None:

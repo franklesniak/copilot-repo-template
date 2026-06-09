@@ -24,6 +24,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     DEFAULT_MANIFEST_SCHEMA_PATH,
     DEFAULT_MARKER_PATH,
     DEFAULT_MARKER_SCHEMA_PATH,
+    INLINE_BLOCK_ANY_MODULES,
     INLINE_BLOCK_MARKER_RE,
     DeferredProtectedCandidate,
     LocalOverride,
@@ -441,6 +442,13 @@ def build_scope_lines(repo_root: Path, state: ReportState) -> tuple[str, ...]:
             required_modules = inline_block_module_requirement(name)
             if required_modules is None:
                 continue
+            if name in INLINE_BLOCK_ANY_MODULES and not required_modules.isdisjoint(
+                state.included_modules
+            ):
+                # OR-retention block is materialized via another member module,
+                # so it is not a retained cross-module surface for the excluded
+                # members.
+                continue
             for module in sorted(required_modules & state.excluded_modules):
                 retained_cross_module_paths[module].add(relative_path)
                 inline_families_by_module[module].add(name)
@@ -551,6 +559,13 @@ def inline_block_findings(repo_root: Path, state: ReportState) -> tuple[Finding,
                     )
                 )
                 continue
+            if block.marker_name in INLINE_BLOCK_ANY_MODULES:
+                # OR-retention: the block is materialized whenever *any* named
+                # module is included, so it is only stale when *every* named
+                # module is excluded. Skip it while at least one is retained to
+                # avoid flagging a correctly retained block for cleanup.
+                if not required_modules.isdisjoint(state.included_modules):
+                    continue
             missing_modules = tuple(sorted(required_modules - state.included_modules))
             if not missing_modules:
                 continue
