@@ -126,6 +126,7 @@ ISSUE_693_RETAINED_DOC_REFERENCES = {
     ),
     "CONTRIBUTING.md": (
         "pre-commit run --all-files",
+        "a working Python 3 interpreter is required",
         "npm run lint:md",
         "Invoke-Pester -Path tests/ -Output Detailed",
         "python .template-sync/scripts/validate_downstream_adoption.py --require-marker",

@@ -54,14 +54,16 @@ npm install
 
 Git hooks are managed by pre-commit.
 
-<!-- template-sync: begin python-reference-only -->
-### Optional: Install Python When Working With Python Code
+### Install Python
 
-Ensure you have a supported Python version available:
+`pre-commit` is installed and run through `pip`/`pipx`, and the template-sync helper scripts run on Python, so a working Python 3 interpreter is required even when your project does not adopt the Python module:
 
 ```bash
 python --version
 ```
+
+<!-- template-sync: begin python-reference-only -->
+When you adopt the Python module, use a Python version that is currently in the supported window (see [Python Version Requirements](#python-version-requirements)).
 <!-- template-sync: end python-reference-only -->
 
 ### 3. Install Pre-commit
