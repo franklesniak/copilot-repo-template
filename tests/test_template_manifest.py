@@ -23,6 +23,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_PATH = REPO_ROOT / ".template-sync" / "manifest.yml"
 VALIDATE_MARKER_PATH = REPO_ROOT / ".template-sync" / "scripts" / "validate_marker.py"
 TEMPLATE_SYNC_SCRIPT_DIR = VALIDATE_MARKER_PATH.parent
+REPORT_EXCLUDED_MODULE_REFERENCES_PATH = (
+    TEMPLATE_SYNC_SCRIPT_DIR / "report_excluded_module_references.py"
+)
+INSTRUCTION_CONTRACTS_PATH = REPO_ROOT / ".template-sync" / "instruction-contracts.yml"
 MANIFEST_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-manifest.schema.json"
 MARKER_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-marker.schema.json"
 PROCEDURE_PATH = REPO_ROOT / "TEMPLATE_UPDATE_PROCEDURE.md"
@@ -50,6 +54,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     UnknownInlineBlockMarkerError,
     UnmatchedInlineBlockEndError,
     remove_inline_block_family,
+    remove_inline_blocks_for_modules,
 )
 
 TERRAFORM_INLINE_BLOCK_PATHS = (
@@ -216,7 +221,7 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "GEMINI.md": 2,
     },
     "python-reference-only": {
-        ".github/copilot-instructions.md": 1,
+        ".github/copilot-instructions.md": 3,
         ".cursor/rules/repository-instructions.mdc": 2,
         ".hermes.md": 2,
         "AGENTS.md": 2,
@@ -226,7 +231,7 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "CONTRIBUTING.md": 9,
     },
     "terraform-reference-only": {
-        ".github/copilot-instructions.md": 3,
+        ".github/copilot-instructions.md": 7,
         ".cursor/rules/repository-instructions.mdc": 2,
         ".hermes.md": 2,
         "AGENTS.md": 2,
@@ -236,7 +241,7 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "CONTRIBUTING.md": 6,
     },
     "json-reference-only": {
-        ".github/copilot-instructions.md": 1,
+        ".github/copilot-instructions.md": 2,
         ".cursor/rules/repository-instructions.mdc": 3,
         ".hermes.md": 3,
         "AGENTS.md": 3,
@@ -246,7 +251,7 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "CONTRIBUTING.md": 2,
     },
     "yaml-reference-only": {
-        ".github/copilot-instructions.md": 1,
+        ".github/copilot-instructions.md": 6,
         ".cursor/rules/repository-instructions.mdc": 3,
         ".hermes.md": 3,
         "AGENTS.md": 3,
@@ -256,7 +261,7 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "CONTRIBUTING.md": 5,
     },
     "schema-reference-only": {
-        ".github/copilot-instructions.md": 2,
+        ".github/copilot-instructions.md": 6,
         ".cursor/rules/repository-instructions.mdc": 3,
         ".hermes.md": 3,
         "AGENTS.md": 3,
@@ -345,6 +350,27 @@ REFERENCE_ONLY_FORBIDDEN_ENTRY_POINT_TOKENS = {
         "schemas/README.md",
     ),
 }
+ISSUE_694_PARTIAL_PROTECTED_DOC_MODULES = {
+    "baseline",
+    "agent-instructions",
+    "github-platform",
+    "github-actions",
+    "github-templates",
+    "template-sync-support",
+    "markdown",
+    "powershell",
+}
+ISSUE_694_PROTECTED_DOC_PATHS = (
+    ".github/copilot-instructions.md",
+    ".github/instructions/docs.instructions.md",
+    ".github/instructions/gitattributes.instructions.md",
+    ".github/instructions/powershell.instructions.md",
+    ".cursor/rules/repository-instructions.mdc",
+    ".hermes.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+)
 PROTECTED_PROTOCOL_HEADINGS_AFTER_REFERENCE_STRIP = {
     "AGENTS.md": (
         "## GitHub Plugin Usage",
@@ -414,6 +440,22 @@ def _load_validate_marker_module() -> Any:
 
 
 VALIDATE_MARKER = _load_validate_marker_module()
+
+
+def _load_excluded_module_reporter_module() -> Any:
+    """Import the excluded-module reporter script as a module for helper tests."""
+    spec = importlib.util.spec_from_file_location(
+        "template_sync_report_excluded_module_references",
+        REPORT_EXCLUDED_MODULE_REFERENCES_PATH,
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+EXCLUDED_MODULE_REPORTER = _load_excluded_module_reporter_module()
 
 
 def _load_manifest() -> dict[str, Any]:
@@ -948,6 +990,27 @@ def _strip_reference_only_blocks_for_modules(
         assert stripped_text != text, f"{relative_path}: {marker_name} did not strip"
         text = stripped_text
     return text
+
+
+def _strip_inline_blocks_for_modules(relative_path: str, included_modules: set[str]) -> str:
+    """Return file text after applying all inline-block module semantics."""
+    return remove_inline_blocks_for_modules(
+        (REPO_ROOT / relative_path).read_text(encoding="utf-8"),
+        included_modules,
+        relative_path=relative_path,
+    )
+
+
+def _excluded_module_report_state(included_modules: set[str]) -> Any:
+    """Return reporter state for an explicit in-memory module selection."""
+    return EXCLUDED_MODULE_REPORTER.build_state(
+        repo_root=REPO_ROOT,
+        marker_path=REPO_ROOT / ".template-sync" / "marker.yml",
+        marker_schema_path=MARKER_SCHEMA_PATH,
+        manifest_path=MANIFEST_PATH,
+        manifest_schema_path=MANIFEST_SCHEMA_PATH,
+        explicit_included_modules=sorted(included_modules),
+    )
 
 
 def _strip_terraform_only_inline_blocks(relative_path: str) -> str:
@@ -2225,6 +2288,58 @@ def test_reference_only_pruning_preserves_platform_protocol_headings() -> None:
         stripped_text = _strip_reference_only_blocks_for_modules(relative_path, included_modules)
         for required_heading in required_headings:
             assert required_heading in stripped_text, f"{relative_path}: {required_heading}"
+
+
+def test_partial_reference_stripping_leaves_protected_docs_clean() -> None:
+    """Partial adoption must leave retained protected docs free of excluded references."""
+    included_modules = ISSUE_694_PARTIAL_PROTECTED_DOC_MODULES
+    state = _excluded_module_report_state(included_modules)
+    failures: list[str] = []
+
+    for relative_path in ISSUE_694_PROTECTED_DOC_PATHS:
+        stripped_text = _strip_inline_blocks_for_modules(relative_path, included_modules)
+        findings = EXCLUDED_MODULE_REPORTER.protected_document_prose_reference_findings_for_text(
+            relative_path,
+            stripped_text,
+            state,
+        )
+        failures.extend(finding.render() for finding in findings)
+
+    assert not failures, (
+        "Retained protected instruction files must not contain live references "
+        "to excluded module-owned paths, hooks, tool inputs, or validation commands "
+        "after reference-only stripping:\n" + "\n".join(failures)
+    )
+
+
+def test_partial_reference_stripping_preserves_retained_instruction_contracts() -> None:
+    """Retained instruction-contract anchors must survive reference-only stripping."""
+    contracts_document = yaml.safe_load(INSTRUCTION_CONTRACTS_PATH.read_text(encoding="utf-8"))
+    assert isinstance(contracts_document, dict), "instruction contracts root must be a mapping"
+    contracts = contracts_document.get("instruction_contracts")
+    assert isinstance(contracts, list), "instruction_contracts must be a list"
+    checked_contracts = 0
+
+    for contract in contracts:
+        assert isinstance(contract, dict), "each instruction contract must be a mapping"
+        required_modules = contract.get("requires_modules")
+        assert isinstance(required_modules, list), "requires_modules must be a list"
+        if not set(required_modules).issubset(ISSUE_694_PARTIAL_PROTECTED_DOC_MODULES):
+            continue
+        relative_path = contract.get("path")
+        assert isinstance(relative_path, str), "contract path must be a string"
+        stripped_text = _strip_inline_blocks_for_modules(
+            relative_path,
+            ISSUE_694_PARTIAL_PROTECTED_DOC_MODULES,
+        )
+        checked_contracts += 1
+
+        for heading in contract.get("required_headings", []):
+            assert heading in stripped_text, f"{relative_path}: missing heading {heading}"
+        for phrase in contract.get("required_phrases", []):
+            assert phrase in stripped_text, f"{relative_path}: missing phrase {phrase}"
+
+    assert checked_contracts > 0, "at least one retained instruction contract must be checked"
 
 
 def test_aggregate_precommit_workflow_is_not_python_scoped() -> None:

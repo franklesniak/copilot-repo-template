@@ -7,13 +7,13 @@ description: "Rules for .gitattributes entries, including line-ending pinning fo
 
 # `.gitattributes` Rules
 
-**Version:** 1.2.20260527.0
+**Version:** 1.2.20260609.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-27
+- **Last Updated:** 2026-06-09
 - **Scope:** Applies to any `.gitattributes` file in repositories that adopt these instructions, independent of programming language. Governs how committed text artifacts, linter-enforced LF file families, and template-managed text formats are protected against platform-dependent checkout rewriting.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -54,7 +54,7 @@ A blanket rule such as `* text=auto` **MUST NOT** be treated as a substitute for
 
 Any committed text file family whose repository-enforced linter or validator requires LF line endings **MUST** be pinned to LF line endings in `.gitattributes` using a pattern as specific as practical to the affected file family. The rule applies even when the file's semantic consumer parses line endings equivalently, because the linter or validator has made the working-tree newline style part of the repository contract.
 
-**Example:** This template configures `yamllint` through `.yamllint.yml`, and the default `new-lines: type: unix` rule rejects CRLF YAML files. Therefore the template pins all YAML files to LF:
+**Example:** If a retained YAML style validator rejects CRLF YAML files through a `new-lines: type: unix` rule, the affected repository should pin YAML files to LF:
 
 ```gitattributes
 *.yml  text eol=lf
@@ -133,7 +133,7 @@ The Git-layer rule defined here is necessary but not sufficient for byte-exact s
 - Tools that **compare** fixtures **SHOULD** read bytes in a mode that does not perform its own newline translation (for example, binary mode) when the comparison is byte-exact.
 - Hashing and signing tools **SHOULD** operate on raw bytes and **MUST NOT** depend on on-disk text normalization.
 
-These language-specific concerns are out of scope for this instructions file; they are addressed in the relevant language instructions (for example, `python.instructions.md`, `powershell.instructions.md`). The Git-layer rule and the producer/consumer rules are complementary: each alone is insufficient, and both are needed for stable byte-exact artifacts across platforms.
+These language-specific concerns are out of scope for this instructions file; they are addressed in the relevant language instructions that a repository retains. The Git-layer rule and the producer/consumer rules are complementary: each alone is insufficient, and both are needed for stable byte-exact artifacts across platforms.
 
 ## Rationale
 
@@ -141,6 +141,6 @@ Git's end-of-line handling is configurable per host. On Windows, the common defa
 
 Per-path `eol=lf` pinning in `.gitattributes` is the durable Git-layer fix because it overrides `core.autocrlf` and any other host-level configuration for the specified paths. Producer-side normalization alone is insufficient: even if a generator writes LF bytes and a comparator reads in binary mode, a Windows checkout with `core.autocrlf=true` will still present CRLF bytes on disk, and any tool that reads the on-disk file (including hashing pipelines that are not explicitly reading in binary mode) will observe the rewritten bytes. Pinning the path to `eol=lf` is what guarantees that the bytes written to the working tree match the bytes stored in the repository, independent of host configuration.
 
-The same Git-layer guarantee is required when a repository-enforced linter or validator makes LF line endings part of the contract. YAML in this template is the worked example: `yamllint` rejects CRLF YAML through the `new-lines` rule, so leaving YAML subject to host checkout conversion makes standard validation fail on Windows even though the parsed YAML data is unchanged. Pinning `*.yml` and `*.yaml` to `eol=lf` aligns the working tree with the configured validation contract.
+The same Git-layer guarantee is required when a repository-enforced linter or validator makes LF line endings part of the contract. YAML style validation is a common example: when a retained validator rejects CRLF YAML through a `new-lines` rule, leaving YAML subject to host checkout conversion makes standard validation fail on Windows even though the parsed YAML data is unchanged. Pinning `*.yml` and `*.yaml` to `eol=lf` aligns the working tree with the configured validation contract.
 
 Template-managed text formats have a third, weaker but still durable rationale: CRLF-churn prevention. Markdown, Cursor MDC, PowerShell, JSON, JSONC, TOML, JavaScript (`*.js`), JavaScript module (`*.mjs`), and Python files are frequently touched during downstream adoption and stack pruning. Allowing host-specific checkout conversion for those file families creates large non-semantic diffs and can obscure the intended template change. LF pinning keeps adoption review focused on content while leaving binary safety to the explicit `binary` overrides.

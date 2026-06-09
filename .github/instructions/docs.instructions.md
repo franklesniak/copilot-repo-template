@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.6.20260606.1
+**Version:** 1.6.20260609.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-06
+- **Last Updated:** 2026-06-09
 - **Scope:** Defines documentation standards for Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) files in this repository, including specs, design docs, runbooks, ADRs, instruction files, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -179,7 +179,7 @@ Where a claim rests on a local check, describe the check generically and reprodu
 
 When a bullet item includes a fenced code block followed by continuation prose that should render as part of the same bullet, the fence **and** the continuation prose **MUST** both be indented to the column after the bullet marker. For this repository's unordered `-` bullets, that is 2 spaces after the marker (markdownlint's MD007 default, which is not overridden in `.markdownlint.jsonc`). Within this pattern, blank lines between the bullet text, fence, and continuation prose **SHOULD** remain truly blank. Mixing an unindented fence with an indented continuation paragraph **MUST NOT** occur, because CommonMark-style renderers can end the list item at the unindented fence and then treat the continuation paragraph as a disconnected block.
 
-When no continuation prose follows the fence before the next sibling bullet or section, a fenced code block that is intended as a standalone example associated with the preceding bullet **MAY** be left at 0 indent. This preserves the existing repository convention used in places such as the `JSONDecodeError` example in `.github/instructions/python.instructions.md` under `Error Handling`. To make the fence render as part of the bullet item, use the 2-space-indented pattern (per the MUST rule above).
+When no continuation prose follows the fence before the next sibling bullet or section, a fenced code block that is intended as a standalone example associated with the preceding bullet **MAY** be left at 0 indent. This preserves the existing repository convention used in standalone style-guide examples. To make the fence render as part of the bullet item, use the 2-space-indented pattern (per the MUST rule above).
 
 MUST-compliant example:
 
@@ -235,7 +235,7 @@ For the issue-form `value:` and PR-template cases, relative forms are additional
 - Use `blob/HEAD` rather than `blob/main` so the URL works regardless of the repository's default branch name.
 - This rule applies only to the files listed above. Tree-rendered Markdown such as `README.md`, `CONTRIBUTING.md`, and files under `docs/**` continue to follow the default "prefer relative links" guidance.
 - The literal `https://github.com/OWNER/REPO/...` example URL is permitted to appear in didactic prose inside style-guide and design-decision files (`.github/instructions/**`, `.github/copilot-instructions.md`, and the template design-decision document under `.github/`); section [6] of `.github/workflows/check-placeholders.yml` skips those files specifically so that adopters are not forced to edit instructional/historical prose to satisfy placeholder CI. Section [6] also skips the workflow file itself (`.github/workflows/check-placeholders.yml`) to avoid self-referential matches against the literal URL embedded in its own grep patterns. The recursive scan in section [6] only enumerates `*.md`, `*.yml`, and `*.yaml` files (`find .github -type f \( -name "*.yml" -o -name "*.yaml" -o -name "*.md" \)`); other file types under `.github/` (for example, `.github/CODEOWNERS` or scripts) are not scanned by section [6] and are covered, where applicable, by other dedicated phases of the workflow rather than the recursive URL scan. Any other Markdown or YAML file under `.github/` (i.e., not `.github/instructions/**`, not `.github/copilot-instructions.md`, not the template design-decision document under `.github/`, and not `.github/workflows/check-placeholders.yml`) that contains the literal `https://github.com/OWNER/REPO` substring outside a single-line HTML comment (in Markdown) or a YAML comment line (in YAML) is treated as a live template placeholder and **MUST** be customized by adopters. (Section [6] of the placeholder workflow filters single-line HTML comments in Markdown and YAML comment lines in YAML before matching, so a single-line HTML comment such as `<!-- https://github.com/OWNER/REPO/... -->` will not by itself cause CI to fail; authors **SHOULD NOT** rely on that filter to ship live template URLs disguised as comments.)
-- The rule for issue-form YAML files (`.github/ISSUE_TEMPLATE/*.yml`) is mirrored in [`.github/instructions/yaml.instructions.md`](./yaml.instructions.md) so that contributors editing those YAML files receive the same guidance. The two instruction files are intentionally self-contained: each may be removed independently in downstream repositories that do not need it, and each restates the rule rather than relying on the other.
+- Retained issue-form YAML guidance SHOULD restate this rule rather than relying on this Markdown guide, so downstream repositories may remove either style guide independently without losing the guidance for retained file types.
 
 #### Adopter-substitution `OWNER/REPO` placeholders in Markdown documentation
 
@@ -250,7 +250,7 @@ This is a placeholder-convention rule only. It does not require converting norma
 **Scope clarifications:**
 
 - Didactic example text inside style-guide and design-decision files (`.github/instructions/**`, `.github/copilot-instructions.md`, and the template design-decision document under `.github/`) **MAY** use alternative placeholder forms when describing the convention rather than creating a live substitution target.
-- Generic GitHub Actions references in `uses:` lines and the adjacent navigation-aid comments under `.github/workflows/` (covered by [`.github/instructions/yaml.instructions.md`](./yaml.instructions.md)) use `<owner>/<repo>` as a metasyntactic placeholder for arbitrary upstream action repositories (e.g., `actions/checkout`) and are **not** template-adopter substitutions; they are unaffected by this rule.
+- Generic GitHub Actions references in `uses:` lines and the adjacent navigation-aid comments under `.github/workflows/` use `<owner>/<repo>` as a metasyntactic placeholder for arbitrary upstream action repositories (e.g., `actions/checkout`) and are **not** template-adopter substitutions; they are unaffected by this rule.
 - Illustrative post-substitution examples in adoption-guide prose, such as `your-org/your-repo`, `your-username/your-repo`, or `YOUR-USERNAME/your-repo-name`, are values a reader might type **after** substitution and are not live unresolved template placeholders; they are unaffected by this rule.
 
 #### Template-substitution marker boundaries and replacement surfaces

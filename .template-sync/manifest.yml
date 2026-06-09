@@ -78,9 +78,11 @@ template_manifest:
         - agent-instructions
       notes: >-
         Contains Markdown-safe *-reference-only inline blocks for optional stack
-        references in protected canonical guidance. Remove each delimited
-        reference-only block when its module is excluded while preserving
-        required shared protocol text.
+        references in protected canonical guidance, including optional
+        instruction-file rows, lint/test command examples, module-owned
+        validator prose, and workflow tool-version examples. Remove each
+        delimited reference-only block when its module is excluded while
+        preserving required shared protocol text.
     - pattern: '.github/instructions/docs.instructions.md'
       requires_all:
         - markdown

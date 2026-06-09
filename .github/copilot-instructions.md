@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.5.20260527.0
+**Version:** 1.5.20260609.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-27
+- **Last Updated:** 2026-06-09
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
@@ -103,17 +103,30 @@ Pre-commit hooks are NOT optional. They enforce:
 In addition to formatting, linting, trailing-whitespace, and end-of-file fixes, pre-commit also enforces validation for structured data files. Run `pre-commit run --all-files` to execute the full hook set. The data-file checks currently include:
 
 - `check-json` — validates strict `.json` syntax. **Note:** `check-json` does **not** validate `.jsonc`; JSONC (JSON with comments) is allowed only when supported by the consuming tool, and stricter enforcement requires JSONC-aware tooling.
-- `check-yaml` — parse-checks `.yml` / `.yaml` files.
+- `check-yaml` — parse-checks retained `.yml` / `.yaml` files.
+<!-- template-sync: begin yaml-reference-only -->
 - `yamllint` — enforces YAML style per `.yamllint.yml`.
+<!-- template-sync: end yaml-reference-only -->
 - `actionlint` — lints GitHub Actions workflow files.
-- `check-jsonschema` — JSON Schema validation. Validates: (a) the worked-example schema's valid example data under `schemas/examples/example-config/valid/` against `schemas/example-config.schema.json`; (b) selected real load-bearing repository configuration files (for example, `.github/dependabot.yml`) against built-in vendor schemas shipped with `check-jsonschema`; and (c) any future project-owned schema-backed file families that downstream maintainers wire up in `.pre-commit-config.yaml`. Documented optional keys for default-validated vendor configuration files must stay within the surface accepted by the pinned built-in schema, or the hook must be moved to an opt-in path.
-- `check-metaschema` — self-validates project-owned schemas (currently `schemas/example-config.schema.json`) against their declared JSON Schema metaschema, where configured in `.pre-commit-config.yaml`.
+- `check-jsonschema` — JSON Schema validation for retained schema-backed configuration. It validates selected real load-bearing repository configuration files (for example, `.github/dependabot.yml`) against built-in vendor schemas shipped with `check-jsonschema`, retained template-sync schemas, and any future retained schema-backed file families that downstream maintainers wire up in `.pre-commit-config.yaml`. Documented optional keys for default-validated vendor configuration files must stay within the surface accepted by the pinned built-in schema, or the hook must be moved to an opt-in path.
+- `check-metaschema` — self-validates retained project-owned schemas against their declared JSON Schema metaschema, where configured in `.pre-commit-config.yaml`.
+
+<!-- template-sync: begin schema-reference-only -->
+- Worked-example schema validation uses `check-jsonschema` for valid example data under `schemas/examples/example-config/valid/` against `schemas/example-config.schema.json`, and uses `check-metaschema` to self-validate `schemas/example-config.schema.json`.
+<!-- template-sync: end schema-reference-only -->
 
 `.pre-commit-config.yaml` is the authoritative list of active hooks. Do **not** rely on a hardcoded total hook count when describing the validation model; consult `.pre-commit-config.yaml` directly to see which hooks are wired up. For the policy and rationale behind which real load-bearing configuration files receive built-in schema validation, see the **Built-in Schema Validation for Real Load-Bearing Configuration Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md).
 
 Prettier is **opt-in** and is **not** part of the default data-file toolchain. (This framing has been re-verified against the built-in schema validation ADR and remains correct.)
 
-> **Schema example tests.** The contract that valid example fixtures pass and invalid example fixtures fail is exercised by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py). Run `pytest tests/test_schema_examples.py -v` after any schema or schema-example change. The dedicated [`.github/workflows/data-ci.yml`](workflows/data-ci.yml) workflow re-runs the data-file hooks (`check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, `check-metaschema`) so JSON/YAML/Actions enforcement can be made a required check via branch protection independent of the Python CI job. See [`schemas/README.md`](../schemas/README.md) for the worked example, the canonical downstream removal checklist, and future-work candidates. Downstream repositories MAY add additional `check-jsonschema` hook entries for their own schema-backed file families.
+The dedicated [`.github/workflows/data-ci.yml`](workflows/data-ci.yml) workflow re-runs the retained data-file hooks (`check-json`, `check-yaml`, `actionlint`, `check-jsonschema`, `check-metaschema`) so retained data-file enforcement can be required via branch protection independent of language-specific CI jobs.
+
+<!-- template-sync: begin yaml-reference-only -->
+When YAML style validation is retained, the dedicated data-file workflow also re-runs `yamllint`.
+<!-- template-sync: end yaml-reference-only -->
+
+<!-- template-sync: begin schema-reference-only -->
+> **Schema example tests.** The contract that valid example fixtures pass and invalid example fixtures fail is exercised by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py). Run `pytest tests/test_schema_examples.py -v` after any schema or schema-example change. See [`schemas/README.md`](../schemas/README.md) for the worked example, the canonical downstream removal checklist, and future-work candidates. Downstream repositories MAY add additional `check-jsonschema` hook entries for their own schema-backed file families.
 >
 > **When schema contracts change**, agents updating any schema **MUST** keep the following in sync in the same change:
 >
@@ -124,6 +137,7 @@ Prettier is **opt-in** and is **not** part of the default data-file toolchain. (
 > - `.github/workflows/data-ci.yml` only when **adding or removing a hook ID** (for example, introducing a new `check-yaml-custom` hook), or when adding, removing, or renaming an explicit CI step or hook alias that the workflow invokes by name. Changes to an **existing** hook's `files:` regex (including `check-jsonschema` scope changes) are picked up automatically, because each `data-ci.yml` step invokes hooks by ID via `pre-commit run <hook-id> --all-files`.
 > - The **Built-in Schema Validation for Real Load-Bearing Configuration Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md) when **adding or removing** a default validated real load-bearing configuration file (for example, when wiring or unwiring a new built-in vendor schema).
 > - Any documentation that references the schema or the validation policy (for example, `schemas/README.md`, `README.md`, `CONTRIBUTING.md`, and `OPTIONAL_CONFIGURATIONS.md`).
+<!-- template-sync: end schema-reference-only -->
 
 ### For GitHub Copilot Coding Agent (Automated PRs)
 
@@ -172,15 +186,15 @@ For the rationale, see the **Workflow Version Pinning and Dependabot Coherence**
 
 ### Action versions in `uses:` references
 
-- Third-party action versions **MUST** remain directly visible in `uses:` references (for example, `actions/checkout@v6`, `hashicorp/setup-terraform@v4`) so Dependabot's `github-actions` ecosystem can update them.
+- Third-party action versions **MUST** remain directly visible in `uses:` references (for example, `actions/checkout@v6`, `actions/setup-node@v6`) so Dependabot's `github-actions` ecosystem can update them.
 - Repeated `uses:` references to the same action across jobs and steps are acceptable when each occurrence is a normal Dependabot-managed `uses:` reference. Dependabot updates each `uses:` line directly.
 - Do **NOT** store an action version in a workflow-level `env:` variable, comment, cache key, file path, shell literal, manually constructed image tag, or any other secondary location as a mirror of a `uses:` version. The `uses:` line **MUST** be the only authoritative source for the action version because Dependabot rewrites `uses:` references and will leave unrelated literals stale.
 - Do **NOT** copy a Dependabot-managed action version into secondary workflow locations that Dependabot will not reliably rewrite (for example, cache keys, file paths, shell commands, manually constructed image tags, or comments presented as authoritative version state).
-- If secondary workflow behavior needs to change when a `uses:` version changes, derive that behavior from a stable source that naturally changes with the workflow or tool configuration. Prefer cache keys scoped to the specific configuration file that governs the cached artifact — for example, `hashFiles('.pre-commit-config.yaml')` for pre-commit caches, `hashFiles('.tflint.hcl')` for TFLint plugin caches, or `hashFiles('**/.terraform.lock.hcl')` for Terraform provider caches, mirroring the pattern already used in this repository's workflows. Avoid broad wildcard patterns such as `hashFiles('.github/workflows/*.yml')` for cache keys: any unrelated workflow edit would invalidate every job's cache. The goal is to track the configuration that actually drives the cached content, not the workflow definition that consumes it.
+- If secondary workflow behavior needs to change when a `uses:` version changes, derive that behavior from a stable source that naturally changes with the workflow or tool configuration. Prefer cache keys scoped to the specific configuration file that governs the cached artifact — for example, `hashFiles('.pre-commit-config.yaml')` for pre-commit caches or `hashFiles('package-lock.json')` for Node dependency caches, mirroring the pattern already used in this repository's workflows. Avoid broad wildcard patterns such as `hashFiles('.github/workflows/*.yml')` for cache keys: any unrelated workflow edit would invalidate every job's cache. The goal is to track the configuration that actually drives the cached content, not the workflow definition that consumes it.
 
 ### Tool versions passed as action inputs or shell arguments
 
-Tool versions that are not managed by Dependabot — for example, `terraform_version: "1.14.4"` passed to `hashicorp/setup-terraform@v4`, or `tflint_version: v0.51.1` passed to `terraform-linters/setup-tflint@v6` — **SHOULD** still avoid unnecessary duplication. If the same tool version is required in multiple workflow jobs or steps, prefer a single source of truth where GitHub Actions supports one, such as a workflow-level `env:` value for the CLI/tool version.
+Tool versions that are not managed by Dependabot — for example, `node-version: "20"` passed to `actions/setup-node@v6` — **SHOULD** still avoid unnecessary duplication. If the same tool version is required in multiple workflow jobs or steps, prefer a single source of truth where GitHub Actions supports one, such as a workflow-level `env:` value for the CLI/tool version.
 
 ### Asymmetry: workflow-level `env:` for action versions vs. tool versions
 
@@ -193,8 +207,8 @@ The two categories are **not** symmetric, and the difference is the entire point
 
 Action wrapper versions and the tool versions they install are **separate pins** that travel through different channels:
 
-- `hashicorp/setup-terraform@v4` is the setup action version (managed by Dependabot via `uses:`).
-- `terraform_version: "1.14.4"` is the Terraform CLI version installed by that setup action (not managed by Dependabot; manually maintained).
+- `actions/setup-node@v6` is the setup action version (managed by Dependabot via `uses:`).
+- `node-version: "20"` is the Node.js version installed by that setup action (not managed by Dependabot; manually maintained).
 
 Both pins exist in the same workflow step, but they update on different cadences and through different mechanisms. Do not conflate them.
 
@@ -205,8 +219,7 @@ If a Dependabot-managed dependency genuinely cannot be represented only through 
 ### Concrete examples in this repository
 
 - Pinned action majors such as `actions/checkout@v6`, `actions/setup-python@v6`, `actions/cache@v5`, and `actions/setup-node@v6` appear repeatedly in workflow `uses:` lines. These are acceptable because each occurrence is a normal Dependabot-managed `uses:` reference.
-- `terraform_version: "1.14.4"` appears in multiple jobs in [`.github/workflows/terraform-ci.yml`](workflows/terraform-ci.yml). This is a Terraform CLI version (not the `hashicorp/setup-terraform` action version), so it is **not** a Dependabot `uses:` desynchronization case. It is a useful candidate for a future single source of truth (such as a workflow-level `env:` value) if duplication grows; refactoring existing workflows to that shape is out of scope for this rule.
-- `tflint_version: v0.51.1` is passed to `terraform-linters/setup-tflint@v6`. This is a tool-version pin distinct from the setup action version; the same dual-pin model applies.
+- `node-version: "20"` is passed to `actions/setup-node@v6` in [`.github/workflows/markdownlint.yml`](workflows/markdownlint.yml). This is a Node.js version (not the `actions/setup-node` action version), so it is **not** a Dependabot `uses:` desynchronization case. It is a useful candidate for a future single source of truth (such as a workflow-level `env:` value) if duplication grows; refactoring existing workflows to that shape is out of scope for this rule.
 
 ## Repository Self-Containment
 
@@ -248,7 +261,10 @@ For each PR-sized change:
 - Add/adjust tests for new behavior.
   - Python: pytest tests in `tests/`
   - PowerShell: Pester tests in `tests/PowerShell/`
-- For data-file changes (JSON, JSONC, YAML, YAML-based GitHub Actions workflows), run the applicable validation hooks via `pre-commit run --all-files` so that `check-json`, `check-yaml`, `yamllint`, `actionlint`, and (where configured) `check-jsonschema` all pass before committing.
+- For data-file changes, run the applicable validation hooks via `pre-commit run --all-files` so that retained checks such as `check-json`, `check-yaml`, `actionlint`, and configured `check-jsonschema` / `check-metaschema` hooks pass before committing.
+  <!-- template-sync: begin yaml-reference-only -->
+  - When YAML style validation is retained, `yamllint` must also pass.
+  <!-- template-sync: end yaml-reference-only -->
 - Keep changes small and reviewable; avoid "big bang" refactors.
 - Update docs/spec only if behavior is intentionally changed (and note why).
 - Ensure:
@@ -270,26 +286,35 @@ For each PR-sized change:
 
 This repository uses modular instruction files covering both language-specific standards and cross-cutting repository rules:
 
-| Scope | Instruction File | Applies To |
-| --- | --- | --- |
-| Git attributes | `.github/instructions/gitattributes.instructions.md` | `**/.gitattributes` |
-| JSON | `.github/instructions/json.instructions.md` | `**/*.json`, `**/*.jsonc` |
-| Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md`, `**/*.mdc` |
-| PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` |
-| Python | `.github/instructions/python.instructions.md` | `**/*.py` |
-| Terraform | `.github/instructions/terraform.instructions.md` | `**/*.tf`, `**/*.tfvars`, `**/*.tftest.hcl`, `**/*.tf.json`, `**/*.tftpl`, `**/*.tfbackend` |
-| YAML | `.github/instructions/yaml.instructions.md` | `**/*.yml`, `**/*.yaml` |
+- Git attributes: `.github/instructions/gitattributes.instructions.md` applies to `**/.gitattributes`.
+<!-- template-sync: begin json-reference-only -->
+- JSON: `.github/instructions/json.instructions.md` applies to `**/*.json` and `**/*.jsonc`.
+<!-- template-sync: end json-reference-only -->
+- Markdown/Docs: `.github/instructions/docs.instructions.md` applies to `**/*.md` and `**/*.mdc`.
+- PowerShell: `.github/instructions/powershell.instructions.md` applies to `**/*.ps1`.
+<!-- template-sync: begin python-reference-only -->
+- Python: `.github/instructions/python.instructions.md` applies to `**/*.py`.
+<!-- template-sync: end python-reference-only -->
+<!-- template-sync: begin terraform-reference-only -->
+- Terraform: `.github/instructions/terraform.instructions.md` applies to `**/*.tf`, `**/*.tfvars`, `**/*.tftest.hcl`, `**/*.tf.json`, `**/*.tftpl`, and `**/*.tfbackend`.
+<!-- template-sync: end terraform-reference-only -->
+<!-- template-sync: begin yaml-reference-only -->
+- YAML: `.github/instructions/yaml.instructions.md` applies to `**/*.yml` and `**/*.yaml`.
+<!-- template-sync: end yaml-reference-only -->
 
-**Note:** The PowerShell instructions include comprehensive guidance on Pester testing. The Terraform instructions include comprehensive guidance on Terraform Test framework.
+**Note:** The PowerShell instructions include comprehensive guidance on Pester testing.
+<!-- template-sync: begin terraform-reference-only -->
+The Terraform instructions include comprehensive guidance on the Terraform test framework.
+<!-- template-sync: end terraform-reference-only -->
 
 **To customize for your project:**
 
 - Remove instruction files for scopes you don't use
 - Add new instruction files for additional languages or cross-cutting rules as needed
-- Update this table to reflect the instruction files present in your project
+- Update this list to reflect the instruction files present in your project
 
 <!-- template-sync: begin terraform-reference-only -->
-> **Terraform note:** If your project does not use Terraform, remove the Terraform instruction file (`.github/instructions/terraform.instructions.md`), remove the Terraform row from the table above, and remove Terraform-related entries from the Linting and Validation Configurations and Testing Tools sections below.
+> **Terraform note:** If your project does not use Terraform, remove the Terraform instruction file (`.github/instructions/terraform.instructions.md`), remove the Terraform bullet from the instruction list above, and remove Terraform-related entries from the Linting and Validation Configurations and Testing Tools sections below.
 <!-- template-sync: end terraform-reference-only -->
 
 ## Agent Instruction Files
@@ -317,15 +342,20 @@ When explicitly authorized to modify high-priority shared guidance in `.github/c
 
 ## Linting and Validation Configurations
 
-This repository includes linting and validation tool configurations that align with the coding standards. The table below covers both linter configuration files and schema-validation contracts; `schemas/` is a schema-contract directory consumed by validation tooling, not a linter configuration file.
+This repository includes linting and validation tool configurations that align with the coding standards. The active files include:
 
-| Tool / Validator | Configuration / Contract | Purpose |
-| --- | --- | --- |
-| PSScriptAnalyzer | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell formatting/linting (OTBS style) |
-| markdownlint | `.markdownlint.jsonc` | Markdown linting |
-| TFLint | `.tflint.hcl` | Terraform linting |
-| yamllint | `.yamllint.yml` | YAML style enforcement |
-| JSON Schema / `check-jsonschema` | `schemas/`, `.pre-commit-config.yaml`, and `tests/test_dependabot_schema.py` | Schema-driven validation: project-owned schemas under `schemas/` (the worked example today; future schema-backed file families) plus built-in vendor-schema checks of selected real load-bearing JSON/YAML config files (for example, `.github/dependabot.yml`) wired in `.pre-commit-config.yaml`; the Dependabot optional auto-assignment fixture guards the documented default-validated surface |
+- PSScriptAnalyzer: `.github/linting/PSScriptAnalyzerSettings.psd1` for PowerShell formatting/linting (OTBS style).
+- markdownlint: `.markdownlint.jsonc` for Markdown linting.
+<!-- template-sync: begin terraform-reference-only -->
+- TFLint: `.tflint.hcl` for Terraform linting.
+<!-- template-sync: end terraform-reference-only -->
+<!-- template-sync: begin yaml-reference-only -->
+- yamllint: `.yamllint.yml` for YAML style enforcement.
+<!-- template-sync: end yaml-reference-only -->
+- JSON Schema / `check-jsonschema`: `.pre-commit-config.yaml` wires schema-driven validation for retained schema-backed configuration, including selected real load-bearing configuration files validated against built-in vendor schemas.
+<!-- template-sync: begin schema-reference-only -->
+- Worked-example JSON Schema validation covers example schemas and fixtures under `schemas/`, and `tests/test_dependabot_schema.py` guards the documented Dependabot optional auto-assignment surface.
+<!-- template-sync: end schema-reference-only -->
 
 ### Running Linters
 
@@ -396,14 +426,18 @@ Prettier is **opt-in** and is **not** part of the default data-file toolchain. T
 
 ## Testing Tools
 
-This repository includes testing infrastructure for Python, PowerShell, Terraform, and JSON Schema example fixtures:
+This repository includes retained testing infrastructure for the adopted language and validation contracts:
 
-| Language / Contract | Framework | Configuration | Test Location |
-| --- | --- | --- | --- |
-| Python | pytest | `pyproject.toml` (`[tool.pytest.ini_options]`) | `tests/` |
-| PowerShell | Pester 5.x | Inline in `.github/workflows/powershell-ci.yml` | `tests/PowerShell/` |
-| Terraform | Terraform Test (requires Terraform 1.6+) | Built-in | `modules/*/tests/` or `tests/` |
-| JSON Schema (Draft 2020-12) example fixtures | `check-jsonschema` + pytest | `schemas/` + `tests/test_schema_examples.py` | `schemas/examples/<name>/{valid,invalid}/` |
+<!-- template-sync: begin python-reference-only -->
+- Python: pytest, configured by `pyproject.toml` (`[tool.pytest.ini_options]`) and located under `tests/`.
+<!-- template-sync: end python-reference-only -->
+- PowerShell: Pester 5.x, configured inline in `.github/workflows/powershell-ci.yml` and located under `tests/PowerShell/`.
+<!-- template-sync: begin terraform-reference-only -->
+- Terraform: Terraform test framework, located under `modules/*/tests/` or `tests/`.
+<!-- template-sync: end terraform-reference-only -->
+<!-- template-sync: begin schema-reference-only -->
+- JSON Schema (Draft 2020-12) example fixtures: `check-jsonschema` plus pytest, using `schemas/` and `tests/test_schema_examples.py` with fixtures under `schemas/examples/<name>/{valid,invalid}/`.
+<!-- template-sync: end schema-reference-only -->
 
 ### Running Tests
 

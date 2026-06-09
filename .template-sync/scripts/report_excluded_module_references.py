@@ -80,6 +80,47 @@ GENERAL_VALIDATION_REFERENCES = {
         ".github/workflows/data-ci.yml": ("pre-commit run check-yaml --all-files",),
     },
 }
+PROTECTED_DOCUMENT_TOOLING_REFERENCES = {
+    "python": (
+        "pytest tests/ -v --cov --cov-report=term-missing",
+        "mypy src/ tests",
+        "Black (Python)",
+        "Ruff (Python)",
+    ),
+    "terraform": (
+        "terraform fmt -check -recursive",
+        "terraform test",
+        "tflint --recursive",
+        "terraform_version",
+        "tflint_version",
+        "terraform-fmt",
+        "terraform-validate",
+        "terraform-tflint",
+        "hashicorp/setup-terraform",
+        "terraform-linters/setup-tflint",
+        "TFLint",
+        "Terraform Test",
+    ),
+    "yaml": (
+        "pre-commit run yamllint --all-files",
+        "yamllint",
+    ),
+    "schema": (
+        "pytest tests/test_schema_examples.py -v",
+        "validate-example-config",
+        "worked-example schema",
+        "schema example fixtures",
+    ),
+}
+UPSTREAM_TEMPLATE_URL_RE = re.compile(
+    re.escape("https://github.com/franklesniak/copilot-repo-template/") + r"(?:blob|tree)/HEAD/\S+"
+)
+UPSTREAM_TEMPLATE_MARKDOWN_LINK_RE = re.compile(
+    r"\[[^\]\n]+\]\("
+    + re.escape("https://github.com/franklesniak/copilot-repo-template/")
+    + r"(?:blob|tree)/HEAD/[^)\s]+"
+    + r"\)"
+)
 
 CATEGORY_REQUIRED = "required_cleanup"
 CATEGORY_OPTIONAL_REFERENCE = "optional_reference_only_cleanup"
@@ -802,6 +843,165 @@ def reference_link_findings(repo_root: Path, state: ReportState) -> tuple[Findin
     return tuple(findings)
 
 
+def line_without_upstream_template_urls(line: str) -> str:
+    """Remove intentional upstream template URLs before local-reference scanning."""
+    without_links = UPSTREAM_TEMPLATE_MARKDOWN_LINK_RE.sub("", line)
+    return UPSTREAM_TEMPLATE_URL_RE.sub("", without_links)
+
+
+def lines_outside_inline_blocks(text: str) -> tuple[tuple[int, str], ...]:
+    """Return text lines outside template-sync inline blocks."""
+    lines: list[tuple[int, str]] = []
+    active_block_name: str | None = None
+
+    for line_number, line in enumerate(text.splitlines(), 1):
+        marker_match = INLINE_BLOCK_MARKER_RE.match(line)
+        if marker_match is not None:
+            marker_name = marker_match.group("name")
+            if marker_match.group("kind") == "begin" and active_block_name is None:
+                active_block_name = marker_name
+                continue
+            if marker_match.group("kind") == "end" and marker_name == active_block_name:
+                active_block_name = None
+                continue
+
+        if active_block_name is not None:
+            continue
+        lines.append((line_number, line))
+
+    return tuple(lines)
+
+
+def directory_is_excluded_module_owned(
+    directory: str,
+    module: str,
+    state: ReportState,
+) -> bool:
+    """Return whether every present path below ``directory`` is excluded-owned."""
+    child_paths = tuple(path for path in state.present_files if path.startswith(directory))
+    if not child_paths:
+        return False
+
+    module_has_child = False
+    for child_path in child_paths:
+        if is_locally_overridden(child_path, state.local_overrides):
+            return False
+        child_relation = selected_relation_for_path(child_path, state.mappings)
+        if child_relation is None or child_relation.is_retained_by(state.included_modules):
+            return False
+        missing_modules = missing_modules_for_relation(child_relation, state.included_modules)
+        module_has_child = module_has_child or module in missing_modules
+
+    return module_has_child
+
+
+def parent_directory_tokens(relative_path: str) -> tuple[str, ...]:
+    """Return parent directory tokens for a repository-relative path."""
+    parts = relative_path.split("/")[:-1]
+    return tuple(f"{'/'.join(parts[:index])}/" for index in range(1, len(parts) + 1))
+
+
+def excluded_path_reference_tokens(state: ReportState) -> tuple[tuple[str, str, str], ...]:
+    """Return module-owned local path tokens that should not survive exclusion."""
+    token_rows: dict[tuple[str, str], str] = {}
+
+    for relative_path in sorted(state.present_files):
+        if is_locally_overridden(relative_path, state.local_overrides):
+            continue
+        relation = selected_relation_for_path(relative_path, state.mappings)
+        if relation is None or relation.is_retained_by(state.included_modules):
+            continue
+        for module in missing_modules_for_relation(relation, state.included_modules):
+            token_rows.setdefault((module, relative_path), relative_path)
+            if relative_path.endswith(".schema.json"):
+                token_rows.setdefault(
+                    (module, relative_path.removesuffix(".schema.json")),
+                    relative_path,
+                )
+            for directory in parent_directory_tokens(relative_path):
+                if directory_is_excluded_module_owned(directory, module, state):
+                    token_rows.setdefault((module, directory), relative_path)
+                    token_rows.setdefault((module, directory.rstrip("/")), relative_path)
+
+    return tuple(
+        sorted(
+            (
+                (module, token, resolved_path)
+                for (module, token), resolved_path in token_rows.items()
+            ),
+            key=lambda row: (-len(row[1]), row[0], row[1], row[2]),
+        )
+    )
+
+
+def protected_document_prose_reference_findings_for_text(
+    relative_path: str,
+    text: str,
+    state: ReportState,
+) -> tuple[Finding, ...]:
+    """Return stale excluded-module prose references in protected instruction text."""
+    findings: list[Finding] = []
+    path_tokens = excluded_path_reference_tokens(state)
+
+    for line_number, line in lines_outside_inline_blocks(text):
+        searchable_line = line_without_upstream_template_urls(line)
+        for module, token, resolved_path in path_tokens:
+            if token not in searchable_line:
+                continue
+            findings.append(
+                Finding(
+                    rule_id="protected-document.prose-reference",
+                    category=finding_category_for_path(relative_path, CATEGORY_REQUIRED),
+                    module=module,
+                    path=relative_path,
+                    line_number=line_number,
+                    detail=f"{token} references excluded path {resolved_path}.",
+                )
+            )
+        for module, tokens in PROTECTED_DOCUMENT_TOOLING_REFERENCES.items():
+            if module not in state.excluded_modules:
+                continue
+            for token in tokens:
+                if token not in searchable_line:
+                    continue
+                findings.append(
+                    Finding(
+                        rule_id="protected-document.prose-reference",
+                        category=finding_category_for_path(relative_path, CATEGORY_REQUIRED),
+                        module=module,
+                        path=relative_path,
+                        line_number=line_number,
+                        detail=f"{token} documents excluded {module} tooling.",
+                    )
+                )
+
+    return tuple(findings)
+
+
+def protected_document_prose_reference_findings(
+    repo_root: Path,
+    state: ReportState,
+) -> tuple[Finding, ...]:
+    """Return stale prose-reference findings for retained protected documents."""
+    findings: list[Finding] = []
+    for relative_path in state.safe_files:
+        if not is_protected_instruction_path(relative_path):
+            continue
+        if is_locally_overridden(relative_path, state.local_overrides):
+            continue
+        relation = selected_relation_for_path(relative_path, state.mappings)
+        if relation is None or not relation.is_retained_by(state.included_modules):
+            continue
+        try:
+            text = resolve_repo_path(repo_root, relative_path).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        findings.extend(
+            protected_document_prose_reference_findings_for_text(relative_path, text, state)
+        )
+    return tuple(findings)
+
+
 def dependency_file_is_retained_or_present(
     dependency_path: str,
     state: ReportState,
@@ -982,6 +1182,7 @@ def build_report(repo_root: Path, state: ReportState) -> ExcludedModuleReport:
         *manifest_owned_path_findings(state),
         *inline_block_findings(repo_root, state),
         *reference_link_findings(repo_root, state),
+        *protected_document_prose_reference_findings(repo_root, state),
         *dependabot_findings(repo_root, state),
         *general_validation_reference_findings(repo_root, state),
         *marker_decision_findings(state),
