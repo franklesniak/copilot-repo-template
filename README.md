@@ -156,7 +156,7 @@ Optional module-owned surfaces include:
 
 ### Linting Tools
 
-This template organizes linting configurations in `.github/linting/` for PSScriptAnalyzer and in the repository root for Markdown tooling. Projects MAY reorganize retained configurations if they update the corresponding workflow and pre-commit references.
+This template organizes linting configurations in `.github/linting/` for PSScriptAnalyzer and in the repository root for Markdown tooling. Projects MAY reorganize retained configurations if they also update every reference to the moved paths so contributor guidance does not drift, including the corresponding workflow, pre-commit, and `.github/copilot-instructions.md` (plus any `.github/instructions/` files) references.
 
 #### Markdown Linting
 
