@@ -68,11 +68,13 @@ When you adopt the Python module, use a Python version that is currently in the 
 
 ### 3. Install Pre-commit
 
-Install `pre-commit` globally or through `pipx`:
+Install `pre-commit` globally using **one** of the following. With `pip`:
 
 ```bash
 pip install pre-commit
 ```
+
+Or, for isolated tooling, with `pipx`:
 
 ```bash
 pipx install pre-commit

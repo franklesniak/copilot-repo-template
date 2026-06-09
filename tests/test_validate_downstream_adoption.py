@@ -365,6 +365,32 @@ def test_excluded_inline_block_leftover_is_reported(tmp_path: Path) -> None:
     assert "python-only remains but requires excluded module(s): python" in result.stdout
 
 
+def test_or_group_inline_block_is_valid_when_any_member_module_retained(
+    tmp_path: Path,
+) -> None:
+    """An OR-retention (ANY) inline block is not flagged while any member is retained.
+
+    ``PARTIAL_MODULES`` excludes ``json`` but keeps ``yaml``, ``schema``, and
+    ``template-sync-support``, so the ``data-ci-reference-only`` OR-group block is
+    correctly retained. A naive AND check would flag it as requiring the excluded
+    ``json`` module.
+    """
+    _write_common_downstream_repo(
+        tmp_path,
+        readme_text=(
+            "# Downstream\n\n"
+            "<!-- template-sync: begin data-ci-reference-only -->\n"
+            "Data CI guidance.\n"
+            "<!-- template-sync: end data-ci-reference-only -->\n"
+        ),
+    )
+
+    result = _run_validator(tmp_path, "--require-marker")
+
+    assert result.returncode == 0, result.stdout
+    assert "data-ci-reference-only" not in result.stdout
+
+
 def test_retained_markdown_relative_link_to_excluded_module_is_reported(
     tmp_path: Path,
 ) -> None:

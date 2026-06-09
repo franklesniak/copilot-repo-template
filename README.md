@@ -34,7 +34,7 @@ This template includes:
 - **Multi-Agent Support:** Instruction files for Cursor Agent, Hermes Agent, Claude Code, OpenAI Codex CLI, and Gemini Code Assist.
 - **Modular Guidelines:** Instruction files for adopted language and file-type stacks.
 - **Linting Configurations:** Retained linting and link-checking configuration for Markdown and PowerShell.
-- **Data-File Validation:** Baseline hooks for `check-json`, `check-yaml`, and `actionlint`. Retained schema-backed modules (the schema and template-sync support modules) add `check-jsonschema` and `check-metaschema` for their JSON Schema contracts.
+- **Data-File Validation:** Baseline hooks for `check-json`, `check-yaml`, and `actionlint`. Retained modules add `check-jsonschema` (schema, template-sync support, or GitHub platform) and `check-metaschema` (schema or template-sync support) for their JSON Schema contracts.
 <!-- template-sync: begin yaml-reference-only -->
 - **YAML Style Validation:** `yamllint` configuration and CI wiring for repositories that adopt the YAML module.
 <!-- template-sync: end yaml-reference-only -->
