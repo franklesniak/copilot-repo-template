@@ -255,6 +255,7 @@ def _write_common_repo(
             "<!-- template-sync: begin python-reference-only -->\n"
             "Python validation command: `pytest tests/ -v`.\n"
             "<!-- template-sync: end python-reference-only -->\n"
+            "Terraform validation command: `terraform test`.\n"
         ),
     )
     _write_text(
@@ -409,6 +410,13 @@ def test_marker_excluding_optional_modules_reports_cleanup_scope(tmp_path: Path)
         line.startswith(
             "manifest.reference-only-note | documented_reference_only_retention | "
             "python | AGENTS.md:3 |"
+        )
+        for line in findings
+    )
+    assert any(
+        line.startswith(
+            "protected-document.prose-reference | protected_file_authorization_needed | "
+            "terraform | AGENTS.md:6 | terraform test documents excluded terraform tooling."
         )
         for line in findings
     )

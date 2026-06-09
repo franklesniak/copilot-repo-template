@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260609.1
+**Version:** 1.1.20260609.2
 
 ## Metadata
 
@@ -845,7 +845,7 @@ The numbered headings are always-retained steps, and the optional `{module}` ste
 
 The current `markdown-reference-only`, `powershell-reference-only`, `python-reference-only`, `terraform-reference-only`, `json-reference-only`, `yaml-reference-only`, and `schema-reference-only` inline blocks live in:
 
-- `.github/copilot-instructions.md` for removable optional-stack references in protected canonical guidance.
+- `.github/copilot-instructions.md` for removable optional-stack references in protected canonical guidance, including instruction-file rows, validation examples, module-owned validator prose, and workflow tool-version examples.
 - `.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` for removable optional-stack references in protected agent entry-point summaries.
 - `README.md` and `CONTRIBUTING.md` for removable optional-stack references in shared baseline contributor-facing documentation.
 
