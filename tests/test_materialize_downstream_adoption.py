@@ -588,11 +588,18 @@ def test_materialized_partial_adoption_strips_shared_baseline_doc_stale_referenc
     report_result = run_excluded_module_report(target_root, ISSUE_693_PARTIAL_DOC_MODULES)
 
     assert report_result.returncode == 0, report_result.stderr
+    matched_report_row = False
     for report_line in report_result.stdout.splitlines():
         if f"| {relative_path}" not in report_line:
             continue
+        matched_report_row = True
         assert "required_cleanup" not in report_line, report_line
         assert "markdown-link.excluded-target" not in report_line, report_line
+    assert matched_report_row, (
+        f"excluded-module report produced no row mentioning {relative_path}; "
+        "the report format may have changed, leaving the cleanup assertions "
+        "above vacuous"
+    )
 
 
 @pytest.mark.parametrize("template_sync_support_included", [False, True])
@@ -689,6 +696,52 @@ def test_materialized_contributing_data_ci_reference_block(
     else:
         assert "| Data CI |" not in generated_text
         assert ".github/workflows/data-ci.yml" not in generated_text
+
+
+def test_excluded_module_report_retains_or_group_block_without_cleanup(
+    tmp_path: Path,
+) -> None:
+    """An OR-group reference-only block retained via one member is not flagged for cleanup."""
+    target_root = tmp_path / "or-group-report"
+    target_root.mkdir()
+    included_modules = (*NO_DATA_NO_TEMPLATE_SYNC_MODULES, "template-sync-support")
+    module_args = [
+        argument
+        for module_name in included_modules
+        for argument in ("--included-module", module_name)
+    ]
+
+    result = run_materialize(
+        REPO_ROOT,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--last-reviewed-template-commit",
+        FULL_SHA,
+        "--repository",
+        "octocat/hello-world",
+        "--security-contact",
+        "security@example.com",
+        "--allow-conflicts",
+        *module_args,
+    )
+    assert result.returncode == 0, result.stderr
+
+    subprocess.run(
+        ["git", "init", "-q"],
+        cwd=target_root,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    report_result = run_excluded_module_report(target_root, included_modules)
+    assert report_result.returncode == 0, report_result.stderr
+    # data-ci.yml is materialized because template-sync-support is retained, so the
+    # OR-group data-ci-reference-only block must not surface anywhere in the report
+    # (neither a cleanup finding nor an excluded-module scope row) for the excluded
+    # json/yaml/schema members.
+    assert "data-ci-reference-only" not in report_result.stdout, report_result.stdout
 
 
 def test_materialized_no_python_adoption_prunes_dependabot_pip_ecosystem(
