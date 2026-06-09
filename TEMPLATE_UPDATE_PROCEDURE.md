@@ -783,7 +783,17 @@ The current `*-reference-only` marker forms are Markdown-safe HTML comments:
 <!-- template-sync: begin schema-reference-only -->
 ...
 <!-- template-sync: end schema-reference-only -->
+
+<!-- template-sync: begin template-sync-support-reference-only -->
+...
+<!-- template-sync: end template-sync-support-reference-only -->
+
+<!-- template-sync: begin data-ci-reference-only -->
+...
+<!-- template-sync: end data-ci-reference-only -->
 ```
+
+Most `*-reference-only` markers name a single module and use the same AND-retention strip semantics as the `*-only` family. The `data-ci-reference-only` marker is the exception: it names the OR-group `json`, `yaml`, `schema`, and `template-sync-support`, mirroring the `requires_any` relation of `.github/workflows/data-ci.yml`. It is retained when at least one of those modules is adopted and is stripped only when every one of them is excluded.
 
 These inline blocks let a downstream repository keep the containing baseline or cross-module file while removing toolchain assumptions for a module it did not adopt. During Step 6, after path mapping decides whether the containing file itself is in scope, apply these rules:
 
@@ -838,6 +848,14 @@ The current `markdown-reference-only`, `powershell-reference-only`, `python-refe
 - `.github/copilot-instructions.md` for removable optional-stack references in protected canonical guidance.
 - `.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` for removable optional-stack references in protected agent entry-point summaries.
 - `README.md` and `CONTRIBUTING.md` for removable optional-stack references in shared baseline contributor-facing documentation.
+
+The current `template-sync-support-reference-only` inline block lives in:
+
+- `README.md` for the optional `.template-sync/` and `schemas/template-sync-*.schema.json` surface rows, which are removed when `template-sync-support` is excluded.
+
+The current `data-ci-reference-only` inline block lives in:
+
+- `CONTRIBUTING.md` for the Data CI workflow row, which is retained when any of `json`, `yaml`, `schema`, or `template-sync-support` is adopted and removed only when all four are excluded.
 
 The current `python-only` inline block lives in:
 

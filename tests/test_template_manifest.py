@@ -265,7 +265,15 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "README.md": 4,
         "CONTRIBUTING.md": 2,
     },
+    "template-sync-support-reference-only": {
+        "README.md": 1,
+    },
+    "data-ci-reference-only": {
+        "CONTRIBUTING.md": 1,
+    },
 }
+# Single-module AND-retention reference-only markers. Each block is stripped when
+# its one named module is excluded.
 REFERENCE_ONLY_MARKER_MODULES = {
     "markdown-reference-only": "markdown",
     "powershell-reference-only": "powershell",
@@ -274,6 +282,13 @@ REFERENCE_ONLY_MARKER_MODULES = {
     "json-reference-only": "json",
     "yaml-reference-only": "yaml",
     "schema-reference-only": "schema",
+    "template-sync-support-reference-only": "template-sync-support",
+}
+# OR-retention (ANY) reference-only markers. Each block is retained when at least
+# one named module is included and stripped only when all of them are excluded;
+# this mirrors the manifest ``requires_any`` relation for the guarded file.
+ANY_REFERENCE_ONLY_MARKER_MODULES = {
+    "data-ci-reference-only": ("json", "yaml", "schema", "template-sync-support"),
 }
 PROTECTED_ENTRY_POINT_REFERENCE_PATHS = (
     ".cursor/rules/repository-instructions.mdc",
@@ -1687,6 +1702,7 @@ def test_template_sync_inline_markers_are_known_and_paired() -> None:
         "template-sync-support-only",
         "github-platform-only",
         *REFERENCE_ONLY_MARKER_MODULES,
+        *ANY_REFERENCE_ONLY_MARKER_MODULES,
     }
     inline_block_paths = sorted(
         {

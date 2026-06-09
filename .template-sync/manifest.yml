@@ -430,8 +430,10 @@ template_manifest:
         - baseline
       notes: >-
         Contains Markdown-safe *-reference-only inline blocks for optional stack
-        sections, rows, prose, and links in the shared baseline README. Remove
-        each delimited reference-only block when its module is excluded while
+        sections, rows, prose, and links in the shared baseline README,
+        including a template-sync-support-reference-only block guarding the
+        .template-sync/ and template-sync schema surface rows. Remove each
+        delimited reference-only block when its module is excluded while
         preserving retained baseline guidance and any retained Markdown,
         PowerShell, GitHub platform, GitHub Actions, GitHub templates, and
         template-sync support guidance.
@@ -459,10 +461,14 @@ template_manifest:
       notes: >-
         Contains Markdown-safe *-reference-only inline blocks for optional stack
         contributor guidance, validation commands, workflow rows, and links in
-        the shared baseline contributing guide. Remove each delimited
-        reference-only block when its module is excluded while preserving
-        retained pre-commit, no-secrets, pull-request, template-sync support,
-        and retained language/tooling guidance.
+        the shared baseline contributing guide, including an OR-group
+        data-ci-reference-only block guarding the Data CI workflow row that is
+        retained when any of json, yaml, schema, or template-sync-support is
+        adopted. Remove each delimited reference-only block when its module is
+        excluded (and the OR-group block only when every module it names is
+        excluded) while preserving retained pre-commit, no-secrets,
+        pull-request, template-sync support, and retained language/tooling
+        guidance.
     - pattern: 'SECURITY.md'
       requires_all:
         - baseline

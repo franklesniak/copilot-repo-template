@@ -51,6 +51,24 @@ FULL_TEMPLATE_MODULES = (
 DEPENDABOT_NO_PYTHON_ECOSYSTEMS = {"github-actions", "npm", "pre-commit"}
 DEPENDABOT_FULL_ECOSYSTEMS = DEPENDABOT_NO_PYTHON_ECOSYSTEMS | {"pip"}
 ISSUE_693_BASELINE_DOCS = ("README.md", "CONTRIBUTING.md")
+# Base module set with no data-file modules (json, yaml, schema) and no
+# template-sync-support, used to exercise the OR-group data-ci-reference-only and
+# the single-module template-sync-support-reference-only blocks.
+NO_DATA_NO_TEMPLATE_SYNC_MODULES = (
+    "baseline",
+    "agent-instructions",
+    "github-platform",
+    "github-actions",
+    "github-templates",
+    "markdown",
+    "powershell",
+)
+# References that exist only inside the template-sync-support-reference-only block
+# in README.md.
+TEMPLATE_SYNC_SUPPORT_README_REFERENCES = (
+    "`.template-sync/`",
+    "schemas/template-sync-",
+)
 ISSUE_693_EXCLUDED_DOC_REFERENCES = {
     "README.md": (
         "pyproject.toml",
@@ -575,6 +593,102 @@ def test_materialized_partial_adoption_strips_shared_baseline_doc_stale_referenc
             continue
         assert "required_cleanup" not in report_line, report_line
         assert "markdown-link.excluded-target" not in report_line, report_line
+
+
+@pytest.mark.parametrize("template_sync_support_included", [False, True])
+def test_materialized_readme_template_sync_support_reference_block(
+    tmp_path: Path,
+    template_sync_support_included: bool,
+) -> None:
+    """README template-sync surface rows materialize only when support is adopted."""
+    target_root = tmp_path / "readme-template-sync"
+    target_root.mkdir()
+    included_modules = NO_DATA_NO_TEMPLATE_SYNC_MODULES
+    if template_sync_support_included:
+        included_modules = (*included_modules, "template-sync-support")
+    module_args = [
+        argument
+        for module_name in included_modules
+        for argument in ("--included-module", module_name)
+    ]
+
+    result = run_materialize(
+        REPO_ROOT,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--last-reviewed-template-commit",
+        FULL_SHA,
+        "--repository",
+        "octocat/hello-world",
+        "--security-contact",
+        "security@example.com",
+        "--allow-conflicts",
+        *module_args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    generated_path = target_root / "README.md"
+    assert generated_path.is_file(), result.stdout
+    generated_text = read_file(generated_path)
+
+    for reference in TEMPLATE_SYNC_SUPPORT_README_REFERENCES:
+        if template_sync_support_included:
+            assert reference in generated_text, reference
+        else:
+            assert reference not in generated_text, reference
+
+
+@pytest.mark.parametrize(
+    ("included_data_module", "expect_data_ci_row"),
+    [
+        pytest.param(None, False, id="all-data-modules-excluded"),
+        pytest.param("json", True, id="json-included"),
+    ],
+)
+def test_materialized_contributing_data_ci_reference_block(
+    tmp_path: Path,
+    included_data_module: str | None,
+    expect_data_ci_row: bool,
+) -> None:
+    """The Data CI row materializes when any OR-group data module is adopted."""
+    target_root = tmp_path / "contributing-data-ci"
+    target_root.mkdir()
+    included_modules = NO_DATA_NO_TEMPLATE_SYNC_MODULES
+    if included_data_module is not None:
+        included_modules = (*included_modules, included_data_module)
+    module_args = [
+        argument
+        for module_name in included_modules
+        for argument in ("--included-module", module_name)
+    ]
+
+    result = run_materialize(
+        REPO_ROOT,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--last-reviewed-template-commit",
+        FULL_SHA,
+        "--repository",
+        "octocat/hello-world",
+        "--security-contact",
+        "security@example.com",
+        "--allow-conflicts",
+        *module_args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    generated_path = target_root / "CONTRIBUTING.md"
+    assert generated_path.is_file(), result.stdout
+    generated_text = read_file(generated_path)
+
+    if expect_data_ci_row:
+        assert "| Data CI |" in generated_text
+        assert ".github/workflows/data-ci.yml" in generated_text
+    else:
+        assert "| Data CI |" not in generated_text
+        assert ".github/workflows/data-ci.yml" not in generated_text
 
 
 def test_materialized_no_python_adoption_prunes_dependabot_pip_ecosystem(

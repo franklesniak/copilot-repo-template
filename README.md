@@ -66,8 +66,6 @@ Core retained surfaces include:
 - `.github/workflows/` - retained GitHub Actions workflows.
 - `.markdownlint.jsonc`, `.remarkrc.mjs`, and `.remarkignore` - Markdown linting and link-check configuration.
 - `.pre-commit-config.yaml` - aggregate pre-commit hook configuration.
-- `.template-sync/` - template-sync marker, manifest, and helper scripts when template-sync support is retained.
-- `schemas/template-sync-*.schema.json` - template-sync schema contracts, with matching `schemas/examples/template-sync-*` fixtures where provided.
 - `templates/markdown/` - Markdown linting starter configuration.
 - `templates/powershell/` - PowerShell starter test content.
 - `tests/` - retained helper tests and PowerShell tests.
@@ -90,6 +88,10 @@ Optional module-owned surfaces include:
 <!-- template-sync: begin terraform-reference-only -->
 - `.tflint.hcl`, `.github/workflows/terraform-ci.yml`, `.github/scripts/terraform_hooks.py`, `docs/terraform/`, and `templates/terraform/` - Terraform validation, docs, and starter tests.
 <!-- template-sync: end terraform-reference-only -->
+<!-- template-sync: begin template-sync-support-reference-only -->
+- `.template-sync/` - template-sync marker, manifest, and helper scripts.
+- `schemas/template-sync-*.schema.json` - template-sync schema contracts, with matching `schemas/examples/template-sync-*` fixtures where provided.
+<!-- template-sync: end template-sync-support-reference-only -->
 
 #### Key Files Explained
 

@@ -294,7 +294,9 @@ This repository includes retained GitHub Actions workflows that run automaticall
 | Auto-fix Pre-commit | `.github/workflows/auto-fix-precommit.yml` | Automatically commits pre-commit auto-fixes on Copilot-agent branches when the workflow conditions match. |
 | Markdown Lint | `.github/workflows/markdownlint.yml` | Validates Markdown formatting and local links. |
 | PowerShell CI | `.github/workflows/powershell-ci.yml` | Runs PSScriptAnalyzer and Pester on PowerShell files. |
+<!-- template-sync: begin data-ci-reference-only -->
 | Data CI | `.github/workflows/data-ci.yml` | Runs retained data-file, GitHub Actions, template-sync, and schema validation hooks. |
+<!-- template-sync: end data-ci-reference-only -->
 <!-- template-sync: begin python-reference-only -->
 | Python CI | `.github/workflows/python-ci.yml` | Runs type checking and pytest on Python files. |
 <!-- template-sync: end python-reference-only -->
