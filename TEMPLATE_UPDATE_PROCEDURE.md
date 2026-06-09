@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260608.1
+**Version:** 1.1.20260609.1
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-08
+- **Last Updated:** 2026-06-09
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the read-only first-adoption preflight/questionnaire mode, one-shot first-adoption materialization, first-adoption structural convention assessment, first-adoption working-tree validation, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -792,6 +792,46 @@ These inline blocks let a downstream repository keep the containing baseline or 
 3. Treat unmatched, nested, or unknown inline-block markers as an explicit sync question for the owner; do not silently keep or drop the affected block.
 
 If a marker names multiple modules, it is retained only when every module named in the marker is present in `included_modules`, and is stripped when any one of them is absent. A reference-only marker, for example `python-reference-only`, follows the same rule and is stripped when the corresponding module is absent.
+
+When an inline module block from either the `*-only` or `*-reference-only` family splits or participates in a retained sequentially numbered Markdown structure, authors **MUST NOT** leave a numbering gap in the post-strip Markdown source or rendered output. Running numbers **MUST** stay contiguous in the full template and after the block is stripped during partial adoption. When multiple inline blocks appear near the same numbered sequence, every supported retain/strip combination **MUST** leave that sequence contiguous. This rule applies to numbered Markdown headings, such as `### 3. ...`, and ordered-list items, such as `1.`, `2.`, and `3.`. A post-strip gap in an ordered list also fails markdownlint MD029 because `.markdownlint.jsonc` configures MD029 with `"style": "ordered"` when the stripped output is linted; a numbered-heading gap is a readability defect rather than a markdownlint numbering failure. A complete independent numbered sequence wholly inside an inline block is acceptable when stripping the block leaves no retained numbering gap.
+
+Recommended pattern: keep optional, stack-specific steps unnumbered, such as `### Optional: Install {module} tooling`, and reserve running numbers for steps that are always retained.
+
+**MUST NOT** wrap a running numbered step in an optional inline block:
+
+```markdown
+### 1. Clone the repository
+
+### 2. Install Node.js dependencies
+
+<!-- template-sync: begin {module}-reference-only -->
+
+### 3. Install {module} tooling
+
+<!-- template-sync: end {module}-reference-only -->
+
+### 4. Install pre-commit
+```
+
+After the `{module}` block is stripped, the retained headings read 1, 2, 4, leaving a numbering gap.
+
+**MUST** keep the optional step unnumbered and keep the retained sequence contiguous:
+
+```markdown
+### 1. Clone the repository
+
+### 2. Install Node.js dependencies
+
+<!-- template-sync: begin {module}-reference-only -->
+
+### Optional: Install {module} tooling
+
+<!-- template-sync: end {module}-reference-only -->
+
+### 3. Install pre-commit
+```
+
+The numbered headings are always-retained steps, and the optional `{module}` step is unnumbered, so stripping the block leaves the sequence contiguous. The `{module}-reference-only` marker family in these examples is inert because it does not match the template-sync marker parser.
 
 The current `markdown-reference-only`, `powershell-reference-only`, `python-reference-only`, `terraform-reference-only`, `json-reference-only`, `yaml-reference-only`, and `schema-reference-only` inline blocks live in:
 
