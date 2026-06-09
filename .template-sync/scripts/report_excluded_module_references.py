@@ -938,10 +938,18 @@ def protected_document_prose_reference_findings_for_text(
     relative_path: str,
     text: str,
     state: ReportState,
+    path_tokens: tuple[tuple[str, str, str], ...] | None = None,
 ) -> tuple[Finding, ...]:
-    """Return stale excluded-module prose references in protected instruction text."""
+    """Return stale excluded-module prose references in protected instruction text.
+
+    ``path_tokens`` lets a caller compute ``excluded_path_reference_tokens(state)``
+    once and reuse it across every scanned protected file; that helper sorts and
+    walks ``state.present_files``, so recomputing it per file would scale poorly as
+    the repository grows. The tokens are computed on demand when not supplied.
+    """
     findings: list[Finding] = []
-    path_tokens = excluded_path_reference_tokens(state)
+    if path_tokens is None:
+        path_tokens = excluded_path_reference_tokens(state)
 
     for line_number, line in lines_outside_inline_blocks(text):
         searchable_line = line_without_upstream_template_urls(line)
@@ -984,6 +992,7 @@ def protected_document_prose_reference_findings(
 ) -> tuple[Finding, ...]:
     """Return stale prose-reference findings for retained protected documents."""
     findings: list[Finding] = []
+    path_tokens = excluded_path_reference_tokens(state)
     for relative_path in state.safe_files:
         if not is_protected_instruction_path(relative_path):
             continue
@@ -997,7 +1006,9 @@ def protected_document_prose_reference_findings(
         except (OSError, UnicodeDecodeError):
             continue
         findings.extend(
-            protected_document_prose_reference_findings_for_text(relative_path, text, state)
+            protected_document_prose_reference_findings_for_text(
+                relative_path, text, state, path_tokens
+            )
         )
     return tuple(findings)
 

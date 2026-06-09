@@ -2308,12 +2308,12 @@ def test_partial_reference_stripping_leaves_protected_docs_clean() -> None:
     assert not failures, (
         "Retained protected instruction files must not contain live references "
         "to excluded module-owned paths, hooks, tool inputs, or validation commands "
-        "after reference-only stripping:\n" + "\n".join(failures)
+        "after module-based inline-block stripping:\n" + "\n".join(failures)
     )
 
 
 def test_partial_reference_stripping_preserves_retained_instruction_contracts() -> None:
-    """Retained instruction-contract anchors must survive reference-only stripping."""
+    """Retained instruction-contract anchors must survive module-based inline-block stripping."""
     contracts_document = yaml.safe_load(INSTRUCTION_CONTRACTS_PATH.read_text(encoding="utf-8"))
     assert isinstance(contracts_document, dict), "instruction contracts root must be a mapping"
     contracts = contracts_document.get("instruction_contracts")
