@@ -213,7 +213,7 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "GEMINI.md": 3,
     },
     "powershell-reference-only": {
-        ".github/copilot-instructions.md": 2,
+        ".github/copilot-instructions.md": 3,
         ".cursor/rules/repository-instructions.mdc": 2,
         ".hermes.md": 2,
         "AGENTS.md": 2,

@@ -119,7 +119,7 @@ In addition to formatting, linting, trailing-whitespace, and end-of-file fixes, 
 
 Prettier is **opt-in** and is **not** part of the default data-file toolchain. (This framing has been re-verified against the built-in schema validation ADR and remains correct.)
 
-The dedicated [`.github/workflows/data-ci.yml`](workflows/data-ci.yml) workflow re-runs the retained data-file hooks (`check-json`, `check-yaml`, `actionlint`, `check-jsonschema`, `check-metaschema`) so retained data-file enforcement can be required via branch protection independent of language-specific CI jobs.
+The dedicated [`.github/workflows/data-ci.yml`](workflows/data-ci.yml) workflow re-runs the repository's retained data-file pre-commit hooks (JSON, TOML, YAML, and GitHub Actions checks plus the retained schema-validation alias hooks) so retained data-file enforcement can be required via branch protection independent of language-specific CI jobs. That workflow file is the authoritative list of the hooks it executes.
 
 <!-- template-sync: begin yaml-reference-only -->
 When YAML style validation is retained, the dedicated data-file workflow also re-runs `yamllint`.
@@ -431,7 +431,9 @@ This repository includes retained testing infrastructure for the adopted languag
 <!-- template-sync: begin python-reference-only -->
 - Python: pytest, configured by `pyproject.toml` (`[tool.pytest.ini_options]`) and located under `tests/`.
 <!-- template-sync: end python-reference-only -->
+<!-- template-sync: begin powershell-reference-only -->
 - PowerShell: Pester 5.x, configured inline in `.github/workflows/powershell-ci.yml` and located under `tests/PowerShell/`.
+<!-- template-sync: end powershell-reference-only -->
 <!-- template-sync: begin terraform-reference-only -->
 - Terraform: Terraform test framework, located under `modules/*/tests/` or `tests/`.
 <!-- template-sync: end terraform-reference-only -->
