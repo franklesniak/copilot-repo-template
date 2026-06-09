@@ -95,44 +95,42 @@ Optional module-owned surfaces include:
 
 #### Key Files Explained
 
-| File | Purpose |
-| --- | --- |
-| `.github/CODEOWNERS` | Defines code ownership for automatic PR review requests; replace the `@OWNER` placeholder. |
-| `.github/copilot-instructions.md` | The repo-wide constitution for all code changes, including safety rules, pre-commit discipline, and instruction-file references. |
-| `.github/dependabot.yml` | Dependabot configuration for automated dependency updates. |
-| `.github/instructions/*.md` | Retained coding standards applied based on file patterns. |
-| `.github/linting/PSScriptAnalyzerSettings.psd1` | PSScriptAnalyzer settings enforcing OTBS formatting for PowerShell. |
-| `.github/workflows/auto-fix-precommit.yml` | Optional auto-fix workflow for pre-commit fixes on Copilot-agent branches. |
-| `.github/workflows/check-placeholders.yml` | Transitional OWNER/REPO and `@OWNER` placeholder check. |
-| `.github/workflows/data-ci.yml` | Data-file and template-sync validation workflow for retained hooks. |
-| `.github/workflows/markdownlint.yml` | Markdown linting and offline link-validation workflow. |
-| `.github/workflows/powershell-ci.yml` | PowerShell linting and Pester testing workflow. |
-| `.github/workflows/precommit-ci.yml` | Aggregate `pre-commit run --all-files` gate. |
+- `.github/CODEOWNERS` - Defines code ownership for automatic PR review requests; replace the `@OWNER` placeholder.
+- `.github/copilot-instructions.md` - The repo-wide constitution for all code changes, including safety rules, pre-commit discipline, and instruction-file references.
+- `.github/dependabot.yml` - Dependabot configuration for automated dependency updates.
+- `.github/instructions/*.md` - Retained coding standards applied based on file patterns.
+- `.github/linting/PSScriptAnalyzerSettings.psd1` - PSScriptAnalyzer settings enforcing OTBS formatting for PowerShell.
+- `.github/workflows/auto-fix-precommit.yml` - Optional auto-fix workflow for pre-commit fixes on Copilot-agent branches.
+- `.github/workflows/check-placeholders.yml` - Transitional OWNER/REPO and `@OWNER` placeholder check.
+- `.github/workflows/data-ci.yml` - Data-file and template-sync validation workflow for retained hooks.
+- `.github/workflows/markdownlint.yml` - Markdown linting and offline link-validation workflow.
+- `.github/workflows/powershell-ci.yml` - PowerShell linting and Pester testing workflow.
+- `.github/workflows/precommit-ci.yml` - Aggregate `pre-commit run --all-files` gate.
 <!-- template-sync: begin python-reference-only -->
-| `.github/workflows/python-ci.yml` | Python type-check and pytest workflow. |
+- `.github/workflows/python-ci.yml` - Python type-check and pytest workflow.
 <!-- template-sync: end python-reference-only -->
 <!-- template-sync: begin terraform-reference-only -->
-| `.github/workflows/terraform-ci.yml` | Terraform format, validate, lint, test, and security workflow. |
+- `.github/workflows/terraform-ci.yml` - Terraform format, validate, lint, test, and security workflow.
 <!-- template-sync: end terraform-reference-only -->
-| `.markdownlint.jsonc` | Markdown linting rules prioritizing auto-fixable checks. |
-| `.remarkignore` | Exclusions for offline Markdown link validation. |
-| `.remarkrc.mjs` | Remark configuration for offline Markdown link validation. |
+- `.markdownlint.jsonc` - Markdown linting rules prioritizing auto-fixable checks.
+- `.remarkignore` - Exclusions for offline Markdown link validation.
+- `.remarkrc.mjs` - Remark configuration for offline Markdown link validation.
 <!-- template-sync: begin yaml-reference-only -->
-| `.yamllint.yml` | YAML linting configuration. |
+- `.yamllint.yml` - YAML linting configuration.
 <!-- template-sync: end yaml-reference-only -->
-| `.pre-commit-config.yaml` | Pre-commit hooks for retained project surfaces. |
-| `schemas/` | Retained schema contracts, including template-sync schemas. |
+- `.pre-commit-config.yaml` - Pre-commit hooks for retained project surfaces.
+- `schemas/` - Retained schema contracts, including template-sync schemas.
 <!-- template-sync: begin python-reference-only -->
-| `pyproject.toml` | Python project configuration with development dependencies. |
-| `src/copilot_repo_template/` | Example Python package to rename for your project. |
+- `pyproject.toml` - Python project configuration with development dependencies.
+- `src/copilot_repo_template/` - Example Python package to rename for your project.
 <!-- template-sync: end python-reference-only -->
-| `tests/` | Retained automated tests for template tooling and adopted stacks. |
+- `tests/` - Retained automated tests for template tooling and adopted stacks.
 <!-- template-sync: begin json-reference-only -->
-| `templates/json/` | JSON Schema starter content for downstream consumers to copy and adapt. |
+- `templates/json/` - JSON Schema starter content for downstream consumers to copy and adapt.
 <!-- template-sync: end json-reference-only -->
-| `templates/powershell/Example.Tests.ps1` | Comprehensive Pester test template with examples. |
+- `templates/powershell/Example.Tests.ps1` - Comprehensive Pester test template with examples.
 <!-- template-sync: begin yaml-reference-only -->
-| `templates/yaml/` | YAML starter configurations and examples for downstream consumers to copy and adapt. |
+- `templates/yaml/` - YAML starter configurations and examples for downstream consumers to copy and adapt.
 <!-- template-sync: end yaml-reference-only -->
 
 ### Language Support

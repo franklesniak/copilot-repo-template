@@ -288,20 +288,18 @@ See [`schemas/README.md`](schemas/README.md) for schema conventions and the cano
 
 This repository includes retained GitHub Actions workflows that run automatically:
 
-| Workflow | File | Purpose |
-| --- | --- | --- |
-| Pre-commit CI | `.github/workflows/precommit-ci.yml` | Runs the aggregate `pre-commit run --all-files` gate over every hook in `.pre-commit-config.yaml`. |
-| Auto-fix Pre-commit | `.github/workflows/auto-fix-precommit.yml` | Automatically commits pre-commit auto-fixes on Copilot-agent branches when the workflow conditions match. |
-| Markdown Lint | `.github/workflows/markdownlint.yml` | Validates Markdown formatting and local links. |
-| PowerShell CI | `.github/workflows/powershell-ci.yml` | Runs PSScriptAnalyzer and Pester on PowerShell files. |
+- **Pre-commit CI** (`.github/workflows/precommit-ci.yml`) - Runs the aggregate `pre-commit run --all-files` gate over every hook in `.pre-commit-config.yaml`.
+- **Auto-fix Pre-commit** (`.github/workflows/auto-fix-precommit.yml`) - Automatically commits pre-commit auto-fixes on Copilot-agent branches when the workflow conditions match.
+- **Markdown Lint** (`.github/workflows/markdownlint.yml`) - Validates Markdown formatting and local links.
+- **PowerShell CI** (`.github/workflows/powershell-ci.yml`) - Runs PSScriptAnalyzer and Pester on PowerShell files.
 <!-- template-sync: begin data-ci-reference-only -->
-| Data CI | `.github/workflows/data-ci.yml` | Runs retained data-file, GitHub Actions, template-sync, and schema validation hooks. |
+- **Data CI** (`.github/workflows/data-ci.yml`) - Runs retained data-file, GitHub Actions, template-sync, and schema validation hooks.
 <!-- template-sync: end data-ci-reference-only -->
 <!-- template-sync: begin python-reference-only -->
-| Python CI | `.github/workflows/python-ci.yml` | Runs type checking and pytest on Python files. |
+- **Python CI** (`.github/workflows/python-ci.yml`) - Runs type checking and pytest on Python files.
 <!-- template-sync: end python-reference-only -->
 <!-- template-sync: begin terraform-reference-only -->
-| Terraform CI | `.github/workflows/terraform-ci.yml` | Runs Terraform format, validate, lint, test, and security checks. |
+- **Terraform CI** (`.github/workflows/terraform-ci.yml`) - Runs Terraform format, validate, lint, test, and security checks.
 <!-- template-sync: end terraform-reference-only -->
 
 The **Auto-fix Pre-commit** workflow is scoped specifically to the GitHub Copilot Coding Agent. Human-authored PRs and PRs on non-`copilot/**` branches are not affected; their authors must run `pre-commit run --all-files` locally and integrate the fixes themselves before pushing.

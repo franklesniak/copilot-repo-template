@@ -2166,8 +2166,41 @@ def test_procedure_registers_reference_only_marker_family() -> None:
     assert "same strip semantics" in procedure_text
     for marker_name in REFERENCE_ONLY_MARKER_MODULES:
         assert marker_name in procedure_text
+    for marker_name in ANY_REFERENCE_ONLY_MARKER_MODULES:
+        assert marker_name in procedure_text
     for relative_path in REFERENCE_ONLY_MANIFEST_PATTERNS:
         assert relative_path in procedure_text
+
+
+def test_template_sync_markers_do_not_break_markdown_tables() -> None:
+    """Template-sync marker lines must not sit between GFM table rows.
+
+    GitHub-flavored Markdown tables require contiguous ``| ... |`` lines. A
+    standalone HTML-comment marker between two table rows terminates the table,
+    so the rows after it render as literal paragraph text. ``markdownlint`` does
+    not catch this, so guard the shared baseline docs structurally: a marker is
+    inside a table only when both its nearest non-blank neighbors are table rows.
+    """
+    table_row = re.compile(r"^\s*\|")
+    marker = re.compile(r"^\s*<!--\s*template-sync:")
+    for relative_path in ("README.md", "CONTRIBUTING.md"):
+        lines = (REPO_ROOT / relative_path).read_text(encoding="utf-8").split("\n")
+        for index, line in enumerate(lines):
+            if not marker.match(line):
+                continue
+            previous = index - 1
+            while previous >= 0 and not lines[previous].strip():
+                previous -= 1
+            following = index + 1
+            while following < len(lines) and not lines[following].strip():
+                following += 1
+            prev_is_row = previous >= 0 and bool(table_row.match(lines[previous]))
+            next_is_row = following < len(lines) and bool(table_row.match(lines[following]))
+            assert not (prev_is_row and next_is_row), (
+                f"{relative_path}:{index + 1}: template-sync marker sits between GFM table "
+                "rows, which breaks table rendering. Use a bullet list or another "
+                "marker-safe layout instead."
+            )
 
 
 def test_reference_only_pruning_removes_entry_point_optional_stack_references() -> None:

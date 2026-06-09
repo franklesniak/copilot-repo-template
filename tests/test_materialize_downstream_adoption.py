@@ -691,10 +691,10 @@ def test_materialized_contributing_data_ci_reference_block(
     generated_text = read_file(generated_path)
 
     if expect_data_ci_row:
-        assert "| Data CI |" in generated_text
+        assert "**Data CI**" in generated_text
         assert ".github/workflows/data-ci.yml" in generated_text
     else:
-        assert "| Data CI |" not in generated_text
+        assert "**Data CI**" not in generated_text
         assert ".github/workflows/data-ci.yml" not in generated_text
 
 
