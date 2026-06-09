@@ -102,7 +102,9 @@ Optional module-owned surfaces include:
 - `.github/linting/PSScriptAnalyzerSettings.psd1` - PSScriptAnalyzer settings enforcing OTBS formatting for PowerShell.
 - `.github/workflows/auto-fix-precommit.yml` - Optional auto-fix workflow for pre-commit fixes on Copilot-agent branches.
 - `.github/workflows/check-placeholders.yml` - Transitional OWNER/REPO and `@OWNER` placeholder check.
-- `.github/workflows/data-ci.yml` - Data-file and template-sync validation workflow for retained hooks.
+<!-- template-sync: begin data-ci-reference-only -->
+- `.github/workflows/data-ci.yml` - Data-file and template-sync validation workflow, present when a data-file or template-sync module is retained.
+<!-- template-sync: end data-ci-reference-only -->
 - `.github/workflows/markdownlint.yml` - Markdown linting and offline link-validation workflow.
 - `.github/workflows/powershell-ci.yml` - PowerShell linting and Pester testing workflow.
 - `.github/workflows/precommit-ci.yml` - Aggregate `pre-commit run --all-files` gate.
@@ -119,7 +121,7 @@ Optional module-owned surfaces include:
 - `.yamllint.yml` - YAML linting configuration.
 <!-- template-sync: end yaml-reference-only -->
 - `.pre-commit-config.yaml` - Pre-commit hooks for retained project surfaces.
-- `schemas/` - Retained schema contracts, including template-sync schemas.
+- `schemas/` - JSON Schema contracts present when the schema or template-sync support module is adopted (the worked-example schema and/or the template-sync schemas).
 <!-- template-sync: begin python-reference-only -->
 - `pyproject.toml` - Python project configuration with development dependencies.
 - `src/copilot_repo_template/` - Example Python package to rename for your project.

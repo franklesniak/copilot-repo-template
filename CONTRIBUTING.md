@@ -90,8 +90,15 @@ pre-commit install
 
 ### 5. Run Pre-commit Manually
 
+Run all hooks across the whole repository:
+
 ```bash
 pre-commit run --all-files
+```
+
+Or run hooks against only the staged changes:
+
+```bash
 pre-commit run
 ```
 

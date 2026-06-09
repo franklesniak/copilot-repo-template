@@ -855,7 +855,7 @@ The current `template-sync-support-reference-only` inline block lives in:
 
 The current `data-ci-reference-only` inline block lives in:
 
-- `CONTRIBUTING.md` for the Data CI workflow row, which is retained when any of `json`, `yaml`, `schema`, or `template-sync-support` is adopted and removed only when all four are excluded.
+- `CONTRIBUTING.md` for the Data CI workflow row, and `README.md` for the `.github/workflows/data-ci.yml` key-file bullet, each retained when any of `json`, `yaml`, `schema`, or `template-sync-support` is adopted and removed only when all four are excluded.
 
 The current `python-only` inline block lives in:
 

@@ -270,6 +270,7 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "CONTRIBUTING.md": 1,
     },
     "data-ci-reference-only": {
+        "README.md": 1,
         "CONTRIBUTING.md": 1,
     },
 }
