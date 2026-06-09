@@ -266,7 +266,8 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "CONTRIBUTING.md": 2,
     },
     "template-sync-support-reference-only": {
-        "README.md": 1,
+        "README.md": 2,
+        "CONTRIBUTING.md": 1,
     },
     "data-ci-reference-only": {
         "CONTRIBUTING.md": 1,

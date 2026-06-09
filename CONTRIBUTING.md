@@ -109,7 +109,7 @@ This repository uses pre-commit for git hooks. Configured hooks include:
 <!-- template-sync: begin yaml-reference-only -->
 - **YAML style validation:** `yamllint` configured by `.yamllint.yml`.
 <!-- template-sync: end yaml-reference-only -->
-- **Schema validation:** `check-jsonschema` and `check-metaschema` for retained schema-backed configuration, including template-sync schemas.
+- **Schema validation:** When schema-backed modules (the schema or template-sync support module) are retained, `check-jsonschema` and `check-metaschema` validate retained schema-backed configuration, including template-sync schemas.
 <!-- template-sync: begin schema-reference-only -->
 - **Worked-example schema validation:** `check-jsonschema` and `check-metaschema` also cover the worked-example schema and its valid fixtures. See [`schemas/README.md`](schemas/README.md) for the worked example and downstream removal checklist.
 <!-- template-sync: end schema-reference-only -->
@@ -180,6 +180,7 @@ pre-commit run terraform-tflint --all-files
 The hooks mirror Terraform CI: format checks run from the repository root, validation runs only in directories containing Terraform files, and TFLint uses the repository-root `.tflint.hcl` path.
 <!-- template-sync: end terraform-reference-only -->
 
+<!-- template-sync: begin template-sync-support-reference-only -->
 ### Template-Sync Validation
 
 When template-sync support is retained, use the downstream validator after module pruning or marker changes:
@@ -193,6 +194,7 @@ For cleanup planning, run the excluded-module reporter:
 ```bash
 python .template-sync/scripts/report_excluded_module_references.py
 ```
+<!-- template-sync: end template-sync-support-reference-only -->
 
 ## Code Quality Standards
 

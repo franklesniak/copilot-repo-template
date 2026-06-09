@@ -34,7 +34,7 @@ This template includes:
 - **Multi-Agent Support:** Instruction files for Cursor Agent, Hermes Agent, Claude Code, OpenAI Codex CLI, and Gemini Code Assist.
 - **Modular Guidelines:** Instruction files for adopted language and file-type stacks.
 - **Linting Configurations:** Retained linting and link-checking configuration for Markdown and PowerShell.
-- **Data-File Validation:** Baseline hooks for `check-json`, `check-yaml`, and `actionlint`, plus retained `check-jsonschema` and `check-metaschema` hooks for template-sync and other retained schema-backed configuration.
+- **Data-File Validation:** Baseline hooks for `check-json`, `check-yaml`, and `actionlint`. Retained schema-backed modules (the schema and template-sync support modules) add `check-jsonschema` and `check-metaschema` for their JSON Schema contracts.
 <!-- template-sync: begin yaml-reference-only -->
 - **YAML Style Validation:** `yamllint` configuration and CI wiring for repositories that adopt the YAML module.
 <!-- template-sync: end yaml-reference-only -->
@@ -201,8 +201,8 @@ Data-file, GitHub Actions, and retained schema validation runs through `.pre-com
 - **`yamllint`** - YAML style enforcement per `.yamllint.yml`.
 <!-- template-sync: end yaml-reference-only -->
 - **`actionlint`** - GitHub Actions workflow linting.
-- **`check-jsonschema`** - JSON Schema validation for retained template-sync schemas and selected real load-bearing configuration files validated against built-in vendor schemas.
-- **`check-metaschema`** - self-validation for retained project-owned schemas.
+- **`check-jsonschema`** - present when schema-backed modules (the schema, template-sync support, or GitHub platform module) are retained; validates retained JSON Schema-backed files and selected load-bearing configuration against built-in vendor schemas.
+- **`check-metaschema`** - present when the schema or template-sync support module is retained; self-validates retained project-owned schemas.
 
 Prettier is **opt-in** and is not part of the default data-file toolchain.
 
@@ -211,8 +211,6 @@ pre-commit run --all-files
 pre-commit run check-json --all-files
 pre-commit run check-yaml --all-files
 pre-commit run actionlint --all-files
-pre-commit run check-jsonschema --all-files
-pre-commit run check-metaschema --all-files
 ```
 
 <!-- template-sync: begin yaml-reference-only -->
@@ -241,6 +239,7 @@ tflint --recursive --config "$(pwd)/.tflint.hcl"
 
 ### Testing
 
+<!-- template-sync: begin template-sync-support-reference-only -->
 #### Downstream Partial-Adoption Validation
 
 Downstream repositories that keep `.template-sync/marker.yml` after removing optional modules SHOULD validate the retained template surface with:
@@ -264,6 +263,7 @@ python .template-sync/scripts/report_excluded_module_references.py --included-mo
 ```
 
 Findings are informational and do not make the command fail. The command exits nonzero only for runtime or input failures such as invalid manifest data, unsafe paths, unreadable required files, or unknown explicit modules.
+<!-- template-sync: end template-sync-support-reference-only -->
 
 <!-- template-sync: begin python-reference-only -->
 #### Python Tests
@@ -320,7 +320,7 @@ This repository enforces code quality through retained validation surfaces:
 <!-- template-sync: begin yaml-reference-only -->
 - **YAML Style Validation:** `yamllint` runs through pre-commit when the YAML module is retained.
 <!-- template-sync: end yaml-reference-only -->
-- **Schema Validation:** `check-jsonschema` validates retained schema-backed files, and `check-metaschema` self-validates retained project-owned schemas. See [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md) for the built-in schema validation policy.
+- **Schema Validation:** When schema-backed modules are retained, `check-jsonschema` validates retained schema-backed files and `check-metaschema` self-validates retained project-owned schemas. See [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md) for the built-in schema validation policy.
 - **Template-Sync Validation:** Template-sync manifest, marker, instruction-contract, and example fixtures are schema-backed when template-sync support is retained.
 - **GitHub Copilot Instructions:** Guides AI-assisted development.
 - **Pre-commit Hooks:** Catches issues before they reach CI.

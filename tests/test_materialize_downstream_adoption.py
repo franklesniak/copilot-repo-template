@@ -68,6 +68,7 @@ NO_DATA_NO_TEMPLATE_SYNC_MODULES = (
 TEMPLATE_SYNC_SUPPORT_README_REFERENCES = (
     "`.template-sync/`",
     "schemas/template-sync-",
+    "validate_downstream_adoption.py",
 )
 ISSUE_693_EXCLUDED_DOC_REFERENCES = {
     "README.md": (
@@ -645,6 +646,49 @@ def test_materialized_readme_template_sync_support_reference_block(
             assert reference in generated_text, reference
         else:
             assert reference not in generated_text, reference
+
+
+@pytest.mark.parametrize("template_sync_support_included", [False, True])
+def test_materialized_contributing_template_sync_support_reference_block(
+    tmp_path: Path,
+    template_sync_support_included: bool,
+) -> None:
+    """CONTRIBUTING template-sync surface materializes only when support is adopted."""
+    target_root = tmp_path / "contributing-template-sync"
+    target_root.mkdir()
+    included_modules = NO_DATA_NO_TEMPLATE_SYNC_MODULES
+    if template_sync_support_included:
+        included_modules = (*included_modules, "template-sync-support")
+    module_args = [
+        argument
+        for module_name in included_modules
+        for argument in ("--included-module", module_name)
+    ]
+
+    result = run_materialize(
+        REPO_ROOT,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--last-reviewed-template-commit",
+        FULL_SHA,
+        "--repository",
+        "octocat/hello-world",
+        "--security-contact",
+        "security@example.com",
+        "--allow-conflicts",
+        *module_args,
+    )
+
+    assert result.returncode == 0, result.stderr
+    generated_path = target_root / "CONTRIBUTING.md"
+    assert generated_path.is_file(), result.stdout
+    generated_text = read_file(generated_path)
+
+    if template_sync_support_included:
+        assert "validate_downstream_adoption.py" in generated_text
+    else:
+        assert "validate_downstream_adoption.py" not in generated_text
 
 
 @pytest.mark.parametrize(
