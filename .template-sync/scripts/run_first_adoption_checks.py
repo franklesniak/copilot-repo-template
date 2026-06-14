@@ -118,8 +118,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_const",
         const=FIX_MODE,
         help=(
-            "Run validation in explicit fix mode for mutating hooks or fixers. "
-            "Inspect the changed-file summary and rerun with --check."
+            "Run validation in explicit fix mode so mutating hooks or fixers may "
+            "update files without failing the run. The same validation commands "
+            "run as in check mode; inspect the changed-file summary, keep or "
+            "discard the edits intentionally, then rerun with --check."
         ),
     )
     parser.add_argument(
@@ -502,6 +504,7 @@ def print_changed_file_summary(
     before_status: Sequence[str],
     after_status: Sequence[str],
     *,
+    run_mode: str = CHECK_MODE,
     stdout: TextIO,
 ) -> bool:
     """Print changed-file status before/after the invocation and return if it changed."""
@@ -518,12 +521,21 @@ def print_changed_file_summary(
     print_status_entries(before_status, stdout=stdout)
     print("  After invocation:", file=stdout, flush=True)
     print_status_entries(after_status, stdout=stdout)
-    print(
-        "Files changed during this invocation. Inspect the changes, keep or discard "
-        "them intentionally, then rerun this helper with --check.",
-        file=stdout,
-        flush=True,
-    )
+    if run_mode == FIX_MODE:
+        print(
+            "Files changed during this invocation as intended by fix mode. Inspect "
+            "the changes, keep or discard them intentionally, then rerun with --check.",
+            file=stdout,
+            flush=True,
+        )
+    else:
+        print(
+            "Files changed during this invocation. Inspect the changes and keep or "
+            "discard them intentionally. To intentionally allow mutating hooks or "
+            "fixers to apply these edits, rerun with --fix, then rerun with --check.",
+            file=stdout,
+            flush=True,
+        )
     return True
 
 
@@ -605,10 +617,11 @@ def run_first_adoption_checks(
         status_changed = print_changed_file_summary(
             before_status,
             after_status,
+            run_mode=run_mode,
             stdout=stdout,
         )
         print_total_elapsed_time(run_started_at, time_source(), stdout=stdout)
-        return CHANGED_FILES_EXIT_CODE if status_changed else 0
+        return CHANGED_FILES_EXIT_CODE if status_changed and run_mode == CHECK_MODE else 0
 
     if plan_only:
         print("Plan-only mode: validation commands were not run.", file=stdout, flush=True)
@@ -616,10 +629,11 @@ def run_first_adoption_checks(
         status_changed = print_changed_file_summary(
             before_status,
             after_status,
+            run_mode=run_mode,
             stdout=stdout,
         )
         print_total_elapsed_time(run_started_at, time_source(), stdout=stdout)
-        return CHANGED_FILES_EXIT_CODE if status_changed else 0
+        return CHANGED_FILES_EXIT_CODE if status_changed and run_mode == CHECK_MODE else 0
 
     failures: list[str] = []
     total_commands = len(plan.commands)
@@ -653,9 +667,10 @@ def run_first_adoption_checks(
     status_changed = print_changed_file_summary(
         before_status,
         after_status,
+        run_mode=run_mode,
         stdout=stdout,
     )
-    if status_changed:
+    if status_changed and run_mode == CHECK_MODE:
         print_total_elapsed_time(run_started_at, time_source(), stdout=stdout)
         return CHANGED_FILES_EXIT_CODE
 

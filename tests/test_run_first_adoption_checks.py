@@ -397,6 +397,40 @@ def test_changed_git_status_exits_distinctly_after_validation(
     assert "    -  M README.md" in output
     assert "    - ?? generated.txt" in output
     assert "Inspect the changes" in output
+    assert "rerun with --fix" in output
+
+
+def test_fix_mode_tolerates_mutations_without_failing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Fix mode reports command-induced mutations but exits zero."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+    commands: list[tuple[str, ...]] = []
+    stdout = io.StringIO()
+
+    result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        run_mode=first_adoption.FIX_MODE,
+        command_runner=_recording_runner(commands),
+        git_status_reader=_queued_status_reader((), (" M README.md",)),
+        stdout=stdout,
+    )
+
+    output = stdout.getvalue()
+    assert result == 0
+    assert commands == [("pre-commit", "run", "--files", "README.md")]
+    assert "Run mode: fix" in output
+    assert "Git changed-file summary:" in output
+    assert "    -  M README.md" in output
+    assert "as intended by fix mode" in output
+    assert "rerun with --check" in output
 
 
 def test_marker_present_runs_marker_validator(tmp_path: Path) -> None:
