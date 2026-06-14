@@ -220,12 +220,12 @@ def is_regular_file(path: Path) -> bool:
 
 
 def existing_note_entries(todo_path: Path, journal_path: Path, repo_root: Path) -> tuple[str, ...]:
-    """Return found adoption note entries."""
+    """Return found adoption note entries in lexicographic order."""
     entries: list[str] = []
     for path in (todo_path, journal_path):
         if is_regular_file(path):
             entries.append(f"`{repository_relative_path(path, repo_root)}` found")
-    return tuple(entries)
+    return tuple(sorted(entries))
 
 
 def missing_state_entries(
@@ -234,19 +234,19 @@ def missing_state_entries(
     journal_path: Path,
     repo_root: Path,
 ) -> tuple[str, ...]:
-    """Return missing adoption state files that are useful to call out explicitly."""
+    """Return missing adoption state files in lexicographic order."""
     entries: list[str] = []
     for path in (marker_path, todo_path, journal_path):
         if not is_regular_file(path):
             entries.append(repository_relative_path(path, repo_root))
-    return tuple(entries)
+    return tuple(sorted(entries))
 
 
 def marker_evidence_entries(marker_path: Path, repo_root: Path) -> tuple[str, ...]:
     """Return marker directory and marker-file evidence as separate facts."""
     template_sync_dir = repo_root / ".template-sync"
     directory_status = "present" if template_sync_dir.is_dir() else "not found"
-    marker_status = "found" if marker_path.is_file() else "missing"
+    marker_status = "found" if is_regular_file(marker_path) else "missing"
     return (
         f"`.template-sync/` directory {directory_status}",
         f"`{repository_relative_path(marker_path, repo_root)}` {marker_status}",

@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "first_adoption_state.py"
 SCRIPT_DIR = SCRIPT_PATH.parent
@@ -90,8 +92,8 @@ def test_inspection_reports_git_state_empty_trees_and_missing_marker(
     )
     assert state.missing_state_files == (
         ".template-sync/marker.yml",
-        "_TODO-repo-init.md",
         "_ADOPTION-DIFFICULTIES.md",
+        "_TODO-repo-init.md",
     )
 
 
@@ -192,3 +194,50 @@ def test_directory_state_paths_are_reported_absent(tmp_path: Path) -> None:
     assert notes == ()
     assert "_TODO-repo-init.md" in missing
     assert "_ADOPTION-DIFFICULTIES.md" in missing
+
+
+def test_marker_evidence_matches_missing_state_for_symlinked_marker(tmp_path: Path) -> None:
+    """A symlinked marker is reported consistently as not a regular file."""
+    marker_path, todo_path, journal_path = _state_paths(tmp_path)
+    marker_path.parent.mkdir(parents=True, exist_ok=True)
+    target = tmp_path / "real-marker.yml"
+    target.write_text("marker: true\n", encoding="utf-8")
+    try:
+        marker_path.symlink_to(target)
+    except (OSError, NotImplementedError):
+        pytest.skip("Filesystem does not support symlink creation")
+
+    evidence = first_adoption_state.marker_evidence_entries(marker_path, tmp_path)
+    missing = first_adoption_state.missing_state_entries(
+        marker_path, todo_path, journal_path, tmp_path
+    )
+
+    # marker_evidence must agree with missing_state_entries: a symlinked marker
+    # is not a regular file, so it is reported "missing", not "found".
+    assert "`.template-sync/marker.yml` missing" in evidence
+    assert "`.template-sync/marker.yml` found" not in evidence
+    assert ".template-sync/marker.yml" in missing
+
+
+def test_state_path_categories_are_lexicographically_ordered(tmp_path: Path) -> None:
+    """Missing-state and found-note categories honor the documented lexicographic order."""
+    marker_path, todo_path, journal_path = _state_paths(tmp_path)
+
+    missing = first_adoption_state.missing_state_entries(
+        marker_path, todo_path, journal_path, tmp_path
+    )
+    assert missing == tuple(sorted(missing))
+    assert missing == (
+        ".template-sync/marker.yml",
+        "_ADOPTION-DIFFICULTIES.md",
+        "_TODO-repo-init.md",
+    )
+
+    todo_path.write_text("todo\n", encoding="utf-8")
+    journal_path.write_text("journal\n", encoding="utf-8")
+    notes = first_adoption_state.existing_note_entries(todo_path, journal_path, tmp_path)
+    assert notes == tuple(sorted(notes))
+    assert notes == (
+        "`_ADOPTION-DIFFICULTIES.md` found",
+        "`_TODO-repo-init.md` found",
+    )
