@@ -1,14 +1,14 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260609.2
+**Version:** 1.1.20260613.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-09
-- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the read-only first-adoption preflight/questionnaire mode, one-shot first-adoption materialization, first-adoption structural convention assessment, first-adoption working-tree validation, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
+- **Last Updated:** 2026-06-13
+- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the read-only first-adoption preflight/questionnaire mode, raw first-adoption state reporting, the adoption difficulties journal, one-shot first-adoption materialization, first-adoption structural convention assessment, first-adoption working-tree validation, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
 ## Purpose
@@ -34,6 +34,7 @@ For the first import into an existing repository, the separate one-shot material
 - **First-adoption working-tree validation runner:** The `.template-sync/scripts/run_first_adoption_checks.py` helper used before the first adoption commit. It collects tracked and untracked non-ignored regular files using `git ls-files --cached --others --exclude-standard`, prints a deterministic numbered command plan, runs chunked `pre-commit run --files ...` commands against that file list, and runs the placeholder scan, marker validation, and Markdown package scripts when the supporting files are present. Its `--plan-only` mode prints discovery results, notes, and the command plan without running validation commands. Normal execution prints UTC start and end timestamps, elapsed time, group label, index, and exit status for each planned command, then prints total elapsed time for the run.
 - **Adoption ledger:** A generated Markdown review artifact emitted by `.template-sync/scripts/generate_sync_candidates.py`. It summarizes manifest module assignments, marker local overrides, protected-file flags and decisions, adoption-mode posture, `_TODO-repo-init.md` checklist links, and affected validation commands. It is not authoritative state; `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable sources of truth.
 - **Adoption summary:** A concise Markdown review artifact emitted by `.template-sync/scripts/generate_sync_candidates.py --summary` for PR descriptions. It summarizes included and excluded modules, protected-file decision records, local overrides, unresolved maintainer decisions, machine-interpretable manual TODO items, and retained-module validation commands. It is not the detailed path-level review artifact; use the adoption ledger for protected-file and per-path review details.
+- **Adoption difficulties journal:** An optional root `_ADOPTION-DIFFICULTIES.md` file created from `templates/adoption/_TEMPLATE-ADOPTION-DIFFICULTIES.md`. It records process and difficulty evidence from first adoption. It is not `_TODO-repo-init.md` decision state and is not `.template-sync/marker.yml` sync state.
 - **Adoption mode:** The preservation posture applied before editing protected files and template-derived governance, community, process, workflow, or collaboration files. Valid named modes are `minimal-preservation` and `tailored`.
 - **`minimal-preservation`:** The default adoption mode for protected files and template-derived governance, community, process, workflow, and collaboration files. Keep upstream wording and structure; limit edits to placeholder substitution, removing complete delimited sections owned by unadopted manifest modules, fixing broken links, and adding required local overrides that are recorded in `.template-sync/marker.yml`.
 - **`tailored`:** A maintainer-selected adoption mode for a specific file or file set that allows broader downstream rewriting. The maintainer MUST select `tailored` explicitly before the broader rewrite starts. For protected files, the selection MUST be recorded in `template_sync.protected_file_decisions` with `tailored_authorization_basis`; for non-protected files, record the selection in `_TODO-repo-init.md`, `.template-sync/marker.yml` local overrides, the sync working notes, or the final sync summary.
@@ -91,6 +92,22 @@ python .template-sync/scripts/generate_sync_candidates.py --preflight
 ```
 
 Use `--include-github-metadata` only after the maintainer explicitly opts in to read-only GitHub metadata discovery through the `gh` CLI. Without that opt-in, GitHub-only settings remain manual-review items in the generated report.
+
+The preflight report includes a raw first-adoption state section that separates initialized sync state from local repository clutter. It reports marker evidence, adoption notes, tracked files, untracked files, ignored files, physical empty directory trees, missing state files, and high-signal path presence. Default output is bounded to deterministic samples with explicit remainder counts. Use `--full-state` with `--preflight` when the full raw inventory is needed:
+
+```bash
+python .template-sync/scripts/generate_sync_candidates.py --preflight --full-state
+```
+
+When the adoption work exposes process difficulties worth preserving, create the optional journal before continuing:
+
+```bash
+python .template-sync/scripts/initialize_adoption_journal.py
+```
+
+Use `--journal-path` when the downstream repository keeps adoption notes somewhere other than the root journal path. The helper never overwrites an existing journal.
+
+After context loss, interruption, or compaction, reread `_ADOPTION-DIFFICULTIES.md` when present, `_TODO-repo-init.md`, `.template-sync/marker.yml` when present, and the current raw repository state before continuing.
 
 When the gate applies, run the structural convention assessment in [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md#structural-convention-assessment) and carry the findings into the first-adoption working notes. Each finding MUST be classified as required for selected template modules, strongly recommended during adoption, post-adoption follow-up, or intentionally not recommended. Required structural changes MUST be implemented or explicitly remapped before adoption is finalized. Post-adoption modernization MUST be drafted as issue follow-up and MUST NOT be bundled into template adoption unless the owner explicitly authorizes it.
 
@@ -647,6 +664,7 @@ Manifest version 2 rows MAY also use `requires_any`: the path is included only w
 | `.template-sync/manifest.yml` | `template-sync-support` |
 | `.template-sync/instruction-contracts.yml` | `template-sync-support` |
 | `.template-sync/scripts/**` | `template-sync-support` |
+| `templates/adoption/**` | `template-sync-support` |
 | `.github/copilot-instructions.md` | `agent-instructions` |
 | `.github/instructions/docs.instructions.md` | `markdown`, `agent-instructions` |
 | `.github/instructions/gitattributes.instructions.md` | `baseline`, `agent-instructions` |
@@ -688,7 +706,7 @@ Manifest version 2 rows MAY also use `requires_any`: the path is included only w
 | `schemas/examples/template-sync-marker/**`, `schemas/examples/template-sync-instruction-contracts/**` | `template-sync-support` |
 | `schemas/**` | `schema` |
 | `tests/test_schema_examples.py` | one of `schema`, `template-sync-support` |
-| `tests/test_generate_sync_candidates.py`, `tests/test_report_excluded_module_references.py`, `tests/test_materialize_downstream_adoption.*` | `template-sync-support` |
+| `tests/test_generate_sync_candidates.py`, `tests/test_first_adoption_state.*`, `tests/test_initialize_adoption_journal.*`, `tests/test_report_excluded_module_references.py`, `tests/test_materialize_downstream_adoption.*` | `template-sync-support` |
 | `tests/test_run_first_adoption_checks.*` | `template-sync-support` |
 | `tests/test_template_manifest.py`, `tests/test_template_sync_materialization_helpers.py`, `tests/test_validate_marker.py`, `tests/test_validate_downstream_adoption.py`, `tests/test_validate_instruction_contracts.py` | `template-sync-support` |
 | `.github/scripts/terraform_hooks.py`, `tests/test_terraform_hooks.py` | `terraform` |

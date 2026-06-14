@@ -101,7 +101,7 @@ This template repository includes several features you can adopt individually or
 | **Pre-commit Hooks** | Automated code quality checks before commits |
 | **Linting Configurations** | Pre-configured settings for markdownlint, PSScriptAnalyzer, TFLint, and yamllint |
 | **Data-File Validation** | JSON, YAML, GitHub Actions, and JSON Schema example validation through pre-commit and `data-ci.yml` |
-| **Template Sync Support** | `.template-sync/marker.yml`, `.template-sync/manifest.yml`, `.template-sync/instruction-contracts.yml`, the first-adoption working-tree runner, the marker-aware retained-state and instruction-contract validation helpers, and the candidate table generator with read-only first-adoption preflight/questionnaire and future-sync ledger modes |
+| **Template Sync Support** | `.template-sync/marker.yml`, `.template-sync/manifest.yml`, `.template-sync/instruction-contracts.yml`, the first-adoption working-tree runner, the marker-aware retained-state and instruction-contract validation helpers, the adoption difficulties journal helper and scaffold, and the candidate table generator with read-only first-adoption preflight/questionnaire, raw state reporting, and future-sync ledger modes |
 | **Dependabot** | Automated dependency update monitoring |
 | **CODEOWNERS** | Automatic reviewer assignment for pull requests |
 | **Multi-Agent Support** | Instruction files for Cursor Agent, Hermes Agent, Claude Code, OpenAI Codex CLI, and Gemini Code Assist |
@@ -205,7 +205,7 @@ Use this matrix to decide which features to adopt based on complexity and depend
 | VS Code Settings | `.vscode/settings.json` | None | Low |
 | Markdown Linting | `.markdownlint.jsonc`, `package.json`, npm scripts | Node.js | Medium |
 | Pre-commit Hooks | `.pre-commit-config.yaml`, `.github/scripts/terraform_hooks.py` if retaining Terraform hooks | Python, pre-commit; Terraform and TFLint for Terraform hooks | Medium |
-| Template Sync Support | `.template-sync/marker.yml`, `.template-sync/manifest.yml`, `.template-sync/instruction-contracts.yml`, `.template-sync/scripts/materialize_downstream_adoption.py`, `.template-sync/scripts/run_first_adoption_checks.py`, `.template-sync/scripts/validate_marker.py`, `.template-sync/scripts/validate_instruction_contracts.py`, `.template-sync/scripts/generate_sync_candidates.py` (`--preflight` / `--questionnaire`, `--ledger`, `--ledger-only`), `schemas/template-sync-marker.schema.json`, `schemas/template-sync-manifest.schema.json`, `schemas/template-sync-instruction-contracts.schema.json` | Python and schema validation dependencies | Medium |
+| Template Sync Support | `.template-sync/marker.yml`, `.template-sync/manifest.yml`, `.template-sync/instruction-contracts.yml`, `.template-sync/scripts/materialize_downstream_adoption.py`, `.template-sync/scripts/run_first_adoption_checks.py`, `.template-sync/scripts/validate_marker.py`, `.template-sync/scripts/validate_instruction_contracts.py`, `.template-sync/scripts/generate_sync_candidates.py` (`--preflight` / `--questionnaire`, `--full-state`, `--ledger`, `--ledger-only`), `.template-sync/scripts/initialize_adoption_journal.py`, `templates/adoption/_TEMPLATE-ADOPTION-DIFFICULTIES.md`, `schemas/template-sync-marker.schema.json`, `schemas/template-sync-manifest.schema.json`, `schemas/template-sync-instruction-contracts.schema.json` | Python and schema validation dependencies | Medium |
 | PowerShell CI Workflow | `.github/workflows/powershell-ci.yml` | PowerShell, Pester | Medium |
 | PSScriptAnalyzer Config | `.github/linting/PSScriptAnalyzerSettings.psd1` | PowerShell | Low |
 | Python CI Workflow | `.github/workflows/python-ci.yml` | Python project structure | High |
@@ -224,6 +224,37 @@ python .template-sync/scripts/generate_sync_candidates.py --preflight
 ```
 
 Use `--include-github-metadata` only when the maintainer explicitly opts in to read-only GitHub metadata lookup through the `gh` CLI. Without that flag, the report labels GitHub-only settings as manual-review items instead of guessing.
+
+The preflight report includes a **Raw First-Adoption State** section. Use it to separate initialized template-sync state from local clutter:
+
+- **Marker Evidence** reports `.template-sync/` directory presence separately from `.template-sync/marker.yml`. A `.template-sync/` directory without `.template-sync/marker.yml` means sync support files may be present, but authoritative marker state is not initialized.
+- **Adoption Notes** reports existing `_TODO-repo-init.md` and `_ADOPTION-DIFFICULTIES.md` files. `_TODO-repo-init.md` records decisions; `_ADOPTION-DIFFICULTIES.md` records process evidence.
+- **Tracked Files**, **Untracked Files**, and **Ignored Files And Directories** are Git state. Use these sections to spot uncommitted adoption files, ignored generated content, and unexpected local files before copying template content.
+- **Physical Empty Directory Trees** are filesystem state, not Git adoption state. Git does not track empty directories, so treat these as layout evidence only.
+- **Missing State Files** calls out absent `_TODO-repo-init.md`, `_ADOPTION-DIFFICULTIES.md`, and `.template-sync/marker.yml` separately so a missing marker is not hidden by the presence of `.template-sync/`.
+- **High-Signal Path Inventory** summarizes `.template-sync/`, `.github/`, root agent files, `.cursor/`, `.claude/`, `.codex/`, `.vscode/`, and `node_modules/` without deeply listing generated dependency trees by default.
+
+Default raw state output is bounded and deterministic: each category prints a count, a lexicographically ordered sample, and an explicit remainder count when more entries exist. When you need every entry, rerun preflight in full-state mode:
+
+```bash
+python .template-sync/scripts/generate_sync_candidates.py --preflight --full-state
+```
+
+Create an adoption difficulties journal when the adoption work exposes blockers, surprises, manual workarounds, or risks that should survive context loss but are not maintainer decisions:
+
+```bash
+python .template-sync/scripts/initialize_adoption_journal.py
+```
+
+The helper creates `_ADOPTION-DIFFICULTIES.md` only when it is absent and never overwrites existing content. Use `--journal-path` to keep the journal somewhere else:
+
+```bash
+python .template-sync/scripts/initialize_adoption_journal.py --journal-path notes/adoption-difficulties.md
+```
+
+Use the journal for timestamped or phase-based evidence: what happened, why it mattered, impact or risk, resolution or workaround, follow-up, related files, and related commands. Do not use it as the source of truth for selected modules, protected-file decisions, reviewed template commits, or unresolved policy decisions; those remain in `.template-sync/marker.yml` and `_TODO-repo-init.md`.
+
+After context loss, interruption, or compaction, reread `_ADOPTION-DIFFICULTIES.md` when present, `_TODO-repo-init.md`, `.template-sync/marker.yml` when present, and the current raw repository state before continuing.
 
 After retained modules, source repository, reviewed template commit, and protected-file decisions are known, you may run the one-shot materialization helper against a target working tree:
 

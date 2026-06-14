@@ -934,6 +934,9 @@ def test_preflight_without_marker_reports_questionnaire_and_reused_ledger(
     assert "Marker: `.template-sync/marker.yml` (not found;" in result.stdout
     assert "GitHub metadata: not requested" in result.stdout
     assert "Which vulnerability reporting channel should `SECURITY.md` publish?" in result.stdout
+    assert "## Raw First-Adoption State" in result.stdout
+    assert "### Missing State Files" in result.stdout
+    assert "`_ADOPTION-DIFFICULTIES.md`" in result.stdout
     assert "## `_TODO-repo-init.md` Starter" in result.stdout
     assert "state: `[not yet asked, asked and deferred, or unavailable" in result.stdout
     assert "## Reused Adoption Ledger" in result.stdout
@@ -943,6 +946,23 @@ def test_preflight_without_marker_reports_questionnaire_and_reused_ledger(
         "needs maintainer decision | Protected path is not retained by included modules"
     ) in result.stdout
     assert "No range base was provided" not in result.stderr
+
+
+def test_preflight_full_state_lists_entries_hidden_by_default(tmp_path: Path) -> None:
+    """Default raw state output is bounded; full-state output lists every entry."""
+    _init_repo(tmp_path)
+    for index in range(12):
+        _write_text(tmp_path, f"notes/file-{index:02}.md", "untracked\n")
+
+    bounded = _run_generator(tmp_path, "--preflight")
+    full = _run_generator(tmp_path, "--preflight", "--full-state")
+
+    assert bounded.returncode == 0, bounded.stderr
+    assert full.returncode == 0, full.stderr
+    assert "Remainder:" in bounded.stdout
+    assert "`notes/file-11.md`" not in bounded.stdout
+    assert "`notes/file-11.md`" in full.stdout
+    assert "Remainder:" not in full.stdout
 
 
 def test_questionnaire_alias_with_marker_reports_protected_questions(
@@ -988,6 +1008,16 @@ def test_preflight_rejects_write_flags(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert "--write-ledger cannot be used with --preflight." in result.stderr
+
+
+def test_full_state_requires_preflight(tmp_path: Path) -> None:
+    """The raw full-state switch belongs to the preflight report only."""
+    _init_repo(tmp_path)
+
+    result = _run_generator(tmp_path, "--ledger-only", "--full-state")
+
+    assert result.returncode == 1
+    assert "--full-state can only be used with --preflight." in result.stderr
 
 
 def test_github_metadata_not_requested_skips_provider(tmp_path: Path) -> None:

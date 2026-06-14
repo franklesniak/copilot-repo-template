@@ -73,6 +73,9 @@ template_manifest:
     - pattern: '.template-sync/scripts/**'
       requires_all:
         - template-sync-support
+    - pattern: 'templates/adoption/**'
+      requires_all:
+        - template-sync-support
     - pattern: '.github/copilot-instructions.md'
       requires_all:
         - agent-instructions
@@ -353,6 +356,12 @@ template_manifest:
         - schema
         - template-sync-support
     - pattern: 'tests/test_generate_sync_candidates.py'
+      requires_all:
+        - template-sync-support
+    - pattern: 'tests/test_first_adoption_state.*'
+      requires_all:
+        - template-sync-support
+    - pattern: 'tests/test_initialize_adoption_journal.*'
       requires_all:
         - template-sync-support
     - pattern: 'tests/test_report_excluded_module_references.py'
