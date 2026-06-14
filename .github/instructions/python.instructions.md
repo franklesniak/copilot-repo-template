@@ -7,7 +7,7 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.6.20260614.0
+**Version:** 1.6.20260614.1
 
 ## Metadata
 
@@ -226,6 +226,45 @@ except json.JSONDecodeError as error:
 
 - **MUST** use `logging` for non-test code.  **MUST NOT** use `print` except in CLI entrypoints.
 - Logging messages **MUST** be human-actionable and **SHOULD** include identifiers/paths when relevant.
+
+### Rendering Commands for Humans
+
+When rendering a command line that a human is expected to read, copy, or paste, including CLI output, generated reports, and suggested manual remediation commands, code **SHOULD** quote for the intended command-line surface. The intended surface is usually the current host, but code that renders commands for a different shell or platform **SHOULD** declare that target explicitly and quote for that target. This guidance covers human-facing rendering only; constructing a command the program will execute is out of scope.
+
+- For POSIX / Unix-shell-facing full command strings built from an argument vector, use `shlex.join()` (added in Python 3.8).
+- On Windows, when rendering the argv-style command line that matches Python's `subprocess` behavior, use `subprocess.list2cmdline()` behind an `os.name == "nt"` branch. This gives display parity with Python's Windows argument conversion.
+- Code **SHOULD NOT** use `subprocess.list2cmdline()` unconditionally for POSIX-facing command strings, because it applies Windows / MS C runtime quoting rules.
+- Code **SHOULD NOT** present `subprocess.list2cmdline()` output as paste-safe for a Windows shell. If output must target PowerShell, `cmd.exe`, or another specific Windows shell, quote per that shell's own rules or do not label the rendered string paste-safe.
+- For POSIX-facing single-token rendering, use `shlex.quote()` rather than adding quotes manually. This is not Windows-shell guidance.
+
+Compliant example:
+
+```python
+import os
+import shlex
+import subprocess
+from collections.abc import Sequence
+
+
+def format_command(command: Sequence[str]) -> str:
+    """Return a platform-appropriate display string for an argument vector."""
+    command_parts = list(command)
+    if os.name == "nt":
+        return subprocess.list2cmdline(command_parts)
+    return shlex.join(command_parts)
+```
+
+Non-compliant counter-example:
+
+```python
+import subprocess
+from collections.abc import Sequence
+
+
+def format_command(command: Sequence[str]) -> str:
+    """Return a command string."""
+    return subprocess.list2cmdline(command)
+```
 
 ### Secrets in User-Facing Output
 
