@@ -256,13 +256,15 @@ Use the journal for timestamped or phase-based evidence: what happened, why it m
 
 After context loss, interruption, or compaction, reread `_ADOPTION-DIFFICULTIES.md` when present, `_TODO-repo-init.md`, `.template-sync/marker.yml` when present, and the current raw repository state before continuing.
 
-After retained modules, source repository, reviewed template commit, and protected-file decisions are known, you may run the one-shot materialization helper against a target working tree:
+After retained modules, source repository, a reviewed source checkout or locally available upstream ref, and protected-file decisions are known, you may run the one-shot materialization helper against a target working tree:
 
 ```bash
 python .template-sync/scripts/materialize_downstream_adoption.py --help
 ```
 
-The helper copies only retained manifest-owned files, removes inline blocks for excluded modules, optionally reuses the approved placeholder replacement helper against a staging tree, and refuses to overwrite non-identical existing target files unless a path-scoped decision authorizes or records the conflict. In a non-empty repository, conflicts for existing files such as `README.md`, `LICENSE`, and `.gitignore` are expected first-adoption decisions. Resolve them per path through `template_sync.local_overrides`, `template_sync.protected_file_decisions`, or `template_sync.deferred_protected_candidates`; they are not runtime/tool failures.
+The helper copies only retained manifest-owned files, removes inline blocks for excluded modules, optionally reuses the approved placeholder replacement helper against a staging tree, and refuses to overwrite non-identical existing target files unless a path-scoped decision authorizes or records the conflict. Use `--template-root` for an existing reviewed checkout, or use `--template-ref REF` / `--template-revision FULL_SHA` with `--template-repo PATH` to let the helper create and remove a private detached source worktree from locally available Git objects. The helper does not fetch, pull, merge, or rebase. Its summary reports the supplied source ref or revision, resolved source SHA, source repository, diagnostic temporary checkout path, cleanup status, and target root; do not copy that resolved SHA into `template_sync.last_reviewed_template_commit` until adoption review is complete. In a non-empty repository, conflicts for existing files such as `README.md`, `LICENSE`, and `.gitignore` are expected first-adoption decisions. Resolve them per path through `template_sync.local_overrides`, `template_sync.protected_file_decisions`, or `template_sync.deferred_protected_candidates`; they are not runtime/tool failures.
+
+Use the existing review-artifact commands around materialization instead of broad manual source reads: `python .template-sync/scripts/generate_sync_candidates.py --ledger`, `python .template-sync/scripts/generate_sync_candidates.py --ledger-only`, and `python .template-sync/scripts/generate_sync_candidates.py --summary`.
 
 Use the concrete `_TODO-repo-init.md` example in [GETTING_STARTED_NEW_REPO.md](GETTING_STARTED_NEW_REPO.md#first-adoption-preflight-checklist) and keep only the items that are unresolved for this repository. Discovery may inspect files and Git metadata first, but agents and maintainers MUST NOT invent contact emails, reporting channels, branch protection policy, CODEOWNERS identities, GHES hosts, label availability, GitHub repository settings, or adoption modes beyond the documented default.
 

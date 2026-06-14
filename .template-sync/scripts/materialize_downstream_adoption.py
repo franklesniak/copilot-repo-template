@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import os
+import re
 import shutil
 import subprocess
 import sys
@@ -49,10 +51,12 @@ from template_sync_materialization_helpers import (  # noqa: E402
 EXIT_SUCCESS = 0
 EXIT_RUNTIME_FAILURE = 1
 EXIT_DECISIONS_REQUIRED = 2
+EXIT_CLEANUP_FAILURE = 3
 PLACEHOLDER_HELPER_PATH = ".github/scripts/replace-template-placeholders.py"
 ADOPTION_MODES = ("minimal-preservation", "tailored")
 TEMPLATE_TAKE_DECISION = "TAKE"
 TEMPLATE_SKIP_DECISION = "SKIP"
+FULL_LOWERCASE_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 PLACEHOLDER_DESTS = (
     "repository",
     "github_host",
@@ -73,6 +77,43 @@ MARKER_COPY_FIELDS = (
 
 class MaterializationError(RuntimeError):
     """Raised when first-adoption materialization cannot proceed safely."""
+
+
+@dataclass
+class SourceSummary:
+    """Template source identity and cleanup information for one run."""
+
+    target_root: str
+    template_root: str
+    source_mode: str
+    source_value: str | None = None
+    resolved_source_sha: str | None = None
+    source_repository: str | None = None
+    temporary_checkout_path: str | None = None
+    cleanup_status: str = "not required"
+    cleanup_failure: str | None = None
+    manual_cleanup_command: str | None = None
+
+
+@dataclass
+class SourceCheckout:
+    """A template source checkout owned by the materializer."""
+
+    template_root: Path
+    summary: SourceSummary
+    template_repo: Path | None = None
+    temporary_parent: Path | None = None
+    temporary_checkout_path: Path | None = None
+
+
+@dataclass(frozen=True)
+class CleanupFailure:
+    """A failed attempt to remove a tool-created temporary worktree."""
+
+    detail: str
+    residual_worktree_path: Path
+    source_repository: Path
+    manual_cleanup_command: str
 
 
 @dataclass(frozen=True)
@@ -120,6 +161,7 @@ class Summary:
     marker_status: str = "preview-only"
     marker_reason: str = ""
     computed_marker_preview: str | None = None
+    source: SourceSummary | None = None
 
     @property
     def unrecorded_conflicts(self) -> tuple[Conflict, ...]:
@@ -140,15 +182,49 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "working tree without overwriting unrecorded conflicts."
         )
     )
-    parser.add_argument(
+    source_group = parser.add_mutually_exclusive_group()
+    source_group.add_argument(
         "--template-root",
         default=None,
         help="Template repository root. Defaults to the repository containing this script.",
+    )
+    source_group.add_argument(
+        "--template-ref",
+        default=None,
+        help=(
+            "Local upstream template ref to materialize from. The ref is resolved "
+            "without fetching, using --template-repo as the Git object database."
+        ),
+    )
+    source_group.add_argument(
+        "--template-revision",
+        default=None,
+        metavar="FULL_SHA",
+        help=(
+            "Full lowercase upstream template commit SHA to materialize from. "
+            "Resolved without fetching, using --template-repo as the Git object database."
+        ),
     )
     parser.add_argument(
         "--target-root",
         required=True,
         help="Downstream repository root that receives the staged materialization.",
+    )
+    parser.add_argument(
+        "--template-repo",
+        default=None,
+        help=(
+            "Git repository whose local object database resolves --template-ref or "
+            "--template-revision. Defaults to --target-root."
+        ),
+    )
+    parser.add_argument(
+        "--template-temp-root",
+        default=None,
+        help=(
+            "Directory for private temporary source worktrees. Defaults outside "
+            "--target-root under the system temporary directory when possible."
+        ),
     )
     parser.add_argument(
         "--decisions-file",
@@ -258,6 +334,338 @@ def resolve_existing_root(raw_root: str | None, *, default: Path | None, name: s
     if not resolved.is_dir():
         raise MaterializationError(f"{name} does not exist or is not a directory.")
     return resolved
+
+
+def is_same_or_descendant(path: Path, root: Path) -> bool:
+    """Return whether ``path`` is equal to or below ``root`` after resolution."""
+    resolved_path = path.resolve(strict=False)
+    resolved_root = root.resolve()
+    if resolved_path == resolved_root:
+        return True
+    try:
+        resolved_path.relative_to(resolved_root)
+    except ValueError:
+        return False
+    return True
+
+
+def filesystem_compare_key(path: Path) -> str:
+    """Return a normalized path string for worktree-list comparisons."""
+    resolved = str(path.resolve(strict=False))
+    if os.name == "nt":
+        return resolved.casefold()
+    return resolved
+
+
+def command_detail(result: subprocess.CompletedProcess[str]) -> str:
+    """Return the first useful diagnostic line from a completed command."""
+    for stream_text in (result.stderr, result.stdout):
+        for line in stream_text.splitlines():
+            if line.strip():
+                return line.strip()
+    return f"exit {result.returncode}"
+
+
+def run_git(
+    repo_root: Path,
+    args: Sequence[str],
+) -> subprocess.CompletedProcess[str]:
+    """Run a local Git command without invoking a shell."""
+    try:
+        return subprocess.run(
+            ["git", "-C", str(repo_root), *args],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except OSError as error:
+        raise MaterializationError(f"Unable to run git: {os_error_summary(error)}") from error
+
+
+def resolve_template_commit(template_repo: Path, raw_ref: str, *, label: str) -> str:
+    """Resolve a locally available ref or SHA to a commit SHA without fetching."""
+    result = run_git(
+        template_repo,
+        ["rev-parse", "--verify", "--end-of-options", f"{raw_ref}^{{commit}}"],
+    )
+    if result.returncode != 0:
+        raise MaterializationError(
+            f"Unable to resolve {label} {raw_ref!r} to a local commit without fetching: "
+            f"{command_detail(result)}"
+        )
+    resolved_sha = result.stdout.strip().splitlines()[0]
+    if not FULL_LOWERCASE_SHA_RE.fullmatch(resolved_sha):
+        raise MaterializationError(
+            f"Git resolved {label} {raw_ref!r} to an unexpected commit value."
+        )
+    return resolved_sha
+
+
+def resolve_template_temp_root(raw_temp_root: str | None, target_root: Path) -> Path:
+    """Return an absolute temporary-worktree parent that stays outside the target."""
+    if raw_temp_root is not None:
+        temp_root = Path(raw_temp_root).expanduser().resolve(strict=False)
+        if is_same_or_descendant(temp_root, target_root):
+            raise MaterializationError("--template-temp-root must not be inside --target-root.")
+        try:
+            temp_root.mkdir(parents=True, exist_ok=True)
+        except OSError as error:
+            raise MaterializationError(
+                f"Unable to create --template-temp-root: {os_error_summary(error)}"
+            ) from error
+        if not temp_root.is_dir():
+            raise MaterializationError("--template-temp-root does not name a directory.")
+        return temp_root.resolve()
+
+    temp_root = Path(tempfile.gettempdir()).resolve()
+    if is_same_or_descendant(temp_root, target_root):
+        temp_root = target_root.parent.resolve()
+    if is_same_or_descendant(temp_root, target_root):
+        raise MaterializationError(
+            "Unable to choose a temporary checkout root outside --target-root; "
+            "pass --template-temp-root."
+        )
+    return temp_root
+
+
+def manual_cleanup_command(template_repo: Path, temporary_checkout_path: Path) -> str:
+    """Return a copy/pasteable command for removing the temporary worktree."""
+    return subprocess.list2cmdline(
+        [
+            "git",
+            "-C",
+            str(template_repo),
+            "worktree",
+            "remove",
+            "--force",
+            str(temporary_checkout_path),
+        ]
+    )
+
+
+def worktree_list_contains_path(template_repo: Path, worktree_path: Path) -> bool:
+    """Return whether ``git worktree list --porcelain`` still lists a path."""
+    result = run_git(template_repo, ["worktree", "list", "--porcelain"])
+    if result.returncode != 0:
+        raise MaterializationError(
+            f"Unable to verify temporary worktree cleanup: {command_detail(result)}"
+        )
+    expected_key = filesystem_compare_key(worktree_path)
+    for line in result.stdout.splitlines():
+        if not line.startswith("worktree "):
+            continue
+        listed_path = Path(line.removeprefix("worktree "))
+        if filesystem_compare_key(listed_path) == expected_key:
+            return True
+    return False
+
+
+def create_temporary_source_checkout(
+    *,
+    template_repo: Path,
+    target_root: Path,
+    source_mode: str,
+    source_value: str,
+    resolved_source_sha: str,
+    temp_root: Path,
+) -> SourceCheckout:
+    """Create a detached temporary worktree for a resolved upstream source commit."""
+    try:
+        temporary_parent = Path(
+            tempfile.mkdtemp(prefix="template-source-", dir=str(temp_root))
+        ).resolve()
+    except OSError as error:
+        raise MaterializationError(
+            f"Unable to create temporary source checkout parent: {os_error_summary(error)}"
+        ) from error
+
+    temporary_checkout_path = temporary_parent / "checkout"
+    if is_same_or_descendant(temporary_checkout_path, target_root):
+        shutil.rmtree(temporary_parent, ignore_errors=True)
+        raise MaterializationError(
+            "Temporary source checkout path would be inside --target-root; "
+            "pass --template-temp-root outside the target repository."
+        )
+
+    result = run_git(
+        template_repo,
+        [
+            "worktree",
+            "add",
+            "--detach",
+            str(temporary_checkout_path),
+            resolved_source_sha,
+        ],
+    )
+    if result.returncode != 0:
+        shutil.rmtree(temporary_parent, ignore_errors=True)
+        raise MaterializationError(
+            f"Unable to create temporary source checkout: {command_detail(result)}"
+        )
+
+    command = manual_cleanup_command(template_repo, temporary_checkout_path)
+    return SourceCheckout(
+        template_root=temporary_checkout_path,
+        template_repo=template_repo,
+        temporary_parent=temporary_parent,
+        temporary_checkout_path=temporary_checkout_path,
+        summary=SourceSummary(
+            target_root=str(target_root),
+            template_root=str(temporary_checkout_path),
+            source_mode=source_mode,
+            source_value=source_value,
+            resolved_source_sha=resolved_source_sha,
+            source_repository=str(template_repo),
+            temporary_checkout_path=str(temporary_checkout_path),
+            cleanup_status="pending",
+            manual_cleanup_command=command,
+        ),
+    )
+
+
+def resolve_template_source(args: argparse.Namespace, target_root: Path) -> SourceCheckout:
+    """Resolve the template source root, creating a private worktree when requested."""
+    if args.template_revision is not None and not FULL_LOWERCASE_SHA_RE.fullmatch(
+        args.template_revision
+    ):
+        raise MaterializationError("--template-revision must be a full lowercase commit SHA.")
+
+    if args.template_ref is None and args.template_revision is None:
+        template_root = resolve_existing_root(
+            args.template_root,
+            default=default_template_root(),
+            name="--template-root",
+        )
+        return SourceCheckout(
+            template_root=template_root,
+            summary=SourceSummary(
+                target_root=str(target_root),
+                template_root=str(template_root),
+                source_mode="template-root",
+                source_value=str(template_root),
+            ),
+        )
+
+    raw_source_value = (
+        args.template_ref if args.template_ref is not None else args.template_revision
+    )
+    assert raw_source_value is not None
+    source_mode = "template-ref" if args.template_ref is not None else "template-revision"
+    template_repo = resolve_existing_root(
+        args.template_repo,
+        default=target_root,
+        name="--template-repo",
+    )
+    label = "--template-ref" if args.template_ref is not None else "--template-revision"
+    resolved_source_sha = resolve_template_commit(template_repo, raw_source_value, label=label)
+    temp_root = resolve_template_temp_root(args.template_temp_root, target_root)
+    return create_temporary_source_checkout(
+        template_repo=template_repo,
+        target_root=target_root,
+        source_mode=source_mode,
+        source_value=raw_source_value,
+        resolved_source_sha=resolved_source_sha,
+        temp_root=temp_root,
+    )
+
+
+def cleanup_source_checkout(source_checkout: SourceCheckout) -> CleanupFailure | None:
+    """Remove a tool-created temporary source checkout and verify it is unregistered."""
+    temporary_checkout_path = source_checkout.temporary_checkout_path
+    template_repo = source_checkout.template_repo
+    if temporary_checkout_path is None or template_repo is None:
+        source_checkout.summary.cleanup_status = "not required"
+        return None
+
+    remove_args = ["worktree", "remove", "--force", str(temporary_checkout_path)]
+    try:
+        first_result = run_git(template_repo, remove_args)
+        retried = False
+        final_result = first_result
+        if first_result.returncode != 0:
+            retried = True
+            final_result = run_git(template_repo, remove_args)
+    except MaterializationError as error:
+        retried = False
+        final_result = None
+        detail = str(error)
+
+    if final_result is not None and final_result.returncode == 0:
+        try:
+            if worktree_list_contains_path(template_repo, temporary_checkout_path):
+                detail = "temporary worktree path still appears in git worktree list"
+            else:
+                source_checkout.summary.cleanup_status = (
+                    "removed after retry" if retried else "removed"
+                )
+                if source_checkout.temporary_parent is not None:
+                    try:
+                        source_checkout.temporary_parent.rmdir()
+                    except OSError:
+                        pass
+                return None
+        except MaterializationError as error:
+            detail = str(error)
+    elif final_result is not None:
+        detail = command_detail(final_result)
+
+    command = source_checkout.summary.manual_cleanup_command or manual_cleanup_command(
+        template_repo,
+        temporary_checkout_path,
+    )
+    source_checkout.summary.cleanup_status = "failed"
+    source_checkout.summary.cleanup_failure = detail
+    source_checkout.summary.manual_cleanup_command = command
+    return CleanupFailure(
+        detail=detail,
+        residual_worktree_path=temporary_checkout_path,
+        source_repository=template_repo,
+        manual_cleanup_command=command,
+    )
+
+
+def format_cleanup_failure_diagnostic(
+    failure: CleanupFailure,
+    *,
+    materialization_succeeded: bool,
+) -> str:
+    """Return an actionable cleanup-failure diagnostic."""
+    if materialization_succeeded:
+        lead = (
+            "Target tree was materialized successfully, but temporary source "
+            "checkout cleanup failed. The target tree is intact."
+        )
+    else:
+        lead = "Temporary source checkout cleanup also failed after the materialization error."
+    return "\n".join(
+        [
+            lead,
+            f"Cleanup detail: {failure.detail}",
+            f"Residual worktree path: {failure.residual_worktree_path}",
+            f"Source repository: {failure.source_repository}",
+            f"Manual cleanup command: {failure.manual_cleanup_command}",
+        ]
+    )
+
+
+def validate_reviewed_commit_matches_source(
+    decisions: Decisions,
+    source_checkout: SourceCheckout,
+) -> None:
+    """Reject an already-reviewed SHA that disagrees with the resolved source commit."""
+    resolved_source_sha = source_checkout.summary.resolved_source_sha
+    reviewed_commit = decisions.last_reviewed_template_commit
+    if resolved_source_sha is None or reviewed_commit is None:
+        return
+    if reviewed_commit == resolved_source_sha:
+        return
+    raise MaterializationError(
+        "template_sync.last_reviewed_template_commit / --last-reviewed-template-commit "
+        f"({reviewed_commit}) does not match the resolved source SHA "
+        f"({resolved_source_sha}). Omit the reviewed value until review is complete "
+        "or supply the matching SHA."
+    )
 
 
 def resolve_target_decisions_file(target_root: Path, raw_path: str) -> Path:
@@ -1045,9 +1453,35 @@ def print_conflicts(conflicts: Iterable[Conflict]) -> None:
         print(f"    authorize: {conflict.resolution}")
 
 
+def print_source_summary(source: SourceSummary | None) -> None:
+    """Print template source identity and cleanup status."""
+    print("Source:")
+    if source is None:
+        print("  - (not recorded)")
+        return
+    print(f"  - target root: {source.target_root}")
+    print(f"  - template root: {source.template_root}")
+    print(f"  - source mode: {source.source_mode}")
+    if source.source_mode == "template-ref":
+        print(f"  - source ref: {source.source_value}")
+    elif source.source_mode == "template-revision":
+        print(f"  - source revision: {source.source_value}")
+    else:
+        print(f"  - source value: {source.source_value}")
+    print(f"  - resolved source SHA: {source.resolved_source_sha or '(not resolved)'}")
+    print(f"  - source repository: {source.source_repository or '(not used)'}")
+    print(f"  - temporary checkout path: {source.temporary_checkout_path or '(not used)'}")
+    print(f"  - cleanup status: {source.cleanup_status}")
+    if source.cleanup_failure is not None:
+        print(f"  - cleanup failure: {source.cleanup_failure}")
+    if source.manual_cleanup_command is not None:
+        print(f"  - manual cleanup command: {source.manual_cleanup_command}")
+
+
 def print_summary(summary: Summary) -> None:
     """Emit the deterministic human-readable materialization summary."""
     print("Materialization summary")
+    print_source_summary(summary.source)
     print(f"Default adoption mode: {summary.default_adoption_mode}")
     print_section("Retained modules", summary.retained_modules)
     print_section("Excluded modules", summary.excluded_modules)
@@ -1079,70 +1513,91 @@ def print_summary(summary: Summary) -> None:
 
 def materialize(args: argparse.Namespace) -> Summary:
     """Run first-adoption materialization and return the operation summary."""
-    template_root = resolve_existing_root(
-        args.template_root,
-        default=default_template_root(),
-        name="--template-root",
-    )
     target_root = resolve_existing_root(
         args.target_root,
         default=None,
         name="--target-root",
     )
-    _manifest, module_order, mappings = load_validated_manifest_context(template_root)
-    decisions = load_decisions(
-        args,
-        template_root=template_root,
-        target_root=target_root,
-        module_order=module_order,
-    )
+    source_checkout: SourceCheckout | None = None
+    summary: Summary | None = None
+    primary_error: Exception | None = None
 
-    marker_document = computed_marker_document(
-        decisions=decisions,
-        module_order=module_order,
-    )
-    validate_computed_marker(marker_document, template_root=template_root)
-    computed_marker_text = marker_yaml(marker_document)
-
-    retained_modules = ordered_modules(module_order, decisions.included_modules)
-    excluded_modules = [
-        module for module in module_order if module not in decisions.included_modules
-    ]
-    summary = Summary(
-        retained_modules=retained_modules,
-        excluded_modules=excluded_modules,
-        default_adoption_mode=args.default_adoption_mode,
-    )
-
-    with tempfile.TemporaryDirectory(prefix="template-adoption-") as temporary_directory:
-        staging_root = Path(temporary_directory)
-        staged_paths = write_staged_candidate(
+    try:
+        source_checkout = resolve_template_source(args, target_root)
+        template_root = source_checkout.template_root
+        _manifest, module_order, mappings = load_validated_manifest_context(template_root)
+        decisions = load_decisions(
+            args,
             template_root=template_root,
-            staging_root=staging_root,
-            mappings=mappings,
-            included_modules=decisions.included_modules,
-            summary=summary,
-        )
-        run_placeholder_helper(
-            args=args,
-            template_root=template_root,
-            staging_root=staging_root,
-            summary=summary,
-        )
-        reconcile_staged_files(
-            staging_root=staging_root,
             target_root=target_root,
-            staged_paths=staged_paths,
+            module_order=module_order,
+        )
+        validate_reviewed_commit_matches_source(decisions, source_checkout)
+
+        marker_document = computed_marker_document(
+            decisions=decisions,
+            module_order=module_order,
+        )
+        validate_computed_marker(marker_document, template_root=template_root)
+        computed_marker_text = marker_yaml(marker_document)
+
+        retained_modules = ordered_modules(module_order, decisions.included_modules)
+        excluded_modules = [
+            module for module in module_order if module not in decisions.included_modules
+        ]
+        summary = Summary(
+            retained_modules=retained_modules,
+            excluded_modules=excluded_modules,
+            default_adoption_mode=args.default_adoption_mode,
+            source=source_checkout.summary,
+        )
+
+        with tempfile.TemporaryDirectory(prefix="template-adoption-") as temporary_directory:
+            staging_root = Path(temporary_directory)
+            staged_paths = write_staged_candidate(
+                template_root=template_root,
+                staging_root=staging_root,
+                mappings=mappings,
+                included_modules=decisions.included_modules,
+                summary=summary,
+            )
+            run_placeholder_helper(
+                args=args,
+                template_root=template_root,
+                staging_root=staging_root,
+                summary=summary,
+            )
+            reconcile_staged_files(
+                staging_root=staging_root,
+                target_root=target_root,
+                staged_paths=staged_paths,
+                decisions=decisions,
+                summary=summary,
+            )
+
+        reconcile_marker(
+            target_root=target_root,
             decisions=decisions,
             summary=summary,
+            computed_marker_text=computed_marker_text,
         )
+    except Exception as error:
+        primary_error = error
 
-    reconcile_marker(
-        target_root=target_root,
-        decisions=decisions,
-        summary=summary,
-        computed_marker_text=computed_marker_text,
+    cleanup_failure = (
+        cleanup_source_checkout(source_checkout) if source_checkout is not None else None
     )
+    if primary_error is not None:
+        if cleanup_failure is not None:
+            raise MaterializationError(
+                f"{primary_error}\n\n"
+                + format_cleanup_failure_diagnostic(
+                    cleanup_failure,
+                    materialization_succeeded=False,
+                )
+            ) from primary_error
+        raise primary_error
+    assert summary is not None
     return summary
 
 
@@ -1173,6 +1628,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EXIT_RUNTIME_FAILURE
 
     print_summary(summary)
+    if summary.source is not None and summary.source.cleanup_status == "failed":
+        print(
+            format_cleanup_failure_diagnostic(
+                CleanupFailure(
+                    detail=summary.source.cleanup_failure or "cleanup failed",
+                    residual_worktree_path=Path(
+                        summary.source.temporary_checkout_path or "(unknown)"
+                    ),
+                    source_repository=Path(summary.source.source_repository or "(unknown)"),
+                    manual_cleanup_command=summary.source.manual_cleanup_command
+                    or "git worktree remove --force <temporary-checkout-path>",
+                ),
+                materialization_succeeded=True,
+            ),
+            file=sys.stderr,
+        )
+        return EXIT_CLEANUP_FAILURE
     if summary.unrecorded_conflicts and not args.allow_conflicts:
         return EXIT_DECISIONS_REQUIRED
     return EXIT_SUCCESS

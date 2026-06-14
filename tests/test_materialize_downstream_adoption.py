@@ -367,6 +367,88 @@ def run_materialize(
     )
 
 
+def run_materialize_without_template_root(
+    target_root: Path,
+    *args: str,
+) -> subprocess.CompletedProcess[str]:
+    """Run the materialization helper using source-selection CLI flags."""
+    return subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--target-root",
+            str(target_root),
+            *args,
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+
+def run_git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """Run Git in a fixture repository and assert success."""
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), *args],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    return result
+
+
+def git_worktree_paths(repo_root: Path) -> set[Path]:
+    """Return paths from ``git worktree list --porcelain``."""
+    result = run_git(repo_root, "worktree", "list", "--porcelain")
+    paths: set[Path] = set()
+    for line in result.stdout.splitlines():
+        if line.startswith("worktree "):
+            paths.add(Path(line.removeprefix("worktree ")).resolve(strict=False))
+    return paths
+
+
+def commit_fixture_template(template_root: Path) -> str:
+    """Initialize and commit a fixture template repository."""
+    run_git(template_root, "init", "-q")
+    run_git(template_root, "add", ".")
+    run_git(
+        template_root,
+        "-c",
+        "user.name=Template Tester",
+        "-c",
+        "user.email=template@example.com",
+        "commit",
+        "-q",
+        "-m",
+        "Initial template fixture",
+    )
+    return run_git(template_root, "rev-parse", "HEAD").stdout.strip()
+
+
+def prepare_git_template(
+    template_root: Path,
+    path_mappings: list[dict[str, Any]],
+    files: dict[str, str],
+) -> str:
+    """Create a minimal committed template repository and return its HEAD SHA."""
+    prepare_template(template_root, path_mappings)
+    for relative_path, content in files.items():
+        write_file(template_root / relative_path, content)
+    return commit_fixture_template(template_root)
+
+
+def summary_value(output: str, label: str) -> str:
+    """Return the first source-summary value for ``label``."""
+    prefix = f"  - {label}: "
+    for line in output.splitlines():
+        if line.startswith(prefix):
+            return line.removeprefix(prefix)
+    raise AssertionError(f"summary label not found: {label}")
+
+
 def run_excluded_module_report(
     repo_root: Path,
     included_modules: tuple[str, ...],
@@ -418,6 +500,368 @@ def test_materializer_help_documents_security_reporting_modes(
     assert "github-private-only" in captured.out
     assert "contact-only" in captured.out
     assert "both" in captured.out
+
+
+def test_materializer_materializes_from_local_template_ref_and_cleans_worktree(
+    tmp_path: Path,
+) -> None:
+    """A locally available template ref is checked out privately and removed."""
+    template_repo = tmp_path / "template-repo"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    resolved_sha = prepare_git_template(
+        template_repo,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+    run_git(template_repo, "branch", "template-main", resolved_sha)
+
+    result = run_materialize_without_template_root(
+        target_root,
+        "--template-ref",
+        "template-main",
+        "--template-repo",
+        str(template_repo),
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert read_file(target_root / "README.md") == "template readme\n"
+    assert summary_value(result.stdout, "source ref") == "template-main"
+    assert summary_value(result.stdout, "resolved source SHA") == resolved_sha
+    assert summary_value(result.stdout, "source repository") == str(template_repo.resolve())
+    temporary_checkout_path = Path(summary_value(result.stdout, "temporary checkout path"))
+    assert not temporary_checkout_path.exists()
+    assert not materializer.is_same_or_descendant(temporary_checkout_path, target_root)
+    assert temporary_checkout_path not in git_worktree_paths(template_repo)
+    assert "cleanup status: removed" in result.stdout
+    assert "\n  - .git\n" not in result.stdout
+
+
+def test_materializer_materializes_from_full_template_revision(tmp_path: Path) -> None:
+    """A full SHA input is resolved, checked out, and reported as a revision."""
+    template_repo = tmp_path / "template-repo"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    resolved_sha = prepare_git_template(
+        template_repo,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+
+    result = run_materialize_without_template_root(
+        target_root,
+        "--template-revision",
+        resolved_sha,
+        "--template-repo",
+        str(template_repo),
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert read_file(target_root / "README.md") == "template readme\n"
+    assert summary_value(result.stdout, "source revision") == resolved_sha
+    assert summary_value(result.stdout, "resolved source SHA") == resolved_sha
+    assert "cleanup status: removed" in result.stdout
+
+
+def test_materializer_rejects_invalid_template_ref(tmp_path: Path) -> None:
+    """The materializer resolves refs locally and fails without fetching."""
+    template_repo = tmp_path / "template-repo"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_git_template(
+        template_repo,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+
+    result = run_materialize_without_template_root(
+        target_root,
+        "--template-ref",
+        "missing-template-ref",
+        "--template-repo",
+        str(template_repo),
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+    )
+
+    assert result.returncode == 1
+    assert "Unable to resolve --template-ref 'missing-template-ref'" in result.stderr
+
+
+def test_materializer_rejects_template_root_with_ref(tmp_path: Path) -> None:
+    """Explicit source root and source ref modes are mutually exclusive."""
+    template_repo = tmp_path / "template-repo"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(template_repo, [{"pattern": "README.md", "requires_all": ["baseline"]}])
+
+    result = run_materialize_without_template_root(
+        target_root,
+        "--template-root",
+        str(template_repo),
+        "--template-ref",
+        "template-main",
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+    )
+
+    assert result.returncode == 2
+    assert "not allowed with argument" in result.stderr
+
+
+def test_materializer_rejects_template_temp_root_inside_target(tmp_path: Path) -> None:
+    """Operator-supplied temporary checkout roots must stay outside the target."""
+    template_repo = tmp_path / "template-repo"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    resolved_sha = prepare_git_template(
+        template_repo,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+    run_git(template_repo, "branch", "template-main", resolved_sha)
+
+    result = run_materialize_without_template_root(
+        target_root,
+        "--template-ref",
+        "template-main",
+        "--template-repo",
+        str(template_repo),
+        "--template-temp-root",
+        str(target_root / ".tmp"),
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+    )
+
+    assert result.returncode == 1
+    assert "--template-temp-root must not be inside --target-root" in result.stderr
+
+
+def test_materializer_rejects_reviewed_sha_mismatch(tmp_path: Path) -> None:
+    """Reviewed commits must match the resolved source SHA when both are supplied."""
+    template_repo = tmp_path / "template-repo"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    resolved_sha = prepare_git_template(
+        template_repo,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+    run_git(template_repo, "branch", "template-main", resolved_sha)
+    mismatched_sha = "f" * 40
+    assert mismatched_sha != resolved_sha
+
+    result = run_materialize_without_template_root(
+        target_root,
+        "--template-ref",
+        "template-main",
+        "--template-repo",
+        str(template_repo),
+        "--source-repo",
+        SOURCE_REPO,
+        "--last-reviewed-template-commit",
+        mismatched_sha,
+        "--included-module",
+        "baseline",
+    )
+
+    assert result.returncode == 1
+    assert "does not match the resolved source SHA" in result.stderr
+    assert "Omit the reviewed value until review is complete" in result.stderr
+
+
+def test_materializer_failure_cleans_temporary_worktree(tmp_path: Path) -> None:
+    """A materialization failure still removes the tool-created source worktree."""
+    template_repo = tmp_path / "template-repo"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    resolved_sha = prepare_git_template(
+        template_repo,
+        [{"pattern": "SECURITY.md", "requires_all": ["baseline"]}],
+        {"SECURITY.md": "Email [security contact email]\n"},
+    )
+    run_git(template_repo, "branch", "template-main", resolved_sha)
+    before_paths = git_worktree_paths(template_repo)
+
+    result = run_materialize_without_template_root(
+        target_root,
+        "--template-ref",
+        "template-main",
+        "--template-repo",
+        str(template_repo),
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--repository",
+        "octo/widget",
+        "--security-contact",
+        "security@example.com",
+    )
+
+    assert result.returncode == 1
+    assert "placeholder helper is unavailable" in result.stderr
+    assert git_worktree_paths(template_repo) == before_paths
+
+
+def test_cleanup_retries_once_and_verifies_worktree_absence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cleanup retries the remove command once before verifying worktree state."""
+    template_repo = tmp_path / "template-repo"
+    template_repo.mkdir()
+    checkout_path = tmp_path / "source-checkout"
+    source_checkout = materializer.SourceCheckout(
+        template_root=checkout_path,
+        template_repo=template_repo,
+        temporary_parent=tmp_path,
+        temporary_checkout_path=checkout_path,
+        summary=materializer.SourceSummary(
+            target_root=str(tmp_path / "target"),
+            template_root=str(checkout_path),
+            source_mode="template-ref",
+            source_value="template-main",
+            resolved_source_sha="a" * 40,
+            source_repository=str(template_repo),
+            temporary_checkout_path=str(checkout_path),
+            cleanup_status="pending",
+            manual_cleanup_command="git worktree remove --force source-checkout",
+        ),
+    )
+    remove_calls = 0
+
+    def fake_run_git(
+        _repo_root: Path,
+        args: list[str],
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal remove_calls
+        if args[:3] == ["worktree", "remove", "--force"]:
+            remove_calls += 1
+            if remove_calls == 1:
+                return subprocess.CompletedProcess(args, 1, "", "locked")
+            return subprocess.CompletedProcess(args, 0, "", "")
+        if args == ["worktree", "list", "--porcelain"]:
+            return subprocess.CompletedProcess(args, 0, "worktree /other/path\n", "")
+        raise AssertionError(f"unexpected git args: {args}")
+
+    monkeypatch.setattr(materializer, "run_git", fake_run_git)
+
+    failure = materializer.cleanup_source_checkout(source_checkout)
+
+    assert failure is None
+    assert remove_calls == 2
+    assert source_checkout.summary.cleanup_status == "removed after retry"
+
+
+def test_successful_materialization_cleanup_failure_exits_dedicated_code(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Successful materialization plus cleanup failure has a dedicated exit code."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(template_root, [{"pattern": "README.md", "requires_all": ["baseline"]}])
+    write_file(template_root / "README.md", "template readme\n")
+
+    def fake_cleanup(source_checkout: materializer.SourceCheckout) -> materializer.CleanupFailure:
+        source_checkout.summary.cleanup_status = "failed"
+        source_checkout.summary.cleanup_failure = "simulated cleanup failure"
+        source_checkout.summary.temporary_checkout_path = str(tmp_path / "stale-worktree")
+        source_checkout.summary.source_repository = str(template_root)
+        source_checkout.summary.manual_cleanup_command = "git worktree remove --force stale"
+        return materializer.CleanupFailure(
+            detail="simulated cleanup failure",
+            residual_worktree_path=tmp_path / "stale-worktree",
+            source_repository=template_root,
+            manual_cleanup_command="git worktree remove --force stale",
+        )
+
+    monkeypatch.setattr(materializer, "cleanup_source_checkout", fake_cleanup)
+
+    exit_code = materializer.main(
+        [
+            "--template-root",
+            str(template_root),
+            "--target-root",
+            str(target_root),
+            "--source-repo",
+            SOURCE_REPO,
+            "--included-module",
+            "baseline",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == materializer.EXIT_CLEANUP_FAILURE
+    assert read_file(target_root / "README.md") == "template readme\n"
+    assert "cleanup status: failed" in captured.out
+    assert "Target tree was materialized successfully" in captured.err
+    assert "Manual cleanup command" in captured.err
+
+
+def test_materialization_failure_plus_cleanup_failure_preserves_primary_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Cleanup failure diagnostics do not replace the materialization failure."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(template_root, [{"pattern": "SECURITY.md", "requires_all": ["baseline"]}])
+    write_file(template_root / "SECURITY.md", "Email [security contact email]\n")
+
+    def fake_cleanup(source_checkout: materializer.SourceCheckout) -> materializer.CleanupFailure:
+        source_checkout.summary.cleanup_status = "failed"
+        return materializer.CleanupFailure(
+            detail="simulated cleanup failure",
+            residual_worktree_path=tmp_path / "stale-worktree",
+            source_repository=template_root,
+            manual_cleanup_command="git worktree remove --force stale",
+        )
+
+    monkeypatch.setattr(materializer, "cleanup_source_checkout", fake_cleanup)
+
+    exit_code = materializer.main(
+        [
+            "--template-root",
+            str(template_root),
+            "--target-root",
+            str(target_root),
+            "--source-repo",
+            SOURCE_REPO,
+            "--included-module",
+            "baseline",
+            "--repository",
+            "octo/widget",
+            "--security-contact",
+            "security@example.com",
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == materializer.EXIT_RUNTIME_FAILURE
+    assert "placeholder helper is unavailable" in captured.err
+    assert captured.err.index("placeholder helper is unavailable") < captured.err.index(
+        "Temporary source checkout cleanup also failed"
+    )
 
 
 def test_retained_files_excluded_files_inline_blocks_and_unmapped_paths(
