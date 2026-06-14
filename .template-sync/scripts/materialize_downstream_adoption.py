@@ -431,7 +431,12 @@ def resolve_template_temp_root(raw_temp_root: str | None, target_root: Path) -> 
 
 
 def manual_cleanup_command(template_repo: Path, temporary_checkout_path: Path) -> str:
-    """Return a copy/pasteable command for removing the temporary worktree."""
+    """Return the worktree-removal command rendered for the host platform's shell.
+
+    POSIX output is paste-safe via ``shlex.join``. Windows output mirrors
+    Python's ``subprocess`` argv parsing via ``list2cmdline`` for display parity
+    and is not guaranteed paste-safe for a specific Windows shell.
+    """
     command_parts = [
         "git",
         "-C",
@@ -441,9 +446,10 @@ def manual_cleanup_command(template_repo: Path, temporary_checkout_path: Path) -
         "--force",
         str(temporary_checkout_path),
     ]
-    # Render shell-correct quoting for the host platform so the printed command
-    # is safe to copy and paste: POSIX shells expect ``shlex.join`` quoting,
-    # while ``list2cmdline`` matches Windows command-line parsing.
+    # Render the command for the host platform: POSIX uses ``shlex.join``
+    # (paste-safe for POSIX shells); Windows uses ``list2cmdline`` for parity
+    # with Python's subprocess argv parsing: a display rendering, not a
+    # paste-safe guarantee for a specific Windows shell.
     if os.name == "nt":
         return subprocess.list2cmdline(command_parts)
     return shlex.join(command_parts)
