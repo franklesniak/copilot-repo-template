@@ -1473,11 +1473,56 @@ def test_github_metadata_rest_retries_ghes_version_header_rejection(
     assert metadata.source == "rest"
     assert metadata.error is not None
     assert "rejected the GitHub API version header" in metadata.error
+    # read_github_rest_json already prefixes the label, so the caller must not
+    # add it again and produce "REST repo metadata: REST repo metadata ...".
+    assert "REST repo metadata: REST repo metadata" not in metadata.error
     assert rest_client.requests[0].url == rest_client.requests[1].url
     assert "X-GitHub-Api-Version" in dict(rest_client.requests[0].headers)
     assert "X-GitHub-Api-Version" not in dict(rest_client.requests[1].headers)
     assert rest_client.requests[0].method == "GET"
     assert rest_client.requests[1].method == "GET"
+
+
+def test_github_metadata_rest_repository_source_is_manual_without_full_name(
+    tmp_path: Path,
+) -> None:
+    """When REST omits full_name, the repository is locally inferred and labeled manual."""
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="gh unavailable\n")
+
+    rest_client = FakeRestClient(
+        [
+            _rest_result(
+                200,
+                {
+                    "visibility": "public",
+                    "default_branch": "main",
+                    "has_discussions": True,
+                },
+            ),
+            _rest_result(200, []),
+        ]
+    )
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "example/project",
+        include_metadata=True,
+        command_runner=runner,
+        rest_client=rest_client,
+    )
+
+    assert metadata.available is True
+    assert metadata.source == "rest"
+    # full_name was absent, so the repository value is the locally inferred owner/name
+    # and its source must be reported as manual rather than rest.
+    assert metadata.repository == "example/project"
+    assert metadata.repository_source == "manual"
+    # Fields that were present in the REST payload remain sourced from rest.
+    assert metadata.visibility == "public"
+    assert metadata.visibility_source == "rest"
+    assert metadata.default_branch_source == "rest"
 
 
 def test_github_metadata_rest_failed_version_header_retry_is_unavailable(

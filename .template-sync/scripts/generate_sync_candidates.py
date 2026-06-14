@@ -1794,7 +1794,7 @@ def discover_github_metadata_with_rest(
             error=combine_metadata_errors(*diagnostics, repo_diagnostic),
         )
     if repo_diagnostic is not None:
-        diagnostics.append(f"REST repo metadata: {repo_diagnostic}")
+        diagnostics.append(repo_diagnostic)
     if not isinstance(repo_payload, dict):
         return GitHubMetadata(
             requested=True,
@@ -1806,9 +1806,13 @@ def discover_github_metadata_with_rest(
             ),
         )
 
-    repository = (
-        repo_payload["full_name"] if isinstance(repo_payload.get("full_name"), str) else owner_name
-    )
+    repository_full_name = repo_payload.get("full_name")
+    if isinstance(repository_full_name, str):
+        repository = repository_full_name
+        repository_source = "rest"
+    else:
+        repository = owner_name
+        repository_source = "manual"
     visibility = None
     visibility_value = repo_payload.get("visibility")
     if isinstance(visibility_value, str):
@@ -1850,7 +1854,7 @@ def discover_github_metadata_with_rest(
         )
         labels_source = "rest"
         if labels_diagnostic is not None:
-            diagnostics.append(f"REST labels metadata: {labels_diagnostic}")
+            diagnostics.append(labels_diagnostic)
     else:
         diagnostics.append("REST labels metadata returned a non-list JSON payload.")
 
@@ -1864,7 +1868,7 @@ def discover_github_metadata_with_rest(
         discussions_enabled=discussions_enabled,
         labels=labels,
         error=combine_metadata_errors(*diagnostics),
-        repository_source="rest" if repository is not None else "manual",
+        repository_source=repository_source,
         visibility_source="rest" if visibility is not None else "manual",
         default_branch_source="rest" if default_branch is not None else "manual",
         discussions_source="rest" if discussions_enabled is not None else "manual",
