@@ -1595,7 +1595,7 @@ def materialize(args: argparse.Namespace) -> Summary:
     if primary_error is not None:
         if cleanup_failure is not None:
             raise MaterializationError(
-                f"{primary_error}\n\n"
+                f"{format_cli_error(primary_error)}\n\n"
                 + format_cleanup_failure_diagnostic(
                     cleanup_failure,
                     materialization_succeeded=False,
