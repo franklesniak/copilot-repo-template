@@ -1020,7 +1020,12 @@ def iter_safe_repository_files(
         dir_names[:] = retained_dir_names
 
         for file_name in file_names:
-            if file_name in skipped_dirs:
+            # A linked worktree stores ``.git`` as a gitlink *file*, which the
+            # ``skipped_dirs`` directory pruning above cannot exclude. Skip only
+            # that metadata file so legitimate regular files that merely share a
+            # name with a skipped directory (such as ``build`` or ``dist``) are
+            # still discovered.
+            if file_name == ".git":
                 continue
             file_path = current_path / file_name
             relative_path = repository_relative_path(file_path, root)
