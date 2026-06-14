@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -431,17 +432,21 @@ def resolve_template_temp_root(raw_temp_root: str | None, target_root: Path) -> 
 
 def manual_cleanup_command(template_repo: Path, temporary_checkout_path: Path) -> str:
     """Return a copy/pasteable command for removing the temporary worktree."""
-    return subprocess.list2cmdline(
-        [
-            "git",
-            "-C",
-            str(template_repo),
-            "worktree",
-            "remove",
-            "--force",
-            str(temporary_checkout_path),
-        ]
-    )
+    command_parts = [
+        "git",
+        "-C",
+        str(template_repo),
+        "worktree",
+        "remove",
+        "--force",
+        str(temporary_checkout_path),
+    ]
+    # Render shell-correct quoting for the host platform so the printed command
+    # is safe to copy and paste: POSIX shells expect ``shlex.join`` quoting,
+    # while ``list2cmdline`` matches Windows command-line parsing.
+    if os.name == "nt":
+        return subprocess.list2cmdline(command_parts)
+    return shlex.join(command_parts)
 
 
 def worktree_list_contains_path(template_repo: Path, worktree_path: Path) -> bool:
