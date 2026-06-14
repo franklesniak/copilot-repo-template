@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import io
+import shutil
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -11,12 +12,8 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT_PATH = (
-    Path(__file__).resolve().parents[1]
-    / ".template-sync"
-    / "scripts"
-    / "run_first_adoption_checks.py"
-)
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "run_first_adoption_checks.py"
 SCRIPT_SPEC = importlib.util.spec_from_file_location("run_first_adoption_checks", SCRIPT_PATH)
 if SCRIPT_SPEC is None or SCRIPT_SPEC.loader is None:
     raise RuntimeError(f"Unable to load first-adoption helper module from {SCRIPT_PATH}")
@@ -45,6 +42,14 @@ def _write_text(repo_root: Path, relative_path: str, text: str = "placeholder\n"
     path.write_text(text, encoding="utf-8")
 
 
+def _write_pytest_profile_root(tmp_path: Path) -> Path:
+    """Create a temporary pytest root with the committed pytest configuration."""
+    pytest_root = tmp_path / "pytest-root"
+    pytest_root.mkdir()
+    shutil.copyfile(REPO_ROOT / "pyproject.toml", pytest_root / "pyproject.toml")
+    return pytest_root
+
+
 def _recording_runner(records: list[tuple[str, ...]]):
     """Return a fake command runner that records commands."""
 
@@ -53,6 +58,17 @@ def _recording_runner(records: list[tuple[str, ...]]):
         return 0
 
     return run
+
+
+def _queued_status_reader(*snapshots: tuple[str, ...]):
+    """Return a Git status reader that consumes a fixed sequence of snapshots."""
+    remaining_snapshots = list(snapshots)
+
+    def read_status(_repo_root: Path) -> tuple[str, ...]:
+        assert remaining_snapshots, "No queued Git status snapshot remains."
+        return remaining_snapshots.pop(0)
+
+    return read_status
 
 
 def _utc_time(second: int) -> datetime:
@@ -97,8 +113,24 @@ def test_no_file_repository_exits_without_validation_commands(tmp_path: Path) ->
 
     assert result == 0
     assert commands == []
+    assert "Run mode: check" in stdout.getvalue()
     assert "No tracked or untracked non-ignored regular files found" in stdout.getvalue()
     assert "No first-adoption checks were available to run." in stdout.getvalue()
+    assert "No Git status changes were detected" in stdout.getvalue()
+
+
+def test_default_mode_is_explicit_check() -> None:
+    """The CLI defaults to explicit check mode."""
+    args = first_adoption.parse_args([])
+
+    assert args.run_mode == first_adoption.CHECK_MODE
+
+
+def test_fix_mode_is_explicit() -> None:
+    """The CLI exposes an explicit fix mode for mutating hook/fixer runs."""
+    args = first_adoption.parse_args(["--fix"])
+
+    assert args.run_mode == first_adoption.FIX_MODE
 
 
 def test_check_plan_assigns_stable_group_labels(
@@ -198,6 +230,7 @@ def test_plan_only_prints_collection_notes_and_plan_without_running(
     output = stdout.getvalue()
     assert result == 0
     assert commands == []
+    assert "Run mode: check" in output
     assert "Collected 3 tracked or untracked non-ignored regular file(s)." in output
     assert "Git-visible regular file(s):" in output
     assert "  - .template-sync/marker.yml" in output
@@ -208,8 +241,39 @@ def test_plan_only_prints_collection_notes_and_plan_without_running(
     assert "  1. [pre-commit] pre-commit run --files" in output
     assert "  2. [marker-validation]" in output
     assert "Plan-only mode: validation commands were not run." in output
+    assert "No Git status changes were detected" in output
     assert "Total elapsed time: 2.000s" in output
     assert "Command 1/2 [pre-commit] start time" not in output
+
+
+def test_fix_mode_plan_only_prints_fix_mode_without_running(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Plan-only mode can preview the explicit fix-mode command plan."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+    commands: list[tuple[str, ...]] = []
+    stdout = io.StringIO()
+
+    result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        run_mode=first_adoption.FIX_MODE,
+        plan_only=True,
+        command_runner=_recording_runner(commands),
+        stdout=stdout,
+    )
+
+    output = stdout.getvalue()
+    assert result == 0
+    assert commands == []
+    assert "Run mode: fix" in output
+    assert "Plan-only mode: validation commands were not run." in output
 
 
 def test_marker_absent_does_not_run_marker_validator(tmp_path: Path) -> None:
@@ -270,7 +334,69 @@ def test_timing_output_uses_injected_time_source_and_prints_cold_start_guidance(
     assert "Command 1/2 [pre-commit] elapsed time: 4.000s" in output
     assert "Command 2/2 [placeholder-scan] start time (UTC): 2026-06-03T12:00:10Z" in output
     assert "Command 2/2 [placeholder-scan] elapsed time: 3.000s" in output
+    assert "No Git status changes were detected" in output
     assert "Total elapsed time: 20.000s" in output
+
+
+def test_unchanged_git_status_passes_after_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A stable dirty status from before the run is not treated as a new mutation."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+    commands: list[tuple[str, ...]] = []
+    stdout = io.StringIO()
+
+    result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        command_runner=_recording_runner(commands),
+        git_status_reader=_queued_status_reader(("?? README.md",), ("?? README.md",)),
+        stdout=stdout,
+    )
+
+    assert result == 0
+    assert commands == [("pre-commit", "run", "--files", "README.md")]
+    assert "No Git status changes were detected" in stdout.getvalue()
+
+
+def test_changed_git_status_exits_distinctly_after_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A command-induced Git status change is reported and exits distinctly."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+    commands: list[tuple[str, ...]] = []
+    stdout = io.StringIO()
+
+    result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        command_runner=_recording_runner(commands),
+        git_status_reader=_queued_status_reader((), (" M README.md", "?? generated.txt")),
+        stdout=stdout,
+    )
+
+    output = stdout.getvalue()
+    assert result == first_adoption.CHANGED_FILES_EXIT_CODE
+    assert commands == [("pre-commit", "run", "--files", "README.md")]
+    assert "Git changed-file summary:" in output
+    assert "  Before invocation:" in output
+    assert "    - <none>" in output
+    assert "  After invocation:" in output
+    assert "    -  M README.md" in output
+    assert "    - ?? generated.txt" in output
+    assert "Inspect the changes" in output
 
 
 def test_marker_present_runs_marker_validator(tmp_path: Path) -> None:
@@ -404,3 +530,86 @@ def test_npm_executable_prefers_cmd_shim_on_windows_style_path(
     monkeypatch.setattr(first_adoption.shutil, "which", fake_which)
 
     assert first_adoption.default_npm_executable() == "C:\\tools\\npm.cmd"
+
+
+def test_downstream_pytest_selection_includes_unmarked_and_excludes_upstream_only(
+    tmp_path: Path,
+) -> None:
+    """Negative marker selection keeps new unmarked tests in the downstream gate."""
+    pytest_root = _write_pytest_profile_root(tmp_path)
+    test_file = pytest_root / "test_profile_selection.py"
+    test_file.write_text(
+        "\n".join(
+            [
+                "import pytest",
+                "",
+                "def test_unmarked_is_selected():",
+                "    pass",
+                "",
+                "@pytest.mark.upstream_template_only",
+                "def test_upstream_only_is_excluded():",
+                "    pass",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "--collect-only",
+            "-q",
+            "-m",
+            "not upstream_template_only",
+            test_file.name,
+        ],
+        cwd=pytest_root,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "test_unmarked_is_selected" in result.stdout
+    assert "test_upstream_only_is_excluded" not in result.stdout
+
+
+def test_unregistered_pytest_marker_fails_collection(tmp_path: Path) -> None:
+    """Committed strict marker configuration rejects marker typos during collection."""
+    pytest_root = _write_pytest_profile_root(tmp_path)
+    test_file = pytest_root / "test_bad_marker.py"
+    test_file.write_text(
+        "\n".join(
+            [
+                "import pytest",
+                "",
+                "@pytest.mark.not_registered_here",
+                "def test_bad_marker():",
+                "    pass",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "--collect-only",
+            test_file.name,
+        ],
+        cwd=pytest_root,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "not_registered_here" in result.stdout + result.stderr

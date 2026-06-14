@@ -78,6 +78,12 @@ warn_unused_configs = true
 disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
+strict_markers = true
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
+markers = [
+    "upstream_template_only: tests that rely on the upstream template repository's complete optional module set, protected governance files, unreplaced placeholders, or maintainer-only context",
+    "downstream_template_support: tests useful for downstream template-support validation; the official downstream gate uses negative upstream_template_only selection instead",
+    "slow: tests that run slower integration scenarios and may be isolated during local iteration",
+]

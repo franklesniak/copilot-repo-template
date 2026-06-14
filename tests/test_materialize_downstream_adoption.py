@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
 import subprocess
 import sys
@@ -47,6 +48,9 @@ FULL_TEMPLATE_MODULES = (
     "schema",
     "python",
     "terraform",
+)
+DOWNSTREAM_PYTEST_MODULES = tuple(
+    module_name for module_name in FULL_TEMPLATE_MODULES if module_name != "agent-instructions"
 )
 DEPENDABOT_NO_PYTHON_ECOSYSTEMS = {"github-actions", "npm", "pre-commit"}
 DEPENDABOT_FULL_ECOSYSTEMS = DEPENDABOT_NO_PYTHON_ECOSYSTEMS | {"pip"}
@@ -367,6 +371,65 @@ def run_materialize(
     )
 
 
+def materialize_downstream_pytest_fixture(tmp_path: Path) -> Path:
+    """Materialize a partial downstream tree suitable for nested pytest profile checks."""
+    target_root = tmp_path / "downstream-pytest"
+    target_root.mkdir()
+    module_args = [
+        argument
+        for module_name in DOWNSTREAM_PYTEST_MODULES
+        for argument in ("--included-module", module_name)
+    ]
+
+    result = run_materialize(
+        REPO_ROOT,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--last-reviewed-template-commit",
+        FULL_SHA,
+        "--repository",
+        "octocat/hello-world",
+        "--security-contact",
+        "security@example.com",
+        *module_args,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    run_git(target_root, "init", "-q")
+    run_git(target_root, "add", ".")
+    return target_root
+
+
+def run_downstream_pytest_gate(
+    target_root: Path,
+    *pytest_args: str,
+) -> subprocess.CompletedProcess[str]:
+    """Run the official downstream pytest gate in a materialized tree."""
+    env = os.environ.copy()
+    src_path = str(target_root / "src")
+    existing_pythonpath = env.get("PYTHONPATH")
+    env["PYTHONPATH"] = (
+        src_path if not existing_pythonpath else os.pathsep.join((src_path, existing_pythonpath))
+    )
+    return subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            *pytest_args,
+            "-m",
+            "not upstream_template_only",
+        ],
+        cwd=target_root,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+    )
+
+
 def run_materialize_without_template_root(
     target_root: Path,
     *args: str,
@@ -454,11 +517,15 @@ def run_excluded_module_report(
     included_modules: tuple[str, ...],
 ) -> subprocess.CompletedProcess[str]:
     """Run the excluded-module reporter against a fixture repository."""
-    module_args = [
-        argument
-        for module_name in included_modules
-        for argument in ("--included-module", module_name)
-    ]
+    module_args = (
+        []
+        if (repo_root / ".template-sync" / "marker.yml").is_file()
+        else [
+            argument
+            for module_name in included_modules
+            for argument in ("--included-module", module_name)
+        ]
+    )
     return subprocess.run(
         [
             sys.executable,
@@ -500,6 +567,33 @@ def test_materializer_help_documents_security_reporting_modes(
     assert "github-private-only" in captured.out
     assert "contact-only" in captured.out
     assert "both" in captured.out
+
+
+@pytest.mark.upstream_template_only
+def test_materialized_downstream_pytest_gate_collects(
+    tmp_path: Path,
+) -> None:
+    """A materialized partial downstream tree collects the downstream pytest gate."""
+    target_root = materialize_downstream_pytest_fixture(tmp_path)
+
+    result = run_downstream_pytest_gate(target_root, "--collect-only", "-q")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "test_run_first_adoption_checks.py" in result.stdout
+    assert "test_template_manifest.py" not in result.stdout
+
+
+@pytest.mark.slow
+@pytest.mark.upstream_template_only
+def test_materialized_downstream_pytest_gate_passes(
+    tmp_path: Path,
+) -> None:
+    """A materialized partial downstream tree passes the downstream pytest gate."""
+    target_root = materialize_downstream_pytest_fixture(tmp_path)
+
+    result = run_downstream_pytest_gate(target_root, "-q")
+
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_materializer_materializes_from_local_template_ref_and_cleans_worktree(
@@ -1602,6 +1696,7 @@ def test_placeholder_replacement_reuses_helper_and_missing_helper_fails(
         ),
     ],
 )
+@pytest.mark.upstream_template_only
 def test_materializes_security_reporting_modes(
     tmp_path: Path,
     mode_args: list[str],
@@ -1667,6 +1762,7 @@ def test_materializes_security_reporting_modes(
         assert "private vulnerability reporting" in combined_security_surfaces
 
 
+@pytest.mark.upstream_template_only
 def test_materialized_security_reporting_mode_preserves_github_host(
     tmp_path: Path,
 ) -> None:
@@ -1706,6 +1802,7 @@ def test_materialized_security_reporting_mode_preserves_github_host(
         assert "https://github.com/octo/widget" not in text
 
 
+@pytest.mark.upstream_template_only
 def test_materializer_rejects_missing_security_mode_and_contact_when_placeholders_run(
     tmp_path: Path,
 ) -> None:

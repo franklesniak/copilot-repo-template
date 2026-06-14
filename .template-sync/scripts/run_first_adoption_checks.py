@@ -25,6 +25,12 @@ GIT_FILE_LIST_COMMAND = (
     "--others",
     "--exclude-standard",
 )
+GIT_STATUS_COMMAND = (
+    "git",
+    "status",
+    "--porcelain=v1",
+    "--untracked-files=all",
+)
 PRE_COMMIT_EXECUTABLE_PREFIX = ("pre-commit", "run", "--files")
 PLACEHOLDER_SCRIPT = ".github/scripts/replace-template-placeholders.py"
 MARKER_PATH = ".template-sync/marker.yml"
@@ -35,8 +41,12 @@ PRE_COMMIT_GROUP = "pre-commit"
 PLACEHOLDER_SCAN_GROUP = "placeholder-scan"
 MARKER_VALIDATION_GROUP = "marker-validation"
 MARKDOWN_SCRIPT_GROUP = "markdown-script"
+CHECK_MODE = "check"
+FIX_MODE = "fix"
+CHANGED_FILES_EXIT_CODE = 2
 
 CommandRunner = Callable[[Sequence[str], Path], int]
+GitStatusReader = Callable[[Path], tuple[str, ...]]
 TimeSource = Callable[[], datetime]
 
 
@@ -88,6 +98,28 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help=(
             "Maximum formatted command length before splitting pre-commit --files "
             f"invocations. Default: {DEFAULT_MAX_COMMAND_LENGTH}."
+        ),
+    )
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        "--check",
+        dest="run_mode",
+        action="store_const",
+        const=CHECK_MODE,
+        default=CHECK_MODE,
+        help=(
+            "Run validation in explicit check mode (default). Any Git status "
+            "change during the invocation exits nonzero and must be inspected."
+        ),
+    )
+    mode_group.add_argument(
+        "--fix",
+        dest="run_mode",
+        action="store_const",
+        const=FIX_MODE,
+        help=(
+            "Run validation in explicit fix mode for mutating hooks or fixers. "
+            "Inspect the changed-file summary and rerun with --check."
         ),
     )
     parser.add_argument(
@@ -180,6 +212,22 @@ def run_external_command(command: Sequence[str], repo_root: Path) -> int:
         error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
         raise FirstAdoptionCheckError(f"Unable to run {command[0]} ({error_summary}).") from error
     return result.returncode
+
+
+def git_status_lines(repo_root: Path) -> tuple[str, ...]:
+    """Return a deterministic Git status snapshot for changed-file reporting."""
+    result = subprocess.run(
+        list(GIT_STATUS_COMMAND),
+        cwd=repo_root,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if result.returncode != 0:
+        message = result.stderr.strip() or result.stdout.strip() or "git status failed"
+        raise FirstAdoptionCheckError(f"Unable to inspect Git changed files: {message}")
+    return tuple(sorted(line for line in result.stdout.splitlines() if line.strip()))
 
 
 def collect_present_regular_files(
@@ -441,6 +489,44 @@ def print_total_elapsed_time(
     )
 
 
+def print_status_entries(status_lines: Sequence[str], *, stdout: TextIO) -> None:
+    """Print one Git status snapshot as a deterministic bullet list."""
+    if not status_lines:
+        print("    - <none>", file=stdout, flush=True)
+        return
+    for status_line in status_lines:
+        print(f"    - {status_line}", file=stdout, flush=True)
+
+
+def print_changed_file_summary(
+    before_status: Sequence[str],
+    after_status: Sequence[str],
+    *,
+    stdout: TextIO,
+) -> bool:
+    """Print changed-file status before/after the invocation and return if it changed."""
+    print("Git changed-file summary:", file=stdout, flush=True)
+    if tuple(before_status) == tuple(after_status):
+        print(
+            "  No Git status changes were detected during this invocation.",
+            file=stdout,
+            flush=True,
+        )
+        return False
+
+    print("  Before invocation:", file=stdout, flush=True)
+    print_status_entries(before_status, stdout=stdout)
+    print("  After invocation:", file=stdout, flush=True)
+    print_status_entries(after_status, stdout=stdout)
+    print(
+        "Files changed during this invocation. Inspect the changes, keep or discard "
+        "them intentionally, then rerun this helper with --check.",
+        file=stdout,
+        flush=True,
+    )
+    return True
+
+
 def run_planned_command(
     planned_command: PlannedCommand,
     *,
@@ -487,13 +573,20 @@ def run_first_adoption_checks(
     repo_root: Path,
     *,
     max_command_length: int = DEFAULT_MAX_COMMAND_LENGTH,
+    run_mode: str = CHECK_MODE,
     plan_only: bool = False,
     command_runner: CommandRunner = run_external_command,
+    git_status_reader: GitStatusReader = git_status_lines,
     time_source: TimeSource = default_time_source,
     stdout: TextIO = sys.stdout,
 ) -> int:
     """Run first-adoption checks and return a process exit code."""
+    if run_mode not in (CHECK_MODE, FIX_MODE):
+        raise FirstAdoptionCheckError(f"Unsupported run mode: {run_mode}")
+
     run_started_at = time_source()
+    print(f"Run mode: {run_mode}", file=stdout, flush=True)
+    before_status = git_status_reader(repo_root)
     collection = collect_present_regular_files(repo_root, stdout=stdout)
     print_file_collection(collection, stdout=stdout, include_files=plan_only)
 
@@ -508,13 +601,25 @@ def run_first_adoption_checks(
 
     if not plan.commands:
         print("No first-adoption checks were available to run.", file=stdout, flush=True)
+        after_status = git_status_reader(repo_root)
+        status_changed = print_changed_file_summary(
+            before_status,
+            after_status,
+            stdout=stdout,
+        )
         print_total_elapsed_time(run_started_at, time_source(), stdout=stdout)
-        return 0
+        return CHANGED_FILES_EXIT_CODE if status_changed else 0
 
     if plan_only:
         print("Plan-only mode: validation commands were not run.", file=stdout, flush=True)
+        after_status = git_status_reader(repo_root)
+        status_changed = print_changed_file_summary(
+            before_status,
+            after_status,
+            stdout=stdout,
+        )
         print_total_elapsed_time(run_started_at, time_source(), stdout=stdout)
-        return 0
+        return CHANGED_FILES_EXIT_CODE if status_changed else 0
 
     failures: list[str] = []
     total_commands = len(plan.commands)
@@ -544,6 +649,16 @@ def run_first_adoption_checks(
                 f"{format_command(planned_command.command)} exited with {return_code}"
             )
 
+    after_status = git_status_reader(repo_root)
+    status_changed = print_changed_file_summary(
+        before_status,
+        after_status,
+        stdout=stdout,
+    )
+    if status_changed:
+        print_total_elapsed_time(run_started_at, time_source(), stdout=stdout)
+        return CHANGED_FILES_EXIT_CODE
+
     if failures:
         print("First-adoption checks failed:", file=stdout, flush=True)
         for failure in failures:
@@ -570,6 +685,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_first_adoption_checks(
             repo_root,
             max_command_length=args.max_command_length,
+            run_mode=args.run_mode,
             plan_only=args.plan_only,
         )
     except FirstAdoptionCheckError as error:

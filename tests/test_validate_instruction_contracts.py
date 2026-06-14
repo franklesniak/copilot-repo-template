@@ -152,6 +152,7 @@ def test_mode_is_required(tmp_path: Path) -> None:
     assert "--mode" in result.stderr
 
 
+@pytest.mark.upstream_template_only
 def test_intact_upstream_claude_contract_passes() -> None:
     """The committed upstream Claude protocol satisfies the default contract."""
     result = _run_validator(REPO_ROOT, "--mode", "upstream-template")
