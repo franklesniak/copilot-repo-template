@@ -1519,6 +1519,22 @@ def test_github_api_base_validation_rejects_credential_bearing_urls() -> None:
     assert "token" not in str(exc_info.value)
 
 
+def test_run_rest_request_rejects_non_get_methods() -> None:
+    """The REST helper enforces its read-only contract by refusing non-GET methods."""
+    request = sync_candidates.RestRequest(
+        method="POST",
+        url="https://api.github.com/repos/example/project",
+        headers=sync_candidates.rest_headers(include_version_header=True),
+        timeout=sync_candidates.GITHUB_REST_TIMEOUT_SECONDS,
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        sync_candidates.run_rest_request(request)
+
+    assert "GET" in str(exc_info.value)
+    assert "POST" in str(exc_info.value)
+
+
 def test_format_remotes_redacts_embedded_credentials() -> None:
     """Remote URLs with embedded user-info are redacted in the report."""
     remotes = (

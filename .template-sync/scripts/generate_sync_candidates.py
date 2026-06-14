@@ -554,7 +554,16 @@ def run_command(repo_root: Path, command: list[str]) -> subprocess.CompletedProc
 
 
 def run_rest_request(request: RestRequest) -> RestResult:
-    """Run one bounded read-only REST request through the standard library."""
+    """Run one bounded read-only REST request through the standard library.
+
+    The request method is restricted to ``GET`` so this helper cannot mutate
+    remote state; any other method raises ``ValueError`` before a network call
+    is made, enforcing the read-only contract at the request boundary.
+    """
+    if request.method != "GET":
+        raise ValueError(
+            f"run_rest_request only issues read-only GET requests, not {request.method!r}."
+        )
     headers = dict(request.headers)
     urllib_request = Request(
         request.url,
