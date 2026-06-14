@@ -241,3 +241,37 @@ def test_state_path_categories_are_lexicographically_ordered(tmp_path: Path) -> 
         "`_ADOPTION-DIFFICULTIES.md` found",
         "`_TODO-repo-init.md` found",
     )
+
+
+def test_high_signal_inventory_reports_unknown_ignore_state_on_git_failure(
+    tmp_path: Path,
+) -> None:
+    """A failing git check-ignore yields ignored: unknown, not a misleading no."""
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        if command[:1] == ["check-ignore"]:
+            return subprocess.CompletedProcess(command, 128, stdout="", stderr="")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    marker_path, todo_path, journal_path = _state_paths(tmp_path)
+    state = first_adoption_state.inspect_first_adoption_state(
+        repo_root=tmp_path,
+        marker_path=marker_path,
+        todo_path=todo_path,
+        journal_path=journal_path,
+        git_runner=runner,
+    )
+
+    assert state.special_paths
+    assert all(path_state.ignored is None for path_state in state.special_paths)
+    summaries = [path_state.summary for path_state in state.special_paths]
+    assert all("ignored: unknown" in summary for summary in summaries)
+    assert not any("ignored: no" in summary for summary in summaries)
+
+
+def test_special_path_summary_renders_unknown_for_none_ignored() -> None:
+    """SpecialPathState renders ignored: unknown when the ignore state is None."""
+    state = first_adoption_state.SpecialPathState(
+        path=".github/", exists=True, kind="directory", ignored=None
+    )
+    assert state.summary == "`.github/`: present directory; ignored: unknown"

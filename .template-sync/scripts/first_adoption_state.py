@@ -57,13 +57,16 @@ class SpecialPathState:
     path: str
     exists: bool
     kind: str
-    ignored: bool
+    ignored: bool | None
 
     @property
     def summary(self) -> str:
         """Return a deterministic Markdown-safe summary line."""
         presence = "present" if self.exists else "absent"
-        ignored = "yes" if self.ignored else "no"
+        if self.ignored is None:
+            ignored = "unknown"
+        else:
+            ignored = "yes" if self.ignored else "no"
         return f"`{self.path}`: {presence} {self.kind}; ignored: {ignored}"
 
 
@@ -128,13 +131,24 @@ def path_kind(repo_root: Path, relative_path: str) -> tuple[bool, str]:
     return False, "path"
 
 
-def is_ignored_path(repo_root: Path, relative_path: str, *, git_runner: GitRunner) -> bool:
-    """Return whether Git treats a path as ignored."""
+def is_ignored_path(repo_root: Path, relative_path: str, *, git_runner: GitRunner) -> bool | None:
+    """Return whether Git treats a path as ignored, or ``None`` when unknown.
+
+    ``git check-ignore -q`` exits 0 when the path is ignored and 1 when it is
+    not. A higher exit code (for example 128 outside a Git repository, or when
+    Git is otherwise unavailable) means the ignore status cannot be determined;
+    that case returns ``None`` so the inventory reports ``ignored: unknown``
+    instead of misreporting ``ignored: no``.
+    """
     result = git_runner(
         repo_root,
         ["check-ignore", "-q", "--", relative_path.rstrip("/")],
     )
-    return result.returncode == 0
+    if result.returncode == 0:
+        return True
+    if result.returncode == 1:
+        return False
+    return None
 
 
 def collect_special_paths(
