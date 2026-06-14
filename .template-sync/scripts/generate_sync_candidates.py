@@ -11,7 +11,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, NoReturn
-from urllib.parse import urlsplit, urlunsplit
+from urllib.error import HTTPError, URLError
+from urllib.parse import quote, urlencode, urlsplit, urlunsplit
+from urllib.request import Request, urlopen
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -66,6 +68,11 @@ GITHUB_METADATA_MANUAL_SETTINGS = (
     "required status checks",
     "bypass roles",
 )
+DEFAULT_GITHUB_API_BASE = "https://api.github.com"
+GITHUB_REST_ACCEPT_HEADER = "application/vnd.github+json"
+GITHUB_REST_API_VERSION = "2022-11-28"
+GITHUB_REST_TIMEOUT_SECONDS = 5.0
+GITHUB_REST_USER_AGENT = "copilot-repo-template-preflight/1.0"
 DISCOVERY_SKIP_DIRS = frozenset(
     {
         ".git",
@@ -296,6 +303,25 @@ class RemoteInfo:
 
 
 @dataclass(frozen=True)
+class RestRequest:
+    """One read-only REST request issued by the metadata preflight probe."""
+
+    method: str
+    url: str
+    headers: tuple[tuple[str, str], ...]
+    timeout: float
+
+
+@dataclass(frozen=True)
+class RestResult:
+    """A small HTTP response envelope for injected REST clients."""
+
+    status_code: int | None
+    body: str
+    error: str | None = None
+
+
+@dataclass(frozen=True)
 class GitHubMetadata:
     """Optional GitHub metadata discovered only after explicit opt-in."""
 
@@ -308,6 +334,11 @@ class GitHubMetadata:
     discussions_enabled: str | None = None
     labels: tuple[str, ...] = ()
     error: str | None = None
+    repository_source: str = "manual"
+    visibility_source: str = "manual"
+    default_branch_source: str = "manual"
+    discussions_source: str = "manual"
+    labels_source: str = "manual"
 
 
 @dataclass(frozen=True)
@@ -331,6 +362,7 @@ class RepositoryDiscovery:
 
 
 CommandRunner = Callable[[Path, list[str]], subprocess.CompletedProcess[str]]
+RestClient = Callable[[RestRequest], RestResult]
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -467,9 +499,20 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--include-github-metadata",
         action="store_true",
         help=(
-            "Opt in to read-only GitHub metadata lookup through the gh CLI for the "
-            "preflight report. Without this flag, GitHub-only settings are labeled "
-            "manual review required."
+            "Opt in to read-only GitHub metadata lookup through the gh CLI, falling "
+            "back to unauthenticated public REST reads when gh is unavailable or "
+            "unusable. Without this flag, GitHub-only settings are labeled manual "
+            "review required."
+        ),
+    )
+    parser.add_argument(
+        "--github-api-base",
+        default=None,
+        metavar="URL",
+        help=(
+            "GitHub REST API base URL for --include-github-metadata, such as "
+            "https://github.example.com/api/v3 for GHES. Defaults to "
+            f"{DEFAULT_GITHUB_API_BASE}."
         ),
     )
     parser.add_argument(
@@ -510,6 +553,50 @@ def run_command(repo_root: Path, command: list[str]) -> subprocess.CompletedProc
     )
 
 
+def run_rest_request(request: RestRequest) -> RestResult:
+    """Run one bounded read-only REST request through the standard library.
+
+    The request method is restricted to ``GET`` so this helper cannot mutate
+    remote state; any other method raises ``ValueError`` before a network call
+    is made, enforcing the read-only contract at the request boundary.
+    """
+    if request.method != "GET":
+        raise ValueError(
+            f"run_rest_request only issues read-only GET requests, not {request.method!r}."
+        )
+    headers = dict(request.headers)
+    urllib_request = Request(
+        request.url,
+        headers=headers,
+        method=request.method,
+    )
+    try:
+        with urlopen(urllib_request, timeout=request.timeout) as response:
+            body = response.read().decode("utf-8", errors="replace")
+            return RestResult(status_code=response.status, body=body)
+    except HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        return RestResult(status_code=error.code, body=body)
+    except URLError as error:
+        return RestResult(
+            status_code=None,
+            body="",
+            error=urllib_error_summary(error),
+        )
+    except TimeoutError as error:
+        return RestResult(
+            status_code=None,
+            body="",
+            error=f"{type(error).__name__}: timed out",
+        )
+    except OSError as error:
+        return RestResult(
+            status_code=None,
+            body="",
+            error=os_error_summary(error),
+        )
+
+
 def command_detail(result: subprocess.CompletedProcess[str]) -> str:
     """Return a short diagnostic string from a command result."""
     for stream_text in (result.stderr, result.stdout):
@@ -522,6 +609,18 @@ def command_detail(result: subprocess.CompletedProcess[str]) -> str:
 def os_error_summary(error: OSError) -> str:
     """Return an OSError summary that avoids exposing implicit filesystem paths."""
     return f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+
+
+def urllib_error_summary(error: URLError) -> str:
+    """Return a short urllib diagnostic without relying on raw OSError strings."""
+    reason = error.reason
+    if isinstance(reason, OSError):
+        reason_text = f"{type(reason).__name__}: {reason.strerror or 'I/O error'}"
+    elif reason is None:
+        reason_text = "transport error"
+    else:
+        reason_text = str(reason)
+    return f"{type(error).__name__}: {reason_text}"
 
 
 def git_ref_exists(repo_root: Path, raw_ref: str) -> bool:
@@ -1313,21 +1412,37 @@ def parse_git_remotes(repo_root: Path) -> tuple[RemoteInfo, ...]:
     return tuple(remotes)
 
 
-def is_github_host(host: str | None) -> bool:
-    """Return whether ``host`` is ``github.com`` or a ``github.com`` subdomain."""
+def normalize_dns_host(host: str) -> str:
+    """Normalize a DNS host for exact comparison."""
+    return host.lower().removesuffix(".")
+
+
+def is_github_host(host: str | None, extra_allowed_hosts: tuple[str, ...] = ()) -> bool:
+    """Return whether ``host`` is a known GitHub or explicit GHES host."""
     if not host:
         return False
-    host = host.lower()
-    return host == "github.com" or host.endswith(".github.com")
+    normalized_host = normalize_dns_host(host)
+    normalized_extra_hosts = tuple(
+        normalize_dns_host(extra_host) for extra_host in extra_allowed_hosts
+    )
+    return (
+        normalized_host == "github.com"
+        or normalized_host.endswith(".github.com")
+        or normalized_host in normalized_extra_hosts
+    )
 
 
-def infer_repository_name(remotes: tuple[RemoteInfo, ...]) -> str | None:
+def infer_repository_name(
+    remotes: tuple[RemoteInfo, ...],
+    *,
+    extra_allowed_hosts: tuple[str, ...] = (),
+) -> str | None:
     """Infer ``owner/name`` from a configured GitHub remote URL.
 
-    The GitHub host is matched against the parsed URL authority (or the SCP-style
-    host), never an arbitrary substring, so look-alike hosts such as
-    ``notgithub.com`` or ``github.com.example.com`` are not misclassified as
-    GitHub remotes.
+    The host is matched against the parsed URL authority (or the SCP-style host),
+    never an arbitrary substring, so look-alike hosts such as ``notgithub.com`` or
+    ``github.com.example.com`` are not misclassified as GitHub remotes. GHES hosts
+    are trusted only when an explicit API base contributes an allowed host.
     """
     for remote in remotes:
         if "://" in remote.url:
@@ -1341,7 +1456,7 @@ def infer_repository_name(remotes: tuple[RemoteInfo, ...]) -> str | None:
             if scp_match is None:
                 continue
             host, path = scp_match.group("host"), scp_match.group("path")
-        if not is_github_host(host):
+        if not is_github_host(host, extra_allowed_hosts):
             continue
         segments = [segment for segment in path.split("/") if segment]
         if len(segments) < 2:
@@ -1352,29 +1467,177 @@ def infer_repository_name(remotes: tuple[RemoteInfo, ...]) -> str | None:
     return None
 
 
-def discover_github_metadata(
-    repo_root: Path,
-    owner_name: str | None,
+def normalize_github_api_base(raw_api_base: str | None) -> str:
+    """Validate and normalize the GitHub REST API base URL."""
+    if raw_api_base is None:
+        return DEFAULT_GITHUB_API_BASE
+
+    try:
+        parsed = urlsplit(raw_api_base)
+    except ValueError as error:
+        raise CandidateGenerationError("GitHub API base URL is malformed.") from error
+
+    if parsed.scheme not in {"http", "https"} or parsed.hostname is None:
+        raise CandidateGenerationError("GitHub API base URL must be an absolute HTTP(S) URL.")
+    if parsed.username is not None or parsed.password is not None:
+        raise CandidateGenerationError("GitHub API base URL must not contain credentials.")
+    if parsed.query or parsed.fragment:
+        raise CandidateGenerationError("GitHub API base URL must not include a query or fragment.")
+
+    normalized_path = parsed.path.rstrip("/")
+    return urlunsplit((parsed.scheme, parsed.netloc, normalized_path, "", ""))
+
+
+def github_api_base_host(raw_api_base: str | None) -> str | None:
+    """Return the explicit API base host when one was supplied."""
+    if raw_api_base is None:
+        return None
+    api_base = normalize_github_api_base(raw_api_base)
+    return urlsplit(api_base).hostname
+
+
+def rest_headers(*, include_version_header: bool) -> tuple[tuple[str, str], ...]:
+    """Return safe headers for GitHub REST reads."""
+    headers = [
+        ("Accept", GITHUB_REST_ACCEPT_HEADER),
+        ("User-Agent", GITHUB_REST_USER_AGENT),
+    ]
+    if include_version_header:
+        headers.append(("X-GitHub-Api-Version", GITHUB_REST_API_VERSION))
+    return tuple(headers)
+
+
+def github_rest_url(api_base: str, endpoint_path: str, query: dict[str, str] | None = None) -> str:
+    """Build a GitHub REST URL from a normalized base and endpoint path."""
+    url = f"{api_base.rstrip('/')}/{endpoint_path.lstrip('/')}"
+    if query:
+        url = f"{url}?{urlencode(query)}"
+    return url
+
+
+def github_rest_request(
+    api_base: str,
+    endpoint_path: str,
     *,
-    include_metadata: bool,
+    include_version_header: bool,
+    query: dict[str, str] | None = None,
+) -> RestRequest:
+    """Build one read-only GitHub REST request."""
+    return RestRequest(
+        method="GET",
+        url=github_rest_url(api_base, endpoint_path, query),
+        headers=rest_headers(include_version_header=include_version_header),
+        timeout=GITHUB_REST_TIMEOUT_SECONDS,
+    )
+
+
+def github_rest_repo_paths(owner_name: str) -> tuple[str, str] | None:
+    """Return encoded repository and labels REST endpoint paths."""
+    parts = owner_name.split("/")
+    if len(parts) != 2 or not all(parts):
+        return None
+    owner, repository = (quote(part, safe="") for part in parts)
+    return f"/repos/{owner}/{repository}", f"/repos/{owner}/{repository}/labels"
+
+
+def rest_response_detail(result: RestResult) -> str:
+    """Return a compact REST response diagnostic."""
+    if result.error is not None:
+        return result.error
+    if result.status_code is None:
+        return "transport error"
+
+    detail = "non-2xx response"
+    if result.body.strip():
+        try:
+            payload = json.loads(result.body)
+        except json.JSONDecodeError:
+            detail = result.body.strip().splitlines()[0]
+        else:
+            if isinstance(payload, dict) and isinstance(payload.get("message"), str):
+                detail = payload["message"]
+    if len(detail) > 160:
+        detail = f"{detail[:157]}..."
+    return f"HTTP {result.status_code}: {detail}"
+
+
+def rest_result_is_success(result: RestResult) -> bool:
+    """Return whether a REST result has a successful HTTP status."""
+    return result.status_code is not None and 200 <= result.status_code < 300
+
+
+def is_version_header_rejection(result: RestResult) -> bool:
+    """Return whether a REST failure looks like API-version header incompatibility."""
+    if result.status_code not in {400, 415}:
+        return False
+    body = result.body.lower()
+    return (
+        "x-github-api-version" in body
+        or ("api version" in body and "header" in body)
+        or "unsupported api version" in body
+    )
+
+
+def read_github_rest_json(
+    *,
+    api_base: str,
+    endpoint_path: str,
+    label: str,
+    rest_client: RestClient,
+    query: dict[str, str] | None = None,
+) -> tuple[Any | None, str | None]:
+    """Read a GitHub REST endpoint with one GHES version-header retry."""
+    request_with_version = github_rest_request(
+        api_base,
+        endpoint_path,
+        include_version_header=True,
+        query=query,
+    )
+    result = rest_client(request_with_version)
+    warning: str | None = None
+
+    if is_version_header_rejection(result):
+        request_without_version = github_rest_request(
+            api_base,
+            endpoint_path,
+            include_version_header=False,
+            query=query,
+        )
+        retry_result = rest_client(request_without_version)
+        warning = (
+            f"{label} rejected the GitHub API version header; retried the same "
+            "read-only endpoint without it."
+        )
+        if not rest_result_is_success(retry_result):
+            return (
+                None,
+                f"{warning} Retry failed: {rest_response_detail(retry_result)}",
+            )
+        result = retry_result
+
+    if not rest_result_is_success(result):
+        return None, f"{label} unavailable: {rest_response_detail(result)}"
+
+    try:
+        return json.loads(result.body), warning
+    except json.JSONDecodeError as error:
+        return None, f"{label} returned malformed JSON: {error.msg}"
+
+
+def combine_metadata_errors(*errors: str | None) -> str | None:
+    """Combine optional metadata diagnostics into one report line."""
+    present_errors = [error for error in errors if error]
+    if not present_errors:
+        return None
+    return "; ".join(present_errors)
+
+
+def discover_github_metadata_with_gh(
+    repo_root: Path,
+    owner_name: str,
     command_runner: CommandRunner = run_command,
 ) -> GitHubMetadata:
-    """Optionally discover GitHub metadata through explicit read-only ``gh`` calls."""
-    if not include_metadata:
-        return GitHubMetadata(
-            requested=False,
-            available=False,
-            source="not requested",
-        )
-
-    if owner_name is None:
-        return GitHubMetadata(
-            requested=True,
-            available=False,
-            source="gh",
-            error="Repository owner/name could not be inferred from local remotes.",
-        )
-
+    """Discover GitHub metadata through explicit read-only ``gh`` calls."""
     try:
         repo_result = command_runner(
             repo_root,
@@ -1428,6 +1691,7 @@ def discover_github_metadata(
 
     labels: tuple[str, ...] = ()
     labels_error: str | None = None
+    labels_source = "manual"
     try:
         labels_result = command_runner(
             repo_root,
@@ -1460,6 +1724,9 @@ def discover_github_metadata(
                             if isinstance(label, dict) and isinstance(label.get("name"), str)
                         )
                     )
+                    labels_source = "gh"
+                else:
+                    labels_error = "gh label list returned a non-list JSON payload."
         else:
             labels_error = command_detail(labels_result)
 
@@ -1471,18 +1738,183 @@ def discover_github_metadata(
     metadata_error = (
         f"Label metadata unavailable: {labels_error}" if labels_error is not None else None
     )
+    repository = payload["nameWithOwner"] if isinstance(payload.get("nameWithOwner"), str) else None
+    visibility = payload["visibility"] if isinstance(payload.get("visibility"), str) else None
     return GitHubMetadata(
         requested=True,
         available=True,
         source="gh",
-        repository=(
-            payload["nameWithOwner"] if isinstance(payload.get("nameWithOwner"), str) else None
-        ),
-        visibility=payload["visibility"] if isinstance(payload.get("visibility"), str) else None,
+        repository=repository,
+        visibility=visibility,
         default_branch=default_branch,
         discussions_enabled=discussions_enabled,
         labels=labels,
         error=metadata_error,
+        repository_source="gh" if repository is not None else "manual",
+        visibility_source="gh" if visibility is not None else "manual",
+        default_branch_source="gh" if default_branch is not None else "manual",
+        discussions_source="gh" if discussions_enabled is not None else "manual",
+        labels_source=labels_source,
+    )
+
+
+def discover_github_metadata_with_rest(
+    owner_name: str,
+    *,
+    github_api_base: str,
+    rest_client: RestClient,
+    gh_error: str | None,
+) -> GitHubMetadata:
+    """Discover public-safe GitHub metadata through unauthenticated REST reads."""
+    endpoint_paths = github_rest_repo_paths(owner_name)
+    if endpoint_paths is None:
+        return GitHubMetadata(
+            requested=True,
+            available=False,
+            source="manual",
+            error="Repository owner/name is not in owner/repo form.",
+        )
+    repo_path, labels_path = endpoint_paths
+
+    diagnostics: list[str] = []
+    if gh_error is not None:
+        diagnostics.append(f"gh unavailable: {gh_error}")
+
+    repo_payload, repo_diagnostic = read_github_rest_json(
+        api_base=github_api_base,
+        endpoint_path=repo_path,
+        label="REST repo metadata",
+        rest_client=rest_client,
+    )
+    if repo_payload is None:
+        return GitHubMetadata(
+            requested=True,
+            available=False,
+            source="rest",
+            error=combine_metadata_errors(*diagnostics, repo_diagnostic),
+        )
+    if repo_diagnostic is not None:
+        diagnostics.append(repo_diagnostic)
+    if not isinstance(repo_payload, dict):
+        return GitHubMetadata(
+            requested=True,
+            available=False,
+            source="rest",
+            error=combine_metadata_errors(
+                *diagnostics,
+                "REST repo metadata returned a non-object JSON payload.",
+            ),
+        )
+
+    repository_full_name = repo_payload.get("full_name")
+    if isinstance(repository_full_name, str):
+        repository = repository_full_name
+        repository_source = "rest"
+    else:
+        repository = owner_name
+        repository_source = "manual"
+    visibility = None
+    visibility_value = repo_payload.get("visibility")
+    if isinstance(visibility_value, str):
+        visibility = visibility_value
+    elif isinstance(repo_payload.get("private"), bool):
+        visibility = "private" if repo_payload["private"] else "public"
+
+    default_branch = (
+        repo_payload["default_branch"]
+        if isinstance(repo_payload.get("default_branch"), str)
+        else None
+    )
+    discussions_enabled = None
+    discussions_value = repo_payload.get("has_discussions")
+    if isinstance(discussions_value, bool):
+        discussions_enabled = "enabled" if discussions_value else "disabled"
+
+    labels: tuple[str, ...] = ()
+    labels_source = "manual"
+    labels_payload, labels_diagnostic = read_github_rest_json(
+        api_base=github_api_base,
+        endpoint_path=labels_path,
+        query={"per_page": "100"},
+        label="REST labels metadata",
+        rest_client=rest_client,
+    )
+    if labels_payload is None:
+        diagnostics.append(
+            "Label metadata unavailable through rest: "
+            f"{labels_diagnostic or 'unknown REST failure'}"
+        )
+    elif isinstance(labels_payload, list):
+        labels = tuple(
+            sorted(
+                label["name"]
+                for label in labels_payload
+                if isinstance(label, dict) and isinstance(label.get("name"), str)
+            )
+        )
+        labels_source = "rest"
+        if labels_diagnostic is not None:
+            diagnostics.append(labels_diagnostic)
+    else:
+        diagnostics.append("REST labels metadata returned a non-list JSON payload.")
+
+    return GitHubMetadata(
+        requested=True,
+        available=True,
+        source="rest",
+        repository=repository,
+        visibility=visibility,
+        default_branch=default_branch,
+        discussions_enabled=discussions_enabled,
+        labels=labels,
+        error=combine_metadata_errors(*diagnostics),
+        repository_source=repository_source,
+        visibility_source="rest" if visibility is not None else "manual",
+        default_branch_source="rest" if default_branch is not None else "manual",
+        discussions_source="rest" if discussions_enabled is not None else "manual",
+        labels_source=labels_source,
+    )
+
+
+def discover_github_metadata(
+    repo_root: Path,
+    owner_name: str | None,
+    *,
+    include_metadata: bool,
+    command_runner: CommandRunner = run_command,
+    rest_client: RestClient = run_rest_request,
+    github_api_base: str | None = None,
+) -> GitHubMetadata:
+    """Optionally discover GitHub metadata through ``gh`` or public REST reads."""
+    if not include_metadata:
+        return GitHubMetadata(
+            requested=False,
+            available=False,
+            source="not requested",
+        )
+
+    if owner_name is None:
+        return GitHubMetadata(
+            requested=True,
+            available=False,
+            source="manual",
+            error="Repository owner/name could not be inferred from local remotes.",
+        )
+
+    normalized_api_base = normalize_github_api_base(github_api_base)
+    gh_metadata = discover_github_metadata_with_gh(
+        repo_root,
+        owner_name,
+        command_runner=command_runner,
+    )
+    if gh_metadata.available:
+        return gh_metadata
+
+    return discover_github_metadata_with_rest(
+        owner_name,
+        github_api_base=normalized_api_base,
+        rest_client=rest_client,
+        gh_error=gh_metadata.error,
     )
 
 
@@ -1617,16 +2049,24 @@ def discover_repository_state(
     marker_path: Path,
     todo_path: Path,
     include_github_metadata: bool,
+    github_api_base: str | None = None,
     command_runner: CommandRunner = run_command,
+    rest_client: RestClient = run_rest_request,
 ) -> RepositoryDiscovery:
     """Discover read-only repository state for the preflight report."""
     remotes = parse_git_remotes(repo_root)
-    owner_name = infer_repository_name(remotes)
+    explicit_api_host = github_api_base_host(github_api_base)
+    owner_name = infer_repository_name(
+        remotes,
+        extra_allowed_hosts=((explicit_api_host,) if explicit_api_host else ()),
+    )
     github_metadata = discover_github_metadata(
         repo_root,
         owner_name,
         include_metadata=include_github_metadata,
         command_runner=command_runner,
+        rest_client=rest_client,
+        github_api_base=github_api_base,
     )
     workflows = discover_workflows(repo_root)
     return RepositoryDiscovery(
@@ -2558,7 +2998,8 @@ def format_github_metadata(metadata: GitHubMetadata) -> str:
             [
                 (
                     "- GitHub metadata: not requested; run with "
-                    "`--include-github-metadata` to opt in to read-only `gh` lookups."
+                    "`--include-github-metadata` to opt in to read-only `gh` or "
+                    "public REST lookups."
                 ),
                 f"- GitHub-only settings requiring manual review: {manual_settings}.",
             ]
@@ -2575,11 +3016,23 @@ def format_github_metadata(metadata: GitHubMetadata) -> str:
     labels = format_limited_path_list(metadata.labels, "none returned", limit=12)
     lines = [
         f"- GitHub metadata source: `{metadata.source}`",
-        f"- GitHub repository: `{metadata.repository or 'unknown'}`",
-        f"- Visibility: `{metadata.visibility or 'unknown'}`",
-        f"- Default branch from GitHub: `{metadata.default_branch or 'unknown'}`",
-        f"- Discussions: `{metadata.discussions_enabled or 'unknown'}`",
-        f"- Labels returned by GitHub: {labels}",
+        (
+            f"- GitHub repository: `{metadata.repository or 'unknown'}` "
+            f"(source: `{metadata.repository_source}`)"
+        ),
+        (
+            f"- Visibility: `{metadata.visibility or 'unknown'}` "
+            f"(source: `{metadata.visibility_source}`)"
+        ),
+        (
+            f"- Default branch from GitHub: `{metadata.default_branch or 'unknown'}` "
+            f"(source: `{metadata.default_branch_source}`)"
+        ),
+        (
+            f"- Discussions: `{metadata.discussions_enabled or 'unknown'}` "
+            f"(source: `{metadata.discussions_source}`)"
+        ),
+        f"- Labels returned by GitHub: {labels} (source: `{metadata.labels_source}`)",
         f"- GitHub-only settings requiring manual review: {manual_settings}.",
     ]
     if metadata.error is not None:
@@ -3173,6 +3626,12 @@ def main(argv: list[str] | None = None) -> int:
             raise CandidateGenerationError(
                 "--include-github-metadata can only be used with --preflight."
             )
+        if args.github_api_base is not None and not args.preflight:
+            raise CandidateGenerationError("--github-api-base can only be used with --preflight.")
+        if args.github_api_base is not None and not args.include_github_metadata:
+            raise CandidateGenerationError(
+                "--github-api-base can only be used with --include-github-metadata."
+            )
         if args.full_state and not args.preflight:
             raise CandidateGenerationError("--full-state can only be used with --preflight.")
 
@@ -3226,6 +3685,7 @@ def main(argv: list[str] | None = None) -> int:
                 marker_path=marker_path,
                 todo_path=todo_path,
                 include_github_metadata=args.include_github_metadata,
+                github_api_base=args.github_api_base,
             )
             first_adoption_state = inspect_first_adoption_state(
                 repo_root=repo_root,
