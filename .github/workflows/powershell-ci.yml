@@ -74,8 +74,27 @@ jobs:
         if: steps.find-ps1.outputs.found == 'true'
         shell: pwsh
         run: |
+          # PSGallery installs intermittently fail with transient errors (for
+          # example, "No match was found for the specified search criteria").
+          # Retry with exponential backoff so a single flaky response does not
+          # fail the whole job.
           if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
-            Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+            $maxAttempts = 5
+            $delaySeconds = 5
+            for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+              try {
+                Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser -ErrorAction Stop
+                break
+              } catch {
+                if ($attempt -eq $maxAttempts) {
+                  Write-Error "Install-Module PSScriptAnalyzer failed after $maxAttempts attempt(s): $($_.Exception.Message)"
+                  throw
+                }
+                Write-Warning "Install-Module PSScriptAnalyzer attempt $attempt of $maxAttempts failed: $($_.Exception.Message). Retrying in $delaySeconds second(s)..."
+                Start-Sleep -Seconds $delaySeconds
+                $delaySeconds = $delaySeconds * 2
+              }
+            }
           }
           Import-Module PSScriptAnalyzer
 
@@ -175,7 +194,26 @@ jobs:
         if: steps.find-tests.outputs.found == 'true'
         shell: pwsh
         run: |
-          Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser
+          # PSGallery installs intermittently fail with transient errors (for
+          # example, "No match was found for the specified search criteria and
+          # module name 'Pester'"). Retry with exponential backoff so a single
+          # flaky response does not fail the whole job.
+          $maxAttempts = 5
+          $delaySeconds = 5
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            try {
+              Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser -ErrorAction Stop
+              break
+            } catch {
+              if ($attempt -eq $maxAttempts) {
+                Write-Error "Install-Module Pester failed after $maxAttempts attempt(s): $($_.Exception.Message)"
+                throw
+              }
+              Write-Warning "Install-Module Pester attempt $attempt of $maxAttempts failed: $($_.Exception.Message). Retrying in $delaySeconds second(s)..."
+              Start-Sleep -Seconds $delaySeconds
+              $delaySeconds = $delaySeconds * 2
+            }
+          }
           Import-Module Pester
           Write-Host "Pester version: $((Get-Module Pester).Version)"
 
