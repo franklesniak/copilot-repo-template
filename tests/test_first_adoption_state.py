@@ -1,0 +1,158 @@
+"""Exercise raw first-adoption state inspection."""
+
+from __future__ import annotations
+
+import importlib.util
+import subprocess
+import sys
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "first_adoption_state.py"
+SCRIPT_DIR = SCRIPT_PATH.parent
+
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+SCRIPT_SPEC = importlib.util.spec_from_file_location("first_adoption_state", SCRIPT_PATH)
+if SCRIPT_SPEC is None or SCRIPT_SPEC.loader is None:
+    raise RuntimeError(f"Unable to load first-adoption state helper from {SCRIPT_PATH}")
+first_adoption_state = importlib.util.module_from_spec(SCRIPT_SPEC)
+sys.modules[SCRIPT_SPEC.name] = first_adoption_state
+SCRIPT_SPEC.loader.exec_module(first_adoption_state)
+
+
+def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+    """Run a test command and capture text output."""
+    return subprocess.run(
+        command,
+        cwd=cwd,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _git(repo_root: Path, *args: str) -> str:
+    """Run a Git command in a fixture repository and return stdout."""
+    result = _run(["git", *args], repo_root)
+    assert result.returncode == 0, result.stderr
+    return result.stdout.strip()
+
+
+def _write_text(repo_root: Path, relative_path: str, text: str = "content\n") -> None:
+    """Write a text file below a fixture repository root."""
+    path = repo_root / relative_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def _state_paths(repo_root: Path) -> tuple[Path, Path, Path]:
+    """Return the default marker, checklist, and journal paths for a fixture."""
+    return (
+        repo_root / ".template-sync" / "marker.yml",
+        repo_root / "_TODO-repo-init.md",
+        repo_root / "_ADOPTION-DIFFICULTIES.md",
+    )
+
+
+def test_inspection_reports_git_state_empty_trees_and_missing_marker(
+    tmp_path: Path,
+) -> None:
+    """Raw state separates Git state, empty directories, and marker evidence."""
+    _git(tmp_path, "init")
+    _git(tmp_path, "config", "user.name", "State Tests")
+    _git(tmp_path, "config", "user.email", "state-tests@example.invalid")
+    _write_text(tmp_path, ".gitignore", "node_modules/\n")
+    _write_text(tmp_path, "README.md", "tracked\n")
+    _git(tmp_path, "add", ".gitignore", "README.md")
+    _git(tmp_path, "commit", "-m", "base")
+
+    _write_text(tmp_path, "notes/raw.txt", "untracked\n")
+    _write_text(tmp_path, "node_modules/pkg/generated.js", "ignored\n")
+    (tmp_path / "empty" / "nested").mkdir(parents=True)
+    (tmp_path / ".template-sync").mkdir()
+    marker_path, todo_path, journal_path = _state_paths(tmp_path)
+
+    state = first_adoption_state.inspect_first_adoption_state(
+        repo_root=tmp_path,
+        marker_path=marker_path,
+        todo_path=todo_path,
+        journal_path=journal_path,
+    )
+
+    assert "README.md" in state.tracked_files
+    assert "notes/raw.txt" in state.untracked_files
+    assert "node_modules/" in state.ignored_files
+    assert state.empty_directory_trees == (".template-sync/", "empty/")
+    assert state.marker_evidence == (
+        "`.template-sync/` directory present",
+        "`.template-sync/marker.yml` missing",
+    )
+    assert state.missing_state_files == (
+        ".template-sync/marker.yml",
+        "_TODO-repo-init.md",
+        "_ADOPTION-DIFFICULTIES.md",
+    )
+
+
+def test_state_rendering_is_bounded_by_default_and_complete_in_full_mode() -> None:
+    """Default rendering shows counts, stable samples, and explicit remainders."""
+    state = first_adoption_state.FirstAdoptionState(
+        marker_evidence=("`.template-sync/` directory present",),
+        adoption_notes=(),
+        tracked_files=("alpha.md", "beta.md", "gamma.md"),
+        untracked_files=(),
+        ignored_files=(),
+        empty_directory_trees=(),
+        missing_state_files=(),
+        special_paths=(),
+    )
+
+    bounded = first_adoption_state.format_first_adoption_state(
+        state,
+        sample_limit=2,
+    )
+    full = first_adoption_state.format_first_adoption_state(
+        state,
+        full_state=True,
+        sample_limit=2,
+    )
+
+    assert "### Tracked Files" in bounded
+    assert "- Count: 3" in bounded
+    assert "`alpha.md`" in bounded
+    assert "`beta.md`" in bounded
+    assert "`gamma.md`" not in bounded
+    assert "Remainder: 1 entry not shown" in bounded
+    assert "`gamma.md`" in full
+    assert "Remainder:" not in full
+
+
+def test_inspection_uses_read_only_git_commands_and_preserves_filesystem(
+    tmp_path: Path,
+) -> None:
+    """The shared inspection path does not issue mutating Git or filesystem writes."""
+    marker_path, todo_path, journal_path = _state_paths(tmp_path)
+    commands: list[tuple[str, ...]] = []
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        commands.append(tuple(command))
+        if command[:1] == ["ls-files"]:
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+        if command[:1] == ["check-ignore"]:
+            return subprocess.CompletedProcess(command, 1, stdout="", stderr="")
+        return subprocess.CompletedProcess(command, 99, stdout="", stderr="unexpected command")
+
+    before = sorted(path.relative_to(tmp_path).as_posix() for path in tmp_path.rglob("*"))
+    first_adoption_state.inspect_first_adoption_state(
+        repo_root=tmp_path,
+        marker_path=marker_path,
+        todo_path=todo_path,
+        journal_path=journal_path,
+        git_runner=runner,
+    )
+    after = sorted(path.relative_to(tmp_path).as_posix() for path in tmp_path.rglob("*"))
+
+    assert before == after
+    assert commands
+    assert {command[0] for command in commands} == {"check-ignore", "ls-files"}

@@ -17,6 +17,12 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from first_adoption_state import (  # noqa: E402
+    DEFAULT_ADOPTION_JOURNAL_PATH,
+    FirstAdoptionState,
+    format_first_adoption_state,
+    inspect_first_adoption_state,
+)
 from template_sync_materialization_helpers import (  # noqa: E402
     DEFAULT_MANIFEST_PATH,
     DEFAULT_MANIFEST_SCHEMA_PATH,
@@ -464,6 +470,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "Opt in to read-only GitHub metadata lookup through the gh CLI for the "
             "preflight report. Without this flag, GitHub-only settings are labeled "
             "manual review required."
+        ),
+    )
+    parser.add_argument(
+        "--full-state",
+        action="store_true",
+        help=(
+            "With --preflight, list every raw first-adoption state entry instead of "
+            "bounded deterministic samples."
         ),
     )
     return parser.parse_args(argv)
@@ -2898,6 +2912,8 @@ def format_preflight_report(
     marker_data: MarkerData,
     manifest_modules: frozenset[str],
     discovery: RepositoryDiscovery,
+    first_adoption_state: FirstAdoptionState,
+    full_state: bool,
     ledger_rows: tuple[LedgerRow, ...],
     ledger_document: str,
 ) -> str:
@@ -2947,6 +2963,10 @@ def format_preflight_report(
         ),
         "",
         format_github_metadata(discovery.github_metadata),
+        "",
+        "## Raw First-Adoption State",
+        "",
+        format_first_adoption_state(first_adoption_state, full_state=full_state),
         "",
         "## Maintainer Questionnaire",
         "",
@@ -3153,6 +3173,8 @@ def main(argv: list[str] | None = None) -> int:
             raise CandidateGenerationError(
                 "--include-github-metadata can only be used with --preflight."
             )
+        if args.full_state and not args.preflight:
+            raise CandidateGenerationError("--full-state can only be used with --preflight.")
 
         repo_root = resolve_repo_root(args.repo_root)
         marker_path = resolve_repo_path(repo_root, args.marker)
@@ -3160,6 +3182,7 @@ def main(argv: list[str] | None = None) -> int:
         marker_schema_path = resolve_repo_path(repo_root, args.marker_schema)
         manifest_schema_path = resolve_repo_path(repo_root, args.manifest_schema)
         todo_path = resolve_repo_path(repo_root, args.todo_file)
+        journal_path = resolve_repo_path(repo_root, DEFAULT_ADOPTION_JOURNAL_PATH)
         write_candidates_path = (
             resolve_repo_path(repo_root, args.write_candidates)
             if args.write_candidates is not None
@@ -3204,6 +3227,12 @@ def main(argv: list[str] | None = None) -> int:
                 todo_path=todo_path,
                 include_github_metadata=args.include_github_metadata,
             )
+            first_adoption_state = inspect_first_adoption_state(
+                repo_root=repo_root,
+                marker_path=marker_path,
+                todo_path=todo_path,
+                journal_path=journal_path,
+            )
             print(
                 format_preflight_report(
                     marker_path=marker_path,
@@ -3213,6 +3242,8 @@ def main(argv: list[str] | None = None) -> int:
                     marker_data=marker_data,
                     manifest_modules=manifest_modules,
                     discovery=discovery,
+                    first_adoption_state=first_adoption_state,
+                    full_state=args.full_state,
                     ledger_rows=ledger_rows,
                     ledger_document=ledger_document,
                 )
