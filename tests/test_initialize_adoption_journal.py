@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "initialize_adoption_journal.py"
 SCRIPT_DIR = SCRIPT_PATH.parent
@@ -94,3 +96,38 @@ def test_existing_journal_is_preserved(tmp_path: Path) -> None:
 
     assert result.created is False
     assert journal.read_text(encoding="utf-8") == "local evidence\n"
+
+
+def test_directory_at_journal_path_is_rejected(tmp_path: Path) -> None:
+    """A directory at the journal path is surfaced, not reported as existing."""
+    scaffold = _write_scaffold(tmp_path, "# Scaffold\n")
+    journal = tmp_path / "_ADOPTION-DIFFICULTIES.md"
+    journal.mkdir()
+
+    with pytest.raises(initialize_adoption_journal.AdoptionJournalError):
+        initialize_adoption_journal.create_adoption_journal(
+            repo_root=tmp_path,
+            journal_path=journal,
+            template_path=scaffold,
+        )
+
+
+def test_symlinked_journal_path_is_rejected(tmp_path: Path) -> None:
+    """A symlink at the journal path is treated as an error, not an existing journal."""
+    scaffold = _write_scaffold(tmp_path, "# Scaffold\n")
+    target = tmp_path / "real-journal.md"
+    target.write_text("real evidence\n", encoding="utf-8")
+    journal = tmp_path / "_ADOPTION-DIFFICULTIES.md"
+    try:
+        journal.symlink_to(target)
+    except (OSError, NotImplementedError):
+        pytest.skip("Filesystem does not support symlink creation")
+
+    with pytest.raises(initialize_adoption_journal.AdoptionJournalError):
+        initialize_adoption_journal.create_adoption_journal(
+            repo_root=tmp_path,
+            journal_path=journal,
+            template_path=scaffold,
+        )
+
+    assert target.read_text(encoding="utf-8") == "real evidence\n"

@@ -156,3 +156,39 @@ def test_inspection_uses_read_only_git_commands_and_preserves_filesystem(
     assert before == after
     assert commands
     assert {command[0] for command in commands} == {"check-ignore", "ls-files"}
+
+
+def test_unavailable_git_state_is_rendered_without_code_spans() -> None:
+    """git_lines unavailable sentinels render as plain status lines, not code spans."""
+    sentinel = "tracked files unavailable: fatal: not a git repository"
+    state = first_adoption_state.FirstAdoptionState(
+        marker_evidence=(),
+        adoption_notes=(),
+        tracked_files=(sentinel,),
+        untracked_files=(),
+        ignored_files=(),
+        empty_directory_trees=(),
+        missing_state_files=(),
+        special_paths=(),
+    )
+
+    rendered = first_adoption_state.format_first_adoption_state(state)
+
+    assert f"  - {sentinel}" in rendered
+    assert f"`{sentinel}`" not in rendered
+
+
+def test_directory_state_paths_are_reported_absent(tmp_path: Path) -> None:
+    """Directories at note/state paths are treated as absent regular files."""
+    marker_path, todo_path, journal_path = _state_paths(tmp_path)
+    todo_path.mkdir(parents=True)
+    journal_path.mkdir(parents=True)
+
+    notes = first_adoption_state.existing_note_entries(todo_path, journal_path, tmp_path)
+    missing = first_adoption_state.missing_state_entries(
+        marker_path, todo_path, journal_path, tmp_path
+    )
+
+    assert notes == ()
+    assert "_TODO-repo-init.md" in missing
+    assert "_ADOPTION-DIFFICULTIES.md" in missing

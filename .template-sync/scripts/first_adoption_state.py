@@ -15,6 +15,7 @@ from template_sync_materialization_helpers import (
 DEFAULT_ADOPTION_TODO_PATH = "_TODO-repo-init.md"
 DEFAULT_ADOPTION_JOURNAL_PATH = "_ADOPTION-DIFFICULTIES.md"
 DEFAULT_STATE_SAMPLE_LIMIT = 8
+UNAVAILABLE_STATE_MARKER = " unavailable: "
 SPECIAL_STATE_PATHS = (
     ".template-sync/",
     DEFAULT_MARKER_PATH,
@@ -109,7 +110,7 @@ def git_lines(
     """Return sorted unique Git output lines or an unavailable-state entry."""
     result = git_runner(repo_root, args)
     if result.returncode != 0:
-        return (f"{label} unavailable: {command_detail(result)}",)
+        return (f"{label}{UNAVAILABLE_STATE_MARKER}{command_detail(result)}",)
     return tuple(sorted({line for line in result.stdout.splitlines() if line}))
 
 
@@ -208,11 +209,21 @@ def collect_empty_directory_trees(repo_root: Path) -> tuple[str, ...]:
     )
 
 
+def is_regular_file(path: Path) -> bool:
+    """Return whether ``path`` is a regular file rather than a symlink or directory.
+
+    Adoption note and state files are expected to be plain regular files. Using
+    this stricter check instead of ``Path.exists()`` avoids misreporting a
+    directory or symlink as a present state file.
+    """
+    return path.is_file() and not path.is_symlink()
+
+
 def existing_note_entries(todo_path: Path, journal_path: Path, repo_root: Path) -> tuple[str, ...]:
     """Return found adoption note entries."""
     entries: list[str] = []
     for path in (todo_path, journal_path):
-        if path.exists() and not path.is_symlink():
+        if is_regular_file(path):
             entries.append(f"`{repository_relative_path(path, repo_root)}` found")
     return tuple(entries)
 
@@ -226,7 +237,7 @@ def missing_state_entries(
     """Return missing adoption state files that are useful to call out explicitly."""
     entries: list[str] = []
     for path in (marker_path, todo_path, journal_path):
-        if not path.exists():
+        if not is_regular_file(path):
             entries.append(repository_relative_path(path, repo_root))
     return tuple(entries)
 
@@ -306,9 +317,19 @@ def format_state_items(
     return "\n".join(lines)
 
 
+def is_unavailable_entry(entry: str) -> bool:
+    """Return whether ``entry`` is a ``git_lines`` unavailable status, not a path."""
+    return UNAVAILABLE_STATE_MARKER in entry
+
+
 def format_path_items(paths: tuple[str, ...]) -> tuple[str, ...]:
-    """Return repository paths formatted as Markdown code spans."""
-    return tuple(f"`{path}`" for path in paths)
+    """Return repository paths as Markdown code spans, leaving status lines plain.
+
+    Entries produced by :func:`git_lines` when a Git command fails are
+    human-readable ``<label> unavailable: <detail>`` status strings rather than
+    repository paths, so they are returned without code-span formatting.
+    """
+    return tuple(entry if is_unavailable_entry(entry) else f"`{entry}`" for entry in paths)
 
 
 def format_first_adoption_state(

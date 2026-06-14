@@ -65,9 +65,21 @@ def create_adoption_journal(
     journal_path: Path,
     template_path: Path,
 ) -> AdoptionJournalResult:
-    """Create ``journal_path`` from ``template_path`` only when absent."""
-    if journal_path.exists():
-        return AdoptionJournalResult(path=journal_path, created=False)
+    """Create ``journal_path`` from ``template_path`` only when absent.
+
+    A pre-existing journal is preserved only when it is a regular file that is
+    not a symlink. Any other existing path kind (directory, symlink, or broken
+    symlink) is an ambiguous state that is surfaced as an error instead of being
+    silently reported as an already-initialized journal.
+    """
+    if journal_path.is_symlink() or journal_path.exists():
+        if journal_path.is_file() and not journal_path.is_symlink():
+            return AdoptionJournalResult(path=journal_path, created=False)
+        journal_relative = repository_relative_path(journal_path, repo_root)
+        raise AdoptionJournalError(
+            f"Adoption journal path {journal_relative} exists but is not a regular file; "
+            "remove it or pass a different --journal-path to initialize the journal."
+        )
 
     try:
         template_text = template_path.read_text(encoding="utf-8")
