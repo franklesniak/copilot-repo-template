@@ -50,6 +50,16 @@ testdata/**                   text eol=lf
 *.js                          text eol=lf
 *.mjs                         text eol=lf
 *.py                          text eol=lf
+*.sh                          text eol=lf
+*.hcl                         text eol=lf
+*.tf                          text eol=lf
+*.tfvars                      text eol=lf
+*.tftpl                       text eol=lf
+*.tfbackend                   text eol=lf
+.gitattributes                text eol=lf
+.*ignore                      text eol=lf
+CODEOWNERS                    text eol=lf
+/LICENSE                      text eol=lf
 
 # Binary overrides: prevent the broad rules above (or any default
 # text-detection) from treating these common binary file types as text.

@@ -7,13 +7,13 @@ description: "Rules for .gitattributes entries, including line-ending pinning fo
 
 # `.gitattributes` Rules
 
-**Version:** 1.2.20260609.0
+**Version:** 1.3.20260615.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-09
+- **Last Updated:** 2026-06-15
 - **Scope:** Applies to any `.gitattributes` file in repositories that adopt these instructions, independent of programming language. Governs how committed text artifacts, linter-enforced LF file families, and template-managed text formats are protected against platform-dependent checkout rewriting.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -69,20 +69,30 @@ Template repositories that ship common text file families for downstream adoptio
 
 The pattern **SHOULD** use a low-risk extension or path family that the template actually owns. Do not add a broad extension pin merely because the format is text; document why the file family is template-managed and keep binary override behavior clear.
 
-**Example:** This template pins Markdown, PowerShell, JSON, JSONC, TOML, JavaScript (`*.js`), JavaScript module (`*.mjs`), and Python file families because they are shipped as template-managed documentation, scripts, configuration, or examples and are commonly edited during downstream adoption:
+**Example:** This template pins Markdown, PowerShell, JSON, JSONC, TOML, JavaScript (`*.js`), JavaScript module (`*.mjs`), Python, shell script (`*.sh`), HCL, Terraform, dot-ignore, CODEOWNERS, `.gitattributes`, and root-license file families because they are shipped as template-managed documentation, scripts, configuration, control files, or examples and are commonly edited during downstream adoption. Shell scripts have an additional correctness rationale: a CRLF shebang can make Unix-like script execution look for an interpreter path containing a carriage return.
 
 ```gitattributes
-*.md    text eol=lf
-*.mdc   text eol=lf
-*.ps1   text eol=lf
-*.psd1  text eol=lf
-*.psm1  text eol=lf
-*.json  text eol=lf
-*.jsonc text eol=lf
-*.toml  text eol=lf
-*.js    text eol=lf
-*.mjs   text eol=lf
-*.py    text eol=lf
+*.md                          text eol=lf
+*.mdc                         text eol=lf
+*.ps1                         text eol=lf
+*.psd1                        text eol=lf
+*.psm1                        text eol=lf
+*.json                        text eol=lf
+*.jsonc                       text eol=lf
+*.toml                        text eol=lf
+*.js                          text eol=lf
+*.mjs                         text eol=lf
+*.py                          text eol=lf
+*.sh                          text eol=lf
+*.hcl                         text eol=lf
+*.tf                          text eol=lf
+*.tfvars                      text eol=lf
+*.tftpl                       text eol=lf
+*.tfbackend                   text eol=lf
+.gitattributes                text eol=lf
+.*ignore                      text eol=lf
+CODEOWNERS                    text eol=lf
+/LICENSE                      text eol=lf
 ```
 
 ## Defaults Shipped by This Template
@@ -108,6 +118,16 @@ This template ships a repo-root `.gitattributes` file with LF-pinning defaults f
 - `*.js`
 - `*.mjs`
 - `*.py`
+- `*.sh`
+- `*.hcl`
+- `*.tf`
+- `*.tfvars`
+- `*.tftpl`
+- `*.tfbackend`
+- `.gitattributes`
+- `.*ignore`
+- `CODEOWNERS`
+- `/LICENSE`
 
 The fixture paths are assumed to contain **text** fixtures. To keep the defaults safe when binary assets are committed under the same directories (for example, `.png` screenshots under `__snapshots__/`), the shipped `.gitattributes` also declassifies a curated list of common binary extensions (images, documents and archives, compiled artifacts, audio and video, fonts) using the `binary` macro so that Git does not apply line-ending conversion to them.
 
@@ -143,4 +163,4 @@ Per-path `eol=lf` pinning in `.gitattributes` is the durable Git-layer fix becau
 
 The same Git-layer guarantee is required when a repository-enforced linter or validator makes LF line endings part of the contract. YAML style validation is a common example: when a retained validator rejects CRLF YAML through a `new-lines` rule, leaving YAML subject to host checkout conversion makes standard validation fail on Windows even though the parsed YAML data is unchanged. Pinning `*.yml` and `*.yaml` to `eol=lf` aligns the working tree with the configured validation contract.
 
-Template-managed text formats have a third, weaker but still durable rationale: CRLF-churn prevention. Markdown, Cursor MDC, PowerShell, JSON, JSONC, TOML, JavaScript (`*.js`), JavaScript module (`*.mjs`), and Python files are frequently touched during downstream adoption and stack pruning. Allowing host-specific checkout conversion for those file families creates large non-semantic diffs and can obscure the intended template change. LF pinning keeps adoption review focused on content while leaving binary safety to the explicit `binary` overrides.
+Template-managed text formats have a third, weaker but still durable rationale: CRLF-churn prevention. Markdown, Cursor MDC, PowerShell, JSON, JSONC, TOML, JavaScript (`*.js`), JavaScript module (`*.mjs`), Python, HCL, Terraform, dot-ignore, CODEOWNERS, `.gitattributes`, and root `LICENSE` files are frequently touched during downstream adoption and stack pruning. Allowing host-specific checkout conversion for those file families creates large non-semantic diffs and can obscure the intended template change. LF pinning keeps adoption review focused on content while leaving binary safety to the explicit `binary` overrides. Shell scripts also need LF for direct execution on Unix-like hosts because a carriage return in the shebang line can become part of the interpreter path.
