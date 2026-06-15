@@ -99,7 +99,7 @@ repos:
   #      Validates the worked-example schema against its declared JSON Schema
   #      Draft 2020-12 metaschema.
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: "0.37.2"
+    rev: "0.37.3"
     hooks:
       - id: check-jsonschema
         alias: validate-example-config-valid-examples
@@ -136,7 +136,7 @@ repos:
   #      Validates the schemas loaded by `.template-sync/scripts/` at runtime
   #      against their declared JSON Schema Draft 2020-12 metaschema.
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: "0.37.2"
+    rev: "0.37.3"
     hooks:
       - id: check-jsonschema
         alias: validate-template-sync-marker-valid-examples
@@ -184,7 +184,7 @@ repos:
   #      the upstream-template required-anchor validator against the template's
   #      own protected instruction files.
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: "0.37.2"
+    rev: "0.37.3"
     hooks:
       - id: check-jsonschema
         alias: validate-template-sync-manifest
@@ -278,7 +278,7 @@ repos:
   #      `files:` pattern at that time. Do not vendor third-party
   #      schemas into this repository to fill the gap.
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: "0.37.2"
+    rev: "0.37.3"
     hooks:
       - id: check-jsonschema
         alias: validate-dependabot-config
