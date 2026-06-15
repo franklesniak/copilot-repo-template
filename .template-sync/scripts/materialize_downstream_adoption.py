@@ -12,7 +12,7 @@ import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Collection, Iterable, Sequence
+from typing import Any, Callable, Collection, Iterable, Sequence
 
 import yaml  # type: ignore[import-untyped]
 
@@ -74,6 +74,21 @@ MARKER_COPY_FIELDS = (
     "deferred_protected_candidates",
     "instruction_contract_waivers",
 )
+LICENSE_TARGET_PATH = "LICENSE"
+LICENSE_SOURCE_CANDIDATE_NAMES = frozenset(
+    name.casefold()
+    for name in (
+        "LICENSE.txt",
+        "LICENSE.md",
+        "LICENSE.rst",
+        "LICENCE",
+        "LICENCE.txt",
+        "LICENCE.md",
+        "COPYING",
+        "COPYING.txt",
+        "COPYING.md",
+    )
+)
 
 
 class MaterializationError(RuntimeError):
@@ -129,6 +144,15 @@ class Decisions:
 
 
 @dataclass(frozen=True)
+class LicensePreservation:
+    """A first-adoption license preservation operation."""
+
+    source_path: str
+    bytes_content: bytes
+    local_override: LocalOverride
+
+
+@dataclass(frozen=True)
 class Conflict:
     """One target path that was not overwritten by materialization."""
 
@@ -158,6 +182,8 @@ class Summary:
     byte_only: set[str] = field(default_factory=set)
     placeholder_related: set[str] = field(default_factory=set)
     placeholder_notes: list[str] = field(default_factory=list)
+    license_notes: list[str] = field(default_factory=list)
+    residual_cleanup_paths: set[str] = field(default_factory=set)
     conflicts: list[Conflict] = field(default_factory=list)
     marker_status: str = "preview-only"
     marker_reason: str = ""
@@ -309,6 +335,23 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--vscode-title",
         default=None,
         help="Replacement VS Code window title.",
+    )
+    parser.add_argument(
+        "--preserve-existing-license",
+        action="store_true",
+        help=(
+            "Copy existing downstream license text to root LICENSE, suppress the "
+            "template LICENSE, and leave the source license file for manual cleanup."
+        ),
+    )
+    parser.add_argument(
+        "--license-source-path",
+        default=None,
+        help=(
+            "Repository-relative downstream license file to preserve. When omitted "
+            "with --preserve-existing-license, the helper only auto-selects a single "
+            "unambiguous root alternate such as LICENSE.txt or LICENSE.md."
+        ),
     )
     parser.add_argument(
         "--allow-conflicts",
@@ -869,6 +912,204 @@ def load_decisions(
     )
 
 
+def license_preservation_local_override(source_path: str) -> LocalOverride:
+    """Return the durable local override that preserves downstream license text."""
+    return LocalOverride(
+        path=LICENSE_TARGET_PATH,
+        default_decision=TEMPLATE_SKIP_DECISION,
+        reason=(
+            f"Preserve downstream license text from {source_path} during first adoption; "
+            "suppress template LICENSE. Source file remains for manual cleanup after review."
+        ),
+        is_directory=False,
+    )
+
+
+def raw_local_override_record(local_override: LocalOverride) -> dict[str, str]:
+    """Return a marker-shaped local override record."""
+    path = f"{local_override.path}/" if local_override.is_directory else local_override.path
+    return {
+        "path": path,
+        "default_decision": local_override.default_decision,
+        "reason": local_override.reason,
+    }
+
+
+def exact_local_override_for_path(
+    local_overrides: tuple[LocalOverride, ...],
+    relative_path: str,
+) -> LocalOverride | None:
+    """Return an exact local override for ``relative_path`` if one exists."""
+    for local_override in local_overrides:
+        if not local_override.is_directory and local_override.path == relative_path:
+            return local_override
+    return None
+
+
+def append_license_preservation_override(
+    decisions: Decisions,
+    preservation: LicensePreservation,
+) -> Decisions:
+    """Add the license-preservation local override to marker-shaped decisions."""
+    existing_override = exact_local_override_for_path(
+        decisions.marker_data.local_overrides,
+        LICENSE_TARGET_PATH,
+    )
+    local_overrides = decisions.marker_data.local_overrides
+    raw_marker_fields = {
+        field_name: value for field_name, value in decisions.raw_marker_fields.items()
+    }
+
+    if existing_override is not None:
+        if existing_override.default_decision != TEMPLATE_SKIP_DECISION:
+            raise MaterializationError(
+                "License preservation requires template_sync.local_overrides for "
+                f"{LICENSE_TARGET_PATH} to be absent or SKIP; found "
+                f"{existing_override.default_decision}."
+            )
+    else:
+        local_overrides = (*local_overrides, preservation.local_override)
+        raw_records = list(raw_marker_fields.get("local_overrides", []))
+        raw_records.append(raw_local_override_record(preservation.local_override))
+        raw_marker_fields["local_overrides"] = raw_records
+
+    marker_data = MarkerDecisionData(
+        last_reviewed_template_commit=decisions.marker_data.last_reviewed_template_commit,
+        included_modules=decisions.marker_data.included_modules,
+        local_overrides=local_overrides,
+        deferred_candidates=decisions.marker_data.deferred_candidates,
+        protected_decisions=decisions.marker_data.protected_decisions,
+    )
+    validate_protected_file_decisions(
+        marker_data.protected_decisions,
+        marker_data.local_overrides,
+        marker_data.deferred_candidates,
+    )
+    return Decisions(
+        source_repo=decisions.source_repo,
+        last_reviewed_template_commit=decisions.last_reviewed_template_commit,
+        included_modules=decisions.included_modules,
+        marker_data=marker_data,
+        raw_marker_fields=raw_marker_fields,
+    )
+
+
+def detected_license_source_candidates(target_root: Path) -> tuple[str, ...]:
+    """Return unambiguous root-level alternate license source candidates."""
+    try:
+        children = tuple(target_root.iterdir())
+    except OSError as error:
+        raise MaterializationError(
+            f"Unable to inspect target root for license candidates: {os_error_summary(error)}"
+        ) from error
+
+    candidates = [
+        child.name for child in children if child.name.casefold() in LICENSE_SOURCE_CANDIDATE_NAMES
+    ]
+    return tuple(sorted(candidates, key=str.casefold))
+
+
+def resolve_license_source_argument(args: argparse.Namespace, target_root: Path) -> str | None:
+    """Resolve the requested or auto-detected license source path."""
+    if args.license_source_path is not None and not args.preserve_existing_license:
+        raise MaterializationError(
+            "--license-source-path requires --preserve-existing-license so the "
+            "owner's license-preservation intent is explicit."
+        )
+    if not args.preserve_existing_license:
+        return None
+    if args.license_source_path is not None:
+        return args.license_source_path
+
+    candidates = detected_license_source_candidates(target_root)
+    if not candidates:
+        raise MaterializationError(
+            "--preserve-existing-license requires --license-source-path because no "
+            "alternate root license candidate was found."
+        )
+    if len(candidates) > 1:
+        raise MaterializationError(
+            "Multiple candidate license source paths found: "
+            + ", ".join(candidates)
+            + ". Pass --license-source-path with the owner-approved source path."
+        )
+    return candidates[0]
+
+
+def read_license_source_bytes(
+    source_path: Path,
+    relative_path: str,
+    *,
+    read_bytes: Callable[[], bytes] | None = None,
+) -> bytes:
+    """Read and validate a preserved license as UTF-8 text bytes."""
+    try:
+        bytes_content = (read_bytes or source_path.read_bytes)()
+    except OSError as error:
+        raise MaterializationError(
+            f"Unable to read license source {relative_path}: {os_error_summary(error)}"
+        ) from error
+    if b"\x00" in bytes_content:
+        raise MaterializationError(
+            f"License source {relative_path} must be a text file; NUL bytes were found."
+        )
+    try:
+        bytes_content.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise MaterializationError(f"License source {relative_path} must be UTF-8 text.") from error
+    return bytes_content
+
+
+def resolve_license_preservation(
+    args: argparse.Namespace,
+    *,
+    target_root: Path,
+) -> LicensePreservation | None:
+    """Resolve and validate first-adoption license preservation inputs."""
+    raw_source_path = resolve_license_source_argument(args, target_root)
+    if raw_source_path is None:
+        return None
+
+    source_path = resolve_safe_repository_target_path(
+        target_root,
+        raw_source_path,
+        field_name="--license-source-path",
+    )
+    source_relative_path = source_path.relative_to(target_root).as_posix()
+    if source_relative_path == LICENSE_TARGET_PATH:
+        raise MaterializationError(
+            "--license-source-path already names root LICENSE. For same-path "
+            "license preservation, keep the downstream LICENSE and record "
+            "template_sync.local_overrides with default_decision SKIP instead of "
+            "using --preserve-existing-license."
+        )
+
+    target_license_path = resolve_safe_repository_target_path(
+        target_root,
+        LICENSE_TARGET_PATH,
+        field_name="license target path",
+    )
+    if target_license_path.exists():
+        raise MaterializationError(
+            "Cannot preserve downstream license text to root LICENSE because root "
+            "LICENSE already exists. Use the existing same-path local_overrides "
+            "SKIP decision for root LICENSE, or resolve the conflicting license "
+            "paths before rerunning."
+        )
+    if not source_path.exists():
+        raise MaterializationError(f"License source path does not exist: {source_relative_path}.")
+    if not source_path.is_file():
+        raise MaterializationError(
+            f"License source path must reference a regular text file: {source_relative_path}."
+        )
+
+    return LicensePreservation(
+        source_path=source_relative_path,
+        bytes_content=read_license_source_bytes(source_path, source_relative_path),
+        local_override=license_preservation_local_override(source_relative_path),
+    )
+
+
 def ordered_modules(module_order: Sequence[str], selected_modules: Collection[str]) -> list[str]:
     """Return selected modules in manifest display order."""
     selected = set(selected_modules)
@@ -1152,6 +1393,52 @@ def run_placeholder_helper(
         )
     if not summary.placeholder_related:
         summary.placeholder_notes.append("no approved placeholders were replaced")
+
+
+def apply_license_preservation(
+    *,
+    staging_root: Path,
+    target_root: Path,
+    staged_paths: Iterable[str],
+    preservation: LicensePreservation,
+    summary: Summary,
+) -> tuple[str, ...]:
+    """Write preserved downstream license text and suppress staged template licenses."""
+    target_license_path = resolve_safe_repository_target_path(
+        target_root,
+        LICENSE_TARGET_PATH,
+        field_name="license target path",
+    )
+    if target_license_path.exists():
+        raise MaterializationError(
+            "Cannot preserve downstream license text to root LICENSE because root "
+            "LICENSE already exists. Resolve the license conflict before rerunning."
+        )
+    write_staged_bytes(target_license_path, preservation.bytes_content)
+    summary.created.add(LICENSE_TARGET_PATH)
+    summary.residual_cleanup_paths.add(preservation.source_path)
+    summary.license_notes.append(
+        f"preserved downstream license text from {preservation.source_path} to LICENSE"
+    )
+    summary.license_notes.append(
+        "suppressed template LICENSE and added local_overrides SKIP for LICENSE "
+        "to the computed marker decision"
+    )
+
+    suppressed_paths = {LICENSE_TARGET_PATH, preservation.source_path}
+    remaining_paths: list[str] = []
+    for relative_path in staged_paths:
+        if relative_path not in suppressed_paths:
+            remaining_paths.append(relative_path)
+            continue
+        staged_path = resolve_safe_repository_target_path(
+            staging_root,
+            relative_path,
+            field_name="staged path",
+        )
+        if staged_path.exists():
+            staged_path.unlink()
+    return tuple(sorted(remaining_paths))
 
 
 def most_specific_local_override(
@@ -1510,6 +1797,8 @@ def print_summary(summary: Summary) -> None:
     print_section("Byte-only paths", summary.byte_only)
     print_section("Placeholder-related paths", summary.placeholder_related)
     print_section("Placeholder notes", summary.placeholder_notes)
+    print_section("License preservation notes", summary.license_notes)
+    print_section("Residual manual-cleanup paths", summary.residual_cleanup_paths)
     print("Marker:")
     print(f"  - {summary.marker_status}: {summary.marker_reason}")
     if summary.recorded_conflicts:
@@ -1543,6 +1832,9 @@ def materialize(args: argparse.Namespace) -> Summary:
             target_root=target_root,
             module_order=module_order,
         )
+        license_preservation = resolve_license_preservation(args, target_root=target_root)
+        if license_preservation is not None:
+            decisions = append_license_preservation_override(decisions, license_preservation)
         validate_reviewed_commit_matches_source(decisions, source_checkout)
 
         marker_document = computed_marker_document(
@@ -1578,6 +1870,14 @@ def materialize(args: argparse.Namespace) -> Summary:
                 staging_root=staging_root,
                 summary=summary,
             )
+            if license_preservation is not None:
+                staged_paths = apply_license_preservation(
+                    staging_root=staging_root,
+                    target_root=target_root,
+                    staged_paths=staged_paths,
+                    preservation=license_preservation,
+                    summary=summary,
+                )
             reconcile_staged_files(
                 staging_root=staging_root,
                 target_root=target_root,
