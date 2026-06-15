@@ -890,10 +890,25 @@ def root_package_lock_mapping(document: dict[str, Any]) -> dict[str, Any]:
     """Return the root package-lock packages[''] object."""
     packages = document.get("packages")
     if not isinstance(packages, dict):
-        raise PlaceholderError("package-lock.json: expected packages object.")
+        lockfile_version = document.get("lockfileVersion")
+        version_note = (
+            f" (found lockfileVersion {lockfile_version!r})" if lockfile_version is not None else ""
+        )
+        raise PlaceholderError(
+            f'package-lock.json has no top-level "packages" object{version_note}. '
+            "Deterministic root-identity updates require an npm lockfileVersion 2 or 3 "
+            "lockfile. Regenerate it with a modern npm (for example, "
+            "`npm install --package-lock-only`), or omit package-lock.json from the "
+            "adopted files so only package.json receives the identity update."
+        )
     root_package = packages.get("")
     if not isinstance(root_package, dict):
-        raise PlaceholderError('package-lock.json: expected packages[""] object.')
+        raise PlaceholderError(
+            'package-lock.json has no root packages[""] entry, so its root identity '
+            "cannot be updated deterministically. Regenerate the lockfile with "
+            "`npm install --package-lock-only`, or omit package-lock.json from the "
+            "adopted files so only package.json receives the identity update."
+        )
     return root_package
 
 

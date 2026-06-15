@@ -804,6 +804,24 @@ def test_package_lock_version_changes_only_when_package_version_is_explicit(
     assert versioned_lock["packages"]["node_modules/example"]["version"] == "9.9.9"
 
 
+def test_package_lock_without_packages_object_yields_actionable_error() -> None:
+    """A lockfileVersion 1 package-lock.json gives an actionable error for identity updates."""
+    file_texts = {
+        "package-lock.json": json.dumps(
+            {"name": "x", "version": "1.0.0", "lockfileVersion": 1, "dependencies": {}}
+        )
+        + "\n"
+    }
+    context = placeholder_helper.build_replacement_context(package_name="downstream-tools")
+
+    with pytest.raises(placeholder_helper.PlaceholderError) as excinfo:
+        placeholder_helper.update_package_lock_identity(file_texts, context)
+
+    message = str(excinfo.value)
+    assert "lockfileVersion" in message
+    assert "npm install --package-lock-only" in message
+
+
 def test_check_placeholders_workflow_delegates_hard_fail_allowlist_to_helper() -> None:
     """The workflow hard-fail path uses the helper's allowlist-backed scan."""
     workflow = read_file(REPO_ROOT / ".github" / "workflows" / "check-placeholders.yml")
