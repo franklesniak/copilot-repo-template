@@ -19,6 +19,8 @@ import jsonschema
 import pytest
 import yaml  # type: ignore[import-untyped]
 
+pytestmark = pytest.mark.upstream_template_only
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_PATH = REPO_ROOT / ".template-sync" / "manifest.yml"
 VALIDATE_MARKER_PATH = REPO_ROOT / ".template-sync" / "scripts" / "validate_marker.py"

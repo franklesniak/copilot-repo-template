@@ -252,6 +252,14 @@ python .template-sync/scripts/validate_downstream_adoption.py --require-marker
 
 Use the downstream adoption command when `.template-sync/marker.yml` is the source of truth for retained modules and excluded modules are intentionally absent. Run the full upstream test suite when maintaining this template or when a downstream repository intentionally keeps the corresponding test/tool stack.
 
+Downstream repositories that retain pytest-based template support SHOULD use the official downstream pytest gate:
+
+```bash
+python -m pytest -m "not upstream_template_only"
+```
+
+The gate excludes only tests marked `upstream_template_only`, so new unmarked tests remain included by default. The committed pytest configuration uses strict marker validation.
+
 For cleanup planning, generate a read-only excluded-module report:
 
 ```bash

@@ -363,6 +363,7 @@ def test_cli_rejects_missing_security_mode_and_contact(
         ),
     ],
 )
+@pytest.mark.upstream_template_only
 def test_security_reporting_modes_render_consistent_surfaces(
     tmp_path: Path,
     mode_args: list[str],
@@ -454,6 +455,7 @@ def test_security_reporting_modes_render_consistent_surfaces(
         ),
     ],
 )
+@pytest.mark.upstream_template_only
 def test_security_reporting_modes_preserve_github_host_override(
     tmp_path: Path,
     mode_args: list[str],
@@ -491,6 +493,7 @@ def test_security_reporting_modes_preserve_github_host_override(
     assert placeholder_helper.scan_repository(tmp_path, repository="octo/widget") == ()
 
 
+@pytest.mark.upstream_template_only
 def test_github_private_only_requires_conduct_contact_when_code_of_conduct_retained(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
