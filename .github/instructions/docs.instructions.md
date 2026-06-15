@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.6.20260609.0
+**Version:** 1.6.20260615.1
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-09
+- **Last Updated:** 2026-06-15
 - **Scope:** Defines documentation standards for Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) files in this repository, including specs, design docs, runbooks, ADRs, instruction files, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -120,6 +120,28 @@ This subsection applies to Tier 1 documents and to any other document that inten
   - `<major>` and `<minor>` are out of scope for this synchronization rule and follow the document's own semantic-versioning conventions.
 - Exemption for trivial mechanical changes. The bump MAY be omitted for commits that do not alter rendered content or documentation meaning, including pure file-mode changes, line-ending normalization, end-of-file newline fixes, or trailing-whitespace-only fixes produced by pre-commit hooks. The trailing-whitespace exemption MUST NOT be applied when the change removes or alters a Markdown hard line break (two or more trailing spaces, or a trailing backslash, immediately before a newline), because such whitespace is rendering-significant; in that case the change alters rendered content and the bump is required. Automated commits made by the auto-fix workflow (`.github/workflows/auto-fix-precommit.yml`) MAY omit the bump when they only apply those mechanical fixes, subject to the same hard-line-break carve-out.
 - This rule applies to all documents in the repository that carry the metadata header block, including but not limited to `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.hermes.md`, and `.cursor/rules/*.mdc`.
+
+### Non-Normative Historical Artifacts
+
+A non-normative historical artifact is a Markdown file committed to preserve provenance, such as a verbatim AI-assistant prompt, transcript excerpt, quoted source excerpt, or similar historical material used to produce or review another artifact. For these files, "preserved" means content-level fidelity; repository hooks can still normalize trailing whitespace and final newlines.
+
+- **Classification.** Treat a non-normative historical artifact as Tier 2, so the metadata header block is **NOT REQUIRED**, unless its current, non-quoted framing independently meets the Tier 1 criteria. Copied prompts, requirements language, review text, or source excerpts inside preserved historical content do not promote the file to Tier 1. Classify the file by its current purpose and framing, not by copied historical text.
+- **Top-of-document label.** The file MUST carry a clear top-of-document label identifying it as a non-normative historical artifact that defines no repository requirements. The H1 itself MUST include the non-normative marker; an explanatory note alone is insufficient because a `**Version:**` line or metadata header block can separate the note from the H1. When a label format shows a placeholder such as `<topic>`, the placeholder MUST stay inside a code span or fenced block so it is not parsed as raw inline HTML.
+- **Note placement.** The explanatory note MUST appear immediately after the H1, or, when the file intentionally carries the metadata header block, immediately after that block. This follows the placement model above. Markdown files SHOULD still include the repository-standard `<!-- markdownlint-disable MD013 -->` portability directive described in **Markdown Conventions**.
+- **Optional metadata.** The file SHOULD NOT carry the metadata header block without a concrete consumer for that metadata, and SHOULD NOT carry a standalone `**Version:**` line unless a concrete consumer and synchronization convention are documented. When the metadata header block is intentionally present, authors MUST follow the placement and synchronization rules above, which govern any `**Version:**` line carried alongside it. A `**Version:**` line carried without the metadata header block has no `Last Updated` field to synchronize against and instead follows the documented synchronization convention recorded for that standalone line. Authors MUST NOT invent new metadata `Status` values such as `Historical`; use only the values allowed by the Tier 1 metadata policy.
+- **Preserved content fencing.** Authors SHOULD preserve prompts, transcripts, and excerpts inside fenced `text` code blocks. Authors MAY use a `markdown` fence only when rendering and linting the preserved Markdown, including the repository's nested-Markdown check, is intentional. If the preserved content contains triple-backtick fences, authors MUST use a longer outer backtick fence. Authors MUST NOT switch to tilde fences because this repository's markdownlint configuration enforces backtick fences.
+- **Fencing rationale.** Fenced code blocks keep preserved content from being parsed as live headings or directives. For an artifact under `docs/`, fenced code blocks also prevent the repo-local `check-prohibited-placeholders` pre-commit hook from flagging quoted `TODO:`, `TBD`, or `FIXME` text, because that hook skips fenced examples. Block quotes and other rendered quote forms are not equivalent for that exemption.
+- **Related sources.** The file SHOULD link to canonical repository documents or inspectable public sources it relates to when they exist, such as the specification, ADR, issue, public upstream source, or quoted source it was used to produce or review. These references MUST follow the existing reproducible-source and repository self-containment rules. Required interpretation MUST NOT depend on machine-local paths, agent session routes, private repositories, internal-only resources, or any other non-public resource.
+- **Scope limit.** This classification MUST NOT be used as a carve-out for active prompt or cookbook guides, runbooks, process docs, specifications, ADRs, or reusable operator guidance. Classify those documents by their current content under the ordinary Tier 1 and Tier 2 policy.
+- **Safety.** Historical provenance MUST NOT override existing safety rules. Authors MUST NOT commit secrets, credentials, private-only context, personal data that should not be published, or source material that cannot be safely or lawfully included.
+
+Compliant label and note example:
+
+```text
+# Historical Artifact (Non-Normative): AI Review Prompt for ADR-0003
+
+This file preserves the AI review prompt used while preparing ADR-0003. The preserved content is provenance/history only; it is not current specification, review, policy, requirements, or implementation guidance.
+```
 
 ## Writing Rules
 

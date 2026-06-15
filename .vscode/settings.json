@@ -1,6 +1,9 @@
 {
-    "window.title": "Go to .vscode/settings.json and make this the name of the repo",
-    "[powershell]": {
-        "files.encoding": "utf8"
-    }
+  "window.title": "Go to .vscode/settings.json and make this the name of the repo",
+  "[powershell]": {
+    "files.encoding": "utf8"
+  },
+  "files.associations": {
+    "**/CODEOWNERS": "ignore"
+  }
 }
