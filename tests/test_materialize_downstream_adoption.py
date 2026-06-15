@@ -517,15 +517,27 @@ def run_excluded_module_report(
     included_modules: tuple[str, ...],
 ) -> subprocess.CompletedProcess[str]:
     """Run the excluded-module reporter against a fixture repository."""
-    module_args = (
-        []
-        if (repo_root / ".template-sync" / "marker.yml").is_file()
-        else [
+    marker_path = repo_root / ".template-sync" / "marker.yml"
+    module_args: list[str]
+    if marker_path.is_file():
+        # The reporter reads the retained module set from the marker, so the
+        # caller's included_modules would otherwise be silently ignored. Assert
+        # the marker records the same module set so drift between the test's
+        # intent and the materialized marker is caught rather than hidden.
+        marker_data = load_yaml(marker_path)
+        assert isinstance(marker_data, dict), marker_path
+        recorded_modules = marker_data["template_sync"]["included_modules"]
+        assert set(recorded_modules) == set(included_modules), (
+            f"marker included_modules {sorted(recorded_modules)!r} do not match "
+            f"requested {sorted(included_modules)!r}"
+        )
+        module_args = []
+    else:
+        module_args = [
             argument
             for module_name in included_modules
             for argument in ("--included-module", module_name)
         ]
-    )
     return subprocess.run(
         [
             sys.executable,
