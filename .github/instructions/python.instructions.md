@@ -7,7 +7,7 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.7.20260615.0
+**Version:** 1.7.20260615.1
 
 ## Metadata
 
@@ -74,13 +74,13 @@ This baseline is not dogma.  When external constraints require modern Python (e.
 - **[This repo]** `ruff format` **MUST NOT** be used to apply or validate Python formatting unless a future toolchain change explicitly adopts Ruff formatting.
 - **[Downstream]** [`templates/python/pyproject.toml`](../../templates/python/pyproject.toml) shows starter `pyproject.toml` configuration for downstream adopters and is distinct from this repository's active root configuration.
 
-### CLI and Argument Handling
+### CLI Flag Integrity
 
-- **[All]** CLI flags and meaningful option modes/values **MUST** have a user- or test-verifiable runtime effect; a flag's help text **MUST** match its actual behavior. See `## CLI and Argument Handling`.
+- **[All]** CLI flags and meaningful option modes/values **MUST** have a user- or test-verifiable runtime effect; a flag's help text **MUST** match its actual behavior. See [CLI and Argument Handling](#cli-and-argument-handling).
 
-### Package Versioning
+### Single-Source Versioning
 
-- **[All]** Packages and applications that expose a version **MUST** maintain a single source of truth for that version and **MUST NOT** duplicate hard-coded version literals across multiple files (for example, repeating the same `"X.Y.Z"` string in `pyproject.toml`, `__init__.py`, and runtime code).
+- **[All]** Packages and applications that expose a version **MUST** maintain a single source of truth for that version and **MUST NOT** duplicate hard-coded version literals across multiple files (for example, repeating the same `"X.Y.Z"` string in `pyproject.toml`, `__init__.py`, and runtime code). See [Package Versioning](#package-versioning).
 - **[All]** For setuptools-based packages in this template, the preferred pattern is to declare the version once in `src/<package>/__init__.py` as `__version__ = "X.Y.Z"` and **SHOULD** reference it from:
   - `pyproject.toml` via dynamic versioning (`dynamic = ["version"]` plus `[tool.setuptools.dynamic] version = { attr = "<package>.__version__" }`).
   - application/runtime metadata by importing `__version__` rather than hard-coding a literal (for example, FastAPI version metadata, a CLI `--version` flag, or HTTP response headers).
