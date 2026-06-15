@@ -7,13 +7,13 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.6.20260614.1
+**Version:** 1.7.20260615.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-14
+- **Last Updated:** 2026-06-15
 - **Scope:** Defines Python coding standards for all Python files in this repository, including modules, scripts, tests, and tooling. Covers style, structure, error handling, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -73,6 +73,10 @@ This baseline is not dogma.  When external constraints require modern Python (e.
 - **[This repo]** The root `[tool.black]` `target-version` list **MUST** stay aligned with the active Python support window to prevent formatter/runtime mismatches and stale syntax allowances, and **MUST** remain explicit so Black does not fall back to inferring unsupported or prerelease Python grammar targets from `[project].requires-python`.
 - **[This repo]** `ruff format` **MUST NOT** be used to apply or validate Python formatting unless a future toolchain change explicitly adopts Ruff formatting.
 - **[Downstream]** [`templates/python/pyproject.toml`](../../templates/python/pyproject.toml) shows starter `pyproject.toml` configuration for downstream adopters and is distinct from this repository's active root configuration.
+
+### CLI and Argument Handling
+
+- **[All]** CLI flags and meaningful option modes/values **MUST** have a user- or test-verifiable runtime effect; a flag's help text **MUST** match its actual behavior. See `## CLI and Argument Handling`.
 
 ### Package Versioning
 
@@ -305,6 +309,62 @@ assert redact_url_userinfo("https://user:secret@[::1/path") == "***@[::1/path"
 assert redact_url_userinfo("//user:token@host/path") == "//***@host/path"
 ```
 
+## CLI and Argument Handling
+
+Command-line flags and options are part of the program's user-facing contract. A flag or option **MUST** have a user- or test-verifiable runtime effect under at least one applicable input state. It need not produce a different result for every possible input. For example, `--fix` may have nothing to rewrite when there are no findings, but it must select behavior that can rewrite files, change output, change an exit code, change validation scope, or otherwise affect the result when fixes are available.
+
+Observable effects include changed output, changed side effects such as filesystem writes, network/API calls, or subprocess calls, changed exit codes, or changed validation scope, such as the set of inputs or rules the command validates. A code branch counts only when it produces one of these effects, whether immediately or through a value recorded at parse time and acted on later. A branch with no externally observable or testable difference does not count, except for a deliberately retained compatibility flag documented under the compatibility rule below.
+
+For options with enumerated values, boolean modes, or named modes, each non-default value or meaningful mode choice **MUST** be reachable in the runtime code path. For free-form value options such as paths, package names, branch names, or URLs, the supplied value **MUST** be used by the behavior the option documents. Explicitly selecting the default value **MAY** behave the same as omitting the option.
+
+A flag that only validates or echoes its own parsed value, such as printing `mode: check` while running the same plan for every mode, is a prohibited no-op unless it is a deliberately retained compatibility flag documented under the compatibility rule below.
+
+A flag's advertised help or usage text **MUST** accurately describe the flag's actual runtime effect and **MUST NOT** imply a different command plan, output, side effect, validation scope, or exit behavior than the code implements. This applies however the help or usage text is produced: an `argparse` `help=` string, the equivalent in `click` or `typer`, generated command help, or any other usage text the program presents.
+
+When mutually exclusive modes, such as `--check` / `--fix` or planning versus writing modes, differ in user-facing meaning, that difference **MUST** be reachable in the runtime code path through output, side effects, exit code, or validation scope, whether produced immediately or through a command plan acted on later. Using `argparse`'s `add_mutually_exclusive_group()`, even when created with `required=True`, enforces only parse-time exclusivity and does not by itself satisfy this runtime-difference requirement. Mode-dependent guidance printed by the tool **SHOULD** reflect the active mode.
+
+Informational and diagnostic flags satisfy the observable-effect rule only when their documented effect is implemented. `--help` and `--version` are compliant when they print the requested information and exit. `--dry-run` is compliant when it reports the plan without performing the normal side effects. `--verbose` is compliant when it changes verbosity or diagnostics. Such a flag is non-compliant if it is parsed but does not produce its documented behavior.
+
+A deliberately retained no-op or deprecated flag **MAY** exist only as a compatibility bridge. This is an exception only to the requirement that the flag change normal command behavior; it is not an exception to truthful documentation. The flag's no-effect or deprecated status **MUST** be disclosed in the help or usage text the flag exposes or, for a flag that intentionally suppresses its help, in release notes or a changelog, consistent with the help-accuracy rule above.
+
+Such a flag **SHOULD** additionally surface its retained-for-compatibility behavior at runtime when that will not break reasonable scripted usage, for example with a clear CLI warning on stderr, or with Python warning categories such as `DeprecationWarning` or `FutureWarning` when those are appropriate for the audience and visible under the tool's warning policy.
+
+This rule applies regardless of parser library. Examples **MAY** use `argparse` because it is the standard-library parser and matches this guide's stdlib-first default. Tests for non-trivial CLI behavior **SHOULD** follow the mode-coverage guidance in [Tests](#tests).
+
+Compliant example:
+
+```python
+parser.add_argument(
+    "--fix",
+    action="store_true",
+    help=(
+        "Rewrite files in place and exit zero after applying fixes; by default, "
+        "only report problems and exit non-zero when problems are found."
+    ),
+)
+args = parser.parse_args()
+problems = run_checks(paths)
+if args.fix:
+    apply_fixes(problems)
+    raise SystemExit(0)
+
+raise SystemExit(1 if problems else 0)
+```
+
+Non-compliant counter-example:
+
+```python
+parser.add_argument(
+    "--mode",
+    choices=["check", "fix"],
+    default="check",
+    help="Apply fixes when set to 'fix'.",  # Help promises fixes.
+)
+args = parser.parse_args()
+print(f"Running in {args.mode} mode")
+run_checks(paths)  # Identical work regardless of --mode; no fixes are ever applied.
+```
+
 ## Data Modeling
 
 ### Baseline
@@ -337,6 +397,7 @@ assert redact_url_userinfo("//user:token@host/path") == "//***@host/path"
 - Non-trivial logic **MUST** have tests.
 - Tests **MUST** be deterministic and **MUST NOT** depend on network unless explicitly marked/integration-only.
 - **SHOULD** use table-driven tests for parsing/validation logic.
+- Tests for non-trivial CLI behavior **SHOULD** exercise at least one observable difference for each meaningful mode or flag family, especially for mutually exclusive modes and for flags that choose between reporting-only and writing behavior.
 - A test that calls `pytest.skip()` or uses `@pytest.mark.skipif` because an external, provisionable prerequisite is unavailable, such as a Node toolchain, `node_modules`, a compiled binary, or another language runtime, **MUST** have at least one CI path that provisions that prerequisite and exercises the protected behavior without taking the skip. Otherwise CI can pass while the behavior the test is meant to protect remains unenforced.
 - This requirement covers prerequisites that CI can reasonably install, build, or otherwise provision. It does **NOT** apply to skips that gate on local or platform capabilities CI cannot reasonably provide on every runner, such as symlink creation support in a particular OS or filesystem environment. Such skips **SHOULD** still describe the missing capability in the skip reason.
 - When the prerequisite belongs to another toolchain already provisioned by an existing workflow, such as the Node setup plus `npm ci` in [`.github/workflows/markdownlint.yml`](../workflows/markdownlint.yml), the regression **SHOULD** run in the workflow or job that owns or already provisions that prerequisite rather than adding a redundant install to an unrelated job, as long as that CI path exercises the non-skipped behavior.
