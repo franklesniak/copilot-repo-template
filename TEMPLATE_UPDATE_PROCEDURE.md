@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260615.1
+**Version:** 1.1.20260615.2
 
 ## Metadata
 
@@ -1250,7 +1250,7 @@ python .template-sync/scripts/materialize_downstream_adoption.py --help
 
 Use `--template-root` when a reviewed source checkout already exists. To materialize from a locally fetched upstream ref or a full upstream commit SHA without manually creating a source checkout, pass `--template-ref REF` or `--template-revision FULL_SHA` instead. The helper resolves that value against `--template-repo PATH` without fetching, pulling, merging, or rebasing; when `--template-repo` is omitted, it defaults to `--target-root` so locally fetched template refs in the downstream repository can be used. The helper creates a private detached worktree outside `--target-root`, reports the supplied source ref or revision, resolved source SHA, source repository, diagnostic temporary checkout path, cleanup status, and target root, then removes the temporary worktree. Do not set `template_sync.last_reviewed_template_commit` merely because a ref was materialized; record it only after the review procedure is complete. If a reviewed SHA is supplied and it differs from the resolved source SHA, the helper rejects the run.
 
-For shell-sensitive identity values, pass `--args-file PATH` instead of relying on shell quoting. JSON args files are always supported. `.yaml` and `.yml` args files use the retained YAML parser path; if that parser is unavailable, convert the args file to JSON or enable retained YAML support. `--args-format json` or `--args-format yaml` overrides the extension and is required for extensionless or unknown-extension files. CLI flags take precedence over args-file values, and the merged source/module values must still agree with any `--decisions-file` values. Repository-relative path values inside args or decisions, such as `decisions_file` and `license_source_path`, must stay inside `--target-root`.
+For shell-sensitive identity values, pass `--args-file PATH` instead of relying on shell quoting. Both JSON and `.yaml`/`.yml` args files are supported, with `.yaml`/`.yml` parsed through the retained YAML parser path. This materializer already requires the retained YAML parser (PyYAML) for manifest and marker processing, so it must be available regardless of args-file format; converting the args file to JSON does not remove that requirement. `--args-format json` or `--args-format yaml` overrides the extension and is required for extensionless or unknown-extension files. CLI flags take precedence over args-file values, and the merged source/module values must still agree with any `--decisions-file` values. Repository-relative path values inside args or decisions, such as `decisions_file` and `license_source_path`, must stay inside `--target-root`.
 
 When the `markdown` module is retained, the args file may include `package_name`, `package_description`, `package_author`, `package_keywords`, and, only when intentionally changing the package release version, `package_version`. Package identity edits update `package.json` and the root identity fields in `package-lock.json` deterministically without running `npm install`; lockfile version fields change only when `package_version` is explicitly supplied.
 
