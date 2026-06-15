@@ -22,12 +22,31 @@ LF_PINNED_TEXT_PATHS = (
     ".remarkrc.mjs",
     "src/copilot_repo_template/example.py",
     ".github/workflows/precommit-ci.yml",
+    ".claude/hooks/session-start.sh",
+    ".gitattributes",
+    "nested/.gitattributes",
+    ".github/CODEOWNERS",
+    "CODEOWNERS",
+    "docs/CODEOWNERS",
+    "nested/CODEOWNERS",
+    ".gitignore",
+    ".remarkignore",
+    ".dockerignore",
+    "nested/.gitignore",
+    ".tflint.hcl",
+    "LICENSE",
+    "templates/terraform/Example.tftest.hcl",
+    "main.tf",
+    "terraform.tfvars",
+    "example.tftpl",
+    "backend.tfbackend",
 )
 BINARY_OVERRIDE_PATHS = (
     "tests/fixtures/screenshot.png",
     "tests/snapshots/archive.zip",
     "testdata/font.ttf",
 )
+NESTED_LICENSE_PATHS = ("nested/LICENSE", "docs/LICENSE")
 
 
 def git_check_attributes(paths: tuple[str, ...]) -> dict[str, dict[str, str]]:
@@ -55,6 +74,14 @@ def test_template_text_paths_are_pinned_to_lf(path: str) -> None:
 
     assert attributes[path]["text"] == "set"
     assert attributes[path]["eol"] == "lf"
+
+
+@pytest.mark.parametrize("path", NESTED_LICENSE_PATHS)
+def test_license_pin_is_root_anchored(path: str) -> None:
+    """The root LICENSE pin must not pin nested license files."""
+    attributes = git_check_attributes((path,))
+
+    assert attributes[path]["eol"] != "lf"
 
 
 @pytest.mark.parametrize("path", BINARY_OVERRIDE_PATHS)
