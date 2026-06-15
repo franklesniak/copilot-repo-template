@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -30,6 +31,11 @@ def write_file(path: Path, content: str) -> Path:
 def read_file(path: Path) -> str:
     """Read a UTF-8 test file."""
     return path.read_text(encoding="utf-8")
+
+
+def write_json(path: Path, content: object) -> Path:
+    """Write a strict JSON fixture file."""
+    return write_file(path, json.dumps(content, indent=2) + "\n")
 
 
 def build_context(**overrides: object) -> object:
@@ -326,6 +332,387 @@ def test_cli_rejects_missing_security_mode_and_contact(
     captured = capsys.readouterr()
     assert result == 1
     assert "Either --security-reporting-mode or --security-contact is required" in captured.err
+
+
+def test_json_args_file_supplies_shell_sensitive_identity_and_package_metadata(
+    tmp_path: Path,
+) -> None:
+    """JSON args files carry shell-sensitive identity values and package metadata."""
+    write_file(tmp_path / ".github" / "CODEOWNERS", "* @OWNER\n")
+    write_file(tmp_path / "CODE_OF_CONDUCT.md", "Contact: [INSERT CONTACT METHOD]\n")
+    write_file(
+        tmp_path / "SECURITY.md",
+        "\n".join(
+            [
+                "## Reporting a Vulnerability",
+                "",
+                "**Please do NOT report security vulnerabilities through public GitHub issues.**",
+                "",
+                "If you discover a security vulnerability in this project, report it privately "
+                "using the contact method below.",
+                "",
+                "### Security Contact",
+                "",
+                "Contact the maintainers directly at:",
+                "",
+                "<!-- TODO: Replace with your security contact email -->",
+                "<!-- Do not use a users.noreply.github.com address as a security "
+                "intake channel. -->",
+                "- Contact: [security contact email]",
+                "",
+                "### What to Include",
+            ]
+        )
+        + "\n",
+    )
+    write_json(
+        tmp_path / "package.json",
+        {
+            "name": "copilot-repo-template",
+            "version": "1.0.0",
+            "description": "Template repository with Copilot instructions",
+            "private": True,
+            "keywords": ["template"],
+            "author": "Frank Lesniak",
+        },
+    )
+    write_json(
+        tmp_path / "package-lock.json",
+        {
+            "name": "copilot-repo-template",
+            "version": "1.0.0",
+            "lockfileVersion": 3,
+            "packages": {
+                "": {
+                    "name": "copilot-repo-template",
+                    "version": "1.0.0",
+                    "dependencies": {"left-pad": "1.3.0"},
+                },
+                "node_modules/left-pad": {
+                    "version": "1.3.0",
+                    "resolved": "https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz",
+                },
+            },
+        },
+    )
+    args_file = write_json(
+        tmp_path / "identity.args.json",
+        {
+            "repository": "octo/widget",
+            "security_reporting_mode": "contact-only",
+            "security_contact": "sec$ops, hotline@example.com",
+            "conduct_contact": "conduct team, $literal inbox",
+            "codeowners_owner": "@octo/platform-team",
+            "package_name": "widget-docs",
+            "package_description": "Docs, tools, and $literal examples",
+            "package_author": "Example Org",
+            "package_keywords": ["docs", "ops team"],
+        },
+    )
+
+    result = placeholder_helper.main(
+        ["replace", "--repo-root", str(tmp_path), "--args-file", str(args_file)]
+    )
+
+    assert result == 0
+    assert "* @octo/platform-team" in read_file(tmp_path / ".github" / "CODEOWNERS")
+    assert "conduct team, $literal inbox" in read_file(tmp_path / "CODE_OF_CONDUCT.md")
+    assert "sec$ops, hotline@example.com" in read_file(tmp_path / "SECURITY.md")
+
+    package_json = json.loads(read_file(tmp_path / "package.json"))
+    assert package_json["name"] == "widget-docs"
+    assert package_json["version"] == "1.0.0"
+    assert package_json["description"] == "Docs, tools, and $literal examples"
+    assert package_json["author"] == "Example Org"
+    assert package_json["keywords"] == ["docs", "ops team"]
+
+    package_lock = json.loads(read_file(tmp_path / "package-lock.json"))
+    assert package_lock["name"] == "widget-docs"
+    assert package_lock["version"] == "1.0.0"
+    assert package_lock["packages"][""]["name"] == "widget-docs"
+    assert package_lock["packages"][""]["version"] == "1.0.0"
+    assert package_lock["packages"]["node_modules/left-pad"]["version"] == "1.3.0"
+
+
+def test_cli_values_take_precedence_over_args_file_values(tmp_path: Path) -> None:
+    """Direct CLI flags override lower-priority args-file values."""
+    write_file(tmp_path / ".github" / "CODEOWNERS", "* @OWNER\n")
+    args_file = write_json(
+        tmp_path / "identity.json",
+        {
+            "repository": "octo/widget",
+            "security_contact": "security@example.com",
+            "codeowners_owner": "@octo/from-file",
+        },
+    )
+
+    result = placeholder_helper.main(
+        [
+            "replace",
+            "--repo-root",
+            str(tmp_path),
+            "--args-file",
+            str(args_file),
+            "--codeowners-owner",
+            "@octo/from-cli",
+        ]
+    )
+
+    assert result == 0
+    assert read_file(tmp_path / ".github" / "CODEOWNERS") == "* @octo/from-cli\n"
+
+
+def test_values_beginning_with_at_work_without_args_file_magic(tmp_path: Path) -> None:
+    """A CODEOWNERS owner beginning with @ is a normal value, not an args-file marker."""
+    write_file(tmp_path / ".github" / "CODEOWNERS", "* @OWNER\n")
+
+    result = placeholder_helper.main(
+        [
+            "replace",
+            "--repo-root",
+            str(tmp_path),
+            "--repository",
+            "octo/widget",
+            "--security-contact",
+            "security@example.com",
+            "--codeowners-owner",
+            "@octo/platform-team",
+        ]
+    )
+
+    assert result == 0
+    assert read_file(tmp_path / ".github" / "CODEOWNERS") == "* @octo/platform-team\n"
+
+
+def test_yaml_args_file_is_supported_when_yaml_parser_is_available(tmp_path: Path) -> None:
+    """YAML args files parse through the retained YAML parser path."""
+    write_file(tmp_path / ".github" / "CODEOWNERS", "* @OWNER\n")
+    args_file = tmp_path / "identity.yml"
+    write_file(
+        args_file,
+        yaml.safe_dump(
+            {
+                "repository": "octo/widget",
+                "security_contact": "security@example.com",
+                "codeowners_owner": "@octo/yaml-team",
+            },
+            sort_keys=False,
+        ),
+    )
+
+    result = placeholder_helper.main(
+        ["replace", "--repo-root", str(tmp_path), "--args-file", str(args_file)]
+    )
+
+    assert result == 0
+    assert read_file(tmp_path / ".github" / "CODEOWNERS") == "* @octo/yaml-team\n"
+
+
+def test_yaml_args_file_unavailable_message_is_actionable(tmp_path: Path) -> None:
+    """Unavailable YAML support tells operators to use JSON or enable YAML support."""
+    args_file = write_file(tmp_path / "identity.yml", "repository: octo/widget\n")
+
+    def missing_yaml(_module_name: str) -> object:
+        raise ImportError("yaml unavailable")
+
+    with pytest.raises(placeholder_helper.PlaceholderError) as excinfo:
+        placeholder_helper.load_args_file_mapping(
+            str(args_file),
+            "yaml",
+            yaml_module_loader=missing_yaml,
+        )
+
+    message = str(excinfo.value)
+    assert "Convert the args file to JSON" in message
+    assert "enable the repository's retained YAML support" in message
+
+
+def test_args_format_override_and_unknown_extension_diagnostics(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Unknown extensions require --args-format, and explicit format wins."""
+    write_file(tmp_path / ".github" / "CODEOWNERS", "* @OWNER\n")
+    args_file = write_json(
+        tmp_path / "identity.arguments",
+        {
+            "repository": "octo/widget",
+            "security_contact": "security@example.com",
+            "codeowners_owner": "@octo/format-team",
+        },
+    )
+
+    missing_format = placeholder_helper.main(
+        ["replace", "--repo-root", str(tmp_path), "--args-file", str(args_file)]
+    )
+    missing_format_output = capsys.readouterr()
+    assert missing_format == 1
+    assert "Unable to determine --args-file format" in missing_format_output.err
+
+    explicit_format = placeholder_helper.main(
+        [
+            "replace",
+            "--repo-root",
+            str(tmp_path),
+            "--args-file",
+            str(args_file),
+            "--args-format",
+            "json",
+        ]
+    )
+
+    assert explicit_format == 0
+    assert read_file(tmp_path / ".github" / "CODEOWNERS") == "* @octo/format-team\n"
+
+    write_file(tmp_path / ".github" / "CODEOWNERS", "* @OWNER\n")
+    json_named_yaml = write_json(
+        tmp_path / "identity.yaml",
+        {
+            "repository": "octo/widget",
+            "security_contact": "security@example.com",
+            "codeowners_owner": "@octo/json-override-team",
+        },
+    )
+    override_recognized_extension = placeholder_helper.main(
+        [
+            "replace",
+            "--repo-root",
+            str(tmp_path),
+            "--args-file",
+            str(json_named_yaml),
+            "--args-format",
+            "json",
+        ]
+    )
+
+    assert override_recognized_extension == 0
+    assert read_file(tmp_path / ".github" / "CODEOWNERS") == "* @octo/json-override-team\n"
+
+
+@pytest.mark.parametrize(
+    ("args_data", "expected"),
+    [
+        pytest.param({"unknown": "value"}, "Unknown --args-file field", id="unknown-field"),
+        pytest.param({"repository": ["octo/widget"]}, "must be a string", id="invalid-type"),
+    ],
+)
+def test_args_file_schema_errors_are_actionable(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    args_data: dict[str, object],
+    expected: str,
+) -> None:
+    """Unknown fields and type errors name the args-file problem."""
+    args_file = write_json(tmp_path / "identity.json", args_data)
+
+    result = placeholder_helper.main(["replace", "--args-file", str(args_file)])
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert expected in captured.err
+
+
+def test_missing_args_file_is_actionable(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Missing args files report an actionable read failure."""
+    result = placeholder_helper.main(["replace", "--args-file", str(tmp_path / "missing.json")])
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "--args-file: unable to read file" in captured.err
+
+
+def test_contact_sentence_and_security_section_overrides(tmp_path: Path) -> None:
+    """Whole-sentence and whole-section contact overrides avoid awkward token grammar."""
+    copy_security_reporting_fixture(tmp_path)
+    conduct_sentence = (
+        "Report possible Code of Conduct violations using the private conduct form "
+        "at https://example.com/conduct."
+    )
+    security_section = (
+        "### Security Intake\n\n"
+        "Use the monitored security desk at security@example.com; include impact details.\n"
+    )
+
+    result = placeholder_helper.main(
+        [
+            "replace",
+            "--repo-root",
+            str(tmp_path),
+            "--repository",
+            "octo/widget",
+            "--security-reporting-mode",
+            "contact-only",
+            "--conduct-contact-sentence",
+            conduct_sentence,
+            "--security-contact-section",
+            security_section,
+        ]
+    )
+
+    assert result == 0
+    code_of_conduct = read_file(tmp_path / "CODE_OF_CONDUCT.md")
+    security_text = read_file(tmp_path / "SECURITY.md")
+    assert conduct_sentence in code_of_conduct
+    assert "[INSERT CONTACT METHOD]" not in code_of_conduct
+    assert "### Security Intake" in security_text
+    assert "[security contact email]" not in security_text
+    assert "TODO: Replace" not in security_text
+
+
+def test_package_lock_version_changes_only_when_package_version_is_explicit(
+    tmp_path: Path,
+) -> None:
+    """Lockfile root versions stay fixed unless --package-version is supplied."""
+    package_json = {
+        "name": "copilot-repo-template",
+        "version": "1.0.0",
+        "description": "Template repository",
+        "author": "Frank Lesniak",
+    }
+    package_lock = {
+        "name": "copilot-repo-template",
+        "version": "1.0.0",
+        "lockfileVersion": 3,
+        "packages": {
+            "": {
+                "name": "copilot-repo-template",
+                "version": "1.0.0",
+            },
+            "node_modules/example": {"version": "9.9.9"},
+        },
+    }
+    write_json(tmp_path / "package.json", package_json)
+    write_json(tmp_path / "package-lock.json", package_lock)
+
+    name_only_context = placeholder_helper.build_replacement_context(
+        package_name="downstream-package"
+    )
+    placeholder_helper.replace_placeholders(tmp_path, name_only_context)
+    name_only_lock = json.loads(read_file(tmp_path / "package-lock.json"))
+    assert name_only_lock["name"] == "downstream-package"
+    assert name_only_lock["version"] == "1.0.0"
+    assert name_only_lock["packages"][""]["name"] == "downstream-package"
+    assert name_only_lock["packages"][""]["version"] == "1.0.0"
+
+    version_context = placeholder_helper.build_replacement_context(package_version="2.0.0")
+    placeholder_helper.replace_placeholders(tmp_path, version_context)
+    versioned_package = json.loads(read_file(tmp_path / "package.json"))
+    versioned_lock = json.loads(read_file(tmp_path / "package-lock.json"))
+    assert versioned_package["version"] == "2.0.0"
+    assert versioned_lock["version"] == "2.0.0"
+    assert versioned_lock["packages"][""]["version"] == "2.0.0"
+    assert versioned_lock["packages"]["node_modules/example"]["version"] == "9.9.9"
+
+
+def test_check_placeholders_workflow_delegates_hard_fail_allowlist_to_helper() -> None:
+    """The workflow hard-fail path uses the helper's allowlist-backed scan."""
+    workflow = read_file(REPO_ROOT / ".github" / "workflows" / "check-placeholders.yml")
+
+    assert "replace-template-placeholders.py scan" in workflow
+    assert "hard-fail allowlist lives" in workflow
 
 
 @pytest.mark.parametrize(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shlex
@@ -63,11 +64,119 @@ PLACEHOLDER_DESTS = (
     "github_host",
     "codeowners_owner",
     "conduct_contact",
+    "conduct_contact_sentence",
     "security_contact",
+    "security_contact_section",
     "security_reporting_mode",
     "vscode_title",
+    "package_name",
+    "package_description",
+    "package_author",
+    "package_version",
+    "package_keywords",
 )
 SECURITY_REPORTING_MODES = ("github-private-only", "contact-only", "both")
+ARGS_FILE_FORMATS = ("json", "yaml")
+ARGS_FILE_EXTENSION_FORMATS = {
+    ".json": "json",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+}
+ARGS_FILE_FIELDS = frozenset(
+    {
+        "template_root",
+        "template_ref",
+        "template_revision",
+        "target_root",
+        "template_repo",
+        "template_temp_root",
+        "decisions_file",
+        "included_modules",
+        "included_modules_csv",
+        "source_repo",
+        "last_reviewed_template_commit",
+        "default_adoption_mode",
+        "repository",
+        "github_host",
+        "codeowners_owner",
+        "conduct_contact",
+        "conduct_contact_sentence",
+        "security_contact",
+        "security_contact_section",
+        "security_reporting_mode",
+        "vscode_title",
+        "package_name",
+        "package_description",
+        "package_author",
+        "package_version",
+        "package_keywords",
+        "preserve_existing_license",
+        "license_source_path",
+        "allow_conflicts",
+    }
+)
+STRING_ARGS_FILE_FIELDS = frozenset(
+    {
+        "template_root",
+        "template_ref",
+        "template_revision",
+        "target_root",
+        "template_repo",
+        "template_temp_root",
+        "decisions_file",
+        "included_modules_csv",
+        "source_repo",
+        "last_reviewed_template_commit",
+        "default_adoption_mode",
+        "repository",
+        "github_host",
+        "codeowners_owner",
+        "conduct_contact",
+        "conduct_contact_sentence",
+        "security_contact",
+        "security_contact_section",
+        "security_reporting_mode",
+        "vscode_title",
+        "package_name",
+        "package_description",
+        "package_author",
+        "package_version",
+        "license_source_path",
+    }
+)
+LIST_STRING_ARGS_FILE_FIELDS = frozenset({"included_modules", "package_keywords"})
+BOOLEAN_ARGS_FILE_FIELDS = frozenset({"preserve_existing_license", "allow_conflicts"})
+CLI_FLAGS = {
+    "template_root": ("--template-root",),
+    "template_ref": ("--template-ref",),
+    "template_revision": ("--template-revision",),
+    "target_root": ("--target-root",),
+    "template_repo": ("--template-repo",),
+    "template_temp_root": ("--template-temp-root",),
+    "decisions_file": ("--decisions-file",),
+    "included_modules": ("--included-module", "--module"),
+    "included_modules_csv": ("--included-modules",),
+    "source_repo": ("--source-repo",),
+    "last_reviewed_template_commit": ("--last-reviewed-template-commit",),
+    "default_adoption_mode": ("--default-adoption-mode",),
+    "repository": ("--repository",),
+    "github_host": ("--github-host",),
+    "codeowners_owner": ("--codeowners-owner",),
+    "conduct_contact": ("--conduct-contact",),
+    "conduct_contact_sentence": ("--conduct-contact-sentence",),
+    "security_contact": ("--security-contact",),
+    "security_contact_section": ("--security-contact-section",),
+    "security_reporting_mode": ("--security-reporting-mode",),
+    "vscode_title": ("--vscode-title",),
+    "package_name": ("--package-name",),
+    "package_description": ("--package-description",),
+    "package_author": ("--package-author",),
+    "package_version": ("--package-version",),
+    "package_keywords": ("--package-keyword",),
+    "preserve_existing_license": ("--preserve-existing-license",),
+    "license_source_path": ("--license-source-path",),
+    "allow_conflicts": ("--allow-conflicts",),
+}
 MARKER_COPY_FIELDS = (
     "local_overrides",
     "protected_file_decisions",
@@ -201,13 +310,161 @@ class Summary:
         return tuple(conflict for conflict in self.conflicts if conflict.recorded)
 
 
+def args_file_format_for_path(path: Path, args_format: str | None) -> str:
+    """Return the parser format selected by override or recognized file extension."""
+    if args_format is not None:
+        return args_format
+    inferred_format = ARGS_FILE_EXTENSION_FORMATS.get(path.suffix.lower())
+    if inferred_format is None:
+        raise MaterializationError(
+            "Unable to determine --args-file format from extension; use "
+            "--args-format json or --args-format yaml, or name the file with "
+            "a .json, .yaml, or .yml extension."
+        )
+    return inferred_format
+
+
+def read_args_file_text(path: Path) -> str:
+    """Read an explicit args file path."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise MaterializationError(
+            f"--args-file: unable to read file ({os_error_summary(error)})."
+        ) from error
+
+
+def load_json_args_file(path: Path) -> dict[str, Any]:
+    """Load a JSON args file that must contain an object."""
+    try:
+        parsed = json.loads(read_args_file_text(path))
+    except json.JSONDecodeError as error:
+        raise MaterializationError(f"--args-file: invalid JSON ({error}).") from error
+    if not isinstance(parsed, dict):
+        raise MaterializationError("--args-file must contain a JSON object.")
+    return parsed
+
+
+def load_yaml_args_file(path: Path) -> dict[str, Any]:
+    """Load a YAML args file through the retained YAML parser path."""
+    try:
+        parsed = yaml.safe_load(read_args_file_text(path))
+    except yaml.YAMLError as error:
+        raise MaterializationError(f"--args-file: invalid YAML ({error}).") from error
+    if not isinstance(parsed, dict):
+        raise MaterializationError("--args-file must contain a YAML mapping.")
+    return parsed
+
+
+def load_args_file_mapping(raw_path: str, args_format: str | None) -> dict[str, Any]:
+    """Load an explicit JSON or YAML argument file."""
+    path = Path(raw_path).expanduser()
+    selected_format = args_file_format_for_path(path, args_format)
+    if selected_format == "json":
+        return load_json_args_file(path)
+    if selected_format == "yaml":
+        return load_yaml_args_file(path)
+    raise AssertionError(f"Unhandled args-file format: {selected_format}")
+
+
+def cli_supplied_fields(argv: Sequence[str]) -> set[str]:
+    """Return argument destinations supplied directly on the command line."""
+    supplied: set[str] = set()
+    flag_to_field = {flag: field_name for field_name, flags in CLI_FLAGS.items() for flag in flags}
+    for token in argv:
+        flag = token.split("=", 1)[0]
+        field_name = flag_to_field.get(flag)
+        if field_name is not None:
+            supplied.add(field_name)
+    return supplied
+
+
+def validate_args_file_value(field_name: str, value: Any) -> Any:
+    """Validate one args-file value and return its normalized representation."""
+    if value is None:
+        return None
+    if field_name in STRING_ARGS_FILE_FIELDS:
+        if not isinstance(value, str):
+            raise MaterializationError(f"--args-file field {field_name!r} must be a string.")
+        return value
+    if field_name in LIST_STRING_ARGS_FILE_FIELDS:
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise MaterializationError(
+                f"--args-file field {field_name!r} must be a list of strings."
+            )
+        return list(value)
+    if field_name in BOOLEAN_ARGS_FILE_FIELDS:
+        if not isinstance(value, bool):
+            raise MaterializationError(f"--args-file field {field_name!r} must be a boolean.")
+        return value
+    raise AssertionError(f"Unhandled args-file field: {field_name}")
+
+
+def validate_merged_arg_choices(args: argparse.Namespace) -> None:
+    """Validate choices and mutual exclusions after args-file merging."""
+    selected_sources = [
+        name
+        for name in ("template_root", "template_ref", "template_revision")
+        if getattr(args, name) is not None
+    ]
+    if len(selected_sources) > 1:
+        raise MaterializationError(
+            "--template-root, --template-ref, and --template-revision are mutually exclusive."
+        )
+    if args.default_adoption_mode not in ADOPTION_MODES:
+        quoted_modes = ", ".join(ADOPTION_MODES)
+        raise MaterializationError(f"--default-adoption-mode must be one of: {quoted_modes}.")
+    if (
+        args.security_reporting_mode is not None
+        and args.security_reporting_mode not in SECURITY_REPORTING_MODES
+    ):
+        quoted_modes = ", ".join(SECURITY_REPORTING_MODES)
+        raise MaterializationError(f"--security-reporting-mode must be one of: {quoted_modes}.")
+
+
+def apply_args_file_values(
+    args: argparse.Namespace,
+    *,
+    argv: Sequence[str],
+) -> argparse.Namespace:
+    """Merge args-file values into parsed args, with CLI flags taking precedence."""
+    if args.args_file is not None:
+        args_file_values = load_args_file_mapping(args.args_file, args.args_format)
+        unknown_fields = sorted(set(args_file_values) - ARGS_FILE_FIELDS)
+        if unknown_fields:
+            raise MaterializationError(
+                "Unknown --args-file field(s): " + ", ".join(unknown_fields) + "."
+            )
+        direct_cli_fields = cli_supplied_fields(argv)
+        for field_name, raw_value in args_file_values.items():
+            if field_name in direct_cli_fields:
+                continue
+            if raw_value is None:
+                continue
+            setattr(args, field_name, validate_args_file_value(field_name, raw_value))
+    validate_merged_arg_choices(args)
+    return args
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments."""
+    argv = tuple(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(
         description=(
             "Materialize selected copilot-repo-template modules into a downstream "
             "working tree without overwriting unrecorded conflicts."
         )
+    )
+    parser.add_argument(
+        "--args-file",
+        default=None,
+        help="JSON or YAML file containing shell-safe materializer argument values.",
+    )
+    parser.add_argument(
+        "--args-format",
+        choices=ARGS_FILE_FORMATS,
+        default=None,
+        help="Explicit args-file format; overrides the file extension.",
     )
     source_group = parser.add_mutually_exclusive_group()
     source_group.add_argument(
@@ -234,7 +491,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--target-root",
-        required=True,
+        default=None,
         help="Downstream repository root that receives the staged materialization.",
     )
     parser.add_argument(
@@ -317,9 +574,19 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Replacement Code of Conduct contact method.",
     )
     parser.add_argument(
+        "--conduct-contact-sentence",
+        default=None,
+        help="Replacement full Code of Conduct reporting sentence.",
+    )
+    parser.add_argument(
         "--security-contact",
         default=None,
         help="Replacement security contact method or intake address.",
+    )
+    parser.add_argument(
+        "--security-contact-section",
+        default=None,
+        help="Replacement whole SECURITY.md contact section for contact-based modes.",
     )
     parser.add_argument(
         "--security-reporting-mode",
@@ -335,6 +602,25 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--vscode-title",
         default=None,
         help="Replacement VS Code window title.",
+    )
+    parser.add_argument("--package-name", default=None, help="Replacement package name.")
+    parser.add_argument(
+        "--package-description",
+        default=None,
+        help="Replacement package description.",
+    )
+    parser.add_argument("--package-author", default=None, help="Replacement package author.")
+    parser.add_argument(
+        "--package-version",
+        default=None,
+        help="Replacement package version; updates package-lock root version fields.",
+    )
+    parser.add_argument(
+        "--package-keyword",
+        dest="package_keywords",
+        action="append",
+        default=None,
+        help="Replacement package keyword. May be repeated.",
     )
     parser.add_argument(
         "--preserve-existing-license",
@@ -361,7 +647,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "advancement governed by unrecorded conflicts."
         ),
     )
-    return parser.parse_args(argv)
+    return apply_args_file_values(parser.parse_args(argv), argv=argv)
 
 
 def default_template_root() -> Path:
@@ -1318,8 +1604,6 @@ def run_placeholder_helper(
             "Placeholder inputs were supplied, but the template-root placeholder "
             f"helper is unavailable at {PLACEHOLDER_HELPER_PATH}."
         )
-    if args.repository is None:
-        raise MaterializationError("Placeholder replacement requires --repository.")
 
     command = [
         sys.executable,
@@ -1327,20 +1611,29 @@ def run_placeholder_helper(
         "replace",
         "--repo-root",
         str(staging_root),
-        "--repository",
-        args.repository,
     ]
+    if args.repository is not None:
+        command.extend(["--repository", args.repository])
     optional_pairs = (
         ("--github-host", args.github_host),
         ("--codeowners-owner", args.codeowners_owner),
         ("--conduct-contact", args.conduct_contact),
+        ("--conduct-contact-sentence", args.conduct_contact_sentence),
         ("--security-contact", args.security_contact),
+        ("--security-contact-section", args.security_contact_section),
         ("--security-reporting-mode", args.security_reporting_mode),
         ("--vscode-title", args.vscode_title),
+        ("--package-name", args.package_name),
+        ("--package-description", args.package_description),
+        ("--package-author", args.package_author),
+        ("--package-version", args.package_version),
     )
     for flag, value in optional_pairs:
         if value is not None:
             command.extend([flag, value])
+    if args.package_keywords is not None:
+        for keyword in args.package_keywords:
+            command.extend(["--package-keyword", keyword])
 
     with tempfile.TemporaryDirectory(prefix="template-adoption-byte-only-") as byte_directory:
         byte_root = Path(byte_directory)
@@ -1927,8 +2220,8 @@ def format_cli_error(error: Exception) -> str:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the materialization CLI."""
-    args = parse_args(argv)
     try:
+        args = parse_args(argv)
         summary = materialize(args)
     except (
         MaterializationError,

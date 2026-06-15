@@ -920,21 +920,47 @@ If your existing repository lacks Python project structure and you want to adopt
 
 These files can be copied directly with minimal modifications.
 
-After copying any placeholder-bearing template files, prefer the helper in `.github/scripts/replace-template-placeholders.py` over ad hoc global find/replace. It replaces only the approved template placeholders and GitHub URL shapes, supports `--security-reporting-mode` (`github-private-only`, `contact-only`, or `both`), supports `--github-host` for GitHub Enterprise Server URL contexts, and scans afterward for unresolved placeholders and common broad-replacement corruption such as mutated `REPORT`, `REPOSITORY`, or `REPOSITORIES` text.
+After copying any placeholder-bearing template files, prefer the helper in `.github/scripts/replace-template-placeholders.py` over ad hoc global find/replace. It replaces only the approved template placeholders and GitHub URL shapes, supports `--security-reporting-mode` (`github-private-only`, `contact-only`, or `both`), supports `--github-host` for GitHub Enterprise Server URL contexts, can read shell-safe JSON or YAML args files, and scans afterward for unresolved placeholders and common broad-replacement corruption such as mutated `REPORT`, `REPOSITORY`, or `REPOSITORIES` text.
 
 Example after copying the helper and the files you intend to adopt:
 
-```bash
-python .github/scripts/replace-template-placeholders.py replace \
-    --repository "your-username/your-repo-name" \
-    --security-reporting-mode "both" \
-    --security-contact "security@example.com" \
-    --conduct-contact "conduct@example.com" \
-    --codeowners-owner "@your-username" \
-    --vscode-title "your-repo-name"
+**Windows (PowerShell):**
+
+```powershell
+@'
+{
+  "repository": "your-username/your-repo-name",
+  "security_reporting_mode": "both",
+  "security_contact": "security@example.com",
+  "conduct_contact": "conduct@example.com",
+  "codeowners_owner": "@your-org/maintainers",
+  "vscode_title": "your-repo-name"
+}
+'@ | Set-Content -Encoding UTF8 .\adoption-identity.json
+
+python .github/scripts/replace-template-placeholders.py replace `
+    --args-file .\adoption-identity.json
 ```
 
-Use `python3` instead of `python` on systems where Python 3 is exposed only as `python3`. For GitHub Enterprise Server, add `--github-host "github.company.com"`; the helper limits host substitution to approved template URL placeholders and does not rewrite unrelated `github.com` links.
+**macOS/Linux/FreeBSD (Bash):**
+
+```bash
+cat > adoption-identity.json <<'JSON'
+{
+  "repository": "your-username/your-repo-name",
+  "security_reporting_mode": "both",
+  "security_contact": "security@example.com",
+  "conduct_contact": "conduct@example.com",
+  "codeowners_owner": "@your-org/maintainers",
+  "vscode_title": "your-repo-name"
+}
+JSON
+
+python .github/scripts/replace-template-placeholders.py replace \
+    --args-file ./adoption-identity.json
+```
+
+Use `python3` instead of `python` on systems where Python 3 is exposed only as `python3`. JSON args files are always supported; `.yaml` and `.yml` args files are supported when the retained YAML parser is available. For GitHub Enterprise Server, add `"github_host": "github.company.com"` to the args file; the helper limits host substitution to approved template URL placeholders and does not rewrite unrelated `github.com` links. Direct CLI flags remain supported for simple values and take precedence over values from `--args-file`.
 
 ### CODEOWNERS
 
@@ -1550,7 +1576,7 @@ If your project doesn't have a `package.json`:
 
 1. Copy `package.json` from the template
 
-2. Update the metadata for your project:
+2. Update the metadata for your project, either manually or by passing package identity fields such as `package_name`, `package_description`, and `package_author` through the placeholder helper's `--args-file`:
 
    ```json
    {
@@ -1567,6 +1593,8 @@ If your project doesn't have a `package.json`:
    ```bash
    npm install
    ```
+
+   When the helper changes `package_name`, it also updates the root `name` fields in `package-lock.json` when that lockfile is present. It updates lockfile version fields only when `package_version` is explicitly supplied.
 
 ### If You Already Have package.json
 

@@ -744,33 +744,57 @@ Choose a security reporting mode before running the helper:
 - `contact-only` keeps the contact method and removes GitHub private vulnerability reporting guidance.
 - `github-private-only` keeps GitHub private vulnerability reporting guidance and removes the security contact section. If you keep `CODE_OF_CONDUCT.md`, still pass an explicit `--conduct-contact`.
 
-Run one of these commands from the repository root after replacing the example values.
+For values that begin with `@`, contain literal `$`, spaces, commas, or need whole-sentence contact prose, prefer an args file. JSON args files are always supported; `.yaml` and `.yml` args files are supported when the retained YAML parser is available. If YAML support is unavailable, convert the args file to JSON or enable the retained YAML support.
+
+Create an args file and run the helper from the repository root after replacing the example values.
 
 **Windows (PowerShell):**
 
 ```powershell
+@'
+{
+  "repository": "your-username/your-repo-name",
+  "security_reporting_mode": "both",
+  "security_contact": "security@example.com",
+  "conduct_contact_sentence": "Report possible Code of Conduct violations using the private conduct form at https://example.com/conduct.",
+  "codeowners_owner": "@your-org/maintainers",
+  "vscode_title": "your-repo-name",
+  "package_name": "your-repo-name",
+  "package_description": "Your project description with literal $ text, spaces, and commas.",
+  "package_author": "Your Name or Organization",
+  "package_keywords": ["your-project", "docs"]
+}
+'@ | Set-Content -Encoding UTF8 .\adoption-identity.json
+
 python .github/scripts/replace-template-placeholders.py replace `
-    --repository "your-username/your-repo-name" `
-    --security-reporting-mode "both" `
-    --security-contact "security@example.com" `
-    --conduct-contact "conduct@example.com" `
-    --codeowners-owner "@your-username" `
-    --vscode-title "your-repo-name"
+    --args-file .\adoption-identity.json
 ```
 
 **macOS/Linux/FreeBSD (Bash):**
 
 ```bash
+cat > adoption-identity.json <<'JSON'
+{
+  "repository": "your-username/your-repo-name",
+  "security_reporting_mode": "both",
+  "security_contact": "security@example.com",
+  "conduct_contact_sentence": "Report possible Code of Conduct violations using the private conduct form at https://example.com/conduct.",
+  "codeowners_owner": "@your-org/maintainers",
+  "vscode_title": "your-repo-name",
+  "package_name": "your-repo-name",
+  "package_description": "Your project description with literal $ text, spaces, and commas.",
+  "package_author": "Your Name or Organization",
+  "package_keywords": ["your-project", "docs"]
+}
+JSON
+
 python3 .github/scripts/replace-template-placeholders.py replace \
-    --repository "your-username/your-repo-name" \
-    --security-reporting-mode "both" \
-    --security-contact "security@example.com" \
-    --conduct-contact "conduct@example.com" \
-    --codeowners-owner "@your-username" \
-    --vscode-title "your-repo-name"
+    --args-file ./adoption-identity.json
 ```
 
-For GitHub Enterprise Server, add `--github-host "github.company.com"`. The helper changes the host only for approved template URL placeholders; it does not rewrite unrelated `github.com` links.
+For GitHub Enterprise Server, add `"github_host": "github.company.com"` to the args file. The helper changes the host only for approved template URL placeholders; it does not rewrite unrelated `github.com` links.
+
+For simple values, direct flags remain supported. CLI flags take precedence over values from `--args-file`, so you can override one field without editing the file.
 
 The helper does not edit `LICENSE`, because `Frank Lesniak` is not a pattern-based placeholder. Update that file manually with your name or organization name.
 
@@ -1806,6 +1830,8 @@ Adopt ecosystem-specific validators (Kubernetes manifest validators, OpenAPI val
 **File:** `package.json`
 
 The `package.json` file contains template-specific values that should be updated to reflect your project. This applies to **all projects** using this template, not just Node.js projects, because `package.json` is used for the markdown linting tooling.
+
+If you used the placeholder helper args-file example in [Initial Placeholder Replacement](#initial-placeholder-replacement), the helper can update the `name`, `description`, `author`, and `keywords` fields for you. When `package_name` changes, it also updates the root package identity fields in `package-lock.json` (`name` and `packages[""].name`) without running `npm install`. It updates lockfile version fields only when `package_version` is explicitly supplied.
 
 ### Fields to Update
 

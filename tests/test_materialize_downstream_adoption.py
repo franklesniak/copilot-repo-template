@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import shutil
 import subprocess
@@ -171,6 +172,11 @@ def write_file(path: Path, content: str) -> None:
 def write_yaml(path: Path, data: dict[str, Any]) -> None:
     """Write a YAML fixture file."""
     write_file(path, yaml.safe_dump(data, sort_keys=False))
+
+
+def write_json(path: Path, data: dict[str, Any]) -> None:
+    """Write a strict JSON fixture file."""
+    write_file(path, json.dumps(data, indent=2) + "\n")
 
 
 def read_file(path: Path) -> str:
@@ -1993,6 +1999,162 @@ def test_remove_local_is_recorded_but_not_applied(tmp_path: Path) -> None:
     assert read_file(target_root / "README.md") == "downstream readme\n"
     assert "Recorded but not applied removals:" in result.stdout
     assert "README.md" in result.stdout
+
+
+def test_materializer_json_args_file_supplies_package_metadata(
+    tmp_path: Path,
+) -> None:
+    """The materializer accepts shell-safe JSON args and updates package identity."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(
+        template_root,
+        [
+            {"pattern": "package.json", "requires_all": ["baseline"]},
+            {"pattern": "package-lock.json", "requires_all": ["baseline"]},
+        ],
+        include_placeholder_helper=True,
+    )
+    write_json(
+        template_root / "package.json",
+        {
+            "name": "copilot-repo-template",
+            "version": "1.0.0",
+            "description": "Template repository with Copilot instructions",
+            "private": True,
+            "author": "Frank Lesniak",
+        },
+    )
+    write_json(
+        template_root / "package-lock.json",
+        {
+            "name": "copilot-repo-template",
+            "version": "1.0.0",
+            "lockfileVersion": 3,
+            "packages": {
+                "": {
+                    "name": "copilot-repo-template",
+                    "version": "1.0.0",
+                },
+                "node_modules/example": {"version": "9.9.9"},
+            },
+        },
+    )
+    args_file = tmp_path / "materialize.args.json"
+    write_json(
+        args_file,
+        {
+            "target_root": str(target_root),
+            "source_repo": SOURCE_REPO,
+            "included_modules": ["baseline"],
+            "package_name": "downstream-markdown-tools",
+            "package_description": "Markdown tooling for downstream docs, with $literal text",
+            "package_author": "Example Org",
+            "package_version": "2.0.0",
+        },
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--template-root",
+            str(template_root),
+            "--args-file",
+            str(args_file),
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    package_json = json.loads(read_file(target_root / "package.json"))
+    package_lock = json.loads(read_file(target_root / "package-lock.json"))
+    assert package_json["name"] == "downstream-markdown-tools"
+    assert package_json["description"] == "Markdown tooling for downstream docs, with $literal text"
+    assert package_json["author"] == "Example Org"
+    assert package_json["version"] == "2.0.0"
+    assert package_lock["name"] == "downstream-markdown-tools"
+    assert package_lock["version"] == "2.0.0"
+    assert package_lock["packages"][""]["name"] == "downstream-markdown-tools"
+    assert package_lock["packages"][""]["version"] == "2.0.0"
+    assert package_lock["packages"]["node_modules/example"]["version"] == "9.9.9"
+
+
+def test_materializer_args_file_cli_values_take_precedence(tmp_path: Path) -> None:
+    """Direct CLI values override lower-priority args-file values."""
+    args_file = tmp_path / "materialize.args.json"
+    write_json(
+        args_file,
+        {
+            "target_root": str(tmp_path / "from-file"),
+            "source_repo": "https://example.com/from-file.git",
+            "included_modules": ["python"],
+            "package_name": "from-file",
+        },
+    )
+
+    args = materializer.parse_args(
+        [
+            "--args-file",
+            str(args_file),
+            "--target-root",
+            str(tmp_path / "from-cli"),
+            "--source-repo",
+            SOURCE_REPO,
+            "--included-module",
+            "baseline",
+            "--package-name",
+            "from-cli",
+        ]
+    )
+
+    assert args.target_root == str(tmp_path / "from-cli")
+    assert args.source_repo == SOURCE_REPO
+    assert args.included_modules == ["baseline"]
+    assert args.package_name == "from-cli"
+
+
+def test_materializer_args_file_decisions_path_traversal_is_rejected(
+    tmp_path: Path,
+) -> None:
+    """Repo-relative path values supplied through args files cannot escape target root."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(template_root, [{"pattern": "README.md", "requires_all": ["baseline"]}])
+    write_file(template_root / "README.md", "template readme\n")
+    args_file = tmp_path / "materialize.args.json"
+    write_json(
+        args_file,
+        {
+            "target_root": str(target_root),
+            "source_repo": SOURCE_REPO,
+            "included_modules": ["baseline"],
+            "decisions_file": "../outside.yml",
+        },
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--template-root",
+            str(template_root),
+            "--args-file",
+            str(args_file),
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "--decisions-file must not contain traversal segments" in result.stderr
 
 
 def test_placeholder_replacement_reuses_helper_and_missing_helper_fails(
