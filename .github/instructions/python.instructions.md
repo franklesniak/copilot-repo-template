@@ -7,7 +7,7 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.7.20260615.1
+**Version:** 1.7.20260615.2
 
 ## Metadata
 
@@ -311,7 +311,7 @@ assert redact_url_userinfo("//user:token@host/path") == "//***@host/path"
 
 ## CLI and Argument Handling
 
-Command-line flags and options are part of the program's user-facing contract. A flag or option **MUST** have a user- or test-verifiable runtime effect under at least one applicable input state. It need not produce a different result for every possible input. For example, `--fix` may have nothing to rewrite when there are no findings, but it must select behavior that can rewrite files, change output, change an exit code, change validation scope, or otherwise affect the result when fixes are available.
+Command-line flags and options are part of the program's user-facing contract. A flag or option **MUST** have a user- or test-verifiable runtime effect under at least one applicable input state. It need not produce a different result for every possible input. For example, `--fix` may have nothing to rewrite when there are no findings, but it **MUST** select behavior that can rewrite files, change output, change an exit code, change validation scope, or otherwise affect the result when fixes are available.
 
 Observable effects include changed output, changed side effects such as filesystem writes, network/API calls, or subprocess calls, changed exit codes, or changed validation scope, such as the set of inputs or rules the command validates. A code branch counts only when it produces one of these effects, whether immediately or through a value recorded at parse time and acted on later. A branch with no externally observable or testable difference does not count, except for a deliberately retained compatibility flag documented under the compatibility rule below.
 
