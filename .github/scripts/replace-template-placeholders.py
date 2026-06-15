@@ -469,6 +469,16 @@ def build_replacement_context(
         require_security_decision=require_security_decision,
     )
     if not require_security_decision and security_reporting_mode is None:
+        if validated_security_contact is not None or validated_security_contact_section is not None:
+            raise PlaceholderError(
+                "--security-contact and --security-contact-section configure the "
+                "SECURITY.md reporting section, which is only rendered when a "
+                "reporting mode is selected. Supply --repository, or set "
+                "--security-reporting-mode explicitly (for example, "
+                "--security-reporting-mode contact-only), so the override is "
+                "applied instead of silently ignored; use --conduct-contact to set "
+                "the Code of Conduct contact independently."
+            )
         resolved_security_reporting_mode = None
     if (
         resolved_security_reporting_mode in SECURITY_CONTACT_REQUIRED_MODES

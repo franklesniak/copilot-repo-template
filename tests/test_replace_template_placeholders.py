@@ -375,6 +375,49 @@ def test_cli_rejects_missing_security_mode_and_contact(
     assert "Either --security-reporting-mode or --security-contact is required" in captured.err
 
 
+def test_repository_less_security_overrides_without_mode_fail_fast(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Security overrides that cannot render fail fast instead of being silently ignored."""
+    # A repository-less section override with no explicit reporting mode is rejected
+    # rather than silently dropped (the security reporting section is not rendered).
+    with pytest.raises(placeholder_helper.PlaceholderError, match="security-reporting-mode"):
+        placeholder_helper.build_replacement_context(
+            security_contact_section="### Security Intake\n\nReach us.\n",
+        )
+    with pytest.raises(placeholder_helper.PlaceholderError):
+        placeholder_helper.build_replacement_context(security_contact="security@example.com")
+
+    # The CLI surfaces the actionable error.
+    result = placeholder_helper.main(
+        [
+            "replace",
+            "--repo-root",
+            str(tmp_path),
+            "--security-contact-section",
+            "### Security Intake\n\nReach us.\n",
+        ]
+    )
+    captured = capsys.readouterr()
+    assert result == 1
+    assert "--security-reporting-mode" in captured.err
+
+    # An explicit contact-only mode makes a repository-less override valid, and
+    # Code-of-Conduct-only inputs remain valid repository-less (not a security override).
+    context = placeholder_helper.build_replacement_context(
+        security_contact_section="### Security Intake\n\nReach us.\n",
+        security_reporting_mode="contact-only",
+    )
+    assert context.security_reporting_mode == "contact-only"
+    assert (
+        placeholder_helper.build_replacement_context(
+            conduct_contact="conduct@example.com",
+        ).security_reporting_mode
+        is None
+    )
+
+
 def test_json_args_file_supplies_shell_sensitive_identity_and_package_metadata(
     tmp_path: Path,
 ) -> None:
