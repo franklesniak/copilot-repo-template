@@ -168,6 +168,47 @@ def test_approved_placeholder_replacement_does_not_mutate_normal_words(tmp_path:
     assert "widget" in read_file(tmp_path / ".vscode" / "settings.json")
 
 
+def test_security_todo_marker_preserved_when_no_security_decision(tmp_path: Path) -> None:
+    """A run that makes no security decision leaves the SECURITY.md TODO marker intact."""
+    write_file(
+        tmp_path / "SECURITY.md",
+        "<!-- TODO: Replace with your security contact email -->\n",
+    )
+    context = placeholder_helper.build_replacement_context()
+    assert context.security_reporting_mode is None
+    assert context.security_todo_replacement is None
+
+    placeholder_helper.replace_placeholders(repo_root=tmp_path, context=context)
+
+    security_text = read_file(tmp_path / "SECURITY.md")
+    assert "<!-- TODO: Replace with your security contact email -->" in security_text
+    assert "intentionally omitted by reporting mode" not in security_text
+
+
+def test_security_todo_replacement_reflects_security_decision() -> None:
+    """The TODO replacement marks omission only when a security decision was actually made."""
+    # Repository-less / package-metadata-only run with no security inputs -> leave the marker.
+    assert (
+        placeholder_helper.build_replacement_context(
+            package_name="downstream-tools",
+        ).security_todo_replacement
+        is None
+    )
+    # An explicit reporting-mode decision that omits the contact -> intentional omission.
+    omitted = placeholder_helper.build_replacement_context(
+        security_reporting_mode="github-private-only",
+    )
+    assert omitted.security_todo_replacement == (
+        "<!-- Security contact intentionally omitted by reporting mode -->"
+    )
+    # A configured security contact -> configured.
+    configured = placeholder_helper.build_replacement_context(
+        repository="octo/widget",
+        security_contact="security@example.com",
+    )
+    assert configured.security_todo_replacement == "<!-- Security contact configured -->"
+
+
 def test_ghes_host_substitution_is_limited_to_approved_template_urls(
     tmp_path: Path,
 ) -> None:

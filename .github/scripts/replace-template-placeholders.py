@@ -186,8 +186,22 @@ class ReplacementContext:
     package_keywords: tuple[str, ...] | None
 
     @property
-    def security_todo_replacement(self) -> str:
-        """Return the replacement for the security-contact TODO marker."""
+    def security_todo_replacement(self) -> str | None:
+        """Return the security-contact TODO replacement, or None when no security decision was made.
+
+        Returns None when the run supplied no security inputs at all (no reporting
+        mode, security contact, or contact section), so the SECURITY.md TODO marker is
+        left intact instead of being rewritten as an intentional omission for a run --
+        such as a repository-less or package-metadata-only run -- that made no security
+        decision. The marker is only rewritten when the run actually configures a
+        security contact or selects a reporting mode that intentionally omits one.
+        """
+        if (
+            self.security_contact is None
+            and self.security_contact_section is None
+            and self.security_reporting_mode is None
+        ):
+            return None
         if self.security_contact is None and self.security_contact_section is None:
             return "<!-- Security contact intentionally omitted by reporting mode -->"
         return "<!-- Security contact configured -->"
