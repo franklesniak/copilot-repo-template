@@ -2134,6 +2134,37 @@ def test_materializer_args_file_with_utf8_bom_is_parsed(tmp_path: Path) -> None:
     assert mapping["source_repo"] == SOURCE_REPO
 
 
+def test_materializer_args_file_cli_selectors_override_family(tmp_path: Path) -> None:
+    """A CLI source/module selector overrides its whole args-file family, not just the same flag."""
+    args_file = tmp_path / "materialize.args.json"
+    write_json(
+        args_file,
+        {"template_ref": "v1.2.3", "included_modules_csv": "python,yaml"},
+    )
+
+    args = materializer.parse_args(
+        [
+            "--args-file",
+            str(args_file),
+            "--template-root",
+            str(tmp_path / "tmpl"),
+            "--target-root",
+            str(tmp_path / "tgt"),
+            "--source-repo",
+            SOURCE_REPO,
+            "--included-module",
+            "baseline",
+        ]
+    )
+
+    # CLI --template-root wins; the args-file source selector is skipped (no conflict error).
+    assert args.template_root == str(tmp_path / "tmpl")
+    assert args.template_ref is None
+    # CLI --included-module wins; the args-file module selector is skipped (no merge).
+    assert args.included_modules == ["baseline"]
+    assert args.included_modules_csv is None
+
+
 def test_materializer_args_file_decisions_path_traversal_is_rejected(
     tmp_path: Path,
 ) -> None:

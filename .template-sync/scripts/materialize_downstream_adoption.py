@@ -380,6 +380,26 @@ def cli_supplied_fields(argv: Sequence[str]) -> set[str]:
     return supplied
 
 
+# Conceptual inputs selectable through more than one destination. CLI precedence is
+# per-family: when any member is supplied on the command line, every member is
+# skipped from the args file, so a CLI selector fully overrides the args-file
+# selector for that concept instead of conflicting with it (source selection) or
+# merging with it (module selection).
+CLI_FIELD_FAMILIES: tuple[frozenset[str], ...] = (
+    frozenset({"template_root", "template_ref", "template_revision"}),
+    frozenset({"included_modules", "included_modules_csv"}),
+)
+
+
+def cli_overridden_args_file_fields(direct_cli_fields: set[str]) -> set[str]:
+    """Expand directly-supplied CLI fields to the full precedence family of each."""
+    overridden = set(direct_cli_fields)
+    for family in CLI_FIELD_FAMILIES:
+        if direct_cli_fields & family:
+            overridden |= family
+    return overridden
+
+
 def validate_args_file_value(field_name: str, value: Any) -> Any:
     """Validate one args-file value and return its normalized representation."""
     if value is None:
@@ -437,8 +457,9 @@ def apply_args_file_values(
                 "Unknown --args-file field(s): " + ", ".join(unknown_fields) + "."
             )
         direct_cli_fields = cli_supplied_fields(argv)
+        overridden_fields = cli_overridden_args_file_fields(direct_cli_fields)
         for field_name, raw_value in args_file_values.items():
-            if field_name in direct_cli_fields:
+            if field_name in overridden_fields:
                 continue
             if raw_value is None:
                 continue
