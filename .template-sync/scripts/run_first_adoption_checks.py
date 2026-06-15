@@ -670,16 +670,16 @@ def run_first_adoption_checks(
         run_mode=run_mode,
         stdout=stdout,
     )
-    if status_changed and run_mode == CHECK_MODE:
-        print_total_elapsed_time(run_started_at, time_source(), stdout=stdout)
-        return CHANGED_FILES_EXIT_CODE
-
     if failures:
         print("First-adoption checks failed:", file=stdout, flush=True)
         for failure in failures:
             print(f"  - {failure}", file=stdout, flush=True)
         print_total_elapsed_time(run_started_at, time_source(), stdout=stdout)
         return 1
+
+    if status_changed and run_mode == CHECK_MODE:
+        print_total_elapsed_time(run_started_at, time_source(), stdout=stdout)
+        return CHANGED_FILES_EXIT_CODE
 
     print_total_elapsed_time(run_started_at, time_source(), stdout=stdout)
     print("First-adoption checks passed.", file=stdout, flush=True)

@@ -433,6 +433,38 @@ def test_fix_mode_tolerates_mutations_without_failing(
     assert "rerun with --check" in output
 
 
+def test_check_mode_reports_command_failure_before_changed_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failing command takes exit-code precedence over a mutated work tree."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+    stdout = io.StringIO()
+
+    def failing_runner(command: list[str] | tuple[str, ...], _repo_root: Path) -> int:
+        return 1
+
+    result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        command_runner=failing_runner,
+        git_status_reader=_queued_status_reader((), (" M README.md",)),
+        stdout=stdout,
+    )
+
+    output = stdout.getvalue()
+    assert result == 1
+    assert "Git changed-file summary:" in output
+    assert "    -  M README.md" in output
+    assert "First-adoption checks failed:" in output
+    assert "exited with 1" in output
+
+
 def test_marker_present_runs_marker_validator(tmp_path: Path) -> None:
     """A present marker adds the marker validator after the pre-commit file check."""
     _run_git(tmp_path, "init")
