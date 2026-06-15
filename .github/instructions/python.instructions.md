@@ -7,7 +7,7 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.7.20260615.2
+**Version:** 1.8.20260615.3
 
 ## Metadata
 
@@ -391,6 +391,44 @@ run_checks(paths)  # Identical work regardless of --mode; no fixes are ever appl
 - **SHOULD NOT** use `base_path.rglob("*")` or `base_path.glob("**/*")` (where `base_path` is a concrete `pathlib.Path` instance) for fixture, config, or input discovery unless the implementation also makes symlink handling and root-containment checks explicit. Prefer the safer `os.walk` / `pathlib.Path.walk` patterns above for untrusted or externally influenced discovery roots.
 - This guidance implements the repo-wide rule "Refuse path traversal and symlink escapes" in [`.github/copilot-instructions.md`](../copilot-instructions.md) § "Non-negotiable Safety and Security Rules" item 3, "Allowlisted file access only".
 - **SHOULD NOT** rely on current working directory; **SHOULD** resolve paths from a clear root (e.g., repo root or config).
+
+## Text Encoding
+
+- When reading local text files from disk that may be authored outside the repository's own write path, especially operator-provided configuration, data, or argument files produced by external tools, code **SHOULD** use `encoding="utf-8-sig"` when the input contract accepts UTF-8 with an optional leading byte order mark (BOM). This guidance applies to JSON and other structured text formats only when the parser path receives decoded text where a leading `\ufeff` would affect parsing.
+- `encoding="utf-8"` remains appropriate for repository-controlled text that the project writes or otherwise guarantees to be BOM-free, and for strict input contracts where a leading BOM should be rejected as invalid.
+- This is read-side guidance. Code **MUST NOT** use `encoding="utf-8-sig"` for project-controlled writes unless the output contract explicitly requires a UTF-8 BOM, because `utf-8-sig` prepends a BOM on encoding.
+- `encoding="utf-8-sig"` only neutralizes an optional leading UTF-8 BOM. It is not general encoding detection and does not handle UTF-16, UTF-32, locale-specific Windows code pages, or other non-UTF-8 encodings. Inputs that may use those encodings need a separate encoding contract, detection strategy, or conversion step.
+- Network and API response decoding is out of scope for this guidance. Code **SHOULD** follow the relevant protocol, content-type, charset, or client-library contract.
+- This guidance does not require changing parser calls that already consume bytes or binary file objects and define their own encoding behavior.
+
+The examples below are intentionally minimal and scoped to the encoding decision. The `dict[str, object]` return type assumes each args file's top-level value is a JSON object; production code that cannot guarantee that **SHOULD** validate the parsed result and use an annotation that reflects the validated schema. Production code that wraps `json.loads(...)` **MUST** also follow [Error Handling](#error-handling), including raising a domain error with `raise ... from error`.
+
+Compliant example:
+
+```python
+import json
+from pathlib import Path
+
+
+def load_args_file(path: Path) -> dict[str, object]:
+    """Load an operator-authored JSON args file (UTF-8, optional leading BOM)."""
+    return json.loads(path.read_text(encoding="utf-8-sig"))
+```
+
+Non-compliant counter-example:
+
+Reading with `encoding="utf-8"` preserves a leading UTF-8 BOM as `\ufeff`, so `json.loads(...)` can raise `json.JSONDecodeError: Unexpected UTF-8 BOM (decode using utf-8-sig)`. This failure is specific to inputs that begin with a UTF-8 BOM; the same code parses BOM-less UTF-8 correctly, which makes the bug easy to miss until an externally authored file arrives.
+
+```python
+import json
+from pathlib import Path
+
+
+def load_args_file(path: Path) -> dict[str, object]:
+    """Load an operator-authored JSON args file."""
+    # Can raise json.JSONDecodeError on a leading UTF-8 BOM.
+    return json.loads(path.read_text(encoding="utf-8"))
+```
 
 ## Tests
 
