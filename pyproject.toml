@@ -56,7 +56,7 @@ dev = [
     # in .pre-commit-config.yaml so the regression tests exercise the same
     # bundled vendor schemas as the default hooks. test_dependabot_schema.py
     # fails if this pin and the pre-commit `rev` drift, so bump them together.
-    "check-jsonschema==0.37.2",
+    "check-jsonschema==0.37.3",
 ]
 
 [tool.setuptools.packages.find]
