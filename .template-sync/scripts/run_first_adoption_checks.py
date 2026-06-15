@@ -218,14 +218,20 @@ def run_external_command(command: Sequence[str], repo_root: Path) -> int:
 
 def git_status_lines(repo_root: Path) -> tuple[str, ...]:
     """Return a deterministic Git status snapshot for changed-file reporting."""
-    result = subprocess.run(
-        list(GIT_STATUS_COMMAND),
-        cwd=repo_root,
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            list(GIT_STATUS_COMMAND),
+            cwd=repo_root,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except OSError as error:
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        raise FirstAdoptionCheckError(
+            f"Unable to inspect Git changed files ({error_summary})."
+        ) from error
     if result.returncode != 0:
         message = result.stderr.strip() or result.stdout.strip() or "git status failed"
         raise FirstAdoptionCheckError(f"Unable to inspect Git changed files: {message}")
@@ -241,14 +247,20 @@ def collect_present_regular_files(
     if stdout is not None:
         print(f"$ {format_command(GIT_FILE_LIST_COMMAND)}", file=stdout, flush=True)
 
-    result = subprocess.run(
-        list(GIT_FILE_LIST_COMMAND),
-        cwd=repo_root,
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            list(GIT_FILE_LIST_COMMAND),
+            cwd=repo_root,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except OSError as error:
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        raise FirstAdoptionCheckError(
+            f"Unable to inspect Git-visible files ({error_summary})."
+        ) from error
     if result.returncode != 0:
         message = result.stderr.strip() or result.stdout.strip() or "git ls-files failed"
         raise FirstAdoptionCheckError(f"Unable to inspect Git-visible files: {message}")

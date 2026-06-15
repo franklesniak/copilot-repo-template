@@ -465,6 +465,40 @@ def test_check_mode_reports_command_failure_before_changed_files(
     assert "exited with 1" in output
 
 
+def test_git_status_lines_reports_oserror_as_check_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing git executable surfaces as FirstAdoptionCheckError, not a raw OSError."""
+
+    def raise_oserror(*_args: object, **_kwargs: object) -> object:
+        raise FileNotFoundError(2, "No such file or directory")
+
+    monkeypatch.setattr(first_adoption.subprocess, "run", raise_oserror)
+
+    with pytest.raises(first_adoption.FirstAdoptionCheckError) as excinfo:
+        first_adoption.git_status_lines(tmp_path)
+
+    assert "Unable to inspect Git changed files" in str(excinfo.value)
+
+
+def test_collect_present_regular_files_reports_oserror_as_check_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing git executable surfaces as FirstAdoptionCheckError, not a raw OSError."""
+
+    def raise_oserror(*_args: object, **_kwargs: object) -> object:
+        raise FileNotFoundError(2, "No such file or directory")
+
+    monkeypatch.setattr(first_adoption.subprocess, "run", raise_oserror)
+
+    with pytest.raises(first_adoption.FirstAdoptionCheckError) as excinfo:
+        first_adoption.collect_present_regular_files(tmp_path)
+
+    assert "Unable to inspect Git-visible files" in str(excinfo.value)
+
+
 def test_marker_present_runs_marker_validator(tmp_path: Path) -> None:
     """A present marker adds the marker validator after the pre-commit file check."""
     _run_git(tmp_path, "init")
