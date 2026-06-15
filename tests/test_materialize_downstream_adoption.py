@@ -581,6 +581,389 @@ def test_materializer_help_documents_security_reporting_modes(
     assert "both" in captured.out
 
 
+def test_materializer_help_documents_license_preservation(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The materializer help output documents license-preservation inputs."""
+    with pytest.raises(SystemExit) as error:
+        materializer.parse_args(["--help"])
+
+    captured = capsys.readouterr()
+    assert error.value.code == 0
+    assert "--preserve-existing-license" in captured.out
+    assert "--license-source-path" in captured.out
+
+
+@pytest.mark.parametrize(
+    "source_path",
+    [
+        pytest.param("LICENSE.txt", id="txt"),
+        pytest.param("LICENSE.md", id="markdown"),
+        pytest.param("docs/OWNER-LICENSE", id="owner-approved-custom-path"),
+    ],
+)
+def test_preserve_existing_license_source_to_root_license_and_records_override(
+    tmp_path: Path,
+    source_path: str,
+) -> None:
+    """A downstream license source is copied byte-for-byte to root LICENSE."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(
+        template_root,
+        [
+            {"pattern": ".template-sync/marker.yml", "requires_all": ["template-sync-support"]},
+            {"pattern": "LICENSE", "requires_all": ["baseline"]},
+        ],
+    )
+    write_file(template_root / "LICENSE", "template license text\n")
+    license_bytes = b"Downstream License\r\n\r\nPreserve this exact text.\r\n"
+    source_file = target_root / source_path
+    source_file.parent.mkdir(parents=True, exist_ok=True)
+    source_file.write_bytes(license_bytes)
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--included-module",
+        "template-sync-support",
+        "--preserve-existing-license",
+        "--license-source-path",
+        source_path,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (target_root / "LICENSE").read_bytes() == license_bytes
+    assert source_file.read_bytes() == license_bytes
+    assert b"template license text" not in (target_root / "LICENSE").read_bytes()
+    assert "License preservation notes:" in result.stdout
+    assert f"preserved downstream license text from {source_path} to LICENSE" in result.stdout
+    assert "Residual manual-cleanup paths:" in result.stdout
+    assert source_path in result.stdout
+
+    marker = load_yaml(target_root / ".template-sync" / "marker.yml")
+    assert isinstance(marker, dict)
+    template_sync = marker["template_sync"]
+    assert isinstance(template_sync, dict)
+    local_overrides = template_sync["local_overrides"]
+    assert isinstance(local_overrides, list)
+    license_override = next(
+        override
+        for override in local_overrides
+        if isinstance(override, dict) and override.get("path") == "LICENSE"
+    )
+    assert license_override["default_decision"] == "SKIP"
+    assert source_path in license_override["reason"]
+
+
+def test_preserve_existing_license_auto_selects_single_alternate_candidate(
+    tmp_path: Path,
+) -> None:
+    """The preservation flag can auto-select one unambiguous root candidate."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(
+        template_root,
+        [{"pattern": "LICENSE", "requires_all": ["baseline"]}],
+    )
+    write_file(template_root / "LICENSE", "template license text\n")
+    license_bytes = b"Downstream license from markdown.\n"
+    (target_root / "LICENSE.md").write_bytes(license_bytes)
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--preserve-existing-license",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (target_root / "LICENSE").read_bytes() == license_bytes
+    assert (target_root / "LICENSE.md").read_bytes() == license_bytes
+
+
+def test_preserve_existing_license_rejects_same_path_source(
+    tmp_path: Path,
+) -> None:
+    """Root LICENSE preservation stays on the existing local-overrides SKIP path."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(template_root, [{"pattern": "LICENSE", "requires_all": ["baseline"]}])
+    write_file(template_root / "LICENSE", "template license text\n")
+    write_file(target_root / "LICENSE", "downstream license text\n")
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--preserve-existing-license",
+        "--license-source-path",
+        "LICENSE",
+    )
+
+    assert result.returncode == 1
+    assert "same-path license preservation" in result.stderr
+    assert "local_overrides" in result.stderr
+    assert read_file(target_root / "LICENSE") == "downstream license text\n"
+
+
+def test_same_path_license_preservation_still_uses_local_override_skip(
+    tmp_path: Path,
+) -> None:
+    """A downstream root LICENSE is preserved by the existing SKIP mechanism."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(
+        template_root,
+        [
+            {"pattern": ".template-sync/marker.yml", "requires_all": ["template-sync-support"]},
+            {"pattern": "LICENSE", "requires_all": ["baseline"]},
+        ],
+    )
+    write_file(template_root / "LICENSE", "template license text\n")
+    write_file(target_root / "LICENSE", "downstream license text\n")
+    write_yaml(
+        target_root / "decisions.yml",
+        marker_document(
+            ["baseline", "template-sync-support"],
+            local_overrides=[
+                {
+                    "path": "LICENSE",
+                    "default_decision": "SKIP",
+                    "reason": "Keep downstream root license text.",
+                }
+            ],
+        ),
+    )
+
+    result = run_materialize(template_root, target_root, "--decisions-file", "decisions.yml")
+
+    assert result.returncode == 0, result.stderr
+    assert read_file(target_root / "LICENSE") == "downstream license text\n"
+    assert "Skipped paths:" in result.stdout
+    assert "LICENSE" in result.stdout
+
+
+def test_preserve_existing_license_rejects_existing_root_license_conflict(
+    tmp_path: Path,
+) -> None:
+    """Normalization refuses to choose between an existing root and alternate license."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(template_root, [{"pattern": "LICENSE", "requires_all": ["baseline"]}])
+    write_file(template_root / "LICENSE", "template license text\n")
+    write_file(target_root / "LICENSE", "existing root license\n")
+    write_file(target_root / "LICENSE.txt", "alternate license text\n")
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--preserve-existing-license",
+        "--license-source-path",
+        "LICENSE.txt",
+    )
+
+    assert result.returncode == 1
+    assert "root LICENSE already exists" in result.stderr
+    assert "same-path local_overrides SKIP" in result.stderr
+    assert read_file(target_root / "LICENSE") == "existing root license\n"
+
+
+def test_preserve_existing_license_rejects_multiple_auto_candidates(
+    tmp_path: Path,
+) -> None:
+    """Ambiguous license candidates require an explicit owner-approved source."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(template_root, [{"pattern": "LICENSE", "requires_all": ["baseline"]}])
+    write_file(template_root / "LICENSE", "template license text\n")
+    write_file(target_root / "LICENSE.txt", "first candidate\n")
+    write_file(target_root / "LICENSE.md", "second candidate\n")
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--preserve-existing-license",
+    )
+
+    assert result.returncode == 1
+    assert "Multiple candidate license source paths found" in result.stderr
+    assert "LICENSE.md" in result.stderr
+    assert "LICENSE.txt" in result.stderr
+    assert "owner-approved source path" in result.stderr
+    assert not (target_root / "LICENSE").exists()
+
+
+def test_preserve_existing_license_rejects_missing_source_path(
+    tmp_path: Path,
+) -> None:
+    """A requested license source path must already exist."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(template_root, [{"pattern": "LICENSE", "requires_all": ["baseline"]}])
+    write_file(template_root / "LICENSE", "template license text\n")
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--preserve-existing-license",
+        "--license-source-path",
+        "LICENSE.txt",
+    )
+
+    assert result.returncode == 1
+    assert "License source path does not exist: LICENSE.txt" in result.stderr
+
+
+def test_preserve_existing_license_rejects_directory_source_path(
+    tmp_path: Path,
+) -> None:
+    """A license source path must be a regular text file."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(template_root, [{"pattern": "LICENSE", "requires_all": ["baseline"]}])
+    write_file(template_root / "LICENSE", "template license text\n")
+    (target_root / "LICENSE.txt").mkdir()
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--preserve-existing-license",
+        "--license-source-path",
+        "LICENSE.txt",
+    )
+
+    assert result.returncode == 1
+    assert "License source path must reference a regular text file" in result.stderr
+    assert "LICENSE.txt" in result.stderr
+
+
+def test_preserve_existing_license_rejects_symlink_source_path(
+    tmp_path: Path,
+) -> None:
+    """A license source path must not traverse or be a symlink."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(template_root, [{"pattern": "LICENSE", "requires_all": ["baseline"]}])
+    write_file(template_root / "LICENSE", "template license text\n")
+    outside_license = tmp_path / "outside-license.txt"
+    outside_license.write_text("outside license\n", encoding="utf-8")
+    try:
+        (target_root / "LICENSE.txt").symlink_to(outside_license)
+    except OSError as error:
+        pytest.skip(f"Symlink creation unavailable in this environment: {error}")
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--preserve-existing-license",
+        "--license-source-path",
+        "LICENSE.txt",
+    )
+
+    assert result.returncode == 1
+    assert "--license-source-path must not traverse a symlink" in result.stderr
+    assert not (target_root / "LICENSE").exists()
+
+
+@pytest.mark.parametrize(
+    ("license_bytes", "expected_message"),
+    [
+        pytest.param(b"license\x00text\n", "NUL bytes were found", id="nul-byte"),
+        pytest.param(b"\xff\xfeinvalid utf-8\n", "must be UTF-8 text", id="invalid-utf8"),
+    ],
+)
+def test_preserve_existing_license_rejects_non_text_source(
+    tmp_path: Path,
+    license_bytes: bytes,
+    expected_message: str,
+) -> None:
+    """License preservation rejects non-text source files before writing LICENSE."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(template_root, [{"pattern": "LICENSE", "requires_all": ["baseline"]}])
+    write_file(template_root / "LICENSE", "template license text\n")
+    (target_root / "LICENSE.txt").write_bytes(license_bytes)
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--preserve-existing-license",
+        "--license-source-path",
+        "LICENSE.txt",
+    )
+
+    assert result.returncode == 1
+    assert expected_message in result.stderr
+    assert not (target_root / "LICENSE").exists()
+
+
+def test_read_license_source_bytes_reports_unreadable_source_without_absolute_path(
+    tmp_path: Path,
+) -> None:
+    """Unreadable license source diagnostics include the safe relative path only."""
+    secret_path = tmp_path / "private" / "LICENSE.txt"
+
+    def unreadable() -> bytes:
+        raise PermissionError(13, "Permission denied", str(secret_path))
+
+    with pytest.raises(materializer.MaterializationError) as excinfo:
+        materializer.read_license_source_bytes(
+            secret_path,
+            "LICENSE.txt",
+            read_bytes=unreadable,
+        )
+
+    message = str(excinfo.value)
+    assert "Unable to read license source LICENSE.txt" in message
+    assert "PermissionError: Permission denied" in message
+    assert str(secret_path) not in message
+
+
 @pytest.mark.upstream_template_only
 def test_materialized_downstream_pytest_gate_collects(
     tmp_path: Path,

@@ -264,6 +264,19 @@ python .template-sync/scripts/materialize_downstream_adoption.py --help
 
 The helper copies only retained manifest-owned files, removes inline blocks for excluded modules, optionally reuses the approved placeholder replacement helper against a staging tree, and refuses to overwrite non-identical existing target files unless a path-scoped decision authorizes or records the conflict. Use `--template-root` for an existing reviewed checkout, or use `--template-ref REF` / `--template-revision FULL_SHA` with `--template-repo PATH` to let the helper create and remove a private detached source worktree from locally available Git objects. The helper does not fetch, pull, merge, or rebase. Its summary reports the supplied source ref or revision, resolved source SHA, source repository, diagnostic temporary checkout path, cleanup status, and target root; do not copy that resolved SHA into `template_sync.last_reviewed_template_commit` until adoption review is complete. In a non-empty repository, conflicts for existing files such as `README.md`, `LICENSE`, and `.gitignore` are expected first-adoption decisions. Resolve them per path through `template_sync.local_overrides`, `template_sync.protected_file_decisions`, or `template_sync.deferred_protected_candidates`; they are not runtime/tool failures.
 
+When an existing repository already has owner-approved license text under an alternate root filename such as `LICENSE.txt` or `LICENSE.md`, the materializer can normalize that text to the platform-standard root `LICENSE` path:
+
+```bash
+python .template-sync/scripts/materialize_downstream_adoption.py \
+  --target-root /path/to/downstream \
+  --source-repo https://github.com/franklesniak/copilot-repo-template.git \
+  --included-module baseline \
+  --preserve-existing-license \
+  --license-source-path LICENSE.txt
+```
+
+This preservation path copies the existing source text byte-for-byte to root `LICENSE`, suppresses the template `LICENSE`, records a `template_sync.local_overrides` `SKIP` decision for `LICENSE` when template-sync support is retained, and leaves the source file in place as a residual manual-cleanup path for the operator to review and remove later. Do not use these flags when the downstream repository already has root `LICENSE`; same-path preservation stays on the ordinary `template_sync.local_overrides` `SKIP` path.
+
 Use the existing review-artifact commands around materialization instead of broad manual source reads: `python .template-sync/scripts/generate_sync_candidates.py --ledger`, `python .template-sync/scripts/generate_sync_candidates.py --ledger-only`, and `python .template-sync/scripts/generate_sync_candidates.py --summary`.
 
 Use the concrete `_TODO-repo-init.md` example in [GETTING_STARTED_NEW_REPO.md](GETTING_STARTED_NEW_REPO.md#first-adoption-preflight-checklist) and keep only the items that are unresolved for this repository. Discovery may inspect files and Git metadata first, but agents and maintainers MUST NOT invent contact emails, reporting channels, branch protection policy, CODEOWNERS identities, GHES hosts, label availability, GitHub repository settings, or adoption modes beyond the documented default.
@@ -1088,9 +1101,16 @@ The template includes an MIT License file with the template author's name as the
    - Optionally update the copyright year to the current year or your project's start year
 
 2. **If you already have a LICENSE file:**
-   - Keep your existing license—no action needed
+   - Keep your existing license text unless the repository owner explicitly requests a license-text edit
+   - When using the first-adoption materializer, preserve the downstream root `LICENSE` through `template_sync.local_overrides` with `default_decision: SKIP`; do not use the alternate-path license normalization flags for same-path preservation
 
-3. **If you want a different license type:**
+3. **If you already have license text under an alternate path such as `LICENSE.txt` or `LICENSE.md`:**
+   - Confirm with the repository owner that this is the license text to preserve
+   - Run the first-adoption materializer with `--preserve-existing-license --license-source-path LICENSE.txt` or the owner-approved source path
+   - Review the generated root `LICENSE` and the residual source path reported by the materializer
+   - Remove the original source file only after manual owner review; the materializer does not delete it
+
+4. **If you want a different license type:**
    - See the [License Customization](OPTIONAL_CONFIGURATIONS.md#license-customization) section in `OPTIONAL_CONFIGURATIONS.md` for guidance on Apache 2.0, proprietary licenses, and updating all license references across your project
 
 ### Code of Conduct
