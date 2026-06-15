@@ -665,6 +665,7 @@ def test_missing_args_file_is_actionable(
     assert "--args-file: unable to read file" in captured.err
 
 
+@pytest.mark.upstream_template_only
 def test_contact_sentence_and_security_section_overrides(tmp_path: Path) -> None:
     """Whole-sentence and whole-section contact overrides avoid awkward token grammar."""
     copy_security_reporting_fixture(tmp_path)
