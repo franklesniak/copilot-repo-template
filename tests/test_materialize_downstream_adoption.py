@@ -2118,6 +2118,22 @@ def test_materializer_args_file_cli_values_take_precedence(tmp_path: Path) -> No
     assert args.package_name == "from-cli"
 
 
+def test_materializer_args_file_with_utf8_bom_is_parsed(tmp_path: Path) -> None:
+    """A UTF-8 BOM (e.g. PowerShell Set-Content -Encoding UTF8) in an args file is tolerated."""
+    args_file = tmp_path / "materialize.args.json"
+    args_file.write_bytes(
+        b"\xef\xbb\xbf"
+        + json.dumps({"target_root": str(tmp_path / "target"), "source_repo": SOURCE_REPO}).encode(
+            "utf-8"
+        )
+    )
+
+    mapping = materializer.load_args_file_mapping(str(args_file), None)
+
+    assert mapping["target_root"] == str(tmp_path / "target")
+    assert mapping["source_repo"] == SOURCE_REPO
+
+
 def test_materializer_args_file_decisions_path_traversal_is_rejected(
     tmp_path: Path,
 ) -> None:

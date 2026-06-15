@@ -327,7 +327,8 @@ def args_file_format_for_path(path: Path, args_format: str | None) -> str:
 def read_args_file_text(path: Path) -> str:
     """Read an explicit args file path."""
     try:
-        return path.read_text(encoding="utf-8")
+        # Tolerate a leading UTF-8 BOM (e.g. PowerShell `Set-Content -Encoding UTF8`).
+        return path.read_text(encoding="utf-8-sig")
     except OSError as error:
         raise MaterializationError(
             f"--args-file: unable to read file ({os_error_summary(error)})."

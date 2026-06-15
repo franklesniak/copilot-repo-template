@@ -708,6 +708,18 @@ def test_missing_args_file_is_actionable(
     assert "--args-file: unable to read file" in captured.err
 
 
+def test_args_file_with_utf8_bom_is_parsed(tmp_path: Path) -> None:
+    """A UTF-8 BOM (e.g. PowerShell Set-Content -Encoding UTF8) in an args file is tolerated."""
+    args_file = tmp_path / "adoption-identity.json"
+    args_file.write_bytes(
+        b"\xef\xbb\xbf" + json.dumps({"repository": "octo/widget"}).encode("utf-8")
+    )
+
+    mapping = placeholder_helper.load_args_file_mapping(str(args_file), None)
+
+    assert mapping == {"repository": "octo/widget"}
+
+
 @pytest.mark.upstream_template_only
 def test_contact_sentence_and_security_section_overrides(tmp_path: Path) -> None:
     """Whole-sentence and whole-section contact overrides avoid awkward token grammar."""
