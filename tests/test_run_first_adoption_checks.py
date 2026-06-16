@@ -168,6 +168,37 @@ def test_check_plan_assigns_stable_group_labels(
     assert plan.commands[-1].command == ("npm", "run", "lint:md:nested")
 
 
+def test_quality_reports_are_planned_before_fixers_when_helper_exists(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The first-adoption runner inventories quality debt before fix-mode commands."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _write_text(tmp_path, ".template-sync/scripts/first_adoption_quality_reports.py")
+
+    plan = first_adoption.build_check_plan(
+        tmp_path,
+        ("README.md",),
+        run_mode=first_adoption.FIX_MODE,
+    )
+
+    assert [command.group_label for command in plan.commands[:5]] == [
+        "quality-report",
+        "quality-report",
+        "quality-report",
+        "markdown-fixer",
+        "pre-commit",
+    ]
+    assert plan.commands[0].command[-1] == "line-endings"
+    assert plan.commands[1].command[-1] == "path-references"
+    assert plan.commands[2].command[-1] == "powershell"
+    assert plan.commands[3].command[-2:] == ("markdown", "--fix")
+
+
 def test_tracked_only_files_are_collected(tmp_path: Path) -> None:
     """Tracked files staged in the index are included in the pre-commit file list."""
     _run_git(tmp_path, "init")

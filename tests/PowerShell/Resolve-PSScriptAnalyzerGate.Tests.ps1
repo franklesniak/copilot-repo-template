@@ -325,6 +325,62 @@ Describe "Resolve-PSScriptAnalyzerGate" {
             ($objResult.SummaryLines -join "`n") | Should -Match 'Strict gate'
             ($objResult.SummaryLines -join "`n") | Should -Match 'Result: fail'
         }
+
+        It "Returns top rule and file summaries in descending count order" {
+            # Arrange
+            $arrFinding = @(
+                Get-SyntheticAnalyzerFinding -Severity 'Warning' -RuleName 'PSRuleB' -ScriptPath 'src/tools/B.ps1'
+                Get-SyntheticAnalyzerFinding -Severity 'Warning' -RuleName 'PSRuleA' -ScriptPath 'src/tools/B.ps1'
+                Get-SyntheticAnalyzerFinding -Severity 'Information' -RuleName 'PSRuleB' -ScriptPath 'src/tools/A.ps1'
+            )
+
+            # Act
+            $objResult = Resolve-PSScriptAnalyzerGate -Mode 'first-adoption' -AnalyzerFinding $arrFinding
+
+            # Assert
+            $objResult.TopRules | Should -Not -BeNullOrEmpty
+            $objResult.TopFiles | Should -Not -BeNullOrEmpty
+            $objResult.TopRules[0].RuleName | Should -Be 'PSRuleB'
+            $objResult.TopRules[0].Count | Should -Be 2
+            $objResult.TopRules[1].RuleName | Should -Be 'PSRuleA'
+            $objResult.TopFiles[0].ScriptPath | Should -Be 'src/tools/B.ps1'
+            $objResult.TopFiles[0].Count | Should -Be 2
+            ($objResult.SummaryLines -join "`n") | Should -Match 'Top rule findings: PSRuleB \(2\); PSRuleA \(1\)'
+            ($objResult.SummaryLines -join "`n") | Should -Match 'Top files by findings: src/tools/B\.ps1 \(2\); src/tools/A\.ps1 \(1\)'
+        }
+
+        It "Recommends first-adoption mode and emits issue-ready Markdown for warning debt" {
+            # Arrange
+            $arrFinding = @(
+                Get-SyntheticAnalyzerFinding -Severity 'Warning' -RuleName 'PSRuleA'
+                Get-SyntheticAnalyzerFinding -Severity 'Information' -RuleName 'PSRuleB'
+            )
+
+            # Act
+            $objResult = Resolve-PSScriptAnalyzerGate -Mode 'strict' -AnalyzerFinding $arrFinding
+
+            # Assert
+            $objResult.RecommendedMode | Should -Be 'first-adoption'
+            $objResult.Summary.RecommendedMode | Should -Be 'first-adoption'
+            $objResult.IssueReadyMarkdown | Should -Not -BeNullOrEmpty
+            ($objResult.IssueReadyMarkdown -join "`n") | Should -Match 'PSScriptAnalyzer First-Adoption Debt Cleanup'
+            ($objResult.IssueReadyMarkdown -join "`n") | Should -Match 'PSSCRIPTANALYZER_GATE_MODE'
+        }
+
+        It "Recommends strict mode when errors or unknown severities are present" {
+            # Arrange
+            $arrFinding = @(
+                Get-SyntheticAnalyzerFinding -Severity 'Error'
+                Get-SyntheticAnalyzerFinding -Severity 'Audit'
+            )
+
+            # Act
+            $objResult = Resolve-PSScriptAnalyzerGate -Mode 'first-adoption' -AnalyzerFinding $arrFinding
+
+            # Assert
+            $objResult.RecommendedMode | Should -Be 'strict'
+            $objResult.IssueReadyMarkdown | Should -BeNullOrEmpty
+        }
     }
 
     Context "When normalizing annotation paths" {

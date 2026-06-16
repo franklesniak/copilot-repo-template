@@ -70,6 +70,9 @@ template_manifest:
     - pattern: '.template-sync/instruction-contracts.yml'
       requires_all:
         - template-sync-support
+    - pattern: '.template-sync/first-adoption/**'
+      requires_all:
+        - template-sync-support
     - pattern: '.template-sync/scripts/**'
       requires_all:
         - template-sync-support
@@ -342,10 +345,16 @@ template_manifest:
     - pattern: 'schemas/template-sync-instruction-contracts.schema.json'
       requires_all:
         - template-sync-support
+    - pattern: 'schemas/first-adoption-quality-suppressions.schema.json'
+      requires_all:
+        - template-sync-support
     - pattern: 'schemas/examples/template-sync-marker/**'
       requires_all:
         - template-sync-support
     - pattern: 'schemas/examples/template-sync-instruction-contracts/**'
+      requires_all:
+        - template-sync-support
+    - pattern: 'schemas/examples/first-adoption-quality-suppressions/**'
       requires_all:
         - template-sync-support
     - pattern: 'schemas/**'
@@ -371,6 +380,9 @@ template_manifest:
       requires_all:
         - template-sync-support
     - pattern: 'tests/test_run_first_adoption_checks.*'
+      requires_all:
+        - template-sync-support
+    - pattern: 'tests/test_first_adoption_quality_reports.*'
       requires_all:
         - template-sync-support
     - pattern: 'tests/test_template_manifest.py'

@@ -6,8 +6,8 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-31
-- **Scope:** Conventions for JSON Schemas that describe load-bearing JSON and YAML files in this repository, the template sync manifest, marker, and instruction-contract schemas, plus a clearly removable worked example (`example-config.schema.json` with valid and invalid example data) wired into pre-commit and data CI to demonstrate the schema-validation pipeline end to end.
+- **Last Updated:** 2026-06-15
+- **Scope:** Conventions for JSON Schemas that describe load-bearing JSON and YAML files in this repository, the template sync manifest, marker, instruction-contract, and first-adoption quality suppression schemas, plus a clearly removable worked example (`example-config.schema.json` with valid and invalid example data) wired into pre-commit and data CI to demonstrate the schema-validation pipeline end to end.
 - **Related:** [JSON Authoring Standards](../.github/instructions/json.instructions.md), [YAML Authoring Standards](../.github/instructions/yaml.instructions.md), [Repository Copilot Instructions](../.github/copilot-instructions.md), [Template Design Decisions — Schema Location at Repository Root](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-location-at-repository-root), [Template Design Decisions — Schema Validation Tiers](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-validation-tiers), [Template Design Decisions — Built-in Schema Validation for Real Load-Bearing Configuration Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files), [Template Design Decisions — `additionalProperties` Policy](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-additionalproperties-policy), [Template Design Decisions — Testing Beyond Linting for JSON/YAML](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-testing-beyond-linting-for-jsonyaml)
 
 ## Purpose
@@ -65,7 +65,7 @@ Schemas whose root type is `object` SHOULD define:
 
 ## Validation
 
-Schema-backed files are validated by pre-commit and the dedicated data-file CI workflow ([`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml)). This template ships a worked example (see [Worked Example](#worked-example) below) so the validation pipeline is exercised end to end out of the box, and it ships production schemas for the template sync manifest, marker, and instruction contracts (see [Template Sync Manifest Schema](#template-sync-manifest-schema), [Template Sync Marker Schema](#template-sync-marker-schema), and [Template Sync Instruction Contracts Schema](#template-sync-instruction-contracts-schema)). Downstream repositories that do not use general schema-backed data files SHOULD remove the worked example using the [Downstream Removal Checklist](#downstream-removal-checklist). Repositories that keep `template-sync-support` SHOULD retain the template-sync production schemas and their template-sync example fixtures even when they remove the general `schema` module. See the JSON authoring standards for the schema-validation policy and tier guidance.
+Schema-backed files are validated by pre-commit and the dedicated data-file CI workflow ([`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml)). This template ships a worked example (see [Worked Example](#worked-example) below) so the validation pipeline is exercised end to end out of the box, and it ships production schemas for the template sync manifest, marker, instruction contracts, and first-adoption quality suppressions (see [Template Sync Manifest Schema](#template-sync-manifest-schema), [Template Sync Marker Schema](#template-sync-marker-schema), [Template Sync Instruction Contracts Schema](#template-sync-instruction-contracts-schema), and [First-Adoption Quality Suppressions Schema](#first-adoption-quality-suppressions-schema)). Downstream repositories that do not use general schema-backed data files SHOULD remove the worked example using the [Downstream Removal Checklist](#downstream-removal-checklist). Repositories that keep `template-sync-support` SHOULD retain the template-sync production schemas and their template-sync example fixtures even when they remove the general `schema` module. See the JSON authoring standards for the schema-validation policy and tier guidance.
 
 ### Schema Categories
 
@@ -76,7 +76,7 @@ This repository distinguishes two schema categories. The distinction matters for
    - MAY include valid and invalid example fixtures under `schemas/examples/<schema-name>/{valid,invalid}/`.
    - Tested by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py), which auto-discovers schema/example pairs and asserts that valid examples pass and invalid examples fail.
    - Wired into pre-commit by adding a `check-jsonschema` hook that points at the schema with `--schemafile schemas/<name>.schema.json` and an anchored `files:` pattern matching the file family the schema covers.
-   - The [Worked Example](#worked-example) below is the canonical illustration of the general `schema` module. The [Template Sync Manifest Schema](#template-sync-manifest-schema), [Template Sync Marker Schema](#template-sync-marker-schema), and [Template Sync Instruction Contracts Schema](#template-sync-instruction-contracts-schema) are production schema-backed contracts owned by `template-sync-support` because the support scripts load them at runtime.
+   - The [Worked Example](#worked-example) below is the canonical illustration of the general `schema` module. The [Template Sync Manifest Schema](#template-sync-manifest-schema), [Template Sync Marker Schema](#template-sync-marker-schema), [Template Sync Instruction Contracts Schema](#template-sync-instruction-contracts-schema), and [First-Adoption Quality Suppressions Schema](#first-adoption-quality-suppressions-schema) are production schema-backed contracts owned by `template-sync-support` because the support scripts load them at runtime or validate downstream-created retained state.
 
 2. **External built-in schemas.**
    - Referenced through `check-jsonschema --builtin-schema vendor.<name>` against schemas that ship inside the pinned `check-jsonschema` release.
@@ -105,6 +105,7 @@ The following project-owned file families are validated by default through `chec
 | [`.template-sync/manifest.yml`](../.template-sync/manifest.yml) | [`template-sync-manifest.schema.json`](./template-sync-manifest.schema.json) |
 | `.template-sync/marker.yml` when present | [`template-sync-marker.schema.json`](./template-sync-marker.schema.json) |
 | [`.template-sync/instruction-contracts.yml`](../.template-sync/instruction-contracts.yml) | [`template-sync-instruction-contracts.schema.json`](./template-sync-instruction-contracts.schema.json) |
+| `.template-sync/first-adoption/quality-suppressions.json` when present | [`first-adoption-quality-suppressions.schema.json`](./first-adoption-quality-suppressions.schema.json) |
 
 ### File-Family Hooks
 
@@ -268,6 +269,21 @@ How the instruction-contract contract is validated:
 - Required anchors are enforced by [`validate_instruction_contracts.py`](../.template-sync/scripts/validate_instruction_contracts.py). Upstream template CI invokes `--mode upstream-template`; downstream repositories SHOULD invoke `--mode downstream`, with `--require-marker` when the marker is required in CI.
 
 Downstream repositories that use the sync procedure SHOULD keep `.template-sync/instruction-contracts.yml`, `schemas/template-sync-instruction-contracts.schema.json`, the matching pre-commit hooks, and the instruction-contract examples or an equivalent validation path. These files are retained with `template-sync-support`; they do not require retaining the general worked-example `schema` module.
+
+## First-Adoption Quality Suppressions Schema
+
+[`first-adoption-quality-suppressions.schema.json`](./first-adoption-quality-suppressions.schema.json) defines the shape of the optional downstream-created `.template-sync/first-adoption/quality-suppressions.json` file used by first-adoption quality reports. The upstream template does not ship a concrete suppression file. Downstream repositories create it only when they intentionally suppress report findings.
+
+The current schema defines a report-scoped `path-reference` section. Each suppression entry can be scoped by `ruleId`, `category`, exact source `path`, source `pathGlob`, exact `literal`, and `literalPattern`; populated selector fields are combined, so every populated selector must match before the finding is suppressed. The schema reserves the top-level structure for future `line-ending`, `powershell`, or `markdown` sections without relocating the file.
+
+How the first-adoption quality suppression contract is validated:
+
+- The suppression file is validated by the `Validate first-adoption quality suppressions` `check-jsonschema` hook when `.template-sync/first-adoption/quality-suppressions.json` is present. Repositories without that file are unaffected because no file matches the hook's anchored pattern.
+- Valid suppression fixtures under [`examples/first-adoption-quality-suppressions/valid/`](./examples/first-adoption-quality-suppressions/valid/) are validated by the `Validate first-adoption quality suppression valid examples` `check-jsonschema` hook and by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+- Invalid suppression fixtures under [`examples/first-adoption-quality-suppressions/invalid/`](./examples/first-adoption-quality-suppressions/invalid/) are exercised by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py), which asserts that each invalid example is rejected.
+- The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate first-adoption quality suppressions schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+
+Downstream repositories that use the first-adoption quality reports SHOULD keep `schemas/first-adoption-quality-suppressions.schema.json`, the matching pre-commit hooks, and the suppression examples or an equivalent validation path. These files are retained with `template-sync-support`; they do not require retaining the general worked-example `schema` module.
 
 ### Downstream Removal Checklist
 
