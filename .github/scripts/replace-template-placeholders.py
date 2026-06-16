@@ -8,12 +8,15 @@ eligible for substitution.
 from __future__ import annotations
 
 import argparse
+import importlib
+import json
 import os
 import re
 import sys
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -44,6 +47,16 @@ APPROVED_GITHUB_URL_SUFFIXES = (
 )
 SECURITY_REPORTING_MODES = ("github-private-only", "contact-only", "both")
 SECURITY_CONTACT_REQUIRED_MODES = frozenset({"contact-only", "both"})
+ARGS_FILE_FORMATS = ("json", "yaml")
+ARGS_FILE_EXTENSION_FORMATS = {
+    ".json": "json",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+}
+PACKAGE_METADATA_PATHS = ("package.json", "package-lock.json")
+CONDUCT_CONTACT_SENTENCE_PLACEHOLDER = (
+    "To report a possible violation, contact us via: [INSERT CONTACT METHOD]"
+)
 TOKEN_REPLACEMENT_SPECS = (
     ("owner-repo token", "OWNER/REPO", OWNER_REPO_TOKEN_PATHS, "repository"),
     ("codeowners owner", "@OWNER", (".github/CODEOWNERS",), "codeowners_owner"),
@@ -67,6 +80,69 @@ TOKEN_REPLACEMENT_SPECS = (
         "vscode_title",
     ),
 )
+REPLACE_ARGS_FILE_FIELDS = frozenset(
+    {
+        "repo_root",
+        "repository",
+        "github_host",
+        "codeowners_owner",
+        "conduct_contact",
+        "conduct_contact_sentence",
+        "security_contact",
+        "security_contact_section",
+        "security_reporting_mode",
+        "vscode_title",
+        "package_name",
+        "package_description",
+        "package_author",
+        "package_version",
+        "package_keywords",
+        "dry_run",
+    }
+)
+SCAN_ARGS_FILE_FIELDS = frozenset({"repo_root", "repository"})
+STRING_ARGS_FILE_FIELDS = frozenset(
+    {
+        "repo_root",
+        "repository",
+        "github_host",
+        "codeowners_owner",
+        "conduct_contact",
+        "conduct_contact_sentence",
+        "security_contact",
+        "security_contact_section",
+        "security_reporting_mode",
+        "vscode_title",
+        "package_name",
+        "package_description",
+        "package_author",
+        "package_version",
+    }
+)
+LIST_STRING_ARGS_FILE_FIELDS = frozenset({"package_keywords"})
+BOOLEAN_ARGS_FILE_FIELDS = frozenset({"dry_run"})
+REPLACE_CLI_FLAGS = {
+    "repo_root": ("--repo-root",),
+    "repository": ("--repository",),
+    "github_host": ("--github-host",),
+    "codeowners_owner": ("--codeowners-owner",),
+    "conduct_contact": ("--conduct-contact",),
+    "conduct_contact_sentence": ("--conduct-contact-sentence",),
+    "security_contact": ("--security-contact",),
+    "security_contact_section": ("--security-contact-section",),
+    "security_reporting_mode": ("--security-reporting-mode",),
+    "vscode_title": ("--vscode-title",),
+    "package_name": ("--package-name",),
+    "package_description": ("--package-description",),
+    "package_author": ("--package-author",),
+    "package_version": ("--package-version",),
+    "package_keywords": ("--package-keyword",),
+    "dry_run": ("--dry-run",),
+}
+SCAN_CLI_FLAGS = {
+    "repo_root": ("--repo-root",),
+    "repository": ("--repository",),
+}
 SKIPPED_DISCOVERY_DIRS = {
     ".git",
     ".mypy_cache",
@@ -94,20 +170,55 @@ class PlaceholderError(RuntimeError):
 class ReplacementContext:
     """Concrete downstream values used during placeholder substitution."""
 
-    repository: str
+    repository: str | None
     github_host: str
-    codeowners_owner: str
+    codeowners_owner: str | None
     conduct_contact: str | None
+    conduct_contact_sentence: str | None
     security_contact: str | None
-    security_reporting_mode: str
-    vscode_title: str
+    security_contact_section: str | None
+    security_reporting_mode: str | None
+    vscode_title: str | None
+    package_name: str | None
+    package_description: str | None
+    package_author: str | None
+    package_version: str | None
+    package_keywords: tuple[str, ...] | None
 
     @property
-    def security_todo_replacement(self) -> str:
-        """Return the replacement for the security-contact TODO marker."""
-        if self.security_contact is None:
+    def security_todo_replacement(self) -> str | None:
+        """Return the security-contact TODO replacement, or None when no security decision was made.
+
+        Returns None when the run supplied no security inputs at all (no reporting
+        mode, security contact, or contact section), so the SECURITY.md TODO marker is
+        left intact instead of being rewritten as an intentional omission for a run --
+        such as a repository-less or package-metadata-only run -- that made no security
+        decision. The marker is only rewritten when the run actually configures a
+        security contact or selects a reporting mode that intentionally omits one.
+        """
+        if (
+            self.security_contact is None
+            and self.security_contact_section is None
+            and self.security_reporting_mode is None
+        ):
+            return None
+        if self.security_contact is None and self.security_contact_section is None:
             return "<!-- Security contact intentionally omitted by reporting mode -->"
         return "<!-- Security contact configured -->"
+
+    @property
+    def has_package_metadata(self) -> bool:
+        """Return whether package metadata replacement was requested."""
+        return any(
+            value is not None
+            for value in (
+                self.package_name,
+                self.package_description,
+                self.package_author,
+                self.package_version,
+                self.package_keywords,
+            )
+        )
 
 
 @dataclass(frozen=True)
@@ -193,6 +304,25 @@ def validate_non_empty(value: str, field_name: str) -> str:
     return value
 
 
+def validate_optional_non_empty(value: str | None, field_name: str) -> str | None:
+    """Validate an optional non-empty CLI value."""
+    if value is None:
+        return None
+    return validate_non_empty(value, field_name)
+
+
+def validate_package_keywords(package_keywords: Sequence[str] | None) -> tuple[str, ...] | None:
+    """Validate optional package keyword metadata."""
+    if package_keywords is None:
+        return None
+    validated_keywords = tuple(
+        validate_non_empty(keyword, "--package-keyword") for keyword in package_keywords
+    )
+    if not validated_keywords:
+        raise PlaceholderError("--package-keyword must be supplied at least once when present.")
+    return validated_keywords
+
+
 def validate_security_reporting_mode(security_reporting_mode: str) -> str:
     """Validate a security-reporting mode name."""
     if security_reporting_mode not in SECURITY_REPORTING_MODES:
@@ -205,12 +335,17 @@ def resolve_security_reporting_mode(
     *,
     security_reporting_mode: str | None,
     security_contact: str | None,
+    security_contact_section: str | None,
+    require_security_decision: bool,
 ) -> str:
     """Resolve explicit and backward-compatible security-reporting mode input."""
     if security_reporting_mode is None:
-        if security_contact is None:
+        if not require_security_decision:
+            return "both"
+        if security_contact is None and security_contact_section is None:
             raise PlaceholderError(
-                "Either --security-reporting-mode or --security-contact is required."
+                "Either --security-reporting-mode or --security-contact is required; "
+                "--security-contact-section may be used instead of --security-contact."
             )
         return "both"
     return validate_security_reporting_mode(security_reporting_mode)
@@ -297,58 +432,109 @@ def replace_url_pattern(placeholder: str, replacement: str) -> Callable[[str], t
 
 
 def build_replacement_context(
-    repository: str,
+    repository: str | None = None,
     github_host: str = "github.com",
     codeowners_owner: str | None = None,
     conduct_contact: str | None = None,
+    conduct_contact_sentence: str | None = None,
     security_contact: str | None = None,
+    security_contact_section: str | None = None,
     security_reporting_mode: str | None = None,
     vscode_title: str | None = None,
+    package_name: str | None = None,
+    package_description: str | None = None,
+    package_author: str | None = None,
+    package_version: str | None = None,
+    package_keywords: Sequence[str] | None = None,
 ) -> ReplacementContext:
     """Return validated replacement values for the helper."""
-    owner, repo = parse_repository(repository)
+    owner: str | None = None
+    repo: str | None = None
+    if repository is not None:
+        owner, repo = parse_repository(repository)
     validated_security_contact = (
         validate_non_empty(security_contact, "--security-contact")
         if security_contact is not None
         else None
     )
+    validated_security_contact_section = validate_optional_non_empty(
+        security_contact_section,
+        "--security-contact-section",
+    )
+    require_security_decision = repository is not None
     resolved_security_reporting_mode = resolve_security_reporting_mode(
         security_reporting_mode=security_reporting_mode,
         security_contact=validated_security_contact,
+        security_contact_section=validated_security_contact_section,
+        require_security_decision=require_security_decision,
     )
+    if not require_security_decision and security_reporting_mode is None:
+        if validated_security_contact is not None or validated_security_contact_section is not None:
+            raise PlaceholderError(
+                "--security-contact and --security-contact-section configure the "
+                "SECURITY.md reporting section, which is only rendered when a "
+                "reporting mode is selected. Supply --repository, or set "
+                "--security-reporting-mode explicitly (for example, "
+                "--security-reporting-mode contact-only), so the override is "
+                "applied instead of silently ignored; use --conduct-contact to set "
+                "the Code of Conduct contact independently."
+            )
+        resolved_security_reporting_mode = None
     if (
         resolved_security_reporting_mode in SECURITY_CONTACT_REQUIRED_MODES
         and validated_security_contact is None
+        and validated_security_contact_section is None
     ):
         raise PlaceholderError(
-            "--security-contact is required when --security-reporting-mode is "
-            f"{resolved_security_reporting_mode}."
+            "--security-contact or --security-contact-section is required when "
+            f"--security-reporting-mode is {resolved_security_reporting_mode}."
         )
     validated_conduct_contact = (
         validate_non_empty(conduct_contact, "--conduct-contact")
         if conduct_contact is not None
-        else validated_security_contact
+        else validated_security_contact if conduct_contact_sentence is None else None
+    )
+    validated_conduct_contact_sentence = validate_optional_non_empty(
+        conduct_contact_sentence,
+        "--conduct-contact-sentence",
     )
     return ReplacementContext(
         repository=repository,
         github_host=validate_github_host(github_host),
-        codeowners_owner=validate_codeowners_owner(codeowners_owner or f"@{owner}"),
+        codeowners_owner=(
+            validate_codeowners_owner(codeowners_owner)
+            if codeowners_owner is not None
+            else validate_codeowners_owner(f"@{owner}") if owner is not None else None
+        ),
         conduct_contact=validated_conduct_contact,
+        conduct_contact_sentence=validated_conduct_contact_sentence,
         security_contact=validated_security_contact,
+        security_contact_section=validated_security_contact_section,
         security_reporting_mode=resolved_security_reporting_mode,
-        vscode_title=validate_non_empty(vscode_title or repo, "--vscode-title"),
+        vscode_title=(
+            validate_non_empty(vscode_title, "--vscode-title")
+            if vscode_title is not None
+            else validate_non_empty(repo, "--vscode-title") if repo is not None else None
+        ),
+        package_name=validate_optional_non_empty(package_name, "--package-name"),
+        package_description=validate_optional_non_empty(
+            package_description,
+            "--package-description",
+        ),
+        package_author=validate_optional_non_empty(package_author, "--package-author"),
+        package_version=validate_optional_non_empty(package_version, "--package-version"),
+        package_keywords=validate_package_keywords(package_keywords),
     )
 
 
 def build_security_reporting_section(context: ReplacementContext) -> str:
     """Build the rendered SECURITY.md reporting section for the selected mode."""
+    if context.security_reporting_mode is None:
+        return ""
     direct_url = "https://github.com/OWNER/REPO/security/advisories/new"
-    contact_lines = (
-        "### Security Contact\n\n"
-        "Contact the maintainers directly at:\n\n"
-        "<!-- TODO: Replace with your security contact email -->\n"
-        "<!-- Do not use a users.noreply.github.com address as a security intake channel. -->\n"
-        "- Contact: [security contact email]\n"
+    contact_lines = security_contact_section(
+        context,
+        default_heading="### Security Contact",
     )
     private_lines = (
         f"### GitHub Private Vulnerability Reporting\n\n"
@@ -387,11 +573,20 @@ def build_security_reporting_section(context: ReplacementContext) -> str:
         f"[private vulnerability reporting form]({direct_url}) after maintainers have "
         f"enabled private vulnerability reporting for this repository. If that form is "
         f"unavailable, use the security contact option below.\n\n"
-        f"### Option 2: Security Contact\n\n"
-        f"Contact the maintainers directly at:\n\n"
-        f"<!-- TODO: Replace with your security contact email -->\n"
-        f"<!-- Do not use a users.noreply.github.com address as a security intake channel. -->\n"
-        f"- Contact: [security contact email]\n"
+        f"{security_contact_section(context, default_heading='### Option 2: Security Contact')}"
+    )
+
+
+def security_contact_section(context: ReplacementContext, *, default_heading: str) -> str:
+    """Return the SECURITY.md contact section, honoring a whole-section override."""
+    if context.security_contact_section is not None:
+        return context.security_contact_section.rstrip("\n") + "\n"
+    return (
+        f"{default_heading}\n\n"
+        "Contact the maintainers directly at:\n\n"
+        "<!-- TODO: Replace with your security contact email -->\n"
+        "<!-- Do not use a users.noreply.github.com address as a security intake channel. -->\n"
+        "- Contact: [security contact email]\n"
     )
 
 
@@ -565,6 +760,8 @@ def render_security_reporting_mode(
     context: ReplacementContext,
 ) -> tuple[ReplacementRecord, ...]:
     """Render known security-reporting surfaces for the selected mode."""
+    if context.security_reporting_mode is None:
+        return ()
     renderers = {
         "SECURITY.md": (replace_security_reporting_section,),
         ".github/ISSUE_TEMPLATE/config.yml": (replace_config_security_block,),
@@ -595,6 +792,169 @@ def render_security_reporting_mode(
     return tuple(records)
 
 
+def render_conduct_contact_sentence(
+    file_texts: dict[str, str],
+    context: ReplacementContext,
+) -> tuple[ReplacementRecord, ...]:
+    """Replace the Code of Conduct contact sentence when a sentence override is supplied."""
+    if context.conduct_contact_sentence is None or "CODE_OF_CONDUCT.md" not in file_texts:
+        return ()
+    text = file_texts["CODE_OF_CONDUCT.md"]
+    updated_text, count = replace_literal(
+        CONDUCT_CONTACT_SENTENCE_PLACEHOLDER,
+        context.conduct_contact_sentence,
+    )(text)
+    if count == 0:
+        return ()
+    file_texts["CODE_OF_CONDUCT.md"] = updated_text
+    return (
+        ReplacementRecord(
+            path="CODE_OF_CONDUCT.md",
+            rule_name="code of conduct contact sentence",
+            count=count,
+        ),
+    )
+
+
+def load_json_object_from_text(text: str, display_path: str) -> dict[str, Any]:
+    """Parse a JSON object from an already-read UTF-8 file body."""
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise PlaceholderError(f"{display_path}: invalid JSON ({error}).") from error
+    if not isinstance(parsed, dict):
+        raise PlaceholderError(f"{display_path}: expected a JSON object.")
+    return parsed
+
+
+def dump_json_object(document: dict[str, Any]) -> str:
+    """Serialize a JSON object with stable repository formatting."""
+    return json.dumps(document, indent=2) + "\n"
+
+
+def set_json_field(
+    document: dict[str, Any],
+    field_name: str,
+    value: Any,
+) -> int:
+    """Set a JSON field and return whether it changed."""
+    if document.get(field_name) == value:
+        return 0
+    document[field_name] = value
+    return 1
+
+
+def package_json_updates(context: ReplacementContext) -> dict[str, Any]:
+    """Return requested package.json metadata field updates."""
+    updates: dict[str, Any] = {}
+    if context.package_name is not None:
+        updates["name"] = context.package_name
+    if context.package_version is not None:
+        updates["version"] = context.package_version
+    if context.package_description is not None:
+        updates["description"] = context.package_description
+    if context.package_keywords is not None:
+        updates["keywords"] = list(context.package_keywords)
+    if context.package_author is not None:
+        updates["author"] = context.package_author
+    return updates
+
+
+def update_package_json_metadata(
+    file_texts: dict[str, str],
+    context: ReplacementContext,
+) -> tuple[ReplacementRecord, ...]:
+    """Apply requested package metadata to package.json."""
+    if "package.json" not in file_texts:
+        return ()
+    updates = package_json_updates(context)
+    if not updates:
+        return ()
+    document = load_json_object_from_text(file_texts["package.json"], "package.json")
+    change_count = 0
+    for field_name, value in updates.items():
+        change_count += set_json_field(document, field_name, value)
+    if change_count == 0:
+        return ()
+    file_texts["package.json"] = dump_json_object(document)
+    return (
+        ReplacementRecord(
+            path="package.json",
+            rule_name="package metadata",
+            count=change_count,
+        ),
+    )
+
+
+def root_package_lock_mapping(document: dict[str, Any]) -> dict[str, Any]:
+    """Return the root package-lock packages[''] object."""
+    packages = document.get("packages")
+    if not isinstance(packages, dict):
+        lockfile_version = document.get("lockfileVersion")
+        version_note = (
+            f" (found lockfileVersion {lockfile_version!r})" if lockfile_version is not None else ""
+        )
+        raise PlaceholderError(
+            f'package-lock.json has no top-level "packages" object{version_note}. '
+            "Deterministic root-identity updates require an npm lockfileVersion 2 or 3 "
+            "lockfile. Regenerate it with a modern npm (for example, "
+            "`npm install --package-lock-only`), or omit package-lock.json from the "
+            "adopted files so only package.json receives the identity update."
+        )
+    root_package = packages.get("")
+    if not isinstance(root_package, dict):
+        raise PlaceholderError(
+            'package-lock.json has no root packages[""] entry, so its root identity '
+            "cannot be updated deterministically. Regenerate the lockfile with "
+            "`npm install --package-lock-only`, or omit package-lock.json from the "
+            "adopted files so only package.json receives the identity update."
+        )
+    return root_package
+
+
+def update_package_lock_identity(
+    file_texts: dict[str, str],
+    context: ReplacementContext,
+) -> tuple[ReplacementRecord, ...]:
+    """Apply requested root identity metadata to package-lock.json."""
+    if "package-lock.json" not in file_texts:
+        return ()
+    if context.package_name is None and context.package_version is None:
+        return ()
+    document = load_json_object_from_text(file_texts["package-lock.json"], "package-lock.json")
+    root_package = root_package_lock_mapping(document)
+    change_count = 0
+    if context.package_name is not None:
+        change_count += set_json_field(document, "name", context.package_name)
+        change_count += set_json_field(root_package, "name", context.package_name)
+    if context.package_version is not None:
+        change_count += set_json_field(document, "version", context.package_version)
+        change_count += set_json_field(root_package, "version", context.package_version)
+    if change_count == 0:
+        return ()
+    file_texts["package-lock.json"] = dump_json_object(document)
+    return (
+        ReplacementRecord(
+            path="package-lock.json",
+            rule_name="package-lock root identity",
+            count=change_count,
+        ),
+    )
+
+
+def render_package_metadata(
+    file_texts: dict[str, str],
+    context: ReplacementContext,
+) -> tuple[ReplacementRecord, ...]:
+    """Render package metadata and deterministic root package-lock identity fields."""
+    records: list[ReplacementRecord] = []
+    if not context.has_package_metadata:
+        return ()
+    records.extend(update_package_json_metadata(file_texts, context))
+    records.extend(update_package_lock_identity(file_texts, context))
+    return tuple(records)
+
+
 def validate_context_against_retained_files(
     file_texts: dict[str, str],
     context: ReplacementContext,
@@ -605,28 +965,31 @@ def validate_context_against_retained_files(
         code_of_conduct is not None
         and "[INSERT CONTACT METHOD]" in code_of_conduct
         and context.conduct_contact is None
+        and context.conduct_contact_sentence is None
     ):
         raise PlaceholderError(
             "CODE_OF_CONDUCT.md contains [INSERT CONTACT METHOD]; provide "
-            "--conduct-contact when --security-contact is omitted."
+            "--conduct-contact or --conduct-contact-sentence when --security-contact "
+            "is omitted."
         )
 
 
 def build_replacement_rules(context: ReplacementContext) -> tuple[ReplacementRule, ...]:
     """Build the concrete allowlist of approved replacements."""
     rules: list[ReplacementRule] = []
-    for suffix in sorted(APPROVED_GITHUB_URL_SUFFIXES, key=len, reverse=True):
-        placeholder = f"https://github.com/OWNER/REPO{suffix}"
-        replacement = f"https://{context.github_host}/{context.repository}{suffix}"
-        rules.append(
-            ReplacementRule(
-                name=f"github url {suffix or '/'}",
-                placeholder=placeholder,
-                replacement=replacement,
-                paths=GITHUB_URL_TOKEN_PATHS,
-                replace=replace_url_pattern(placeholder, replacement),
+    if context.repository is not None:
+        for suffix in sorted(APPROVED_GITHUB_URL_SUFFIXES, key=len, reverse=True):
+            placeholder = f"https://github.com/OWNER/REPO{suffix}"
+            replacement = f"https://{context.github_host}/{context.repository}{suffix}"
+            rules.append(
+                ReplacementRule(
+                    name=f"github url {suffix or '/'}",
+                    placeholder=placeholder,
+                    replacement=replacement,
+                    paths=GITHUB_URL_TOKEN_PATHS,
+                    replace=replace_url_pattern(placeholder, replacement),
+                )
             )
-        )
 
     for name, placeholder, paths, attribute_name in TOKEN_REPLACEMENT_SPECS:
         replacement = getattr(context, attribute_name)
@@ -669,6 +1032,12 @@ def replace_placeholders(
                 resolve_repo_path(repo_root, relative_path),
                 relative_path,
             )
+    if context.has_package_metadata:
+        for relative_path in PACKAGE_METADATA_PATHS:
+            files_by_path[relative_path] = (
+                resolve_repo_path(repo_root, relative_path),
+                relative_path,
+            )
     for rule in rules:
         for relative_path in rule.paths:
             files_by_path[relative_path] = (
@@ -685,7 +1054,9 @@ def replace_placeholders(
         file_texts[relative_path] = read_text(path, display_path)
 
     validate_context_against_retained_files(file_texts, context)
+    records.extend(render_conduct_contact_sentence(file_texts, context))
     records.extend(render_security_reporting_mode(file_texts, context))
+    records.extend(render_package_metadata(file_texts, context))
 
     for rule in rules:
         for relative_path in rule.paths:
@@ -863,14 +1234,167 @@ def scan_repository(repo_root: Path, repository: str | None = None) -> tuple[Sca
     return scan_unresolved_placeholders(repo_root) + scan_corruption_patterns(repo_root, repository)
 
 
+def add_args_file_options(parser: argparse.ArgumentParser) -> None:
+    """Add explicit argument-file options to one subcommand parser."""
+    parser.add_argument(
+        "--args-file",
+        default=None,
+        help="JSON or YAML file containing shell-safe argument values for this command.",
+    )
+    parser.add_argument(
+        "--args-format",
+        choices=ARGS_FILE_FORMATS,
+        default=None,
+        help="Explicit args-file format; overrides the file extension.",
+    )
+
+
+def args_file_format_for_path(path: Path, args_format: str | None) -> str:
+    """Return the parser format selected by override or recognized file extension."""
+    if args_format is not None:
+        return args_format
+    inferred_format = ARGS_FILE_EXTENSION_FORMATS.get(path.suffix.lower())
+    if inferred_format is None:
+        raise PlaceholderError(
+            "Unable to determine --args-file format from extension; use "
+            "--args-format json or --args-format yaml, or name the file with "
+            "a .json, .yaml, or .yml extension."
+        )
+    return inferred_format
+
+
+def read_args_file_text(path: Path) -> str:
+    """Read an explicit args file path."""
+    try:
+        # Tolerate a leading UTF-8 BOM (e.g. PowerShell `Set-Content -Encoding UTF8`).
+        return path.read_text(encoding="utf-8-sig")
+    except OSError as error:
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        raise PlaceholderError(f"--args-file: unable to read file ({error_summary}).") from error
+
+
+def load_json_args_file(path: Path) -> dict[str, Any]:
+    """Load a JSON args file that must contain an object."""
+    text = read_args_file_text(path)
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise PlaceholderError(f"--args-file: invalid JSON ({error}).") from error
+    if not isinstance(parsed, dict):
+        raise PlaceholderError("--args-file must contain a JSON object.")
+    return parsed
+
+
+def load_yaml_args_file(
+    path: Path,
+    *,
+    yaml_module_loader: Callable[[str], Any] = importlib.import_module,
+) -> dict[str, Any]:
+    """Load a YAML args file through the retained YAML parser path."""
+    try:
+        yaml_module = yaml_module_loader("yaml")
+    except ImportError as error:
+        raise PlaceholderError(
+            "YAML --args-file support is unavailable because the retained YAML "
+            "parser is not importable. Convert the args file to JSON or enable "
+            "the repository's retained YAML support."
+        ) from error
+    text = read_args_file_text(path)
+    try:
+        parsed = yaml_module.safe_load(text)
+    except yaml_module.YAMLError as error:
+        raise PlaceholderError(f"--args-file: invalid YAML ({error}).") from error
+    if not isinstance(parsed, dict):
+        raise PlaceholderError("--args-file must contain a YAML mapping.")
+    return parsed
+
+
+def load_args_file_mapping(
+    raw_path: str,
+    args_format: str | None,
+    *,
+    yaml_module_loader: Callable[[str], Any] = importlib.import_module,
+) -> dict[str, Any]:
+    """Load an explicit JSON or YAML argument file."""
+    path = Path(raw_path).expanduser()
+    selected_format = args_file_format_for_path(path, args_format)
+    if selected_format == "json":
+        return load_json_args_file(path)
+    if selected_format == "yaml":
+        return load_yaml_args_file(path, yaml_module_loader=yaml_module_loader)
+    raise AssertionError(f"Unhandled args-file format: {selected_format}")
+
+
+def cli_supplied_fields(
+    argv: Sequence[str],
+    flags_by_field: dict[str, tuple[str, ...]],
+) -> set[str]:
+    """Return argument destinations supplied directly on the command line."""
+    supplied: set[str] = set()
+    flag_to_field = {
+        flag: field_name for field_name, flags in flags_by_field.items() for flag in flags
+    }
+    for token in argv:
+        flag = token.split("=", 1)[0]
+        field_name = flag_to_field.get(flag)
+        if field_name is not None:
+            supplied.add(field_name)
+    return supplied
+
+
+def validate_args_file_value(field_name: str, value: Any) -> Any:
+    """Validate one args-file value and return its normalized representation."""
+    if value is None:
+        return None
+    if field_name in STRING_ARGS_FILE_FIELDS:
+        if not isinstance(value, str):
+            raise PlaceholderError(f"--args-file field {field_name!r} must be a string.")
+        return value
+    if field_name in LIST_STRING_ARGS_FILE_FIELDS:
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise PlaceholderError(f"--args-file field {field_name!r} must be a list of strings.")
+        return tuple(value)
+    if field_name in BOOLEAN_ARGS_FILE_FIELDS:
+        if not isinstance(value, bool):
+            raise PlaceholderError(f"--args-file field {field_name!r} must be a boolean.")
+        return value
+    raise AssertionError(f"Unhandled args-file field: {field_name}")
+
+
+def apply_args_file_values(
+    args: argparse.Namespace,
+    *,
+    argv: Sequence[str],
+    allowed_fields: frozenset[str],
+    flags_by_field: dict[str, tuple[str, ...]],
+) -> argparse.Namespace:
+    """Merge args-file values into parsed args, with CLI flags taking precedence."""
+    if args.args_file is None:
+        return args
+    args_file_values = load_args_file_mapping(args.args_file, args.args_format)
+    unknown_fields = sorted(set(args_file_values) - allowed_fields)
+    if unknown_fields:
+        raise PlaceholderError("Unknown --args-file field(s): " + ", ".join(unknown_fields) + ".")
+    direct_cli_fields = cli_supplied_fields(argv, flags_by_field)
+    for field_name, raw_value in args_file_values.items():
+        if field_name in direct_cli_fields:
+            continue
+        if raw_value is None:
+            continue
+        setattr(args, field_name, validate_args_file_value(field_name, raw_value))
+    return args
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments."""
+    argv = tuple(sys.argv[1:] if argv is None else argv)
     parser = argparse.ArgumentParser(description="Replace and audit exact template placeholders.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     replace_parser = subparsers.add_parser("replace", help="replace approved placeholders")
+    add_args_file_options(replace_parser)
     replace_parser.add_argument("--repo-root", default=None, help="repository root")
-    replace_parser.add_argument("--repository", required=True, help="replacement OWNER/REPO value")
+    replace_parser.add_argument("--repository", default=None, help="replacement OWNER/REPO value")
     replace_parser.add_argument(
         "--github-host",
         default="github.com",
@@ -890,12 +1414,22 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
     replace_parser.add_argument(
+        "--conduct-contact-sentence",
+        default=None,
+        help="replacement full Code of Conduct reporting sentence",
+    )
+    replace_parser.add_argument(
         "--security-contact",
         default=None,
         help=(
             "replacement security contact method; required for contact-only and "
             "both security reporting modes"
         ),
+    )
+    replace_parser.add_argument(
+        "--security-contact-section",
+        default=None,
+        help="replacement whole SECURITY.md contact section for contact-based modes",
     )
     replace_parser.add_argument(
         "--security-reporting-mode",
@@ -912,16 +1446,51 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=None,
         help="replacement VS Code window title; defaults to the repository name",
     )
+    replace_parser.add_argument("--package-name", default=None, help="replacement package name")
+    replace_parser.add_argument(
+        "--package-description",
+        default=None,
+        help="replacement package description",
+    )
+    replace_parser.add_argument("--package-author", default=None, help="replacement package author")
+    replace_parser.add_argument(
+        "--package-version",
+        default=None,
+        help="replacement package version; updates package-lock root version fields",
+    )
+    replace_parser.add_argument(
+        "--package-keyword",
+        dest="package_keywords",
+        action="append",
+        default=None,
+        help="replacement package keyword; may be repeated",
+    )
     replace_parser.add_argument("--dry-run", action="store_true", help="report without writing")
 
     scan_parser = subparsers.add_parser("scan", help="scan for unresolved placeholders")
+    add_args_file_options(scan_parser)
     scan_parser.add_argument("--repo-root", default=None, help="repository root")
     scan_parser.add_argument(
         "--repository",
         default=None,
         help="optional OWNER/REPO value used to detect common corruption patterns",
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.command == "replace":
+        return apply_args_file_values(
+            args,
+            argv=argv,
+            allowed_fields=REPLACE_ARGS_FILE_FIELDS,
+            flags_by_field=REPLACE_CLI_FLAGS,
+        )
+    if args.command == "scan":
+        return apply_args_file_values(
+            args,
+            argv=argv,
+            allowed_fields=SCAN_ARGS_FILE_FIELDS,
+            flags_by_field=SCAN_CLI_FLAGS,
+        )
+    raise AssertionError(f"Unhandled command: {args.command}")
 
 
 def print_replacement_records(records: Iterable[ReplacementRecord]) -> None:
@@ -954,9 +1523,16 @@ def run_replace(args: argparse.Namespace) -> int:
         github_host=args.github_host,
         codeowners_owner=args.codeowners_owner,
         conduct_contact=args.conduct_contact,
+        conduct_contact_sentence=args.conduct_contact_sentence,
         security_contact=args.security_contact,
+        security_contact_section=args.security_contact_section,
         security_reporting_mode=args.security_reporting_mode,
         vscode_title=args.vscode_title,
+        package_name=args.package_name,
+        package_description=args.package_description,
+        package_author=args.package_author,
+        package_version=args.package_version,
+        package_keywords=args.package_keywords,
     )
     records = replace_placeholders(repo_root=repo_root, context=context, dry_run=args.dry_run)
     print_replacement_records(records)
@@ -979,8 +1555,8 @@ def run_scan(args: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the placeholder helper CLI."""
-    args = parse_args(argv)
     try:
+        args = parse_args(argv)
         if args.command == "replace":
             return run_replace(args)
         if args.command == "scan":
