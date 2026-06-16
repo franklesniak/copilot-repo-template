@@ -232,6 +232,50 @@ def test_powershell_quality_report_is_skipped_when_marker_excludes_powershell(
     assert all("powershell" not in command.command for command in plan.commands)
 
 
+def test_marker_module_detection_ignores_sibling_string_lists(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sibling marker lists like issue_labels are not read as retained modules."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _write_text(tmp_path, ".template-sync/scripts/first_adoption_quality_reports.py")
+    _write_text(tmp_path, ".template-sync/scripts/validate_marker.py")
+    # Block sequence items render at the key's own indentation under PyYAML's
+    # default safe_dump style, and issue_labels can reuse module-like names.
+    _write_text(
+        tmp_path,
+        ".template-sync/marker.yml",
+        (
+            "template_sync:\n"
+            "  source_repo: https://github.com/franklesniak/copilot-repo-template\n"
+            "  included_modules:\n"
+            "  - baseline\n"
+            "  - template-sync-support\n"
+            "  issue_label_policy: custom\n"
+            "  issue_labels:\n"
+            "  - powershell\n"
+            "  - markdown\n"
+        ),
+    )
+
+    assert first_adoption.marker_included_modules(tmp_path) == frozenset(
+        {"baseline", "template-sync-support"}
+    )
+    assert not first_adoption.marker_includes_markdown_module(tmp_path)
+
+    plan = first_adoption.build_check_plan(
+        tmp_path,
+        ("README.md",),
+        run_mode=first_adoption.FIX_MODE,
+    )
+
+    assert all("powershell" not in command.command for command in plan.commands)
+
+
 def test_tracked_only_files_are_collected(tmp_path: Path) -> None:
     """Tracked files staged in the index are included in the pre-commit file list."""
     _run_git(tmp_path, "init")
