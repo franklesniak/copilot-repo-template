@@ -110,7 +110,7 @@ ISSUE_693_EXCLUDED_DOC_REFERENCES = {
         "schemas/README.md",
         "schemas/example-config",
         "pytest tests/ -v --cov --cov-report=term-missing",
-        "mypy src/ tests/",
+        "mypy src tests",
         "terraform-fmt",
         "terraform-validate",
         "terraform-tflint",
@@ -153,14 +153,8 @@ NESTED_MARKDOWN_LINT_NODE_MODULES = (
 
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
-_MODULE_SPEC = importlib.util.spec_from_file_location(
-    "materialize_downstream_adoption", SCRIPT_PATH
-)
-if _MODULE_SPEC is None or _MODULE_SPEC.loader is None:
-    raise RuntimeError(f"Unable to load materializer module from {SCRIPT_PATH}")
-materializer = importlib.util.module_from_spec(_MODULE_SPEC)
-sys.modules[_MODULE_SPEC.name] = materializer
-_MODULE_SPEC.loader.exec_module(materializer)
+
+import materialize_downstream_adoption as materializer  # noqa: E402
 
 
 def write_file(path: Path, content: str) -> None:
@@ -1556,7 +1550,7 @@ def test_materialized_readme_template_sync_support_reference_block(
     """README template-sync surface rows materialize only when support is adopted."""
     target_root = tmp_path / "readme-template-sync"
     target_root.mkdir()
-    included_modules = NO_DATA_NO_TEMPLATE_SYNC_MODULES
+    included_modules: tuple[str, ...] = NO_DATA_NO_TEMPLATE_SYNC_MODULES
     if template_sync_support_included:
         included_modules = (*included_modules, "template-sync-support")
     module_args = [
@@ -1600,7 +1594,7 @@ def test_materialized_contributing_template_sync_support_reference_block(
     """CONTRIBUTING template-sync surface materializes only when support is adopted."""
     target_root = tmp_path / "contributing-template-sync"
     target_root.mkdir()
-    included_modules = NO_DATA_NO_TEMPLATE_SYNC_MODULES
+    included_modules: tuple[str, ...] = NO_DATA_NO_TEMPLATE_SYNC_MODULES
     if template_sync_support_included:
         included_modules = (*included_modules, "template-sync-support")
     module_args = [
@@ -1650,7 +1644,7 @@ def test_materialized_contributing_data_ci_reference_block(
     """The Data CI row materializes when any OR-group data module is adopted."""
     target_root = tmp_path / "contributing-data-ci"
     target_root.mkdir()
-    included_modules = NO_DATA_NO_TEMPLATE_SYNC_MODULES
+    included_modules: tuple[str, ...] = NO_DATA_NO_TEMPLATE_SYNC_MODULES
     if included_data_module is not None:
         included_modules = (*included_modules, included_data_module)
     module_args = [

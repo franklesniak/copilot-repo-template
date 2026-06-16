@@ -40,7 +40,7 @@ def write_json(path: Path, content: object) -> Path:
 
 def build_context(**overrides: object) -> object:
     """Build a replacement context with test defaults."""
-    values = {
+    values: dict[str, object] = {
         "repository": "octo/widget",
         "github_host": "github.com",
         "codeowners_owner": "@octo",

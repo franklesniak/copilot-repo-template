@@ -49,6 +49,7 @@ dev = [
     "mypy>=1.20.0",
     "ruff>=0.15.10",
     "jsonschema>=4.18.0",
+    "types-jsonschema>=4.26.0.20260518",
     "PyYAML>=6.0.3",
     # check-jsonschema validates schema examples (tests/test_schema_examples.py)
     # and the documented Dependabot fixture (tests/test_dependabot_schema.py).
@@ -72,6 +73,8 @@ target-version = ["py313", "py314"]
 # Check against the lowest supported Python line so type checks stay compatible
 # across the support window. mypy uses a dotted version string.
 python_version = "3.13"
+mypy_path = "$MYPY_CONFIG_FILE_DIR/src,$MYPY_CONFIG_FILE_DIR/.template-sync/scripts"
+explicit_package_bases = true
 warn_return_any = true
 warn_unused_configs = true
 # Start permissive for template; projects can tighten as they mature

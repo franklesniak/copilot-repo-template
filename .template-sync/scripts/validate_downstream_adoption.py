@@ -16,6 +16,8 @@ import validate_marker
 from template_sync_materialization_helpers import (
     INLINE_BLOCK_ANY_MODULES,
     INLINE_BLOCK_MARKER_RE,
+    ManifestMapping,
+    PathRelation,
     inline_block_module_requirement,
 )
 
@@ -197,12 +199,13 @@ def load_validated_manifest_context(
     repo_root: Path,
     manifest_path: Path,
     manifest_schema_path: Path,
-) -> tuple[set[str], tuple[validate_marker.ManifestMapping, ...]]:
+) -> tuple[set[str], tuple[ManifestMapping, ...]]:
     """Load a schema-valid manifest and return its modules and mappings."""
     manifest = validate_marker.load_yaml_mapping(manifest_path, repo_root)
     manifest_schema = validate_marker.load_json_mapping(manifest_schema_path, repo_root)
     validate_marker.validate_schema(manifest, manifest_schema, manifest_path, repo_root)
-    return validate_marker.parse_manifest_mappings(manifest)
+    module_names, mappings = validate_marker.parse_manifest_mappings(manifest)
+    return set(module_names), mappings
 
 
 def load_validated_marker_context(
@@ -340,9 +343,9 @@ def instruction_contract_report_items(
 
 def retained_relation(
     relative_path: str,
-    mappings: tuple[validate_marker.ManifestMapping, ...],
+    mappings: tuple[ManifestMapping, ...],
     included_modules: set[str],
-) -> validate_marker.PathRelation | None:
+) -> PathRelation | None:
     """Return the selected retained relation for a path, if any."""
     relation = validate_marker.selected_relation_for_path(relative_path, mappings)
     if relation is None or not relation.is_retained_by(included_modules):
@@ -523,7 +526,7 @@ def resolve_relative_markdown_target(source_path: str, target: str) -> str | Non
 def validate_retained_markdown_links(
     repo_root: Path,
     relative_paths: Iterable[str],
-    mappings: tuple[validate_marker.ManifestMapping, ...],
+    mappings: tuple[ManifestMapping, ...],
     included_modules: set[str],
     local_overrides: tuple[validate_marker.LocalOverride, ...],
 ) -> tuple[MarkdownLinkFailure, ...]:
@@ -713,11 +716,11 @@ def build_report(
         included_modules,
         local_overrides,
     )
-    for failure in markdown_link_failures:
+    for link_failure in markdown_link_failures:
         failures.append(
             "Retained Markdown relative link targets excluded module(s): "
-            f"{failure.path}:{failure.line_number}: {failure.target} -> "
-            f"{failure.target_path} ({failure.relation.description})"
+            f"{link_failure.path}:{link_failure.line_number}: {link_failure.target} -> "
+            f"{link_failure.target_path} ({link_failure.relation.description})"
         )
 
     return DownstreamAdoptionReport(

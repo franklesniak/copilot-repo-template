@@ -2,24 +2,23 @@
 
 from __future__ import annotations
 
-import importlib.util
 import io
 import json
 import subprocess
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "first_adoption_quality_reports.py"
-SCRIPT_SPEC = importlib.util.spec_from_file_location("first_adoption_quality_reports", SCRIPT_PATH)
-if SCRIPT_SPEC is None or SCRIPT_SPEC.loader is None:
-    raise RuntimeError(f"Unable to load first-adoption quality helper from {SCRIPT_PATH}")
-quality_reports = importlib.util.module_from_spec(SCRIPT_SPEC)
-sys.modules[SCRIPT_SPEC.name] = quality_reports
-SCRIPT_SPEC.loader.exec_module(quality_reports)
+SCRIPT_DIR = SCRIPT_PATH.parent
+
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import first_adoption_quality_reports as quality_reports  # noqa: E402
 
 
 def _run_git(repo_root: Path, *args: str) -> str:
@@ -316,9 +315,12 @@ def test_markdownlint_fixer_reports_changed_files(
     monkeypatch.setattr(quality_reports, "npm_executable", lambda: "npm")
 
     def fake_runner(
-        command: list[str] | tuple[str, ...],
+        command: Sequence[str],
         repo_root: Path,
+        *,
+        env: Mapping[str, str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
+        del env
         (repo_root / "README.md").write_text("# Title\n\nBody\n", encoding="utf-8")
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
@@ -350,7 +352,7 @@ def test_powershell_report_parses_injected_runner_output(
     captured_env: dict[str, str] = {}
 
     def fake_runner(
-        command: list[str] | tuple[str, ...],
+        command: Sequence[str],
         repo_root: Path,
         *,
         env: Mapping[str, str] | None = None,

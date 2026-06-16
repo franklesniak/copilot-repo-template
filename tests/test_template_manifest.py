@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import fnmatch
-import importlib.util
 import json
 import os
 import posixpath
@@ -58,6 +57,8 @@ from template_sync_materialization_helpers import (  # noqa: E402
     remove_inline_block_family,
     remove_inline_blocks_for_modules,
 )
+import report_excluded_module_references as EXCLUDED_MODULE_REPORTER  # noqa: E402
+import validate_marker as VALIDATE_MARKER  # noqa: E402
 
 TERRAFORM_INLINE_BLOCK_PATHS = (
     ".pre-commit-config.yaml",
@@ -435,38 +436,6 @@ CONCRETE_PATTERN_ALLOWLIST = {
 }
 SOURCE_REPO = "https://github.com/franklesniak/copilot-repo-template.git"
 FULL_SHA = "0123456789abcdef0123456789abcdef01234567"
-
-
-def _load_validate_marker_module() -> Any:
-    """Import the marker validator script as a module for shared helper tests."""
-    spec = importlib.util.spec_from_file_location(
-        "template_sync_validate_marker",
-        VALIDATE_MARKER_PATH,
-    )
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-VALIDATE_MARKER = _load_validate_marker_module()
-
-
-def _load_excluded_module_reporter_module() -> Any:
-    """Import the excluded-module reporter script as a module for helper tests."""
-    spec = importlib.util.spec_from_file_location(
-        "template_sync_report_excluded_module_references",
-        REPORT_EXCLUDED_MODULE_REFERENCES_PATH,
-    )
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-EXCLUDED_MODULE_REPORTER = _load_excluded_module_reporter_module()
 
 
 def _load_manifest() -> dict[str, Any]:
@@ -2097,7 +2066,7 @@ def test_template_sync_support_inline_blocks_are_declared() -> None:
 
 def test_sync_missing_template_sync_support_strips_support_tooling() -> None:
     """Template sync support blocks must be removed when support is absent."""
-    module_sets_missing_support = (
+    module_sets_missing_support: tuple[set[str], ...] = (
         {"schema"},
         set(),
     )
@@ -2119,7 +2088,7 @@ def test_sync_missing_template_sync_support_strips_support_tooling() -> None:
 
 def test_sync_missing_template_sync_support_leaves_valid_yaml() -> None:
     """Stripping template sync support blocks must not corrupt the host YAML document."""
-    module_sets_missing_support = (
+    module_sets_missing_support: tuple[set[str], ...] = (
         {"schema"},
         set(),
     )

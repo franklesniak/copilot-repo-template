@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import importlib.util
 import io
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable, Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -14,12 +14,12 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "run_first_adoption_checks.py"
-SCRIPT_SPEC = importlib.util.spec_from_file_location("run_first_adoption_checks", SCRIPT_PATH)
-if SCRIPT_SPEC is None or SCRIPT_SPEC.loader is None:
-    raise RuntimeError(f"Unable to load first-adoption helper module from {SCRIPT_PATH}")
-first_adoption = importlib.util.module_from_spec(SCRIPT_SPEC)
-sys.modules[SCRIPT_SPEC.name] = first_adoption
-SCRIPT_SPEC.loader.exec_module(first_adoption)
+SCRIPT_DIR = SCRIPT_PATH.parent
+
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import run_first_adoption_checks as first_adoption  # noqa: E402
 
 
 def _run_git(repo_root: Path, *args: str) -> str:
@@ -50,17 +50,17 @@ def _write_pytest_profile_root(tmp_path: Path) -> Path:
     return pytest_root
 
 
-def _recording_runner(records: list[tuple[str, ...]]):
+def _recording_runner(records: list[tuple[str, ...]]) -> Callable[[Sequence[str], Path], int]:
     """Return a fake command runner that records commands."""
 
-    def run(command: list[str] | tuple[str, ...], _repo_root: Path) -> int:
+    def run(command: Sequence[str], _repo_root: Path) -> int:
         records.append(tuple(command))
         return 0
 
     return run
 
 
-def _queued_status_reader(*snapshots: tuple[str, ...]):
+def _queued_status_reader(*snapshots: tuple[str, ...]) -> Callable[[Path], tuple[str, ...]]:
     """Return a Git status reader that consumes a fixed sequence of snapshots."""
     remaining_snapshots = list(snapshots)
 
@@ -76,7 +76,7 @@ def _utc_time(second: int) -> datetime:
     return datetime(2026, 6, 3, 12, 0, second, tzinfo=timezone.utc)
 
 
-def _queued_time_source(*timestamps: datetime):
+def _queued_time_source(*timestamps: datetime) -> Callable[[], datetime]:
     """Return a time source that consumes a fixed sequence of timestamps."""
     remaining_timestamps = list(timestamps)
 
@@ -87,9 +87,9 @@ def _queued_time_source(*timestamps: datetime):
     return now
 
 
-def _incrementing_time_source():
+def _incrementing_time_source() -> Callable[[], datetime]:
     """Return a deterministic time source that advances one second per read."""
-    current_timestamp = [_utc_time(0)]
+    current_timestamp: list[datetime] = [_utc_time(0)]
 
     def now() -> datetime:
         timestamp = current_timestamp[0]
@@ -478,7 +478,8 @@ def test_check_mode_reports_command_failure_before_changed_files(
     _write_text(tmp_path, "README.md")
     stdout = io.StringIO()
 
-    def failing_runner(command: list[str] | tuple[str, ...], _repo_root: Path) -> int:
+    def failing_runner(command: Sequence[str], _repo_root: Path) -> int:
+        del command
         return 1
 
     result = first_adoption.run_first_adoption_checks(
@@ -569,7 +570,7 @@ def test_multiple_failures_are_reported_by_default(
     return_codes = [7, 3]
     records: list[tuple[str, ...]] = []
 
-    def run(command: list[str] | tuple[str, ...], _repo_root: Path) -> int:
+    def run(command: Sequence[str], _repo_root: Path) -> int:
         records.append(tuple(command))
         return return_codes.pop(0)
 
