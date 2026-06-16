@@ -329,10 +329,11 @@ function Resolve-PSScriptAnalyzerGate {
     #
     # .OUTPUTS
     # [pscustomobject] Gate result with Mode, ShouldFail, Summary,
-    # SummaryLines, AnnotationCommands, and Findings properties.
+    # SummaryLines, AnnotationCommands, Findings, RuleCounts, FileCounts,
+    # TopRules, TopFiles, RecommendedMode, and IssueReadyMarkdown properties.
     #
     # .NOTES
-    # Version: 1.0.20260604.0
+    # Version: 1.1.20260616.0
     # Positional parameters are not supported.
     #
     [CmdletBinding(PositionalBinding = $false)]
@@ -376,6 +377,8 @@ function Resolve-PSScriptAnalyzerGate {
     $intUnknownSeverityCount = 0
     $intBlockingCount = 0
     $intDebtCount = 0
+    $hashtableRuleCount = @{}
+    $hashtableFileCount = @{}
 
     foreach ($objFinding in $arrAnalyzerFinding) {
         $objSeverityValue = Get-PSScriptAnalyzerFindingProperty -Finding $objFinding -Name 'Severity'
@@ -452,6 +455,22 @@ function Resolve-PSScriptAnalyzerGate {
             $strScriptPath = [string](Get-PSScriptAnalyzerFindingProperty -Finding $objFinding -Name 'FileName')
         }
         $strScriptPath = ConvertTo-RepositoryRelativePath -Path $strScriptPath -RepositoryRoot $RepositoryRoot
+        $strCountedScriptPath = $strScriptPath
+        if ([string]::IsNullOrWhiteSpace($strCountedScriptPath)) {
+            $strCountedScriptPath = '<unknown>'
+        }
+
+        if ($hashtableRuleCount.ContainsKey($strRuleName)) {
+            $hashtableRuleCount[$strRuleName] = [int]$hashtableRuleCount[$strRuleName] + 1
+        } else {
+            $hashtableRuleCount[$strRuleName] = 1
+        }
+
+        if ($hashtableFileCount.ContainsKey($strCountedScriptPath)) {
+            $hashtableFileCount[$strCountedScriptPath] = [int]$hashtableFileCount[$strCountedScriptPath] + 1
+        } else {
+            $hashtableFileCount[$strCountedScriptPath] = 1
+        }
 
         $intLine = ConvertTo-PSScriptAnalyzerPositiveInteger -Value (
             Get-PSScriptAnalyzerFindingProperty -Finding $objFinding -Name 'Line'
@@ -504,6 +523,45 @@ function Resolve-PSScriptAnalyzerGate {
 
     $intTotalCount = $listNormalizedFinding.Count
     $boolShouldFail = ($intBlockingCount -gt 0)
+    $strRecommendedMode = 'strict'
+    if (($intErrorCount -eq 0) -and ($intUnknownSeverityCount -eq 0) -and (($intWarningCount + $intInformationCount) -gt 0)) {
+        $strRecommendedMode = 'first-adoption'
+    }
+
+    $arrRuleCount = @(
+        foreach ($strRule in $hashtableRuleCount.Keys) {
+            [pscustomobject]@{
+                RuleName = [string]$strRule
+                Count = [int]$hashtableRuleCount[$strRule]
+            }
+        }
+    )
+    $arrRuleSortProperty = @(
+        @{ Expression = 'Count'; Descending = $true }
+        @{ Expression = 'RuleName'; Descending = $false }
+    )
+    $arrRuleCount = @(
+        $arrRuleCount | Sort-Object -Property $arrRuleSortProperty
+    )
+
+    $arrFileCount = @(
+        foreach ($strFile in $hashtableFileCount.Keys) {
+            [pscustomobject]@{
+                ScriptPath = [string]$strFile
+                Count = [int]$hashtableFileCount[$strFile]
+            }
+        }
+    )
+    $arrFileSortProperty = @(
+        @{ Expression = 'Count'; Descending = $true }
+        @{ Expression = 'ScriptPath'; Descending = $false }
+    )
+    $arrFileCount = @(
+        $arrFileCount | Sort-Object -Property $arrFileSortProperty
+    )
+
+    $arrTopRule = @($arrRuleCount | Select-Object -First 5)
+    $arrTopFile = @($arrFileCount | Select-Object -First 5)
 
     $objSummary = [pscustomobject]@{
         TotalCount = $intTotalCount
@@ -513,6 +571,7 @@ function Resolve-PSScriptAnalyzerGate {
         UnknownSeverityCount = $intUnknownSeverityCount
         BlockingCount = $intBlockingCount
         DebtCount = $intDebtCount
+        RecommendedMode = $strRecommendedMode
     }
 
     $listSummaryLine = [System.Collections.Generic.List[string]]::new()
@@ -520,10 +579,28 @@ function Resolve-PSScriptAnalyzerGate {
 
     if ($intTotalCount -eq 0) {
         $listSummaryLine.Add('No PSScriptAnalyzer findings were reported.')
+        $listSummaryLine.Add('Recommended gate mode: strict.')
         $listSummaryLine.Add('Result: pass.')
     } else {
         $strFindingSummary = 'Findings: {0} total; {1} Error; {2} Warning; {3} Information; {4} unknown severity.' -f $intTotalCount, $intErrorCount, $intWarningCount, $intInformationCount, $intUnknownSeverityCount
         $listSummaryLine.Add($strFindingSummary)
+        $listSummaryLine.Add(('Recommended gate mode from full scan: {0}.' -f $strRecommendedMode))
+
+        if ($arrTopRule.Count -gt 0) {
+            $strTopRuleSummary = (
+                $arrTopRule |
+                    ForEach-Object { '{0} ({1})' -f $_.RuleName, $_.Count }
+            ) -join '; '
+            $listSummaryLine.Add(('Top rule findings: {0}.' -f $strTopRuleSummary))
+        }
+
+        if ($arrTopFile.Count -gt 0) {
+            $strTopFileSummary = (
+                $arrTopFile |
+                    ForEach-Object { '{0} ({1})' -f $_.ScriptPath, $_.Count }
+            ) -join '; '
+            $listSummaryLine.Add(('Top files by findings: {0}.' -f $strTopFileSummary))
+        }
 
         if ($strResolvedMode -eq 'first-adoption') {
             if ($intDebtCount -gt 0) {
@@ -551,6 +628,34 @@ function Resolve-PSScriptAnalyzerGate {
         }
     }
 
+    $listIssueMarkdown = [System.Collections.Generic.List[string]]::new()
+    if ($strRecommendedMode -eq 'first-adoption') {
+        $listIssueMarkdown.Add('## PSScriptAnalyzer First-Adoption Debt Cleanup')
+        $listIssueMarkdown.Add('')
+        $listIssueMarkdown.Add('### Summary')
+        $listIssueMarkdown.Add(('- Findings: {0} total; {1} Warning; {2} Information.' -f $intTotalCount, $intWarningCount, $intInformationCount))
+        $listIssueMarkdown.Add('- Recommended temporary gate mode: `first-adoption`.')
+        $listIssueMarkdown.Add('- Target final gate mode after cleanup: `strict`.')
+        if ($arrTopRule.Count -gt 0) {
+            $listIssueMarkdown.Add('')
+            $listIssueMarkdown.Add('### Top Rules')
+            foreach ($objRuleCount in $arrTopRule) {
+                $listIssueMarkdown.Add(('- `{0}`: {1}' -f $objRuleCount.RuleName, $objRuleCount.Count))
+            }
+        }
+        if ($arrTopFile.Count -gt 0) {
+            $listIssueMarkdown.Add('')
+            $listIssueMarkdown.Add('### Top Files')
+            foreach ($objFileCount in $arrTopFile) {
+                $listIssueMarkdown.Add(('- `{0}`: {1}' -f $objFileCount.ScriptPath, $objFileCount.Count))
+            }
+        }
+        $listIssueMarkdown.Add('')
+        $listIssueMarkdown.Add('### Acceptance Criteria')
+        $listIssueMarkdown.Add('- PSScriptAnalyzer Warning and Information findings are remediated or intentionally suppressed with narrow justification.')
+        $listIssueMarkdown.Add('- `PSSCRIPTANALYZER_GATE_MODE` is returned to `strict` after cleanup.')
+    }
+
     return [pscustomobject]@{
         Mode = $strResolvedMode
         ShouldFail = $boolShouldFail
@@ -558,5 +663,11 @@ function Resolve-PSScriptAnalyzerGate {
         SummaryLines = [string[]]$listSummaryLine.ToArray()
         AnnotationCommands = [string[]]$listAnnotationCommand.ToArray()
         Findings = [object[]]$listNormalizedFinding.ToArray()
+        RuleCounts = [object[]]$arrRuleCount
+        FileCounts = [object[]]$arrFileCount
+        TopRules = [object[]]$arrTopRule
+        TopFiles = [object[]]$arrTopFile
+        RecommendedMode = $strRecommendedMode
+        IssueReadyMarkdown = [string[]]$listIssueMarkdown.ToArray()
     }
 }

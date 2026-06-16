@@ -35,11 +35,14 @@ PRE_COMMIT_EXECUTABLE_PREFIX = ("pre-commit", "run", "--files")
 PLACEHOLDER_SCRIPT = ".github/scripts/replace-template-placeholders.py"
 MARKER_PATH = ".template-sync/marker.yml"
 MARKER_VALIDATOR_SCRIPT = ".template-sync/scripts/validate_marker.py"
+QUALITY_REPORT_SCRIPT = ".template-sync/scripts/first_adoption_quality_reports.py"
 MARKDOWN_PACKAGE_SCRIPTS = ("lint:md", "lint:md:links", "lint:md:nested")
 MARKDOWN_MODULE_PATTERN = re.compile(r"(?m)^\s*-\s*['\"]?markdown['\"]?\s*(?:#.*)?$")
 PRE_COMMIT_GROUP = "pre-commit"
 PLACEHOLDER_SCAN_GROUP = "placeholder-scan"
 MARKER_VALIDATION_GROUP = "marker-validation"
+QUALITY_REPORT_GROUP = "quality-report"
+MARKDOWN_FIXER_GROUP = "markdown-fixer"
 MARKDOWN_SCRIPT_GROUP = "markdown-script"
 CHECK_MODE = "check"
 FIX_MODE = "fix"
@@ -351,7 +354,7 @@ def load_package_scripts(repo_root: Path) -> dict[str, object]:
     if not is_present_regular_file(package_path):
         raise FirstAdoptionCheckError("Expected a regular file: package.json")
     try:
-        package_data = json.loads(package_path.read_text(encoding="utf-8"))
+        package_data = json.loads(package_path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as error:
         raise FirstAdoptionCheckError(f"package.json is not valid JSON: {error}") from error
     except OSError as error:
@@ -370,7 +373,7 @@ def marker_includes_markdown_module(repo_root: Path) -> bool:
     if not is_present_regular_file(marker_path):
         raise FirstAdoptionCheckError(f"Expected a regular file: {MARKER_PATH}")
     try:
-        marker_text = marker_path.read_text(encoding="utf-8")
+        marker_text = marker_path.read_text(encoding="utf-8-sig")
     except OSError as error:
         error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
         raise FirstAdoptionCheckError(f"Unable to read {MARKER_PATH} ({error_summary}).") from error
@@ -402,15 +405,55 @@ def markdown_commands_and_notes(repo_root: Path) -> CheckPlan:
     return CheckPlan(commands=(), notes=())
 
 
+def quality_report_commands(
+    repo_root: Path, *, run_mode: str = CHECK_MODE
+) -> tuple[PlannedCommand, ...]:
+    """Build first-adoption quality report commands when the helper is available."""
+    if not optional_regular_file_exists(repo_root, QUALITY_REPORT_SCRIPT):
+        return ()
+
+    commands = [
+        PlannedCommand(
+            group_label=QUALITY_REPORT_GROUP,
+            command=(sys.executable, QUALITY_REPORT_SCRIPT, "line-endings"),
+        ),
+        PlannedCommand(
+            group_label=QUALITY_REPORT_GROUP,
+            command=(sys.executable, QUALITY_REPORT_SCRIPT, "path-references"),
+        ),
+        PlannedCommand(
+            group_label=QUALITY_REPORT_GROUP,
+            command=(sys.executable, QUALITY_REPORT_SCRIPT, "powershell"),
+        ),
+    ]
+
+    markdown_command = [sys.executable, QUALITY_REPORT_SCRIPT, "markdown"]
+    group_label = QUALITY_REPORT_GROUP
+    if run_mode == FIX_MODE:
+        markdown_command.append("--fix")
+        group_label = MARKDOWN_FIXER_GROUP
+
+    commands.append(
+        PlannedCommand(
+            group_label=group_label,
+            command=tuple(markdown_command),
+        )
+    )
+    return tuple(commands)
+
+
 def build_check_plan(
     repo_root: Path,
     files: Sequence[str],
     *,
     max_command_length: int = DEFAULT_MAX_COMMAND_LENGTH,
+    run_mode: str = CHECK_MODE,
 ) -> CheckPlan:
     """Build the first-adoption check command plan."""
     commands: list[PlannedCommand] = []
     notes: list[str] = []
+
+    commands.extend(quality_report_commands(repo_root, run_mode=run_mode))
 
     if files:
         commands.extend(
@@ -618,6 +661,7 @@ def run_first_adoption_checks(
         repo_root=repo_root,
         files=collection.files,
         max_command_length=max_command_length,
+        run_mode=run_mode,
     )
     for note in plan.notes:
         print(note, file=stdout, flush=True)

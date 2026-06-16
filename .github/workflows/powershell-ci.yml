@@ -131,6 +131,14 @@ jobs:
             Write-Output $summaryLine
           }
 
+          if ($gateResult.IssueReadyMarkdown.Count -gt 0) {
+            Write-Output ""
+            Write-Output "Issue-ready PSScriptAnalyzer cleanup text:"
+            foreach ($issueLine in $gateResult.IssueReadyMarkdown) {
+              Write-Output $issueLine
+            }
+          }
+
           if ($gateResult.ShouldFail) {
             Write-Output "::error::PSScriptAnalyzer gate failed. See annotations and summary above."
             exit 1

@@ -32,6 +32,10 @@
 #                         — JSON Schema validation for valid template-sync
 #                           instruction-contract fixtures under
 #                           `schemas/examples/template-sync-instruction-contracts/`.
+#   - validate-first-adoption-quality-suppressions-valid-examples
+#                         — JSON Schema validation for valid first-adoption
+#                           quality suppression fixtures under
+#                           `schemas/examples/first-adoption-quality-suppressions/`.
 #   - validate-template-sync-manifest-schema
 #                         — JSON Schema metaschema validation for the
 #                           template sync manifest schema.
@@ -41,6 +45,9 @@
 #   - validate-template-sync-instruction-contracts-schema
 #                         — JSON Schema metaschema validation for the
 #                           template sync instruction contracts schema.
+#   - validate-first-adoption-quality-suppressions-schema
+#                         — JSON Schema metaschema validation for the
+#                           first-adoption quality suppressions schema.
 #   - validate-template-sync-manifest
 #                         — JSON Schema validation for
 #                           `.template-sync/manifest.yml`.
@@ -50,6 +57,10 @@
 #   - validate-template-sync-instruction-contracts
 #                         — JSON Schema validation for
 #                           `.template-sync/instruction-contracts.yml`.
+#   - validate-first-adoption-quality-suppressions
+#                         — JSON Schema validation for
+#                           `.template-sync/first-adoption/quality-suppressions.json`
+#                           when present.
 #   - validate-instruction-contracts-upstream
 #                         — Required-anchor validation for the upstream
 #                           template's protected instruction files.
@@ -177,6 +188,9 @@ jobs:
       - name: Run validate-template-sync-instruction-contracts-valid-examples
         run: pre-commit run validate-template-sync-instruction-contracts-valid-examples --all-files
 
+      - name: Run validate-first-adoption-quality-suppressions-valid-examples
+        run: pre-commit run validate-first-adoption-quality-suppressions-valid-examples --all-files
+
       - name: Run validate-template-sync-manifest-schema
         run: pre-commit run validate-template-sync-manifest-schema --all-files
 
@@ -186,6 +200,9 @@ jobs:
       - name: Run validate-template-sync-instruction-contracts-schema
         run: pre-commit run validate-template-sync-instruction-contracts-schema --all-files
 
+      - name: Run validate-first-adoption-quality-suppressions-schema
+        run: pre-commit run validate-first-adoption-quality-suppressions-schema --all-files
+
       - name: Run validate-template-sync-manifest
         run: pre-commit run validate-template-sync-manifest --all-files
 
@@ -194,6 +211,9 @@ jobs:
 
       - name: Run validate-template-sync-instruction-contracts
         run: pre-commit run validate-template-sync-instruction-contracts --all-files
+
+      - name: Run validate-first-adoption-quality-suppressions
+        run: pre-commit run validate-first-adoption-quality-suppressions --all-files
 
       - name: Run validate-instruction-contracts-upstream
         run: pre-commit run validate-instruction-contracts-upstream --all-files

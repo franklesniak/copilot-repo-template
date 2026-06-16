@@ -123,11 +123,14 @@ repos:
   #      `schemas/template-sync-marker.schema.json`, and the valid
   #      instruction-contract examples under
   #      `schemas/examples/template-sync-instruction-contracts/valid/` against
-  #      `schemas/template-sync-instruction-contracts.schema.json`. See
+  #      `schemas/template-sync-instruction-contracts.schema.json`, and the
+  #      valid first-adoption quality suppression examples under
+  #      `schemas/examples/first-adoption-quality-suppressions/valid/` against
+  #      `schemas/first-adoption-quality-suppressions.schema.json`. See
   #      `schemas/README.md` for template sync schema documentation.
   #
-  #      Invalid template sync example data files under the matching
-  #      `schemas/examples/template-sync-*/invalid/` directories are
+  #      Invalid template sync and first-adoption quality example data files
+  #      under the matching `schemas/examples/*/invalid/` directories are
   #      intentionally NOT wired into a normal pre-commit hook because they are
   #      expected to fail validation. They are exercised by
   #      `tests/test_schema_examples.py`.
@@ -152,6 +155,13 @@ repos:
         args:
           - --schemafile
           - schemas/template-sync-instruction-contracts.schema.json
+      - id: check-jsonschema
+        alias: validate-first-adoption-quality-suppressions-valid-examples
+        name: Validate first-adoption quality suppression valid examples
+        files: ^schemas/examples/first-adoption-quality-suppressions/valid/.*\.json$
+        args:
+          - --schemafile
+          - schemas/first-adoption-quality-suppressions.schema.json
       - id: check-metaschema
         alias: validate-template-sync-manifest-schema
         name: Self-validate template-sync-manifest schema
@@ -164,6 +174,10 @@ repos:
         alias: validate-template-sync-instruction-contracts-schema
         name: Self-validate template-sync-instruction-contracts schema
         files: ^schemas/template-sync-instruction-contracts\.schema\.json$
+      - id: check-metaschema
+        alias: validate-first-adoption-quality-suppressions-schema
+        name: Self-validate first-adoption quality suppressions schema
+        files: ^schemas/first-adoption-quality-suppressions\.schema\.json$
 
   # Template sync live-file validation:
   #
@@ -183,6 +197,11 @@ repos:
   #      `schemas/template-sync-instruction-contracts.schema.json`, then runs
   #      the upstream-template required-anchor validator against the template's
   #      own protected instruction files.
+  #
+  #   F. First-adoption quality suppression validation
+  #      Validates `.template-sync/first-adoption/quality-suppressions.json`
+  #      when a downstream repository creates it. The upstream template does
+  #      not ship that downstream-owned suppression file.
   - repo: https://github.com/python-jsonschema/check-jsonschema
     rev: "0.37.3"
     hooks:
@@ -207,6 +226,13 @@ repos:
         args:
           - --schemafile
           - schemas/template-sync-instruction-contracts.schema.json
+      - id: check-jsonschema
+        alias: validate-first-adoption-quality-suppressions
+        name: Validate first-adoption quality suppressions
+        files: ^\.template-sync/first-adoption/quality-suppressions\.json$
+        args:
+          - --schemafile
+          - schemas/first-adoption-quality-suppressions.schema.json
   - repo: local
     hooks:
       - id: validate-instruction-contracts-upstream
