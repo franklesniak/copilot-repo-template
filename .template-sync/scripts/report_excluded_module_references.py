@@ -61,7 +61,13 @@ MARKDOWN_INLINE_LINK_RE = re.compile(
 MARKDOWN_REFERENCE_DEFINITION_RE = re.compile(r"^ {0,3}\[[^\]\n]+\]:\s+(?P<target><[^>\n]+>|\S+)")
 PRE_COMMIT_HOOK_FIELD_RE = re.compile(r"^\s+(?:-\s+)?(?P<field>id|alias):\s*(?P<value>[^#\n]+)")
 WORKFLOW_RUN_RE = re.compile(r"^\s*run:\s*(?P<command>.+?)\s*$")
-CONTACT_LINK_URL_RE = re.compile(r"^\s*url:\s*(?P<target>[^#\n]+?)\s*$")
+# Capture the contact-link ``url:`` value as a quoted scalar (kept intact, so a
+# ``#`` fragment inside quotes is preserved) or an unquoted scalar whose ``#`` is
+# only treated as a YAML comment when it follows whitespace. The caller strips
+# any surrounding quotes from the captured value.
+CONTACT_LINK_URL_RE = re.compile(
+    r"""^\s*url:\s*(?P<target>(?P<quote>['"])[^'"\n]*(?P=quote)|[^\s#\n]\S*)\s*(?:#.*)?$"""
+)
 UPSTREAM_BLOB_PREFIX = "/franklesniak/copilot-repo-template/blob/HEAD/"
 DEPENDABOT_ECOSYSTEM_MODULES = {
     "npm": ("markdown", ("package.json", "package-lock.json")),

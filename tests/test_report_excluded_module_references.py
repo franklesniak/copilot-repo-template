@@ -677,3 +677,34 @@ def test_yaml_embedded_fenced_links_are_skipped(tmp_path: Path) -> None:
     # The link inside the fenced block must be ignored even though the file is
     # YAML and the fence is indented inside a ``value: |`` block.
     assert not any(".github/ISSUE_TEMPLATE/fenced_example.yml:9" in line for line in findings)
+
+
+def test_active_contact_link_urls_preserves_fragment_and_quoted_urls() -> None:
+    """Contact-link URL extraction keeps ``#`` fragments and quoted scalars."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("report_excluded_module_references", SCRIPT_PATH)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    text = (
+        "contact_links:\n"
+        "  - name: Unquoted Fragment\n"
+        "    url: https://github.com/OWNER/REPO#support\n"
+        "  - name: Quoted Fragment\n"
+        '    url: "https://github.com/OWNER/REPO/blob/HEAD/file.md#L1-L5"\n'
+        "  - name: Trailing Comment\n"
+        "    url: https://example.com/docs # see the docs\n"
+    )
+
+    extracted = [url for _, url in module.active_contact_link_urls(text)]
+
+    # A ``#`` fragment (quoted or unquoted) must be retained, while a genuine
+    # trailing YAML comment (``#`` after whitespace) is still stripped.
+    assert extracted == [
+        "https://github.com/OWNER/REPO#support",
+        "https://github.com/OWNER/REPO/blob/HEAD/file.md#L1-L5",
+        "https://example.com/docs",
+    ]
