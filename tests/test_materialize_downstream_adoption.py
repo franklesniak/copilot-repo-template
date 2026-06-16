@@ -110,7 +110,7 @@ ISSUE_693_EXCLUDED_DOC_REFERENCES = {
         "schemas/README.md",
         "schemas/example-config",
         "pytest tests/ -v --cov --cov-report=term-missing",
-        "mypy src/ tests/",
+        "mypy src tests",
         "terraform-fmt",
         "terraform-validate",
         "terraform-tflint",

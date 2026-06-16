@@ -91,7 +91,7 @@ GENERAL_VALIDATION_REFERENCES = {
 PROTECTED_DOCUMENT_TOOLING_REFERENCES = {
     "python": (
         "pytest tests/ -v --cov --cov-report=term-missing",
-        "mypy src/ tests",
+        "mypy src tests",
         "Black (Python)",
         "Ruff (Python)",
     ),
