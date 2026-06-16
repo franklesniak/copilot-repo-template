@@ -333,7 +333,7 @@ function Resolve-PSScriptAnalyzerGate {
     # TopRules, TopFiles, RecommendedMode, and IssueReadyMarkdown properties.
     #
     # .NOTES
-    # Version: 1.1.20260615.0
+    # Version: 1.1.20260616.0
     # Positional parameters are not supported.
     #
     [CmdletBinding(PositionalBinding = $false)]
@@ -377,8 +377,8 @@ function Resolve-PSScriptAnalyzerGate {
     $intUnknownSeverityCount = 0
     $intBlockingCount = 0
     $intDebtCount = 0
-    $hashRuleCount = @{}
-    $hashFileCount = @{}
+    $hashtableRuleCount = @{}
+    $hashtableFileCount = @{}
 
     foreach ($objFinding in $arrAnalyzerFinding) {
         $objSeverityValue = Get-PSScriptAnalyzerFindingProperty -Finding $objFinding -Name 'Severity'
@@ -460,16 +460,16 @@ function Resolve-PSScriptAnalyzerGate {
             $strCountedScriptPath = '<unknown>'
         }
 
-        if ($hashRuleCount.ContainsKey($strRuleName)) {
-            $hashRuleCount[$strRuleName] = [int]$hashRuleCount[$strRuleName] + 1
+        if ($hashtableRuleCount.ContainsKey($strRuleName)) {
+            $hashtableRuleCount[$strRuleName] = [int]$hashtableRuleCount[$strRuleName] + 1
         } else {
-            $hashRuleCount[$strRuleName] = 1
+            $hashtableRuleCount[$strRuleName] = 1
         }
 
-        if ($hashFileCount.ContainsKey($strCountedScriptPath)) {
-            $hashFileCount[$strCountedScriptPath] = [int]$hashFileCount[$strCountedScriptPath] + 1
+        if ($hashtableFileCount.ContainsKey($strCountedScriptPath)) {
+            $hashtableFileCount[$strCountedScriptPath] = [int]$hashtableFileCount[$strCountedScriptPath] + 1
         } else {
-            $hashFileCount[$strCountedScriptPath] = 1
+            $hashtableFileCount[$strCountedScriptPath] = 1
         }
 
         $intLine = ConvertTo-PSScriptAnalyzerPositiveInteger -Value (
@@ -529,10 +529,10 @@ function Resolve-PSScriptAnalyzerGate {
     }
 
     $arrRuleCount = @(
-        foreach ($strRule in $hashRuleCount.Keys) {
+        foreach ($strRule in $hashtableRuleCount.Keys) {
             [pscustomobject]@{
                 RuleName = [string]$strRule
-                Count = [int]$hashRuleCount[$strRule]
+                Count = [int]$hashtableRuleCount[$strRule]
             }
         }
     )
@@ -545,10 +545,10 @@ function Resolve-PSScriptAnalyzerGate {
     )
 
     $arrFileCount = @(
-        foreach ($strFile in $hashFileCount.Keys) {
+        foreach ($strFile in $hashtableFileCount.Keys) {
             [pscustomobject]@{
                 ScriptPath = [string]$strFile
-                Count = [int]$hashFileCount[$strFile]
+                Count = [int]$hashtableFileCount[$strFile]
             }
         }
     )
