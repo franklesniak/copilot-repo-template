@@ -840,6 +840,26 @@ def find_line_start(text: str, needle: str) -> int:
     return text.rfind("\n", 0, index) + 1
 
 
+def find_comment_block_end(text: str, index: int) -> int:
+    """Return the offset just past the contiguous comment block at ``index``.
+
+    Starting from the line containing ``index``, consume consecutive comment
+    lines (whose first non-space character is ``#``) and stop at the first
+    blank or non-comment line, or end of file. This locates the end of an
+    issue-template contact-link section so any content after it is preserved.
+    """
+    end = text.rfind("\n", 0, index) + 1
+    length = len(text)
+    while end < length:
+        newline = text.find("\n", end)
+        line_end = length if newline == -1 else newline + 1
+        line = text[end:line_end]
+        if not line.strip() or not line.lstrip().startswith("#"):
+            break
+        end = line_end
+    return end
+
+
 def replace_bug_report_security_notice(
     text: str,
     context: ReplacementContext,
@@ -1045,7 +1065,14 @@ def replace_config_discussions_block(
     )
     if start == -1:
         return text, 0
-    return f"{text[:start]}{build_config_discussions_block(context)}", 1
+    # The Discussions policy block supersedes both the Discussions section and
+    # the optional Support/FAQ section that follows it. Extend the removed span
+    # to the end of the Support/FAQ section when present so it is dropped, while
+    # splicing the rest of the file back in instead of truncating at ``start``.
+    support_index = text.find("  # SUPPORT / FAQ LINK", heading_index)
+    block_anchor = support_index if support_index != -1 else heading_index
+    end = find_comment_block_end(text, block_anchor)
+    return f"{text[:start]}{build_config_discussions_block(context)}{text[end:]}", 1
 
 
 def render_collaboration_policy(
@@ -1745,9 +1772,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--issue-label-policy",
         choices=ISSUE_LABEL_POLICIES,
         default=None,
-        help=(
-            "Issue-template label policy: existing, create-manual-follow-up, " "omit, or custom."
-        ),
+        help="Issue-template label policy: existing, create-manual-follow-up, omit, or custom.",
     )
     replace_parser.add_argument(
         "--issue-label",

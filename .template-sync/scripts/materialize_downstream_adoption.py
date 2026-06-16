@@ -656,9 +656,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--issue-label-policy",
         choices=ISSUE_LABEL_POLICIES,
         default=None,
-        help=(
-            "Issue-template label policy: existing, create-manual-follow-up, " "omit, or custom."
-        ),
+        help="Issue-template label policy: existing, create-manual-follow-up, omit, or custom.",
     )
     parser.add_argument(
         "--issue-label",

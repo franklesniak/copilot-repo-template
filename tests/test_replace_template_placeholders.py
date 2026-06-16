@@ -1020,6 +1020,45 @@ def test_collaboration_policy_can_omit_labels_and_disable_discussions(
     assert_issue_form_shape(bug_report)
 
 
+def test_replace_config_discussions_block_preserves_trailing_content() -> None:
+    """Rendering the Discussions policy keeps contact-link content after Support/FAQ."""
+    text = (
+        "contact_links:\n"
+        "  # =============================================================================\n"
+        "  # DISCUSSIONS LINK (OPTIONAL)\n"
+        "  # =============================================================================\n"
+        "  # CUSTOMIZE: Uncomment to enable Discussions.\n"
+        "  # - name: Questions & Discussions\n"
+        "  #   url: https://github.com/OWNER/REPO/discussions\n"
+        "\n"
+        "  # =============================================================================\n"
+        "  # SUPPORT / FAQ LINK (OPTIONAL)\n"
+        "  # =============================================================================\n"
+        "  # - name: Support / FAQ\n"
+        "  #   url: https://github.com/OWNER/REPO#support\n"
+        "\n"
+        "  # =============================================================================\n"
+        "  # ENTERPRISE SUPPORT LINK\n"
+        "  # =============================================================================\n"
+        "  - name: Enterprise Support\n"
+        "    url: https://github.com/OWNER/REPO/enterprise\n"
+    )
+    context = placeholder_helper.build_replacement_context(discussions_policy="disabled")
+
+    rendered, count = placeholder_helper.replace_config_discussions_block(text, context)
+
+    assert count == 1
+    assert "SUPPORT / FAQ LINK" not in rendered
+    assert "/discussions" not in rendered
+    assert "Discussions policy: disabled" in rendered
+    # Content after the superseded Support/FAQ section must be preserved verbatim.
+    assert "# ENTERPRISE SUPPORT LINK" in rendered
+    assert "name: Enterprise Support" in rendered
+    assert rendered.endswith(
+        "  - name: Enterprise Support\n    url: https://github.com/OWNER/REPO/enterprise\n"
+    )
+
+
 def test_collaboration_policy_validates_custom_labels_and_deferred_status() -> None:
     """Invalid collaboration policy combinations fail before rendering."""
     with pytest.raises(placeholder_helper.PlaceholderError) as custom_exc:
