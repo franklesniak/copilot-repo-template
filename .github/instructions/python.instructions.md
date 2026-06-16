@@ -7,7 +7,7 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.9.20260616.0
+**Version:** 1.9.20260616.1
 
 ## Metadata
 
@@ -537,7 +537,7 @@ Non-compliant counter-example:
 word_lines = re.findall(r"^(\w+)$", text)
 ```
 
-Compliant scoped extraction example:
+Compliant scoped extraction example, where `extract_key_block(...)` is an illustrative helper that returns the lines of the named nested block and `module_item_pattern` is the compiled per-item pattern:
 
 ```python
 module_lines = extract_key_block(marker_text, ("template_sync", "included_modules"))
