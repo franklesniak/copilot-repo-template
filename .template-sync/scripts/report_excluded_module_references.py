@@ -8,6 +8,7 @@ import posixpath
 import re
 import sys
 from collections import Counter, defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, NoReturn
@@ -119,7 +120,7 @@ PROTECTED_DOCUMENT_TOOLING_REFERENCES = {
         "schema example fixtures",
     ),
 }
-COLLABORATION_TEMPLATE_TOOLING_REFERENCES = {
+COLLABORATION_TEMPLATE_TOOLING_REFERENCES: Mapping[str, Mapping[str, tuple[str, ...]]] = {
     "python": {
         ".github/pull_request_template.md": (
             "Python-Specific",

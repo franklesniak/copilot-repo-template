@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-15
+- **Last Updated:** 2026-06-16
 - **Scope:** Durable design-decision record for this repository template, including rationale for GitHub configuration, instruction files, validation policy, template structure, maintenance conventions, and the documentation-tier inventory below.
 - **Related:** [Repository Copilot Instructions](copilot-instructions.md), [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -953,7 +953,15 @@ The repository ships `.github/workflows/precommit-ci.yml` as the canonical aggre
 
 ### Design Decision: Non-Blocking Type Checking by Default
 
-The template uses `continue-on-error: true` for the mypy type checking job. This is a deliberate choice for template portability.
+The template keeps mypy advisory by default for repositories created from this template. In the upstream `franklesniak/copilot-repo-template` repository, the mypy step is blocking so the shipped template cannot accumulate type-check failures.
+
+**Implementation:**
+
+```yaml
+continue-on-error: ${{ github.repository != 'franklesniak/copilot-repo-template' }}
+```
+
+The expression evaluates to `false` in the upstream template repository, so mypy failures block upstream pushes and pull requests. It evaluates to `true` in adopter repositories because their `github.repository` value is different, preserving the template's non-blocking default without any adopter edit.
 
 **Why this is the right default for a template:**
 
@@ -969,7 +977,7 @@ Blocking type checking (strict):
 - Pros: Enforces type safety, prevents type debt accumulation
 - Cons: High friction for new adopters, requires upfront investment
 
-Non-blocking type checking (current):
+Non-blocking type checking (adopter default):
 
 - Pros: Zero friction adoption, gradual improvement path, visibility without blocking
 - Cons: Type errors can accumulate if not addressed, requires discipline
@@ -981,6 +989,8 @@ Non-blocking type checking (current):
 2. Strict by default with documentation to make it lenient: Rejected because this inverts the adoption experience—failing CI on first push is a poor template UX
 
 3. Conditional based on repository variable: Rejected as over-engineering for a simple toggle that adopters can easily change
+
+4. Repository-slug gate for upstream enforcement only: Accepted because the literal upstream slug is stable, pull requests into this repository evaluate in the upstream repository context, and adopters automatically receive the advisory behavior when their repository slug differs.
 
 **When downstream repos should make this strict:**
 

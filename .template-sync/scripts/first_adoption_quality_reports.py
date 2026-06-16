@@ -557,7 +557,7 @@ def normalize_reference_literal(
     source_parent = PurePosixPath(source_path).parent
     try:
         if path_part.startswith("./") or path_part.startswith("../"):
-            parts = []
+            parts: list[str] = []
             for part in (source_parent / path_part).parts:
                 if part in ("", "."):
                     continue
@@ -759,7 +759,7 @@ def build_path_reference_report(
     scanned_paths = tuple(path for path in collection.files if is_path_reference_surface(path))
     findings: list[PathReferenceFinding] = []
     suppressed_count = 0
-    seen_findings: set[tuple[str, int, str, str]] = set()
+    seen_findings: set[tuple[str, str, int, str]] = set()
     for source_path in scanned_paths:
         full_path = resolve_repo_path(repo_root, source_path)
         try:
@@ -1216,39 +1216,39 @@ def run_report(args: argparse.Namespace, *, stdout: TextIO = sys.stdout) -> int:
     repo_root = resolve_repo_root(args.repo_root)
 
     if args.command == "line-endings":
-        report = build_line_ending_report(
+        line_ending_report = build_line_ending_report(
             repo_root,
             tracked_only=args.tracked_only,
             include_ignored=args.include_ignored,
         )
-        print_line_ending_report(report, stdout=stdout)
+        print_line_ending_report(line_ending_report, stdout=stdout)
         return 0
 
     if args.command == "path-references":
-        report = build_path_reference_report(
+        path_reference_report = build_path_reference_report(
             repo_root,
             tracked_only=args.tracked_only,
             include_ignored=args.include_ignored,
             suppression_path=args.suppressions,
             include_missing_targets=args.include_missing_targets,
         )
-        print_path_reference_report(report, stdout=stdout)
-        if args.fail_on_findings and report.findings:
+        print_path_reference_report(path_reference_report, stdout=stdout)
+        if args.fail_on_findings and path_reference_report.findings:
             return 1
         return 0
 
     if args.command == "markdown":
-        report = build_markdownlint_report(repo_root, fix=args.fix)
-        print_markdownlint_report(report, fix=args.fix, stdout=stdout)
-        return report.return_code if args.fix and report.return_code != 0 else 0
+        markdown_report = build_markdownlint_report(repo_root, fix=args.fix)
+        print_markdownlint_report(markdown_report, fix=args.fix, stdout=stdout)
+        return markdown_report.return_code if args.fix and markdown_report.return_code != 0 else 0
 
     if args.command == "powershell":
-        report = build_powershell_report(
+        powershell_report = build_powershell_report(
             repo_root,
             tracked_only=args.tracked_only,
             include_ignored=args.include_ignored,
         )
-        print_powershell_report(report, stdout=stdout)
+        print_powershell_report(powershell_report, stdout=stdout)
         return 0
 
     raise FirstAdoptionQualityError(f"Unsupported report command: {args.command}")

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 import subprocess
 import sys
 from pathlib import Path
@@ -15,12 +14,8 @@ SCRIPT_DIR = SCRIPT_PATH.parent
 
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
-SCRIPT_SPEC = importlib.util.spec_from_file_location("first_adoption_state", SCRIPT_PATH)
-if SCRIPT_SPEC is None or SCRIPT_SPEC.loader is None:
-    raise RuntimeError(f"Unable to load first-adoption state helper from {SCRIPT_PATH}")
-first_adoption_state = importlib.util.module_from_spec(SCRIPT_SPEC)
-sys.modules[SCRIPT_SPEC.name] = first_adoption_state
-SCRIPT_SPEC.loader.exec_module(first_adoption_state)
+
+import first_adoption_state  # noqa: E402
 
 
 def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:

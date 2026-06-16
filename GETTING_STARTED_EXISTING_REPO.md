@@ -2197,7 +2197,7 @@ If you remove the workflow, also drop or de-emphasize documentation that implies
 
 **Prerequisites:**
 
-- Python code in `src/` directory (or update `MYPY_PATHS`)
+- Python code in `src/` directory (or update the mypy `targets` array)
 - Tests in `tests/` directory
 - `pyproject.toml` with `[project.optional-dependencies] dev` section containing test dependencies
 
@@ -2207,11 +2207,12 @@ If you remove the workflow, also drop or de-emphasize documentation that implies
 
 2. **Update paths if needed:**
 
-   If your Python code is in a different location, update the `MYPY_PATHS` environment variable:
+   If your Python code is in a different location, update the mypy `targets` array:
 
    ```yaml
-   env:
-     MYPY_PATHS: "your_package/ tests/"  # Change from "src/ tests/"
+   run: |
+     targets=(your_package tests)
+     python -m mypy "${targets[@]}"
    ```
 
 3. **Update pytest path if needed:**
@@ -2586,7 +2587,7 @@ git push origin feature/adopt-template-features
 | Workflow fails with "file not found" | Different project structure | Update paths in workflow file |
 | Pre-commit downloads every time | Environment cache issue | Run `pre-commit clean && pre-commit install` |
 | Markdown lint finds many errors | Stricter rules than before | Adjust `.markdownlint.jsonc` or fix files |
-| Python CI fails on imports | Different package structure | Update `MYPY_PATHS` in workflow |
+| Python CI fails on imports | Different package structure | Update the mypy `targets` array in workflow |
 | PSScriptAnalyzer fails | Code does not match the adopted analyzer rules | Run with `-Fix`, apply the analyzer debt triage workflow, or add narrow justified suppressions |
 | npm install fails | Node.js version mismatch | Update Node.js to v20+ (see `engines` in package.json) |
 | Placeholder check fails | OWNER/REPO not replaced | Search and replace all placeholders |

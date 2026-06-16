@@ -216,7 +216,7 @@ def load_manifest_modules(
     """Load the template manifest and return its declared module names."""
     manifest = load_schema_validated_yaml(manifest_path, manifest_schema_path, repo_root)
     module_names, _mappings = validate_marker.parse_manifest_mappings(manifest)
-    return module_names
+    return set(module_names)
 
 
 def _required_string_list(

@@ -3611,6 +3611,7 @@ def fail(message: str) -> NoReturn:
 def main(argv: list[str] | None = None) -> int:
     """Generate the sync candidate table."""
     args = parse_args(sys.argv[1:] if argv is None else argv)
+    ledger_document: str | None = None
     try:
         if args.ledger_only and args.write_candidates is not None:
             raise CandidateGenerationError("--write-candidates cannot be used with --ledger-only.")

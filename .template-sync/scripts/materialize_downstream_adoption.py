@@ -13,7 +13,7 @@ import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Collection, Iterable, Sequence
+from typing import Any, Callable, Collection, Iterable, Sequence, cast
 
 import yaml  # type: ignore[import-untyped]
 
@@ -1410,7 +1410,7 @@ def resolve_license_source_argument(args: argparse.Namespace, target_root: Path)
     if not args.preserve_existing_license:
         return None
     if args.license_source_path is not None:
-        return args.license_source_path
+        return cast(str, args.license_source_path)
 
     candidates = detected_license_source_candidates(target_root)
     if not candidates:
@@ -1530,7 +1530,7 @@ def computed_marker_document(
 
 def marker_yaml(marker_document: dict[str, Any]) -> str:
     """Return deterministic marker YAML."""
-    return yaml.safe_dump(marker_document, sort_keys=False, allow_unicode=False)
+    return cast(str, yaml.safe_dump(marker_document, sort_keys=False, allow_unicode=False))
 
 
 def validate_computed_marker(
@@ -2049,11 +2049,11 @@ def reconcile_staged_files(
         )
         if local_override is not None:
             summary.locally_overridden.add(relative_path)
-            decision = local_override.default_decision
-            if decision == TEMPLATE_SKIP_DECISION:
+            local_override_decision = local_override.default_decision
+            if local_override_decision == TEMPLATE_SKIP_DECISION:
                 summary.skipped.add(relative_path)
                 continue
-            if decision == TEMPLATE_TAKE_DECISION:
+            if local_override_decision == TEMPLATE_TAKE_DECISION:
                 if is_identical:
                     summary.unchanged.add(relative_path)
                 elif target_exists:
@@ -2063,7 +2063,7 @@ def reconcile_staged_files(
                     write_staged_bytes(target_path, staged_bytes)
                     summary.created.add(relative_path)
                 continue
-            if decision == REMOVAL_DECISION:
+            if local_override_decision == REMOVAL_DECISION:
                 summary.recorded_removals.add(relative_path)
             else:
                 summary.deferred.add(relative_path)
@@ -2071,7 +2071,7 @@ def reconcile_staged_files(
                 conflict_for_non_protected_path(
                     relative_path,
                     recorded=True,
-                    decision=decision,
+                    decision=local_override_decision,
                 )
             )
             continue

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import shutil
 import subprocess
@@ -33,12 +32,8 @@ MODULE_DEFINITIONS = {
 
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
-SCRIPT_SPEC = importlib.util.spec_from_file_location("generate_sync_candidates", SCRIPT_PATH)
-if SCRIPT_SPEC is None or SCRIPT_SPEC.loader is None:
-    raise RuntimeError(f"Unable to load sync candidate helper module from {SCRIPT_PATH}")
-sync_candidates = importlib.util.module_from_spec(SCRIPT_SPEC)
-sys.modules[SCRIPT_SPEC.name] = sync_candidates
-SCRIPT_SPEC.loader.exec_module(sync_candidates)
+
+import generate_sync_candidates as sync_candidates  # noqa: E402
 
 
 def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:

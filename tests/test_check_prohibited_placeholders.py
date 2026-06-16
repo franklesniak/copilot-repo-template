@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from collections.abc import Iterable
 from pathlib import Path
+from typing import Protocol, cast
 
 import pytest
 
@@ -14,9 +16,32 @@ HOOK_PATH = (
 HOOK_SPEC = importlib.util.spec_from_file_location("check_prohibited_placeholders", HOOK_PATH)
 if HOOK_SPEC is None or HOOK_SPEC.loader is None:
     raise RuntimeError(f"Unable to load placeholder hook module from {HOOK_PATH}")
-placeholder_hook = importlib.util.module_from_spec(HOOK_SPEC)
-sys.modules[HOOK_SPEC.name] = placeholder_hook
-HOOK_SPEC.loader.exec_module(placeholder_hook)
+_placeholder_hook = importlib.util.module_from_spec(HOOK_SPEC)
+sys.modules[HOOK_SPEC.name] = _placeholder_hook
+HOOK_SPEC.loader.exec_module(_placeholder_hook)
+
+
+class ViolationLike(Protocol):
+    """Attributes exposed by a placeholder-hook violation."""
+
+    display_path: str
+    line_number: int
+    matched_text: str
+
+
+class PlaceholderHookModule(Protocol):
+    """Typed public surface used from the file-path-loaded placeholder hook."""
+
+    def scan_files(
+        self,
+        path_arguments: Iterable[str | Path],
+        root: Path,
+    ) -> list[ViolationLike]: ...
+
+    def main(self, argv: Iterable[str] | None = None, root: Path = ...) -> int: ...
+
+
+placeholder_hook: PlaceholderHookModule = cast(PlaceholderHookModule, _placeholder_hook)
 
 
 def write_file(path: Path, content: str) -> Path:
@@ -26,7 +51,7 @@ def write_file(path: Path, content: str) -> Path:
     return path
 
 
-def scan_single_file(path: Path, root: Path) -> list[object]:
+def scan_single_file(path: Path, root: Path) -> list[ViolationLike]:
     """Scan one file through the public hook path."""
     return placeholder_hook.scan_files([path], root=root)
 

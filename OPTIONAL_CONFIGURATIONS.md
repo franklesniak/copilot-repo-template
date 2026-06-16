@@ -2812,15 +2812,21 @@ Uncomment the Codecov step to enable code coverage reporting:
 
 ### Making Type Checking Strict
 
-The mypy step includes `continue-on-error: true` by default:
+The mypy step stays advisory in adopter repositories by default:
 
 ```yaml
 - name: Run mypy
-  run: mypy $MYPY_PATHS
-  continue-on-error: true
+  shell: bash
+  run: |
+    targets=(src tests)
+    if [ -d .template-sync/scripts ]; then
+      targets+=(.template-sync/scripts)
+    fi
+    python -m mypy "${targets[@]}"
+  continue-on-error: ${{ github.repository != 'franklesniak/copilot-repo-template' }}
 ```
 
-**Once your project has full type coverage**, remove `continue-on-error: true` to make type checking a required check.
+**Once your project has full type coverage**, remove the `continue-on-error` line or set it to `false` to make type checking a required check.
 
 ### Customizing Python Version Matrix
 
@@ -2844,18 +2850,22 @@ strategy:
 
 ### Customizing Test Paths
 
-The `MYPY_PATHS` environment variable controls which directories mypy checks:
+The Bash `targets` array in `.github/workflows/python-ci.yml` controls which directories mypy checks:
 
 ```yaml
-env:
-  MYPY_PATHS: "src/ tests/"
+run: |
+  targets=(src tests)
+  if [ -d .template-sync/scripts ]; then
+    targets+=(.template-sync/scripts)
+  fi
+  python -m mypy "${targets[@]}"
 ```
 
 **Common configurations:**
 
-- Flat layout: `MYPY_PATHS: "."`
-- src layout: `MYPY_PATHS: "src/ tests/"`
-- Custom: `MYPY_PATHS: "mymodule/ tests/ scripts/"`
+- Flat layout: `targets=(.)`
+- src layout: `targets=(src tests)`
+- Custom: `targets=(mymodule tests scripts/check.py)`
 
 ### Customizing Dependency Installation
 
@@ -3270,8 +3280,9 @@ your-project/
 For mypy in CI, use:
 
 ```yaml
-env:
-  MYPY_PATHS: "."
+run: |
+  targets=(.)
+  python -m mypy "${targets[@]}"
 ```
 
 #### Option 2: src/ Layout (Recommended)
@@ -3292,8 +3303,9 @@ your-project/
 For mypy in CI, use:
 
 ```yaml
-env:
-  MYPY_PATHS: "src/ tests/"
+run: |
+  targets=(src tests)
+  python -m mypy "${targets[@]}"
 ```
 
 The `src/` layout is recommended because it:
@@ -3355,27 +3367,33 @@ python_version = "3.13"  # Lowest supported version, dotted string only
 
 ### mypy Path Configuration
 
-The CI workflow (`.github/workflows/python-ci.yml`) uses the `MYPY_PATHS` environment variable to specify which directories/files mypy should check.
+The CI workflow (`.github/workflows/python-ci.yml`) uses a Bash `targets` array to specify which directories/files mypy should check.
 
 **Default (for src/ layout):**
 
 ```yaml
-env:
-  MYPY_PATHS: "src/ tests/"
+run: |
+  targets=(src tests)
+  if [ -d .template-sync/scripts ]; then
+    targets+=(.template-sync/scripts)
+  fi
+  python -m mypy "${targets[@]}"
 ```
 
 **For flat layout:**
 
 ```yaml
-env:
-  MYPY_PATHS: "."
+run: |
+  targets=(.)
+  python -m mypy "${targets[@]}"
 ```
 
 **For custom directories:**
 
 ```yaml
-env:
-  MYPY_PATHS: "foo/ bar/ baz.py"
+run: |
+  targets=(foo bar baz.py)
+  python -m mypy "${targets[@]}"
 ```
 
 The command-line paths override any `files` or `exclude` settings in `pyproject.toml` or `mypy.ini` in terms of directory scope. However, per-file configuration options in those files still apply to the files that mypy discovers.

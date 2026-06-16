@@ -356,7 +356,7 @@ Before submitting a pull request, ensure the retained test suites pass locally.
 ```bash
 pip install -e ".[dev]"
 pytest tests/ -v --cov --cov-report=term-missing
-mypy src/ tests/
+python -m mypy src tests
 ```
 <!-- template-sync: end python-reference-only -->
 
