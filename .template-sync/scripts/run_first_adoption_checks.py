@@ -37,7 +37,12 @@ MARKER_PATH = ".template-sync/marker.yml"
 MARKER_VALIDATOR_SCRIPT = ".template-sync/scripts/validate_marker.py"
 QUALITY_REPORT_SCRIPT = ".template-sync/scripts/first_adoption_quality_reports.py"
 MARKDOWN_PACKAGE_SCRIPTS = ("lint:md", "lint:md:links", "lint:md:nested")
-MARKDOWN_MODULE_PATTERN = re.compile(r"(?m)^\s*-\s*['\"]?markdown['\"]?\s*(?:#.*)?$")
+MARKER_KEY_PATTERN = re.compile(
+    r"^(?P<indent> *)(?P<key>[A-Za-z_][A-Za-z0-9_-]*):(?P<suffix>(?:[ \t].*)?)$"
+)
+MARKDOWN_MODULE_ITEM_PATTERN = re.compile(
+    r"^ *-\s+(?:markdown|'markdown'|\"markdown\")(?:[ \t]+#.*)?[ \t]*$"
+)
 PRE_COMMIT_GROUP = "pre-commit"
 PLACEHOLDER_SCAN_GROUP = "placeholder-scan"
 MARKER_VALIDATION_GROUP = "marker-validation"
@@ -365,6 +370,155 @@ def load_package_scripts(repo_root: Path) -> dict[str, object]:
     return scripts if isinstance(scripts, dict) else {}
 
 
+def marker_line_indent(line: str) -> int:
+    """Return the number of leading spaces on ``line``."""
+    return len(line) - len(line.lstrip(" "))
+
+
+def is_marker_blank_or_comment_line(line: str) -> bool:
+    """Return whether ``line`` is blank or a full-line marker comment."""
+    stripped_line = line.strip()
+    return not stripped_line or stripped_line.startswith("#")
+
+
+def parse_marker_key_line(line: str) -> tuple[int, str, str] | None:
+    """Return a simple marker key line as ``(indent, key, suffix)``."""
+    match = MARKER_KEY_PATTERN.fullmatch(line)
+    if match is None:
+        return None
+    return len(match.group("indent")), match.group("key"), match.group("suffix")
+
+
+def is_empty_or_comment_key_suffix(suffix: str) -> bool:
+    """Return whether a key suffix is empty or only a whitespace-separated comment."""
+    if suffix.strip() == "":
+        return True
+    return suffix[0] in " \t" and suffix.lstrip(" \t").startswith("#")
+
+
+def is_exact_empty_list_key_suffix(suffix: str) -> bool:
+    """Return whether a key suffix is exactly ``[]`` with an optional comment."""
+    if not suffix or suffix[0] not in " \t":
+        return False
+    value = suffix.lstrip(" \t")
+    if not value.startswith("[]"):
+        return False
+    tail = value[2:]
+    return tail.strip() == "" or (tail[0] in " \t" and tail.lstrip(" \t").startswith("#"))
+
+
+def is_marker_block_key(line: str, key: str, *, indent: int | None = None) -> bool:
+    """Return whether ``line`` is a simple block-style marker key."""
+    parsed_line = parse_marker_key_line(line)
+    if parsed_line is None:
+        return False
+    line_indent, line_key, suffix = parsed_line
+    if indent is not None and line_indent != indent:
+        return False
+    return line_key == key and is_empty_or_comment_key_suffix(suffix)
+
+
+def included_modules_key_kind(line: str, child_indent: int) -> str | None:
+    """Return the recognized direct-child ``included_modules`` key shape."""
+    parsed_line = parse_marker_key_line(line)
+    if parsed_line is None:
+        return None
+    line_indent, key, suffix = parsed_line
+    if line_indent != child_indent or key != "included_modules":
+        return None
+    if is_empty_or_comment_key_suffix(suffix):
+        return "block"
+    if is_exact_empty_list_key_suffix(suffix):
+        return "empty"
+    return None
+
+
+def template_sync_child_indent(marker_lines: Sequence[str], start_index: int) -> int | None:
+    """Return the direct-child indentation under top-level ``template_sync``."""
+    for line in marker_lines[start_index:]:
+        if is_marker_blank_or_comment_line(line):
+            continue
+        line_indent = marker_line_indent(line)
+        if line_indent == 0:
+            return None
+        parsed_line = parse_marker_key_line(line)
+        if parsed_line is not None:
+            return parsed_line[0]
+    return None
+
+
+def included_modules_block_includes_markdown(
+    marker_lines: Sequence[str],
+    start_index: int,
+    included_modules_indent: int,
+) -> bool:
+    """Return whether a scoped ``included_modules`` block contains ``markdown``."""
+    sequence_indent: int | None = None
+    sequence_blocked = False
+    for line in marker_lines[start_index:]:
+        if is_marker_blank_or_comment_line(line):
+            continue
+
+        line_indent = marker_line_indent(line)
+        stripped_line = line[line_indent:]
+        if line_indent < included_modules_indent:
+            break
+        if line_indent == included_modules_indent and parse_marker_key_line(line):
+            break
+        if stripped_line.startswith("-"):
+            if sequence_blocked:
+                continue
+            if sequence_indent is None:
+                sequence_indent = line_indent
+            if line_indent == sequence_indent and MARKDOWN_MODULE_ITEM_PATTERN.fullmatch(line):
+                return True
+            continue
+        if sequence_indent is None:
+            sequence_blocked = True
+    return False
+
+
+def template_sync_block_includes_markdown(
+    marker_lines: Sequence[str],
+    start_index: int,
+) -> bool:
+    """Return whether top-level ``template_sync.included_modules`` has ``markdown``."""
+    child_indent = template_sync_child_indent(marker_lines, start_index)
+    if child_indent is None:
+        return False
+
+    for line_index, line in enumerate(marker_lines[start_index:], start=start_index):
+        if is_marker_blank_or_comment_line(line):
+            continue
+        line_indent = marker_line_indent(line)
+        if line_indent == 0:
+            break
+        if line_indent != child_indent:
+            continue
+
+        key_kind = included_modules_key_kind(line, child_indent)
+        if key_kind == "empty":
+            return False
+        if key_kind == "block":
+            return included_modules_block_includes_markdown(
+                marker_lines,
+                line_index + 1,
+                child_indent,
+            )
+    return False
+
+
+def marker_text_includes_markdown_module(marker_text: str) -> bool:
+    """Return whether marker text retains ``template_sync.included_modules`` markdown."""
+    marker_lines = marker_text.splitlines()
+    for line_index, line in enumerate(marker_lines):
+        if is_marker_block_key(line, "template_sync", indent=0) and (
+            template_sync_block_includes_markdown(marker_lines, line_index + 1)
+        ):
+            return True
+    return False
+
+
 def marker_includes_markdown_module(repo_root: Path) -> bool:
     """Return whether the downstream marker appears to retain the markdown module."""
     marker_path = repo_root / MARKER_PATH
@@ -377,7 +531,7 @@ def marker_includes_markdown_module(repo_root: Path) -> bool:
     except OSError as error:
         error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
         raise FirstAdoptionCheckError(f"Unable to read {MARKER_PATH} ({error_summary}).") from error
-    return bool(MARKDOWN_MODULE_PATTERN.search(marker_text))
+    return marker_text_includes_markdown_module(marker_text)
 
 
 def markdown_commands_and_notes(repo_root: Path) -> CheckPlan:
