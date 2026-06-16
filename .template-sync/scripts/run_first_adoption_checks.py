@@ -37,7 +37,7 @@ MARKER_PATH = ".template-sync/marker.yml"
 MARKER_VALIDATOR_SCRIPT = ".template-sync/scripts/validate_marker.py"
 QUALITY_REPORT_SCRIPT = ".template-sync/scripts/first_adoption_quality_reports.py"
 MARKDOWN_PACKAGE_SCRIPTS = ("lint:md", "lint:md:links", "lint:md:nested")
-MARKDOWN_MODULE_PATTERN = re.compile(r"(?m)^\s*-\s*['\"]?markdown['\"]?\s*(?:#.*)?$")
+MARKER_MODULE_PATTERN = re.compile(r"(?m)^\s*-\s*['\"]?(?P<module>[a-z0-9-]+)['\"]?\s*(?:#.*)?$")
 PRE_COMMIT_GROUP = "pre-commit"
 PLACEHOLDER_SCAN_GROUP = "placeholder-scan"
 MARKER_VALIDATION_GROUP = "marker-validation"
@@ -365,11 +365,11 @@ def load_package_scripts(repo_root: Path) -> dict[str, object]:
     return scripts if isinstance(scripts, dict) else {}
 
 
-def marker_includes_markdown_module(repo_root: Path) -> bool:
-    """Return whether the downstream marker appears to retain the markdown module."""
+def marker_included_modules(repo_root: Path) -> frozenset[str] | None:
+    """Return marker-listed modules, or ``None`` when no marker is present."""
     marker_path = repo_root / MARKER_PATH
     if not marker_path.exists():
-        return False
+        return None
     if not is_present_regular_file(marker_path):
         raise FirstAdoptionCheckError(f"Expected a regular file: {MARKER_PATH}")
     try:
@@ -377,7 +377,21 @@ def marker_includes_markdown_module(repo_root: Path) -> bool:
     except OSError as error:
         error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
         raise FirstAdoptionCheckError(f"Unable to read {MARKER_PATH} ({error_summary}).") from error
-    return bool(MARKDOWN_MODULE_PATTERN.search(marker_text))
+    return frozenset(match.group("module") for match in MARKER_MODULE_PATTERN.finditer(marker_text))
+
+
+def marker_includes_markdown_module(repo_root: Path) -> bool:
+    """Return whether the downstream marker appears to retain the markdown module."""
+    modules = marker_included_modules(repo_root)
+    return modules is not None and "markdown" in modules
+
+
+def has_powershell_files(files: Sequence[str]) -> bool:
+    """Return whether collected files include PowerShell-owned extensions."""
+    return any(
+        Path(relative_path).suffix.casefold() in {".ps1", ".psd1", ".psm1"}
+        for relative_path in files
+    )
 
 
 def markdown_commands_and_notes(repo_root: Path) -> CheckPlan:
@@ -406,12 +420,16 @@ def markdown_commands_and_notes(repo_root: Path) -> CheckPlan:
 
 
 def quality_report_commands(
-    repo_root: Path, *, run_mode: str = CHECK_MODE
+    repo_root: Path,
+    files: Sequence[str],
+    *,
+    run_mode: str = CHECK_MODE,
 ) -> tuple[PlannedCommand, ...]:
     """Build first-adoption quality report commands when the helper is available."""
     if not optional_regular_file_exists(repo_root, QUALITY_REPORT_SCRIPT):
         return ()
 
+    marker_modules = marker_included_modules(repo_root)
     commands = [
         PlannedCommand(
             group_label=QUALITY_REPORT_GROUP,
@@ -421,11 +439,14 @@ def quality_report_commands(
             group_label=QUALITY_REPORT_GROUP,
             command=(sys.executable, QUALITY_REPORT_SCRIPT, "path-references"),
         ),
-        PlannedCommand(
-            group_label=QUALITY_REPORT_GROUP,
-            command=(sys.executable, QUALITY_REPORT_SCRIPT, "powershell"),
-        ),
     ]
+    if marker_modules is None or "powershell" in marker_modules or has_powershell_files(files):
+        commands.append(
+            PlannedCommand(
+                group_label=QUALITY_REPORT_GROUP,
+                command=(sys.executable, QUALITY_REPORT_SCRIPT, "powershell"),
+            )
+        )
 
     markdown_command = [sys.executable, QUALITY_REPORT_SCRIPT, "markdown"]
     group_label = QUALITY_REPORT_GROUP
@@ -453,7 +474,7 @@ def build_check_plan(
     commands: list[PlannedCommand] = []
     notes: list[str] = []
 
-    commands.extend(quality_report_commands(repo_root, run_mode=run_mode))
+    commands.extend(quality_report_commands(repo_root, files, run_mode=run_mode))
 
     if files:
         commands.extend(

@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260616.0
+**Version:** 1.1.20260616.1
 
 ## Metadata
 
@@ -1291,6 +1291,8 @@ python -m pytest -m "not upstream_template_only"
 ```
 
 The committed pytest configuration registers the `upstream_template_only`, `downstream_template_support`, and `slow` markers and enables strict marker validation, so marker typos fail during collection. The downstream gate intentionally excludes only tests marked `upstream_template_only`; a newly added unmarked test remains included by default.
+
+Retained downstream tests MUST derive optional-module expectations from `.template-sync/manifest.yml` and the materialized `.template-sync/marker.yml`. After modules such as `terraform` or `powershell` are excluded, retained tests may still assert absence, cleanup reporting, or documented exclusion behavior, but they MUST NOT require excluded module-owned files, commands, inline blocks, pytest markers, or validation surfaces to exist. Tests that genuinely require the complete upstream template module set MUST be marked `upstream_template_only` so the downstream gate does not select them.
 
 Run instruction-contract validation directly when debugging protected agent instruction protocols or when validating the upstream template repository. Mode selection is explicit and has no fallback:
 

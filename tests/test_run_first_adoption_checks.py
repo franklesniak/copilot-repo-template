@@ -199,6 +199,39 @@ def test_quality_reports_are_planned_before_fixers_when_helper_exists(
     assert plan.commands[3].command[-2:] == ("markdown", "--fix")
 
 
+def test_powershell_quality_report_is_skipped_when_marker_excludes_powershell(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Marker-derived module state suppresses stale PowerShell report commands."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _write_text(tmp_path, ".template-sync/scripts/first_adoption_quality_reports.py")
+    _write_text(tmp_path, ".template-sync/scripts/validate_marker.py")
+    _write_text(
+        tmp_path,
+        ".template-sync/marker.yml",
+        "template_sync:\n  included_modules:\n    - baseline\n    - template-sync-support\n",
+    )
+
+    plan = first_adoption.build_check_plan(
+        tmp_path,
+        ("README.md",),
+        run_mode=first_adoption.FIX_MODE,
+    )
+
+    quality_modes = [
+        command.command[-1]
+        for command in plan.commands
+        if command.group_label == first_adoption.QUALITY_REPORT_GROUP
+    ]
+    assert quality_modes == ["line-endings", "path-references"]
+    assert all("powershell" not in command.command for command in plan.commands)
+
+
 def test_tracked_only_files_are_collected(tmp_path: Path) -> None:
     """Tracked files staged in the index are included in the pre-commit file list."""
     _run_git(tmp_path, "init")
