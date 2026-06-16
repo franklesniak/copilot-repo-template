@@ -7,6 +7,7 @@ import io
 import json
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
@@ -329,6 +330,58 @@ def test_markdownlint_fixer_reports_changed_files(
 
     assert report.available is True
     assert report.changed_files == ("README.md",)
+
+
+def test_powershell_report_parses_injected_runner_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The PowerShell report runs through its injectable runner and parses gate JSON."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, "src/sample.ps1", "Write-Output 'sample'\n")
+    _write_text(tmp_path, ".github/linting/PSScriptAnalyzerSettings.psd1", "@{}\n")
+    _write_text(
+        tmp_path,
+        "src/tools/Resolve-PSScriptAnalyzerGate.ps1",
+        "function Resolve-PSScriptAnalyzerGate {}\n",
+    )
+    monkeypatch.setattr(quality_reports, "powershell_executable", lambda: "pwsh")
+
+    captured_env: dict[str, str] = {}
+
+    def fake_runner(
+        command: list[str] | tuple[str, ...],
+        repo_root: Path,
+        *,
+        env: Mapping[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        captured_env.update(env or {})
+        payload = json.dumps(
+            {
+                "SummaryLines": [
+                    "PSScriptAnalyzer gate mode: first-adoption.",
+                    "Result: pass.",
+                ],
+                "IssueReadyMarkdown": [
+                    "## PSScriptAnalyzer First-Adoption Debt Cleanup",
+                    "",
+                ],
+            }
+        )
+        return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
+
+    report = quality_reports.build_powershell_report(tmp_path, runner=fake_runner)
+
+    assert report.available is True
+    assert report.summary_lines == (
+        "PSScriptAnalyzer gate mode: first-adoption.",
+        "Result: pass.",
+    )
+    assert report.issue_ready_markdown == (
+        "## PSScriptAnalyzer First-Adoption Debt Cleanup",
+        "",
+    )
+    assert "FIRST_ADOPTION_PS1_FILES_JSON" in captured_env
 
 
 def test_path_reference_cli_can_fail_on_findings(tmp_path: Path) -> None:

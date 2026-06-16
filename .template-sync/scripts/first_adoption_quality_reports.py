@@ -12,10 +12,10 @@ import shutil
 import subprocess
 import sys
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import NoReturn, TextIO
+from typing import NoReturn, Protocol, TextIO
 
 DEFAULT_SUPPRESSION_PATH = ".template-sync/first-adoption/quality-suppressions.json"
 GIT_VISIBLE_FILES_COMMAND = (
@@ -72,7 +72,17 @@ GIT_EOL_PATTERN = re.compile(
     r"^i/(?P<index>\S+)\s+w/(?P<worktree>\S+)\s+attr/(?P<attr>.*?)\t(?P<path>.*)$"
 )
 
-CaptureRunner = Callable[[Sequence[str], Path], subprocess.CompletedProcess[str]]
+
+class CaptureRunner(Protocol):
+    """Run a command in a repository root and capture its text output."""
+
+    def __call__(
+        self,
+        command: Sequence[str],
+        repo_root: Path,
+        *,
+        env: Mapping[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]: ...
 
 
 class FirstAdoptionQualityError(RuntimeError):
@@ -253,7 +263,12 @@ def format_command(command: Sequence[str]) -> str:
     return shlex.join(command_parts)
 
 
-def run_capture(command: Sequence[str], repo_root: Path) -> subprocess.CompletedProcess[str]:
+def run_capture(
+    command: Sequence[str],
+    repo_root: Path,
+    *,
+    env: Mapping[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     """Run ``command`` in ``repo_root`` and capture text output."""
     try:
         return subprocess.run(
@@ -263,6 +278,7 @@ def run_capture(command: Sequence[str], repo_root: Path) -> subprocess.Completed
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            env=env,
         )
     except OSError as error:
         error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
@@ -1064,21 +1080,11 @@ $result | ConvertTo-Json -Depth 8
 """
     environment = os.environ.copy()
     environment["FIRST_ADOPTION_PS1_FILES_JSON"] = json.dumps(script_paths)
-    try:
-        result = subprocess.run(
-            (executable, "-NoProfile", "-Command", command_script),
-            cwd=repo_root,
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            env=environment,
-        )
-    except OSError as error:
-        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
-        raise FirstAdoptionQualityError(
-            f"Unable to run PowerShell analyzer report ({error_summary})."
-        ) from error
+    result = runner(
+        (executable, "-NoProfile", "-Command", command_script),
+        repo_root,
+        env=environment,
+    )
 
     if result.returncode != 0:
         diagnostic = result.stderr.strip() or result.stdout.strip() or "PowerShell command failed"
