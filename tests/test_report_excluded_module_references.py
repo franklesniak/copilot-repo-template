@@ -683,7 +683,14 @@ def test_active_contact_link_urls_preserves_fragment_and_quoted_urls() -> None:
     """Contact-link URL extraction keeps ``#`` fragments and quoted scalars."""
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("report_excluded_module_references", SCRIPT_PATH)
+    # Register under a test-scoped module name rather than the importable
+    # ``report_excluded_module_references``. The sys.modules entry is required so
+    # the reporter's dataclasses resolve during exec_module, and a unique name
+    # keeps it from shadowing a real import of the reporter elsewhere in the
+    # session (the script puts its own directory on sys.path).
+    spec = importlib.util.spec_from_file_location(
+        "report_excluded_module_references_under_test", SCRIPT_PATH
+    )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
