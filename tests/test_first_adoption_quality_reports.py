@@ -160,6 +160,38 @@ def test_path_reference_suppression_can_match_rule_path_glob_and_literal_pattern
     assert report.suppressed_count == 1
 
 
+def test_quality_suppressions_tolerate_leading_utf8_bom(tmp_path: Path) -> None:
+    """Downstream-authored suppression files load even with a leading UTF-8 BOM."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, "CSV/data.csv")
+    _write_text(tmp_path, "README.md", "See [data](Csv/data.csv).\n")
+    suppression_document = json.dumps(
+        {
+            "path-reference": {
+                "suppressions": [
+                    {
+                        "ruleId": "path-reference.case-mismatch",
+                        "pathGlob": "*.md",
+                        "literalPattern": "^Csv/",
+                        "reason": "Fixture exercises BOM-tolerant suppression loading.",
+                    }
+                ]
+            }
+        },
+        indent=2,
+    )
+    _write_bytes(
+        tmp_path,
+        ".template-sync/first-adoption/quality-suppressions.json",
+        b"\xef\xbb\xbf" + (suppression_document + "\n").encode("utf-8"),
+    )
+
+    report = quality_reports.build_path_reference_report(tmp_path)
+
+    assert report.findings == ()
+    assert report.suppressed_count == 1
+
+
 def test_path_reference_suppression_rejects_unknown_rule_identifier(tmp_path: Path) -> None:
     """Malformed suppression files fail with actionable errors."""
     _init_repo(tmp_path)

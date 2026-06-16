@@ -424,7 +424,7 @@ def load_yaml_file(repo_root: Path, relative_path: str) -> dict[str, Any] | None
     if not path.is_file():
         return None
     try:
-        parsed = yaml.safe_load(path.read_text(encoding="utf-8"))
+        parsed = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
     except (OSError, yaml.YAMLError):
         return None
     return parsed if isinstance(parsed, dict) else None

@@ -354,7 +354,7 @@ def load_package_scripts(repo_root: Path) -> dict[str, object]:
     if not is_present_regular_file(package_path):
         raise FirstAdoptionCheckError("Expected a regular file: package.json")
     try:
-        package_data = json.loads(package_path.read_text(encoding="utf-8"))
+        package_data = json.loads(package_path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as error:
         raise FirstAdoptionCheckError(f"package.json is not valid JSON: {error}") from error
     except OSError as error:
@@ -373,7 +373,7 @@ def marker_includes_markdown_module(repo_root: Path) -> bool:
     if not is_present_regular_file(marker_path):
         raise FirstAdoptionCheckError(f"Expected a regular file: {MARKER_PATH}")
     try:
-        marker_text = marker_path.read_text(encoding="utf-8")
+        marker_text = marker_path.read_text(encoding="utf-8-sig")
     except OSError as error:
         error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
         raise FirstAdoptionCheckError(f"Unable to read {MARKER_PATH} ({error_summary}).") from error

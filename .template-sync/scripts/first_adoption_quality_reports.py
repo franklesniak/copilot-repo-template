@@ -667,7 +667,7 @@ def load_quality_suppressions(repo_root: Path, suppression_path: str) -> Quality
             f"Suppression path is not a regular file: {suppression_path}"
         )
     try:
-        raw_data = json.loads(full_path.read_text(encoding="utf-8"))
+        raw_data = json.loads(full_path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as error:
         raise FirstAdoptionQualityError(
             f"{suppression_path} is not valid JSON: {error.msg}"
@@ -852,7 +852,7 @@ def load_package_scripts(repo_root: Path) -> dict[str, object]:
     if not is_present_regular_file(package_path):
         raise FirstAdoptionQualityError("Expected a regular file: package.json")
     try:
-        package_data = json.loads(package_path.read_text(encoding="utf-8"))
+        package_data = json.loads(package_path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as error:
         raise FirstAdoptionQualityError(f"package.json is not valid JSON: {error.msg}") from error
     except OSError as error:

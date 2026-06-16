@@ -345,7 +345,7 @@ def load_json_mapping(path: Path, repo_root: Path) -> dict[str, Any]:
 def load_yaml_mapping(path: Path, repo_root: Path) -> dict[str, Any]:
     """Load a YAML file that must contain a mapping."""
     try:
-        parsed = yaml.safe_load(path.read_text(encoding="utf-8"))
+        parsed = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
     except OSError as error:
         relative_path = repository_relative_path(path, repo_root)
         raise TemplateSyncMaterializationError(
