@@ -123,6 +123,10 @@ def _manifest() -> dict[str, Any]:
                 {"pattern": ".github/dependabot.yml", "requires_all": ["github-platform"]},
                 {"pattern": ".github/ISSUE_TEMPLATE/**", "requires_all": ["github-templates"]},
                 {
+                    "pattern": ".github/pull_request_template.md",
+                    "requires_all": ["github-templates"],
+                },
+                {
                     "pattern": ".github/workflows/data-ci.yml",
                     "requires_all": ["github-actions"],
                     "requires_any": ["yaml", "schema", "template-sync-support"],
@@ -271,6 +275,30 @@ def _write_common_repo(
             "        See [schema](../../schemas/example-config.schema.json).\n"
         ),
     )
+    _write_text(
+        repo_root,
+        ".github/ISSUE_TEMPLATE/config.yml",
+        (
+            "blank_issues_enabled: true\n"
+            "contact_links:\n"
+            "  - name: Schema Guide\n"
+            "    url: https://github.com/OWNER/REPO/blob/HEAD/schemas/README.md\n"
+            "    about: Read schema guidance\n"
+        ),
+    )
+    _write_text(
+        repo_root,
+        ".github/pull_request_template.md",
+        (
+            "## Checklist\n\n"
+            "### General\n\n"
+            "- [ ] Baseline checks pass\n\n"
+            "### Python-Specific (if applicable)\n\n"
+            "- [ ] `pytest` passes locally\n\n"
+            "### Schema-Specific (if applicable)\n\n"
+            "- [ ] If a `check-jsonschema` hook was changed, schema docs were reviewed\n"
+        ),
+    )
     _write_text(repo_root, "templates/json/example.json", "{}\n")
     if include_reference_content:
         _write_text(
@@ -383,6 +411,29 @@ def test_marker_excluding_optional_modules_reports_cleanup_scope(tmp_path: Path)
             "markdown-link.excluded-target | required_cleanup | schema | "
             ".github/ISSUE_TEMPLATE/bug_report.yml:7 |"
         )
+        for line in findings
+    )
+    assert any(
+        line.startswith(
+            "contact-link.excluded-target | required_cleanup | schema | "
+            ".github/ISSUE_TEMPLATE/config.yml:4 |"
+        )
+        for line in findings
+    )
+    assert any(
+        line.startswith(
+            "collaboration-template.prose-reference | required_cleanup | "
+            "python | .github/pull_request_template.md:"
+        )
+        and "`pytest` documents excluded python tooling." in line
+        for line in findings
+    )
+    assert any(
+        line.startswith(
+            "collaboration-template.prose-reference | required_cleanup | "
+            "schema | .github/pull_request_template.md:"
+        )
+        and "check-jsonschema documents excluded schema tooling." in line
         for line in findings
     )
     assert any(
@@ -626,3 +677,41 @@ def test_yaml_embedded_fenced_links_are_skipped(tmp_path: Path) -> None:
     # The link inside the fenced block must be ignored even though the file is
     # YAML and the fence is indented inside a ``value: |`` block.
     assert not any(".github/ISSUE_TEMPLATE/fenced_example.yml:9" in line for line in findings)
+
+
+def test_active_contact_link_urls_preserves_fragment_and_quoted_urls() -> None:
+    """Contact-link URL extraction keeps ``#`` fragments and quoted scalars."""
+    import importlib.util
+
+    # Register under a test-scoped module name rather than the importable
+    # ``report_excluded_module_references``. The sys.modules entry is required so
+    # the reporter's dataclasses resolve during exec_module, and a unique name
+    # keeps it from shadowing a real import of the reporter elsewhere in the
+    # session (the script puts its own directory on sys.path).
+    spec = importlib.util.spec_from_file_location(
+        "report_excluded_module_references_under_test", SCRIPT_PATH
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    text = (
+        "contact_links:\n"
+        "  - name: Unquoted Fragment\n"
+        "    url: https://github.com/OWNER/REPO#support\n"
+        "  - name: Quoted Fragment\n"
+        '    url: "https://github.com/OWNER/REPO/blob/HEAD/file.md#L1-L5"\n'
+        "  - name: Trailing Comment\n"
+        "    url: https://example.com/docs # see the docs\n"
+    )
+
+    extracted = [url for _, url in module.active_contact_link_urls(text)]
+
+    # A ``#`` fragment (quoted or unquoted) must be retained, while a genuine
+    # trailing YAML comment (``#`` after whitespace) is still stripped.
+    assert extracted == [
+        "https://github.com/OWNER/REPO#support",
+        "https://github.com/OWNER/REPO/blob/HEAD/file.md#L1-L5",
+        "https://example.com/docs",
+    ]

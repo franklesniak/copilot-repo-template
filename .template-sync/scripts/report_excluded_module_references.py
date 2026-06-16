@@ -61,6 +61,13 @@ MARKDOWN_INLINE_LINK_RE = re.compile(
 MARKDOWN_REFERENCE_DEFINITION_RE = re.compile(r"^ {0,3}\[[^\]\n]+\]:\s+(?P<target><[^>\n]+>|\S+)")
 PRE_COMMIT_HOOK_FIELD_RE = re.compile(r"^\s+(?:-\s+)?(?P<field>id|alias):\s*(?P<value>[^#\n]+)")
 WORKFLOW_RUN_RE = re.compile(r"^\s*run:\s*(?P<command>.+?)\s*$")
+# Capture the contact-link ``url:`` value as a quoted scalar (kept intact, so a
+# ``#`` fragment inside quotes is preserved) or an unquoted scalar whose ``#`` is
+# only treated as a YAML comment when it follows whitespace. The caller strips
+# any surrounding quotes from the captured value.
+CONTACT_LINK_URL_RE = re.compile(
+    r"""^\s*url:\s*(?P<target>(?P<quote>['"])[^'"\n]*(?P=quote)|[^\s#\n]\S*)\s*(?:#.*)?$"""
+)
 UPSTREAM_BLOB_PREFIX = "/franklesniak/copilot-repo-template/blob/HEAD/"
 DEPENDABOT_ECOSYSTEM_MODULES = {
     "npm": ("markdown", ("package.json", "package-lock.json")),
@@ -111,6 +118,37 @@ PROTECTED_DOCUMENT_TOOLING_REFERENCES = {
         "worked-example schema",
         "schema example fixtures",
     ),
+}
+COLLABORATION_TEMPLATE_TOOLING_REFERENCES = {
+    "python": {
+        ".github/pull_request_template.md": (
+            "Python-Specific",
+            "Minimum Python version",
+            "`pytest`",
+            "`mypy`",
+        ),
+    },
+    "powershell": {
+        ".github/pull_request_template.md": (
+            "PowerShell-Specific",
+            "PSScriptAnalyzer",
+            "Invoke-Pester",
+        ),
+    },
+    "schema": {
+        ".github/pull_request_template.md": (
+            "Schema-Specific",
+            "schemas/examples/",
+            "pytest tests/test_schema_examples.py -v",
+            "check-jsonschema",
+        ),
+    },
+    "github-actions": {
+        ".github/pull_request_template.md": (
+            "GitHub Actions-Specific",
+            "actionlint",
+        ),
+    },
 }
 UPSTREAM_TEMPLATE_URL_RE = re.compile(
     re.escape("https://github.com/franklesniak/copilot-repo-template/") + r"(?:blob|tree)/HEAD/\S+"
@@ -777,6 +815,20 @@ def resolve_upstream_blob_target(target: str) -> str | None:
     return unquote(parsed.path.removeprefix(UPSTREAM_BLOB_PREFIX))
 
 
+def resolve_github_blob_target(target: str) -> str | None:
+    """Return the repo path from a GitHub blob/HEAD URL, if present."""
+    try:
+        parsed = urlsplit(target)
+    except ValueError:
+        return None
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return None
+    path_parts = [part for part in parsed.path.split("/") if part]
+    if len(path_parts) < 5 or path_parts[2:4] != ["blob", "HEAD"]:
+        return None
+    return unquote("/".join(path_parts[4:]))
+
+
 def reference_link_findings(repo_root: Path, state: ReportState) -> tuple[Finding, ...]:
     """Return stale and documented-reference findings for retained links."""
     findings: list[Finding] = []
@@ -1013,6 +1065,91 @@ def protected_document_prose_reference_findings(
     return tuple(findings)
 
 
+def active_contact_link_urls(text: str) -> tuple[tuple[int, str], ...]:
+    """Return active issue-template contact-link URL values outside inline blocks."""
+    targets: list[tuple[int, str]] = []
+    for line_number, line in lines_outside_inline_blocks(text):
+        if line.lstrip().startswith("#"):
+            continue
+        match = CONTACT_LINK_URL_RE.match(line)
+        if match is None:
+            continue
+        target = match.group("target").strip().strip("'\"")
+        targets.append((line_number, target))
+    return tuple(targets)
+
+
+def collaboration_template_reference_findings(
+    repo_root: Path,
+    state: ReportState,
+) -> tuple[Finding, ...]:
+    """Return stale excluded-module references in issue and PR collaboration files."""
+    findings: list[Finding] = []
+    collaboration_paths = {
+        path
+        for paths_and_tokens in COLLABORATION_TEMPLATE_TOOLING_REFERENCES.values()
+        for path in paths_and_tokens
+    } | {".github/ISSUE_TEMPLATE/config.yml"}
+
+    for relative_path in sorted(collaboration_paths):
+        if relative_path not in state.present_files or not retained_path(relative_path, state):
+            continue
+        if is_locally_overridden(relative_path, state.local_overrides):
+            continue
+        try:
+            text = resolve_repo_path(repo_root, relative_path).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+
+        for module, paths_and_tokens in COLLABORATION_TEMPLATE_TOOLING_REFERENCES.items():
+            if module not in state.excluded_modules:
+                continue
+            for token in paths_and_tokens.get(relative_path, ()):
+                for line_number, line in lines_outside_inline_blocks(text):
+                    searchable_line = line_without_upstream_template_urls(line)
+                    if token not in searchable_line:
+                        continue
+                    findings.append(
+                        Finding(
+                            rule_id="collaboration-template.prose-reference",
+                            category=finding_category_for_path(
+                                relative_path,
+                                CATEGORY_REQUIRED,
+                            ),
+                            module=module,
+                            path=relative_path,
+                            line_number=line_number,
+                            detail=f"{token} documents excluded {module} tooling.",
+                        )
+                    )
+
+        if relative_path != ".github/ISSUE_TEMPLATE/config.yml":
+            continue
+        for line_number, target in active_contact_link_urls(text):
+            target_path = resolve_github_blob_target(target)
+            if target_path is None:
+                continue
+            target_relation = selected_relation_for_path(target_path, state.mappings)
+            if target_relation is None or target_relation.is_retained_by(state.included_modules):
+                continue
+            for module in missing_modules_for_relation(target_relation, state.included_modules):
+                findings.append(
+                    Finding(
+                        rule_id="contact-link.excluded-target",
+                        category=finding_category_for_path(relative_path, CATEGORY_REQUIRED),
+                        module=module,
+                        path=relative_path,
+                        line_number=line_number,
+                        detail=(
+                            f"{target} points at excluded path {target_path} "
+                            f"({target_relation.description})."
+                        ),
+                    )
+                )
+
+    return tuple(findings)
+
+
 def dependency_file_is_retained_or_present(
     dependency_path: str,
     state: ReportState,
@@ -1194,6 +1331,7 @@ def build_report(repo_root: Path, state: ReportState) -> ExcludedModuleReport:
         *inline_block_findings(repo_root, state),
         *reference_link_findings(repo_root, state),
         *protected_document_prose_reference_findings(repo_root, state),
+        *collaboration_template_reference_findings(repo_root, state),
         *dependabot_findings(repo_root, state),
         *general_validation_reference_findings(repo_root, state),
         *marker_decision_findings(state),

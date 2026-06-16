@@ -68,6 +68,10 @@ PLACEHOLDER_DESTS = (
     "security_contact",
     "security_contact_section",
     "security_reporting_mode",
+    "issue_label_policy",
+    "issue_labels",
+    "discussions_policy",
+    "collaboration_policy_follow_up_status",
     "vscode_title",
     "package_name",
     "package_description",
@@ -76,6 +80,13 @@ PLACEHOLDER_DESTS = (
     "package_keywords",
 )
 SECURITY_REPORTING_MODES = ("github-private-only", "contact-only", "both")
+ISSUE_LABEL_POLICIES = ("existing", "create-manual-follow-up", "omit", "custom")
+DISCUSSIONS_POLICIES = (
+    "enabled",
+    "disabled",
+    "deferred-planned-render",
+    "deferred-not-rendered",
+)
 ARGS_FILE_FORMATS = ("json", "yaml")
 ARGS_FILE_EXTENSION_FORMATS = {
     ".json": "json",
@@ -104,6 +115,10 @@ ARGS_FILE_FIELDS = frozenset(
         "security_contact",
         "security_contact_section",
         "security_reporting_mode",
+        "issue_label_policy",
+        "issue_labels",
+        "discussions_policy",
+        "collaboration_policy_follow_up_status",
         "vscode_title",
         "package_name",
         "package_description",
@@ -136,6 +151,9 @@ STRING_ARGS_FILE_FIELDS = frozenset(
         "security_contact",
         "security_contact_section",
         "security_reporting_mode",
+        "issue_label_policy",
+        "discussions_policy",
+        "collaboration_policy_follow_up_status",
         "vscode_title",
         "package_name",
         "package_description",
@@ -144,7 +162,7 @@ STRING_ARGS_FILE_FIELDS = frozenset(
         "license_source_path",
     }
 )
-LIST_STRING_ARGS_FILE_FIELDS = frozenset({"included_modules", "package_keywords"})
+LIST_STRING_ARGS_FILE_FIELDS = frozenset({"included_modules", "issue_labels", "package_keywords"})
 BOOLEAN_ARGS_FILE_FIELDS = frozenset({"preserve_existing_license", "allow_conflicts"})
 CLI_FLAGS = {
     "template_root": ("--template-root",),
@@ -167,6 +185,10 @@ CLI_FLAGS = {
     "security_contact": ("--security-contact",),
     "security_contact_section": ("--security-contact-section",),
     "security_reporting_mode": ("--security-reporting-mode",),
+    "issue_label_policy": ("--issue-label-policy",),
+    "issue_labels": ("--issue-label",),
+    "discussions_policy": ("--discussions-policy",),
+    "collaboration_policy_follow_up_status": ("--collaboration-policy-follow-up-status",),
     "vscode_title": ("--vscode-title",),
     "package_name": ("--package-name",),
     "package_description": ("--package-description",),
@@ -182,6 +204,10 @@ MARKER_COPY_FIELDS = (
     "protected_file_decisions",
     "deferred_protected_candidates",
     "instruction_contract_waivers",
+    "issue_label_policy",
+    "issue_labels",
+    "discussions_policy",
+    "collaboration_policy_follow_up_status",
 )
 LICENSE_TARGET_PATH = "LICENSE"
 LICENSE_SOURCE_CANDIDATE_NAMES = frozenset(
@@ -441,6 +467,12 @@ def validate_merged_arg_choices(args: argparse.Namespace) -> None:
     ):
         quoted_modes = ", ".join(SECURITY_REPORTING_MODES)
         raise MaterializationError(f"--security-reporting-mode must be one of: {quoted_modes}.")
+    if args.issue_label_policy is not None and args.issue_label_policy not in ISSUE_LABEL_POLICIES:
+        quoted_policies = ", ".join(ISSUE_LABEL_POLICIES)
+        raise MaterializationError(f"--issue-label-policy must be one of: {quoted_policies}.")
+    if args.discussions_policy is not None and args.discussions_policy not in DISCUSSIONS_POLICIES:
+        quoted_policies = ", ".join(DISCUSSIONS_POLICIES)
+        raise MaterializationError(f"--discussions-policy must be one of: {quoted_policies}.")
 
 
 def apply_args_file_values(
@@ -618,6 +650,36 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "Security reporting mode: github-private-only, contact-only, or both. "
             "Omitting this while supplying --security-contact preserves the "
             "backward-compatible both mode."
+        ),
+    )
+    parser.add_argument(
+        "--issue-label-policy",
+        choices=ISSUE_LABEL_POLICIES,
+        default=None,
+        help="Issue-template label policy: existing, create-manual-follow-up, omit, or custom.",
+    )
+    parser.add_argument(
+        "--issue-label",
+        dest="issue_labels",
+        action="append",
+        default=None,
+        help="Custom issue label for --issue-label-policy custom. May be repeated.",
+    )
+    parser.add_argument(
+        "--discussions-policy",
+        choices=DISCUSSIONS_POLICIES,
+        default=None,
+        help=(
+            "Issue-template Discussions contact-link policy: enabled, disabled, "
+            "deferred-planned-render, or deferred-not-rendered."
+        ),
+    )
+    parser.add_argument(
+        "--collaboration-policy-follow-up-status",
+        default=None,
+        help=(
+            "Single source status text from _TODO-repo-init.md for label or "
+            "Discussions policies that leave manual setup open."
         ),
     )
     parser.add_argument(
@@ -1220,6 +1282,27 @@ def load_decisions(
     )
 
 
+MARKER_PLACEHOLDER_FIELDS = (
+    "issue_label_policy",
+    "issue_labels",
+    "discussions_policy",
+    "collaboration_policy_follow_up_status",
+)
+
+
+def apply_marker_placeholder_values(args: argparse.Namespace, decisions: Decisions) -> None:
+    """Apply marker-recorded placeholder policy fields when CLI values are absent."""
+    for field_name in MARKER_PLACEHOLDER_FIELDS:
+        if field_name not in decisions.raw_marker_fields:
+            continue
+        if getattr(args, field_name) is not None:
+            continue
+        value = decisions.raw_marker_fields[field_name]
+        if field_name == "issue_labels":
+            value = list(value)
+        setattr(args, field_name, value)
+
+
 def license_preservation_local_override(source_path: str) -> LocalOverride:
     """Return the durable local override that preserves downstream license text."""
     return LocalOverride(
@@ -1644,6 +1727,12 @@ def run_placeholder_helper(
         ("--security-contact", args.security_contact),
         ("--security-contact-section", args.security_contact_section),
         ("--security-reporting-mode", args.security_reporting_mode),
+        ("--issue-label-policy", args.issue_label_policy),
+        ("--discussions-policy", args.discussions_policy),
+        (
+            "--collaboration-policy-follow-up-status",
+            args.collaboration_policy_follow_up_status,
+        ),
         ("--vscode-title", args.vscode_title),
         ("--package-name", args.package_name),
         ("--package-description", args.package_description),
@@ -1653,6 +1742,9 @@ def run_placeholder_helper(
     for flag, value in optional_pairs:
         if value is not None:
             command.extend([flag, value])
+    if args.issue_labels is not None:
+        for label in args.issue_labels:
+            command.extend(["--issue-label", label])
     if args.package_keywords is not None:
         for keyword in args.package_keywords:
             command.extend(["--package-keyword", keyword])
@@ -2147,6 +2239,7 @@ def materialize(args: argparse.Namespace) -> Summary:
             target_root=target_root,
             module_order=module_order,
         )
+        apply_marker_placeholder_values(args, decisions)
         license_preservation = resolve_license_preservation(args, target_root=target_root)
         if license_preservation is not None:
             decisions = append_license_preservation_override(decisions, license_preservation)

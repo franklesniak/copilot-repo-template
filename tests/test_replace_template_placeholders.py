@@ -72,14 +72,19 @@ def load_yaml(path: Path) -> object:
 
 def security_contact_link(config: object) -> dict[str, object]:
     """Return the security contact link from parsed issue-template config."""
+    return contact_link_by_name(config, "Security Vulnerabilities")
+
+
+def contact_link_by_name(config: object, name: str) -> dict[str, object]:
+    """Return a named contact link from parsed issue-template config."""
     assert isinstance(config, dict)
     contact_links = config["contact_links"]
     assert isinstance(contact_links, list)
     for contact_link in contact_links:
         assert isinstance(contact_link, dict)
-        if contact_link.get("name") == "Security Vulnerabilities":
+        if contact_link.get("name") == name:
             return contact_link
-    raise AssertionError("Security Vulnerabilities contact link not found")
+    raise AssertionError(f"{name} contact link not found")
 
 
 def assert_issue_form_shape(bug_report: object) -> None:
@@ -930,6 +935,141 @@ def test_security_reporting_modes_render_consistent_surfaces(
         assert contact_link["url"] == "https://github.com/octo/widget/blob/HEAD/SECURITY.md"
         assert "GitHub Security Advisories" in security_text
         assert "private vulnerability reporting" in combined_security_surfaces
+
+
+@pytest.mark.upstream_template_only
+def test_collaboration_policy_renders_labels_and_discussions(
+    tmp_path: Path,
+) -> None:
+    """Collaboration policy inputs render issue labels and Discussions contact links."""
+    copy_security_reporting_fixture(tmp_path)
+    follow_up_status = "Enable labels and Discussions before accepting public intake."
+
+    result = placeholder_helper.main(
+        [
+            "replace",
+            "--repo-root",
+            str(tmp_path),
+            "--repository",
+            "octo/widget",
+            "--security-contact",
+            "security@example.com",
+            "--conduct-contact",
+            "conduct@example.com",
+            "--issue-label-policy",
+            "create-manual-follow-up",
+            "--discussions-policy",
+            "deferred-planned-render",
+            "--collaboration-policy-follow-up-status",
+            follow_up_status,
+        ]
+    )
+
+    assert result == 0
+    assert placeholder_helper.scan_repository(tmp_path, repository="octo/widget") == ()
+
+    bug_report = load_yaml(tmp_path / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml")
+    assert isinstance(bug_report, dict)
+    assert bug_report["labels"] == ["bug", "triage"]
+    config = load_yaml(tmp_path / ".github" / "ISSUE_TEMPLATE" / "config.yml")
+    discussions_link = contact_link_by_name(config, "Questions & Discussions")
+    assert discussions_link["url"] == "https://github.com/octo/widget/discussions"
+
+    combined_text = "\n".join(
+        (
+            read_file(tmp_path / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml"),
+            read_file(tmp_path / ".github" / "ISSUE_TEMPLATE" / "config.yml"),
+        )
+    )
+    assert "_TODO-repo-init.md dependent-file status remains open" in combined_text
+    assert follow_up_status in combined_text
+
+
+@pytest.mark.upstream_template_only
+def test_collaboration_policy_can_omit_labels_and_disable_discussions(
+    tmp_path: Path,
+) -> None:
+    """Omit/disabled policies remove active label and Discussions output."""
+    copy_security_reporting_fixture(tmp_path)
+
+    result = placeholder_helper.main(
+        [
+            "replace",
+            "--repo-root",
+            str(tmp_path),
+            "--repository",
+            "octo/widget",
+            "--security-contact",
+            "security@example.com",
+            "--conduct-contact",
+            "conduct@example.com",
+            "--issue-label-policy",
+            "omit",
+            "--discussions-policy",
+            "disabled",
+        ]
+    )
+
+    assert result == 0
+    bug_report = load_yaml(tmp_path / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml")
+    assert isinstance(bug_report, dict)
+    assert "labels" not in bug_report
+    config_text = read_file(tmp_path / ".github" / "ISSUE_TEMPLATE" / "config.yml")
+    assert "/discussions" not in config_text
+    assert "Support / FAQ" not in config_text
+    assert_issue_form_shape(bug_report)
+
+
+def test_replace_config_discussions_block_preserves_trailing_content() -> None:
+    """Rendering the Discussions policy keeps contact-link content after Support/FAQ."""
+    text = (
+        "contact_links:\n"
+        "  # =============================================================================\n"
+        "  # DISCUSSIONS LINK (OPTIONAL)\n"
+        "  # =============================================================================\n"
+        "  # CUSTOMIZE: Uncomment to enable Discussions.\n"
+        "  # - name: Questions & Discussions\n"
+        "  #   url: https://github.com/OWNER/REPO/discussions\n"
+        "\n"
+        "  # =============================================================================\n"
+        "  # SUPPORT / FAQ LINK (OPTIONAL)\n"
+        "  # =============================================================================\n"
+        "  # - name: Support / FAQ\n"
+        "  #   url: https://github.com/OWNER/REPO#support\n"
+        "\n"
+        "  # =============================================================================\n"
+        "  # ENTERPRISE SUPPORT LINK\n"
+        "  # =============================================================================\n"
+        "  - name: Enterprise Support\n"
+        "    url: https://github.com/OWNER/REPO/enterprise\n"
+    )
+    context = placeholder_helper.build_replacement_context(discussions_policy="disabled")
+
+    rendered, count = placeholder_helper.replace_config_discussions_block(text, context)
+
+    assert count == 1
+    assert "SUPPORT / FAQ LINK" not in rendered
+    assert "/discussions" not in rendered
+    assert "Discussions policy: disabled" in rendered
+    # Content after the superseded Support/FAQ section must be preserved verbatim.
+    assert "# ENTERPRISE SUPPORT LINK" in rendered
+    assert "name: Enterprise Support" in rendered
+    assert rendered.endswith(
+        "  - name: Enterprise Support\n    url: https://github.com/OWNER/REPO/enterprise\n"
+    )
+
+
+def test_collaboration_policy_validates_custom_labels_and_deferred_status() -> None:
+    """Invalid collaboration policy combinations fail before rendering."""
+    with pytest.raises(placeholder_helper.PlaceholderError) as custom_exc:
+        placeholder_helper.build_replacement_context(issue_label_policy="custom")
+    assert "--issue-label-policy custom requires" in str(custom_exc.value)
+
+    with pytest.raises(placeholder_helper.PlaceholderError) as follow_up_exc:
+        placeholder_helper.build_replacement_context(
+            discussions_policy="deferred-planned-render",
+        )
+    assert "--collaboration-policy-follow-up-status is required" in str(follow_up_exc.value)
 
 
 @pytest.mark.parametrize(

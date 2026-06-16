@@ -89,8 +89,81 @@
           "items": {
             "$ref": "#/$defs/instructionContractWaiver"
           }
+        },
+        "issue_label_policy": {
+          "$ref": "#/$defs/issueLabelPolicy"
+        },
+        "issue_labels": {
+          "type": "array",
+          "description": "Custom labels rendered into issue templates when issue_label_policy is custom.",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/singleLineNonEmptyString"
+          }
+        },
+        "discussions_policy": {
+          "$ref": "#/$defs/discussionsPolicy"
+        },
+        "collaboration_policy_follow_up_status": {
+          "$ref": "#/$defs/nonEmptyString",
+          "description": "Status text from _TODO-repo-init.md documenting any open manual action for deferred or future-state collaboration template rendering."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["issue_labels"]
+          },
+          "then": {
+            "required": ["issue_label_policy"],
+            "properties": {
+              "issue_label_policy": {
+                "const": "custom"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["issue_label_policy"],
+            "properties": {
+              "issue_label_policy": {
+                "const": "custom"
+              }
+            }
+          },
+          "then": {
+            "required": ["issue_labels"]
+          }
+        },
+        {
+          "if": {
+            "required": ["issue_label_policy"],
+            "properties": {
+              "issue_label_policy": {
+                "const": "create-manual-follow-up"
+              }
+            }
+          },
+          "then": {
+            "required": ["collaboration_policy_follow_up_status"]
+          }
+        },
+        {
+          "if": {
+            "required": ["discussions_policy"],
+            "properties": {
+              "discussions_policy": {
+                "enum": ["deferred-planned-render", "deferred-not-rendered"]
+              }
+            }
+          },
+          "then": {
+            "required": ["collaboration_policy_follow_up_status"]
+          }
+        }
+      ]
     }
   },
   "$defs": {
@@ -121,6 +194,14 @@
       "type": "string",
       "minLength": 1
     },
+    "singleLineNonEmptyString": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "pattern": "[\\r\\n]"
+      },
+      "description": "Non-empty string containing no carriage return or line feed, mirroring the renderer's single-line label validation."
+    },
     "repositoryPath": {
       "type": "string",
       "minLength": 1,
@@ -147,6 +228,24 @@
       "enum": [
         "minimal-preservation",
         "tailored"
+      ]
+    },
+    "issueLabelPolicy": {
+      "type": "string",
+      "enum": [
+        "existing",
+        "create-manual-follow-up",
+        "omit",
+        "custom"
+      ]
+    },
+    "discussionsPolicy": {
+      "type": "string",
+      "enum": [
+        "enabled",
+        "disabled",
+        "deferred-planned-render",
+        "deferred-not-rendered"
       ]
     },
     "protectedFileDecision": {

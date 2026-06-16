@@ -1,14 +1,14 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260615.3
+**Version:** 1.1.20260616.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-15
-- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the read-only first-adoption preflight/questionnaire mode, raw first-adoption state reporting, first-adoption quality-debt reports and suppressions, the adoption difficulties journal, one-shot first-adoption materialization, shell-safe first-adoption args files, package identity materialization, first-adoption structural convention assessment, first-adoption working-tree validation, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
+- **Last Updated:** 2026-06-16
+- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the read-only first-adoption preflight/questionnaire mode, raw first-adoption state reporting, first-adoption quality-debt reports and suppressions, the adoption difficulties journal, one-shot first-adoption materialization, shell-safe first-adoption args files, package identity and collaboration-policy materialization, first-adoption structural convention assessment, first-adoption working-tree validation, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
 ## Purpose
@@ -811,6 +811,10 @@ The current `*-reference-only` marker forms are Markdown-safe HTML comments:
 <!-- template-sync: begin data-ci-reference-only -->
 ...
 <!-- template-sync: end data-ci-reference-only -->
+
+<!-- template-sync: begin github-actions-reference-only -->
+...
+<!-- template-sync: end github-actions-reference-only -->
 ```
 
 Most `*-reference-only` markers name a single module and use the same AND-retention strip semantics as the `*-only` family. The `data-ci-reference-only` marker is the exception: it names the OR-group `json`, `yaml`, `schema`, and `template-sync-support`, mirroring the `requires_any` relation of `.github/workflows/data-ci.yml`. It is retained when at least one of those modules is adopted and is stripped only when every one of them is excluded.
@@ -868,6 +872,11 @@ The current `markdown-reference-only`, `powershell-reference-only`, `python-refe
 - `.github/copilot-instructions.md` for removable optional-stack references in protected canonical guidance, including instruction-file rows, validation examples, module-owned validator prose, and workflow tool-version examples.
 - `.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` for removable optional-stack references in protected agent entry-point summaries.
 - `README.md` and `CONTRIBUTING.md` for removable optional-stack references in shared baseline contributor-facing documentation.
+- `.github/pull_request_template.md` for removable Python, PowerShell, and schema checklist sections in the retained PR template.
+
+The current `github-actions-reference-only` inline block lives in:
+
+- `.github/pull_request_template.md` for the GitHub Actions checklist section in the retained PR template.
 
 The current `template-sync-support-reference-only` inline block lives in:
 
@@ -876,6 +885,7 @@ The current `template-sync-support-reference-only` inline block lives in:
 The current `data-ci-reference-only` inline block lives in:
 
 - `CONTRIBUTING.md` for the Data CI workflow row, and `README.md` for the `.github/workflows/data-ci.yml` key-file bullet, each retained when any of `json`, `yaml`, `schema`, or `template-sync-support` is adopted and removed only when all four are excluded.
+- `.github/pull_request_template.md` for the generic retained data-file checklist section.
 
 The current `python-only` inline block lives in:
 
@@ -1257,6 +1267,8 @@ Use `--template-root` when a reviewed source checkout already exists. To materia
 For shell-sensitive identity values, pass `--args-file PATH` instead of relying on shell quoting. Both JSON and `.yaml`/`.yml` args files are supported, with `.yaml`/`.yml` parsed through the retained YAML parser path. This materializer already requires the retained YAML parser (PyYAML) for manifest and marker processing, so it must be available regardless of args-file format; converting the args file to JSON does not remove that requirement. `--args-format json` or `--args-format yaml` overrides the extension and is required for extensionless or unknown-extension files. CLI flags take precedence over args-file values, and the merged source/module values must still agree with any `--decisions-file` values. Repository-relative path values inside args or decisions, such as `decisions_file` and `license_source_path`, must stay inside `--target-root`.
 
 When the `markdown` module is retained, the args file may include `package_name`, `package_description`, `package_author`, `package_keywords`, and, only when intentionally changing the package release version, `package_version`. Package identity edits update `package.json` and the root identity fields in `package-lock.json` deterministically without running `npm install`; lockfile version fields change only when `package_version` is explicitly supplied.
+
+When `github-templates` is retained, the args file or marker may include `issue_label_policy`, `issue_labels`, `discussions_policy`, and `collaboration_policy_follow_up_status`. `issue_label_policy` accepts `existing`, `create-manual-follow-up`, `omit`, or `custom`; `custom` requires `issue_labels`. `discussions_policy` accepts `enabled`, `disabled`, `deferred-planned-render`, or `deferred-not-rendered`. Policies that render future-state content or defer a GitHub setting require `collaboration_policy_follow_up_status` with the matching `_TODO-repo-init.md` dependent-file status so issue and PR collaboration templates do not ship misleading defaults.
 
 When the owner has approved preserving existing downstream license text from an alternate source path such as `LICENSE.txt` or `LICENSE.md`, pass `--preserve-existing-license --license-source-path SOURCE_PATH`. The helper validates that the source path is repository-relative, non-symlink, readable UTF-8 text, and distinct from root `LICENSE`; copies the source bytes to root `LICENSE`; suppresses the template `LICENSE`; records or previews a `local_overrides` `SKIP` decision for root `LICENSE`; and reports the original source path as residual manual cleanup. If root `LICENSE` already exists, do not use the alternate-path normalization flags. Preserve that same-path license with the existing `template_sync.local_overrides` `SKIP` decision instead. The helper never deletes the source license file and MUST NOT be used to alter license text without explicit owner authorization.
 

@@ -76,6 +76,7 @@ INLINE_BLOCK_MODULES = {
     "yaml-reference-only": frozenset({"yaml"}),
     "schema-reference-only": frozenset({"schema"}),
     "template-sync-support-reference-only": frozenset({"template-sync-support"}),
+    "github-actions-reference-only": frozenset({"github-actions"}),
 }
 # OR-retention (ANY) markers. A block in this family is retained when *at least
 # one* module it names is present in ``included_modules``; it is stripped only
