@@ -123,6 +123,10 @@ def _manifest() -> dict[str, Any]:
                 {"pattern": ".github/dependabot.yml", "requires_all": ["github-platform"]},
                 {"pattern": ".github/ISSUE_TEMPLATE/**", "requires_all": ["github-templates"]},
                 {
+                    "pattern": ".github/pull_request_template.md",
+                    "requires_all": ["github-templates"],
+                },
+                {
                     "pattern": ".github/workflows/data-ci.yml",
                     "requires_all": ["github-actions"],
                     "requires_any": ["yaml", "schema", "template-sync-support"],
@@ -271,6 +275,30 @@ def _write_common_repo(
             "        See [schema](../../schemas/example-config.schema.json).\n"
         ),
     )
+    _write_text(
+        repo_root,
+        ".github/ISSUE_TEMPLATE/config.yml",
+        (
+            "blank_issues_enabled: true\n"
+            "contact_links:\n"
+            "  - name: Schema Guide\n"
+            "    url: https://github.com/OWNER/REPO/blob/HEAD/schemas/README.md\n"
+            "    about: Read schema guidance\n"
+        ),
+    )
+    _write_text(
+        repo_root,
+        ".github/pull_request_template.md",
+        (
+            "## Checklist\n\n"
+            "### General\n\n"
+            "- [ ] Baseline checks pass\n\n"
+            "### Python-Specific (if applicable)\n\n"
+            "- [ ] `pytest` passes locally\n\n"
+            "### Schema-Specific (if applicable)\n\n"
+            "- [ ] If a `check-jsonschema` hook was changed, schema docs were reviewed\n"
+        ),
+    )
     _write_text(repo_root, "templates/json/example.json", "{}\n")
     if include_reference_content:
         _write_text(
@@ -383,6 +411,29 @@ def test_marker_excluding_optional_modules_reports_cleanup_scope(tmp_path: Path)
             "markdown-link.excluded-target | required_cleanup | schema | "
             ".github/ISSUE_TEMPLATE/bug_report.yml:7 |"
         )
+        for line in findings
+    )
+    assert any(
+        line.startswith(
+            "contact-link.excluded-target | required_cleanup | schema | "
+            ".github/ISSUE_TEMPLATE/config.yml:4 |"
+        )
+        for line in findings
+    )
+    assert any(
+        line.startswith(
+            "collaboration-template.prose-reference | required_cleanup | "
+            "python | .github/pull_request_template.md:"
+        )
+        and "`pytest` documents excluded python tooling." in line
+        for line in findings
+    )
+    assert any(
+        line.startswith(
+            "collaboration-template.prose-reference | required_cleanup | "
+            "schema | .github/pull_request_template.md:"
+        )
+        and "check-jsonschema documents excluded schema tooling." in line
         for line in findings
     )
     assert any(

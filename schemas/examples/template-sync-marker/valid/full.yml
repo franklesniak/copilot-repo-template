@@ -16,6 +16,12 @@ template_sync:
     - schema
     - python
     - terraform
+  issue_label_policy: custom
+  issue_labels:
+    - bug
+    - triage
+  discussions_policy: deferred-planned-render
+  collaboration_policy_follow_up_status: GitHub Discussions enablement remains open in _TODO-repo-init.md.
   local_overrides:
     - path: README.md
       reason: Project-specific reader-facing documentation.

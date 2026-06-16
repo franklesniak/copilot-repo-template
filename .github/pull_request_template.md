@@ -101,9 +101,8 @@ outside the scope of that rule and CI check.
 - [ ] If this repository uses pre-commit, I ran `pre-commit run --all-files` and all checks pass
 - [ ] If pre-commit made auto-fixes, I reviewed and committed them
 
+<!-- template-sync: begin python-reference-only -->
 ### Python-Specific (if applicable)
-
-<!-- Delete this section if your project does not use Python -->
 
 - [ ] Minimum Python version complies with the bugfix support policy (see [Python Developer's Guide - Versions](https://devguide.python.org/versions/))
 - [ ] I have not defaulted to or required unsupported Python versions
@@ -112,24 +111,36 @@ outside the scope of that rule and CI check.
 - [ ] `pytest` passes locally
 - [ ] `mypy` type checking passes (if applicable)
 
+<!-- template-sync: end python-reference-only -->
+<!-- template-sync: begin powershell-reference-only -->
 ### PowerShell-Specific (if applicable)
-
-<!-- Delete this section if your project does not use PowerShell -->
 
 - [ ] PSScriptAnalyzer passes locally (`Invoke-ScriptAnalyzer -Path . -Settings .github/linting/PSScriptAnalyzerSettings.psd1`)
 - [ ] Pester tests pass locally (`Invoke-Pester -Path tests/ -Output Detailed`)
 - [ ] PowerShell formatting follows repository standards (OTBS, consistent line endings)
 
+<!-- template-sync: end powershell-reference-only -->
+<!-- template-sync: begin data-ci-reference-only -->
 ### Data-File-Specific (if applicable)
 
-<!-- Delete this section if your project does not commit JSON, YAML, GitHub Actions workflows, or schema files. Note that GitHub Actions workflows alone are YAML, so this section will apply to most repositories. The General checklist retains its own no-secrets/PII/credentials bullet regardless of whether this section is removed. -->
+- [ ] Retained data-file checks pass locally through `pre-commit run --all-files` or the matching targeted pre-commit hooks
+- [ ] No secrets, real PII, or production credentials appear in any committed data file or fixture
 
-- [ ] `pre-commit run --all-files` passes (in particular `check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, and `check-metaschema`)
+<!-- template-sync: end data-ci-reference-only -->
+<!-- template-sync: begin schema-reference-only -->
+### Schema-Specific (if applicable)
+
 - [ ] If a schema under `schemas/` was modified, the matching `schemas/examples/<schema-name>/{valid,invalid}/` fixtures were updated in the same commit
 - [ ] If a schema under `schemas/` was modified, `pytest tests/test_schema_examples.py -v` still passes
+- [ ] If a `check-jsonschema` hook was added, removed, or renamed, related validation documentation was reviewed and updated where needed; any updates to protected instruction files (e.g., `.github/copilot-instructions.md`) were coordinated with maintainers per the protected-instruction-files rule
+
+<!-- template-sync: end schema-reference-only -->
+<!-- template-sync: begin github-actions-reference-only -->
+### GitHub Actions-Specific (if applicable)
+
 - [ ] If a GitHub Actions workflow was modified, `actionlint` passes (run via `pre-commit run actionlint --all-files`)
-- [ ] If a `check-jsonschema` hook was added, removed, or renamed, `.github/workflows/data-ci.yml` and related documentation were reviewed and updated where needed; any updates to protected instruction files (e.g., `.github/copilot-instructions.md`) were coordinated with maintainers per the protected-instruction-files rule
-- [ ] No secrets, real PII, or production credentials appear in any committed JSON/YAML file or fixture
+
+<!-- template-sync: end github-actions-reference-only -->
 
 ## Additional Notes
 

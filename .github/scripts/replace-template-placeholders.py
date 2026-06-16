@@ -47,6 +47,16 @@ APPROVED_GITHUB_URL_SUFFIXES = (
 )
 SECURITY_REPORTING_MODES = ("github-private-only", "contact-only", "both")
 SECURITY_CONTACT_REQUIRED_MODES = frozenset({"contact-only", "both"})
+ISSUE_LABEL_POLICIES = ("existing", "create-manual-follow-up", "omit", "custom")
+DISCUSSIONS_POLICIES = (
+    "enabled",
+    "disabled",
+    "deferred-planned-render",
+    "deferred-not-rendered",
+)
+ISSUE_LABEL_FOLLOW_UP_POLICIES = frozenset({"create-manual-follow-up"})
+DISCUSSIONS_FOLLOW_UP_POLICIES = frozenset({"deferred-planned-render", "deferred-not-rendered"})
+DEFAULT_ISSUE_LABELS = ("bug", "triage")
 ARGS_FILE_FORMATS = ("json", "yaml")
 ARGS_FILE_EXTENSION_FORMATS = {
     ".json": "json",
@@ -91,6 +101,10 @@ REPLACE_ARGS_FILE_FIELDS = frozenset(
         "security_contact",
         "security_contact_section",
         "security_reporting_mode",
+        "issue_label_policy",
+        "issue_labels",
+        "discussions_policy",
+        "collaboration_policy_follow_up_status",
         "vscode_title",
         "package_name",
         "package_description",
@@ -112,6 +126,9 @@ STRING_ARGS_FILE_FIELDS = frozenset(
         "security_contact",
         "security_contact_section",
         "security_reporting_mode",
+        "issue_label_policy",
+        "discussions_policy",
+        "collaboration_policy_follow_up_status",
         "vscode_title",
         "package_name",
         "package_description",
@@ -119,7 +136,7 @@ STRING_ARGS_FILE_FIELDS = frozenset(
         "package_version",
     }
 )
-LIST_STRING_ARGS_FILE_FIELDS = frozenset({"package_keywords"})
+LIST_STRING_ARGS_FILE_FIELDS = frozenset({"issue_labels", "package_keywords"})
 BOOLEAN_ARGS_FILE_FIELDS = frozenset({"dry_run"})
 REPLACE_CLI_FLAGS = {
     "repo_root": ("--repo-root",),
@@ -131,6 +148,10 @@ REPLACE_CLI_FLAGS = {
     "security_contact": ("--security-contact",),
     "security_contact_section": ("--security-contact-section",),
     "security_reporting_mode": ("--security-reporting-mode",),
+    "issue_label_policy": ("--issue-label-policy",),
+    "issue_labels": ("--issue-label",),
+    "discussions_policy": ("--discussions-policy",),
+    "collaboration_policy_follow_up_status": ("--collaboration-policy-follow-up-status",),
     "vscode_title": ("--vscode-title",),
     "package_name": ("--package-name",),
     "package_description": ("--package-description",),
@@ -178,6 +199,10 @@ class ReplacementContext:
     security_contact: str | None
     security_contact_section: str | None
     security_reporting_mode: str | None
+    issue_label_policy: str | None
+    issue_labels: tuple[str, ...] | None
+    discussions_policy: str | None
+    collaboration_policy_follow_up_status: str | None
     vscode_title: str | None
     package_name: str | None
     package_description: str | None
@@ -219,6 +244,11 @@ class ReplacementContext:
                 self.package_keywords,
             )
         )
+
+    @property
+    def has_collaboration_policy(self) -> bool:
+        """Return whether issue/PR collaboration policy rendering was requested."""
+        return self.issue_label_policy is not None or self.discussions_policy is not None
 
 
 @dataclass(frozen=True)
@@ -331,6 +361,76 @@ def validate_security_reporting_mode(security_reporting_mode: str) -> str:
     return security_reporting_mode
 
 
+def validate_issue_label_policy(issue_label_policy: str) -> str:
+    """Validate an issue-label policy name."""
+    if issue_label_policy not in ISSUE_LABEL_POLICIES:
+        quoted_policies = ", ".join(ISSUE_LABEL_POLICIES)
+        raise PlaceholderError(f"--issue-label-policy must be one of: {quoted_policies}.")
+    return issue_label_policy
+
+
+def validate_discussions_policy(discussions_policy: str) -> str:
+    """Validate a Discussions contact-link policy name."""
+    if discussions_policy not in DISCUSSIONS_POLICIES:
+        quoted_policies = ", ".join(DISCUSSIONS_POLICIES)
+        raise PlaceholderError(f"--discussions-policy must be one of: {quoted_policies}.")
+    return discussions_policy
+
+
+def validate_issue_labels(issue_labels: Sequence[str] | None) -> tuple[str, ...] | None:
+    """Validate optional issue labels for the custom issue-label policy."""
+    if issue_labels is None:
+        return None
+    validated_labels = tuple(validate_non_empty(label, "--issue-label") for label in issue_labels)
+    if not validated_labels:
+        raise PlaceholderError("--issue-label must be supplied at least once when present.")
+    invalid_labels = [label for label in validated_labels if "\n" in label or "\r" in label]
+    if invalid_labels:
+        raise PlaceholderError("--issue-label values must be single-line labels.")
+    return validated_labels
+
+
+def resolve_issue_label_policy(
+    *,
+    issue_label_policy: str | None,
+    issue_labels: tuple[str, ...] | None,
+) -> str | None:
+    """Resolve the label policy, inferring custom when labels are supplied."""
+    if issue_label_policy is None:
+        return "custom" if issue_labels is not None else None
+    resolved_policy = validate_issue_label_policy(issue_label_policy)
+    if resolved_policy == "custom" and issue_labels is None:
+        raise PlaceholderError("--issue-label-policy custom requires at least one --issue-label.")
+    if resolved_policy != "custom" and issue_labels is not None:
+        raise PlaceholderError("--issue-label can only be used with --issue-label-policy custom.")
+    return resolved_policy
+
+
+def validate_collaboration_policy_follow_up(
+    *,
+    issue_label_policy: str | None,
+    discussions_policy: str | None,
+    collaboration_policy_follow_up_status: str | None,
+) -> str | None:
+    """Validate follow-up status for policies that leave manual setup open."""
+    follow_up_status = validate_optional_non_empty(
+        collaboration_policy_follow_up_status,
+        "--collaboration-policy-follow-up-status",
+    )
+    needs_follow_up = (
+        issue_label_policy in ISSUE_LABEL_FOLLOW_UP_POLICIES
+        or discussions_policy in DISCUSSIONS_FOLLOW_UP_POLICIES
+    )
+    if needs_follow_up and follow_up_status is None:
+        raise PlaceholderError(
+            "--collaboration-policy-follow-up-status is required when "
+            "--issue-label-policy is create-manual-follow-up or "
+            "--discussions-policy is deferred-planned-render/deferred-not-rendered; "
+            "record the matching _TODO-repo-init.md dependent-file status."
+        )
+    return follow_up_status
+
+
 def resolve_security_reporting_mode(
     *,
     security_reporting_mode: str | None,
@@ -440,6 +540,10 @@ def build_replacement_context(
     security_contact: str | None = None,
     security_contact_section: str | None = None,
     security_reporting_mode: str | None = None,
+    issue_label_policy: str | None = None,
+    issue_labels: Sequence[str] | None = None,
+    discussions_policy: str | None = None,
+    collaboration_policy_follow_up_status: str | None = None,
     vscode_title: str | None = None,
     package_name: str | None = None,
     package_description: str | None = None,
@@ -489,6 +593,19 @@ def build_replacement_context(
             "--security-contact or --security-contact-section is required when "
             f"--security-reporting-mode is {resolved_security_reporting_mode}."
         )
+    validated_issue_labels = validate_issue_labels(issue_labels)
+    resolved_issue_label_policy = resolve_issue_label_policy(
+        issue_label_policy=issue_label_policy,
+        issue_labels=validated_issue_labels,
+    )
+    resolved_discussions_policy = (
+        validate_discussions_policy(discussions_policy) if discussions_policy is not None else None
+    )
+    validated_follow_up_status = validate_collaboration_policy_follow_up(
+        issue_label_policy=resolved_issue_label_policy,
+        discussions_policy=resolved_discussions_policy,
+        collaboration_policy_follow_up_status=collaboration_policy_follow_up_status,
+    )
     validated_conduct_contact = (
         validate_non_empty(conduct_contact, "--conduct-contact")
         if conduct_contact is not None
@@ -511,6 +628,10 @@ def build_replacement_context(
         security_contact=validated_security_contact,
         security_contact_section=validated_security_contact_section,
         security_reporting_mode=resolved_security_reporting_mode,
+        issue_label_policy=resolved_issue_label_policy,
+        issue_labels=validated_issue_labels,
+        discussions_policy=resolved_discussions_policy,
+        collaboration_policy_follow_up_status=validated_follow_up_status,
         vscode_title=(
             validate_non_empty(vscode_title, "--vscode-title")
             if vscode_title is not None
@@ -792,6 +913,175 @@ def render_security_reporting_mode(
     return tuple(records)
 
 
+def yaml_string(value: str) -> str:
+    """Return a YAML-safe quoted scalar using JSON string syntax."""
+    return json.dumps(value)
+
+
+def collaboration_follow_up_comments(
+    status: str,
+    *,
+    prefix: str = "",
+) -> str:
+    """Return comment lines describing an open _TODO-repo-init.md action."""
+    comment_lines = [f"{prefix}# Follow-up: _TODO-repo-init.md dependent-file status remains open:"]
+    comment_lines.extend(f"{prefix}#   {line}" for line in status.splitlines())
+    return "\n".join(comment_lines) + "\n"
+
+
+def issue_labels_for_policy(context: ReplacementContext) -> tuple[str, ...]:
+    """Return the labels rendered for the selected issue-label policy."""
+    if context.issue_label_policy in {"existing", "create-manual-follow-up"}:
+        return DEFAULT_ISSUE_LABELS
+    if context.issue_label_policy == "custom":
+        assert context.issue_labels is not None
+        return context.issue_labels
+    return ()
+
+
+def build_bug_report_label_block(context: ReplacementContext) -> str:
+    """Build the top-level bug-report labels block for the selected policy."""
+    policy = context.issue_label_policy
+    if policy is None:
+        return ""
+
+    lines = [
+        "# CUSTOMIZE: Update these labels to match your repository's label taxonomy.",
+        "# Template-sync issue-label policy: " + policy,
+    ]
+    if policy == "existing":
+        lines.append("# These labels are expected to exist before this template is used.")
+    elif policy == "create-manual-follow-up":
+        assert context.collaboration_policy_follow_up_status is not None
+        lines.append("# These labels are rendered before repository setup is complete.")
+        lines.append(
+            collaboration_follow_up_comments(context.collaboration_policy_follow_up_status).rstrip(
+                "\n"
+            )
+        )
+    elif policy == "omit":
+        lines.append("# Labels intentionally omitted for downstream policy.")
+        return "\n".join(lines) + "\n"
+    elif policy == "custom":
+        lines.append("# Custom labels were supplied by the downstream adoption policy.")
+    else:
+        raise AssertionError(f"Unhandled issue label policy: {policy}")
+
+    lines.append("labels:")
+    lines.extend(f"  - {yaml_string(label)}" for label in issue_labels_for_policy(context))
+    return "\n".join(lines) + "\n"
+
+
+def replace_bug_report_label_block(
+    text: str,
+    context: ReplacementContext,
+) -> tuple[str, int]:
+    """Replace the top-level bug-report label block for the selected policy."""
+    start = find_line_start(text, "# CUSTOMIZE: Update these labels")
+    end = find_line_start(text, "# CUSTOMIZE: Uncomment and update to specify an issue type")
+    if start == -1 or end == -1:
+        return text, 0
+    return f"{text[:start]}{build_bug_report_label_block(context)}{text[end:]}", 1
+
+
+def build_config_discussions_block(context: ReplacementContext) -> str:
+    """Build the issue-template contact-link Discussions block for the selected policy."""
+    policy = context.discussions_policy
+    if policy is None:
+        return ""
+
+    lines = [
+        "  # =============================================================================",
+        "  # DISCUSSIONS LINK (OPTIONAL)",
+        "  # =============================================================================",
+        f"  # Template-sync Discussions policy: {policy}.",
+    ]
+    renders_link = policy in {"enabled", "deferred-planned-render"}
+    if policy in DISCUSSIONS_FOLLOW_UP_POLICIES:
+        assert context.collaboration_policy_follow_up_status is not None
+        lines.append(
+            collaboration_follow_up_comments(
+                context.collaboration_policy_follow_up_status,
+                prefix="  ",
+            ).rstrip("\n")
+        )
+    if policy == "disabled":
+        lines.append("  # GitHub Discussions contact link intentionally omitted.")
+    elif policy == "deferred-not-rendered":
+        lines.append("  # GitHub Discussions contact link deferred and not rendered.")
+    elif policy not in {"enabled", "deferred-planned-render"}:
+        raise AssertionError(f"Unhandled Discussions policy: {policy}")
+    if renders_link:
+        lines.extend(
+            [
+                "  - name: Questions & Discussions",
+                "    url: https://github.com/OWNER/REPO/discussions",
+                "    about: Ask questions and discuss ideas (not for bug reports)",
+            ]
+        )
+    return "\n".join(lines) + "\n"
+
+
+def replace_config_discussions_block(
+    text: str,
+    context: ReplacementContext,
+) -> tuple[str, int]:
+    """Replace the issue-template config Discussions contact-link block."""
+    heading_candidates = (
+        "  # DISCUSSIONS LINK (OPTIONAL)\n",
+        "  # DISCUSSIONS LINK CONFIGURATION\n",
+    )
+    heading_index = -1
+    for heading in heading_candidates:
+        heading_index = text.find(heading)
+        if heading_index != -1:
+            break
+    if heading_index == -1:
+        return text, 0
+    start = text.rfind(
+        "  # =============================================================================",
+        0,
+        heading_index,
+    )
+    if start == -1:
+        return text, 0
+    return f"{text[:start]}{build_config_discussions_block(context)}", 1
+
+
+def render_collaboration_policy(
+    file_texts: dict[str, str],
+    context: ReplacementContext,
+) -> tuple[ReplacementRecord, ...]:
+    """Render issue-template collaboration policies."""
+    if not context.has_collaboration_policy:
+        return ()
+    renderers: dict[str, tuple[Callable[[str, ReplacementContext], tuple[str, int]], ...]] = {}
+    if context.issue_label_policy is not None:
+        renderers[".github/ISSUE_TEMPLATE/bug_report.yml"] = (replace_bug_report_label_block,)
+    if context.discussions_policy is not None:
+        renderers[".github/ISSUE_TEMPLATE/config.yml"] = (replace_config_discussions_block,)
+
+    records: list[ReplacementRecord] = []
+    for relative_path, path_renderers in renderers.items():
+        if relative_path not in file_texts:
+            continue
+        text = file_texts[relative_path]
+        replacement_count = 0
+        for renderer in path_renderers:
+            text, count = renderer(text, context)
+            replacement_count += count
+        if replacement_count:
+            file_texts[relative_path] = text
+            records.append(
+                ReplacementRecord(
+                    path=relative_path,
+                    rule_name="collaboration policy",
+                    count=replacement_count,
+                )
+            )
+    return tuple(records)
+
+
 def render_conduct_contact_sentence(
     file_texts: dict[str, str],
     context: ReplacementContext,
@@ -1038,6 +1328,15 @@ def replace_placeholders(
                 resolve_repo_path(repo_root, relative_path),
                 relative_path,
             )
+    if context.has_collaboration_policy:
+        for relative_path in (
+            ".github/ISSUE_TEMPLATE/config.yml",
+            ".github/ISSUE_TEMPLATE/bug_report.yml",
+        ):
+            files_by_path[relative_path] = (
+                resolve_repo_path(repo_root, relative_path),
+                relative_path,
+            )
     for rule in rules:
         for relative_path in rule.paths:
             files_by_path[relative_path] = (
@@ -1056,6 +1355,7 @@ def replace_placeholders(
     validate_context_against_retained_files(file_texts, context)
     records.extend(render_conduct_contact_sentence(file_texts, context))
     records.extend(render_security_reporting_mode(file_texts, context))
+    records.extend(render_collaboration_policy(file_texts, context))
     records.extend(render_package_metadata(file_texts, context))
 
     for rule in rules:
@@ -1442,6 +1742,38 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
     replace_parser.add_argument(
+        "--issue-label-policy",
+        choices=ISSUE_LABEL_POLICIES,
+        default=None,
+        help=(
+            "Issue-template label policy: existing, create-manual-follow-up, " "omit, or custom."
+        ),
+    )
+    replace_parser.add_argument(
+        "--issue-label",
+        dest="issue_labels",
+        action="append",
+        default=None,
+        help="Custom issue label for --issue-label-policy custom. May be repeated.",
+    )
+    replace_parser.add_argument(
+        "--discussions-policy",
+        choices=DISCUSSIONS_POLICIES,
+        default=None,
+        help=(
+            "Issue-template Discussions contact-link policy: enabled, disabled, "
+            "deferred-planned-render, or deferred-not-rendered."
+        ),
+    )
+    replace_parser.add_argument(
+        "--collaboration-policy-follow-up-status",
+        default=None,
+        help=(
+            "Single source status text from _TODO-repo-init.md for label or "
+            "Discussions policies that leave manual setup open."
+        ),
+    )
+    replace_parser.add_argument(
         "--vscode-title",
         default=None,
         help="replacement VS Code window title; defaults to the repository name",
@@ -1527,6 +1859,10 @@ def run_replace(args: argparse.Namespace) -> int:
         security_contact=args.security_contact,
         security_contact_section=args.security_contact_section,
         security_reporting_mode=args.security_reporting_mode,
+        issue_label_policy=args.issue_label_policy,
+        issue_labels=args.issue_labels,
+        discussions_policy=args.discussions_policy,
+        collaboration_policy_follow_up_status=args.collaboration_policy_follow_up_status,
         vscode_title=args.vscode_title,
         package_name=args.package_name,
         package_description=args.package_description,

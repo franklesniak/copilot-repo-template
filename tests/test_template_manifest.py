@@ -221,6 +221,7 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "AGENTS.md": 2,
         "CLAUDE.md": 2,
         "GEMINI.md": 2,
+        ".github/pull_request_template.md": 1,
     },
     "python-reference-only": {
         ".github/copilot-instructions.md": 3,
@@ -231,6 +232,7 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "GEMINI.md": 2,
         "README.md": 6,
         "CONTRIBUTING.md": 9,
+        ".github/pull_request_template.md": 1,
     },
     "terraform-reference-only": {
         ".github/copilot-instructions.md": 7,
@@ -271,6 +273,7 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "GEMINI.md": 3,
         "README.md": 4,
         "CONTRIBUTING.md": 2,
+        ".github/pull_request_template.md": 1,
     },
     "template-sync-support-reference-only": {
         "README.md": 2,
@@ -279,6 +282,10 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
     "data-ci-reference-only": {
         "README.md": 1,
         "CONTRIBUTING.md": 1,
+        ".github/pull_request_template.md": 1,
+    },
+    "github-actions-reference-only": {
+        ".github/pull_request_template.md": 1,
     },
 }
 # Single-module AND-retention reference-only markers. Each block is stripped when
@@ -292,6 +299,7 @@ REFERENCE_ONLY_MARKER_MODULES = {
     "yaml-reference-only": "yaml",
     "schema-reference-only": "schema",
     "template-sync-support-reference-only": "template-sync-support",
+    "github-actions-reference-only": "github-actions",
 }
 # OR-retention (ANY) reference-only markers. Each block is retained when at least
 # one named module is included and stripped only when all of them are excluded;
@@ -315,6 +323,7 @@ REFERENCE_ONLY_MANIFEST_PATTERNS = {
     "GEMINI.md": "GEMINI.md",
     "README.md": "README.md",
     "CONTRIBUTING.md": "CONTRIBUTING.md",
+    ".github/pull_request_template.md": ".github/pull_request_template.md",
 }
 REFERENCE_ONLY_FORBIDDEN_ENTRY_POINT_TOKENS = {
     "markdown-reference-only": (
@@ -2290,6 +2299,45 @@ def test_reference_only_pruning_preserves_platform_protocol_headings() -> None:
         stripped_text = _strip_reference_only_blocks_for_modules(relative_path, included_modules)
         for required_heading in required_headings:
             assert required_heading in stripped_text, f"{relative_path}: {required_heading}"
+
+
+def test_pr_template_reference_pruning_follows_module_boundaries() -> None:
+    """PR checklist sections must strip cleanly for partial template adoption."""
+    no_optional_text = _strip_inline_blocks_for_modules(
+        ".github/pull_request_template.md",
+        {"github-templates"},
+    )
+    for forbidden_token in (
+        "Python-Specific",
+        "PowerShell-Specific",
+        "Data-File-Specific",
+        "Schema-Specific",
+        "GitHub Actions-Specific",
+        "actionlint",
+        "check-jsonschema",
+        "pytest tests/test_schema_examples.py -v",
+    ):
+        assert forbidden_token not in no_optional_text
+    assert "### General" in no_optional_text
+    assert "### Pre-commit Verification" in no_optional_text
+
+    schema_only_text = _strip_inline_blocks_for_modules(
+        ".github/pull_request_template.md",
+        {"github-templates", "schema"},
+    )
+    assert "Data-File-Specific" in schema_only_text
+    assert "Schema-Specific" in schema_only_text
+    assert "check-jsonschema" in schema_only_text
+    assert "GitHub Actions-Specific" not in schema_only_text
+    assert "actionlint" not in schema_only_text
+
+    schema_actions_text = _strip_inline_blocks_for_modules(
+        ".github/pull_request_template.md",
+        {"github-templates", "schema", "github-actions"},
+    )
+    assert "Schema-Specific" in schema_actions_text
+    assert "GitHub Actions-Specific" in schema_actions_text
+    assert "actionlint" in schema_actions_text
 
 
 def test_partial_reference_stripping_leaves_protected_docs_clean() -> None:

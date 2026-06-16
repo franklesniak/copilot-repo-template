@@ -182,6 +182,11 @@ template_manifest:
     - pattern: '.github/pull_request_template.md'
       requires_all:
         - github-templates
+      notes: >-
+        Contains Markdown-safe *-reference-only inline blocks for optional
+        stack-specific checklist sections. Remove each delimited reference-only
+        block when its module is excluded while preserving the retained
+        template checklist.
     - pattern: '.github/CODEOWNERS'
       requires_all:
         - github-templates

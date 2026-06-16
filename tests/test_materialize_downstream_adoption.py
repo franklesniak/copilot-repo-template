@@ -332,14 +332,19 @@ def validate_dependabot_vendor_schema(path: Path) -> None:
 
 def security_contact_link(config: object) -> dict[str, object]:
     """Return the security contact link from parsed issue-template config."""
+    return contact_link_by_name(config, "Security Vulnerabilities")
+
+
+def contact_link_by_name(config: object, name: str) -> dict[str, object]:
+    """Return a named contact link from parsed issue-template config."""
     assert isinstance(config, dict)
     contact_links = config["contact_links"]
     assert isinstance(contact_links, list)
     for contact_link in contact_links:
         assert isinstance(contact_link, dict)
-        if contact_link.get("name") == "Security Vulnerabilities":
+        if contact_link.get("name") == name:
             return contact_link
-    raise AssertionError("Security Vulnerabilities contact link not found")
+    raise AssertionError(f"{name} contact link not found")
 
 
 def assert_issue_form_shape(bug_report: object) -> None:
@@ -2404,6 +2409,96 @@ def test_materialized_security_reporting_mode_preserves_github_host(
     ):
         text = read_file(target_root / relative_path)
         assert "https://github.com/octo/widget" not in text
+
+
+@pytest.mark.upstream_template_only
+def test_materializes_collaboration_policy_cli_inputs(
+    tmp_path: Path,
+) -> None:
+    """Materialization passes collaboration policy CLI inputs to the helper."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_security_reporting_template(template_root)
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--repository",
+        "octo/widget",
+        "--security-contact",
+        "security@example.com",
+        "--conduct-contact",
+        "conduct@example.com",
+        "--issue-label-policy",
+        "custom",
+        "--issue-label",
+        "type: bug",
+        "--issue-label",
+        "needs triage",
+        "--discussions-policy",
+        "enabled",
+    )
+
+    assert result.returncode == 0, result.stderr
+    bug_report = load_yaml(target_root / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml")
+    assert isinstance(bug_report, dict)
+    assert bug_report["labels"] == ["type: bug", "needs triage"]
+    config = load_yaml(target_root / ".github" / "ISSUE_TEMPLATE" / "config.yml")
+    discussions_link = contact_link_by_name(config, "Questions & Discussions")
+    assert discussions_link["url"] == "https://github.com/octo/widget/discussions"
+
+
+@pytest.mark.upstream_template_only
+def test_materializes_collaboration_policy_from_decisions_file(
+    tmp_path: Path,
+) -> None:
+    """Marker-recorded collaboration policy fields feed placeholder rendering."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_security_reporting_template(template_root)
+    follow_up_status = "Discussions enablement is still open in _TODO-repo-init.md."
+    write_yaml(
+        target_root / "decisions.yml",
+        {
+            "template_sync": {
+                "source_repo": SOURCE_REPO,
+                "included_modules": ["baseline"],
+                "issue_label_policy": "create-manual-follow-up",
+                "discussions_policy": "deferred-not-rendered",
+                "collaboration_policy_follow_up_status": follow_up_status,
+            }
+        },
+    )
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--decisions-file",
+        "decisions.yml",
+        "--repository",
+        "octo/widget",
+        "--security-contact",
+        "security@example.com",
+        "--conduct-contact",
+        "conduct@example.com",
+    )
+
+    assert result.returncode == 0, result.stderr
+    bug_report = load_yaml(target_root / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml")
+    assert isinstance(bug_report, dict)
+    assert bug_report["labels"] == ["bug", "triage"]
+    config_text = read_file(target_root / ".github" / "ISSUE_TEMPLATE" / "config.yml")
+    assert "/discussions" not in config_text
+    assert "_TODO-repo-init.md dependent-file status remains open" in config_text
+    assert follow_up_status in config_text
+    assert "issue_label_policy: create-manual-follow-up" in result.stdout
+    assert "discussions_policy: deferred-not-rendered" in result.stdout
 
 
 @pytest.mark.upstream_template_only
