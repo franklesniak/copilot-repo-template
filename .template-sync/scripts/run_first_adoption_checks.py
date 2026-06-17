@@ -380,7 +380,9 @@ def included_modules_from_marker_text(marker_text: str) -> frozenset[str]:
     example ``issue_labels``) are never read as retained modules, even when a
     downstream label happens to match a module name. Block sequence items are
     accepted both when indented beneath the key and when rendered at the key's
-    own indentation, matching PyYAML's default ``safe_dump`` block style.
+    own indentation, matching PyYAML's default ``safe_dump`` block style. Blank
+    lines and full-line comments inside the block are skipped rather than
+    treated as block terminators, so hand-edited markers parse correctly.
     """
     modules: set[str] = set()
     in_block = False
@@ -392,7 +394,10 @@ def included_modules_from_marker_text(marker_text: str) -> frozenset[str]:
                 in_block = True
                 block_indent = len(key_match.group("indent"))
             continue
-        if not line.strip():
+        if is_marker_blank_or_comment_line(line):
+            # Blank lines and full-line comments are structurally transparent in
+            # YAML; skip them so a comment at the block indentation does not
+            # prematurely terminate the included_modules block.
             continue
         item_match = MARKER_MODULE_PATTERN.match(line)
         if item_match is None and len(line) - len(line.lstrip()) <= block_indent:

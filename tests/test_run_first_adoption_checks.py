@@ -281,6 +281,31 @@ def test_marker_module_detection_ignores_sibling_string_lists(
     assert all("powershell" not in command.command for command in plan.commands)
 
 
+def test_marker_module_detection_skips_comment_lines_inside_block(
+    tmp_path: Path,
+) -> None:
+    """Full-line comments inside included_modules do not end the module scan."""
+    # A hand-added comment at the block indentation must be skipped, not treated
+    # as an end-of-block marker that drops the modules listed after it.
+    _write_marker(
+        tmp_path,
+        (
+            "template_sync:\n"
+            "  included_modules:\n"
+            "  - baseline\n"
+            "  # downstream note kept after editing\n"
+            "  - powershell\n"
+            "  - template-sync-support\n"
+            "  issue_labels:\n"
+            "  - markdown\n"
+        ),
+    )
+
+    assert first_adoption.marker_included_modules(tmp_path) == frozenset(
+        {"baseline", "powershell", "template-sync-support"}
+    )
+
+
 def test_tracked_only_files_are_collected(tmp_path: Path) -> None:
     """Tracked files staged in the index are included in the pre-commit file list."""
     _run_git(tmp_path, "init")
