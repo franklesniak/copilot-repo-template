@@ -162,6 +162,7 @@ def _marker(
     *,
     last_reviewed_template_commit: str | None,
     local_overrides: list[dict[str, str]] | None = None,
+    local_path_ownership: list[dict[str, str]] | None = None,
     deferred_candidates: list[dict[str, str]] | None = None,
     protected_decisions: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
@@ -174,6 +175,8 @@ def _marker(
         template_sync["last_reviewed_template_commit"] = last_reviewed_template_commit
     if local_overrides is not None:
         template_sync["local_overrides"] = local_overrides
+    if local_path_ownership is not None:
+        template_sync["local_path_ownership"] = local_path_ownership
     if deferred_candidates is not None:
         template_sync["deferred_protected_candidates"] = deferred_candidates
     if protected_decisions is not None:
@@ -574,6 +577,102 @@ def test_ledger_only_reports_manifest_marker_and_todo_decisions(tmp_path: Path) 
         in written_ledger
     )
     assert "| `_TODO-repo-init.md` link |" in written_ledger
+
+
+def test_ledger_and_summary_report_local_path_ownership(tmp_path: Path) -> None:
+    """Local path ownership records render separately from local overrides."""
+    _init_repo(
+        tmp_path,
+        extra_mappings=[
+            {"pattern": "schemas/**", "requires_all": ["schema"]},
+        ],
+    )
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["baseline"],
+            last_reviewed_template_commit=None,
+            local_path_ownership=[
+                {
+                    "path": "docs/",
+                    "reason": "Project documentation is downstream-owned.",
+                },
+                {
+                    "path": "schemas/local-project.schema.json",
+                    "reason": "Project schema is downstream-owned.",
+                    "overlap_exception_reason": "It lives near template schema examples.",
+                },
+            ],
+        ),
+    )
+
+    ledger_result = _run_generator(tmp_path, "--ledger-only")
+    summary_result = _run_generator(tmp_path, "--summary")
+
+    assert ledger_result.returncode == 0, ledger_result.stderr
+    assert (
+        "| docs/ | local | local ownership | Marker local path ownership: "
+        "Project documentation is downstream-owned."
+    ) in ledger_result.stdout
+    assert (
+        "| schemas/local-project.schema.json | all: schema | local ownership | "
+        "Marker local path ownership: Project schema is downstream-owned. "
+        "Broad manifest overlap exception: It lives near template schema examples."
+    ) in ledger_result.stdout
+    assert "Marker local override defaults" not in ledger_result.stdout
+
+    assert summary_result.returncode == 0, summary_result.stderr
+    assert "## Local Path Ownership" in summary_result.stdout
+    assert (
+        "| docs/ | Project documentation is downstream-owned. | not recorded |"
+        in summary_result.stdout
+    )
+    assert (
+        "| schemas/local-project.schema.json | Project schema is downstream-owned. | "
+        "It lives near template schema examples. |"
+    ) in summary_result.stdout
+
+
+def test_ledger_directory_ownership_reports_manifest_proximity(tmp_path: Path) -> None:
+    """A directory ownership record over a broad manifest pattern reports its modules.
+
+    ``selected_relation_for_path`` cannot match the directory path itself against a
+    glob such as ``schemas/**``, so the ledger must derive the proximate modules
+    from manifest mappings under the directory prefix instead of rendering ``local``.
+    """
+    _init_repo(
+        tmp_path,
+        extra_mappings=[
+            {"pattern": "schemas/**", "requires_all": ["schema"]},
+        ],
+    )
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["baseline"],
+            last_reviewed_template_commit=None,
+            local_path_ownership=[
+                {
+                    "path": "schemas/",
+                    "reason": "Project owns the schemas directory.",
+                    "overlap_exception_reason": "Downstream owns this entire tree.",
+                },
+            ],
+        ),
+    )
+
+    ledger_result = _run_generator(tmp_path, "--ledger-only")
+
+    assert ledger_result.returncode == 0, ledger_result.stderr
+    assert (
+        "| schemas/ | all: schema | local ownership | "
+        "Marker local path ownership: Project owns the schemas directory. "
+        "Broad manifest overlap exception: Downstream owns this entire tree. "
+        "Manifest proximity is documented by this ownership record."
+    ) in ledger_result.stdout
+    assert "| schemas/ | local |" not in ledger_result.stdout
 
 
 def test_ledger_only_without_marker_uses_empty_marker_data(tmp_path: Path) -> None:

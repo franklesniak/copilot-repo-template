@@ -201,6 +201,7 @@ CLI_FLAGS = {
 }
 MARKER_COPY_FIELDS = (
     "local_overrides",
+    "local_path_ownership",
     "protected_file_decisions",
     "deferred_protected_candidates",
     "instruction_contract_waivers",
@@ -1264,6 +1265,7 @@ def load_decisions(
         last_reviewed_template_commit=reviewed_commit,
         included_modules=frozenset(included_modules),
         local_overrides=(),
+        local_path_ownership=(),
         deferred_candidates=(),
         protected_decisions=(),
     )
@@ -1368,6 +1370,7 @@ def append_license_preservation_override(
         last_reviewed_template_commit=decisions.marker_data.last_reviewed_template_commit,
         included_modules=decisions.marker_data.included_modules,
         local_overrides=local_overrides,
+        local_path_ownership=decisions.marker_data.local_path_ownership,
         deferred_candidates=decisions.marker_data.deferred_candidates,
         protected_decisions=decisions.marker_data.protected_decisions,
     )

@@ -33,12 +33,14 @@ from template_sync_materialization_helpers import (  # noqa: E402
     REMOVAL_DECISION,
     DeferredProtectedCandidate,
     ManifestMapping,
+    LocalPathOwnership,
     LocalOverride,
     PathRelation,
     PROTECTED_EXACT_PATHS,
     ProtectedFileDecision,
     TemplateSyncMaterializationError as MarkerValidationError,
     deferred_candidate_summary,
+    directory_prefix_relation,
     has_wildcard,
     is_protected_instruction_path,
     is_protected_manifest_pattern,
@@ -198,6 +200,7 @@ class MarkerData:
     last_reviewed_template_commit: str | None
     included_modules: frozenset[str]
     local_overrides: tuple[LocalOverride, ...]
+    local_path_ownership: tuple[LocalPathOwnership, ...]
     deferred_candidates: tuple[DeferredProtectedCandidate, ...]
     protected_decisions: tuple[ProtectedFileDecision, ...]
 
@@ -797,6 +800,7 @@ def parse_marker(marker: dict[str, Any]) -> MarkerData:
         last_reviewed_template_commit=marker_data.last_reviewed_template_commit,
         included_modules=marker_data.included_modules,
         local_overrides=marker_data.local_overrides,
+        local_path_ownership=marker_data.local_path_ownership,
         deferred_candidates=marker_data.deferred_candidates,
         protected_decisions=marker_data.protected_decisions,
     )
@@ -1297,6 +1301,7 @@ def empty_marker_data() -> MarkerData:
         last_reviewed_template_commit=None,
         included_modules=frozenset(),
         local_overrides=(),
+        local_path_ownership=(),
         deferred_candidates=(),
         protected_decisions=(),
     )
@@ -2288,6 +2293,58 @@ def build_unmatched_local_override_row(
     )
 
 
+def build_local_path_ownership_row(
+    *,
+    local_path_ownership: LocalPathOwnership,
+    mappings: tuple[ManifestMapping, ...],
+    todo_items: tuple[TodoItem, ...],
+    todo_path: Path,
+    repo_root: Path,
+    ledger_output_dir: Path | None = None,
+) -> LedgerRow:
+    """Build a ledger row for one downstream local path ownership record."""
+    relation = selected_relation_for_path(local_path_ownership.path, mappings)
+    if relation is None and local_path_ownership.is_directory:
+        # A directory record (for example ``schemas/``) is never matched by a glob
+        # such as ``schemas/**``, so fall back to the manifest mappings under the
+        # directory prefix. This keeps the ledger's manifest_modules and proximity
+        # note consistent with the broad-overlap checks in marker validation.
+        relation = directory_prefix_relation(local_path_ownership.path, mappings)
+    modules = relation.requires_all | relation.requires_any if relation is not None else frozenset()
+    is_protected = is_protected_instruction_path(local_path_ownership.path)
+    reason = f"Marker local path ownership: {local_path_ownership.reason}"
+    if local_path_ownership.overlap_exception_reason is not None:
+        reason += (
+            f" Broad manifest overlap exception: {local_path_ownership.overlap_exception_reason}"
+        )
+    if relation is not None:
+        reason += " Manifest proximity is documented by this ownership record."
+
+    return LedgerRow(
+        path=local_path_ownership.display_path,
+        manifest_modules=(
+            format_manifest_modules(relation.requires_all, relation.requires_any)
+            if relation is not None
+            else "local"
+        ),
+        decision="local ownership",
+        reason=reason,
+        protected_file="Yes" if is_protected else "No",
+        requires_maintainer_decision="Yes" if is_protected else "No",
+        adoption_mode="downstream-owned",
+        todo_link=matching_todo_links(
+            path=local_path_ownership.display_path,
+            modules=modules,
+            is_protected=is_protected,
+            todo_items=todo_items,
+            todo_path=todo_path,
+            repo_root=repo_root,
+            ledger_output_dir=ledger_output_dir,
+        ),
+        validation_commands=validation_commands_for_modules(modules),
+    )
+
+
 def build_unmatched_protected_decision_row(
     *,
     protected_decision: ProtectedFileDecision,
@@ -2394,6 +2451,21 @@ def build_adoption_ledger_rows(
                 todo_path=todo_path,
                 repo_root=repo_root,
                 default_adoption_mode=default_adoption_mode,
+                ledger_output_dir=ledger_output_dir,
+            )
+        )
+
+    for local_path_ownership in sorted(
+        marker_data.local_path_ownership,
+        key=lambda record: record.display_path,
+    ):
+        rows.append(
+            build_local_path_ownership_row(
+                local_path_ownership=local_path_ownership,
+                mappings=mappings,
+                todo_items=todo_items,
+                todo_path=todo_path,
+                repo_root=repo_root,
                 ledger_output_dir=ledger_output_dir,
             )
         )
@@ -2701,6 +2773,34 @@ def format_summary_local_overrides(marker_data: MarkerData) -> str:
     return "\n".join(lines)
 
 
+def format_summary_local_path_ownership(marker_data: MarkerData) -> str:
+    """Render marker local path ownership records for the concise adoption summary."""
+    if not marker_data.local_path_ownership:
+        return "None recorded."
+
+    lines = [
+        "| Path | Reason | Overlap exception reason |",
+        "| --- | --- | --- |",
+    ]
+    for record in sorted(
+        marker_data.local_path_ownership,
+        key=lambda item: item.display_path,
+    ):
+        lines.append(
+            "| "
+            + " | ".join(
+                markdown_cell(cell)
+                for cell in (
+                    record.display_path,
+                    record.reason,
+                    record.overlap_exception_reason or "not recorded",
+                )
+            )
+            + " |"
+        )
+    return "\n".join(lines)
+
+
 def format_summary_manual_todo_items(
     *,
     todo_state: SummaryTodoState,
@@ -2915,6 +3015,10 @@ def format_adoption_summary(
             "",
             format_summary_local_overrides(marker_data),
             "",
+            "## Local Path Ownership",
+            "",
+            format_summary_local_path_ownership(marker_data),
+            "",
             "## Unresolved Maintainer Decisions",
             "",
             format_summary_unresolved_decisions(
@@ -3050,6 +3154,7 @@ def format_marker_summary(marker_data: MarkerData, marker_present: bool) -> str:
     return (
         "found; included modules: "
         f"{included_modules}; local overrides: {len(marker_data.local_overrides)}; "
+        f"local path ownership records: {len(marker_data.local_path_ownership)}; "
         f"deferred protected candidates: {len(marker_data.deferred_candidates)}; "
         f"protected-file decisions: {len(marker_data.protected_decisions)}"
     )

@@ -56,6 +56,26 @@
             }
           }
         },
+        "local_path_ownership": {
+          "type": "array",
+          "description": "Downstream-owned exact paths or explicit directory-prefix path families that are not upstream template-managed manifest rows.",
+          "items": {
+            "type": "object",
+            "required": ["path", "reason"],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "$ref": "#/$defs/localOwnershipPath"
+              },
+              "reason": {
+                "$ref": "#/$defs/nonEmptyString"
+              },
+              "overlap_exception_reason": {
+                "$ref": "#/$defs/nonEmptyString"
+              }
+            }
+          }
+        },
         "deferred_protected_candidates": {
           "type": "array",
           "description": "Protected paths whose upstream changes require explicit owner authorization before they can be applied.",
@@ -206,6 +226,11 @@
       "type": "string",
       "minLength": 1,
       "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(/|$))(?!.*//).+$"
+    },
+    "localOwnershipPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(/|$))(?!.*//)(?!.*[*?\\[\\]]).+$"
     },
     "repositoryFilePath": {
       "type": "string",

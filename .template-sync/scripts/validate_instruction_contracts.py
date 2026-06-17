@@ -378,9 +378,13 @@ def load_marker_for_downstream(
 ]:
     """Load downstream marker state needed by instruction-contract validation."""
     marker = load_schema_validated_yaml(marker_path, marker_schema_path, repo_root)
-    included_modules, _local_overrides, _deferred_candidates, protected_decisions = (
-        validate_marker.parse_marker(marker)
-    )
+    (
+        included_modules,
+        _local_overrides,
+        _local_path_ownership,
+        _deferred_candidates,
+        protected_decisions,
+    ) = validate_marker.parse_marker(marker)
     unknown_included_modules = included_modules - manifest_modules
     if unknown_included_modules:
         raise InstructionContractValidationError(

@@ -76,6 +76,14 @@ def _manifest(version: int = 2) -> dict[str, Any]:
             "pattern": ".template-sync/scripts/**",
             "requires_all": ["template-sync-support"],
         },
+        {
+            "pattern": "schemas/template-sync-marker.schema.json",
+            "requires_all": ["template-sync-support"],
+        },
+        {
+            "pattern": "schemas/template-sync-manifest.schema.json",
+            "requires_all": ["template-sync-support"],
+        },
         {"pattern": "templates/python/**", "requires_all": ["python"]},
         {"pattern": "tests/test_schema_examples.py", "requires_all": ["schema"]},
     ]
@@ -122,6 +130,7 @@ def _marker(
     included_modules: list[str],
     *,
     local_overrides: list[dict[str, str]] | None = None,
+    local_path_ownership: list[dict[str, str]] | None = None,
     deferred_candidates: list[dict[str, str]] | None = None,
     protected_decisions: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
@@ -133,6 +142,8 @@ def _marker(
     }
     if local_overrides is not None:
         template_sync["local_overrides"] = local_overrides
+    if local_path_ownership is not None:
+        template_sync["local_path_ownership"] = local_path_ownership
     if deferred_candidates is not None:
         template_sync["deferred_protected_candidates"] = deferred_candidates
     if protected_decisions is not None:
@@ -150,6 +161,7 @@ def _write_marker(
     included_modules: list[str],
     *,
     local_overrides: list[dict[str, str]] | None = None,
+    local_path_ownership: list[dict[str, str]] | None = None,
     deferred_candidates: list[dict[str, str]] | None = None,
     protected_decisions: list[dict[str, str]] | None = None,
 ) -> None:
@@ -160,6 +172,7 @@ def _write_marker(
         _marker(
             included_modules,
             local_overrides=local_overrides,
+            local_path_ownership=local_path_ownership,
             deferred_candidates=deferred_candidates,
             protected_decisions=protected_decisions,
         ),
@@ -192,6 +205,44 @@ def _run_git(repo_root: Path, *args: str) -> None:
         stderr=subprocess.PIPE,
         text=True,
     )
+
+
+def _section_paths(output: str, heading: str) -> set[str]:
+    """Return ``  - <path>`` entries rendered under a named output section."""
+    entries: set[str] = set()
+    in_section = False
+    for line in output.splitlines():
+        if line == heading:
+            in_section = True
+            continue
+        if not in_section:
+            continue
+        if not line.strip():
+            break
+        if line.startswith("  - "):
+            entries.add(line.removeprefix("  - ").strip())
+    return entries
+
+
+def _unrecorded_local_path_lines(output: str) -> set[str]:
+    """Return paths listed in the unrecorded local path section."""
+    heading = "Git-visible paths not mapped by the manifest or template_sync.local_path_ownership:"
+    return _section_paths(output, heading)
+
+
+def _symlink_or_skip(link_path: Path, target_path: Path, *, is_directory: bool) -> None:
+    """Create a symlink, or skip when the platform refuses it."""
+    try:
+        link_path.symlink_to(target_path, target_is_directory=is_directory)
+    except (OSError, NotImplementedError) as error:
+        # Avoid interpolating an OSError directly: its default string form and
+        # filename attributes can leak absolute local paths. Report the class
+        # name plus strerror instead (NotImplementedError has no strerror).
+        if isinstance(error, OSError):
+            detail = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        else:
+            detail = type(error).__name__
+        pytest.skip(f"Filesystem does not support symlink creation: {detail}")
 
 
 @pytest.fixture()
@@ -330,6 +381,392 @@ def test_local_overrides_skip_matching_paths(marker_repo: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert "Local overrides skipped:" in result.stdout
     assert "templates/python/ (SKIP): Local project owns this directory." in result.stdout
+
+
+def test_local_path_ownership_exact_path_suppresses_unrecorded_suggestion(
+    marker_repo: Path,
+) -> None:
+    """An exact local ownership record covers only the named local path."""
+    _write_marker(
+        marker_repo,
+        ["baseline", "template-sync-support"],
+        local_path_ownership=[
+            {
+                "path": "docs/index.md",
+                "reason": "Project documentation is downstream-owned.",
+            }
+        ],
+    )
+    _write_text(marker_repo, "README.md")
+    _write_text(marker_repo, "docs/index.md")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "Local path ownership records:" in result.stdout
+    assert "path=docs/index.md; reason=Project documentation is downstream-owned." in (
+        result.stdout
+    )
+    assert "docs/index.md" not in _unrecorded_local_path_lines(result.stdout)
+
+
+def test_local_path_ownership_directory_family_covers_directory_and_descendants(
+    marker_repo: Path,
+) -> None:
+    """Directory-prefix local ownership covers the directory path and descendants."""
+    _write_marker(
+        marker_repo,
+        ["baseline", "template-sync-support"],
+        local_path_ownership=[
+            {
+                "path": "docs/",
+                "reason": "Project docs are downstream-owned.",
+            }
+        ],
+    )
+    _write_text(marker_repo, "README.md")
+    _write_text(marker_repo, "docs/index.md")
+    _write_text(marker_repo, "docs/api/reference.md")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "path=docs/; reason=Project docs are downstream-owned." in result.stdout
+    unrecorded = _unrecorded_local_path_lines(result.stdout)
+    assert "docs/index.md" not in unrecorded
+    assert "docs/api/reference.md" not in unrecorded
+
+
+def test_duplicate_local_path_ownership_paths_fail(marker_repo: Path) -> None:
+    """Local ownership records must not repeat the same normalized path."""
+    _write_marker(
+        marker_repo,
+        ["baseline", "template-sync-support"],
+        local_path_ownership=[
+            {"path": "docs/", "reason": "Project documentation."},
+            {"path": "docs/", "reason": "Duplicate documentation record."},
+        ],
+    )
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1
+    assert "Duplicate local_path_ownership path(s): docs" in result.stderr
+
+
+def test_local_path_ownership_exact_manifest_collision_fails(marker_repo: Path) -> None:
+    """Local ownership cannot override an exact concrete upstream-owned file."""
+    _write_marker(
+        marker_repo,
+        ["baseline", "template-sync-support"],
+        local_path_ownership=[
+            {
+                "path": "README.md",
+                "reason": "README is local.",
+                "overlap_exception_reason": "Attempted exact-file exception.",
+            }
+        ],
+    )
+    _write_text(marker_repo, "README.md")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1
+    assert "README.md exactly collides with concrete manifest-owned path(s): README.md" in (
+        result.stderr
+    )
+    assert "overlap_exception_reason cannot override an exact upstream-owned file collision" in (
+        result.stderr
+    )
+
+
+def test_local_path_ownership_broad_manifest_overlap_requires_exception(
+    marker_repo: Path,
+) -> None:
+    """Local ownership inside a broad manifest area requires an exception reason."""
+    _write_marker(
+        marker_repo,
+        ["baseline", "template-sync-support"],
+        local_path_ownership=[
+            {
+                "path": "templates/python/local-tool.py",
+                "reason": "Local Python utility lives near template starter files.",
+            }
+        ],
+    )
+    _write_text(marker_repo, "README.md")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1
+    assert "templates/python/local-tool.py overlaps broad manifest-owned pattern(s)" in (
+        result.stderr
+    )
+    assert "add overlap_exception_reason" in result.stderr
+
+
+def test_local_path_ownership_broad_manifest_overlap_with_exception_passes(
+    marker_repo: Path,
+) -> None:
+    """A broad manifest-area local ownership exception may point at a future path."""
+    _write_marker(
+        marker_repo,
+        ["baseline", "template-sync-support"],
+        local_path_ownership=[
+            {
+                "path": "templates/python/local-tool.py",
+                "reason": "Local Python utility lives near template starter files.",
+                "overlap_exception_reason": "This downstream tool is not from the template.",
+            }
+        ],
+    )
+    _write_text(marker_repo, "README.md")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "templates/python/local-tool.py" in result.stdout
+
+
+def test_local_path_ownership_exception_without_broad_overlap_fails(
+    marker_repo: Path,
+) -> None:
+    """An overlap exception reason is invalid when no broad manifest area overlaps."""
+    _write_marker(
+        marker_repo,
+        ["baseline", "template-sync-support"],
+        local_path_ownership=[
+            {
+                "path": "docs/local.md",
+                "reason": "Project documentation is local.",
+                "overlap_exception_reason": "No manifest pattern overlaps this path.",
+            }
+        ],
+    )
+    _write_text(marker_repo, "README.md")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1
+    assert "docs/local.md overlap_exception_reason is only permitted" in result.stderr
+
+
+def test_local_path_ownership_future_path_is_allowed(marker_repo: Path) -> None:
+    """A local ownership record may name a future path whose leaf is absent."""
+    _write_marker(
+        marker_repo,
+        ["baseline", "template-sync-support"],
+        local_path_ownership=[
+            {
+                "path": "docs/future.md",
+                "reason": "Planned downstream documentation path.",
+            }
+        ],
+    )
+    _write_text(marker_repo, "README.md")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "docs/future.md" in result.stdout
+
+
+def test_local_path_ownership_rejects_existing_symlink_ancestor(
+    marker_repo: Path,
+    tmp_path: Path,
+) -> None:
+    """Declared local ownership paths must not traverse symlinked ancestors."""
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    _symlink_or_skip(marker_repo / "local", outside, is_directory=True)
+    _write_marker(
+        marker_repo,
+        ["baseline", "template-sync-support"],
+        local_path_ownership=[
+            {
+                "path": "local/future.md",
+                "reason": "This path traverses a symlink.",
+            }
+        ],
+    )
+    _write_text(marker_repo, "README.md")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1
+    assert "template_sync.local_path_ownership[].path must not traverse a symlink" in (
+        result.stderr
+    )
+
+
+def test_git_visible_symlink_local_path_is_surfaced(marker_repo: Path, tmp_path: Path) -> None:
+    """Git-visible local symlinks are surfaced without becoming ownership suggestions."""
+    outside = tmp_path / "outside.txt"
+    outside.write_text("outside\n", encoding="utf-8")
+    _symlink_or_skip(marker_repo / "local-link.txt", outside, is_directory=False)
+    _write_marker(marker_repo, ["baseline", "template-sync-support"])
+    _write_text(marker_repo, "README.md")
+    _run_git(marker_repo, "add", "local-link.txt")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "Git-visible local paths that are symlinks or resolve unsafely:" in result.stdout
+    assert "local-link.txt" in result.stdout
+
+
+def test_manifest_directory_symlink_is_a_managed_failure(
+    marker_repo: Path,
+    tmp_path: Path,
+) -> None:
+    """A symlinked directory over a manifest-managed tree fails as a managed path.
+
+    A directory replaced by a symlink is stored by Git as a single entry, so a
+    glob mapping such as ``templates/python/**`` never matches the directory path
+    itself. The validator must still treat it as template-managed so the symlink
+    surfaces as a fatal managed-path finding rather than a non-fatal local warning.
+    """
+    outside = tmp_path / "outside-python"
+    outside.mkdir()
+    (marker_repo / "templates").mkdir(parents=True, exist_ok=True)
+    _symlink_or_skip(marker_repo / "templates" / "python", outside, is_directory=True)
+    _write_marker(marker_repo, ["baseline", "template-sync-support", "python"])
+    _write_text(marker_repo, "README.md")
+    _run_git(marker_repo, "add", "templates/python")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1, result.stdout
+    managed_paths = _section_paths(
+        result.stdout,
+        "Template-managed paths that are symlinks or resolve unsafely:",
+    )
+    local_paths = _section_paths(
+        result.stdout,
+        "Git-visible local paths that are symlinks or resolve unsafely:",
+    )
+    assert "templates/python" in managed_paths
+    assert "templates/python" not in local_paths
+
+
+def test_unrecorded_local_paths_surface_copy_ready_suggestion(marker_repo: Path) -> None:
+    """Unrecorded local paths are warnings by default and include a YAML stub."""
+    _write_marker(marker_repo, ["baseline", "template-sync-support"])
+    _write_text(marker_repo, "README.md")
+    _write_text(marker_repo, "docs/unrecorded.md")
+
+    result = _run_validator(marker_repo)
+    strict_result = _run_validator(marker_repo, "--strict-local-path-ownership")
+
+    assert result.returncode == 0, result.stderr
+    assert "Git-visible paths not mapped by the manifest" in result.stdout
+    assert "docs/unrecorded.md" in result.stdout
+    assert "  - path: docs/" in result.stdout
+    assert "    reason: Downstream project owns this path family." in result.stdout
+    assert "--strict-local-path-ownership to make them fatal" in result.stdout
+    assert strict_result.returncode == 1
+    assert "Local path ownership findings are fatal because strict mode is enabled." in (
+        strict_result.stdout
+    )
+
+
+def test_exact_path_ownership_suggestion_uses_neutral_reason(marker_repo: Path) -> None:
+    """An exact-file ownership suggestion avoids directory-family wording.
+
+    The suggested record for a top-level file (no trailing ``/``) should not imply
+    directory-family semantics in its reason text.
+    """
+    _write_marker(marker_repo, ["baseline", "template-sync-support"])
+    _write_text(marker_repo, "README.md")
+    _write_text(marker_repo, "unrecorded.txt")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "  - path: unrecorded.txt" in result.stdout
+    assert "    reason: Downstream project owns this path." in result.stdout
+    assert "    reason: Downstream project owns this path family." not in result.stdout
+
+
+def test_unrecorded_local_paths_include_walk_pruned_directories(marker_repo: Path) -> None:
+    """Git-tracked files under walk-pruned directories are still reported as unrecorded.
+
+    Discovery follows the documented ``git ls-files`` contract, so a file a
+    downstream intentionally tracks under a pruned directory such as ``dist/``
+    must not be silently dropped just because the safe walk prunes that directory.
+    """
+    _write_marker(marker_repo, ["baseline", "template-sync-support"])
+    _write_text(marker_repo, "README.md")
+    _write_text(marker_repo, "dist/app.js")
+    _run_git(marker_repo, "add", "dist/app.js")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "dist/app.js" in _unrecorded_local_path_lines(result.stdout)
+
+
+def test_symlink_under_pruned_directory_is_surfaced_as_unsafe(
+    marker_repo: Path,
+    tmp_path: Path,
+) -> None:
+    """A Git-tracked symlink under a walk-pruned directory is still flagged unsafe.
+
+    The safe walk prunes directories such as node_modules/, so such a symlink is
+    absent from the walk's skipped list. It must still be derived from the
+    Git-visible list and surfaced rather than dropped from every output.
+    """
+    outside = tmp_path / "outside.txt"
+    outside.write_text("outside\n", encoding="utf-8")
+    (marker_repo / "node_modules").mkdir(parents=True, exist_ok=True)
+    _symlink_or_skip(marker_repo / "node_modules" / "dep.js", outside, is_directory=False)
+    _write_marker(marker_repo, ["baseline", "template-sync-support"])
+    _write_text(marker_repo, "README.md")
+    _run_git(marker_repo, "add", "node_modules/dep.js")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    unsafe_paths = _section_paths(
+        result.stdout,
+        "Git-visible local paths that are symlinks or resolve unsafely:",
+    )
+    assert "node_modules/dep.js" in unsafe_paths
+
+
+def test_ignored_files_do_not_surface_as_local_path_suggestions(marker_repo: Path) -> None:
+    """Ignored files are excluded by the Git-visible path convention."""
+    _write_marker(
+        marker_repo,
+        ["baseline", "template-sync-support"],
+        local_path_ownership=[
+            {"path": ".gitignore", "reason": "Ignore rules are downstream-owned."}
+        ],
+    )
+    _write_text(marker_repo, "README.md")
+    _write_text(marker_repo, ".gitignore", "ignored.log\n")
+    _write_text(marker_repo, "ignored.log")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "ignored.log" not in result.stdout
+
+
+def test_unrecorded_local_path_suggestions_are_bounded(marker_repo: Path) -> None:
+    """Large unrecorded local path sets produce deterministic bounded suggestions."""
+    _write_marker(marker_repo, ["baseline", "template-sync-support"])
+    _write_text(marker_repo, "README.md")
+    for index in range(12):
+        _write_text(marker_repo, f"local-{index:02d}/file.txt")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "# Showing 10 of 12 suggested record(s)." in result.stdout
+    assert "  - path: local-00/" in result.stdout
+    assert "  - path: local-09/" in result.stdout
+    assert "  - path: local-10/" not in result.stdout
 
 
 def test_deferred_protected_candidates_are_reported_without_failure(marker_repo: Path) -> None:

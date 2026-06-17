@@ -1,14 +1,14 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260616.1
+**Version:** 1.1.20260617.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-16
-- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the read-only first-adoption preflight/questionnaire mode, raw first-adoption state reporting, first-adoption quality-debt reports and suppressions, the adoption difficulties journal, one-shot first-adoption materialization, shell-safe first-adoption args files, package identity and collaboration-policy materialization, first-adoption structural convention assessment, first-adoption working-tree validation, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
+- **Last Updated:** 2026-06-17
+- **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the read-only first-adoption preflight/questionnaire mode, raw first-adoption state reporting, first-adoption quality-debt reports and suppressions, the adoption difficulties journal, one-shot first-adoption materialization, shell-safe first-adoption args files, package identity and collaboration-policy materialization, first-adoption structural convention assessment, first-adoption working-tree validation, downstream local path ownership records, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
 ## Purpose
@@ -23,7 +23,7 @@ For the first import into an existing repository, the separate one-shot material
 
 - **Module:** A unit in the taxonomy defined by `.template-sync/manifest.yml` and rendered in this procedure, such as `markdown`, `powershell`, or `terraform`. Procedure logic operates on modules.
 - **Stack:** Informal shorthand for a related grouping of modules. For example, a "PowerShell stack" may mean `powershell`, `markdown`, `yaml`, and `agent-instructions`, depending on what the downstream repository adopted. Stack is acceptable in prose, but sync decisions MUST be recorded in module terms.
-- **Downstream sync marker:** The `.template-sync/marker.yml` file in the downstream repository. Under `template_sync`, it records the upstream template repository, the newest upstream template commit that has been reviewed, the modules the downstream repository has adopted, local override rules, protected-file decision records, deferred protected-file candidates, and instruction-contract waivers.
+- **Downstream sync marker:** The `.template-sync/marker.yml` file in the downstream repository. Under `template_sync`, it records the upstream template repository, the newest upstream template commit that has been reviewed, the modules the downstream repository has adopted, local override rules, downstream local path ownership records, protected-file decision records, deferred protected-file candidates, and instruction-contract waivers.
 - **Instruction contract:** A machine-readable required-anchor contract in `.template-sync/instruction-contracts.yml`. Each entry names a protected instruction file, the modules that make the contract relevant downstream, and the required headings or phrases that MUST remain present unless a marker waiver or authorized protected-file removal applies.
 - **First-adoption preflight checklist:** A root `_TODO-repo-init.md` file, or an equivalent committed adoption note named by this procedure, that records manual GitHub settings and maintainer policy decisions that cannot be inferred from repository files during first-time template adoption.
 - **First-adoption state:** The resolved answers from the first-adoption preflight checklist, `.template-sync/marker.yml`, or an equivalent committed adoption note. Examples include conduct and security reporting channels, private vulnerability reporting, Discussions, expected labels, CODEOWNERS owner/team identity, default-branch protection policy, adoption mode, and any GHES host override.
@@ -33,8 +33,8 @@ For the first import into an existing repository, the separate one-shot material
 - **First-adoption materialization command:** The `.template-sync/scripts/materialize_downstream_adoption.py` one-shot helper used during first adoption to stage retained manifest-owned template files, prune inline blocks for excluded modules, optionally run approved placeholder replacement against the staging tree, optionally normalize owner-approved downstream license text from an alternate source path to root `LICENSE`, and reconcile non-conflicting staged files into a target working tree. It can read from an explicit `--template-root`, or from a locally available upstream `--template-ref` / `--template-revision` through a private temporary detached worktree created from `--template-repo`. It is a write-once adoption helper, not an automated ongoing upstream sync tool.
 - **First-adoption working-tree validation runner:** The `.template-sync/scripts/run_first_adoption_checks.py` helper used before the first adoption commit. It collects tracked and untracked non-ignored regular files using `git ls-files --cached --others --exclude-standard`, prints a deterministic numbered command plan, runs read-only line-ending, path-reference, Markdownlint, and PSScriptAnalyzer debt reports when the quality report helper is present, runs chunked `pre-commit run --files ...` commands against that file list, and runs the placeholder scan, marker validation, and Markdown package scripts when the supporting files are present. Its default `--check` mode makes validation intent explicit, its `--fix` mode is the opt-in surface for mutating hooks or fixers, and its `--plan-only` mode prints discovery results, notes, and the command plan without running validation commands. Normal execution prints UTC start and end timestamps, elapsed time, group label, index, and exit status for each planned command, prints a deterministic Git changed-file summary, then prints total elapsed time for the run.
 - **First-adoption quality suppressions:** The optional downstream-created `.template-sync/first-adoption/quality-suppressions.json` file records durable suppressions for first-adoption quality reports. The current schema defines the report-scoped `path-reference` section only, with selector fields for rule/category identifier, source path or glob, and literal or pattern. The file is retained downstream state like `.template-sync/marker.yml`; the upstream template classifies and validates it when present but does not ship a concrete suppression file.
-- **Adoption ledger:** A generated Markdown review artifact emitted by `.template-sync/scripts/generate_sync_candidates.py`. It summarizes manifest module assignments, marker local overrides, protected-file flags and decisions, adoption-mode posture, `_TODO-repo-init.md` checklist links, and affected validation commands. It is not authoritative state; `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable sources of truth.
-- **Adoption summary:** A concise Markdown review artifact emitted by `.template-sync/scripts/generate_sync_candidates.py --summary` for PR descriptions. It summarizes included and excluded modules, protected-file decision records, local overrides, unresolved maintainer decisions, machine-interpretable manual TODO items, and retained-module validation commands. It is not the detailed path-level review artifact; use the adoption ledger for protected-file and per-path review details.
+- **Adoption ledger:** A generated Markdown review artifact emitted by `.template-sync/scripts/generate_sync_candidates.py`. It summarizes manifest module assignments, marker local overrides, local path ownership records, protected-file flags and decisions, adoption-mode posture, `_TODO-repo-init.md` checklist links, and affected validation commands. It is not authoritative state; `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable sources of truth.
+- **Adoption summary:** A concise Markdown review artifact emitted by `.template-sync/scripts/generate_sync_candidates.py --summary` for PR descriptions. It summarizes included and excluded modules, protected-file decision records, local overrides, local path ownership records, unresolved maintainer decisions, machine-interpretable manual TODO items, and retained-module validation commands. It is not the detailed path-level review artifact; use the adoption ledger for protected-file and per-path review details.
 - **Adoption difficulties journal:** An optional root `_ADOPTION-DIFFICULTIES.md` file created from `templates/adoption/_TEMPLATE-ADOPTION-DIFFICULTIES.md`. It records process and difficulty evidence from first adoption. It is not `_TODO-repo-init.md` decision state and is not `.template-sync/marker.yml` sync state.
 - **Adoption mode:** The preservation posture applied before editing protected files and template-derived governance, community, process, workflow, or collaboration files. Valid named modes are `minimal-preservation` and `tailored`.
 - **`minimal-preservation`:** The default adoption mode for protected files and template-derived governance, community, process, workflow, and collaboration files. Keep upstream wording and structure; limit edits to placeholder substitution, removing complete delimited sections owned by unadopted manifest modules, fixing broken links, and adding required local overrides that are recorded in `.template-sync/marker.yml`.
@@ -43,6 +43,7 @@ For the first import into an existing repository, the separate one-shot material
 - **Included module:** A module listed in the downstream sync marker under `template_sync.included_modules`.
 - **Unadopted-module activity:** Upstream activity in a known taxonomy module that is not listed in `included_modules`.
 - **Unknown module:** A module name introduced by a newer upstream manifest or procedure that the downstream marker does not recognize. Unknown modules MUST be surfaced for explicit owner decision.
+- **Local path ownership:** A marker record under `template_sync.local_path_ownership` that documents downstream-owned exact paths or directory-prefix path families, such as `docs/local.md` or `docs/`. Local ownership records are not manifest rows and do not make downstream project files template-managed.
 - **Protected file:** A governance or instruction file that requires explicit owner authorization before editing.
 - **Sync working notes:** Temporary notes maintained while applying this procedure. They MAY be a scratch document, a draft PR body, or another local checklist, but they are not the final sync summary. They MUST capture the first-adoption preflight disposition and any unresolved `_TODO-repo-init.md` manual GitHub settings when applicable, structural convention findings and their required/strongly recommended/post-adoption/not-recommended classifications when first adoption applies, required structural changes, the range mode, range endpoints or reconciliation command, range-base rationale, saved Step 6 candidate table or table citation, saved adoption ledger location or ledger citation, unmapped paths, per-file decisions, protected-file dispositions, line-ending normalization actions, validation results, validation issue classifications, post-adoption issue drafts, finalization mode, and open questions as those facts are discovered. Step 14 turns these working notes into the final sync summary.
 - **Sync summary:** The final owner-facing record created in Step 14 from the sync working notes. Depending on the finalization mode, it MAY be a PR description, a committed summary artifact, a local handoff note, or a dry-run report. It is the durable review artifact for modes that commit a branch or open a PR; working-tree inspection and dry-run modes MUST still present it clearly before stopping.
@@ -490,7 +491,7 @@ Downstream repositories SHOULD keep the sync marker at `.template-sync/marker.ym
 
 Marker contents are schema-backed by [`schemas/template-sync-marker.schema.json`](schemas/template-sync-marker.schema.json). The `validate-template-sync-marker` pre-commit hook validates `.template-sync/marker.yml` when that file is present; repositories without a marker are unaffected because no file matches the hook's anchored pattern. Marker changes MUST be rejected when they fail the schema. The schema's `included_modules` enum mirrors `.template-sync/manifest.yml`, and [`tests/test_template_manifest.py`](tests/test_template_manifest.py) fails if the schema enum drifts from the manifest module list.
 
-The marker may record sync-specific first-adoption state, such as adopted modules, path-specific local overrides, protected-file decisions, explicit `tailored` opt-ins for protected paths, deferred protected-file candidates, and instruction-contract waivers. It is not a general replacement for `_TODO-repo-init.md` when manual GitHub settings or maintainer policy decisions still need explicit resolution.
+The marker may record sync-specific first-adoption state, such as adopted modules, path-specific local overrides, downstream local path ownership, protected-file decisions, explicit `tailored` opt-ins for protected paths, deferred protected-file candidates, and instruction-contract waivers. It is not a general replacement for `_TODO-repo-init.md` when manual GitHub settings or maintainer policy decisions still need explicit resolution.
 
 For example, suppose upstream changed `README.md` and `.github/workflows/terraform-ci.yml`, and the downstream repository reviewed both but adopted neither because `README.md` is locally owned and Terraform is not adopted. The sync still advances `last_reviewed_template_commit` to the resolved range head after review, because those upstream changes were inspected and intentionally skipped. A `last_adopted_template_commit` field would incorrectly imply that skipped-but-reviewed changes need to be reviewed again during the next sync.
 
@@ -498,7 +499,7 @@ If Step 4 used a first-sync delta range because the marker was missing or incomp
 
 If Step 4 selected full reconciliation, the marker still has no reviewed upstream commit at this step. You MAY initialize or update other marker fields, such as `source_repo`, `included_modules`, and local overrides chosen by the owner, but do not set `template_sync.last_reviewed_template_commit` until Step 13 records the resolved upstream range head SHA after review is complete.
 
-`local_overrides`, `protected_file_decisions`, `deferred_protected_candidates`, and `instruction_contract_waivers` are explained immediately after the example.
+`local_overrides`, `local_path_ownership`, `protected_file_decisions`, `deferred_protected_candidates`, and `instruction_contract_waivers` are explained immediately after the example.
 
 Example marker:
 
@@ -524,6 +525,14 @@ template_sync:
     - path: .github/ISSUE_TEMPLATE/config.yml
       reason: "Repository-specific contact links."
       default_decision: MERGE
+  local_path_ownership:
+    - path: docs/
+      reason: "Project documentation is downstream-owned."
+    - path: corpus/
+      reason: "Evaluation corpus is downstream application data."
+    - path: schemas/local-project.schema.json
+      reason: "Project-specific schema lives beside retained template schemas."
+      overlap_exception_reason: "This exact local schema is not an upstream template file."
   deferred_protected_candidates:
     - path: .github/copilot-instructions.md
       source_commit: "dddddddddddddddddddddddddddddddddddddddd"
@@ -552,6 +561,7 @@ template_sync:
 - `last_reviewed_template_commit` is the resolved upstream template commit SHA whose changes were most recently reviewed, regardless of how many were adopted. It MUST NOT be a branch name, tag name, or other moving ref.
 - `included_modules` is the adoption state. Anything not listed is not adopted.
 - `local_overrides` changes the starting recommendation for a path, but it MUST NOT hide upstream activity from the sync.
+- `local_path_ownership` records downstream-owned exact paths or directory-prefix path families without modifying upstream-owned manifest rows.
 - `protected_file_decisions` records the current path-scoped protected-file authorization and decision. Content adoption decisions (`TAKE` and `MERGE`) require `adoption_mode`, `authorization_basis`, and `authorized_scope`. Broad rewrites require `adoption_mode: tailored` plus `tailored_authorization_basis`. Protected-file removals require `decision: REMOVE-LOCAL`, explicit removal authorization, `authorized_scope`, and a substantive `reason`.
 - `deferred_protected_candidates` records protected-file updates that were reviewed but not applied because path-scoped owner authorization was absent.
 - `instruction_contract_waivers` records explicit owner-approved waivers for missing required instruction-contract anchors. Each waiver MUST include `path`, `anchor`, `reason`, and `authorization_basis`.
@@ -581,6 +591,36 @@ Worked local-overrides mini scenario:
 2. The reviewed upstream range changes `README.md` to add a security reporting note.
 3. The per-file row starts with `SKIP` from the override, but the maintainer upgrades the decision to `MERGE` because the security note is relevant.
 4. The sync summary still lists the applied override and the upstream change, for example: `README.md` defaulted to `SKIP`; upstream added security reporting guidance; final decision `MERGE`.
+
+### Local Path Ownership
+
+Use `template_sync.local_path_ownership` for downstream project paths that upstream cannot know in advance, such as `docs/`, `corpus/`, `.devcontainer/`, application source directories, or implementation-state directories. Local ownership lives only in the marker. Do not add downstream-local paths to `.template-sync/manifest.yml` and do not add rows to the generated module-definition or path-mapping tables for them.
+
+Each record MUST include:
+
+- `path`: the downstream-owned exact path or directory-prefix path family.
+- `reason`: a concise ownership explanation that is durable without private context.
+- `overlap_exception_reason`: optional; use only when the validator reports broad manifest-area proximity and the path is still downstream-owned.
+
+Path syntax is intentionally narrow:
+
+- `docs` means the exact path `docs`.
+- `docs/` means the `docs/` directory family. Directory-family ownership covers both the directory path and descendants.
+- `docs/**` is not valid local ownership syntax. Manifest-style glob semantics remain reserved for `.template-sync/manifest.yml`.
+
+Local ownership records may name future paths whose final segment does not exist yet. Validators still reject unsafe lexical forms such as absolute paths, backslashes, `..` traversal, duplicate slashes, empty segments, and glob characters. Validators also reject existing symlink ancestors and surface Git-visible symlink paths that would resolve outside the repository root.
+
+Duplicate normalized local ownership paths MUST be rejected. Parent and child records, such as `docs/` plus `docs/api/`, MAY coexist when a subtree needs a more specific reason. Matching uses the most-specific record for diagnostics and grouping.
+
+Exact collisions with concrete upstream-owned manifest paths MUST fail validation and cannot be overridden with `overlap_exception_reason`. A local path inside a broad manifest-owned area, such as `schemas/local-project.schema.json` near `schemas/**`, MUST include `overlap_exception_reason`. That exception reason is permitted only for broad-area proximity, not for exact upstream-file collisions and not for unrelated local paths.
+
+Local path ownership affects only unrecorded local-path diagnostics. It MUST NOT silence retained-template-file missing checks, excluded-module leftover checks, protected-file decision checks, downstream instruction-contract checks, or inline-block consistency checks. Use:
+
+- `local_path_ownership` when the path family is downstream-owned project state.
+- `local_overrides` when an upstream-changed template path needs a default sync decision such as `SKIP`, `MERGE`, or `DEFER`.
+- `protected_file_decisions` or `deferred_protected_candidates` for protected instruction/governance files.
+
+The marker validator discovers unrecorded local paths with `git ls-files --cached --others --exclude-standard`, so ignored build and cache files do not create ownership suggestions. Unrecorded local paths are warnings by default and include bounded, deterministic, copy-ready suggested records. Run `python .template-sync/scripts/validate_marker.py --require-marker --strict-local-path-ownership` only when the downstream repository intentionally wants unrecorded local paths to fail validation.
 
 ### Adoption Mode Records
 
@@ -990,7 +1030,7 @@ python .template-sync/scripts/generate_sync_candidates.py --summary
 
 Use `--summary` for the final adoption PR body or owner handoff when maintainers need the high-level module set, protected-file decisions, local overrides, unresolved decisions, manual TODOs, and retained-module validation commands in a compact form. Use `--ledger` or `--ledger-only` for the detailed path-level review artifact, especially before editing protected files, auditing local overrides, or reviewing `_TODO-repo-init.md` checklist links. The summary is a standalone mode and cannot be combined with `--ledger`, `--ledger-only`, or `--preflight`. The summary is deterministic and pasteable, but it is not authoritative state and it does not replace the full ledger when protected-file review details are needed.
 
-The `ADOPTION_LEDGER_PATH` value MUST remain inside the repository root; the helper rejects paths that escape it. The ledger is a generated review artifact. It MUST be regenerated when `.template-sync/manifest.yml`, `.template-sync/marker.yml`, `_TODO-repo-init.md`, the selected adoption mode, or the included module set changes. Do not treat a stale committed ledger as authoritative: `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable source of truth. Rows marked `manual TODO` link to `_TODO-repo-init.md` checklist lines when that file exists. Rows marked `local override` MUST show a reason from `.template-sync/marker.yml`; if a local override has no durable reason, fix the marker before relying on the ledger. Protected rows with matching `protected_file_decisions` show the protected decision state, distinguish default `minimal-preservation` from authorized minimal edits and authorized tailored rewrites, and include a distinct `REMOVE-LOCAL` authorization section when protected removals are recorded.
+The `ADOPTION_LEDGER_PATH` value MUST remain inside the repository root; the helper rejects paths that escape it. The ledger is a generated review artifact. It MUST be regenerated when `.template-sync/manifest.yml`, `.template-sync/marker.yml`, `_TODO-repo-init.md`, the selected adoption mode, or the included module set changes. Do not treat a stale committed ledger as authoritative: `.template-sync/manifest.yml` and `.template-sync/marker.yml` remain the machine-readable source of truth. Rows marked `manual TODO` link to `_TODO-repo-init.md` checklist lines when that file exists. Rows marked `local override` MUST show a reason from `.template-sync/marker.yml`; if a local override has no durable reason, fix the marker before relying on the ledger. Rows marked `local ownership` summarize `template_sync.local_path_ownership` records without treating those paths as manifest-owned template files. Protected rows with matching `protected_file_decisions` show the protected decision state, distinguish default `minimal-preservation` from authorized minimal edits and authorized tailored rewrites, and include a distinct `REMOVE-LOCAL` authorization section when protected removals are recorded.
 
 `_TODO-repo-init.md` link targets in the ledger depend on the rendering destination. When `--write-ledger` is used, the helper writes Markdown link targets relative to the saved file's directory so the links resolve correctly when the saved ledger is committed and rendered on GitHub. When the ledger is emitted only to stdout (no `--write-ledger`), the helper writes repo-root-relative link targets, which are informative when reading the ledger in a terminal but **do not** render as clickable links to repository files when pasted into a GitHub pull request or issue body — GitHub resolves relative Markdown link targets in PR/issue bodies relative to the PR/issue URL, not the repository root. For clickable rendered links, run the helper with `--write-ledger ADOPTION_LEDGER_PATH`, commit the saved file, and review it directly on GitHub.
 
@@ -1276,13 +1316,13 @@ The materialization command writes non-conflicting retained files, reports confl
 
 Before editing protected files or finalizing adoption decisions, generate review artifacts with the existing candidate generator rather than reading the source tree broadly. Use `python .template-sync/scripts/generate_sync_candidates.py --ledger` during a normal delta review, `python .template-sync/scripts/generate_sync_candidates.py --ledger-only` when first-adoption or full-reconciliation work needs the ledger before a range is available, and `python .template-sync/scripts/generate_sync_candidates.py --summary` for the concise PR-description or owner-handoff summary after marker and checklist state are current.
 
-Run the downstream adoption validation command after file removals, retained files, `included_modules`, `local_overrides`, `protected_file_decisions`, and `deferred_protected_candidates` reflect the intended sync result, and before finalizing the sync summary. Use `--require-marker` once the downstream repository has committed to carrying `.template-sync/marker.yml` in CI:
+Run the downstream adoption validation command after file removals, retained files, `included_modules`, `local_overrides`, `local_path_ownership`, `protected_file_decisions`, and `deferred_protected_candidates` reflect the intended sync result, and before finalizing the sync summary. Use `--require-marker` once the downstream repository has committed to carrying `.template-sync/marker.yml` in CI:
 
 ```bash
 python .template-sync/scripts/validate_downstream_adoption.py --require-marker
 ```
 
-The aggregate command composes marker schema validation, retained-file presence checks, excluded-module leftover checks, protected-file decision checks, downstream instruction-contract validation, inline-block consistency checks, and retained Markdown relative-link checks. Omit `--require-marker` only during initial adoption or exploratory sync work where the marker may intentionally be absent; in that mode, the helper exits zero with a clear no-marker message.
+The aggregate command composes marker schema validation, retained-file presence checks, excluded-module leftover checks, protected-file decision checks, downstream instruction-contract validation, inline-block consistency checks, retained Markdown relative-link checks, and local path ownership warnings. Omit `--require-marker` only during initial adoption or exploratory sync work where the marker may intentionally be absent; in that mode, the helper exits zero with a clear no-marker message.
 
 Downstream repositories that retain pytest-based template support SHOULD run the official downstream pytest gate with negative marker selection:
 
@@ -1378,6 +1418,7 @@ After all decisions are recorded and validation is complete, update `.template-s
 - Set `template_sync.last_reviewed_template_commit` to the resolved upstream range head SHA that was reviewed.
 - Keep `included_modules` current.
 - Add, update, or remove `local_overrides` only when the owner made that adoption decision.
+- Add, update, or remove `local_path_ownership` only for downstream-owned project paths; do not use it to bypass template-managed retained-file, excluded-module, protected-file, or inline-block validation.
 - Add, update, or remove `protected_file_decisions` for protected files that were taken, merged, skipped, removed locally, deferred as a decision, or sent through protected review during this sync.
 - Add or refresh `deferred_protected_candidates` for unresolved protected-file changes.
 - Preserve adoption-mode records: keep the default `minimal-preservation` record in `_TODO-repo-init.md` or the sync summary, represent protected path-specific decisions in `protected_file_decisions`, and represent non-protected path-specific `tailored` opt-ins or required local ownership exceptions as `local_overrides` when `.template-sync/marker.yml` is the durable record.
