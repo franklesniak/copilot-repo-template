@@ -809,7 +809,7 @@ def local_path_ownership_summary(local_path_ownership: LocalPathOwnership) -> st
         f"reason={local_path_ownership.reason}",
     ]
     if local_path_ownership.overlap_exception_reason is not None:
-        parts.append("overlap_exception_reason=" f"{local_path_ownership.overlap_exception_reason}")
+        parts.append(f"overlap_exception_reason={local_path_ownership.overlap_exception_reason}")
     return "; ".join(parts)
 
 
@@ -1039,6 +1039,30 @@ def is_template_managed_path(
 ) -> bool:
     """Return whether a repository-relative path maps to the template manifest."""
     return selected_relation_for_path(relative_path, mappings) is not None
+
+
+def manifest_covers_directory(
+    directory: str,
+    mappings: tuple[ManifestMapping, ...],
+) -> bool:
+    """Return whether any manifest pattern targets a path under ``directory``.
+
+    A directory replaced by a symlink is recorded by Git as a single entry, so a
+    glob mapping such as ``templates/python/**`` never matches the directory path
+    itself (``templates/python``). ``selected_relation_for_path`` therefore returns
+    ``None`` for such a directory even though the manifest manages its contents.
+    This predicate recognizes the directory as template-managed when at least one
+    manifest pattern falls under its prefix, so directory symlinks over managed
+    trees are treated as managed rather than as unmanaged local paths.
+
+    The trailing-slash prefix comparison avoids sibling false positives (for
+    example, ``templates_other/**`` does not count as covering ``templates``).
+    """
+    normalized_directory = directory.rstrip("/")
+    if not normalized_directory:
+        return False
+    prefix = f"{normalized_directory}/"
+    return any(mapping.pattern.startswith(prefix) for mapping in mappings)
 
 
 def is_retained_template_path(

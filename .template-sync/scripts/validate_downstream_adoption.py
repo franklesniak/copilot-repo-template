@@ -262,7 +262,7 @@ def marker_report_warnings(report: validate_marker.MarkerValidationReport) -> tu
     warnings: list[str] = []
     for relative_path in report.unsafe_local_paths:
         warnings.append(
-            "Git-visible local path is a symlink or resolves unsafely: " f"{relative_path}"
+            f"Git-visible local path is a symlink or resolves unsafely: {relative_path}"
         )
     for relative_path in report.unrecorded_local_paths:
         warnings.append(

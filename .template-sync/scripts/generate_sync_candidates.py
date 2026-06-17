@@ -2305,10 +2305,10 @@ def build_local_path_ownership_row(
     relation = selected_relation_for_path(local_path_ownership.path, mappings)
     modules = relation.requires_all | relation.requires_any if relation is not None else frozenset()
     is_protected = is_protected_instruction_path(local_path_ownership.path)
-    reason = "Marker local path ownership: " f"{local_path_ownership.reason}"
+    reason = f"Marker local path ownership: {local_path_ownership.reason}"
     if local_path_ownership.overlap_exception_reason is not None:
         reason += (
-            " Broad manifest overlap exception: " f"{local_path_ownership.overlap_exception_reason}"
+            f" Broad manifest overlap exception: {local_path_ownership.overlap_exception_reason}"
         )
     if relation is not None:
         reason += " Manifest proximity is documented by this ownership record."

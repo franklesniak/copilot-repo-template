@@ -207,11 +207,8 @@ def _run_git(repo_root: Path, *args: str) -> None:
     )
 
 
-def _unrecorded_local_path_lines(output: str) -> set[str]:
-    """Return paths listed in the unrecorded local path section."""
-    heading = (
-        "Git-visible paths not mapped by the manifest or " "template_sync.local_path_ownership:"
-    )
+def _section_paths(output: str, heading: str) -> set[str]:
+    """Return ``  - <path>`` entries rendered under a named output section."""
     entries: set[str] = set()
     in_section = False
     for line in output.splitlines():
@@ -223,8 +220,14 @@ def _unrecorded_local_path_lines(output: str) -> set[str]:
         if not line.strip():
             break
         if line.startswith("  - "):
-            entries.add(line.removeprefix("  - "))
+            entries.add(line.removeprefix("  - ").strip())
     return entries
+
+
+def _unrecorded_local_path_lines(output: str) -> set[str]:
+    """Return paths listed in the unrecorded local path section."""
+    heading = "Git-visible paths not mapped by the manifest or template_sync.local_path_ownership:"
+    return _section_paths(output, heading)
 
 
 def _symlink_or_skip(link_path: Path, target_path: Path, *, is_directory: bool) -> None:
@@ -603,6 +606,40 @@ def test_git_visible_symlink_local_path_is_surfaced(marker_repo: Path, tmp_path:
     assert result.returncode == 0, result.stderr
     assert "Git-visible local paths that are symlinks or resolve unsafely:" in result.stdout
     assert "local-link.txt" in result.stdout
+
+
+def test_manifest_directory_symlink_is_a_managed_failure(
+    marker_repo: Path,
+    tmp_path: Path,
+) -> None:
+    """A symlinked directory over a manifest-managed tree fails as a managed path.
+
+    A directory replaced by a symlink is stored by Git as a single entry, so a
+    glob mapping such as ``templates/python/**`` never matches the directory path
+    itself. The validator must still treat it as template-managed so the symlink
+    surfaces as a fatal managed-path finding rather than a non-fatal local warning.
+    """
+    outside = tmp_path / "outside-python"
+    outside.mkdir()
+    (marker_repo / "templates").mkdir(parents=True, exist_ok=True)
+    _symlink_or_skip(marker_repo / "templates" / "python", outside, is_directory=True)
+    _write_marker(marker_repo, ["baseline", "template-sync-support", "python"])
+    _write_text(marker_repo, "README.md")
+    _run_git(marker_repo, "add", "templates/python")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1, result.stdout
+    managed_paths = _section_paths(
+        result.stdout,
+        "Template-managed paths that are symlinks or resolve unsafely:",
+    )
+    local_paths = _section_paths(
+        result.stdout,
+        "Git-visible local paths that are symlinks or resolve unsafely:",
+    )
+    assert "templates/python" in managed_paths
+    assert "templates/python" not in local_paths
 
 
 def test_unrecorded_local_paths_surface_copy_ready_suggestion(marker_repo: Path) -> None:

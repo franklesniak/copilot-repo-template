@@ -35,6 +35,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     load_json_mapping,
     load_yaml_mapping,
     local_path_ownership_summary,
+    manifest_covers_directory,
     path_has_symlink_component,
     normalize_repository_path as normalize_repository_path,
     parse_manifest_mappings,
@@ -365,6 +366,7 @@ def unrecorded_local_path_findings(
     """Return unsafe and unrecorded Git-visible local paths."""
     unsafe_paths: list[str] = []
     for skipped_path in skipped_symlinks:
+        is_directory_symlink = skipped_path.endswith("/")
         normalized_path = skipped_path.rstrip("/")
         is_git_visible = normalized_path in present_paths or any(
             path.startswith(f"{normalized_path}/") for path in present_paths
@@ -372,6 +374,12 @@ def unrecorded_local_path_findings(
         if not is_git_visible:
             continue
         if selected_relation_for_path(normalized_path, mappings) is not None:
+            continue
+        # A symlinked directory is stored by Git as a single entry, so manifest
+        # globs under it (for example ``templates/python/**``) never match the
+        # directory path itself. Treat it as template-managed so it surfaces as a
+        # fatal managed-path finding instead of a non-fatal local warning.
+        if is_directory_symlink and manifest_covers_directory(normalized_path, mappings):
             continue
         unsafe_paths.append(normalized_path)
 
@@ -446,13 +454,21 @@ def validate_marker_state(
     )
     unsafe_managed_paths: list[str] = []
     for relative_path in skipped_symlinks:
+        is_directory_symlink = relative_path.endswith("/")
         normalized_relative_path = relative_path.rstrip("/")
         if normalized_relative_path not in present_paths:
             continue
         if is_locally_overridden(normalized_relative_path, local_overrides):
             continue
         relation = selected_relation_for_path(normalized_relative_path, mappings)
-        if relation is not None:
+        # A symlinked directory over a manifest-managed tree is not matched by
+        # ``selected_relation_for_path`` (glob patterns like ``dir/**`` never match
+        # the directory itself), so recognize it as managed when the manifest has
+        # patterns under it. This keeps directory symlinks a fatal finding.
+        is_managed = relation is not None or (
+            is_directory_symlink and manifest_covers_directory(normalized_relative_path, mappings)
+        )
+        if is_managed:
             unsafe_managed_paths.append(normalized_relative_path)
 
     leftover_files: list[tuple[str, PathRelation]] = []
