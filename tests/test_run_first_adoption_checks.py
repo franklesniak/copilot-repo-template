@@ -42,6 +42,11 @@ def _write_text(repo_root: Path, relative_path: str, text: str = "placeholder\n"
     path.write_text(text, encoding="utf-8")
 
 
+def _write_marker(repo_root: Path, text: str) -> None:
+    """Write a downstream marker fixture."""
+    _write_text(repo_root, ".template-sync/marker.yml", text)
+
+
 def _write_pytest_profile_root(tmp_path: Path) -> Path:
     """Create a temporary pytest root with the committed pytest configuration."""
     pytest_root = tmp_path / "pytest-root"
@@ -146,7 +151,7 @@ def test_check_plan_assigns_stable_group_labels(
     monkeypatch.setattr(first_adoption, "default_npm_executable", lambda: "npm")
     _write_text(tmp_path, "README.md")
     _write_text(tmp_path, ".github/scripts/replace-template-placeholders.py")
-    _write_text(tmp_path, ".template-sync/marker.yml", "included_modules:\n  - markdown\n")
+    _write_marker(tmp_path, "template_sync:\n  included_modules:\n  - markdown\n")
     _write_text(tmp_path, ".template-sync/scripts/validate_marker.py")
     _write_text(
         tmp_path,
@@ -322,7 +327,7 @@ def test_plan_only_prints_collection_notes_and_plan_without_running(
     )
     _run_git(tmp_path, "init")
     _write_text(tmp_path, "README.md")
-    _write_text(tmp_path, ".template-sync/marker.yml", "included_modules:\n  - markdown\n")
+    _write_marker(tmp_path, "template_sync:\n  included_modules:\n  - markdown\n")
     _write_text(tmp_path, ".template-sync/scripts/validate_marker.py")
     commands: list[tuple[str, ...]] = []
     stdout = io.StringIO()
@@ -691,6 +696,240 @@ def test_placeholder_script_runs_when_present(tmp_path: Path) -> None:
         ".github/scripts/replace-template-placeholders.py",
         "scan",
     ) in commands
+
+
+@pytest.mark.parametrize(
+    "marker_text",
+    [
+        pytest.param(
+            "\n".join(
+                [
+                    "template_sync:",
+                    "  included_modules:",
+                    "  - baseline",
+                    "  - markdown",
+                    "  issue_labels:",
+                    "  - triage",
+                    "",
+                ]
+            ),
+            id="indentless-sequence",
+        ),
+        pytest.param(
+            "\n".join(
+                [
+                    "template_sync:",
+                    "  included_modules:",
+                    "    - baseline",
+                    "    - markdown",
+                    "  issue_labels:",
+                    "    - triage",
+                    "",
+                ]
+            ),
+            id="visually-indented-sequence",
+        ),
+        pytest.param(
+            "\n".join(
+                [
+                    "template_sync:",
+                    "    included_modules:",
+                    "    - baseline",
+                    "    - markdown",
+                    "    issue_labels:",
+                    "    - triage",
+                    "",
+                ]
+            ),
+            id="four-space-child-indent",
+        ),
+        pytest.param(
+            "\n".join(
+                [
+                    "template_sync: # downstream marker",
+                    "  included_modules: # retained modules",
+                    "  - baseline",
+                    '  - "markdown" # exact module',
+                    "",
+                ]
+            ),
+            id="key-comments",
+        ),
+    ],
+)
+def test_marker_includes_markdown_module_detects_scoped_module(
+    tmp_path: Path,
+    marker_text: str,
+) -> None:
+    """The marker scan detects markdown only in top-level retained modules."""
+    _write_marker(tmp_path, marker_text)
+
+    assert first_adoption.marker_includes_markdown_module(tmp_path) is True
+
+
+@pytest.mark.parametrize(
+    "item_line",
+    [
+        "- markdown",
+        "- 'markdown'",
+        '- "markdown"',
+        "- markdown # note",
+        "- 'markdown' # note",
+        '- "markdown" # note',
+    ],
+)
+def test_marker_includes_markdown_module_accepts_exact_scalar_items(
+    tmp_path: Path,
+    item_line: str,
+) -> None:
+    """Exact unquoted and matching-quoted markdown items are recognized."""
+    _write_marker(tmp_path, f"template_sync:\n  included_modules:\n  {item_line}\n")
+
+    assert first_adoption.marker_includes_markdown_module(tmp_path) is True
+
+
+@pytest.mark.parametrize(
+    "marker_text",
+    [
+        pytest.param(
+            "\n".join(
+                [
+                    "template_sync:",
+                    "  included_modules:",
+                    "  - baseline",
+                    "  issue_labels:",
+                    "  - markdown",
+                    "",
+                ]
+            ),
+            id="issue-label-markdown",
+        ),
+        pytest.param(
+            "template_sync:\n    included_modules:\n    - baseline\n",
+            id="four-space-child-indent-without-markdown",
+        ),
+        pytest.param(
+            "included_modules:\n- markdown\ntemplate_sync:\n  source_repo: example\n",
+            id="top-level-included-modules",
+        ),
+        pytest.param(
+            "root:\n  template_sync:\n    included_modules:\n    - markdown\n",
+            id="nested-template-sync",
+        ),
+        pytest.param(
+            "# template_sync:\n#   included_modules:\n#   - markdown\n",
+            id="commented-template-sync",
+        ),
+        pytest.param(
+            'notes: "template_sync:"\nincluded_modules:\n- markdown\n',
+            id="scalar-template-sync",
+        ),
+        pytest.param(
+            "template_sync:\n  source_repo: example\nother:\n  included_modules:\n  - markdown\n",
+            id="included-modules-outside-template-sync",
+        ),
+        pytest.param(
+            "template_sync:\n  some_nested_mapping:\n    included_modules:\n    - markdown\n",
+            id="nested-included-modules",
+        ),
+        pytest.param(
+            "template_sync:\n  # included_modules:\n  # - markdown\n",
+            id="commented-included-modules",
+        ),
+        pytest.param(
+            'template_sync:\n  notes: "included_modules:"\n  issue_labels:\n  - markdown\n',
+            id="scalar-included-modules",
+        ),
+        pytest.param(
+            "\n".join(
+                [
+                    "template_sync:",
+                    "  included_modules:",
+                    "  - markdown-extra",
+                    "  - not-markdown",
+                    "  - markdown#note",
+                    "",
+                ]
+            ),
+            id="substring-values",
+        ),
+        pytest.param(
+            "template_sync:\n  included_modules:\n  - 'markdown\"\n  - \"markdown'\n",
+            id="malformed-quotes",
+        ),
+        pytest.param(
+            "source_repo: example\n",
+            id="missing-template-sync",
+        ),
+        pytest.param(
+            "template_sync:\n  source_repo: example\n",
+            id="missing-included-modules",
+        ),
+        pytest.param(
+            "template_sync:\n  included_modules: []\n  issue_labels:\n  - markdown\n",
+            id="empty-list",
+        ),
+        pytest.param(
+            "template_sync:\n  included_modules:\n  issue_labels:\n  - markdown\n",
+            id="block-with-no-items",
+        ),
+    ],
+)
+def test_marker_includes_markdown_module_rejects_unscoped_or_inexact_matches(
+    tmp_path: Path,
+    marker_text: str,
+) -> None:
+    """Look-alike markdown tokens outside the module block are ignored."""
+    _write_marker(tmp_path, marker_text)
+
+    assert first_adoption.marker_includes_markdown_module(tmp_path) is False
+
+
+def test_marker_includes_markdown_module_skips_blank_and_comment_lines(
+    tmp_path: Path,
+) -> None:
+    """Blank and comment lines do not terminate the retained-module sequence."""
+    _write_marker(
+        tmp_path,
+        "\n".join(
+            [
+                "template_sync:",
+                "  included_modules:",
+                "  # retained baseline module",
+                "",
+                "  - baseline",
+                "",
+                "  # retained markdown module",
+                "  - markdown",
+                "  issue_labels:",
+                "  - triage",
+                "",
+            ]
+        ),
+    )
+
+    assert first_adoption.marker_includes_markdown_module(tmp_path) is True
+
+
+def test_markdown_note_ignores_markdown_issue_label(tmp_path: Path) -> None:
+    """An issue label named markdown does not imply the Markdown module is retained."""
+    _write_marker(
+        tmp_path,
+        "\n".join(
+            [
+                "template_sync:",
+                "  included_modules:",
+                "  - baseline",
+                "  issue_labels:",
+                "  - markdown",
+                "",
+            ]
+        ),
+    )
+
+    plan = first_adoption.markdown_commands_and_notes(tmp_path)
+
+    assert plan == first_adoption.CheckPlan(commands=(), notes=())
 
 
 def test_package_markdown_scripts_run_when_present(tmp_path: Path) -> None:
