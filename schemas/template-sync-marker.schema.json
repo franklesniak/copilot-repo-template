@@ -195,6 +195,7 @@
       "type": "string",
       "enum": [
         "baseline",
+        "git-lfs",
         "agent-instructions",
         "github-platform",
         "github-actions",

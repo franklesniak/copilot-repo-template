@@ -139,6 +139,7 @@ VALIDATION_COMMANDS_BY_MODULE = {
         "pytest tests/test_dependabot_schema.py -v",
     ),
     "github-templates": ("manual GitHub template rendering review",),
+    "git-lfs": ("pytest tests/test_gitattributes.py -v",),
     "json": ("pre-commit run check-json --all-files",),
     "markdown": (
         "npm run lint:md",

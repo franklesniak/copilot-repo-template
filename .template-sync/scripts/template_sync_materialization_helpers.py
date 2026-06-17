@@ -60,6 +60,7 @@ MARKDOWN_FENCE_INFO = frozenset({"markdown", "md"})
 # the default inline-block semantics and covers both the ``*-only`` toolchain
 # blocks and the single-module ``*-reference-only`` documentation blocks.
 INLINE_BLOCK_MODULES = {
+    "git-lfs-only": frozenset({"git-lfs"}),
     "terraform-only": frozenset({"terraform"}),
     "markdown-only": frozenset({"markdown"}),
     "python-only": frozenset({"python"}),

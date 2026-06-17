@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260617.0
+**Version:** 1.1.20260617.1
 
 ## Metadata
 
@@ -677,6 +677,7 @@ When changing the taxonomy, update `.template-sync/manifest.yml` first, then upd
 | Module | Scope |
 | --- | --- |
 | `baseline` | Core repository scaffolding, community files, starter identity files, and repository-level configuration not owned by a narrower module. |
+| `git-lfs` | Opt-in Git LFS-managed attributes for selected opaque authoring and project formats in the baseline root `.gitattributes`. |
 | `agent-instructions` | Agent entry points, Copilot instructions, Cursor rules, reusable prompt guidance, and modular instruction docs. |
 | `github-platform` | Repository-level GitHub platform configuration that is not itself an issue template, PR template, CODEOWNERS file, or workflow. Includes Dependabot configuration, repository funding metadata, security-advisory configuration, code-scanning configuration outside of workflows, and similar repository-scope GitHub-only settings. Current example: `.github/dependabot.yml`. Likely future inhabitants include `.github/FUNDING.yml`, `.github/security/*`, and other repository-scope GitHub configuration files. |
 | `github-actions` | GitHub Actions workflow files under `.github/workflows/**`. |
@@ -811,6 +812,14 @@ The current `*-only` marker forms are:
 # template-sync: begin github-platform-only
 # ...
 # template-sync: end github-platform-only
+
+# template-sync: begin schema-template-sync-support-only
+# ...
+# template-sync: end schema-template-sync-support-only
+
+# template-sync: begin git-lfs-only
+# ...
+# template-sync: end git-lfs-only
 ```
 
 The current `*-reference-only` marker forms are Markdown-safe HTML comments:
@@ -857,7 +866,7 @@ The current `*-reference-only` marker forms are Markdown-safe HTML comments:
 <!-- template-sync: end github-actions-reference-only -->
 ```
 
-Most `*-reference-only` markers name a single module and use the same AND-retention strip semantics as the `*-only` family. The `data-ci-reference-only` marker is the exception: it names the OR-group `json`, `yaml`, `schema`, and `template-sync-support`, mirroring the `requires_any` relation of `.github/workflows/data-ci.yml`. It is retained when at least one of those modules is adopted and is stripped only when every one of them is excluded.
+Most `*-reference-only` markers name a single module and use the same AND-retention strip semantics as the `*-only` family. The `schema-template-sync-support-only` marker is a registered multi-module AND-retention family: it is retained only when both `schema` and `template-sync-support` are adopted. The `data-ci-reference-only` marker is the OR-retention exception: it names the OR-group `json`, `yaml`, `schema`, and `template-sync-support`, mirroring the `requires_any` relation of `.github/workflows/data-ci.yml`. It is retained when at least one of those modules is adopted and is stripped only when every one of them is excluded.
 
 These inline blocks let a downstream repository keep the containing baseline or cross-module file while removing toolchain assumptions for a module it did not adopt. During Step 6, after path mapping decides whether the containing file itself is in scope, apply these rules:
 
@@ -956,6 +965,12 @@ The current `github-platform-only` inline blocks live in:
 - `.pre-commit-config.yaml` for the `validate-dependabot-config` hook.
 - `.github/workflows/data-ci.yml` for Dependabot validation hook-list documentation and the dedicated `Run validate-dependabot-config` step.
 
+The `schema-template-sync-support-only` inline marker family is registered for future blocks that require both `schema` and `template-sync-support`; no checked-in block currently uses it.
+
+The current `git-lfs-only` inline block lives in:
+
+- `.gitattributes` for optional Git LFS-managed opaque authoring and project format patterns.
+
 The current `terraform-only` inline blocks live in:
 
 - `.pre-commit-config.yaml` for the `terraform-fmt`, `terraform-validate`, and `terraform-tflint` repo-local hooks.
@@ -973,6 +988,8 @@ After stripping `schema-only` blocks, a downstream repository that excludes `sch
 After stripping `template-sync-support-only` blocks, a downstream repository that excludes `template-sync-support` should be able to run `pre-commit run --all-files` and the retained data-file workflow without invoking template sync schema example validators, first-adoption quality suppression validators, runtime schema self-validation hooks, manifest validators, marker validators, or instruction-contract validators.
 
 After stripping `github-platform-only` blocks, a downstream repository that excludes `github-platform` should be able to run `pre-commit run --all-files` and the retained data-file workflow without retaining Dependabot validation hooks or invoking a missing `validate-dependabot-config` hook.
+
+After stripping `git-lfs-only` blocks, a downstream repository that excludes `git-lfs` should receive the baseline root `.gitattributes` without any `filter=lfs`, `diff=lfs`, or `merge=lfs` attributes.
 
 After stripping `terraform-only` blocks, a downstream repository that excludes `terraform` should be able to run `pre-commit run --all-files` and the retained non-Terraform workflows without installing HashiCorp Terraform or TFLint.
 

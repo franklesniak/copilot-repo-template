@@ -36,6 +36,7 @@ ISSUE_692_NO_PYTHON_MODULES = (
 ISSUE_693_PARTIAL_DOC_MODULES = ISSUE_692_NO_PYTHON_MODULES
 FULL_TEMPLATE_MODULES = (
     "baseline",
+    "git-lfs",
     "agent-instructions",
     "github-platform",
     "github-actions",
@@ -53,7 +54,7 @@ FULL_TEMPLATE_MODULES = (
 DOWNSTREAM_PYTEST_MODULES = tuple(
     module_name
     for module_name in FULL_TEMPLATE_MODULES
-    if module_name not in {"agent-instructions", "powershell", "terraform"}
+    if module_name not in {"agent-instructions", "git-lfs", "powershell", "terraform"}
 )
 OPTIONAL_PRUNING_FIXTURES = (
     pytest.param(
@@ -80,6 +81,19 @@ BASELINE_GITATTRIBUTES_LF_PIN_PATHS = (
     "terraform.tfvars",
     "example.tftpl",
     "backend.tfbackend",
+)
+GIT_ATTRIBUTES_TO_CHECK = ("text", "eol", "filter", "diff", "merge")
+GIT_LFS_ATTRIBUTES_TO_CHECK = ("filter", "diff", "merge", "text")
+GIT_LFS_MANAGED_ATTRIBUTE_PATHS = (
+    "assets/source/poster.psd",
+    "assets/source/poster.psb",
+    "assets/source/identity.ai",
+    "assets/source/layout.indd",
+    "assets/source/wireframe.sketch",
+    "assets/source/mockup.fig",
+    "assets/source/scene.blend",
+    "assets/source/model.fbx",
+    "assets/source/plan.dwg",
 )
 OPTIONAL_STACK_OWNED_PATHS = {
     "powershell": (
@@ -485,14 +499,33 @@ def materialize_module_fixture(
 def git_check_attributes_in_repo(
     repo_root: Path,
     paths: tuple[str, ...],
+    attributes: tuple[str, ...] = GIT_ATTRIBUTES_TO_CHECK,
 ) -> dict[str, dict[str, str]]:
     """Return Git attributes for paths in a materialized fixture."""
+    info_attributes = repo_root / ".git" / "info" / "attributes"
+    info_attributes.write_text("", encoding="utf-8")
+    global_attributes = repo_root / ".git" / "info" / "empty-global-attributes"
+    global_attributes.write_text("", encoding="utf-8")
+    env = os.environ.copy()
+    env["GIT_ATTR_NOSYSTEM"] = "1"
+
     result = subprocess.run(
-        ["git", "-C", str(repo_root), "check-attr", "text", "eol", "--", *paths],
+        [
+            "git",
+            "-C",
+            str(repo_root),
+            "-c",
+            f"core.attributesFile={global_attributes.as_posix()}",
+            "check-attr",
+            *attributes,
+            "--",
+            *paths,
+        ],
         check=False,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        env=env,
     )
     assert result.returncode == 0, result.stderr
 
@@ -1240,6 +1273,55 @@ def test_materialized_gitattributes_baseline_lf_pins_survive_optional_stack_excl
     for path, attributes in attributes_by_path.items():
         assert attributes["text"] == "set", path
         assert attributes["eol"] == "lf", path
+
+
+def test_materialized_gitattributes_strips_lfs_when_git_lfs_module_excluded(
+    tmp_path: Path,
+) -> None:
+    """Repositories that do not adopt git-lfs receive no LFS attributes."""
+    target_root = materialize_module_fixture(tmp_path, ("baseline",))
+    run_git(target_root, "init", "-q")
+
+    gitattributes_text = read_file(target_root / ".gitattributes")
+    assert "git-lfs-only" not in gitattributes_text
+    assert "filter=lfs" not in gitattributes_text
+
+    attributes_by_path = git_check_attributes_in_repo(
+        target_root,
+        GIT_LFS_MANAGED_ATTRIBUTE_PATHS,
+        GIT_LFS_ATTRIBUTES_TO_CHECK,
+    )
+
+    for path, attributes in attributes_by_path.items():
+        assert attributes["filter"] == "unspecified", path
+        assert attributes["diff"] == "unspecified", path
+        assert attributes["merge"] == "unspecified", path
+        assert attributes["text"] == "unspecified", path
+
+
+@pytest.mark.upstream_template_only
+def test_materialized_gitattributes_retains_lfs_when_git_lfs_module_included(
+    tmp_path: Path,
+) -> None:
+    """Repositories that adopt git-lfs receive the opt-in LFS attributes."""
+    target_root = materialize_module_fixture(tmp_path, ("baseline", "git-lfs"))
+    run_git(target_root, "init", "-q")
+
+    gitattributes_text = read_file(target_root / ".gitattributes")
+    assert "git-lfs-only" in gitattributes_text
+    assert "filter=lfs diff=lfs merge=lfs -text" in gitattributes_text
+
+    attributes_by_path = git_check_attributes_in_repo(
+        target_root,
+        GIT_LFS_MANAGED_ATTRIBUTE_PATHS,
+        GIT_LFS_ATTRIBUTES_TO_CHECK,
+    )
+
+    for path, attributes in attributes_by_path.items():
+        assert attributes["filter"] == "lfs", path
+        assert attributes["diff"] == "lfs", path
+        assert attributes["merge"] == "lfs", path
+        assert attributes["text"] == "unset", path
 
 
 def test_materializer_materializes_from_local_template_ref_and_cleans_worktree(
