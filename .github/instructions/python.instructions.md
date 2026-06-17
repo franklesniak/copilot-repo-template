@@ -7,13 +7,13 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.8.20260615.3
+**Version:** 1.9.20260616.1
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-15
+- **Last Updated:** 2026-06-16
 - **Scope:** Defines Python coding standards for all Python files in this repository, including modules, scripts, tests, and tooling. Covers style, structure, error handling, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -518,6 +518,12 @@ Code **MUST NOT** use `re.findall()` or `re.finditer()` over a whole multi-line 
 
 Code that consumes `re.findall()` results **MUST** account for the pattern's capturing groups: no capturing groups yields a list of full-match strings, one capturing group yields that group's strings, and two or more capturing groups yield a list of tuples. Use non-capturing groups `(?:...)` for grouping that should not change the result shape, or use `re.finditer()` with explicit `match.group(...)` access when match context or a stable result shape matters.
 
+When extracting values from structured text, code **SHOULD** prefer an existing structured parser when one is available in the runtime and dependency posture. When a parser is intentionally unavailable or avoided, such as in a standard-library-only bootstrap script, regex-based extraction of values that belong to a specific key or section **MUST** scope the scan to that key or section's block instead of applying a membership test or per-line item regex to the whole document. A whole-document scan can silently sweep in look-alike tokens from sibling sections, such as a YAML `issue_labels:` item whose value equals a module name.
+
+For YAML-like indentation-bounded extraction, code **MUST** recognize the target key only as a key-shaped line, ignoring the same token when it appears in a comment or single-line scalar value. Code **MUST** derive indentation from the document's actual space indentation rather than assuming a fixed two-space width, support sequence items that appear at the target key's own indentation as well as items indented beneath the key, skip blank and comment lines within the block, treat only whitespace-separated `#` text as an inline comment, and terminate on a non-list sibling key at the target key's indentation or on dedent. A line-based scan cannot reliably parse all YAML features, such as tokens embedded inside multi-line block scalars; that limit is itself a reason to prefer a real parser when one is available.
+
+This rule is the production-code counterpart to the test guidance that section-membership assertions must isolate the target section, and to the [Host Matching](#host-matching) requirement to parse and compare the structured component rather than trusting the raw string.
+
 Compliant example:
 
 ```python
@@ -529,6 +535,19 @@ Non-compliant counter-example:
 
 ```python
 word_lines = re.findall(r"^(\w+)$", text)
+```
+
+Compliant scoped extraction example, where `extract_key_block(...)` is an illustrative helper that returns the lines of the named nested block and `module_item_pattern` is the compiled per-item pattern:
+
+```python
+module_lines = extract_key_block(marker_text, ("template_sync", "included_modules"))
+has_markdown = any(module_item_pattern.fullmatch(line) for line in module_lines)
+```
+
+Non-compliant counter-example:
+
+```python
+has_markdown = module_item_pattern.search(marker_text) is not None
 ```
 
 ### Host Matching
