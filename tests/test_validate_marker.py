@@ -670,6 +670,24 @@ def test_unrecorded_local_paths_surface_copy_ready_suggestion(marker_repo: Path)
     )
 
 
+def test_unrecorded_local_paths_include_walk_pruned_directories(marker_repo: Path) -> None:
+    """Git-tracked files under walk-pruned directories are still reported as unrecorded.
+
+    Discovery follows the documented ``git ls-files`` contract, so a file a
+    downstream intentionally tracks under a pruned directory such as ``dist/``
+    must not be silently dropped just because the safe walk prunes that directory.
+    """
+    _write_marker(marker_repo, ["baseline", "template-sync-support"])
+    _write_text(marker_repo, "README.md")
+    _write_text(marker_repo, "dist/app.js")
+    _run_git(marker_repo, "add", "dist/app.js")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "dist/app.js" in _unrecorded_local_path_lines(result.stdout)
+
+
 def test_ignored_files_do_not_surface_as_local_path_suggestions(marker_repo: Path) -> None:
     """Ignored files are excluded by the Git-visible path convention."""
     _write_marker(

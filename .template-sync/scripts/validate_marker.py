@@ -366,10 +366,10 @@ def build_local_path_ownership_suggestions(
 
 
 def unrecorded_local_path_findings(
+    repo_root: Path,
     mappings: tuple[ManifestMapping, ...],
     local_path_ownership: tuple[LocalPathOwnership, ...],
     present_paths: set[str],
-    repository_files: tuple[str, ...],
     skipped_symlinks: tuple[str, ...],
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """Return unsafe and unrecorded Git-visible local paths."""
@@ -392,13 +392,28 @@ def unrecorded_local_path_findings(
             continue
         unsafe_paths.append(normalized_path)
 
+    repo_root_resolved = repo_root.resolve()
     unrecorded_paths: list[str] = []
     for relative_path in sorted(present_paths):
-        if relative_path not in repository_files:
-            continue
         if selected_relation_for_path(relative_path, mappings) is not None:
             continue
         if is_locally_owned_path(relative_path, local_path_ownership):
+            continue
+        # Derive the unrecorded set from the full Git-visible list (the documented
+        # ``git ls-files --cached --others --exclude-standard`` contract) and apply
+        # per-path safety checks directly. Filtering by the safe-walk list would
+        # hide files under walk-pruned directories such as build/, dist/, and
+        # node_modules/ that a downstream may intentionally track. Symlinked or
+        # repo-escaping paths are surfaced by the unsafe-path loop above, so they
+        # are skipped here.
+        if path_has_symlink_component(repo_root, relative_path):
+            continue
+        candidate = repo_root / relative_path
+        try:
+            candidate.resolve().relative_to(repo_root_resolved)
+        except (OSError, ValueError):
+            continue
+        if not candidate.is_file():
             continue
         unrecorded_paths.append(relative_path)
 
@@ -452,10 +467,10 @@ def validate_marker_state(
     present_paths = set(git_present_paths(repo_root))
     repository_files, skipped_symlinks = iter_safe_repository_files(repo_root)
     unsafe_local_paths, unrecorded_local_paths = unrecorded_local_path_findings(
+        repo_root=repo_root,
         mappings=mappings,
         local_path_ownership=local_path_ownership,
         present_paths=present_paths,
-        repository_files=repository_files,
         skipped_symlinks=skipped_symlinks,
     )
     local_path_ownership_suggestions, omitted_local_path_suggestion_count = (
