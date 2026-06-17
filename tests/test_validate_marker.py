@@ -235,7 +235,14 @@ def _symlink_or_skip(link_path: Path, target_path: Path, *, is_directory: bool) 
     try:
         link_path.symlink_to(target_path, target_is_directory=is_directory)
     except (OSError, NotImplementedError) as error:
-        pytest.skip(f"Filesystem does not support symlink creation: {error}")
+        # Avoid interpolating an OSError directly: its default string form and
+        # filename attributes can leak absolute local paths. Report the class
+        # name plus strerror instead (NotImplementedError has no strerror).
+        if isinstance(error, OSError):
+            detail = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        else:
+            detail = type(error).__name__
+        pytest.skip(f"Filesystem does not support symlink creation: {detail}")
 
 
 @pytest.fixture()
