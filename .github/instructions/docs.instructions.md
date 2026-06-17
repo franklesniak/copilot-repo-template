@@ -7,7 +7,7 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.6.20260617.0
+**Version:** 1.6.20260617.1
 
 ## Metadata
 
@@ -160,6 +160,23 @@ This file preserves the AI review prompt used while preparing ADR-0003. The pres
 - **Scope conditional obligations.** When a normative keyword constrains an action that is itself optional, explicitly scope the obligation to when that action occurs, for example, "When a document cites sources, it MUST cite only inspectable sources." This prevents readers from misreading the requirement as mandating the optional action.
 - **Cross-instruction-file normative-level alignment.** When a document restates a normative requirement that is also defined in an applicable file under `.github/instructions/*`, the document's requirement level (`MUST`, `SHOULD`, `MAY`, and their negations) MUST match the level used in the instruction file when the scope and context are the same, unless the document explicitly justifies a stricter or weaker level in prose immediately adjacent to the restatement. If the scope or context differs from the instruction file, the document SHOULD note that scope/context difference at the restatement. Implicit divergence (silently using a different level when the scope and context are the same as in the instruction file, with no adjacent justification) MUST NOT occur.
 - **Intra-document normative-level consistency.** Within a single document, the normative requirement level for the same keyword, field, rule, and scope MUST be consistent across sections. If two sections appear to attach different levels to the same item, reconcile the wording or explicitly explain why the scopes differ.
+
+### Status and Tense Consistency
+
+When a tracked entry in an ADR, another decision or design record, a requirements table, or a similar status-bearing record carries a status indicating the described change is complete or realized (for example, `Addressed`, `Implemented`, `Resolved`, `Fixed`, `Done`, or `Completed`), the prose that summarizes that realized change MUST use present or past tense. For example, use "Section 25.7 defines ..." or "The spec requires ..." rather than future or pending phrasing such as "will define", "will require", or "does not yet ...". Future-tense phrasing and "not yet" phrasing remain acceptable only when the sentence explicitly describes genuinely pending work, future-scoped work, or future-triggered effects that have not occurred yet, including genuinely forward-looking ADR consequences. A status that records only that a decision was approved rather than realized, notably an ADR marked `Accepted` under this repository's `Proposed | Accepted | Superseded | Deprecated` lifecycle, does not by itself require present or past tense; match the tense to the actual state of the work. When a sentence must describe the pre-change state, scope it explicitly to that prior state (for example, "Before this change, ..." or "Prior to this revision, ...").
+
+Examples:
+
+```text
+Non-compliant (future tense under a completed status):
+  **Status:** Addressed. Section 25.7 will define the retry budget.
+
+Compliant (realized change in present tense):
+  **Status:** Addressed. Section 25.7 defines the retry budget.
+
+Compliant (explicitly scoped pre-change reference):
+  **Status:** Addressed. Prior to this revision, no retry budget existed; Section 25.7 defines it.
+```
 
 ### Examples
 
