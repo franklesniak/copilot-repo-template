@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.6.20260615.1
+**Version:** 1.6.20260617.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-15
+- **Last Updated:** 2026-06-17
 - **Scope:** Defines documentation standards for Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) files in this repository, including specs, design docs, runbooks, ADRs, instruction files, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -168,6 +168,7 @@ This file preserves the AI review prompt used while preparing ADR-0003. The pres
   - Output
   - Explanation (why that output is correct)
 - For edge cases, include at least one "failure or ambiguous input" example and the expected handling.
+- When a code example intentionally uses an example-only helper function, method, type, module, or similarly non-obvious symbol (i.e., one invented for the example and not defined within the example or elsewhere in the same document), the example SHOULD orient the reader in at least one of these ways: label the symbol or example as illustrative, incomplete, or example-only (in surrounding prose, a language-appropriate comment, or a clear document-level or section-level note that applies to the example); or include a minimal declaration, signature, or definition. When the example-only symbol appears as a function call, method call, or type/constructor instantiation (for example, an undefined `do_thing(x)`, `thing.do()`, `Widget()`, or `new Widget()` expression), the example MUST do at least one of these, because calls and instantiations read as runnable code more strongly than bare values. An obvious generic local variable or parameter name with clear local meaning (such as `text`, `value`, `input`, `expected`, or `result`) does not by itself trigger this rule, and neither does a reference to a known real, documented API (for example, a standard-library API, documented third-party API, or repo-owned API referenced by the surrounding document), even when that API is not defined within the document.
 
 ### Markdown Conventions
 
