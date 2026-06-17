@@ -84,7 +84,14 @@ class MarkerValidationReport:
 
     @property
     def has_failures(self) -> bool:
-        """Return whether actual retained-template inconsistencies were found."""
+        """Return whether validation failures were found.
+
+        Retained-template inconsistencies (unsafe template-managed paths,
+        missing expected files, and excluded leftovers) always count as
+        failures. When ``strict_local_path_ownership`` is enabled, local path
+        ownership findings (unsafe local symlinks and unrecorded local paths)
+        are treated as failures too.
+        """
         if self.unsafe_managed_paths or self.missing_expected_files or self.leftover_files:
             return True
         return self.strict_local_path_ownership and bool(
@@ -162,8 +169,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--strict-local-path-ownership",
         action="store_true",
         help=(
-            "Fail when Git-visible non-ignored paths are neither template-managed "
-            "nor covered by template_sync.local_path_ownership. Off by default."
+            "Fail on Git-visible local path ownership findings: paths that are "
+            "neither template-managed nor covered by template_sync.local_path_ownership, "
+            "and local paths that are symlinks or otherwise resolve unsafely. "
+            "Off by default."
         ),
     )
     parser.add_argument(

@@ -266,8 +266,7 @@ def marker_report_warnings(report: validate_marker.MarkerValidationReport) -> tu
         )
     for relative_path in report.unrecorded_local_paths:
         warnings.append(
-            "Git-visible path is neither template-managed nor recorded in "
-            f"template_sync.local_path_ownership: {relative_path}"
+            f"Git-visible path is neither template-managed nor recorded in template_sync.local_path_ownership: {relative_path}"
         )
     return tuple(warnings)
 
