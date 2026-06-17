@@ -47,7 +47,9 @@ if str(TEMPLATE_SYNC_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(TEMPLATE_SYNC_SCRIPT_DIR))
 
 from template_sync_materialization_helpers import (  # noqa: E402
+    INLINE_BLOCK_ANY_MODULES,
     INLINE_BLOCK_MARKER_RE,
+    INLINE_BLOCK_MODULES,
     MismatchedInlineBlockError,
     MissingExpectedInlineBlockError,
     NestedInlineBlockError,
@@ -204,6 +206,24 @@ GITHUB_PLATFORM_SHARED_SURFACE_TOKENS = {
         "pre-commit run validate-dependabot-config --all-files",
         ".github/dependabot.yml",
         "vendor.dependabot",
+    ),
+}
+GIT_LFS_INLINE_BLOCK_COUNTS = {
+    ".gitattributes": 1,
+}
+GIT_LFS_INLINE_MARKER_BEGIN = "# template-sync: begin git-lfs-only"
+GIT_LFS_INLINE_MARKER_END = "# template-sync: end git-lfs-only"
+GIT_LFS_SHARED_SURFACE_TOKENS = {
+    ".gitattributes": (
+        "*.psd                         filter=lfs diff=lfs merge=lfs -text",
+        "*.psb                         filter=lfs diff=lfs merge=lfs -text",
+        "*.ai                          filter=lfs diff=lfs merge=lfs -text",
+        "*.indd                        filter=lfs diff=lfs merge=lfs -text",
+        "*.sketch                      filter=lfs diff=lfs merge=lfs -text",
+        "*.fig                         filter=lfs diff=lfs merge=lfs -text",
+        "*.blend                       filter=lfs diff=lfs merge=lfs -text",
+        "*.fbx                         filter=lfs diff=lfs merge=lfs -text",
+        "*.dwg                         filter=lfs diff=lfs merge=lfs -text",
     ),
 }
 REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
@@ -1060,6 +1080,15 @@ def _strip_github_platform_only_inline_blocks(relative_path: str) -> str:
     )
 
 
+def _strip_git_lfs_only_inline_blocks(relative_path: str) -> str:
+    """Return file text after simulating a downstream sync without Git LFS."""
+    return _strip_inline_blocks(
+        relative_path,
+        GIT_LFS_INLINE_MARKER_BEGIN,
+        GIT_LFS_INLINE_MARKER_END,
+    )
+
+
 def _strip_template_sync_support_blocks_for_modules(
     relative_path: str,
     included_modules: set[str],
@@ -1144,6 +1173,33 @@ def _split_markdown_table_row(line: str) -> list[str]:
 def _is_separator_row(row: list[str]) -> bool:
     """Return whether a parsed row is a Markdown table separator."""
     return all(cell and set(cell) <= {"-", ":"} for cell in row)
+
+
+def _extract_heading_section(markdown_text: str, heading: str) -> str:
+    """Return the Markdown section under ``heading`` up to the next same-level heading."""
+    lines = markdown_text.splitlines()
+    try:
+        heading_index = lines.index(heading)
+    except ValueError as error:
+        raise AssertionError(f"Missing heading {heading!r}") from error
+
+    heading_level = len(heading) - len(heading.lstrip("#"))
+    following_lines: list[str] = []
+    in_fenced_code_block = False
+    for line in lines[heading_index + 1 :]:
+        stripped = line.lstrip()
+        if stripped.startswith(("```", "~~~")):
+            in_fenced_code_block = not in_fenced_code_block
+            following_lines.append(line)
+            continue
+
+        heading_match = re.match(r"^(#{1,6})\s+\S", stripped)
+        if heading_match and not in_fenced_code_block:
+            level = len(heading_match.group(1))
+            if level <= heading_level:
+                break
+        following_lines.append(line)
+    return "\n".join(following_lines)
 
 
 def _code_spans(markdown_cell: str) -> list[str]:
@@ -1472,6 +1528,25 @@ def test_template_manifest_path_mapping_modules_exist() -> None:
     assert not unknown_modules
 
 
+def test_template_manifest_modules_have_path_or_inline_block_ownership() -> None:
+    """Every manifest module must own at least one path mapping or inline block."""
+    modules = {name for name, _description in _module_rows_from_manifest()}
+    path_modules = {
+        module
+        for _pattern, referenced_modules in _path_mapping_rows_from_manifest()
+        for module in referenced_modules
+    }
+    inline_modules: set[str] = set()
+    for required_modules in (
+        *INLINE_BLOCK_MODULES.values(),
+        *INLINE_BLOCK_ANY_MODULES.values(),
+    ):
+        inline_modules.update(required_modules)
+
+    assert not (inline_modules - modules)
+    assert not (modules - path_modules - inline_modules)
+
+
 def test_top_level_python_tests_map_to_python_module() -> None:
     """Top-level Python test files must not fall through the recursive glob gap."""
     assert _manifest_modules_for_path("tests/__init__.py") == ("python",)
@@ -1742,17 +1817,7 @@ def test_dependabot_schema_regression_surface_maps_to_github_platform_and_schema
 
 def test_template_sync_inline_markers_are_known_and_paired() -> None:
     """Both inline marker families must use known, non-nested begin/end pairs."""
-    known_marker_names = {
-        "terraform-only",
-        "markdown-only",
-        "python-only",
-        "yaml-only",
-        "schema-only",
-        "template-sync-support-only",
-        "github-platform-only",
-        *REFERENCE_ONLY_MARKER_MODULES,
-        *ANY_REFERENCE_ONLY_MARKER_MODULES,
-    }
+    known_marker_names = set(INLINE_BLOCK_MODULES) | set(INLINE_BLOCK_ANY_MODULES)
     inline_block_paths = sorted(
         {
             *TERRAFORM_INLINE_BLOCK_PATHS,
@@ -1762,6 +1827,7 @@ def test_template_sync_inline_markers_are_known_and_paired() -> None:
             *SCHEMA_INLINE_BLOCK_COUNTS,
             *TEMPLATE_SYNC_SUPPORT_INLINE_BLOCK_COUNTS,
             *GITHUB_PLATFORM_INLINE_BLOCK_COUNTS,
+            *GIT_LFS_INLINE_BLOCK_COUNTS,
             *(
                 relative_path
                 for path_counts in REFERENCE_ONLY_INLINE_BLOCK_COUNTS.values()
@@ -2182,6 +2248,40 @@ def test_github_platform_sync_retains_dependabot_tooling_in_shared_surfaces() ->
             assert required_token in text, f"{relative_path}: {required_token}"
 
 
+def test_git_lfs_inline_blocks_are_declared_for_template_sync() -> None:
+    """Git-lfs-only inline blocks must be paired with manifest notes."""
+    mappings = _path_mapping_by_pattern()
+
+    for relative_path, expected_count in GIT_LFS_INLINE_BLOCK_COUNTS.items():
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        assert text.count(GIT_LFS_INLINE_MARKER_BEGIN) == expected_count
+        assert text.count(GIT_LFS_INLINE_MARKER_END) == expected_count
+        _strip_git_lfs_only_inline_blocks(relative_path)
+
+        mapping = mappings.get(relative_path)
+        assert mapping is not None, f"{relative_path} must have a manifest mapping"
+        notes = mapping.get("notes")
+        assert isinstance(notes, str), f"{relative_path} mapping must describe inline blocks"
+        assert "git-lfs-only inline block" in notes
+        assert "git-lfs module is excluded" in notes
+
+
+def test_non_git_lfs_sync_strips_lfs_attributes_from_shared_surfaces() -> None:
+    """A simulated sync without Git LFS must remove LFS attributes."""
+    for relative_path, forbidden_tokens in GIT_LFS_SHARED_SURFACE_TOKENS.items():
+        stripped_text = _strip_git_lfs_only_inline_blocks(relative_path)
+        for forbidden_token in forbidden_tokens:
+            assert forbidden_token not in stripped_text, f"{relative_path}: {forbidden_token}"
+
+
+def test_git_lfs_sync_retains_lfs_attributes_in_shared_surfaces() -> None:
+    """A sync that includes Git LFS must keep LFS attributes."""
+    for relative_path, required_tokens in GIT_LFS_SHARED_SURFACE_TOKENS.items():
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        for required_token in required_tokens:
+            assert required_token in text, f"{relative_path}: {required_token}"
+
+
 def test_reference_only_inline_blocks_are_declared_for_template_sync() -> None:
     """Reference-only inline blocks must be paired with manifest notes."""
     mappings = _path_mapping_by_pattern()
@@ -2219,6 +2319,15 @@ def test_procedure_registers_reference_only_marker_family() -> None:
         assert marker_name in procedure_text
     for relative_path in REFERENCE_ONLY_MANIFEST_PATTERNS:
         assert relative_path in procedure_text
+
+
+def test_procedure_inline_block_inventory_documents_registered_families() -> None:
+    """The sync procedure inventory must document every registered inline family."""
+    procedure_text = PROCEDURE_PATH.read_text(encoding="utf-8")
+    inventory_section = _extract_heading_section(procedure_text, "### Inline Module Blocks")
+
+    for marker_name in sorted(set(INLINE_BLOCK_MODULES) | set(INLINE_BLOCK_ANY_MODULES)):
+        assert marker_name in inventory_section
 
 
 def test_template_sync_markers_do_not_break_markdown_tables() -> None:
@@ -2454,6 +2563,20 @@ def test_template_sync_marker_schema_module_enum_matches_manifest() -> None:
     """The marker schema's baked module enum must mirror the manifest."""
     manifest_modules = [name for name, _description in _module_rows_from_manifest()]
     assert _module_enum_from_marker_schema() == manifest_modules
+
+
+def test_full_marker_example_lists_every_manifest_module() -> None:
+    """The named full marker example must stay aligned with manifest modules."""
+    example_path = (
+        REPO_ROOT / "schemas" / "examples" / "template-sync-marker" / "valid" / "full.yml"
+    )
+    example = yaml.safe_load(example_path.read_text(encoding="utf-8"))
+    assert isinstance(example, dict), "full marker example root must be a mapping"
+    template_sync = example.get("template_sync")
+    assert isinstance(template_sync, dict), "full marker example must contain template_sync"
+    included_modules = template_sync.get("included_modules")
+    assert isinstance(included_modules, list), "full marker example must list modules"
+    assert included_modules == [name for name, _description in _module_rows_from_manifest()]
 
 
 def test_template_manifest_filtering_semantics_are_valid() -> None:

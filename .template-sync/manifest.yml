@@ -5,6 +5,10 @@ template_manifest:
       description: >-
         Core repository scaffolding, community files, starter identity files,
         and repository-level configuration not owned by a narrower module.
+    - name: git-lfs
+      description: >-
+        Opt-in Git LFS-managed attributes for selected opaque authoring and
+        project formats in the baseline root `.gitattributes`.
     - name: agent-instructions
       description: >-
         Agent entry points, Copilot instructions, Cursor rules, reusable prompt
@@ -519,6 +523,11 @@ template_manifest:
     - pattern: '.gitattributes'
       requires_all:
         - baseline
+      notes: >-
+        Contains a git-lfs-only inline block for optional Git LFS-managed
+        opaque authoring and project formats. Remove the delimited block when
+        the git-lfs module is excluded so downstream repositories without Git
+        LFS adoption receive no LFS attributes.
     - pattern: '.vscode/**'
       requires_all:
         - baseline

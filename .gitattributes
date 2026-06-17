@@ -63,7 +63,7 @@ CODEOWNERS                    text eol=lf
 
 # Binary overrides: prevent the broad rules above (or any default
 # text-detection) from treating these common binary file types as text.
-# The `binary` macro expands to `-text -diff`.
+# The `binary` macro expands to `-diff -merge -text`.
 
 # Images
 *.png                         binary
@@ -114,3 +114,17 @@ CODEOWNERS                    text eol=lf
 *.woff                        binary
 *.woff2                       binary
 *.eot                         binary
+
+# Git LFS-managed opaque authoring/project formats. This opt-in block is
+# removed for downstream repositories that do not adopt the git-lfs module.
+# template-sync: begin git-lfs-only
+*.psd                         filter=lfs diff=lfs merge=lfs -text
+*.psb                         filter=lfs diff=lfs merge=lfs -text
+*.ai                          filter=lfs diff=lfs merge=lfs -text
+*.indd                        filter=lfs diff=lfs merge=lfs -text
+*.sketch                      filter=lfs diff=lfs merge=lfs -text
+*.fig                         filter=lfs diff=lfs merge=lfs -text
+*.blend                       filter=lfs diff=lfs merge=lfs -text
+*.fbx                         filter=lfs diff=lfs merge=lfs -text
+*.dwg                         filter=lfs diff=lfs merge=lfs -text
+# template-sync: end git-lfs-only
