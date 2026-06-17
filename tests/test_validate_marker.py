@@ -670,6 +670,24 @@ def test_unrecorded_local_paths_surface_copy_ready_suggestion(marker_repo: Path)
     )
 
 
+def test_exact_path_ownership_suggestion_uses_neutral_reason(marker_repo: Path) -> None:
+    """An exact-file ownership suggestion avoids directory-family wording.
+
+    The suggested record for a top-level file (no trailing ``/``) should not imply
+    directory-family semantics in its reason text.
+    """
+    _write_marker(marker_repo, ["baseline", "template-sync-support"])
+    _write_text(marker_repo, "README.md")
+    _write_text(marker_repo, "unrecorded.txt")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "  - path: unrecorded.txt" in result.stdout
+    assert "    reason: Downstream project owns this path." in result.stdout
+    assert "    reason: Downstream project owns this path family." not in result.stdout
+
+
 def test_unrecorded_local_paths_include_walk_pruned_directories(marker_repo: Path) -> None:
     """Git-tracked files under walk-pruned directories are still reported as unrecorded.
 

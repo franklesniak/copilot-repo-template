@@ -598,7 +598,10 @@ def print_report(report: MarkerValidationReport) -> None:
             )
         for suggestion in report.local_path_ownership_suggestions:
             print(f"  - path: {suggestion.path}")
-            print("    reason: Downstream project owns this path family.")
+            if suggestion.path.endswith("/"):
+                print("    reason: Downstream project owns this path family.")
+            else:
+                print("    reason: Downstream project owns this path.")
             sampled_covered_paths = suggestion.covered_paths[:LOCAL_PATH_SUGGESTION_COVERED_LIMIT]
             print("    # covers: " + ", ".join(sampled_covered_paths))
             remaining_covered_paths = len(suggestion.covered_paths) - len(sampled_covered_paths)
