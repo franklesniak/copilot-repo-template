@@ -51,8 +51,57 @@ FULL_TEMPLATE_MODULES = (
     "terraform",
 )
 DOWNSTREAM_PYTEST_MODULES = tuple(
-    module_name for module_name in FULL_TEMPLATE_MODULES if module_name != "agent-instructions"
+    module_name
+    for module_name in FULL_TEMPLATE_MODULES
+    if module_name not in {"agent-instructions", "powershell", "terraform"}
 )
+OPTIONAL_PRUNING_FIXTURES = (
+    pytest.param(
+        ("baseline", "python", "schema", "template-sync-support"),
+        False,
+        id="python-schema-template-sync-without-terraform",
+    ),
+    pytest.param(
+        ("baseline", "template-sync-support"),
+        False,
+        id="template-sync-support-without-powershell",
+    ),
+    pytest.param(
+        FULL_TEMPLATE_MODULES,
+        True,
+        id="full-upstream-module-set",
+    ),
+)
+BASELINE_GITATTRIBUTES_LF_PIN_PATHS = (
+    "example.ps1",
+    "settings.psd1",
+    "module.psm1",
+    "main.tf",
+    "terraform.tfvars",
+    "example.tftpl",
+    "backend.tfbackend",
+)
+OPTIONAL_STACK_OWNED_PATHS = {
+    "powershell": (
+        ".github/instructions/powershell.instructions.md",
+        ".github/linting/PSScriptAnalyzerSettings.psd1",
+        ".github/workflows/powershell-ci.yml",
+        "src/tools/Resolve-PSScriptAnalyzerGate.ps1",
+        "templates/powershell/Example.Tests.ps1",
+    ),
+    "terraform": (
+        ".github/instructions/terraform.instructions.md",
+        ".github/workflows/terraform-ci.yml",
+        ".tflint.hcl",
+        "docs/terraform/TERRAFORM_LINTING_GUIDE.md",
+        "docs/terraform/TERRAFORM_TESTING_GUIDE.md",
+        "templates/terraform/Example.tftest.hcl",
+    ),
+}
+OPTIONAL_STACK_INLINE_MARKERS = {
+    "powershell": ("powershell-reference-only",),
+    "terraform": ("terraform-only", "terraform-reference-only"),
+}
 DEPENDABOT_NO_PYTHON_ECOSYSTEMS = {"github-actions", "npm", "pre-commit"}
 DEPENDABOT_FULL_ECOSYSTEMS = DEPENDABOT_NO_PYTHON_ECOSYSTEMS | {"pip"}
 ISSUE_693_BASELINE_DOCS = ("README.md", "CONTRIBUTING.md")
@@ -376,8 +425,94 @@ def run_materialize(
     )
 
 
+def retained_protected_paths_for_modules(included_modules: tuple[str, ...]) -> tuple[str, ...]:
+    """Return protected instruction files retained by a materialized module set."""
+    _manifest, _module_order, mappings = materializer.load_validated_manifest_context(REPO_ROOT)
+    template_paths, skipped_symlinks = materializer.iter_safe_repository_files(REPO_ROOT)
+    assert not skipped_symlinks, f"fixture source has skipped symlink(s): {skipped_symlinks}"
+
+    protected_paths: list[str] = []
+    for relative_path in template_paths:
+        relation = materializer.selected_relation_for_path(relative_path, mappings)
+        if relation is None or not relation.is_retained_by(included_modules):
+            continue
+        if materializer.is_protected_instruction_path(relative_path):
+            protected_paths.append(relative_path)
+    return tuple(sorted(protected_paths))
+
+
+def protected_take_decisions_for_modules(
+    included_modules: tuple[str, ...],
+) -> list[dict[str, str]]:
+    """Return marker decisions that allow a full protected-file fixture."""
+    return [
+        {
+            "path": relative_path,
+            "decision": "TAKE",
+            "adoption_mode": "minimal-preservation",
+            "authorization_basis": f"Regression fixture authorizes taking {relative_path}.",
+            "authorized_scope": f"{relative_path} only.",
+        }
+        for relative_path in retained_protected_paths_for_modules(included_modules)
+    ]
+
+
+def materialize_module_fixture(
+    tmp_path: Path,
+    included_modules: tuple[str, ...],
+    *,
+    authorize_protected_files: bool = False,
+) -> Path:
+    """Materialize a real downstream fixture from the requested module set."""
+    target_root = tmp_path / "downstream"
+    target_root.mkdir()
+    marker_fields: dict[str, Any] = {}
+    if authorize_protected_files:
+        marker_fields["protected_file_decisions"] = protected_take_decisions_for_modules(
+            included_modules
+        )
+    write_yaml(
+        target_root / "decisions.yml",
+        marker_document(list(included_modules), **marker_fields),
+    )
+
+    result = run_materialize(REPO_ROOT, target_root, "--decisions-file", "decisions.yml")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    return target_root
+
+
+def git_check_attributes_in_repo(
+    repo_root: Path,
+    paths: tuple[str, ...],
+) -> dict[str, dict[str, str]]:
+    """Return Git attributes for paths in a materialized fixture."""
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "check-attr", "text", "eol", "--", *paths],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+    attributes_by_path: dict[str, dict[str, str]] = {path: {} for path in paths}
+    for line in result.stdout.splitlines():
+        path, attribute, value = line.split(": ", 2)
+        attributes_by_path[path][attribute] = value
+    return attributes_by_path
+
+
+def retained_test_files(target_root: Path) -> tuple[Path, ...]:
+    """Return retained pytest files in a materialized fixture."""
+    tests_root = target_root / "tests"
+    if not tests_root.is_dir():
+        return ()
+    return tuple(sorted(tests_root.rglob("test_*.py")))
+
+
 def materialize_downstream_pytest_fixture(tmp_path: Path) -> Path:
-    """Materialize a partial downstream tree suitable for nested pytest profile checks."""
+    """Materialize a pytest-capable tree that excludes Terraform and PowerShell."""
     target_root = tmp_path / "downstream-pytest"
     target_root.mkdir()
     module_args = [
@@ -973,7 +1108,7 @@ def test_read_license_source_bytes_reports_unreadable_source_without_absolute_pa
 def test_materialized_downstream_pytest_gate_collects(
     tmp_path: Path,
 ) -> None:
-    """A materialized partial downstream tree collects the downstream pytest gate."""
+    """A Terraform/PowerShell-excluded downstream collects the pytest gate."""
     target_root = materialize_downstream_pytest_fixture(tmp_path)
 
     result = run_downstream_pytest_gate(target_root, "--collect-only", "-q")
@@ -988,12 +1123,123 @@ def test_materialized_downstream_pytest_gate_collects(
 def test_materialized_downstream_pytest_gate_passes(
     tmp_path: Path,
 ) -> None:
-    """A materialized partial downstream tree passes the downstream pytest gate."""
+    """A Terraform/PowerShell-excluded downstream passes the pytest gate."""
     target_root = materialize_downstream_pytest_fixture(tmp_path)
 
     result = run_downstream_pytest_gate(target_root, "-q")
 
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    ("included_modules", "authorize_protected_files"),
+    OPTIONAL_PRUNING_FIXTURES,
+)
+def test_materialized_optional_pruning_retained_tests_have_no_stale_markers(
+    tmp_path: Path,
+    included_modules: tuple[str, ...],
+    authorize_protected_files: bool,
+) -> None:
+    """Materialized optional-pruning fixtures carry no stale retained-test markers."""
+    target_root = materialize_module_fixture(
+        tmp_path,
+        included_modules,
+        authorize_protected_files=authorize_protected_files,
+    )
+    run_git(target_root, "init", "-q")
+    run_git(target_root, "add", ".")
+
+    report_result = run_excluded_module_report(target_root, included_modules)
+    marker = load_yaml(target_root / ".template-sync" / "marker.yml")
+    assert isinstance(marker, dict)
+    recorded_modules = marker["template_sync"]["included_modules"]
+    assert set(recorded_modules) == set(included_modules)
+
+    assert report_result.returncode == 0, report_result.stderr
+    assert "State source: marker (.template-sync/marker.yml)" in report_result.stdout
+
+    excluded_modules = set(FULL_TEMPLATE_MODULES) - set(included_modules)
+    for module_name, relative_paths in OPTIONAL_STACK_OWNED_PATHS.items():
+        if module_name not in excluded_modules:
+            continue
+        for relative_path in relative_paths:
+            assert not (target_root / relative_path).exists(), relative_path
+
+    test_files = retained_test_files(target_root)
+    assert test_files, "fixture must retain template-support pytest files"
+    for test_file in test_files:
+        relative_path = test_file.relative_to(target_root).as_posix()
+        text = read_file(test_file)
+        for module_name, marker_names in OPTIONAL_STACK_INLINE_MARKERS.items():
+            if module_name not in excluded_modules:
+                continue
+            for marker_name in marker_names:
+                for line in text.splitlines():
+                    stripped_line = line.lstrip()
+                    assert not stripped_line.startswith(
+                        f"# template-sync: begin {marker_name}"
+                    ), f"{relative_path}: {marker_name}"
+                    assert not stripped_line.startswith(
+                        f"# template-sync: end {marker_name}"
+                    ), f"{relative_path}: {marker_name}"
+                    assert not stripped_line.startswith(
+                        f"<!-- template-sync: begin {marker_name}"
+                    ), f"{relative_path}: {marker_name}"
+                    assert not stripped_line.startswith(
+                        f"<!-- template-sync: end {marker_name}"
+                    ), f"{relative_path}: {marker_name}"
+
+
+def test_materialized_template_sync_support_only_first_adoption_plan_omits_powershell(
+    tmp_path: Path,
+) -> None:
+    """A no-PowerShell support fixture does not plan stale PowerShell checks."""
+    target_root = materialize_module_fixture(
+        tmp_path,
+        ("baseline", "template-sync-support"),
+    )
+    run_git(target_root, "init", "-q")
+    run_git(target_root, "add", ".")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            ".template-sync/scripts/run_first_adoption_checks.py",
+            "--repo-root",
+            str(target_root),
+            "--plan-only",
+        ],
+        cwd=target_root,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "first_adoption_quality_reports.py line-endings" in result.stdout
+    assert "first_adoption_quality_reports.py path-references" in result.stdout
+    assert "first_adoption_quality_reports.py powershell" not in result.stdout
+
+
+def test_materialized_gitattributes_baseline_lf_pins_survive_optional_stack_exclusion(
+    tmp_path: Path,
+) -> None:
+    """Baseline-owned LF pins remain after Terraform and PowerShell are excluded."""
+    target_root = materialize_module_fixture(
+        tmp_path,
+        DOWNSTREAM_PYTEST_MODULES,
+    )
+    run_git(target_root, "init", "-q")
+
+    attributes_by_path = git_check_attributes_in_repo(
+        target_root,
+        BASELINE_GITATTRIBUTES_LF_PIN_PATHS,
+    )
+
+    for path, attributes in attributes_by_path.items():
+        assert attributes["text"] == "set", path
+        assert attributes["eol"] == "lf", path
 
 
 def test_materializer_materializes_from_local_template_ref_and_cleans_worktree(

@@ -37,6 +37,8 @@ MARKER_PATH = ".template-sync/marker.yml"
 MARKER_VALIDATOR_SCRIPT = ".template-sync/scripts/validate_marker.py"
 QUALITY_REPORT_SCRIPT = ".template-sync/scripts/first_adoption_quality_reports.py"
 MARKDOWN_PACKAGE_SCRIPTS = ("lint:md", "lint:md:links", "lint:md:nested")
+MARKER_MODULE_PATTERN = re.compile(r"(?m)^\s*-\s*['\"]?(?P<module>[a-z0-9-]+)['\"]?\s*(?:#.*)?$")
+INCLUDED_MODULES_KEY_PATTERN = re.compile(r"^(?P<indent>\s*)included_modules\s*:\s*(?:#.*)?$")
 MARKER_KEY_PATTERN = re.compile(
     r"^(?P<indent> *)(?P<key>[A-Za-z_][A-Za-z0-9_-]*):(?P<suffix>(?:[ \t].*)?)$"
 )
@@ -370,6 +372,41 @@ def load_package_scripts(repo_root: Path) -> dict[str, object]:
     return scripts if isinstance(scripts, dict) else {}
 
 
+def included_modules_from_marker_text(marker_text: str) -> frozenset[str]:
+    """Return modules listed under the marker's ``included_modules`` block.
+
+    Only the ``included_modules`` block is scanned. The block is located by its
+    key line and bounded by indentation so sibling marker string lists (for
+    example ``issue_labels``) are never read as retained modules, even when a
+    downstream label happens to match a module name. Block sequence items are
+    accepted both when indented beneath the key and when rendered at the key's
+    own indentation, matching PyYAML's default ``safe_dump`` block style. Blank
+    lines and full-line comments inside the block are skipped rather than
+    treated as block terminators, so hand-edited markers parse correctly.
+    """
+    modules: set[str] = set()
+    in_block = False
+    block_indent = 0
+    for line in marker_text.splitlines():
+        if not in_block:
+            key_match = INCLUDED_MODULES_KEY_PATTERN.match(line)
+            if key_match is not None:
+                in_block = True
+                block_indent = len(key_match.group("indent"))
+            continue
+        if is_marker_blank_or_comment_line(line):
+            # Blank lines and full-line comments are structurally transparent in
+            # YAML; skip them so a comment at the block indentation does not
+            # prematurely terminate the included_modules block.
+            continue
+        item_match = MARKER_MODULE_PATTERN.match(line)
+        if item_match is None and len(line) - len(line.lstrip()) <= block_indent:
+            break
+        if item_match is not None:
+            modules.add(item_match.group("module"))
+    return frozenset(modules)
+
+
 def marker_line_indent(line: str) -> int:
     """Return the number of leading spaces on ``line``."""
     return len(line) - len(line.lstrip(" "))
@@ -519,6 +556,21 @@ def marker_text_includes_markdown_module(marker_text: str) -> bool:
     return False
 
 
+def marker_included_modules(repo_root: Path) -> frozenset[str] | None:
+    """Return marker-listed modules, or ``None`` when no marker is present."""
+    marker_path = repo_root / MARKER_PATH
+    if not marker_path.exists():
+        return None
+    if not is_present_regular_file(marker_path):
+        raise FirstAdoptionCheckError(f"Expected a regular file: {MARKER_PATH}")
+    try:
+        marker_text = marker_path.read_text(encoding="utf-8-sig")
+    except OSError as error:
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        raise FirstAdoptionCheckError(f"Unable to read {MARKER_PATH} ({error_summary}).") from error
+    return included_modules_from_marker_text(marker_text)
+
+
 def marker_includes_markdown_module(repo_root: Path) -> bool:
     """Return whether the downstream marker appears to retain the markdown module."""
     marker_path = repo_root / MARKER_PATH
@@ -532,6 +584,14 @@ def marker_includes_markdown_module(repo_root: Path) -> bool:
         error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
         raise FirstAdoptionCheckError(f"Unable to read {MARKER_PATH} ({error_summary}).") from error
     return marker_text_includes_markdown_module(marker_text)
+
+
+def has_powershell_files(files: Sequence[str]) -> bool:
+    """Return whether collected files include PowerShell-owned extensions."""
+    return any(
+        Path(relative_path).suffix.casefold() in {".ps1", ".psd1", ".psm1"}
+        for relative_path in files
+    )
 
 
 def markdown_commands_and_notes(repo_root: Path) -> CheckPlan:
@@ -560,12 +620,16 @@ def markdown_commands_and_notes(repo_root: Path) -> CheckPlan:
 
 
 def quality_report_commands(
-    repo_root: Path, *, run_mode: str = CHECK_MODE
+    repo_root: Path,
+    files: Sequence[str],
+    *,
+    run_mode: str = CHECK_MODE,
 ) -> tuple[PlannedCommand, ...]:
     """Build first-adoption quality report commands when the helper is available."""
     if not optional_regular_file_exists(repo_root, QUALITY_REPORT_SCRIPT):
         return ()
 
+    marker_modules = marker_included_modules(repo_root)
     commands = [
         PlannedCommand(
             group_label=QUALITY_REPORT_GROUP,
@@ -575,11 +639,14 @@ def quality_report_commands(
             group_label=QUALITY_REPORT_GROUP,
             command=(sys.executable, QUALITY_REPORT_SCRIPT, "path-references"),
         ),
-        PlannedCommand(
-            group_label=QUALITY_REPORT_GROUP,
-            command=(sys.executable, QUALITY_REPORT_SCRIPT, "powershell"),
-        ),
     ]
+    if marker_modules is None or "powershell" in marker_modules or has_powershell_files(files):
+        commands.append(
+            PlannedCommand(
+                group_label=QUALITY_REPORT_GROUP,
+                command=(sys.executable, QUALITY_REPORT_SCRIPT, "powershell"),
+            )
+        )
 
     markdown_command = [sys.executable, QUALITY_REPORT_SCRIPT, "markdown"]
     group_label = QUALITY_REPORT_GROUP
@@ -607,7 +674,7 @@ def build_check_plan(
     commands: list[PlannedCommand] = []
     notes: list[str] = []
 
-    commands.extend(quality_report_commands(repo_root, run_mode=run_mode))
+    commands.extend(quality_report_commands(repo_root, files, run_mode=run_mode))
 
     if files:
         commands.extend(
