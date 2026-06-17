@@ -322,6 +322,29 @@ def test_unrecorded_local_path_is_warning_not_failure(tmp_path: Path) -> None:
     ) in result.stdout
 
 
+def test_unrecorded_local_path_warnings_are_bounded(tmp_path: Path) -> None:
+    """A large unrecorded local path set is capped with a summary remainder line.
+
+    This mirrors the bounded sample validate_marker.py prints
+    (``UNRECORDED_LOCAL_PATH_LIMIT`` = 20) so the aggregate adoption report cannot
+    flood CI logs in real downstream repositories.
+    """
+    _write_common_downstream_repo(tmp_path)
+    expected_limit = 20
+    for index in range(expected_limit + 5):
+        _write_text(tmp_path, f"docs/local-{index:02d}.md")
+
+    result = _run_validator(tmp_path, "--require-marker")
+
+    assert result.returncode == 0, result.stderr
+    detailed_warnings = result.stdout.count(
+        "Git-visible path is neither template-managed nor recorded in "
+        "template_sync.local_path_ownership:"
+    )
+    assert detailed_warnings == expected_limit
+    assert "more unrecorded Git-visible local path(s) not shown." in result.stdout
+
+
 def test_retained_template_sync_helper_scripts_are_required(tmp_path: Path) -> None:
     """Retained template-sync support requires its helper scripts."""
     _write_common_downstream_repo(tmp_path)

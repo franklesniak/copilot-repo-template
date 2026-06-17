@@ -264,9 +264,19 @@ def marker_report_warnings(report: validate_marker.MarkerValidationReport) -> tu
         warnings.append(
             f"Git-visible local path is a symlink or resolves unsafely: {relative_path}"
         )
-    for relative_path in report.unrecorded_local_paths:
+    # Bound the per-path warnings to the same sample size validate_marker.py
+    # prints, so a downstream repo with a large unrecorded set cannot flood the
+    # aggregate adoption report or CI logs.
+    unrecorded_limit = validate_marker.UNRECORDED_LOCAL_PATH_LIMIT
+    sampled_unrecorded = report.unrecorded_local_paths[:unrecorded_limit]
+    for relative_path in sampled_unrecorded:
         warnings.append(
             f"Git-visible path is neither template-managed nor recorded in template_sync.local_path_ownership: {relative_path}"
+        )
+    remaining_unrecorded = len(report.unrecorded_local_paths) - len(sampled_unrecorded)
+    if remaining_unrecorded > 0:
+        warnings.append(
+            f"... and {remaining_unrecorded} more unrecorded Git-visible local path(s) not shown."
         )
     return tuple(warnings)
 
