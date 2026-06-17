@@ -373,7 +373,7 @@ def unrecorded_local_path_findings(
     skipped_symlinks: tuple[str, ...],
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """Return unsafe and unrecorded Git-visible local paths."""
-    unsafe_paths: list[str] = []
+    unsafe_paths: set[str] = set()
     for skipped_path in skipped_symlinks:
         is_directory_symlink = skipped_path.endswith("/")
         normalized_path = skipped_path.rstrip("/")
@@ -390,7 +390,7 @@ def unrecorded_local_path_findings(
         # fatal managed-path finding instead of a non-fatal local warning.
         if is_directory_symlink and manifest_covers_directory(normalized_path, mappings):
             continue
-        unsafe_paths.append(normalized_path)
+        unsafe_paths.add(normalized_path)
 
     repo_root_resolved = repo_root.resolve()
     unrecorded_paths: list[str] = []
@@ -403,21 +403,27 @@ def unrecorded_local_path_findings(
         # ``git ls-files --cached --others --exclude-standard`` contract) and apply
         # per-path safety checks directly. Filtering by the safe-walk list would
         # hide files under walk-pruned directories such as build/, dist/, and
-        # node_modules/ that a downstream may intentionally track. Symlinked or
-        # repo-escaping paths are surfaced by the unsafe-path loop above, so they
-        # are skipped here.
+        # node_modules/ that a downstream may intentionally track. The safe walk
+        # also prunes those directories, so a Git-visible symlink (or repo-escaping
+        # path) tracked under one is absent from skipped_symlinks; classify such a
+        # path as unsafe here so it is not dropped from both outputs. A directory
+        # symlink over a manifest-managed tree is reported as a fatal managed-path
+        # finding instead, so it is left out of the local set.
         if path_has_symlink_component(repo_root, relative_path):
+            if not manifest_covers_directory(relative_path, mappings):
+                unsafe_paths.add(relative_path)
             continue
         candidate = repo_root / relative_path
         try:
             candidate.resolve().relative_to(repo_root_resolved)
         except (OSError, ValueError):
+            unsafe_paths.add(relative_path)
             continue
         if not candidate.is_file():
             continue
         unrecorded_paths.append(relative_path)
 
-    return tuple(sorted(set(unsafe_paths))), tuple(unrecorded_paths)
+    return tuple(sorted(unsafe_paths)), tuple(unrecorded_paths)
 
 
 def validate_marker_state(

@@ -706,6 +706,34 @@ def test_unrecorded_local_paths_include_walk_pruned_directories(marker_repo: Pat
     assert "dist/app.js" in _unrecorded_local_path_lines(result.stdout)
 
 
+def test_symlink_under_pruned_directory_is_surfaced_as_unsafe(
+    marker_repo: Path,
+    tmp_path: Path,
+) -> None:
+    """A Git-tracked symlink under a walk-pruned directory is still flagged unsafe.
+
+    The safe walk prunes directories such as node_modules/, so such a symlink is
+    absent from the walk's skipped list. It must still be derived from the
+    Git-visible list and surfaced rather than dropped from every output.
+    """
+    outside = tmp_path / "outside.txt"
+    outside.write_text("outside\n", encoding="utf-8")
+    (marker_repo / "node_modules").mkdir(parents=True, exist_ok=True)
+    _symlink_or_skip(marker_repo / "node_modules" / "dep.js", outside, is_directory=False)
+    _write_marker(marker_repo, ["baseline", "template-sync-support"])
+    _write_text(marker_repo, "README.md")
+    _run_git(marker_repo, "add", "node_modules/dep.js")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    unsafe_paths = _section_paths(
+        result.stdout,
+        "Git-visible local paths that are symlinks or resolve unsafely:",
+    )
+    assert "node_modules/dep.js" in unsafe_paths
+
+
 def test_ignored_files_do_not_surface_as_local_path_suggestions(marker_repo: Path) -> None:
     """Ignored files are excluded by the Git-visible path convention."""
     _write_marker(
