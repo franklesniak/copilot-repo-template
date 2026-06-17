@@ -306,6 +306,22 @@ def test_excluded_module_leftover_is_reported(tmp_path: Path) -> None:
     assert "src/copilot_repo_template/example.py" in result.stdout
 
 
+def test_unrecorded_local_path_is_warning_not_failure(tmp_path: Path) -> None:
+    """Aggregate adoption validation surfaces local ownership gaps without failing."""
+    _write_common_downstream_repo(tmp_path)
+    _write_text(tmp_path, "docs/local.md")
+
+    result = _run_validator(tmp_path, "--require-marker")
+
+    assert result.returncode == 0, result.stderr
+    assert "Downstream adoption validation passed." in result.stdout
+    assert "Warnings:" in result.stdout
+    assert (
+        "Git-visible path is neither template-managed nor recorded in "
+        "template_sync.local_path_ownership: docs/local.md"
+    ) in result.stdout
+
+
 def test_retained_template_sync_helper_scripts_are_required(tmp_path: Path) -> None:
     """Retained template-sync support requires its helper scripts."""
     _write_common_downstream_repo(tmp_path)

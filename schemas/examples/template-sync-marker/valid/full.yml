@@ -41,6 +41,14 @@ template_sync:
     - path: docs/PR_REVIEW_PROMPTS.md
       reason: Adopt upstream reusable prompt guidance when reviewed.
       default_decision: TAKE
+  local_path_ownership:
+    - path: docs/
+      reason: Project documentation is downstream-owned.
+    - path: corpus/
+      reason: Test corpus files are downstream application data.
+    - path: schemas/local-project.schema.json
+      reason: Project-specific schema is not part of the upstream template.
+      overlap_exception_reason: Documented local schema lives near retained template schemas.
   deferred_protected_candidates:
     - path: .github/copilot-instructions.md
       source_commit: "89abcdef0123456789abcdef0123456789abcdef"

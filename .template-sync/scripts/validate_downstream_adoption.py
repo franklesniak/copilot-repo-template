@@ -223,9 +223,13 @@ def load_validated_marker_context(
     marker = validate_marker.load_yaml_mapping(marker_path, repo_root)
     marker_schema = validate_marker.load_json_mapping(marker_schema_path, repo_root)
     validate_marker.validate_schema(marker, marker_schema, marker_path, repo_root)
-    included_modules, local_overrides, deferred_candidates, protected_decisions = (
-        validate_marker.parse_marker(marker)
-    )
+    (
+        included_modules,
+        local_overrides,
+        _local_path_ownership,
+        deferred_candidates,
+        protected_decisions,
+    ) = validate_marker.parse_marker(marker)
     unknown_modules = included_modules - manifest_modules
     if unknown_modules:
         raise DownstreamAdoptionValidationError(
@@ -251,6 +255,21 @@ def marker_report_failures(report: validate_marker.MarkerValidationReport) -> tu
             "Retained concrete mapped file is missing: " f"{relative_path} ({relation.description})"
         )
     return tuple(failures)
+
+
+def marker_report_warnings(report: validate_marker.MarkerValidationReport) -> tuple[str, ...]:
+    """Return human-readable warnings from marker-aware validation."""
+    warnings: list[str] = []
+    for relative_path in report.unsafe_local_paths:
+        warnings.append(
+            "Git-visible local path is a symlink or resolves unsafely: " f"{relative_path}"
+        )
+    for relative_path in report.unrecorded_local_paths:
+        warnings.append(
+            "Git-visible path is neither template-managed nor recorded in "
+            f"template_sync.local_path_ownership: {relative_path}"
+        )
+    return tuple(warnings)
 
 
 def retained_support_file_failures(repo_root: Path, included_modules: set[str]) -> tuple[str, ...]:
@@ -679,6 +698,7 @@ def build_report(
         )
 
     failures.extend(marker_report_failures(marker_report))
+    warnings.extend(marker_report_warnings(marker_report))
     failures.extend(retained_support_file_failures(repo_root, included_modules))
     waivers.extend(local_override_waiver_items(local_overrides))
     deferred.extend(deferred_items(deferred_candidates))

@@ -163,6 +163,29 @@ class LocalOverride:
 
 
 @dataclass(frozen=True)
+class LocalPathOwnership:
+    """A downstream-owned path family recorded in the sync marker."""
+
+    path: str
+    reason: str
+    overlap_exception_reason: str | None
+    is_directory: bool
+
+    @property
+    def display_path(self) -> str:
+        """Return the marker path form, preserving directory-prefix notation."""
+        return f"{self.path}/" if self.is_directory else self.path
+
+    def matches(self, relative_path: str) -> bool:
+        """Return whether this ownership record applies to ``relative_path``."""
+        if relative_path == self.path:
+            return True
+        if self.is_directory:
+            return relative_path.startswith(f"{self.path}/")
+        return False
+
+
+@dataclass(frozen=True)
 class DeferredProtectedCandidate:
     """A protected path awaiting owner authorization for an upstream change."""
 
@@ -252,6 +275,7 @@ class MarkerDecisionData:
     last_reviewed_template_commit: str | None
     included_modules: frozenset[str]
     local_overrides: tuple[LocalOverride, ...]
+    local_path_ownership: tuple[LocalPathOwnership, ...]
     deferred_candidates: tuple[DeferredProtectedCandidate, ...]
     protected_decisions: tuple[ProtectedFileDecision, ...]
 
@@ -597,6 +621,50 @@ def parse_protected_file_decisions(
     return tuple(protected_decisions)
 
 
+def parse_local_path_ownership(
+    template_sync: dict[str, Any],
+) -> tuple[LocalPathOwnership, ...]:
+    """Extract normalized downstream-owned path records from ``template_sync``."""
+    local_path_ownership: list[LocalPathOwnership] = []
+    duplicate_paths: set[str] = set()
+    seen_paths: set[str] = set()
+    for raw_record in template_sync.get("local_path_ownership", []):
+        if not isinstance(raw_record, dict):
+            raise TemplateSyncMaterializationError(
+                "Each local path ownership record must be a mapping."
+            )
+        raw_path = raw_record.get("path")
+        reason = raw_record.get("reason")
+        if not isinstance(raw_path, str) or not isinstance(reason, str):
+            raise TemplateSyncMaterializationError(
+                "Each local path ownership record must define string path and reason."
+            )
+        normalized_path, is_directory = normalize_repository_path(
+            raw_path,
+            "template_sync.local_path_ownership[].path",
+        )
+        if normalized_path in seen_paths:
+            duplicate_paths.add(normalized_path)
+        seen_paths.add(normalized_path)
+        local_path_ownership.append(
+            LocalPathOwnership(
+                path=normalized_path,
+                reason=reason,
+                overlap_exception_reason=optional_marker_string(
+                    raw_record,
+                    "overlap_exception_reason",
+                    "template_sync.local_path_ownership[]",
+                ),
+                is_directory=is_directory,
+            )
+        )
+    if duplicate_paths:
+        raise TemplateSyncMaterializationError(
+            "Duplicate local_path_ownership path(s): " + ", ".join(sorted(duplicate_paths))
+        )
+    return tuple(local_path_ownership)
+
+
 def parse_marker_decision_data(
     marker: dict[str, Any],
     *,
@@ -686,6 +754,7 @@ def parse_marker_decision_data(
         )
 
     protected_decisions = parse_protected_file_decisions(template_sync)
+    local_path_ownership = parse_local_path_ownership(template_sync)
     local_override_tuple = tuple(local_overrides)
     deferred_candidate_tuple = tuple(deferred_candidates)
     if validate_protected_decision_integrity:
@@ -699,6 +768,7 @@ def parse_marker_decision_data(
         last_reviewed_template_commit=last_reviewed,
         included_modules=included_modules,
         local_overrides=local_override_tuple,
+        local_path_ownership=local_path_ownership,
         deferred_candidates=deferred_candidate_tuple,
         protected_decisions=protected_decisions,
     )
@@ -730,6 +800,17 @@ def local_override_summary(local_override: LocalOverride) -> str:
         f"default_decision={local_override.default_decision}; "
         f"reason={local_override.reason}"
     )
+
+
+def local_path_ownership_summary(local_path_ownership: LocalPathOwnership) -> str:
+    """Return a compact local path ownership summary."""
+    parts = [
+        f"path={local_path_ownership.display_path}",
+        f"reason={local_path_ownership.reason}",
+    ]
+    if local_path_ownership.overlap_exception_reason is not None:
+        parts.append("overlap_exception_reason=" f"{local_path_ownership.overlap_exception_reason}")
+    return "; ".join(parts)
 
 
 def deferred_candidate_summary(candidate: DeferredProtectedCandidate) -> str:
@@ -915,6 +996,41 @@ def is_locally_overridden(
 ) -> bool:
     """Return whether any marker local override covers ``relative_path``."""
     return any(local_override.matches(relative_path) for local_override in local_overrides)
+
+
+def local_path_ownership_specificity(
+    local_path_ownership: LocalPathOwnership,
+) -> tuple[int, int]:
+    """Return a deterministic specificity rank for local ownership matching."""
+    return (
+        local_path_ownership.path.count("/") + 1,
+        int(not local_path_ownership.is_directory),
+    )
+
+
+def selected_local_path_ownership_for_path(
+    relative_path: str,
+    local_path_ownership: tuple[LocalPathOwnership, ...],
+) -> LocalPathOwnership | None:
+    """Return the most-specific local ownership record for ``relative_path``."""
+    matches = [record for record in local_path_ownership if record.matches(relative_path)]
+    if not matches:
+        return None
+    return max(
+        matches,
+        key=lambda record: (
+            local_path_ownership_specificity(record),
+            record.display_path,
+        ),
+    )
+
+
+def is_locally_owned_path(
+    relative_path: str,
+    local_path_ownership: tuple[LocalPathOwnership, ...],
+) -> bool:
+    """Return whether any marker local ownership record covers ``relative_path``."""
+    return selected_local_path_ownership_for_path(relative_path, local_path_ownership) is not None
 
 
 def is_template_managed_path(

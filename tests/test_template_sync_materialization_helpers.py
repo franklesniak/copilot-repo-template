@@ -18,6 +18,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from template_sync_materialization_helpers import (  # noqa: E402
+    LocalPathOwnership,
     MissingExpectedInlineBlockError,
     RepositoryPathError,
     classify_repository_file,
@@ -31,6 +32,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     remove_inline_block_family,
     remove_inline_blocks_for_modules,
     resolve_safe_repository_target_path,
+    selected_local_path_ownership_for_path,
     selected_relation_for_path,
 )
 
@@ -157,6 +159,35 @@ def test_marker_loader_schema_validates_decision_data(tmp_path: Path) -> None:
     assert marker_data.included_modules == frozenset({"baseline"})
     assert marker_data.local_overrides[0].matches("local/file.txt")
     assert marker_data.protected_decisions[0].path == "AGENTS.md"
+
+
+def test_local_path_ownership_matching_uses_most_specific_record() -> None:
+    """Parent and child local ownership records are permitted and deterministic."""
+    parent = LocalPathOwnership(
+        path="docs",
+        reason="General documentation ownership.",
+        overlap_exception_reason=None,
+        is_directory=True,
+    )
+    child = LocalPathOwnership(
+        path="docs/api",
+        reason="API documentation ownership.",
+        overlap_exception_reason=None,
+        is_directory=True,
+    )
+    exact = LocalPathOwnership(
+        path="docs/api/index.md",
+        reason="Landing page ownership.",
+        overlap_exception_reason=None,
+        is_directory=False,
+    )
+    records = (parent, child, exact)
+
+    assert selected_local_path_ownership_for_path("docs", records) == parent
+    assert selected_local_path_ownership_for_path("docs/guide.md", records) == parent
+    assert selected_local_path_ownership_for_path("docs/api/reference.md", records) == child
+    assert selected_local_path_ownership_for_path("docs/api/index.md", records) == exact
+    assert selected_local_path_ownership_for_path("src/app.py", records) is None
 
 
 def test_mapping_classification_identifies_retained_excluded_and_unmapped_paths() -> None:
