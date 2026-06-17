@@ -40,6 +40,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     ProtectedFileDecision,
     TemplateSyncMaterializationError as MarkerValidationError,
     deferred_candidate_summary,
+    directory_prefix_relation,
     has_wildcard,
     is_protected_instruction_path,
     is_protected_manifest_pattern,
@@ -2303,6 +2304,12 @@ def build_local_path_ownership_row(
 ) -> LedgerRow:
     """Build a ledger row for one downstream local path ownership record."""
     relation = selected_relation_for_path(local_path_ownership.path, mappings)
+    if relation is None and local_path_ownership.is_directory:
+        # A directory record (for example ``schemas/``) is never matched by a glob
+        # such as ``schemas/**``, so fall back to the manifest mappings under the
+        # directory prefix. This keeps the ledger's manifest_modules and proximity
+        # note consistent with the broad-overlap checks in marker validation.
+        relation = directory_prefix_relation(local_path_ownership.path, mappings)
     modules = relation.requires_all | relation.requires_any if relation is not None else frozenset()
     is_protected = is_protected_instruction_path(local_path_ownership.path)
     reason = f"Marker local path ownership: {local_path_ownership.reason}"

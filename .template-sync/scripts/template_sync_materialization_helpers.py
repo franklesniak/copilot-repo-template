@@ -1065,6 +1065,50 @@ def manifest_covers_directory(
     return any(mapping.pattern.startswith(prefix) for mapping in mappings)
 
 
+def directory_prefix_relation(
+    directory: str,
+    mappings: tuple[ManifestMapping, ...],
+) -> PathRelation | None:
+    """Return a relation aggregating manifest mappings under ``directory``.
+
+    A directory path is never matched by a glob such as ``schemas/**`` because
+    ``fnmatch`` does not match the directory path itself. Callers that need the
+    module requirements "proximate" to a directory record therefore union every
+    manifest mapping whose pattern falls under the directory prefix. Returns
+    ``None`` when nothing falls under the directory. The trailing-slash prefix
+    comparison avoids sibling false positives (``schemas_local/**`` does not count
+    as covering ``schemas``).
+    """
+    normalized_directory = directory.rstrip("/")
+    if not normalized_directory:
+        return None
+    prefix = f"{normalized_directory}/"
+    proximate = [mapping for mapping in mappings if mapping.pattern.startswith(prefix)]
+    if not proximate:
+        return None
+
+    patterns: list[str] = []
+    requires_all: set[str] = set()
+    requires_any: set[str] = set()
+    notes: list[str] = []
+    unknown_modules: set[str] = set()
+    for mapping in proximate:
+        patterns.append(mapping.pattern)
+        requires_all.update(mapping.requires_all)
+        requires_any.update(mapping.requires_any)
+        unknown_modules.update(mapping.unknown_modules)
+        if mapping.notes:
+            notes.append(mapping.notes)
+
+    return PathRelation(
+        patterns=tuple(patterns),
+        requires_all=frozenset(requires_all),
+        requires_any=frozenset(requires_any),
+        notes=tuple(notes),
+        unknown_modules=frozenset(unknown_modules),
+    )
+
+
 def is_retained_template_path(
     relative_path: str,
     mappings: tuple[ManifestMapping, ...],
