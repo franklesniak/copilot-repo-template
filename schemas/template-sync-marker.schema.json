@@ -142,16 +142,16 @@
           "$ref": "#/$defs/singleLineNonEmptyString"
         },
         "azure_devops_project_url": {
-          "$ref": "#/$defs/azureDevOpsHttpsUrl"
+          "$ref": "#/$defs/azureDevOpsProjectUrl"
         },
         "azure_devops_repository": {
           "$ref": "#/$defs/singleLineNonEmptyString"
         },
         "azure_devops_repository_url": {
-          "$ref": "#/$defs/azureDevOpsHttpsUrl"
+          "$ref": "#/$defs/azureDevOpsRepositoryUrl"
         },
         "azure_devops_clone_url": {
-          "$ref": "#/$defs/azureDevOpsHttpsUrl"
+          "$ref": "#/$defs/azureDevOpsRepositoryUrl"
         },
         "azure_devops_default_branch": {
           "$ref": "#/$defs/singleLineNonEmptyString"
@@ -424,6 +424,38 @@
       "format": "uri",
       "description": "Azure DevOps Services organization root URL: https://dev.azure.com/<organization> or https://<organization>.visualstudio.com, with no extra path segments, mirroring validate_azure_devops_organization_url.",
       "pattern": "^https://(dev\\.azure\\.com(:[0-9]+)?/[^/?#@]+/?|[^/?#@:]+\\.visualstudio\\.com(:[0-9]+)?/?)$",
+      "not": {
+        "anyOf": [
+          {
+            "pattern": "^https://[^/?#]*@"
+          },
+          {
+            "pattern": "[?#]"
+          }
+        ]
+      }
+    },
+    "azureDevOpsProjectUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Azure DevOps Services project URL: https://dev.azure.com/<organization>/<project> or https://<organization>.visualstudio.com/<project>, mirroring validate_azure_devops_project_url.",
+      "pattern": "^https://(dev\\.azure\\.com(:[0-9]+)?/[^/?#@]+/[^/?#@]+/?|[^/?#@:]+\\.visualstudio\\.com(:[0-9]+)?/[^/?#@]+/?)$",
+      "not": {
+        "anyOf": [
+          {
+            "pattern": "^https://[^/?#]*@"
+          },
+          {
+            "pattern": "[?#]"
+          }
+        ]
+      }
+    },
+    "azureDevOpsRepositoryUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Azure Repos repository or clone URL: https://dev.azure.com/<organization>/<project>/_git/<repository> or https://<organization>.visualstudio.com/<project>/_git/<repository>, mirroring validate_azure_devops_repository_url.",
+      "pattern": "^https://(dev\\.azure\\.com(:[0-9]+)?/[^/?#@]+/[^/?#@]+/_git/[^/?#@]+/?|[^/?#@:]+\\.visualstudio\\.com(:[0-9]+)?/[^/?#@]+/_git/[^/?#@]+/?)$",
       "not": {
         "anyOf": [
           {
