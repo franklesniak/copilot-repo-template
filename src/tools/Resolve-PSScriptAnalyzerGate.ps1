@@ -997,7 +997,10 @@ function Resolve-PSScriptAnalyzerGate {
     # Optional repository root used to render annotation file paths relative to
     # the repository for GitHub Actions and to build absolute Azure Pipelines
     # source paths from relative analyzer paths. Defaults to the
-    # GITHUB_WORKSPACE environment variable.
+    # GITHUB_WORKSPACE environment variable. When both RepositoryRoot and
+    # GITHUB_WORKSPACE are empty, the BUILD_SOURCESDIRECTORY environment
+    # variable is used as the effective repository root so Azure Pipelines
+    # callers still resolve absolute source paths.
     #
     # .PARAMETER AnnotationFormat
     # The annotation/output format to render. Supported values are Auto,
@@ -1022,7 +1025,7 @@ function Resolve-PSScriptAnalyzerGate {
     # properties.
     #
     # .NOTES
-    # Version: 1.2.20260619.0
+    # Version: 1.2.20260619.1
     # Positional parameters are not supported.
     #
     [CmdletBinding(PositionalBinding = $false)]
