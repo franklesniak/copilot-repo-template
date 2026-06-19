@@ -293,7 +293,12 @@
             ]
           },
           "then": {
-            "required": ["host_provider"]
+            "required": ["host_provider"],
+            "properties": {
+              "host_provider": {
+                "enum": ["azure-devops-services", "dual"]
+              }
+            }
           }
         }
       ]

@@ -593,6 +593,9 @@ def materialize_downstream_pytest_fixture(tmp_path: Path) -> Path:
     ]
     placeholder_args = azure_provider_cli_args_for_modules(DOWNSTREAM_PYTEST_MODULES)
 
+    # placeholder_args already supplies --repository and --security-contact for
+    # this fixture's module set (Azure modules resolve host_provider to "dual"),
+    # so they are not repeated here.
     result = run_materialize(
         REPO_ROOT,
         target_root,
@@ -600,10 +603,6 @@ def materialize_downstream_pytest_fixture(tmp_path: Path) -> Path:
         SOURCE_REPO,
         "--last-reviewed-template-commit",
         FULL_SHA,
-        "--repository",
-        "octocat/hello-world",
-        "--security-contact",
-        "security@example.com",
         *module_args,
         *placeholder_args,
     )
