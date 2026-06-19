@@ -17,7 +17,10 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import NoReturn, Protocol, TextIO
 
+import yaml  # type: ignore[import-untyped]
+
 DEFAULT_SUPPRESSION_PATH = ".template-sync/first-adoption/quality-suppressions.json"
+MARKER_PATH = ".template-sync/marker.yml"
 GIT_VISIBLE_FILES_COMMAND = (
     "git",
     "ls-files",
@@ -59,6 +62,17 @@ IGNORED_SCAN_DIRECTORIES = frozenset(
 )
 MARKDOWN_PACKAGE_SCRIPT = "lint:md"
 LINE_ENDING_RISK_STATES = frozenset(("cr", "crlf", "mixed"))
+AZURE_DEVOPS_MODULES = frozenset(
+    ("azure-devops-platform", "azure-pipelines", "azure-devops-collaboration")
+)
+AZURE_HOST_SETUP_FIELDS = (
+    ("azure_boards_policy", "Azure Boards intake policy"),
+    ("azure_repos_pr_template_policy", "Azure Repos pull request template policy"),
+    ("azure_branch_policy_reviewer_guidance", "Branch policy reviewer guidance"),
+    ("azure_security_intake_policy", "Security intake policy"),
+    ("azure_security_product_enablement", "Security product enablement"),
+    ("azure_dependency_update_policy", "Dependency update policy"),
+)
 PATH_TOKEN_PATTERN = re.compile(
     r"(?P<literal>(?:[A-Za-z0-9_.-]+[\\/])+[A-Za-z0-9_.%+~#?=&,-]+|"
     r"(?:\./|\../)?[A-Za-z0-9_.-]+\."
@@ -219,6 +233,17 @@ class PowerShellAnalyzerReport:
     issue_ready_markdown: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class HostSetupReport:
+    """Azure DevOps Services first-adoption setup status."""
+
+    marker_available: bool
+    azure_modules_retained: bool
+    host_provider: str | None
+    setup_items: tuple[tuple[str, str], ...]
+    message: str
+
+
 def default_repo_root() -> Path:
     """Return the repository root implied by this script's committed location."""
     return Path(__file__).resolve().parents[2]
@@ -253,6 +278,92 @@ def resolve_repo_path(repo_root: Path, relative_path: str) -> Path:
 def is_present_regular_file(path: Path) -> bool:
     """Return whether ``path`` is a present regular file, excluding symlinks."""
     return not path.is_symlink() and path.is_file()
+
+
+def load_marker_template_sync(repo_root: Path) -> dict[str, object] | None:
+    """Load the marker's template_sync mapping when a marker is present."""
+    marker_path = resolve_repo_path(repo_root, MARKER_PATH)
+    if not marker_path.exists():
+        return None
+    if not is_present_regular_file(marker_path):
+        raise FirstAdoptionQualityError(f"Expected a regular file: {MARKER_PATH}")
+    try:
+        marker_document = yaml.safe_load(marker_path.read_text(encoding="utf-8-sig"))
+    except yaml.YAMLError as error:
+        raise FirstAdoptionQualityError(f"{MARKER_PATH} is not valid YAML: {error}") from error
+    except OSError as error:
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        raise FirstAdoptionQualityError(
+            f"Unable to read {MARKER_PATH} ({error_summary})."
+        ) from error
+    if not isinstance(marker_document, dict):
+        raise FirstAdoptionQualityError(f"{MARKER_PATH} must contain a YAML mapping.")
+    template_sync = marker_document.get("template_sync")
+    if not isinstance(template_sync, dict):
+        raise FirstAdoptionQualityError(f"{MARKER_PATH} must contain template_sync mapping.")
+    return template_sync
+
+
+def marker_modules(template_sync: Mapping[str, object]) -> frozenset[str]:
+    """Return marker-listed modules from a parsed template_sync mapping."""
+    raw_modules = template_sync.get("included_modules")
+    if not isinstance(raw_modules, list):
+        return frozenset()
+    return frozenset(item for item in raw_modules if isinstance(item, str))
+
+
+def build_host_setup_report(repo_root: Path) -> HostSetupReport:
+    """Build an Azure DevOps Services first-adoption service setup report."""
+    template_sync = load_marker_template_sync(repo_root)
+    if template_sync is None:
+        return HostSetupReport(
+            marker_available=False,
+            azure_modules_retained=False,
+            host_provider=None,
+            setup_items=(),
+            message=f"{MARKER_PATH} not found; no host setup marker decisions are available.",
+        )
+
+    modules = marker_modules(template_sync)
+    azure_modules_retained = bool(modules & AZURE_DEVOPS_MODULES)
+    host_provider = template_sync.get("host_provider")
+    host_provider_text = host_provider if isinstance(host_provider, str) else None
+    if not azure_modules_retained:
+        return HostSetupReport(
+            marker_available=True,
+            azure_modules_retained=False,
+            host_provider=host_provider_text,
+            setup_items=(),
+            message="No Azure DevOps Services host setup tasks are recorded.",
+        )
+
+    setup_items = tuple(
+        (label, str(template_sync.get(field_name, "not recorded")))
+        for field_name, label in AZURE_HOST_SETUP_FIELDS
+    )
+    return HostSetupReport(
+        marker_available=True,
+        azure_modules_retained=True,
+        host_provider=host_provider_text,
+        setup_items=setup_items,
+        message=(
+            "These are Azure DevOps Services setup follow-ups, not local file "
+            "materialization failures."
+        ),
+    )
+
+
+def print_host_setup_report(report: HostSetupReport, *, stdout: TextIO) -> None:
+    """Print a stable Azure DevOps Services setup report."""
+    print("First-adoption host setup report:", file=stdout)
+    if not report.marker_available or not report.azure_modules_retained:
+        print(f"  {report.message}", file=stdout)
+        return
+    print("  Azure DevOps Services service setup tasks:", file=stdout)
+    print(f"    - Host provider: {report.host_provider or 'not recorded'}", file=stdout)
+    for label, value in report.setup_items:
+        print(f"    - {label}: {value}", file=stdout)
+    print(f"  {report.message}", file=stdout)
 
 
 def format_command(command: Sequence[str]) -> str:
@@ -1192,6 +1303,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
 
+    subparsers.add_parser(
+        "host-setup",
+        help="Report Azure DevOps Services first-adoption service setup follow-ups.",
+    )
+
     markdown_parser = subparsers.add_parser(
         "markdown",
         help="Report Markdownlint debt or run the explicit Markdown fixer.",
@@ -1235,6 +1351,11 @@ def run_report(args: argparse.Namespace, *, stdout: TextIO = sys.stdout) -> int:
         print_path_reference_report(path_reference_report, stdout=stdout)
         if args.fail_on_findings and path_reference_report.findings:
             return 1
+        return 0
+
+    if args.command == "host-setup":
+        host_setup_report = build_host_setup_report(repo_root)
+        print_host_setup_report(host_setup_report, stdout=stdout)
         return 0
 
     if args.command == "markdown":

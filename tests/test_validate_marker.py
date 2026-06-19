@@ -307,6 +307,47 @@ def test_partial_module_exclusion_without_leftovers_passes(marker_repo: Path) ->
     assert "Marker-aware template sync validation passed." in result.stdout
 
 
+def test_marker_validation_accepts_azure_provider_fields(marker_repo: Path) -> None:
+    """Marker validation accepts durable Azure DevOps Services provider decisions."""
+    _write_manifest(marker_repo, version=3)
+    _write_yaml(
+        marker_repo,
+        ".template-sync/marker.yml",
+        {
+            "template_sync": {
+                "source_repo": SOURCE_REPO,
+                "last_reviewed_template_commit": FULL_SHA,
+                "included_modules": ["baseline", "template-sync-support", "azure-pipelines"],
+                "host_provider": "azure-devops-services",
+                "azure_devops_organization": "contoso",
+                "azure_devops_project": "Platform",
+                "azure_devops_project_url": "https://dev.azure.com/contoso/Platform",
+                "azure_devops_repository": "downstream-template",
+                "azure_devops_repository_url": (
+                    "https://dev.azure.com/contoso/Platform/_git/downstream-template"
+                ),
+                "azure_devops_clone_url": (
+                    "https://dev.azure.com/contoso/Platform/_git/downstream-template"
+                ),
+                "azure_boards_policy": "work-items",
+                "azure_repos_pr_template_policy": "materialize",
+                "azure_branch_policy_reviewer_guidance": "manual-follow-up",
+                "azure_security_intake_policy": "manual-follow-up",
+                "azure_security_product_enablement": "github-code-security",
+                "azure_dependency_update_policy": "manual-follow-up",
+            }
+        },
+    )
+    _write_text(marker_repo, "README.md")
+    _write_text(marker_repo, ".template-sync/scripts/validate_marker.py")
+    _write_text(marker_repo, ".azuredevops/pipelines/azure-pipelines.yml")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "Marker-aware template sync validation passed." in result.stdout
+
+
 def test_absent_marker_skips_by_default_and_fails_when_required(tmp_path: Path) -> None:
     """A missing marker is a no-op unless CI explicitly requires one."""
     result = _run_validator(tmp_path)

@@ -60,8 +60,23 @@ TEMPLATE_TAKE_DECISION = "TAKE"
 TEMPLATE_SKIP_DECISION = "SKIP"
 FULL_LOWERCASE_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 PLACEHOLDER_DESTS = (
+    "host_provider",
     "repository",
     "github_host",
+    "azure_devops_organization",
+    "azure_devops_organization_url",
+    "azure_devops_project",
+    "azure_devops_project_url",
+    "azure_devops_repository",
+    "azure_devops_repository_url",
+    "azure_devops_clone_url",
+    "azure_devops_default_branch",
+    "azure_boards_policy",
+    "azure_repos_pr_template_policy",
+    "azure_branch_policy_reviewer_guidance",
+    "azure_security_intake_policy",
+    "azure_security_product_enablement",
+    "azure_dependency_update_policy",
     "codeowners_owner",
     "conduct_contact",
     "conduct_contact_sentence",
@@ -79,6 +94,12 @@ PLACEHOLDER_DESTS = (
     "package_version",
     "package_keywords",
 )
+HOST_PROVIDERS = (
+    "github",
+    "github-enterprise-server",
+    "azure-devops-services",
+    "dual",
+)
 SECURITY_REPORTING_MODES = ("github-private-only", "contact-only", "both")
 ISSUE_LABEL_POLICIES = ("existing", "create-manual-follow-up", "omit", "custom")
 DISCUSSIONS_POLICIES = (
@@ -86,6 +107,37 @@ DISCUSSIONS_POLICIES = (
     "disabled",
     "deferred-planned-render",
     "deferred-not-rendered",
+)
+AZURE_DEVOPS_BOARDS_POLICIES = ("work-items", "disabled", "manual-follow-up")
+AZURE_DEVOPS_PR_TEMPLATE_POLICIES = ("materialize", "disabled", "manual-follow-up")
+AZURE_DEVOPS_BRANCH_POLICY_POLICIES = ("required-reviewers", "manual-follow-up", "none")
+AZURE_DEVOPS_SECURITY_INTAKE_POLICIES = ("security-contact", "external-process", "manual-follow-up")
+AZURE_DEVOPS_SECURITY_PRODUCT_POLICIES = (
+    "none",
+    "github-advanced-security",
+    "github-secret-protection",
+    "github-code-security",
+    "github-secret-protection-and-code-security",
+)
+AZURE_DEVOPS_DEPENDENCY_UPDATE_POLICIES = ("none", "renovate", "manual-follow-up")
+AZURE_DEVOPS_PLACEHOLDER_FIELDS = frozenset(
+    {
+        "host_provider",
+        "azure_devops_organization",
+        "azure_devops_organization_url",
+        "azure_devops_project",
+        "azure_devops_project_url",
+        "azure_devops_repository",
+        "azure_devops_repository_url",
+        "azure_devops_clone_url",
+        "azure_devops_default_branch",
+        "azure_boards_policy",
+        "azure_repos_pr_template_policy",
+        "azure_branch_policy_reviewer_guidance",
+        "azure_security_intake_policy",
+        "azure_security_product_enablement",
+        "azure_dependency_update_policy",
+    }
 )
 ARGS_FILE_FORMATS = ("json", "yaml")
 ARGS_FILE_EXTENSION_FORMATS = {
@@ -107,8 +159,23 @@ ARGS_FILE_FIELDS = frozenset(
         "source_repo",
         "last_reviewed_template_commit",
         "default_adoption_mode",
+        "host_provider",
         "repository",
         "github_host",
+        "azure_devops_organization",
+        "azure_devops_organization_url",
+        "azure_devops_project",
+        "azure_devops_project_url",
+        "azure_devops_repository",
+        "azure_devops_repository_url",
+        "azure_devops_clone_url",
+        "azure_devops_default_branch",
+        "azure_boards_policy",
+        "azure_repos_pr_template_policy",
+        "azure_branch_policy_reviewer_guidance",
+        "azure_security_intake_policy",
+        "azure_security_product_enablement",
+        "azure_dependency_update_policy",
         "codeowners_owner",
         "conduct_contact",
         "conduct_contact_sentence",
@@ -143,8 +210,23 @@ STRING_ARGS_FILE_FIELDS = frozenset(
         "source_repo",
         "last_reviewed_template_commit",
         "default_adoption_mode",
+        "host_provider",
         "repository",
         "github_host",
+        "azure_devops_organization",
+        "azure_devops_organization_url",
+        "azure_devops_project",
+        "azure_devops_project_url",
+        "azure_devops_repository",
+        "azure_devops_repository_url",
+        "azure_devops_clone_url",
+        "azure_devops_default_branch",
+        "azure_boards_policy",
+        "azure_repos_pr_template_policy",
+        "azure_branch_policy_reviewer_guidance",
+        "azure_security_intake_policy",
+        "azure_security_product_enablement",
+        "azure_dependency_update_policy",
         "codeowners_owner",
         "conduct_contact",
         "conduct_contact_sentence",
@@ -177,8 +259,23 @@ CLI_FLAGS = {
     "source_repo": ("--source-repo",),
     "last_reviewed_template_commit": ("--last-reviewed-template-commit",),
     "default_adoption_mode": ("--default-adoption-mode",),
+    "host_provider": ("--host-provider",),
     "repository": ("--repository",),
     "github_host": ("--github-host",),
+    "azure_devops_organization": ("--azure-devops-organization",),
+    "azure_devops_organization_url": ("--azure-devops-organization-url",),
+    "azure_devops_project": ("--azure-devops-project",),
+    "azure_devops_project_url": ("--azure-devops-project-url",),
+    "azure_devops_repository": ("--azure-devops-repository",),
+    "azure_devops_repository_url": ("--azure-devops-repository-url",),
+    "azure_devops_clone_url": ("--azure-devops-clone-url",),
+    "azure_devops_default_branch": ("--azure-devops-default-branch",),
+    "azure_boards_policy": ("--azure-boards-policy",),
+    "azure_repos_pr_template_policy": ("--azure-repos-pr-template-policy",),
+    "azure_branch_policy_reviewer_guidance": ("--azure-branch-policy-reviewer-guidance",),
+    "azure_security_intake_policy": ("--azure-security-intake-policy",),
+    "azure_security_product_enablement": ("--azure-security-product-enablement",),
+    "azure_dependency_update_policy": ("--azure-dependency-update-policy",),
     "codeowners_owner": ("--codeowners-owner",),
     "conduct_contact": ("--conduct-contact",),
     "conduct_contact_sentence": ("--conduct-contact-sentence",),
@@ -209,6 +306,21 @@ MARKER_COPY_FIELDS = (
     "issue_labels",
     "discussions_policy",
     "collaboration_policy_follow_up_status",
+    "host_provider",
+    "azure_devops_organization",
+    "azure_devops_organization_url",
+    "azure_devops_project",
+    "azure_devops_project_url",
+    "azure_devops_repository",
+    "azure_devops_repository_url",
+    "azure_devops_clone_url",
+    "azure_devops_default_branch",
+    "azure_boards_policy",
+    "azure_repos_pr_template_policy",
+    "azure_branch_policy_reviewer_guidance",
+    "azure_security_intake_policy",
+    "azure_security_product_enablement",
+    "azure_dependency_update_policy",
 )
 LICENSE_TARGET_PATH = "LICENSE"
 LICENSE_SOURCE_CANDIDATE_NAMES = frozenset(
@@ -474,6 +586,43 @@ def validate_merged_arg_choices(args: argparse.Namespace) -> None:
     if args.discussions_policy is not None and args.discussions_policy not in DISCUSSIONS_POLICIES:
         quoted_policies = ", ".join(DISCUSSIONS_POLICIES)
         raise MaterializationError(f"--discussions-policy must be one of: {quoted_policies}.")
+    if args.host_provider is not None and args.host_provider not in HOST_PROVIDERS:
+        quoted_providers = ", ".join(HOST_PROVIDERS)
+        raise MaterializationError(f"--host-provider must be one of: {quoted_providers}.")
+    azure_choice_fields = (
+        ("azure_boards_policy", "--azure-boards-policy", AZURE_DEVOPS_BOARDS_POLICIES),
+        (
+            "azure_repos_pr_template_policy",
+            "--azure-repos-pr-template-policy",
+            AZURE_DEVOPS_PR_TEMPLATE_POLICIES,
+        ),
+        (
+            "azure_branch_policy_reviewer_guidance",
+            "--azure-branch-policy-reviewer-guidance",
+            AZURE_DEVOPS_BRANCH_POLICY_POLICIES,
+        ),
+        (
+            "azure_security_intake_policy",
+            "--azure-security-intake-policy",
+            AZURE_DEVOPS_SECURITY_INTAKE_POLICIES,
+        ),
+        (
+            "azure_security_product_enablement",
+            "--azure-security-product-enablement",
+            AZURE_DEVOPS_SECURITY_PRODUCT_POLICIES,
+        ),
+        (
+            "azure_dependency_update_policy",
+            "--azure-dependency-update-policy",
+            AZURE_DEVOPS_DEPENDENCY_UPDATE_POLICIES,
+        ),
+    )
+    for attribute_name, flag_name, choices in azure_choice_fields:
+        value = getattr(args, attribute_name)
+        if value is None or value in choices:
+            continue
+        quoted_choices = ", ".join(choices)
+        raise MaterializationError(f"{flag_name} must be one of: {quoted_choices}.")
 
 
 def apply_args_file_values(
@@ -609,6 +758,15 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--host-provider",
+        choices=HOST_PROVIDERS,
+        default=None,
+        help=(
+            "Host-provider mode for placeholder materialization: github, "
+            "github-enterprise-server, azure-devops-services, or dual."
+        ),
+    )
+    parser.add_argument(
         "--repository",
         default=None,
         help="Replacement OWNER/REPO value for the existing placeholder helper.",
@@ -617,6 +775,82 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--github-host",
         default=None,
         help="GitHub or GHES host for approved placeholder URL contexts.",
+    )
+    parser.add_argument(
+        "--azure-devops-organization",
+        default=None,
+        help="Azure DevOps Services organization name.",
+    )
+    parser.add_argument(
+        "--azure-devops-organization-url",
+        default=None,
+        help="Azure DevOps organization URL override.",
+    )
+    parser.add_argument(
+        "--azure-devops-project",
+        default=None,
+        help="Azure DevOps project name.",
+    )
+    parser.add_argument(
+        "--azure-devops-project-url",
+        default=None,
+        help="Azure DevOps project URL override.",
+    )
+    parser.add_argument(
+        "--azure-devops-repository",
+        default=None,
+        help="Azure Repos repository name.",
+    )
+    parser.add_argument(
+        "--azure-devops-repository-url",
+        default=None,
+        help="Azure Repos repository web URL override.",
+    )
+    parser.add_argument(
+        "--azure-devops-clone-url",
+        default=None,
+        help="Azure Repos HTTPS clone URL override without embedded credentials.",
+    )
+    parser.add_argument(
+        "--azure-devops-default-branch",
+        default=None,
+        help="Azure Repos default branch name; defaults to main in the placeholder helper.",
+    )
+    parser.add_argument(
+        "--azure-boards-policy",
+        choices=AZURE_DEVOPS_BOARDS_POLICIES,
+        default=None,
+        help="Azure Boards intake policy for first-adoption reporting.",
+    )
+    parser.add_argument(
+        "--azure-repos-pr-template-policy",
+        choices=AZURE_DEVOPS_PR_TEMPLATE_POLICIES,
+        default=None,
+        help="Azure Repos pull request template policy.",
+    )
+    parser.add_argument(
+        "--azure-branch-policy-reviewer-guidance",
+        choices=AZURE_DEVOPS_BRANCH_POLICY_POLICIES,
+        default=None,
+        help="Azure Repos branch policy reviewer-guidance status.",
+    )
+    parser.add_argument(
+        "--azure-security-intake-policy",
+        choices=AZURE_DEVOPS_SECURITY_INTAKE_POLICIES,
+        default=None,
+        help="Azure security intake policy for SECURITY.md and first-adoption reporting.",
+    )
+    parser.add_argument(
+        "--azure-security-product-enablement",
+        choices=AZURE_DEVOPS_SECURITY_PRODUCT_POLICIES,
+        default=None,
+        help="Azure DevOps Services security product enablement status.",
+    )
+    parser.add_argument(
+        "--azure-dependency-update-policy",
+        choices=AZURE_DEVOPS_DEPENDENCY_UPDATE_POLICIES,
+        default=None,
+        help="Azure Repos dependency update policy status.",
     )
     parser.add_argument(
         "--codeowners-owner",
@@ -1289,7 +1523,7 @@ MARKER_PLACEHOLDER_FIELDS = (
     "issue_labels",
     "discussions_policy",
     "collaboration_policy_follow_up_status",
-)
+) + tuple(sorted(AZURE_DEVOPS_PLACEHOLDER_FIELDS))
 
 
 def apply_marker_placeholder_values(args: argparse.Namespace, decisions: Decisions) -> None:
@@ -1720,10 +1954,29 @@ def run_placeholder_helper(
         "--repo-root",
         str(staging_root),
     ]
+    if args.host_provider is not None:
+        command.extend(["--host-provider", args.host_provider])
     if args.repository is not None:
         command.extend(["--repository", args.repository])
     optional_pairs = (
         ("--github-host", args.github_host),
+        ("--azure-devops-organization", args.azure_devops_organization),
+        ("--azure-devops-organization-url", args.azure_devops_organization_url),
+        ("--azure-devops-project", args.azure_devops_project),
+        ("--azure-devops-project-url", args.azure_devops_project_url),
+        ("--azure-devops-repository", args.azure_devops_repository),
+        ("--azure-devops-repository-url", args.azure_devops_repository_url),
+        ("--azure-devops-clone-url", args.azure_devops_clone_url),
+        ("--azure-devops-default-branch", args.azure_devops_default_branch),
+        ("--azure-boards-policy", args.azure_boards_policy),
+        ("--azure-repos-pr-template-policy", args.azure_repos_pr_template_policy),
+        (
+            "--azure-branch-policy-reviewer-guidance",
+            args.azure_branch_policy_reviewer_guidance,
+        ),
+        ("--azure-security-intake-policy", args.azure_security_intake_policy),
+        ("--azure-security-product-enablement", args.azure_security_product_enablement),
+        ("--azure-dependency-update-policy", args.azure_dependency_update_policy),
         ("--codeowners-owner", args.codeowners_owner),
         ("--conduct-contact", args.conduct_contact),
         ("--conduct-contact-sentence", args.conduct_contact_sentence),

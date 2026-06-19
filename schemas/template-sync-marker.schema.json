@@ -128,6 +128,51 @@
         "collaboration_policy_follow_up_status": {
           "$ref": "#/$defs/nonEmptyString",
           "description": "Status text from _TODO-repo-init.md documenting any open manual action for deferred or future-state collaboration template rendering."
+        },
+        "host_provider": {
+          "$ref": "#/$defs/hostProvider"
+        },
+        "azure_devops_organization": {
+          "$ref": "#/$defs/singleLineNonEmptyString"
+        },
+        "azure_devops_organization_url": {
+          "$ref": "#/$defs/azureDevOpsHttpsUrl"
+        },
+        "azure_devops_project": {
+          "$ref": "#/$defs/singleLineNonEmptyString"
+        },
+        "azure_devops_project_url": {
+          "$ref": "#/$defs/azureDevOpsHttpsUrl"
+        },
+        "azure_devops_repository": {
+          "$ref": "#/$defs/singleLineNonEmptyString"
+        },
+        "azure_devops_repository_url": {
+          "$ref": "#/$defs/azureDevOpsHttpsUrl"
+        },
+        "azure_devops_clone_url": {
+          "$ref": "#/$defs/azureDevOpsHttpsUrl"
+        },
+        "azure_devops_default_branch": {
+          "$ref": "#/$defs/singleLineNonEmptyString"
+        },
+        "azure_boards_policy": {
+          "$ref": "#/$defs/azureBoardsPolicy"
+        },
+        "azure_repos_pr_template_policy": {
+          "$ref": "#/$defs/azureReposPrTemplatePolicy"
+        },
+        "azure_branch_policy_reviewer_guidance": {
+          "$ref": "#/$defs/azureBranchPolicyReviewerGuidance"
+        },
+        "azure_security_intake_policy": {
+          "$ref": "#/$defs/azureSecurityIntakePolicy"
+        },
+        "azure_security_product_enablement": {
+          "$ref": "#/$defs/azureSecurityProductEnablement"
+        },
+        "azure_dependency_update_policy": {
+          "$ref": "#/$defs/azureDependencyUpdatePolicy"
         }
       },
       "allOf": [
@@ -181,6 +226,74 @@
           },
           "then": {
             "required": ["collaboration_policy_follow_up_status"]
+          }
+        },
+        {
+          "if": {
+            "required": ["host_provider"],
+            "properties": {
+              "host_provider": {
+                "enum": ["azure-devops-services", "dual"]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "azure_devops_organization",
+              "azure_devops_project",
+              "azure_devops_repository"
+            ]
+          }
+        },
+        {
+          "if": {
+            "anyOf": [
+              {
+                "required": ["azure_devops_organization"]
+              },
+              {
+                "required": ["azure_devops_organization_url"]
+              },
+              {
+                "required": ["azure_devops_project"]
+              },
+              {
+                "required": ["azure_devops_project_url"]
+              },
+              {
+                "required": ["azure_devops_repository"]
+              },
+              {
+                "required": ["azure_devops_repository_url"]
+              },
+              {
+                "required": ["azure_devops_clone_url"]
+              },
+              {
+                "required": ["azure_devops_default_branch"]
+              },
+              {
+                "required": ["azure_boards_policy"]
+              },
+              {
+                "required": ["azure_repos_pr_template_policy"]
+              },
+              {
+                "required": ["azure_branch_policy_reviewer_guidance"]
+              },
+              {
+                "required": ["azure_security_intake_policy"]
+              },
+              {
+                "required": ["azure_security_product_enablement"]
+              },
+              {
+                "required": ["azure_dependency_update_policy"]
+              }
+            ]
+          },
+          "then": {
+            "required": ["host_provider"]
           }
         }
       ]
@@ -275,6 +388,80 @@
         "disabled",
         "deferred-planned-render",
         "deferred-not-rendered"
+      ]
+    },
+    "hostProvider": {
+      "type": "string",
+      "enum": [
+        "github",
+        "github-enterprise-server",
+        "azure-devops-services",
+        "dual"
+      ]
+    },
+    "azureDevOpsHttpsUrl": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://",
+      "not": {
+        "anyOf": [
+          {
+            "pattern": "^https://[^/?#]*@"
+          },
+          {
+            "pattern": "[?#]"
+          }
+        ]
+      }
+    },
+    "azureBoardsPolicy": {
+      "type": "string",
+      "enum": [
+        "work-items",
+        "disabled",
+        "manual-follow-up"
+      ]
+    },
+    "azureReposPrTemplatePolicy": {
+      "type": "string",
+      "enum": [
+        "materialize",
+        "disabled",
+        "manual-follow-up"
+      ]
+    },
+    "azureBranchPolicyReviewerGuidance": {
+      "type": "string",
+      "enum": [
+        "required-reviewers",
+        "manual-follow-up",
+        "none"
+      ]
+    },
+    "azureSecurityIntakePolicy": {
+      "type": "string",
+      "enum": [
+        "security-contact",
+        "external-process",
+        "manual-follow-up"
+      ]
+    },
+    "azureSecurityProductEnablement": {
+      "type": "string",
+      "enum": [
+        "none",
+        "github-advanced-security",
+        "github-secret-protection",
+        "github-code-security",
+        "github-secret-protection-and-code-security"
+      ]
+    },
+    "azureDependencyUpdatePolicy": {
+      "type": "string",
+      "enum": [
+        "none",
+        "renovate",
+        "manual-follow-up"
       ]
     },
     "protectedFileDecision": {
