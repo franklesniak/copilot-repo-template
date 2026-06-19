@@ -1763,6 +1763,66 @@ def render_azure_devops_provider_neutral_docs(
     return tuple(records)
 
 
+def markdown_link_text(value: str) -> str:
+    """Escape Markdown link text delimiters in a generated link label."""
+    return value.replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
+
+
+def replace_azure_pr_template_service_links(
+    text: str,
+    context: ReplacementContext,
+) -> tuple[str, int]:
+    """Render Azure Repos PR template service destinations as Markdown links."""
+    if context.azure_devops is None:
+        return text, 0
+    replacements = (
+        (
+            "- Project: AZURE_DEVOPS_PROJECT (AZURE_DEVOPS_PROJECT_URL)",
+            (
+                "- Project: "
+                f"[{markdown_link_text(context.azure_devops.project)}]"
+                f"({context.azure_devops.project_url})"
+            ),
+        ),
+        (
+            "- Repository: AZURE_DEVOPS_REPOSITORY (AZURE_DEVOPS_REPOSITORY_WEB_URL)",
+            (
+                "- Repository: "
+                f"[{markdown_link_text(context.azure_devops.repository)}]"
+                f"({context.azure_devops.repository_web_url})"
+            ),
+        ),
+    )
+    replacement_count = 0
+    for placeholder, replacement in replacements:
+        count = text.count(placeholder)
+        if count:
+            text = text.replace(placeholder, replacement)
+            replacement_count += count
+    return text, replacement_count
+
+
+def render_azure_devops_pr_template(
+    file_texts: dict[str, str],
+    context: ReplacementContext,
+) -> tuple[ReplacementRecord, ...]:
+    """Render Azure Repos PR-template lines that need generated Markdown."""
+    relative_path = ".azuredevops/pull_request_template.md"
+    if context.azure_devops is None or relative_path not in file_texts:
+        return ()
+    text, count = replace_azure_pr_template_service_links(file_texts[relative_path], context)
+    if count == 0:
+        return ()
+    file_texts[relative_path] = text
+    return (
+        ReplacementRecord(
+            path=relative_path,
+            rule_name="azure devops pr template links",
+            count=count,
+        ),
+    )
+
+
 def yaml_string(value: str) -> str:
     """Return a YAML-safe quoted scalar using JSON string syntax."""
     return json.dumps(value)
@@ -2139,7 +2199,11 @@ def build_replacement_rules(context: ReplacementContext) -> tuple[ReplacementRul
             )
 
     if context.azure_devops is not None:
-        for name, placeholder, attribute_name in AZURE_DEVOPS_TOKEN_REPLACEMENT_SPECS:
+        for name, placeholder, attribute_name in sorted(
+            AZURE_DEVOPS_TOKEN_REPLACEMENT_SPECS,
+            key=lambda spec: len(spec[1]),
+            reverse=True,
+        ):
             replacement = getattr(context.azure_devops, attribute_name)
             rules.append(
                 ReplacementRule(
@@ -2237,6 +2301,7 @@ def replace_placeholders(
     records.extend(render_conduct_contact_sentence(file_texts, context))
     records.extend(render_security_reporting_mode(file_texts, context))
     records.extend(render_azure_devops_provider_neutral_docs(file_texts, context))
+    records.extend(render_azure_devops_pr_template(file_texts, context))
     records.extend(render_collaboration_policy(file_texts, context))
     records.extend(render_package_metadata(file_texts, context))
 

@@ -351,7 +351,7 @@ def build_host_setup_report(repo_root: Path) -> HostSetupReport:
         setup_items=setup_items,
         message=(
             "These are Azure DevOps Services setup follow-ups, not local file "
-            "materialization failures."
+            "materialization failures or GitHub issue-template findings."
         ),
     )
 

@@ -2744,6 +2744,16 @@ def test_materializer_replays_azure_provider_fields_from_marker(
     assert "https://dev.azure.com/contoso/Microsoft%20365" in guidance_text
     assert "https://dev.azure.com/contoso/Microsoft%20365/_git/downstream-template" in guidance_text
     assert "AZURE_DEVOPS_PROJECT_URL" not in guidance_text
+    pr_template_text = read_file(target_root / ".azuredevops" / "pull_request_template.md")
+    assert "[Microsoft 365](https://dev.azure.com/contoso/Microsoft%20365)" in pr_template_text
+    assert (
+        "[downstream-template]"
+        "(https://dev.azure.com/contoso/Microsoft%20365/_git/downstream-template)"
+    ) in pr_template_text
+    assert "Default branch used for PR template discovery: `main`." in pr_template_text
+    assert "Azure Boards intake policy: `work-items`." in pr_template_text
+    assert "not by this Markdown template" in pr_template_text
+    assert "AZURE_DEVOPS_PROJECT_URL" not in pr_template_text
     security_text = read_file(target_root / "SECURITY.md")
     assert "Azure DevOps Services project" in security_text
     assert "private vulnerability reporting" not in security_text

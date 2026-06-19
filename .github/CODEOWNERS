@@ -17,6 +17,9 @@
 # Workflow files require maintainer review
 .github/workflows/ @OWNER
 
+# Azure DevOps collaboration and service-guidance assets require maintainer review
+.azuredevops/ @OWNER
+
 # Copilot instructions require maintainer review
 .github/copilot-instructions.md @OWNER
 .github/instructions/ @OWNER
