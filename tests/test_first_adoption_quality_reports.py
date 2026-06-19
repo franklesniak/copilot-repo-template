@@ -422,7 +422,10 @@ def test_load_marker_rejects_symlinked_marker(tmp_path: Path) -> None:
     """A symlinked marker (even a broken one) is rejected, not treated as absent."""
     marker_path = tmp_path / ".template-sync" / "marker.yml"
     marker_path.parent.mkdir(parents=True, exist_ok=True)
-    marker_path.symlink_to(tmp_path / "nonexistent-target.yml")
+    try:
+        marker_path.symlink_to(tmp_path / "nonexistent-target.yml")
+    except (OSError, NotImplementedError):
+        pytest.skip("Filesystem does not support symlink creation")
 
     with pytest.raises(quality_reports.FirstAdoptionQualityError, match="Expected a regular file"):
         quality_reports.load_marker_template_sync(tmp_path)
