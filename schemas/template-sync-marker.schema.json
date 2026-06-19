@@ -407,7 +407,7 @@
     "azureDevOpsHttpsUrl": {
       "type": "string",
       "format": "uri",
-      "pattern": "^https://",
+      "pattern": "^https://(dev\\.azure\\.com|[^/?#@:]+\\.visualstudio\\.com)(:[0-9]+)?(/|$)",
       "not": {
         "anyOf": [
           {
