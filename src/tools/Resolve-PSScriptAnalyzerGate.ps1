@@ -103,6 +103,114 @@ function ConvertTo-GitHubAnnotationMessage {
     return $strEscapedValue
 }
 
+function ConvertTo-AzurePipelinesLoggingCommandPropertyValue {
+    # .SYNOPSIS
+    # Escapes a value for an Azure Pipelines logging-command property.
+    #
+    # .DESCRIPTION
+    # Converts a value to a string and applies Azure Pipelines logging-command
+    # escaping for property values inside the command metadata block. Property
+    # values are separated by semicolons and terminated by a closing bracket, so
+    # semicolons and closing brackets are escaped in addition to percent signs
+    # and line endings.
+    #
+    # .PARAMETER Value
+    # The value to escape. Null values are emitted as an empty string.
+    #
+    # .EXAMPLE
+    # ConvertTo-AzurePipelinesLoggingCommandPropertyValue -Value 'PSRule;Name]'
+    # # Returns PSRule%3BName%5D
+    #
+    # .INPUTS
+    # None. This function does not accept pipeline input.
+    #
+    # .OUTPUTS
+    # [string] The escaped logging-command property value.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
+    # Version: 1.0.20260619.0
+    # Positional parameters are not supported.
+    #
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string])]
+    param(
+        [AllowNull()]
+        [object]$Value
+    )
+
+    Set-StrictMode -Version Latest
+
+    if ($null -eq $Value) {
+        return ''
+    }
+
+    $strEscapedValue = [string]$Value
+    $strEscapedValue = $strEscapedValue.Replace('%', '%AZP25')
+    $strEscapedValue = $strEscapedValue.Replace("`r", '%0D')
+    $strEscapedValue = $strEscapedValue.Replace("`n", '%0A')
+    $strEscapedValue = $strEscapedValue.Replace(']', '%5D')
+    $strEscapedValue = $strEscapedValue.Replace(';', '%3B')
+
+    return $strEscapedValue
+}
+
+function ConvertTo-AzurePipelinesLoggingCommandMessage {
+    # .SYNOPSIS
+    # Escapes a value for an Azure Pipelines logging-command message.
+    #
+    # .DESCRIPTION
+    # Converts a value to a string and applies Azure Pipelines logging-command
+    # escaping for the free-text message after the command metadata block.
+    # Message values are read to the end of the output line, so semicolons and
+    # closing brackets are preserved while percent signs and line endings are
+    # encoded to keep each rendered finding on one physical line.
+    #
+    # .PARAMETER Value
+    # The value to escape. Null values are emitted as an empty string.
+    #
+    # .EXAMPLE
+    # ConvertTo-AzurePipelinesLoggingCommandMessage -Value 'Use ]; keep 100%'
+    # # Returns Use ]; keep 100%AZP25
+    #
+    # .INPUTS
+    # None. This function does not accept pipeline input.
+    #
+    # .OUTPUTS
+    # [string] The escaped logging-command message value.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
+    # Version: 1.0.20260619.0
+    # Positional parameters are not supported.
+    #
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string])]
+    param(
+        [AllowNull()]
+        [object]$Value
+    )
+
+    Set-StrictMode -Version Latest
+
+    if ($null -eq $Value) {
+        return ''
+    }
+
+    $strEscapedValue = [string]$Value
+    $strEscapedValue = $strEscapedValue.Replace('%', '%AZP25')
+    $strEscapedValue = $strEscapedValue.Replace("`r", '%0D')
+    $strEscapedValue = $strEscapedValue.Replace("`n", '%0A')
+
+    return $strEscapedValue
+}
+
 function Get-PSScriptAnalyzerFindingProperty {
     # .SYNOPSIS
     # Reads a named property from a PSScriptAnalyzer finding.
@@ -291,6 +399,578 @@ function ConvertTo-RepositoryRelativePath {
     return $strPath
 }
 
+function Test-PSScriptAnalyzerCiIndicator {
+    # .SYNOPSIS
+    # Tests whether a CI host indicator environment value is enabled.
+    #
+    # .DESCRIPTION
+    # Treats the string value true, case-insensitively, as an enabled CI host
+    # indicator. Empty, missing, false, and other values are treated as not
+    # indicating that host so explicit false-like values do not trigger
+    # annotation rendering.
+    #
+    # .PARAMETER Value
+    # The environment value to test.
+    #
+    # .EXAMPLE
+    # Test-PSScriptAnalyzerCiIndicator -Value 'True'
+    # # Returns $true
+    #
+    # .INPUTS
+    # None. This function does not accept pipeline input.
+    #
+    # .OUTPUTS
+    # [bool] True when the value indicates an active CI host; otherwise false.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
+    # Version: 1.0.20260619.0
+    # Positional parameters are not supported.
+    #
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([bool])]
+    param(
+        [AllowNull()]
+        [object]$Value
+    )
+
+    Set-StrictMode -Version Latest
+
+    if ($null -eq $Value) {
+        return $false
+    }
+
+    return (([string]$Value).Trim() -eq 'true')
+}
+
+function Test-PSScriptAnalyzerRootedPath {
+    # .SYNOPSIS
+    # Tests whether a path is rooted for CI annotation purposes.
+    #
+    # .DESCRIPTION
+    # Detects common rooted source path shapes without relying on the current
+    # operating system's path parser. Azure Pipelines can run on Windows,
+    # Linux, or macOS, while tests may need to reason about paths from any of
+    # those agents.
+    #
+    # .PARAMETER Path
+    # The path value to inspect.
+    #
+    # .EXAMPLE
+    # Test-PSScriptAnalyzerRootedPath -Path '/agent/_work/1/s/file.ps1'
+    # # Returns $true
+    #
+    # .INPUTS
+    # None. This function does not accept pipeline input.
+    #
+    # .OUTPUTS
+    # [bool] True when the path appears rooted; otherwise false.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
+    # Version: 1.0.20260619.0
+    # Positional parameters are not supported.
+    #
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([bool])]
+    param(
+        [AllowNull()]
+        [object]$Path
+    )
+
+    Set-StrictMode -Version Latest
+
+    if ($null -eq $Path) {
+        return $false
+    }
+
+    $strPath = [string]$Path
+    if ([string]::IsNullOrWhiteSpace($strPath)) {
+        return $false
+    }
+
+    return (
+        ($strPath -match '^[A-Za-z]:[\\/]') -or
+        ($strPath -match '^/') -or
+        ($strPath -match '^\\\\')
+    )
+}
+
+function ConvertTo-AzurePipelinesSourcePath {
+    # .SYNOPSIS
+    # Converts an analyzer path to an Azure Pipelines source path.
+    #
+    # .DESCRIPTION
+    # Preserves rooted source paths and combines relative source paths with the
+    # repository root when one is available. Azure Pipelines logging commands
+    # attach file locations most reliably when source paths are absolute.
+    #
+    # .PARAMETER Path
+    # The analyzer source path to convert.
+    #
+    # .PARAMETER RepositoryRoot
+    # The repository root used to make relative paths absolute.
+    #
+    # .EXAMPLE
+    # ConvertTo-AzurePipelinesSourcePath -Path 'src/a.ps1' -RepositoryRoot '/agent/_work/1/s'
+    # # Returns /agent/_work/1/s/src/a.ps1
+    #
+    # .INPUTS
+    # None. This function does not accept pipeline input.
+    #
+    # .OUTPUTS
+    # [string] The Azure Pipelines source path.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
+    # Version: 1.0.20260619.0
+    # Positional parameters are not supported.
+    #
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string])]
+    param(
+        [AllowNull()]
+        [object]$Path,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$RepositoryRoot
+    )
+
+    Set-StrictMode -Version Latest
+
+    if ($null -eq $Path) {
+        return ''
+    }
+
+    $strPath = [string]$Path
+    if ([string]::IsNullOrWhiteSpace($strPath)) {
+        return $strPath
+    }
+
+    if (Test-PSScriptAnalyzerRootedPath -Path $strPath) {
+        return $strPath
+    }
+
+    if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
+        return $strPath
+    }
+
+    $arrSeparator = [char[]]@('/', '\')
+    $strTrimmedRoot = $RepositoryRoot.TrimEnd($arrSeparator)
+    if ([string]::IsNullOrWhiteSpace($strTrimmedRoot)) {
+        return $strPath
+    }
+
+    $strSeparator = '/'
+    if (($strTrimmedRoot.Contains('\')) -and (-not $strTrimmedRoot.Contains('/'))) {
+        $strSeparator = '\'
+    }
+
+    $strTrimmedPath = $strPath.TrimStart($arrSeparator)
+
+    return ('{0}{1}{2}' -f $strTrimmedRoot, $strSeparator, $strTrimmedPath)
+}
+
+function ConvertTo-PSScriptAnalyzerSingleLineText {
+    # .SYNOPSIS
+    # Converts text to a single physical output line.
+    #
+    # .DESCRIPTION
+    # Converts a value to a string and replaces carriage returns and newlines
+    # with spaces so plain console rendering emits one output line per finding.
+    #
+    # .PARAMETER Value
+    # The value to convert. Null values are emitted as an empty string.
+    #
+    # .EXAMPLE
+    # ConvertTo-PSScriptAnalyzerSingleLineText -Value "Line 1`nLine 2"
+    # # Returns Line 1 Line 2
+    #
+    # .INPUTS
+    # None. This function does not accept pipeline input.
+    #
+    # .OUTPUTS
+    # [string] The single-line text value.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
+    # Version: 1.0.20260619.0
+    # Positional parameters are not supported.
+    #
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string])]
+    param(
+        [AllowNull()]
+        [object]$Value
+    )
+
+    Set-StrictMode -Version Latest
+
+    if ($null -eq $Value) {
+        return ''
+    }
+
+    $strSingleLineValue = [string]$Value
+    $strSingleLineValue = $strSingleLineValue.Replace("`r`n", ' ')
+    $strSingleLineValue = $strSingleLineValue.Replace("`r", ' ')
+    $strSingleLineValue = $strSingleLineValue.Replace("`n", ' ')
+
+    return $strSingleLineValue
+}
+
+function ConvertTo-PSScriptAnalyzerPlainTextLine {
+    # .SYNOPSIS
+    # Renders a normalized finding as a plain console line.
+    #
+    # .DESCRIPTION
+    # Produces a deterministic, single-line text representation of a normalized
+    # PSScriptAnalyzer finding for local runs and informational Azure Pipelines
+    # diagnostics that should not be promoted to warnings or errors.
+    #
+    # .PARAMETER Finding
+    # The normalized finding to render.
+    #
+    # .PARAMETER Path
+    # The path to display for the finding. When omitted or empty, the finding's
+    # normalized ScriptPath is used.
+    #
+    # .EXAMPLE
+    # ConvertTo-PSScriptAnalyzerPlainTextLine -Finding $objFinding
+    # # Returns a single-line diagnostic.
+    #
+    # .INPUTS
+    # None. This function does not accept pipeline input.
+    #
+    # .OUTPUTS
+    # [string] The plain diagnostic line.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
+    # Version: 1.0.20260619.0
+    # Positional parameters are not supported.
+    #
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNull()]
+        [pscustomobject]$Finding,
+
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Path
+    )
+
+    Set-StrictMode -Version Latest
+
+    $strDisplayPath = $Path
+    if ([string]::IsNullOrWhiteSpace($strDisplayPath)) {
+        $strDisplayPath = [string]$Finding.ScriptPath
+    }
+    if ([string]::IsNullOrWhiteSpace($strDisplayPath)) {
+        $strDisplayPath = '<unknown>'
+    }
+
+    $strLocation = ConvertTo-PSScriptAnalyzerSingleLineText -Value $strDisplayPath
+    if ([int]$Finding.Line -gt 0) {
+        $strLocation = '{0}:{1}' -f $strLocation, [int]$Finding.Line
+        if ([int]$Finding.Column -gt 0) {
+            $strLocation = '{0}:{1}' -f $strLocation, [int]$Finding.Column
+        }
+    }
+
+    $strRuleName = ConvertTo-PSScriptAnalyzerSingleLineText -Value $Finding.RuleName
+    $strMessage = ConvertTo-PSScriptAnalyzerSingleLineText -Value $Finding.Message
+
+    return ('PSScriptAnalyzer {0}: {1} [{2}] {3}' -f $Finding.DisplaySeverity, $strLocation, $strRuleName, $strMessage)
+}
+
+function ConvertTo-PSScriptAnalyzerGitHubAnnotationCommand {
+    # .SYNOPSIS
+    # Renders a normalized finding as a GitHub Actions annotation command.
+    #
+    # .DESCRIPTION
+    # Converts a normalized PSScriptAnalyzer finding into the GitHub Actions
+    # workflow command syntax used by the existing PowerShell CI workflow.
+    #
+    # .PARAMETER Finding
+    # The normalized finding to render.
+    #
+    # .EXAMPLE
+    # ConvertTo-PSScriptAnalyzerGitHubAnnotationCommand -Finding $objFinding
+    # # Returns a ::warning file=...::... annotation command.
+    #
+    # .INPUTS
+    # None. This function does not accept pipeline input.
+    #
+    # .OUTPUTS
+    # [string] The GitHub Actions annotation command.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
+    # Version: 1.0.20260619.0
+    # Positional parameters are not supported.
+    #
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNull()]
+        [pscustomobject]$Finding
+    )
+
+    Set-StrictMode -Version Latest
+
+    $listAnnotationField = [System.Collections.Generic.List[string]]::new()
+    if (-not [string]::IsNullOrWhiteSpace($Finding.ScriptPath)) {
+        $listAnnotationField.Add(('file={0}' -f (ConvertTo-GitHubAnnotationField -Value $Finding.ScriptPath)))
+    }
+    if ([int]$Finding.Line -gt 0) {
+        $listAnnotationField.Add(('line={0}' -f [int]$Finding.Line))
+    }
+    if ([int]$Finding.Column -gt 0) {
+        $listAnnotationField.Add(('col={0}' -f [int]$Finding.Column))
+    }
+
+    $strAnnotationMessage = '[{0}] {1} - {2}' -f $Finding.DisplaySeverity, $Finding.RuleName, $Finding.Message
+    $strEscapedAnnotationMessage = ConvertTo-GitHubAnnotationMessage -Value $strAnnotationMessage
+    if ($listAnnotationField.Count -gt 0) {
+        $strAnnotationField = $listAnnotationField.ToArray() -join ','
+        return ('::{0} {1}::{2}' -f $Finding.AnnotationLevel, $strAnnotationField, $strEscapedAnnotationMessage)
+    }
+
+    return ('::{0}::{1}' -f $Finding.AnnotationLevel, $strEscapedAnnotationMessage)
+}
+
+function ConvertTo-PSScriptAnalyzerAzurePipelinesOutputLine {
+    # .SYNOPSIS
+    # Renders a normalized finding for Azure Pipelines output.
+    #
+    # .DESCRIPTION
+    # Converts a normalized PSScriptAnalyzer finding into an Azure Pipelines
+    # task.logissue logging command for warning and error diagnostics. The
+    # Information severity is rendered as a plain line so it remains visible
+    # without becoming an Azure warning or error.
+    #
+    # .PARAMETER Finding
+    # The normalized finding to render.
+    #
+    # .EXAMPLE
+    # ConvertTo-PSScriptAnalyzerAzurePipelinesOutputLine -Finding $objFinding
+    # # Returns a ##vso[task.logissue ...] command for warnings and errors.
+    #
+    # .INPUTS
+    # None. This function does not accept pipeline input.
+    #
+    # .OUTPUTS
+    # [string] The Azure Pipelines output line.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
+    # Version: 1.0.20260619.0
+    # Positional parameters are not supported.
+    #
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNull()]
+        [pscustomobject]$Finding
+    )
+
+    Set-StrictMode -Version Latest
+
+    if ($Finding.Severity -eq 'Information') {
+        return ConvertTo-PSScriptAnalyzerPlainTextLine -Finding $Finding -Path $Finding.AzureSourcePath
+    }
+
+    $strIssueType = 'error'
+    if ($Finding.Severity -eq 'Warning') {
+        $strIssueType = 'warning'
+    }
+
+    $listProperty = [System.Collections.Generic.List[string]]::new()
+    $listProperty.Add(('type={0}' -f $strIssueType))
+    if (-not [string]::IsNullOrWhiteSpace($Finding.AzureSourcePath)) {
+        $strEscapedSourcePath = ConvertTo-AzurePipelinesLoggingCommandPropertyValue -Value $Finding.AzureSourcePath
+        $listProperty.Add(('sourcepath={0}' -f $strEscapedSourcePath))
+    }
+    if ([int]$Finding.Line -gt 0) {
+        $listProperty.Add(('linenumber={0}' -f [int]$Finding.Line))
+    }
+    if ([int]$Finding.Column -gt 0) {
+        $listProperty.Add(('columnnumber={0}' -f [int]$Finding.Column))
+    }
+    if (-not [string]::IsNullOrWhiteSpace($Finding.RuleName)) {
+        $strEscapedRuleName = ConvertTo-AzurePipelinesLoggingCommandPropertyValue -Value $Finding.RuleName
+        $listProperty.Add(('code={0}' -f $strEscapedRuleName))
+    }
+
+    $strProperty = ($listProperty.ToArray() -join ';') + ';'
+    $strMessage = '[{0}] {1} - {2}' -f $Finding.DisplaySeverity, $Finding.RuleName, $Finding.Message
+    $strEscapedMessage = ConvertTo-AzurePipelinesLoggingCommandMessage -Value $strMessage
+
+    return ('##vso[task.logissue {0}]{1}' -f $strProperty, $strEscapedMessage)
+}
+
+function ConvertTo-PSScriptAnalyzerOutputLine {
+    # .SYNOPSIS
+    # Renders normalized findings in the selected output format.
+    #
+    # .DESCRIPTION
+    # Converts normalized PSScriptAnalyzer findings into GitHub Actions
+    # annotations, Azure Pipelines logging commands, or plain console lines.
+    #
+    # .PARAMETER Finding
+    # The normalized findings to render.
+    #
+    # .PARAMETER AnnotationFormat
+    # The resolved annotation format to use.
+    #
+    # .EXAMPLE
+    # ConvertTo-PSScriptAnalyzerOutputLine -Finding $arrFinding -AnnotationFormat 'Plain'
+    # # Returns plain diagnostic lines.
+    #
+    # .INPUTS
+    # None. This function does not accept pipeline input.
+    #
+    # .OUTPUTS
+    # [string[]] The rendered output lines.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
+    # Version: 1.0.20260619.0
+    # Positional parameters are not supported.
+    #
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string[]])]
+    param(
+        [AllowNull()]
+        [object[]]$Finding,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateSet('GitHubActions', 'AzurePipelines', 'Plain')]
+        [string]$AnnotationFormat
+    )
+
+    Set-StrictMode -Version Latest
+
+    $arrFinding = @()
+    if ($null -ne $Finding) {
+        $arrFinding = @($Finding)
+    }
+
+    $listOutputLine = [System.Collections.Generic.List[string]]::new()
+    foreach ($objFinding in $arrFinding) {
+        if ($AnnotationFormat -eq 'GitHubActions') {
+            $listOutputLine.Add((ConvertTo-PSScriptAnalyzerGitHubAnnotationCommand -Finding $objFinding))
+        } elseif ($AnnotationFormat -eq 'AzurePipelines') {
+            $listOutputLine.Add((ConvertTo-PSScriptAnalyzerAzurePipelinesOutputLine -Finding $objFinding))
+        } else {
+            $listOutputLine.Add((ConvertTo-PSScriptAnalyzerPlainTextLine -Finding $objFinding))
+        }
+    }
+
+    return [string[]]$listOutputLine.ToArray()
+}
+
+function Resolve-PSScriptAnalyzerAnnotationFormat {
+    # .SYNOPSIS
+    # Resolves the requested analyzer annotation format.
+    #
+    # .DESCRIPTION
+    # Resolves explicit annotation formats directly and auto-detects supported
+    # CI hosts from environment indicators. Auto mode fails closed when both
+    # GitHub Actions and Azure Pipelines indicators are present.
+    #
+    # .PARAMETER AnnotationFormat
+    # The requested format: Auto, GitHubActions, AzurePipelines, or Plain.
+    #
+    # .EXAMPLE
+    # Resolve-PSScriptAnalyzerAnnotationFormat -AnnotationFormat 'Auto'
+    # # Returns the detected format, or Plain outside supported CI hosts.
+    #
+    # .INPUTS
+    # None. This function does not accept pipeline input.
+    #
+    # .OUTPUTS
+    # [string] The resolved annotation format.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
+    # Version: 1.0.20260619.0
+    # Positional parameters are not supported.
+    #
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string])]
+    param(
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$AnnotationFormat
+    )
+
+    Set-StrictMode -Version Latest
+
+    if (-not [string]::IsNullOrWhiteSpace($AnnotationFormat)) {
+        switch ($AnnotationFormat.Trim().ToLowerInvariant()) {
+            'githubactions' {
+                return 'GitHubActions'
+            }
+            'azurepipelines' {
+                return 'AzurePipelines'
+            }
+            'plain' {
+                return 'Plain'
+            }
+        }
+    }
+
+    $boolGitHubActions = Test-PSScriptAnalyzerCiIndicator -Value $env:GITHUB_ACTIONS
+    $boolAzurePipelines = Test-PSScriptAnalyzerCiIndicator -Value $env:TF_BUILD
+
+    if (($boolGitHubActions) -and ($boolAzurePipelines)) {
+        throw 'Both GITHUB_ACTIONS and TF_BUILD indicate supported CI hosts. Pass an explicit -AnnotationFormat value (GitHubActions, AzurePipelines, or Plain).'
+    }
+
+    if ($boolGitHubActions) {
+        return 'GitHubActions'
+    }
+
+    if ($boolAzurePipelines) {
+        return 'AzurePipelines'
+    }
+
+    return 'Plain'
+}
+
 function Resolve-PSScriptAnalyzerGate {
     # .SYNOPSIS
     # Resolves PSScriptAnalyzer findings into a CI gate decision.
@@ -303,9 +983,9 @@ function Resolve-PSScriptAnalyzerGate {
     # adoption debt. Information findings are annotation-only in both modes.
     #
     # Missing, empty, and unrecognized mode values resolve to strict mode.
-    # The returned object includes deterministic summary data, GitHub Actions
-    # annotation commands for every finding, normalized finding records, and the
-    # final gate decision.
+    # The returned object includes deterministic summary data, rendered output
+    # lines for every finding, normalized finding records, and the final gate
+    # decision.
     #
     # .PARAMETER Mode
     # The requested gate mode. Supported values are strict and first-adoption.
@@ -315,8 +995,16 @@ function Resolve-PSScriptAnalyzerGate {
     #
     # .PARAMETER RepositoryRoot
     # Optional repository root used to render annotation file paths relative to
-    # the repository. Defaults to the GITHUB_WORKSPACE environment variable so
-    # GitHub Actions annotations link to the correct file.
+    # the repository for GitHub Actions and to build absolute Azure Pipelines
+    # source paths from relative analyzer paths. Defaults to the
+    # GITHUB_WORKSPACE environment variable.
+    #
+    # .PARAMETER AnnotationFormat
+    # The annotation/output format to render. Supported values are Auto,
+    # GitHubActions, AzurePipelines, and Plain. Auto uses GitHub Actions when
+    # GITHUB_ACTIONS indicates GitHub Actions, Azure Pipelines when TF_BUILD
+    # indicates Azure Pipelines, Plain when no supported CI host is detected,
+    # and fails closed if both supported CI indicators are present.
     #
     # .EXAMPLE
     # $objGate = Resolve-PSScriptAnalyzerGate -Mode 'first-adoption' -AnalyzerFinding $arrFinding
@@ -329,11 +1017,12 @@ function Resolve-PSScriptAnalyzerGate {
     #
     # .OUTPUTS
     # [pscustomobject] Gate result with Mode, ShouldFail, Summary,
-    # SummaryLines, AnnotationCommands, Findings, RuleCounts, FileCounts,
-    # TopRules, TopFiles, RecommendedMode, and IssueReadyMarkdown properties.
+    # SummaryLines, AnnotationFormat, AnnotationCommands, Findings, RuleCounts,
+    # FileCounts, TopRules, TopFiles, RecommendedMode, and IssueReadyMarkdown
+    # properties.
     #
     # .NOTES
-    # Version: 1.1.20260616.0
+    # Version: 1.2.20260619.0
     # Positional parameters are not supported.
     #
     [CmdletBinding(PositionalBinding = $false)]
@@ -348,7 +1037,10 @@ function Resolve-PSScriptAnalyzerGate {
 
         [AllowNull()]
         [AllowEmptyString()]
-        [string]$RepositoryRoot = $env:GITHUB_WORKSPACE
+        [string]$RepositoryRoot = $env:GITHUB_WORKSPACE,
+
+        [ValidateSet('Auto', 'GitHubActions', 'AzurePipelines', 'Plain')]
+        [string]$AnnotationFormat = 'Auto'
     )
 
     Set-StrictMode -Version Latest
@@ -363,13 +1055,22 @@ function Resolve-PSScriptAnalyzerGate {
         $strResolvedMode = 'first-adoption'
     }
 
+    $strResolvedAnnotationFormat = Resolve-PSScriptAnalyzerAnnotationFormat -AnnotationFormat $AnnotationFormat
+
+    $strEffectiveRepositoryRoot = $RepositoryRoot
+    if (
+        [string]::IsNullOrWhiteSpace($strEffectiveRepositoryRoot) -and
+        (-not [string]::IsNullOrWhiteSpace($env:BUILD_SOURCESDIRECTORY))
+    ) {
+        $strEffectiveRepositoryRoot = $env:BUILD_SOURCESDIRECTORY
+    }
+
     $arrAnalyzerFinding = @()
     if ($null -ne $AnalyzerFinding) {
         $arrAnalyzerFinding = @($AnalyzerFinding)
     }
 
     $listNormalizedFinding = [System.Collections.Generic.List[pscustomobject]]::new()
-    $listAnnotationCommand = [System.Collections.Generic.List[string]]::new()
 
     $intErrorCount = 0
     $intWarningCount = 0
@@ -454,7 +1155,9 @@ function Resolve-PSScriptAnalyzerGate {
         if ([string]::IsNullOrWhiteSpace($strScriptPath)) {
             $strScriptPath = [string](Get-PSScriptAnalyzerFindingProperty -Finding $objFinding -Name 'FileName')
         }
-        $strScriptPath = ConvertTo-RepositoryRelativePath -Path $strScriptPath -RepositoryRoot $RepositoryRoot
+        $strSourcePath = $strScriptPath
+        $strAzureSourcePath = ConvertTo-AzurePipelinesSourcePath -Path $strSourcePath -RepositoryRoot $strEffectiveRepositoryRoot
+        $strScriptPath = ConvertTo-RepositoryRelativePath -Path $strScriptPath -RepositoryRoot $strEffectiveRepositoryRoot
         $strCountedScriptPath = $strScriptPath
         if ([string]::IsNullOrWhiteSpace($strCountedScriptPath)) {
             $strCountedScriptPath = '<unknown>'
@@ -484,34 +1187,16 @@ function Resolve-PSScriptAnalyzerGate {
             $strDisplaySeverity = "Unknown ($strOriginalSeverity)"
         }
 
-        $strAnnotationMessage = '[{0}] {1} - {2}' -f $strDisplaySeverity, $strRuleName, $strMessage
-
-        $listAnnotationField = [System.Collections.Generic.List[string]]::new()
-        if (-not [string]::IsNullOrWhiteSpace($strScriptPath)) {
-            $listAnnotationField.Add(('file={0}' -f (ConvertTo-GitHubAnnotationField -Value $strScriptPath)))
-        }
-        if ($intLine -gt 0) {
-            $listAnnotationField.Add(('line={0}' -f $intLine))
-        }
-        if ($intColumn -gt 0) {
-            $listAnnotationField.Add(('col={0}' -f $intColumn))
-        }
-
-        $strEscapedAnnotationMessage = ConvertTo-GitHubAnnotationMessage -Value $strAnnotationMessage
-        if ($listAnnotationField.Count -gt 0) {
-            $strAnnotationField = $listAnnotationField.ToArray() -join ','
-            $listAnnotationCommand.Add(('::{0} {1}::{2}' -f $strAnnotationLevel, $strAnnotationField, $strEscapedAnnotationMessage))
-        } else {
-            $listAnnotationCommand.Add(('::{0}::{1}' -f $strAnnotationLevel, $strEscapedAnnotationMessage))
-        }
-
         $listNormalizedFinding.Add(
             [pscustomobject]@{
                 Severity = $strNormalizedSeverity
                 OriginalSeverity = $strOriginalSeverity
+                DisplaySeverity = $strDisplaySeverity
                 RuleName = $strRuleName
                 Message = $strMessage
                 ScriptPath = $strScriptPath
+                SourcePath = $strSourcePath
+                AzureSourcePath = $strAzureSourcePath
                 Line = $intLine
                 Column = $intColumn
                 AnnotationLevel = $strAnnotationLevel
@@ -656,12 +1341,19 @@ function Resolve-PSScriptAnalyzerGate {
         $listIssueMarkdown.Add('- `PSSCRIPTANALYZER_GATE_MODE` is returned to `strict` after cleanup.')
     }
 
+    $arrAnnotationCommand = @(
+        ConvertTo-PSScriptAnalyzerOutputLine `
+            -Finding ([object[]]$listNormalizedFinding.ToArray()) `
+            -AnnotationFormat $strResolvedAnnotationFormat
+    )
+
     return [pscustomobject]@{
         Mode = $strResolvedMode
         ShouldFail = $boolShouldFail
         Summary = $objSummary
         SummaryLines = [string[]]$listSummaryLine.ToArray()
-        AnnotationCommands = [string[]]$listAnnotationCommand.ToArray()
+        AnnotationFormat = $strResolvedAnnotationFormat
+        AnnotationCommands = [string[]]$arrAnnotationCommand
         Findings = [object[]]$listNormalizedFinding.ToArray()
         RuleCounts = [object[]]$arrRuleCount
         FileCounts = [object[]]$arrFileCount
