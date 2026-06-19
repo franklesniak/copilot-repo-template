@@ -1,5 +1,5 @@
 template_manifest:
-  version: 2
+  version: 3
   modules:
     - name: baseline
       description: >-
@@ -23,12 +23,23 @@ template_manifest:
         `.github/dependabot.yml`. Likely future inhabitants include
         `.github/FUNDING.yml`, `.github/security/*`, and other repository-scope
         GitHub configuration files.
+    - name: azure-devops-platform
+      description: >-
+        Azure DevOps Services project, security, and service configuration
+        guidance that is not itself an Azure Pipelines file or Azure Repos
+        collaboration template.
     - name: github-actions
       description: GitHub Actions workflow files under `.github/workflows/**`.
+    - name: azure-pipelines
+      description: Azure Pipelines CI assets and setup guidance under `.azuredevops/pipelines/**`.
     - name: github-templates
       description: >-
         GitHub issue templates, PR templates, CODEOWNERS, and GitHub
         collaboration surfaces.
+    - name: azure-devops-collaboration
+      description: >-
+        Azure Repos PR templates, Azure Boards intake guidance, reviewer
+        policies, and Azure DevOps Services security intake guidance.
     - name: template-onboarding
       description: >-
         Template adoption and template maintainer guidance that downstream
@@ -64,6 +75,51 @@ template_manifest:
         configuration.
     - name: terraform
       description: Terraform modules, tests, linting, documentation, and template files.
+  compatibility_groups:
+    - name: ci-host
+      description: >-
+        CI host modules. GitHub remains the default through `github-actions`;
+        Azure DevOps Services support is additive through `azure-pipelines`.
+      default_modules:
+        - github-actions
+      alternatives:
+        - host: github
+          modules:
+            - github-actions
+        - host: azure-devops
+          modules:
+            - azure-pipelines
+      mixed_hosts: allowed
+    - name: platform-security-host
+      description: >-
+        Platform and security host modules. GitHub remains the default through
+        `github-platform`; Azure DevOps Services support is additive through
+        `azure-devops-platform`.
+      default_modules:
+        - github-platform
+      alternatives:
+        - host: github
+          modules:
+            - github-platform
+        - host: azure-devops
+          modules:
+            - azure-devops-platform
+      mixed_hosts: allowed
+    - name: collaboration-host
+      description: >-
+        Collaboration host modules. GitHub remains the default through
+        `github-templates`; Azure DevOps Services support is additive through
+        `azure-devops-collaboration`.
+      default_modules:
+        - github-templates
+      alternatives:
+        - host: github
+          modules:
+            - github-templates
+        - host: azure-devops
+          modules:
+            - azure-devops-collaboration
+      mixed_hosts: allowed
   path_mappings:
     - pattern: '.template-sync/marker.yml'
       requires_all:
@@ -194,6 +250,12 @@ template_manifest:
     - pattern: '.github/CODEOWNERS'
       requires_all:
         - github-templates
+    - pattern: '.azuredevops/pull_request_template.*'
+      requires_all:
+        - azure-devops-collaboration
+    - pattern: '.azuredevops/pull_request_template/**'
+      requires_all:
+        - azure-devops-collaboration
     - pattern: '.github/dependabot.yml'
       requires_all:
         - github-platform
@@ -201,6 +263,9 @@ template_manifest:
         Contains Python-only inline blocks for the pip ecosystem header and
         update block. Remove the delimited blocks when the python module is
         excluded so Dependabot only monitors retained dependency surfaces.
+    - pattern: '.azuredevops/platform/**'
+      requires_all:
+        - azure-devops-platform
     - pattern: 'tests/test_dependabot_schema.py'
       requires_all:
         - github-platform
@@ -272,6 +337,9 @@ template_manifest:
       notes: >-
         Contains a Terraform-only inline block for aggregate pre-commit setup.
         Remove the delimited block when the terraform module is excluded.
+    - pattern: '.azuredevops/pipelines/**'
+      requires_all:
+        - azure-pipelines
     - pattern: '.yamllint.yml'
       requires_all:
         - yaml

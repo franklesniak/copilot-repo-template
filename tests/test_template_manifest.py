@@ -56,8 +56,10 @@ from template_sync_materialization_helpers import (  # noqa: E402
     UnclosedInlineBlockError,
     UnknownInlineBlockMarkerError,
     UnmatchedInlineBlockEndError,
+    parse_manifest_compatibility_groups,
     remove_inline_block_family,
     remove_inline_blocks_for_modules,
+    validate_module_compatibility,
 )
 import report_excluded_module_references as EXCLUDED_MODULE_REPORTER  # noqa: E402
 import validate_marker as VALIDATE_MARKER  # noqa: E402
@@ -516,24 +518,42 @@ def _minimal_manifest_document(version: int, path_mapping: dict[str, Any]) -> di
                 "future_work": "Move to manifest version 2 relation semantics.",
             }
         ]
-    elif version == 2:
+    elif version in {2, 3}:
         filtering["requires_any_semantics"] = "OR"
 
-    return {
-        "template_manifest": {
-            "version": version,
-            "modules": [
-                {"name": "baseline", "description": "Baseline files."},
-                {"name": "github-actions", "description": "GitHub Actions workflows."},
-                {"name": "json", "description": "JSON files."},
-                {"name": "yaml", "description": "YAML files."},
-                {"name": "schema", "description": "JSON Schema files."},
-            ],
-            "path_mappings": [path_mapping],
-            "filtering": filtering,
-            "notes": notes,
-        }
+    template_manifest: dict[str, Any] = {
+        "version": version,
+        "modules": [
+            {"name": "baseline", "description": "Baseline files."},
+            {"name": "github-actions", "description": "GitHub Actions workflows."},
+            {"name": "azure-pipelines", "description": "Azure Pipelines workflows."},
+            {"name": "json", "description": "JSON files."},
+            {"name": "yaml", "description": "YAML files."},
+            {"name": "schema", "description": "JSON Schema files."},
+            {
+                "name": "template-sync-support",
+                "description": "Template sync support files.",
+            },
+        ],
+        "path_mappings": [path_mapping],
+        "filtering": filtering,
+        "notes": notes,
     }
+    if version == 3:
+        template_manifest["compatibility_groups"] = [
+            {
+                "name": "ci-host",
+                "description": "CI host modules.",
+                "default_modules": ["github-actions"],
+                "alternatives": [
+                    {"host": "github", "modules": ["github-actions"]},
+                    {"host": "azure-devops", "modules": ["azure-pipelines"]},
+                ],
+                "mixed_hosts": "allowed",
+            }
+        ]
+
+    return {"template_manifest": template_manifest}
 
 
 def _synthetic_manifest_document(path_mappings: list[dict[str, Any]]) -> dict[str, Any]:
@@ -1443,6 +1463,38 @@ def test_template_manifest_schema_accepts_version_2_requires_any() -> None:
     assert not errors, "\n".join(f"{error.json_path}: {error.message}" for error in errors)
 
 
+def test_template_manifest_schema_accepts_version_3_compatibility_groups() -> None:
+    """Manifest schema must accept version 3 host compatibility metadata."""
+    manifest = _minimal_manifest_document(
+        3,
+        {
+            "pattern": ".github/workflows/data-ci.yml",
+            "requires_all": ["github-actions"],
+            "requires_any": ["json", "yaml", "schema", "template-sync-support"],
+        },
+    )
+
+    errors = _manifest_validation_errors(manifest)
+
+    assert not errors, "\n".join(f"{error.json_path}: {error.message}" for error in errors)
+
+
+def test_template_manifest_schema_rejects_version_3_without_compatibility_groups() -> None:
+    """Manifest version 3 must include compatibility group metadata."""
+    manifest = _minimal_manifest_document(
+        3,
+        {
+            "pattern": ".github/workflows/data-ci.yml",
+            "requires_all": ["github-actions"],
+        },
+    )
+    del manifest["template_manifest"]["compatibility_groups"]
+
+    errors = _manifest_validation_errors(manifest)
+
+    assert errors
+
+
 def test_template_manifest_schema_rejects_malformed_relation_combinations() -> None:
     """Schema validation must reject invalid v1/v2 relation shapes."""
     invalid_manifests = [
@@ -1502,6 +1554,70 @@ def test_template_manifest_data_ci_mapping_uses_v2_boolean_semantics() -> None:
     assert not _path_mapping_matches_modules(data_ci_mapping, {"github-actions"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"yaml", "schema"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "terraform"})
+
+
+def test_template_manifest_compatibility_groups_define_host_families() -> None:
+    """Manifest compatibility groups must cover the declared GitHub and Azure families."""
+    groups = parse_manifest_compatibility_groups(_load_manifest())
+    group_by_name = {group.name: group for group in groups}
+
+    expected = {
+        "ci-host": {
+            "default_modules": frozenset({"github-actions"}),
+            "alternatives": {
+                "github": frozenset({"github-actions"}),
+                "azure-devops": frozenset({"azure-pipelines"}),
+            },
+        },
+        "platform-security-host": {
+            "default_modules": frozenset({"github-platform"}),
+            "alternatives": {
+                "github": frozenset({"github-platform"}),
+                "azure-devops": frozenset({"azure-devops-platform"}),
+            },
+        },
+        "collaboration-host": {
+            "default_modules": frozenset({"github-templates"}),
+            "alternatives": {
+                "github": frozenset({"github-templates"}),
+                "azure-devops": frozenset({"azure-devops-collaboration"}),
+            },
+        },
+    }
+
+    assert set(group_by_name) == set(expected)
+    for group_name, expected_group in expected.items():
+        group = group_by_name[group_name]
+        alternatives = {alternative.host: alternative.modules for alternative in group.alternatives}
+        assert group.default_modules == expected_group["default_modules"]
+        assert alternatives == expected_group["alternatives"]
+        assert group.mixed_hosts == "allowed"
+
+
+def test_template_manifest_host_selection_matrix_is_supported() -> None:
+    """Current host groups allow GitHub-only, Azure-only, and explicit mixed selections."""
+    groups = parse_manifest_compatibility_groups(_load_manifest())
+    scenarios = {
+        "github-only": {
+            "github-actions",
+            "github-platform",
+            "github-templates",
+        },
+        "azure-devops-only": {
+            "azure-pipelines",
+            "azure-devops-platform",
+            "azure-devops-collaboration",
+        },
+        "explicit-mixed": {
+            "github-platform",
+            "azure-pipelines",
+            "github-templates",
+        },
+    }
+
+    assert [group.name for group in groups if group.mixed_hosts == "unsupported"] == []
+    for included_modules in scenarios.values():
+        assert not validate_module_compatibility(included_modules, groups)
 
 
 def test_template_manifest_module_names_are_unique() -> None:

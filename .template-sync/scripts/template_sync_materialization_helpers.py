@@ -235,6 +235,25 @@ class ManifestMapping:
 
 
 @dataclass(frozen=True)
+class ManifestCompatibilityAlternative:
+    """One host-family alternative in a manifest compatibility group."""
+
+    host: str
+    modules: frozenset[str]
+
+
+@dataclass(frozen=True)
+class ManifestCompatibilityGroup:
+    """Host-family compatibility metadata for related optional modules."""
+
+    name: str
+    description: str
+    default_modules: frozenset[str]
+    alternatives: tuple[ManifestCompatibilityAlternative, ...]
+    mixed_hosts: str
+
+
+@dataclass(frozen=True)
 class PathRelation:
     """The manifest module relation selected for a repository path."""
 
@@ -418,10 +437,16 @@ def load_validated_manifest(
     manifest = load_yaml_mapping(manifest_path, repo_root)
     manifest_schema = load_json_mapping(manifest_schema_path, repo_root)
     validate_schema(manifest, manifest_schema, manifest_path, repo_root)
-    return parse_manifest_mappings(
+    module_names, mappings = parse_manifest_mappings(
         manifest,
         reject_unknown_modules=reject_unknown_modules,
     )
+    parse_manifest_compatibility_groups(
+        manifest,
+        module_names=module_names,
+        reject_unknown_modules=reject_unknown_modules,
+    )
+    return module_names, mappings
 
 
 def load_validated_marker_decision_data(
@@ -484,12 +509,8 @@ def relation_modules(mapping: dict[str, Any], relation_key: str) -> frozenset[st
     return frozenset(modules)
 
 
-def parse_manifest_mappings(
-    manifest: dict[str, Any],
-    *,
-    reject_unknown_modules: bool = True,
-) -> tuple[frozenset[str], tuple[ManifestMapping, ...]]:
-    """Extract module definitions and path mappings from a validated manifest."""
+def parse_manifest_module_names(manifest: dict[str, Any]) -> frozenset[str]:
+    """Extract declared module names from a manifest document."""
     template_manifest = manifest.get("template_manifest")
     if not isinstance(template_manifest, dict):
         raise TemplateSyncMaterializationError("Manifest must contain template_manifest mapping.")
@@ -504,6 +525,20 @@ def parse_manifest_mappings(
                 "Every manifest module must define a string name."
             )
         module_names.add(module["name"])
+    return frozenset(module_names)
+
+
+def parse_manifest_mappings(
+    manifest: dict[str, Any],
+    *,
+    reject_unknown_modules: bool = True,
+) -> tuple[frozenset[str], tuple[ManifestMapping, ...]]:
+    """Extract module definitions and path mappings from a validated manifest."""
+    template_manifest = manifest.get("template_manifest")
+    if not isinstance(template_manifest, dict):
+        raise TemplateSyncMaterializationError("Manifest must contain template_manifest mapping.")
+
+    module_names = set(parse_manifest_module_names(manifest))
 
     raw_path_mappings = template_manifest.get("path_mappings")
     if not isinstance(raw_path_mappings, list):
@@ -545,6 +580,159 @@ def parse_manifest_mappings(
         )
 
     return frozenset(module_names), tuple(mappings)
+
+
+def compatibility_modules(raw_modules: object, field_name: str) -> frozenset[str]:
+    """Return a non-empty compatibility module set from a manifest field."""
+    if not isinstance(raw_modules, list):
+        raise TemplateSyncMaterializationError(f"{field_name} must be a list.")
+    if not raw_modules:
+        raise TemplateSyncMaterializationError(f"{field_name} must not be empty.")
+    if not all(isinstance(module, str) for module in raw_modules):
+        raise TemplateSyncMaterializationError(f"{field_name} values must be strings.")
+    return frozenset(raw_modules)
+
+
+def parse_manifest_compatibility_groups(
+    manifest: dict[str, Any],
+    *,
+    module_names: Collection[str] | None = None,
+    reject_unknown_modules: bool = True,
+) -> tuple[ManifestCompatibilityGroup, ...]:
+    """Extract host-family compatibility groups from a manifest document."""
+    template_manifest = manifest.get("template_manifest")
+    if not isinstance(template_manifest, dict):
+        raise TemplateSyncMaterializationError("Manifest must contain template_manifest mapping.")
+
+    raw_groups = template_manifest.get("compatibility_groups")
+    if raw_groups is None:
+        return ()
+    if not isinstance(raw_groups, list):
+        raise TemplateSyncMaterializationError(
+            "template_manifest.compatibility_groups must be a list."
+        )
+
+    known_modules = set(module_names or parse_manifest_module_names(manifest))
+    group_names: set[str] = set()
+    groups: list[ManifestCompatibilityGroup] = []
+    for index, raw_group in enumerate(raw_groups, 1):
+        group_field = f"template_manifest.compatibility_groups[{index}]"
+        if not isinstance(raw_group, dict):
+            raise TemplateSyncMaterializationError(f"{group_field} must be a mapping.")
+
+        name = raw_group.get("name")
+        description = raw_group.get("description")
+        mixed_hosts = raw_group.get("mixed_hosts")
+        raw_alternatives = raw_group.get("alternatives")
+        if not isinstance(name, str):
+            raise TemplateSyncMaterializationError(f"{group_field}.name must be a string.")
+        if not isinstance(description, str):
+            raise TemplateSyncMaterializationError(f"{group_field}.description must be a string.")
+        if mixed_hosts not in {"allowed", "unsupported"}:
+            raise TemplateSyncMaterializationError(
+                f"{group_field}.mixed_hosts must be allowed or unsupported."
+            )
+        if name in group_names:
+            raise TemplateSyncMaterializationError(f"Duplicate compatibility group: {name}")
+        group_names.add(name)
+
+        default_modules = compatibility_modules(
+            raw_group.get("default_modules"),
+            f"{group_field}.default_modules",
+        )
+        if not isinstance(raw_alternatives, list) or not raw_alternatives:
+            raise TemplateSyncMaterializationError(
+                f"{group_field}.alternatives must be a non-empty list."
+            )
+
+        alternatives: list[ManifestCompatibilityAlternative] = []
+        alternative_hosts: set[str] = set()
+        alternative_modules: set[str] = set()
+        module_hosts: dict[str, str] = {}
+        for alternative_index, raw_alternative in enumerate(raw_alternatives, 1):
+            alternative_field = f"{group_field}.alternatives[{alternative_index}]"
+            if not isinstance(raw_alternative, dict):
+                raise TemplateSyncMaterializationError(f"{alternative_field} must be a mapping.")
+            host = raw_alternative.get("host")
+            if not isinstance(host, str):
+                raise TemplateSyncMaterializationError(
+                    f"{alternative_field}.host must be a string."
+                )
+            if host in alternative_hosts:
+                raise TemplateSyncMaterializationError(
+                    f"{group_field} defines duplicate host alternative: {host}"
+                )
+            alternative_hosts.add(host)
+
+            modules = compatibility_modules(
+                raw_alternative.get("modules"),
+                f"{alternative_field}.modules",
+            )
+            for module in modules:
+                previous_host = module_hosts.get(module)
+                if previous_host is not None:
+                    raise TemplateSyncMaterializationError(
+                        f"{group_field} maps module {module} to multiple hosts: "
+                        f"{previous_host}, {host}"
+                    )
+                module_hosts[module] = host
+            alternative_modules.update(modules)
+            alternatives.append(ManifestCompatibilityAlternative(host=host, modules=modules))
+
+        missing_default_modules = default_modules - alternative_modules
+        if missing_default_modules:
+            raise TemplateSyncMaterializationError(
+                f"{group_field}.default_modules must be listed in an alternative: "
+                + ", ".join(sorted(missing_default_modules))
+            )
+
+        unknown_modules = (default_modules | alternative_modules) - known_modules
+        if reject_unknown_modules and unknown_modules:
+            raise TemplateSyncMaterializationError(
+                f"{group_field} references unknown manifest module(s): "
+                + ", ".join(sorted(unknown_modules))
+            )
+
+        groups.append(
+            ManifestCompatibilityGroup(
+                name=name,
+                description=description,
+                default_modules=default_modules,
+                alternatives=tuple(alternatives),
+                mixed_hosts=mixed_hosts,
+            )
+        )
+
+    return tuple(groups)
+
+
+def validate_module_compatibility(
+    included_modules: Collection[str],
+    compatibility_groups: tuple[ManifestCompatibilityGroup, ...],
+) -> tuple[str, ...]:
+    """Return actionable errors for unsupported host-family module mixes."""
+    included_module_set = set(included_modules)
+    errors: list[str] = []
+    for group in compatibility_groups:
+        if group.mixed_hosts == "allowed":
+            continue
+        selected_hosts: list[tuple[str, frozenset[str]]] = []
+        for alternative in group.alternatives:
+            selected_modules = alternative.modules & included_module_set
+            if selected_modules:
+                selected_hosts.append((alternative.host, selected_modules))
+        if len(selected_hosts) <= 1:
+            continue
+
+        selected_summary = "; ".join(
+            f"{host} ({', '.join(sorted(modules))})" for host, modules in selected_hosts
+        )
+        errors.append(
+            f"Unsupported mixed-host selection in compatibility group {group.name}: "
+            f"{selected_summary}. Select one host family or update "
+            "template_manifest.compatibility_groups if this mixed-host shape is intentional."
+        )
+    return tuple(errors)
 
 
 def optional_marker_string(
