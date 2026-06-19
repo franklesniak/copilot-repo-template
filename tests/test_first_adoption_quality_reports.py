@@ -418,6 +418,16 @@ def test_host_setup_report_distinguishes_azure_service_tasks(tmp_path: Path) -> 
     assert "not local file materialization failures" in output
 
 
+def test_load_marker_rejects_symlinked_marker(tmp_path: Path) -> None:
+    """A symlinked marker (even a broken one) is rejected, not treated as absent."""
+    marker_path = tmp_path / ".template-sync" / "marker.yml"
+    marker_path.parent.mkdir(parents=True, exist_ok=True)
+    marker_path.symlink_to(tmp_path / "nonexistent-target.yml")
+
+    with pytest.raises(quality_reports.FirstAdoptionQualityError, match="Expected a regular file"):
+        quality_reports.load_marker_template_sync(tmp_path)
+
+
 def test_path_reference_cli_can_fail_on_findings(tmp_path: Path) -> None:
     """The CLI offers an explicit non-zero path-reference gate when selected."""
     _init_repo(tmp_path)

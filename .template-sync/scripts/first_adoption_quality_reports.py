@@ -283,9 +283,12 @@ def is_present_regular_file(path: Path) -> bool:
 def load_marker_template_sync(repo_root: Path) -> dict[str, object] | None:
     """Load the marker's template_sync mapping when a marker is present."""
     marker_path = resolve_repo_path(repo_root, MARKER_PATH)
-    if not marker_path.exists():
+    # resolve_repo_path() collapses a leaf symlink, so check the lexical path for
+    # symlink/regular-file status the way the rest of this file's discovery does.
+    marker_link = repo_root / MARKER_PATH
+    if not marker_path.exists() and not marker_link.is_symlink():
         return None
-    if not is_present_regular_file(marker_path):
+    if not is_present_regular_file(marker_link):
         raise FirstAdoptionQualityError(f"Expected a regular file: {MARKER_PATH}")
     try:
         marker_document = yaml.safe_load(marker_path.read_text(encoding="utf-8-sig"))
