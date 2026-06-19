@@ -850,25 +850,25 @@ function ConvertTo-PSScriptAnalyzerOutputLine {
     # The resolved annotation format to use.
     #
     # .EXAMPLE
-    # ConvertTo-PSScriptAnalyzerOutputLine -Finding $arrFinding -AnnotationFormat 'Plain'
-    # # Returns plain diagnostic lines.
+    # $arrLine = @(ConvertTo-PSScriptAnalyzerOutputLine -Finding $arrFinding -AnnotationFormat 'Plain')
+    # # Returns plain diagnostic lines, one streamed string per finding.
     #
     # .INPUTS
     # None. This function does not accept pipeline input.
     #
     # .OUTPUTS
-    # [string[]] The rendered output lines.
+    # [string] The rendered output lines, streamed one per finding.
     #
     # .NOTES
     # PRIVATE/INTERNAL HELPER - This function is not part of the public
     # API surface. Parameters, return shape, and positional contract may
     # change without notice.
     #
-    # Version: 1.0.20260619.0
+    # Version: 1.0.20260619.1
     # Positional parameters are not supported.
     #
     [CmdletBinding(PositionalBinding = $false)]
-    [OutputType([string[]])]
+    [OutputType([string])]
     param(
         [AllowNull()]
         [object[]]$Finding,
@@ -885,18 +885,15 @@ function ConvertTo-PSScriptAnalyzerOutputLine {
         $arrFinding = @($Finding)
     }
 
-    $listOutputLine = [System.Collections.Generic.List[string]]::new()
     foreach ($objFinding in $arrFinding) {
         if ($AnnotationFormat -eq 'GitHubActions') {
-            $listOutputLine.Add((ConvertTo-PSScriptAnalyzerGitHubAnnotationCommand -Finding $objFinding))
+            ConvertTo-PSScriptAnalyzerGitHubAnnotationCommand -Finding $objFinding
         } elseif ($AnnotationFormat -eq 'AzurePipelines') {
-            $listOutputLine.Add((ConvertTo-PSScriptAnalyzerAzurePipelinesOutputLine -Finding $objFinding))
+            ConvertTo-PSScriptAnalyzerAzurePipelinesOutputLine -Finding $objFinding
         } else {
-            $listOutputLine.Add((ConvertTo-PSScriptAnalyzerPlainTextLine -Finding $objFinding))
+            ConvertTo-PSScriptAnalyzerPlainTextLine -Finding $objFinding
         }
     }
-
-    return [string[]]$listOutputLine.ToArray()
 }
 
 function Resolve-PSScriptAnalyzerAnnotationFormat {
