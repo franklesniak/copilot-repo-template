@@ -86,9 +86,11 @@ Describe "Resolve-PSScriptAnalyzerGate" {
         $script:strOriginalGitHubActions = $env:GITHUB_ACTIONS
         $script:strOriginalTfBuild = $env:TF_BUILD
         $script:strOriginalBuildSourcesDirectory = $env:BUILD_SOURCESDIRECTORY
+        $script:strOriginalGitHubWorkspace = $env:GITHUB_WORKSPACE
         Remove-Item -LiteralPath Env:\GITHUB_ACTIONS -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath Env:\TF_BUILD -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath Env:\BUILD_SOURCESDIRECTORY -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath Env:\GITHUB_WORKSPACE -ErrorAction SilentlyContinue
     }
 
     AfterEach {
@@ -108,6 +110,12 @@ Describe "Resolve-PSScriptAnalyzerGate" {
             Remove-Item -LiteralPath Env:\BUILD_SOURCESDIRECTORY -ErrorAction SilentlyContinue
         } else {
             $env:BUILD_SOURCESDIRECTORY = $script:strOriginalBuildSourcesDirectory
+        }
+
+        if ($null -eq $script:strOriginalGitHubWorkspace) {
+            Remove-Item -LiteralPath Env:\GITHUB_WORKSPACE -ErrorAction SilentlyContinue
+        } else {
+            $env:GITHUB_WORKSPACE = $script:strOriginalGitHubWorkspace
         }
     }
 
