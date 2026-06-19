@@ -417,6 +417,62 @@ def test_azure_only_baseline_docs_do_not_leave_github_placeholders(tmp_path: Pat
     assert placeholder_helper.scan_repository(tmp_path) == ()
 
 
+def test_azure_pr_template_materializes_service_links_and_policy_guidance(
+    tmp_path: Path,
+) -> None:
+    """Azure PR template rendering uses service URLs and names service-backed policies."""
+    destination = tmp_path / ".azuredevops" / "pull_request_template.md"
+    write_file(
+        destination,
+        "\n".join(
+            [
+                "- Project: AZURE_DEVOPS_PROJECT (AZURE_DEVOPS_PROJECT_URL)",
+                "- Repository: AZURE_DEVOPS_REPOSITORY (AZURE_DEVOPS_REPOSITORY_WEB_URL)",
+                "- Default branch used for PR template discovery: `AZURE_DEVOPS_DEFAULT_BRANCH`.",
+                "- Azure Boards intake policy: `AZURE_BOARDS_INTAKE_POLICY`.",
+                "- Branch policy reviewer guidance: `AZURE_BRANCH_POLICY_REVIEWER_GUIDANCE`.",
+                "- Pull request template policy: `AZURE_REPOS_PR_TEMPLATE_POLICY`.",
+                "- Reviewer requirements are enforced by Azure Repos branch policies, "
+                "not by this Markdown template.",
+                "- Security-sensitive reports are handled through private security intake, "
+                "not public Azure Boards work items or PR comments.",
+                "- Security-sensitive findings use the private intake policy: "
+                "`AZURE_SECURITY_INTAKE_POLICY`.",
+            ]
+        )
+        + "\n",
+    )
+    context = placeholder_helper.build_replacement_context(
+        host_provider="azure-devops-services",
+        azure_devops_organization="contoso",
+        azure_devops_project="Template Adoption",
+        azure_devops_repository="downstream-template",
+        azure_boards_policy="work-items",
+        azure_branch_policy_reviewer_guidance="required-reviewers",
+        azure_security_intake_policy="manual-follow-up",
+    )
+
+    records = placeholder_helper.replace_placeholders(repo_root=tmp_path, context=context)
+
+    template_text = read_file(destination)
+    assert any(record.path == ".azuredevops/pull_request_template.md" for record in records)
+    assert "[Template Adoption](https://dev.azure.com/contoso/Template%20Adoption)" in (
+        template_text
+    )
+    assert (
+        "[downstream-template]"
+        "(https://dev.azure.com/contoso/Template%20Adoption/_git/downstream-template)"
+    ) in template_text
+    assert "Default branch used for PR template discovery: `main`." in template_text
+    assert "Azure Boards intake policy: `work-items`." in template_text
+    assert "Branch policy reviewer guidance: `required-reviewers`." in template_text
+    assert "not by this Markdown template" in template_text
+    assert "public Azure Boards work items or PR comments" in template_text
+    assert "AZURE_" not in template_text
+    assert "github.com/OWNER/REPO" not in template_text
+    assert placeholder_helper.scan_repository(tmp_path) == ()
+
+
 def test_default_host_leaves_unrelated_github_com_occurrences_untouched(
     tmp_path: Path,
 ) -> None:

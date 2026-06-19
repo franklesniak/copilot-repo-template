@@ -415,7 +415,10 @@ def test_host_setup_report_distinguishes_azure_service_tasks(tmp_path: Path) -> 
     assert report.azure_modules_retained is True
     assert "Azure DevOps Services service setup tasks" in output
     assert "Azure Boards intake policy: work-items" in output
+    assert "Azure Repos pull request template policy: materialize" in output
+    assert "Branch policy reviewer guidance: manual-follow-up" in output
     assert "not local file materialization failures" in output
+    assert "not local file materialization failures or GitHub issue-template findings" in output
 
 
 def test_load_marker_rejects_symlinked_marker(tmp_path: Path) -> None:

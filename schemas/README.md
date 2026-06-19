@@ -250,6 +250,8 @@ The marker schema includes `template_sync.local_path_ownership` for downstream-o
 
 The marker schema also records collaboration-template policy inputs used by first-adoption materialization. `template_sync.issue_label_policy` accepts `existing`, `create-manual-follow-up`, `omit`, or `custom`; `custom` requires `template_sync.issue_labels`. `template_sync.discussions_policy` accepts `enabled`, `disabled`, `deferred-planned-render`, or `deferred-not-rendered`. Deferred or future-state policies that leave manual setup open require `template_sync.collaboration_policy_follow_up_status`, which MUST reflect the matching `_TODO-repo-init.md` dependent-file status.
 
+For Azure DevOps Services adoptions, `template_sync.host_provider` values of `azure-devops-services` or `dual` enable Azure DevOps project identity fields and service setup policy fields. The Azure collaboration fields record Azure Boards intake policy, Azure Repos PR template policy, branch-policy reviewer guidance, security intake policy, security product enablement, and dependency update policy so first-adoption reporting can distinguish service-backed setup decisions from Git-file materialization.
+
 How the template sync marker contract is validated:
 
 - The marker file is validated by the `Validate template sync marker` `check-jsonschema` hook when `.template-sync/marker.yml` is present. Repositories without a marker are unaffected because no file matches the hook's anchored pattern.

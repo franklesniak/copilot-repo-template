@@ -1620,6 +1620,19 @@ def test_template_manifest_host_selection_matrix_is_supported() -> None:
         assert not validate_module_compatibility(included_modules, groups)
 
 
+def test_template_manifest_maps_azure_repos_pr_template_to_collaboration_module() -> None:
+    """Azure Repos PR template assets must stay owned by collaboration, not platform."""
+    assert _manifest_modules_for_path(".azuredevops/pull_request_template.md") == (
+        "azure-devops-collaboration",
+    )
+    assert _manifest_modules_for_path(".azuredevops/pull_request_template/branches/main.md") == (
+        "azure-devops-collaboration",
+    )
+    assert _manifest_modules_for_path(".azuredevops/platform/adoption-guidance.md") == (
+        "azure-devops-platform",
+    )
+
+
 def test_template_manifest_module_names_are_unique() -> None:
     """Each module name must be declared exactly once."""
     names = [name for name, _description in _module_rows_from_manifest()]

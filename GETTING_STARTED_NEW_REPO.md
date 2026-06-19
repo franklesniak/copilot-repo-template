@@ -714,7 +714,7 @@ This template uses placeholder values that you **must** replace with your actual
 | `.github/ISSUE_TEMPLATE/config.yml` | `OWNER/REPO` (appears in URLs twice) |
 | `.github/ISSUE_TEMPLATE/bug_report.yml` | `OWNER/REPO` (appears in security-notice URLs) |
 | `.github/pull_request_template.md` | `OWNER/REPO` (appears in the contributing-guidelines link) |
-| `.github/CODEOWNERS` | `@OWNER` (appears four times) |
+| `.github/CODEOWNERS` | `@OWNER` (appears five times) |
 | `CODE_OF_CONDUCT.md` | `[INSERT CONTACT METHOD]` (enforcement contact for code of conduct violations) |
 | `CONTRIBUTING.md` | `OWNER/REPO` (appears in clone URL and issues URL) |
 | `LICENSE` | `Frank Lesniak` (copyright holder name — replace with your name or organization) |
@@ -1006,7 +1006,7 @@ If you prefer, you can open each file in a text editor and manually find and rep
 
 4. **`.github/CODEOWNERS`:**
    - Find: `@OWNER`
-   - Replace with: `@your-username` (appears four times)
+   - Replace with: `@your-username` (appears five times)
 
 5. **`CODE_OF_CONDUCT.md`:**
    - Find: `[INSERT CONTACT METHOD]`
