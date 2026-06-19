@@ -54,6 +54,10 @@ FULL_TEMPLATE_MODULES = (
     "python",
     "terraform",
 )
+AZURE_TEMPLATE_MODULES = frozenset(
+    ("azure-devops-platform", "azure-pipelines", "azure-devops-collaboration")
+)
+GITHUB_HOST_TEMPLATE_MODULES = frozenset(("github-platform", "github-actions", "github-templates"))
 DOWNSTREAM_PYTEST_MODULES = tuple(
     module_name
     for module_name in FULL_TEMPLATE_MODULES
@@ -76,6 +80,17 @@ OPTIONAL_PRUNING_FIXTURES = (
         id="full-upstream-module-set",
     ),
 )
+AZURE_PROVIDER_BASE_FIELDS: dict[str, str] = {
+    "azure_devops_organization": "contoso",
+    "azure_devops_project": "Template Adoption",
+    "azure_devops_repository": "downstream-template",
+    "azure_boards_policy": "manual-follow-up",
+    "azure_repos_pr_template_policy": "materialize",
+    "azure_branch_policy_reviewer_guidance": "manual-follow-up",
+    "azure_security_intake_policy": "manual-follow-up",
+    "azure_security_product_enablement": "none",
+    "azure_dependency_update_policy": "manual-follow-up",
+}
 BASELINE_GITATTRIBUTES_LF_PIN_PATHS = (
     "example.ps1",
     "settings.psd1",
@@ -291,6 +306,18 @@ def prepare_template(
                     "name": "template-sync-support",
                     "description": "Template sync support files.",
                 },
+                {
+                    "name": "azure-devops-platform",
+                    "description": "Azure DevOps platform files.",
+                },
+                {
+                    "name": "azure-pipelines",
+                    "description": "Azure Pipelines files.",
+                },
+                {
+                    "name": "azure-devops-collaboration",
+                    "description": "Azure DevOps collaboration files.",
+                },
                 {"name": "python", "description": "Python files."},
                 {"name": "markdown", "description": "Markdown files."},
             ],
@@ -484,6 +511,7 @@ def materialize_module_fixture(
     target_root = tmp_path / "downstream"
     target_root.mkdir()
     marker_fields: dict[str, Any] = {}
+    marker_fields.update(azure_provider_fields_for_modules(included_modules))
     if authorize_protected_files:
         marker_fields["protected_file_decisions"] = protected_take_decisions_for_modules(
             included_modules
@@ -492,8 +520,15 @@ def materialize_module_fixture(
         target_root / "decisions.yml",
         marker_document(list(included_modules), **marker_fields),
     )
+    placeholder_args = azure_provider_cli_args_for_modules(included_modules)
 
-    result = run_materialize(REPO_ROOT, target_root, "--decisions-file", "decisions.yml")
+    result = run_materialize(
+        REPO_ROOT,
+        target_root,
+        "--decisions-file",
+        "decisions.yml",
+        *placeholder_args,
+    )
 
     assert result.returncode == 0, result.stdout + result.stderr
     return target_root
@@ -556,7 +591,11 @@ def materialize_downstream_pytest_fixture(tmp_path: Path) -> Path:
         for module_name in DOWNSTREAM_PYTEST_MODULES
         for argument in ("--included-module", module_name)
     ]
+    placeholder_args = azure_provider_cli_args_for_modules(DOWNSTREAM_PYTEST_MODULES)
 
+    # placeholder_args already supplies --repository and --security-contact for
+    # this fixture's module set (Azure modules resolve host_provider to "dual"),
+    # so they are not repeated here.
     result = run_materialize(
         REPO_ROOT,
         target_root,
@@ -564,11 +603,8 @@ def materialize_downstream_pytest_fixture(tmp_path: Path) -> Path:
         SOURCE_REPO,
         "--last-reviewed-template-commit",
         FULL_SHA,
-        "--repository",
-        "octocat/hello-world",
-        "--security-contact",
-        "security@example.com",
         *module_args,
+        *placeholder_args,
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
@@ -741,6 +777,34 @@ def marker_document(
     }
     template_sync.update(template_sync_fields)
     return {"template_sync": template_sync}
+
+
+def azure_provider_fields_for_modules(included_modules: tuple[str, ...]) -> dict[str, str]:
+    """Return marker-shaped Azure provider fields for retained Azure modules."""
+    module_set = set(included_modules)
+    if not module_set & AZURE_TEMPLATE_MODULES:
+        return {}
+    host_provider = "dual" if module_set & GITHUB_HOST_TEMPLATE_MODULES else "azure-devops-services"
+    return {"host_provider": host_provider, **AZURE_PROVIDER_BASE_FIELDS}
+
+
+def azure_provider_cli_args_for_modules(included_modules: tuple[str, ...]) -> tuple[str, ...]:
+    """Return CLI placeholder args needed by Azure-aware materialization fixtures."""
+    provider_fields = azure_provider_fields_for_modules(included_modules)
+    if not provider_fields:
+        return ()
+    args = [
+        "--host-provider",
+        provider_fields["host_provider"],
+        "--security-contact",
+        "security@example.com",
+    ]
+    if provider_fields["host_provider"] == "dual":
+        args.extend(["--repository", "octocat/hello-world"])
+    for field_name, value in AZURE_PROVIDER_BASE_FIELDS.items():
+        flag = "--" + field_name.replace("_", "-")
+        args.extend([flag, value])
+    return tuple(args)
 
 
 def test_materializer_help_documents_security_reporting_modes(
@@ -926,7 +990,12 @@ def test_same_path_license_preservation_still_uses_local_override_skip(
         ),
     )
 
-    result = run_materialize(template_root, target_root, "--decisions-file", "decisions.yml")
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--decisions-file",
+        "decisions.yml",
+    )
 
     assert result.returncode == 0, result.stderr
     assert read_file(target_root / "LICENSE") == "downstream license text\n"
@@ -2224,7 +2293,12 @@ def test_decisions_file_take_skip_and_cli_overlap_conflict(tmp_path: Path) -> No
         ),
     )
 
-    result = run_materialize(template_root, target_root, "--decisions-file", "decisions.yml")
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--decisions-file",
+        "decisions.yml",
+    )
 
     assert result.returncode == 0, result.stderr
     assert read_file(target_root / "README.md") == "template readme\n"
@@ -2275,7 +2349,12 @@ def test_recorded_deferral_exits_zero_and_marker_updates_then_stays_unchanged(
         ),
     )
 
-    result = run_materialize(template_root, target_root, "--decisions-file", "decisions.yml")
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--decisions-file",
+        "decisions.yml",
+    )
 
     assert result.returncode == 0, result.stderr
     assert "Recorded unresolved decisions remain:" in result.stdout
@@ -2594,6 +2673,91 @@ def test_placeholder_replacement_reuses_helper_and_missing_helper_fails(
 
     assert missing_result.returncode == 1
     assert "placeholder helper is unavailable" in missing_result.stderr
+
+
+@pytest.mark.upstream_template_only
+def test_materializer_replays_azure_provider_fields_from_marker(
+    tmp_path: Path,
+) -> None:
+    """Marker-recorded Azure provider fields drive placeholder materialization."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(
+        template_root,
+        [
+            {"pattern": "SECURITY.md", "requires_all": ["baseline"]},
+            {"pattern": "CONTRIBUTING.md", "requires_all": ["baseline"]},
+            {"pattern": "CODE_OF_CONDUCT.md", "requires_all": ["baseline"]},
+            {
+                "pattern": ".azuredevops/platform/**",
+                "requires_all": ["azure-devops-platform"],
+            },
+            {
+                "pattern": ".azuredevops/pull_request_template.md",
+                "requires_all": ["azure-devops-collaboration"],
+            },
+        ],
+        include_placeholder_helper=True,
+    )
+    copy_template_file(template_root, "SECURITY.md")
+    copy_template_file(template_root, "CONTRIBUTING.md")
+    copy_template_file(template_root, "CODE_OF_CONDUCT.md")
+    copy_template_file(template_root, ".azuredevops/platform/adoption-guidance.md")
+    copy_template_file(template_root, ".azuredevops/pull_request_template.md")
+    write_yaml(
+        target_root / "decisions.yml",
+        {
+            "template_sync": {
+                "source_repo": SOURCE_REPO,
+                "included_modules": [
+                    "baseline",
+                    "template-sync-support",
+                    "azure-devops-platform",
+                    "azure-devops-collaboration",
+                ],
+                "host_provider": "azure-devops-services",
+                "azure_devops_organization": "contoso",
+                "azure_devops_project": "Microsoft 365",
+                "azure_devops_repository": "downstream-template",
+                "azure_boards_policy": "work-items",
+                "azure_repos_pr_template_policy": "materialize",
+                "azure_branch_policy_reviewer_guidance": "manual-follow-up",
+                "azure_security_intake_policy": "manual-follow-up",
+                "azure_security_product_enablement": "github-secret-protection",
+                "azure_dependency_update_policy": "manual-follow-up",
+            }
+        },
+    )
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--decisions-file",
+        "decisions.yml",
+        "--security-contact",
+        "security@example.com",
+    )
+
+    assert result.returncode == 0, result.stderr
+    guidance_text = read_file(target_root / ".azuredevops" / "platform" / "adoption-guidance.md")
+    assert "https://dev.azure.com/contoso/Microsoft%20365" in guidance_text
+    assert "https://dev.azure.com/contoso/Microsoft%20365/_git/downstream-template" in guidance_text
+    assert "AZURE_DEVOPS_PROJECT_URL" not in guidance_text
+    security_text = read_file(target_root / "SECURITY.md")
+    assert "Azure DevOps Services project" in security_text
+    assert "private vulnerability reporting" not in security_text
+    contributing_text = read_file(target_root / "CONTRIBUTING.md")
+    assert "OWNER/REPO" not in contributing_text
+    assert "https://dev.azure.com/contoso/Microsoft%20365/_git/downstream-template" in (
+        contributing_text
+    )
+    marker = load_yaml(target_root / ".template-sync" / "marker.yml")
+    assert isinstance(marker, dict)
+    template_sync = marker["template_sync"]
+    assert template_sync["host_provider"] == "azure-devops-services"
+    assert template_sync["azure_devops_project"] == "Microsoft 365"
+    assert template_sync["azure_security_product_enablement"] == "github-secret-protection"
 
 
 @pytest.mark.parametrize(

@@ -26,6 +26,21 @@ template_sync:
     - triage
   discussions_policy: deferred-planned-render
   collaboration_policy_follow_up_status: GitHub Discussions enablement remains open in _TODO-repo-init.md.
+  host_provider: dual
+  azure_devops_organization: contoso
+  azure_devops_organization_url: https://dev.azure.com/contoso
+  azure_devops_project: Template Adoption
+  azure_devops_project_url: https://dev.azure.com/contoso/Template%20Adoption
+  azure_devops_repository: downstream-template
+  azure_devops_repository_url: https://dev.azure.com/contoso/Template%20Adoption/_git/downstream-template
+  azure_devops_clone_url: https://dev.azure.com/contoso/Template%20Adoption/_git/downstream-template
+  azure_devops_default_branch: main
+  azure_boards_policy: manual-follow-up
+  azure_repos_pr_template_policy: materialize
+  azure_branch_policy_reviewer_guidance: required-reviewers
+  azure_security_intake_policy: manual-follow-up
+  azure_security_product_enablement: github-advanced-security
+  azure_dependency_update_policy: renovate
   local_overrides:
     - path: README.md
       reason: Project-specific reader-facing documentation.

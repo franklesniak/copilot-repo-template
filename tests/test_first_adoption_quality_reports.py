@@ -386,6 +386,51 @@ def test_powershell_report_parses_injected_runner_output(
     assert "FIRST_ADOPTION_PS1_FILES_JSON" in captured_env
 
 
+def test_host_setup_report_distinguishes_azure_service_tasks(tmp_path: Path) -> None:
+    """Azure host setup reporting separates service tasks from file materialization."""
+    _write_text(
+        tmp_path,
+        ".template-sync/marker.yml",
+        (
+            "template_sync:\n"
+            "  source_repo: https://github.com/franklesniak/copilot-repo-template.git\n"
+            "  included_modules:\n"
+            "    - baseline\n"
+            "    - azure-devops-platform\n"
+            "  host_provider: azure-devops-services\n"
+            "  azure_boards_policy: work-items\n"
+            "  azure_repos_pr_template_policy: materialize\n"
+            "  azure_branch_policy_reviewer_guidance: manual-follow-up\n"
+            "  azure_security_intake_policy: manual-follow-up\n"
+            "  azure_security_product_enablement: github-advanced-security\n"
+            "  azure_dependency_update_policy: manual-follow-up\n"
+        ),
+    )
+    stdout = io.StringIO()
+
+    report = quality_reports.build_host_setup_report(tmp_path)
+    quality_reports.print_host_setup_report(report, stdout=stdout)
+
+    output = stdout.getvalue()
+    assert report.azure_modules_retained is True
+    assert "Azure DevOps Services service setup tasks" in output
+    assert "Azure Boards intake policy: work-items" in output
+    assert "not local file materialization failures" in output
+
+
+def test_load_marker_rejects_symlinked_marker(tmp_path: Path) -> None:
+    """A symlinked marker (even a broken one) is rejected, not treated as absent."""
+    marker_path = tmp_path / ".template-sync" / "marker.yml"
+    marker_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        marker_path.symlink_to(tmp_path / "nonexistent-target.yml")
+    except (OSError, NotImplementedError):
+        pytest.skip("Filesystem does not support symlink creation")
+
+    with pytest.raises(quality_reports.FirstAdoptionQualityError, match="Expected a regular file"):
+        quality_reports.load_marker_template_sync(tmp_path)
+
+
 def test_path_reference_cli_can_fail_on_findings(tmp_path: Path) -> None:
     """The CLI offers an explicit non-zero path-reference gate when selected."""
     _init_repo(tmp_path)

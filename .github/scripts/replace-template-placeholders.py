@@ -12,11 +12,13 @@ import importlib
 import json
 import os
 import re
+import shlex
 import sys
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -57,6 +59,89 @@ DISCUSSIONS_POLICIES = (
 ISSUE_LABEL_FOLLOW_UP_POLICIES = frozenset({"create-manual-follow-up"})
 DISCUSSIONS_FOLLOW_UP_POLICIES = frozenset({"deferred-planned-render", "deferred-not-rendered"})
 DEFAULT_ISSUE_LABELS = ("bug", "triage")
+HOST_PROVIDERS = (
+    "github",
+    "github-enterprise-server",
+    "azure-devops-services",
+    "dual",
+)
+GITHUB_HOST_PROVIDERS = frozenset({"github", "github-enterprise-server", "dual"})
+AZURE_DEVOPS_HOST_PROVIDERS = frozenset({"azure-devops-services", "dual"})
+AZURE_DEVOPS_URL_TOKEN_PATHS = (
+    ".azuredevops/platform/adoption-guidance.md",
+    ".azuredevops/pull_request_template.md",
+)
+AZURE_DEVOPS_TOKEN_REPLACEMENT_SPECS = (
+    ("azure devops organization", "AZURE_DEVOPS_ORGANIZATION", "organization"),
+    ("azure devops organization url", "AZURE_DEVOPS_ORGANIZATION_URL", "organization_url"),
+    ("azure devops project", "AZURE_DEVOPS_PROJECT", "project"),
+    ("azure devops project url", "AZURE_DEVOPS_PROJECT_URL", "project_url"),
+    ("azure devops repository", "AZURE_DEVOPS_REPOSITORY", "repository"),
+    (
+        "azure devops repository url",
+        "AZURE_DEVOPS_REPOSITORY_WEB_URL",
+        "repository_web_url",
+    ),
+    ("azure devops clone url", "AZURE_DEVOPS_CLONE_URL", "clone_url"),
+    ("azure devops default branch", "AZURE_DEVOPS_DEFAULT_BRANCH", "default_branch"),
+    ("azure boards policy", "AZURE_BOARDS_INTAKE_POLICY", "boards_policy"),
+    (
+        "azure repos pr template policy",
+        "AZURE_REPOS_PR_TEMPLATE_POLICY",
+        "pr_template_policy",
+    ),
+    (
+        "azure branch policy reviewer guidance",
+        "AZURE_BRANCH_POLICY_REVIEWER_GUIDANCE",
+        "branch_policy_reviewer_guidance",
+    ),
+    (
+        "azure security intake policy",
+        "AZURE_SECURITY_INTAKE_POLICY",
+        "security_intake_policy",
+    ),
+    (
+        "azure security product enablement",
+        "AZURE_SECURITY_PRODUCT_ENABLEMENT",
+        "security_product_enablement",
+    ),
+    (
+        "azure dependency update policy",
+        "AZURE_DEPENDENCY_UPDATE_POLICY",
+        "dependency_update_policy",
+    ),
+)
+AZURE_DEVOPS_BOARDS_POLICIES = ("work-items", "disabled", "manual-follow-up")
+AZURE_DEVOPS_PR_TEMPLATE_POLICIES = ("materialize", "disabled", "manual-follow-up")
+AZURE_DEVOPS_BRANCH_POLICY_POLICIES = ("required-reviewers", "manual-follow-up", "none")
+AZURE_DEVOPS_SECURITY_INTAKE_POLICIES = ("security-contact", "external-process", "manual-follow-up")
+AZURE_DEVOPS_SECURITY_PRODUCT_POLICIES = (
+    "none",
+    "github-advanced-security",
+    "github-secret-protection",
+    "github-code-security",
+    "github-secret-protection-and-code-security",
+)
+AZURE_DEVOPS_DEPENDENCY_UPDATE_POLICIES = ("none", "renovate", "manual-follow-up")
+AZURE_DEVOPS_ARGS_FILE_FIELDS = frozenset(
+    {
+        "host_provider",
+        "azure_devops_organization",
+        "azure_devops_organization_url",
+        "azure_devops_project",
+        "azure_devops_project_url",
+        "azure_devops_repository",
+        "azure_devops_repository_url",
+        "azure_devops_clone_url",
+        "azure_devops_default_branch",
+        "azure_boards_policy",
+        "azure_repos_pr_template_policy",
+        "azure_branch_policy_reviewer_guidance",
+        "azure_security_intake_policy",
+        "azure_security_product_enablement",
+        "azure_dependency_update_policy",
+    }
+)
 ARGS_FILE_FORMATS = ("json", "yaml")
 ARGS_FILE_EXTENSION_FORMATS = {
     ".json": "json",
@@ -90,56 +175,63 @@ TOKEN_REPLACEMENT_SPECS = (
         "vscode_title",
     ),
 )
-REPLACE_ARGS_FILE_FIELDS = frozenset(
-    {
-        "repo_root",
-        "repository",
-        "github_host",
-        "codeowners_owner",
-        "conduct_contact",
-        "conduct_contact_sentence",
-        "security_contact",
-        "security_contact_section",
-        "security_reporting_mode",
-        "issue_label_policy",
-        "issue_labels",
-        "discussions_policy",
-        "collaboration_policy_follow_up_status",
-        "vscode_title",
-        "package_name",
-        "package_description",
-        "package_author",
-        "package_version",
-        "package_keywords",
-        "dry_run",
-    }
+REPLACE_ARGS_FILE_FIELDS = (
+    frozenset(
+        {
+            "repo_root",
+            "repository",
+            "github_host",
+            "codeowners_owner",
+            "conduct_contact",
+            "conduct_contact_sentence",
+            "security_contact",
+            "security_contact_section",
+            "security_reporting_mode",
+            "issue_label_policy",
+            "issue_labels",
+            "discussions_policy",
+            "collaboration_policy_follow_up_status",
+            "vscode_title",
+            "package_name",
+            "package_description",
+            "package_author",
+            "package_version",
+            "package_keywords",
+            "dry_run",
+        }
+    )
+    | AZURE_DEVOPS_ARGS_FILE_FIELDS
 )
 SCAN_ARGS_FILE_FIELDS = frozenset({"repo_root", "repository"})
-STRING_ARGS_FILE_FIELDS = frozenset(
-    {
-        "repo_root",
-        "repository",
-        "github_host",
-        "codeowners_owner",
-        "conduct_contact",
-        "conduct_contact_sentence",
-        "security_contact",
-        "security_contact_section",
-        "security_reporting_mode",
-        "issue_label_policy",
-        "discussions_policy",
-        "collaboration_policy_follow_up_status",
-        "vscode_title",
-        "package_name",
-        "package_description",
-        "package_author",
-        "package_version",
-    }
+STRING_ARGS_FILE_FIELDS = (
+    frozenset(
+        {
+            "repo_root",
+            "repository",
+            "github_host",
+            "codeowners_owner",
+            "conduct_contact",
+            "conduct_contact_sentence",
+            "security_contact",
+            "security_contact_section",
+            "security_reporting_mode",
+            "issue_label_policy",
+            "discussions_policy",
+            "collaboration_policy_follow_up_status",
+            "vscode_title",
+            "package_name",
+            "package_description",
+            "package_author",
+            "package_version",
+        }
+    )
+    | AZURE_DEVOPS_ARGS_FILE_FIELDS
 )
 LIST_STRING_ARGS_FILE_FIELDS = frozenset({"issue_labels", "package_keywords"})
 BOOLEAN_ARGS_FILE_FIELDS = frozenset({"dry_run"})
 REPLACE_CLI_FLAGS = {
     "repo_root": ("--repo-root",),
+    "host_provider": ("--host-provider",),
     "repository": ("--repository",),
     "github_host": ("--github-host",),
     "codeowners_owner": ("--codeowners-owner",),
@@ -159,6 +251,20 @@ REPLACE_CLI_FLAGS = {
     "package_version": ("--package-version",),
     "package_keywords": ("--package-keyword",),
     "dry_run": ("--dry-run",),
+    "azure_devops_organization": ("--azure-devops-organization",),
+    "azure_devops_organization_url": ("--azure-devops-organization-url",),
+    "azure_devops_project": ("--azure-devops-project",),
+    "azure_devops_project_url": ("--azure-devops-project-url",),
+    "azure_devops_repository": ("--azure-devops-repository",),
+    "azure_devops_repository_url": ("--azure-devops-repository-url",),
+    "azure_devops_clone_url": ("--azure-devops-clone-url",),
+    "azure_devops_default_branch": ("--azure-devops-default-branch",),
+    "azure_boards_policy": ("--azure-boards-policy",),
+    "azure_repos_pr_template_policy": ("--azure-repos-pr-template-policy",),
+    "azure_branch_policy_reviewer_guidance": ("--azure-branch-policy-reviewer-guidance",),
+    "azure_security_intake_policy": ("--azure-security-intake-policy",),
+    "azure_security_product_enablement": ("--azure-security-product-enablement",),
+    "azure_dependency_update_policy": ("--azure-dependency-update-policy",),
 }
 SCAN_CLI_FLAGS = {
     "repo_root": ("--repo-root",),
@@ -181,6 +287,7 @@ REPOSITORY_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 HOST_PATTERN = re.compile(r"^[A-Za-z0-9.-]+(?::[0-9]+)?$")
 OWNER_REPO_NON_PATH_SEGMENT_PATTERN = re.compile(r"(?<!/)OWNER/REPO(?![A-Za-z0-9_-])")
 URL_BOUNDARY_PATTERN = r"(?=$|[^A-Za-z0-9._~:/?#@!$&'*+,;=%-])"
+INVALID_PERCENT_ENCODING_PATTERN = re.compile(r"%(?![0-9A-Fa-f]{2})")
 
 
 class PlaceholderError(RuntimeError):
@@ -188,11 +295,33 @@ class PlaceholderError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class AzureDevOpsContext:
+    """Concrete Azure DevOps Services values used during substitution."""
+
+    organization: str
+    organization_url: str
+    project: str
+    project_url: str
+    repository: str
+    repository_web_url: str
+    clone_url: str
+    default_branch: str
+    boards_policy: str
+    pr_template_policy: str
+    branch_policy_reviewer_guidance: str
+    security_intake_policy: str
+    security_product_enablement: str
+    dependency_update_policy: str
+
+
+@dataclass(frozen=True)
 class ReplacementContext:
     """Concrete downstream values used during placeholder substitution."""
 
+    host_provider: str
     repository: str | None
     github_host: str
+    azure_devops: AzureDevOpsContext | None
     codeowners_owner: str | None
     conduct_contact: str | None
     conduct_contact_sentence: str | None
@@ -249,6 +378,11 @@ class ReplacementContext:
     def has_collaboration_policy(self) -> bool:
         """Return whether issue/PR collaboration policy rendering was requested."""
         return self.issue_label_policy is not None or self.discussions_policy is not None
+
+    @property
+    def uses_github_surfaces(self) -> bool:
+        """Return whether GitHub-specific repository surfaces are in scope."""
+        return self.host_provider in GITHUB_HOST_PROVIDERS
 
 
 @dataclass(frozen=True)
@@ -339,6 +473,443 @@ def validate_optional_non_empty(value: str | None, field_name: str) -> str | Non
     if value is None:
         return None
     return validate_non_empty(value, field_name)
+
+
+def validate_single_line_non_empty(value: str, field_name: str) -> str:
+    """Validate a required non-empty CLI value that must fit on one line."""
+    validated = validate_non_empty(value, field_name)
+    if "\n" in validated or "\r" in validated:
+        raise PlaceholderError(f"{field_name} must be a single-line value.")
+    return validated
+
+
+def validate_choice(value: str, field_name: str, choices: Sequence[str]) -> str:
+    """Validate a CLI enum value against an explicit list of choices."""
+    if value not in choices:
+        quoted_choices = ", ".join(choices)
+        raise PlaceholderError(f"{field_name} must be one of: {quoted_choices}.")
+    return value
+
+
+def validate_host_provider(host_provider: str) -> str:
+    """Validate a host-provider mode name."""
+    return validate_choice(host_provider, "--host-provider", HOST_PROVIDERS)
+
+
+def validate_azure_devops_segment(value: str, field_name: str) -> str:
+    """Validate an Azure DevOps path segment before URL generation."""
+    validated = validate_single_line_non_empty(value, field_name)
+    if validated != validated.strip():
+        raise PlaceholderError(f"{field_name} must not include leading or trailing whitespace.")
+    if "/" in validated or "\\" in validated:
+        raise PlaceholderError(f"{field_name} must be one Azure DevOps path segment.")
+    if any(ord(character) < 32 for character in validated):
+        raise PlaceholderError(f"{field_name} must not contain control characters.")
+    return validated
+
+
+def quote_azure_devops_segment(value: str) -> str:
+    """Percent-encode one Azure DevOps URL path segment."""
+    return quote(value, safe="")
+
+
+def validate_azure_devops_url(raw_url: str, field_name: str) -> Any:
+    """Parse and validate a credential-free Azure DevOps Services URL."""
+    url = validate_single_line_non_empty(raw_url, field_name)
+    if re.search(r"\s", url):
+        raise PlaceholderError(
+            f"{field_name} must not contain whitespace; percent-encode spaces as %20."
+        )
+    if INVALID_PERCENT_ENCODING_PATTERN.search(url):
+        raise PlaceholderError(f"{field_name} contains malformed percent encoding.")
+    parts = urlsplit(url)
+    if parts.scheme.lower() != "https":
+        raise PlaceholderError(f"{field_name} must use https.")
+    if not parts.netloc or parts.hostname is None:
+        raise PlaceholderError(f"{field_name} must include a host.")
+    try:
+        _port = parts.port
+    except ValueError as error:
+        raise PlaceholderError(f"{field_name} contains an invalid port.") from error
+    if parts.username is not None or parts.password is not None or "@" in parts.netloc:
+        raise PlaceholderError(f"{field_name} must not contain embedded credentials.")
+    if parts.query or parts.fragment:
+        raise PlaceholderError(f"{field_name} must not include a query string or fragment.")
+    return parts
+
+
+def azure_devops_host_kind(parts: Any, field_name: str) -> str:
+    """Return the recognized Azure DevOps Services host shape."""
+    hostname = parts.hostname.lower()
+    if hostname == "dev.azure.com":
+        return "dev.azure.com"
+    if hostname.endswith(".visualstudio.com") and hostname != "visualstudio.com":
+        return "visualstudio.com"
+    raise PlaceholderError(
+        f"{field_name} must use https://dev.azure.com/<organization> or "
+        "https://<organization>.visualstudio.com."
+    )
+
+
+def azure_devops_path_segments(parts: Any, field_name: str) -> tuple[str, ...]:
+    """Return decoded Azure DevOps URL path segments after structural validation."""
+    path = parts.path.strip("/")
+    if not path:
+        return ()
+    segments = tuple(path.split("/"))
+    if any(segment == "" for segment in segments):
+        raise PlaceholderError(f"{field_name} must not include empty path segments.")
+    return tuple(unquote(segment) for segment in segments)
+
+
+def normalize_azure_devops_url(parts: Any) -> str:
+    """Return an Azure DevOps URL without query, fragment, or trailing slash."""
+    normalized_path = parts.path.rstrip("/")
+    return urlunsplit(("https", parts.netloc, normalized_path, "", ""))
+
+
+def validate_azure_devops_organization_url(raw_url: str, organization: str) -> str:
+    """Validate an Azure DevOps Services organization URL."""
+    parts = validate_azure_devops_url(raw_url, "--azure-devops-organization-url")
+    host_kind = azure_devops_host_kind(parts, "--azure-devops-organization-url")
+    segments = azure_devops_path_segments(parts, "--azure-devops-organization-url")
+    if host_kind == "dev.azure.com":
+        if len(segments) != 1 or segments[0].casefold() != organization.casefold():
+            raise PlaceholderError(
+                "--azure-devops-organization-url must use the selected organization "
+                "as its only path segment."
+            )
+    else:
+        account_name = parts.hostname[: -len(".visualstudio.com")]
+        if segments or account_name.casefold() != organization.casefold():
+            raise PlaceholderError(
+                "--azure-devops-organization-url must use the selected organization "
+                "as the visualstudio.com account name and must not include a path."
+            )
+    return normalize_azure_devops_url(parts)
+
+
+def validate_azure_devops_project_url(
+    raw_url: str,
+    *,
+    organization: str,
+    project: str,
+) -> str:
+    """Validate an Azure DevOps Services project URL override."""
+    parts = validate_azure_devops_url(raw_url, "--azure-devops-project-url")
+    host_kind = azure_devops_host_kind(parts, "--azure-devops-project-url")
+    segments = azure_devops_path_segments(parts, "--azure-devops-project-url")
+    if host_kind == "dev.azure.com":
+        if len(segments) != 2 or (
+            segments[0].casefold() != organization.casefold() or segments[1] != project
+        ):
+            raise PlaceholderError(
+                "--azure-devops-project-url must use the selected organization and project path."
+            )
+    else:
+        account_name = parts.hostname[: -len(".visualstudio.com")]
+        if (
+            len(segments) != 1
+            or account_name.casefold() != organization.casefold()
+            or segments[0] != project
+        ):
+            raise PlaceholderError(
+                "--azure-devops-project-url must use the selected organization "
+                "account and project path."
+            )
+    return normalize_azure_devops_url(parts)
+
+
+def validate_azure_devops_repository_url(
+    raw_url: str,
+    *,
+    organization: str,
+    project: str,
+    repository: str,
+    field_name: str,
+) -> str:
+    """Validate an Azure Repos repository or clone URL override."""
+    parts = validate_azure_devops_url(raw_url, field_name)
+    host_kind = azure_devops_host_kind(parts, field_name)
+    segments = azure_devops_path_segments(parts, field_name)
+    if host_kind == "dev.azure.com":
+        expected = (organization, project, "_git", repository)
+        if len(segments) != 4 or (
+            segments[0].casefold() != expected[0].casefold() or segments[1:] != expected[1:]
+        ):
+            raise PlaceholderError(
+                f"{field_name} must use the selected organization, project, "
+                "and repository under /_git/."
+            )
+    else:
+        account_name = parts.hostname[: -len(".visualstudio.com")]
+        if (
+            len(segments) != 3
+            or account_name.casefold() != organization.casefold()
+            or segments != (project, "_git", repository)
+        ):
+            raise PlaceholderError(
+                f"{field_name} must use the selected organization account, project, "
+                "and repository under /_git/."
+            )
+    return normalize_azure_devops_url(parts)
+
+
+def build_azure_devops_url(base_url: str, *segments: str) -> str:
+    """Build an Azure DevOps Services URL from a validated base and path segments."""
+    encoded_segments = "/".join(quote_azure_devops_segment(segment) for segment in segments)
+    return f"{base_url.rstrip('/')}/{encoded_segments}"
+
+
+def validate_azure_policy(
+    value: str | None,
+    *,
+    field_name: str,
+    default: str,
+    choices: Sequence[str],
+) -> str:
+    """Validate or default one Azure DevOps policy selector."""
+    return default if value is None else validate_choice(value, field_name, choices)
+
+
+def azure_devops_inputs_supplied(values: dict[str, str | None]) -> bool:
+    """Return whether any Azure DevOps provider value was supplied."""
+    return any(value is not None for value in values.values())
+
+
+def github_only_inputs_supplied(
+    *,
+    repository: str | None,
+    github_host: str,
+    codeowners_owner: str | None,
+    issue_label_policy: str | None,
+    issue_labels: Sequence[str] | None,
+    discussions_policy: str | None,
+) -> bool:
+    """Return whether GitHub-specific replacement inputs were supplied."""
+    return (
+        repository is not None
+        or github_host != "github.com"
+        or codeowners_owner is not None
+        or issue_label_policy is not None
+        or issue_labels is not None
+        or discussions_policy is not None
+    )
+
+
+def resolve_host_provider(
+    host_provider: str | None,
+    *,
+    azure_inputs: dict[str, str | None],
+    repository: str | None,
+    github_host: str,
+    codeowners_owner: str | None,
+    issue_label_policy: str | None,
+    issue_labels: Sequence[str] | None,
+    discussions_policy: str | None,
+) -> str:
+    """Resolve the host-provider mode while preserving backward compatibility."""
+    if host_provider is not None:
+        return validate_host_provider(host_provider)
+    if azure_devops_inputs_supplied(azure_inputs):
+        if github_only_inputs_supplied(
+            repository=repository,
+            github_host=github_host,
+            codeowners_owner=codeowners_owner,
+            issue_label_policy=issue_label_policy,
+            issue_labels=issue_labels,
+            discussions_policy=discussions_policy,
+        ):
+            raise PlaceholderError(
+                "Azure DevOps and GitHub-specific inputs were both supplied; "
+                "set --host-provider dual when both hosts are intentional."
+            )
+        return "azure-devops-services"
+    return "github"
+
+
+def validate_provider_inputs(
+    *,
+    host_provider: str,
+    azure_inputs: dict[str, str | None],
+    repository: str | None,
+    github_host: str,
+    codeowners_owner: str | None,
+    issue_label_policy: str | None,
+    issue_labels: Sequence[str] | None,
+    discussions_policy: str | None,
+    security_reporting_mode: str | None,
+) -> None:
+    """Reject host-provider combinations that would render incompatible surfaces."""
+    if host_provider in {"github", "github-enterprise-server"} and azure_devops_inputs_supplied(
+        azure_inputs
+    ):
+        raise PlaceholderError(
+            "Azure DevOps provider fields require --host-provider azure-devops-services "
+            "or --host-provider dual."
+        )
+    if host_provider == "dual" and repository is None:
+        raise PlaceholderError("--host-provider dual requires --repository for GitHub surfaces.")
+    if host_provider != "azure-devops-services":
+        return
+
+    incompatible_inputs: list[str] = []
+    if repository is not None:
+        incompatible_inputs.append("--repository")
+    if github_host != "github.com":
+        incompatible_inputs.append("--github-host")
+    if codeowners_owner is not None:
+        incompatible_inputs.append("--codeowners-owner")
+    if issue_label_policy is not None or issue_labels is not None:
+        incompatible_inputs.append("--issue-label-policy/--issue-label")
+    if discussions_policy is not None:
+        incompatible_inputs.append("--discussions-policy")
+    if security_reporting_mode is not None:
+        # SECURITY.md rendering for Azure-only adoptions is driven by
+        # --azure-security-intake-policy/--security-contact, so any
+        # --security-reporting-mode value (including contact-only) is a no-op here.
+        incompatible_inputs.append("--security-reporting-mode")
+    if incompatible_inputs:
+        raise PlaceholderError(
+            "--host-provider azure-devops-services cannot be combined with "
+            "GitHub-specific inputs: "
+            + ", ".join(incompatible_inputs)
+            + ". Use --host-provider dual when both hosts are intentional."
+        )
+
+
+def build_azure_devops_context(
+    *,
+    host_provider: str,
+    azure_devops_organization: str | None,
+    azure_devops_organization_url: str | None,
+    azure_devops_project: str | None,
+    azure_devops_project_url: str | None,
+    azure_devops_repository: str | None,
+    azure_devops_repository_url: str | None,
+    azure_devops_clone_url: str | None,
+    azure_devops_default_branch: str | None,
+    azure_boards_policy: str | None,
+    azure_repos_pr_template_policy: str | None,
+    azure_branch_policy_reviewer_guidance: str | None,
+    azure_security_intake_policy: str | None,
+    azure_security_product_enablement: str | None,
+    azure_dependency_update_policy: str | None,
+    security_contact: str | None,
+    security_contact_section: str | None,
+) -> AzureDevOpsContext | None:
+    """Build validated Azure DevOps Services context when the provider requires it."""
+    if host_provider not in AZURE_DEVOPS_HOST_PROVIDERS:
+        return None
+    if azure_devops_organization is None:
+        raise PlaceholderError(
+            "--azure-devops-organization is required for Azure DevOps Services adoption."
+        )
+    if azure_devops_project is None:
+        raise PlaceholderError("--azure-devops-project is required for Azure DevOps adoption.")
+    if azure_devops_repository is None:
+        raise PlaceholderError("--azure-devops-repository is required for Azure Repos adoption.")
+
+    organization = validate_azure_devops_segment(
+        azure_devops_organization,
+        "--azure-devops-organization",
+    )
+    project = validate_azure_devops_segment(azure_devops_project, "--azure-devops-project")
+    repository = validate_azure_devops_segment(
+        azure_devops_repository,
+        "--azure-devops-repository",
+    )
+    organization_url = (
+        validate_azure_devops_organization_url(azure_devops_organization_url, organization)
+        if azure_devops_organization_url is not None
+        else build_azure_devops_url("https://dev.azure.com", organization)
+    )
+    project_url = (
+        validate_azure_devops_project_url(
+            azure_devops_project_url,
+            organization=organization,
+            project=project,
+        )
+        if azure_devops_project_url is not None
+        else build_azure_devops_url(organization_url, project)
+    )
+    repository_web_url = (
+        validate_azure_devops_repository_url(
+            azure_devops_repository_url,
+            organization=organization,
+            project=project,
+            repository=repository,
+            field_name="--azure-devops-repository-url",
+        )
+        if azure_devops_repository_url is not None
+        else build_azure_devops_url(organization_url, project, "_git", repository)
+    )
+    clone_url = (
+        validate_azure_devops_repository_url(
+            azure_devops_clone_url,
+            organization=organization,
+            project=project,
+            repository=repository,
+            field_name="--azure-devops-clone-url",
+        )
+        if azure_devops_clone_url is not None
+        else repository_web_url
+    )
+    security_intake_default = (
+        "security-contact"
+        if security_contact is not None or security_contact_section is not None
+        else "manual-follow-up"
+    )
+    security_intake_policy_value = validate_azure_policy(
+        azure_security_intake_policy,
+        field_name="--azure-security-intake-policy",
+        default=security_intake_default,
+        choices=AZURE_DEVOPS_SECURITY_INTAKE_POLICIES,
+    )
+    return AzureDevOpsContext(
+        organization=organization,
+        organization_url=organization_url,
+        project=project,
+        project_url=project_url,
+        repository=repository,
+        repository_web_url=repository_web_url,
+        clone_url=clone_url,
+        default_branch=validate_single_line_non_empty(
+            azure_devops_default_branch or "main",
+            "--azure-devops-default-branch",
+        ),
+        boards_policy=validate_azure_policy(
+            azure_boards_policy,
+            field_name="--azure-boards-policy",
+            default="manual-follow-up",
+            choices=AZURE_DEVOPS_BOARDS_POLICIES,
+        ),
+        pr_template_policy=validate_azure_policy(
+            azure_repos_pr_template_policy,
+            field_name="--azure-repos-pr-template-policy",
+            default="materialize",
+            choices=AZURE_DEVOPS_PR_TEMPLATE_POLICIES,
+        ),
+        branch_policy_reviewer_guidance=validate_azure_policy(
+            azure_branch_policy_reviewer_guidance,
+            field_name="--azure-branch-policy-reviewer-guidance",
+            default="manual-follow-up",
+            choices=AZURE_DEVOPS_BRANCH_POLICY_POLICIES,
+        ),
+        security_intake_policy=security_intake_policy_value,
+        security_product_enablement=validate_azure_policy(
+            azure_security_product_enablement,
+            field_name="--azure-security-product-enablement",
+            default="none",
+            choices=AZURE_DEVOPS_SECURITY_PRODUCT_POLICIES,
+        ),
+        dependency_update_policy=validate_azure_policy(
+            azure_dependency_update_policy,
+            field_name="--azure-dependency-update-policy",
+            default="none",
+            choices=AZURE_DEVOPS_DEPENDENCY_UPDATE_POLICIES,
+        ),
+    )
 
 
 def validate_package_keywords(package_keywords: Sequence[str] | None) -> tuple[str, ...] | None:
@@ -532,8 +1103,23 @@ def replace_url_pattern(placeholder: str, replacement: str) -> Callable[[str], t
 
 
 def build_replacement_context(
+    host_provider: str | None = None,
     repository: str | None = None,
     github_host: str = "github.com",
+    azure_devops_organization: str | None = None,
+    azure_devops_organization_url: str | None = None,
+    azure_devops_project: str | None = None,
+    azure_devops_project_url: str | None = None,
+    azure_devops_repository: str | None = None,
+    azure_devops_repository_url: str | None = None,
+    azure_devops_clone_url: str | None = None,
+    azure_devops_default_branch: str | None = None,
+    azure_boards_policy: str | None = None,
+    azure_repos_pr_template_policy: str | None = None,
+    azure_branch_policy_reviewer_guidance: str | None = None,
+    azure_security_intake_policy: str | None = None,
+    azure_security_product_enablement: str | None = None,
+    azure_dependency_update_policy: str | None = None,
     codeowners_owner: str | None = None,
     conduct_contact: str | None = None,
     conduct_contact_sentence: str | None = None,
@@ -556,6 +1142,43 @@ def build_replacement_context(
     repo: str | None = None
     if repository is not None:
         owner, repo = parse_repository(repository)
+    azure_inputs = {
+        "azure_devops_organization": azure_devops_organization,
+        "azure_devops_organization_url": azure_devops_organization_url,
+        "azure_devops_project": azure_devops_project,
+        "azure_devops_project_url": azure_devops_project_url,
+        "azure_devops_repository": azure_devops_repository,
+        "azure_devops_repository_url": azure_devops_repository_url,
+        "azure_devops_clone_url": azure_devops_clone_url,
+        "azure_devops_default_branch": azure_devops_default_branch,
+        "azure_boards_policy": azure_boards_policy,
+        "azure_repos_pr_template_policy": azure_repos_pr_template_policy,
+        "azure_branch_policy_reviewer_guidance": azure_branch_policy_reviewer_guidance,
+        "azure_security_intake_policy": azure_security_intake_policy,
+        "azure_security_product_enablement": azure_security_product_enablement,
+        "azure_dependency_update_policy": azure_dependency_update_policy,
+    }
+    resolved_host_provider = resolve_host_provider(
+        host_provider,
+        azure_inputs=azure_inputs,
+        repository=repository,
+        github_host=github_host,
+        codeowners_owner=codeowners_owner,
+        issue_label_policy=issue_label_policy,
+        issue_labels=issue_labels,
+        discussions_policy=discussions_policy,
+    )
+    validate_provider_inputs(
+        host_provider=resolved_host_provider,
+        azure_inputs=azure_inputs,
+        repository=repository,
+        github_host=github_host,
+        codeowners_owner=codeowners_owner,
+        issue_label_policy=issue_label_policy,
+        issue_labels=issue_labels,
+        discussions_policy=discussions_policy,
+        security_reporting_mode=security_reporting_mode,
+    )
     validated_security_contact = (
         validate_non_empty(security_contact, "--security-contact")
         if security_contact is not None
@@ -564,6 +1187,25 @@ def build_replacement_context(
     validated_security_contact_section = validate_optional_non_empty(
         security_contact_section,
         "--security-contact-section",
+    )
+    azure_context = build_azure_devops_context(
+        host_provider=resolved_host_provider,
+        azure_devops_organization=azure_devops_organization,
+        azure_devops_organization_url=azure_devops_organization_url,
+        azure_devops_project=azure_devops_project,
+        azure_devops_project_url=azure_devops_project_url,
+        azure_devops_repository=azure_devops_repository,
+        azure_devops_repository_url=azure_devops_repository_url,
+        azure_devops_clone_url=azure_devops_clone_url,
+        azure_devops_default_branch=azure_devops_default_branch,
+        azure_boards_policy=azure_boards_policy,
+        azure_repos_pr_template_policy=azure_repos_pr_template_policy,
+        azure_branch_policy_reviewer_guidance=azure_branch_policy_reviewer_guidance,
+        azure_security_intake_policy=azure_security_intake_policy,
+        azure_security_product_enablement=azure_security_product_enablement,
+        azure_dependency_update_policy=azure_dependency_update_policy,
+        security_contact=validated_security_contact,
+        security_contact_section=validated_security_contact_section,
     )
     require_security_decision = repository is not None
     resolved_security_reporting_mode = resolve_security_reporting_mode(
@@ -574,15 +1216,16 @@ def build_replacement_context(
     )
     if not require_security_decision and security_reporting_mode is None:
         if validated_security_contact is not None or validated_security_contact_section is not None:
-            raise PlaceholderError(
-                "--security-contact and --security-contact-section configure the "
-                "SECURITY.md reporting section, which is only rendered when a "
-                "reporting mode is selected. Supply --repository, or set "
-                "--security-reporting-mode explicitly (for example, "
-                "--security-reporting-mode contact-only), so the override is "
-                "applied instead of silently ignored; use --conduct-contact to set "
-                "the Code of Conduct contact independently."
-            )
+            if azure_context is None:
+                raise PlaceholderError(
+                    "--security-contact and --security-contact-section configure the "
+                    "SECURITY.md reporting section, which is only rendered when a "
+                    "reporting mode is selected. Supply --repository, or set "
+                    "--security-reporting-mode explicitly (for example, "
+                    "--security-reporting-mode contact-only), so the override is "
+                    "applied instead of silently ignored; use --conduct-contact to set "
+                    "the Code of Conduct contact independently."
+                )
         resolved_security_reporting_mode = None
     if (
         resolved_security_reporting_mode in SECURITY_CONTACT_REQUIRED_MODES
@@ -616,8 +1259,10 @@ def build_replacement_context(
         "--conduct-contact-sentence",
     )
     return ReplacementContext(
+        host_provider=resolved_host_provider,
         repository=repository,
         github_host=validate_github_host(github_host),
+        azure_devops=azure_context,
         codeowners_owner=(
             validate_codeowners_owner(codeowners_owner)
             if codeowners_owner is not None
@@ -648,8 +1293,153 @@ def build_replacement_context(
     )
 
 
+def azure_security_contact_section(context: ReplacementContext, *, default_heading: str) -> str:
+    """Return an Azure-oriented SECURITY.md private contact section."""
+    if context.security_contact_section is not None:
+        return context.security_contact_section.rstrip("\n") + "\n"
+    if context.security_contact is not None:
+        return (
+            f"{default_heading}\n\n"
+            "Contact the maintainers directly at:\n\n"
+            f"- Contact: {context.security_contact}\n"
+        )
+    return (
+        f"{default_heading}\n\n"
+        "Maintainers must publish the private security intake route before relying on "
+        "this policy.\n"
+    )
+
+
+def azure_security_product_note(azure_context: AzureDevOpsContext) -> str:
+    """Return optional Azure DevOps Services security-product setup guidance."""
+    notes = {
+        "none": "",
+        "github-advanced-security": (
+            "Maintainers should enable and review GitHub Advanced Security for "
+            "Azure DevOps Services before treating service-side scanning as complete."
+        ),
+        "github-secret-protection": (
+            "Maintainers should enable and review GitHub Secret Protection for the "
+            "Azure Repos project before treating secret scanning as complete."
+        ),
+        "github-code-security": (
+            "Maintainers should enable and review GitHub Code Security for the Azure "
+            "Repos project before treating code scanning as complete."
+        ),
+        "github-secret-protection-and-code-security": (
+            "Maintainers should enable and review GitHub Secret Protection and GitHub "
+            "Code Security for the Azure Repos project before treating security "
+            "scanning as complete."
+        ),
+    }
+    note = notes[azure_context.security_product_enablement]
+    return f"\n{note}\n" if note else ""
+
+
+def build_azure_devops_security_reporting_section(context: ReplacementContext) -> str:
+    """Build SECURITY.md reporting guidance for Azure DevOps Services adoption."""
+    assert context.azure_devops is not None
+    azure_context = context.azure_devops
+    if azure_context.security_intake_policy == "security-contact":
+        intake_text = (
+            "Report vulnerabilities privately using the security contact below.\n\n"
+            f"{azure_security_contact_section(context, default_heading='### Security Contact')}"
+        )
+    elif azure_context.security_intake_policy == "external-process":
+        intake_text = (
+            "Report vulnerabilities through the maintainers' private external "
+            "security intake process. Do not create public Azure Boards work items, "
+            "pull request comments, or discussion posts for vulnerabilities.\n"
+        )
+    elif azure_context.security_intake_policy == "manual-follow-up":
+        intake_text = (
+            "> **Maintainers:** Finalize the private security intake route before "
+            "publishing this repository for broad use. Until that route is ready, "
+            "treat vulnerability intake as a first-adoption service setup task.\n"
+        )
+    else:
+        raise AssertionError(
+            f"Unhandled Azure security intake policy: {azure_context.security_intake_policy}"
+        )
+    return (
+        f"## Reporting a Vulnerability\n\n"
+        f"**Please do NOT report security vulnerabilities through public Azure Boards "
+        f"work items, Azure Repos pull request comments, or other public project "
+        f"surfaces.**\n\n"
+        f"Azure DevOps Services project: "
+        f"[{azure_context.project}]({azure_context.project_url})\n\n"
+        f"{intake_text}"
+        f"{azure_security_product_note(azure_context)}"
+    )
+
+
+def replace_contributing_placeholder_strategy_comment(
+    text: str,
+    _context: ReplacementContext,
+) -> tuple[str, int]:
+    """Remove the GitHub placeholder design note from Azure-only contributing docs."""
+    start_marker = "<!--\nTEMPLATE DESIGN DECISION: Placeholder Strategy"
+    start = text.find(start_marker)
+    if start == -1:
+        return text, 0
+    end = text.find("-->\n\n", start)
+    if end == -1:
+        return text, 0
+    end += len("-->\n\n")
+    return f"{text[:start]}{text[end:]}", 1
+
+
+def replace_contributing_clone_block(
+    text: str,
+    context: ReplacementContext,
+) -> tuple[str, int]:
+    """Render the Azure Repos clone block in CONTRIBUTING.md."""
+    assert context.azure_devops is not None
+    start_marker = "### 1. Clone the Repository"
+    end_marker = "\n### 2. Install Node.js Dependencies"
+    start = text.find(start_marker)
+    end = text.find(end_marker, start)
+    if start == -1 or end == -1:
+        return text, 0
+    azure_context = context.azure_devops
+    replacement = (
+        "### 1. Clone the Repository\n\n"
+        "```bash\n"
+        f"git clone {azure_context.clone_url}\n"
+        f"cd {shlex.quote(azure_context.repository)}\n"
+        "```\n"
+    )
+    return f"{text[:start]}{replacement}{text[end:]}", 1
+
+
+def replace_contributing_questions_block(
+    text: str,
+    context: ReplacementContext,
+) -> tuple[str, int]:
+    """Render Azure DevOps Services issue-intake guidance in CONTRIBUTING.md."""
+    assert context.azure_devops is not None
+    start_marker = "## Questions or Issues?"
+    end_marker = "\n## License"
+    start = text.find(start_marker)
+    end = text.find(end_marker, start)
+    if start == -1 or end == -1:
+        return text, 0
+    azure_context = context.azure_devops
+    replacement = (
+        "## Questions or Issues?\n\n"
+        "If you have questions or encounter issues:\n\n"
+        f"1. Review the Azure DevOps Services project: "
+        f"[{azure_context.project}]({azure_context.project_url}).\n"
+        "2. Review the retained documentation in `.github/instructions/`.\n"
+        f"3. Follow the Azure Boards intake policy: {azure_context.boards_policy}.\n"
+    )
+    return f"{text[:start]}{replacement}{text[end:]}", 1
+
+
 def build_security_reporting_section(context: ReplacementContext) -> str:
     """Build the rendered SECURITY.md reporting section for the selected mode."""
+    if context.host_provider == "azure-devops-services":
+        return build_azure_devops_security_reporting_section(context)
     if context.security_reporting_mode is None:
         return ""
     direct_url = "https://github.com/OWNER/REPO/security/advisories/new"
@@ -901,16 +1691,56 @@ def render_security_reporting_mode(
     context: ReplacementContext,
 ) -> tuple[ReplacementRecord, ...]:
     """Render known security-reporting surfaces for the selected mode."""
-    if context.security_reporting_mode is None:
+    if context.security_reporting_mode is None and context.azure_devops is None:
         return ()
     renderers = {
         "SECURITY.md": (replace_security_reporting_section,),
-        ".github/ISSUE_TEMPLATE/config.yml": (replace_config_security_block,),
-        ".github/ISSUE_TEMPLATE/bug_report.yml": (
+    }
+    if context.uses_github_surfaces and context.security_reporting_mode is not None:
+        renderers[".github/ISSUE_TEMPLATE/config.yml"] = (replace_config_security_block,)
+        renderers[".github/ISSUE_TEMPLATE/bug_report.yml"] = (
             replace_bug_report_security_notice,
             replace_bug_report_checkbox_label,
             replace_bug_report_severity_notice,
-        ),
+        )
+    records: list[ReplacementRecord] = []
+    for relative_path, path_renderers in renderers.items():
+        if relative_path not in file_texts:
+            continue
+        text = file_texts[relative_path]
+        replacement_count = 0
+        for renderer in path_renderers:
+            text, count = renderer(text, context)
+            replacement_count += count
+        if replacement_count:
+            file_texts[relative_path] = text
+            records.append(
+                ReplacementRecord(
+                    path=relative_path,
+                    rule_name=(
+                        f"security reporting mode {context.security_reporting_mode}"
+                        if context.security_reporting_mode is not None
+                        else f"{context.host_provider} security reporting"
+                    ),
+                    count=replacement_count,
+                )
+            )
+    return tuple(records)
+
+
+def render_azure_devops_provider_neutral_docs(
+    file_texts: dict[str, str],
+    context: ReplacementContext,
+) -> tuple[ReplacementRecord, ...]:
+    """Render provider-neutral baseline docs for Azure-only adoption."""
+    if context.host_provider != "azure-devops-services" or context.azure_devops is None:
+        return ()
+    renderers: dict[str, tuple[Callable[[str, ReplacementContext], tuple[str, int]], ...]] = {
+        "CONTRIBUTING.md": (
+            replace_contributing_placeholder_strategy_comment,
+            replace_contributing_clone_block,
+            replace_contributing_questions_block,
+        )
     }
     records: list[ReplacementRecord] = []
     for relative_path, path_renderers in renderers.items():
@@ -926,7 +1756,7 @@ def render_security_reporting_mode(
             records.append(
                 ReplacementRecord(
                     path=relative_path,
-                    rule_name=f"security reporting mode {context.security_reporting_mode}",
+                    rule_name="azure devops provider-neutral docs",
                     count=replacement_count,
                 )
             )
@@ -1294,7 +2124,7 @@ def validate_context_against_retained_files(
 def build_replacement_rules(context: ReplacementContext) -> tuple[ReplacementRule, ...]:
     """Build the concrete allowlist of approved replacements."""
     rules: list[ReplacementRule] = []
-    if context.repository is not None:
+    if context.uses_github_surfaces and context.repository is not None:
         for suffix in sorted(APPROVED_GITHUB_URL_SUFFIXES, key=len, reverse=True):
             placeholder = f"https://github.com/OWNER/REPO{suffix}"
             replacement = f"https://{context.github_host}/{context.repository}{suffix}"
@@ -1305,6 +2135,19 @@ def build_replacement_rules(context: ReplacementContext) -> tuple[ReplacementRul
                     replacement=replacement,
                     paths=GITHUB_URL_TOKEN_PATHS,
                     replace=replace_url_pattern(placeholder, replacement),
+                )
+            )
+
+    if context.azure_devops is not None:
+        for name, placeholder, attribute_name in AZURE_DEVOPS_TOKEN_REPLACEMENT_SPECS:
+            replacement = getattr(context.azure_devops, attribute_name)
+            rules.append(
+                ReplacementRule(
+                    name=name,
+                    placeholder=placeholder,
+                    replacement=replacement,
+                    paths=AZURE_DEVOPS_URL_TOKEN_PATHS,
+                    replace=replace_literal(placeholder, replacement),
                 )
             )
 
@@ -1364,6 +2207,17 @@ def replace_placeholders(
                 resolve_repo_path(repo_root, relative_path),
                 relative_path,
             )
+    if context.azure_devops is not None:
+        for relative_path in AZURE_DEVOPS_URL_TOKEN_PATHS:
+            files_by_path[relative_path] = (
+                resolve_repo_path(repo_root, relative_path),
+                relative_path,
+            )
+    if context.host_provider == "azure-devops-services":
+        files_by_path["CONTRIBUTING.md"] = (
+            resolve_repo_path(repo_root, "CONTRIBUTING.md"),
+            "CONTRIBUTING.md",
+        )
     for rule in rules:
         for relative_path in rule.paths:
             files_by_path[relative_path] = (
@@ -1382,6 +2236,7 @@ def replace_placeholders(
     validate_context_against_retained_files(file_texts, context)
     records.extend(render_conduct_contact_sentence(file_texts, context))
     records.extend(render_security_reporting_mode(file_texts, context))
+    records.extend(render_azure_devops_provider_neutral_docs(file_texts, context))
     records.extend(render_collaboration_policy(file_texts, context))
     records.extend(render_package_metadata(file_texts, context))
 
@@ -1425,6 +2280,15 @@ def build_unresolved_scan_patterns() -> (
             else re.compile(re.escape(placeholder))
         )
         patterns.append((name, placeholder, pattern, paths))
+    for name, placeholder, _attribute_name in AZURE_DEVOPS_TOKEN_REPLACEMENT_SPECS:
+        patterns.append(
+            (
+                name,
+                placeholder,
+                re.compile(re.escape(placeholder)),
+                AZURE_DEVOPS_URL_TOKEN_PATHS,
+            )
+        )
     return tuple(patterns)
 
 
@@ -1721,11 +2585,100 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     replace_parser = subparsers.add_parser("replace", help="replace approved placeholders")
     add_args_file_options(replace_parser)
     replace_parser.add_argument("--repo-root", default=None, help="repository root")
+    replace_parser.add_argument(
+        "--host-provider",
+        choices=HOST_PROVIDERS,
+        default=None,
+        help=(
+            "Host-provider mode: github, github-enterprise-server, "
+            "azure-devops-services, or dual."
+        ),
+    )
     replace_parser.add_argument("--repository", default=None, help="replacement OWNER/REPO value")
     replace_parser.add_argument(
         "--github-host",
         default="github.com",
         help="GitHub or GHES host for approved template URL contexts",
+    )
+    replace_parser.add_argument(
+        "--azure-devops-organization",
+        default=None,
+        help="Azure DevOps Services organization name.",
+    )
+    replace_parser.add_argument(
+        "--azure-devops-organization-url",
+        default=None,
+        help=(
+            "Azure DevOps Services organization URL, either "
+            "https://dev.azure.com/<organization> or "
+            "https://<organization>.visualstudio.com."
+        ),
+    )
+    replace_parser.add_argument(
+        "--azure-devops-project",
+        default=None,
+        help="Azure DevOps project name.",
+    )
+    replace_parser.add_argument(
+        "--azure-devops-project-url",
+        default=None,
+        help="Validated Azure DevOps project URL override.",
+    )
+    replace_parser.add_argument(
+        "--azure-devops-repository",
+        default=None,
+        help="Azure Repos repository name.",
+    )
+    replace_parser.add_argument(
+        "--azure-devops-repository-url",
+        default=None,
+        help="Validated Azure Repos repository web URL override.",
+    )
+    replace_parser.add_argument(
+        "--azure-devops-clone-url",
+        default=None,
+        help="Validated Azure Repos HTTPS clone URL override without embedded credentials.",
+    )
+    replace_parser.add_argument(
+        "--azure-devops-default-branch",
+        default=None,
+        help="Azure Repos default branch name; defaults to main.",
+    )
+    replace_parser.add_argument(
+        "--azure-boards-policy",
+        choices=AZURE_DEVOPS_BOARDS_POLICIES,
+        default=None,
+        help="Azure Boards intake policy for first-adoption reporting.",
+    )
+    replace_parser.add_argument(
+        "--azure-repos-pr-template-policy",
+        choices=AZURE_DEVOPS_PR_TEMPLATE_POLICIES,
+        default=None,
+        help="Azure Repos pull request template policy.",
+    )
+    replace_parser.add_argument(
+        "--azure-branch-policy-reviewer-guidance",
+        choices=AZURE_DEVOPS_BRANCH_POLICY_POLICIES,
+        default=None,
+        help="Azure Repos branch policy reviewer-guidance status.",
+    )
+    replace_parser.add_argument(
+        "--azure-security-intake-policy",
+        choices=AZURE_DEVOPS_SECURITY_INTAKE_POLICIES,
+        default=None,
+        help="Azure security intake policy for SECURITY.md and first-adoption reporting.",
+    )
+    replace_parser.add_argument(
+        "--azure-security-product-enablement",
+        choices=AZURE_DEVOPS_SECURITY_PRODUCT_POLICIES,
+        default=None,
+        help="Azure DevOps Services security product enablement status.",
+    )
+    replace_parser.add_argument(
+        "--azure-dependency-update-policy",
+        choices=AZURE_DEVOPS_DEPENDENCY_UPDATE_POLICIES,
+        default=None,
+        help="Azure Repos dependency update policy status.",
     )
     replace_parser.add_argument(
         "--codeowners-owner",
@@ -1876,8 +2829,23 @@ def run_replace(args: argparse.Namespace) -> int:
     """Run the replacement command."""
     repo_root = resolve_repo_root(args.repo_root)
     context = build_replacement_context(
+        host_provider=args.host_provider,
         repository=args.repository,
         github_host=args.github_host,
+        azure_devops_organization=args.azure_devops_organization,
+        azure_devops_organization_url=args.azure_devops_organization_url,
+        azure_devops_project=args.azure_devops_project,
+        azure_devops_project_url=args.azure_devops_project_url,
+        azure_devops_repository=args.azure_devops_repository,
+        azure_devops_repository_url=args.azure_devops_repository_url,
+        azure_devops_clone_url=args.azure_devops_clone_url,
+        azure_devops_default_branch=args.azure_devops_default_branch,
+        azure_boards_policy=args.azure_boards_policy,
+        azure_repos_pr_template_policy=args.azure_repos_pr_template_policy,
+        azure_branch_policy_reviewer_guidance=args.azure_branch_policy_reviewer_guidance,
+        azure_security_intake_policy=args.azure_security_intake_policy,
+        azure_security_product_enablement=args.azure_security_product_enablement,
+        azure_dependency_update_policy=args.azure_dependency_update_policy,
         codeowners_owner=args.codeowners_owner,
         conduct_contact=args.conduct_contact,
         conduct_contact_sentence=args.conduct_contact_sentence,

@@ -237,6 +237,38 @@ def test_powershell_quality_report_is_skipped_when_marker_excludes_powershell(
     assert all("powershell" not in command.command for command in plan.commands)
 
 
+def test_azure_marker_plans_host_setup_quality_report(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Azure DevOps module retention schedules the host setup report."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _write_text(tmp_path, ".template-sync/scripts/first_adoption_quality_reports.py")
+    _write_text(tmp_path, ".template-sync/scripts/validate_marker.py")
+    _write_text(
+        tmp_path,
+        ".template-sync/marker.yml",
+        "template_sync:\n  included_modules:\n    - baseline\n    - azure-devops-platform\n",
+    )
+
+    plan = first_adoption.build_check_plan(
+        tmp_path,
+        ("README.md",),
+        run_mode=first_adoption.FIX_MODE,
+    )
+
+    quality_modes = [
+        command.command[-1]
+        for command in plan.commands
+        if command.group_label == first_adoption.QUALITY_REPORT_GROUP
+    ]
+    assert quality_modes == ["line-endings", "path-references", "host-setup"]
+
+
 def test_marker_module_detection_ignores_sibling_string_lists(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -37,6 +37,9 @@ MARKER_PATH = ".template-sync/marker.yml"
 MARKER_VALIDATOR_SCRIPT = ".template-sync/scripts/validate_marker.py"
 QUALITY_REPORT_SCRIPT = ".template-sync/scripts/first_adoption_quality_reports.py"
 MARKDOWN_PACKAGE_SCRIPTS = ("lint:md", "lint:md:links", "lint:md:nested")
+AZURE_DEVOPS_MODULES = frozenset(
+    ("azure-devops-platform", "azure-pipelines", "azure-devops-collaboration")
+)
 MARKER_MODULE_PATTERN = re.compile(r"(?m)^\s*-\s*['\"]?(?P<module>[a-z0-9-]+)['\"]?\s*(?:#.*)?$")
 INCLUDED_MODULES_KEY_PATTERN = re.compile(r"^(?P<indent>\s*)included_modules\s*:\s*(?:#.*)?$")
 MARKER_KEY_PATTERN = re.compile(
@@ -640,6 +643,13 @@ def quality_report_commands(
             command=(sys.executable, QUALITY_REPORT_SCRIPT, "path-references"),
         ),
     ]
+    if marker_modules is not None and marker_modules & AZURE_DEVOPS_MODULES:
+        commands.append(
+            PlannedCommand(
+                group_label=QUALITY_REPORT_GROUP,
+                command=(sys.executable, QUALITY_REPORT_SCRIPT, "host-setup"),
+            )
+        )
     if marker_modules is None or "powershell" in marker_modules or has_powershell_files(files):
         commands.append(
             PlannedCommand(

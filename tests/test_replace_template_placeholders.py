@@ -239,6 +239,184 @@ def test_ghes_host_substitution_is_limited_to_approved_template_urls(
     assert "https://github.com/example/other/security" in text
 
 
+def test_azure_devops_url_generation_encodes_paths_and_preserves_host_forms(
+    tmp_path: Path,
+) -> None:
+    """Azure DevOps Services URLs are generated for both supported organization URL forms."""
+    write_file(
+        tmp_path / ".azuredevops" / "platform" / "adoption-guidance.md",
+        "\n".join(
+            [
+                "AZURE_DEVOPS_ORGANIZATION_URL",
+                "AZURE_DEVOPS_PROJECT_URL",
+                "AZURE_DEVOPS_REPOSITORY_WEB_URL",
+                "AZURE_DEVOPS_CLONE_URL",
+            ]
+        )
+        + "\n",
+    )
+    context = placeholder_helper.build_replacement_context(
+        host_provider="azure-devops-services",
+        azure_devops_organization="contoso",
+        azure_devops_project="Microsoft 365",
+        azure_devops_repository="repo tools",
+    )
+
+    placeholder_helper.replace_placeholders(repo_root=tmp_path, context=context)
+
+    text = read_file(tmp_path / ".azuredevops" / "platform" / "adoption-guidance.md")
+    assert "https://dev.azure.com/contoso" in text
+    assert "https://dev.azure.com/contoso/Microsoft%20365" in text
+    assert "https://dev.azure.com/contoso/Microsoft%20365/_git/repo%20tools" in text
+
+    visualstudio_context = placeholder_helper.build_replacement_context(
+        host_provider="azure-devops-services",
+        azure_devops_organization="contoso",
+        azure_devops_organization_url="https://contoso.visualstudio.com",
+        azure_devops_project="Microsoft 365",
+        azure_devops_repository="repo tools",
+    )
+
+    assert visualstudio_context.azure_devops.project_url == (
+        "https://contoso.visualstudio.com/Microsoft%20365"
+    )
+    assert visualstudio_context.azure_devops.repository_web_url == (
+        "https://contoso.visualstudio.com/Microsoft%20365/_git/repo%20tools"
+    )
+
+
+def test_azure_devops_url_overrides_validate_without_double_encoding() -> None:
+    """Azure DevOps URL overrides preserve supplied encoding and reject credentials."""
+    context = placeholder_helper.build_replacement_context(
+        host_provider="azure-devops-services",
+        azure_devops_organization="contoso",
+        azure_devops_project="Microsoft 365",
+        azure_devops_project_url="https://dev.azure.com/contoso/Microsoft%20365",
+        azure_devops_repository="repo tools",
+        azure_devops_repository_url=(
+            "https://dev.azure.com/contoso/Microsoft%20365/_git/repo%20tools"
+        ),
+    )
+
+    assert context.azure_devops.project_url == "https://dev.azure.com/contoso/Microsoft%20365"
+    assert "%2520" not in context.azure_devops.repository_web_url
+
+    with pytest.raises(placeholder_helper.PlaceholderError, match="embedded credentials"):
+        placeholder_helper.build_replacement_context(
+            host_provider="azure-devops-services",
+            azure_devops_organization="contoso",
+            azure_devops_project="Platform",
+            azure_devops_repository="downstream-template",
+            azure_devops_clone_url=(
+                "https://user:token@dev.azure.com/contoso/Platform/_git/downstream-template"
+            ),
+        )
+
+    with pytest.raises(placeholder_helper.PlaceholderError, match="whitespace"):
+        placeholder_helper.build_replacement_context(
+            host_provider="azure-devops-services",
+            azure_devops_organization="contoso",
+            azure_devops_project="Microsoft 365",
+            azure_devops_project_url="https://dev.azure.com/contoso/Microsoft 365",
+            azure_devops_repository="downstream-template",
+        )
+
+
+def test_azure_provider_rejects_github_only_inputs_unless_dual() -> None:
+    """Azure-only adoption rejects GitHub-only surfaces such as CODEOWNERS ownership."""
+    with pytest.raises(placeholder_helper.PlaceholderError, match="codeowners-owner"):
+        placeholder_helper.build_replacement_context(
+            host_provider="azure-devops-services",
+            azure_devops_organization="contoso",
+            azure_devops_project="Platform",
+            azure_devops_repository="downstream-template",
+            codeowners_owner="@octo",
+        )
+
+    context = placeholder_helper.build_replacement_context(
+        host_provider="dual",
+        repository="octo/widget",
+        codeowners_owner="@octo",
+        security_contact="security@example.com",
+        azure_devops_organization="contoso",
+        azure_devops_project="Platform",
+        azure_devops_repository="downstream-template",
+    )
+
+    assert context.host_provider == "dual"
+    assert context.codeowners_owner == "@octo"
+    assert context.azure_devops.repository_web_url == (
+        "https://dev.azure.com/contoso/Platform/_git/downstream-template"
+    )
+
+
+@pytest.mark.parametrize(
+    "security_reporting_mode",
+    ["contact-only", "github-private-only", "both"],
+)
+def test_azure_only_rejects_security_reporting_mode(security_reporting_mode: str) -> None:
+    """Azure-only adoption rejects --security-reporting-mode (a no-op for this provider)."""
+    with pytest.raises(placeholder_helper.PlaceholderError, match="security-reporting-mode"):
+        placeholder_helper.build_replacement_context(
+            host_provider="azure-devops-services",
+            azure_devops_organization="contoso",
+            azure_devops_project="Platform",
+            azure_devops_repository="downstream-template",
+            security_contact="security@example.com",
+            security_reporting_mode=security_reporting_mode,
+        )
+
+
+def test_azure_security_reporting_renders_security_md_without_github_urls(
+    tmp_path: Path,
+) -> None:
+    """Azure-only SECURITY.md rendering does not use GitHub private advisory language."""
+    shutil.copyfile(REPO_ROOT / "SECURITY.md", tmp_path / "SECURITY.md")
+    context = placeholder_helper.build_replacement_context(
+        host_provider="azure-devops-services",
+        azure_devops_organization="contoso",
+        azure_devops_project="Platform",
+        azure_devops_repository="downstream-template",
+        azure_security_intake_policy="security-contact",
+        security_contact="security@example.com",
+    )
+
+    placeholder_helper.replace_placeholders(repo_root=tmp_path, context=context)
+
+    security_text = read_file(tmp_path / "SECURITY.md")
+    assert "Azure DevOps Services project" in security_text
+    assert "Azure Boards work items" in security_text
+    assert "security@example.com" in security_text
+    assert "github.com/OWNER/REPO" not in security_text
+    assert "private vulnerability reporting" not in security_text
+    assert "[security contact email]" not in security_text
+
+
+def test_azure_only_baseline_docs_do_not_leave_github_placeholders(tmp_path: Path) -> None:
+    """Azure-only rendering removes GitHub OWNER/REPO placeholders from baseline docs."""
+    for relative_path in ("CONTRIBUTING.md", "SECURITY.md", "CODE_OF_CONDUCT.md"):
+        shutil.copyfile(REPO_ROOT / relative_path, tmp_path / relative_path)
+    context = placeholder_helper.build_replacement_context(
+        host_provider="azure-devops-services",
+        azure_devops_organization="contoso",
+        azure_devops_project="Platform",
+        azure_devops_repository="downstream-template",
+        azure_boards_policy="work-items",
+        security_contact="security@example.com",
+    )
+
+    placeholder_helper.replace_placeholders(repo_root=tmp_path, context=context)
+
+    contributing_text = read_file(tmp_path / "CONTRIBUTING.md")
+    assert "OWNER/REPO" not in contributing_text
+    assert "git clone https://dev.azure.com/contoso/Platform/_git/downstream-template" in (
+        contributing_text
+    )
+    assert "[Platform](https://dev.azure.com/contoso/Platform)" in contributing_text
+    assert "Azure Boards intake policy: work-items" in contributing_text
+    assert placeholder_helper.scan_repository(tmp_path) == ()
+
+
 def test_default_host_leaves_unrelated_github_com_occurrences_untouched(
     tmp_path: Path,
 ) -> None:
