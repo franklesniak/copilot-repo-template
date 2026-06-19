@@ -34,7 +34,10 @@ This template includes:
 - **Multi-Agent Support:** Instruction files for Cursor Agent, Hermes Agent, Claude Code, OpenAI Codex CLI, and Gemini Code Assist.
 - **Modular Guidelines:** Instruction files for adopted language and file-type stacks.
 - **Linting Configurations:** Retained linting and link-checking configuration for Markdown and PowerShell.
-- **Data-File Validation:** Baseline hooks for `check-json`, `check-yaml`, and `actionlint`. Retained modules add `check-jsonschema` (schema, template-sync support, or GitHub platform) and `check-metaschema` (schema or template-sync support) for their JSON Schema contracts.
+- **Data-File Validation:** Baseline hooks for `check-json` and `check-yaml`. Retained modules add `check-jsonschema` (schema, template-sync support, or GitHub platform) and `check-metaschema` (schema or template-sync support) for their JSON Schema contracts.
+<!-- template-sync: begin github-actions-reference-only -->
+- **GitHub Actions Validation:** Retained GitHub Actions workflows add `actionlint` validation.
+<!-- template-sync: end github-actions-reference-only -->
 <!-- template-sync: begin yaml-reference-only -->
 - **YAML Style Validation:** `yamllint` configuration and CI wiring for repositories that adopt the YAML module.
 <!-- template-sync: end yaml-reference-only -->
@@ -59,7 +62,9 @@ Core retained surfaces include:
 
 - `.github/copilot-instructions.md` - repo-wide constitution for all changes.
 - `.github/ISSUE_TEMPLATE/`, `.github/pull_request_template.md`, and `.github/CODEOWNERS` - GitHub collaboration surfaces.
-- `.github/dependabot.yml` - automated dependency update configuration.
+<!-- template-sync: begin github-platform-reference-only -->
+- `.github/dependabot.yml` - GitHub Dependabot configuration for GitHub-hosted dependency update automation.
+<!-- template-sync: end github-platform-reference-only -->
 - `.github/instructions/` - retained modular instruction files.
 - `.github/linting/PSScriptAnalyzerSettings.psd1` - PowerShell lint settings.
 - `.github/scripts/` - helper scripts for placeholder replacement, Markdown linting, and retained validation.
@@ -97,7 +102,9 @@ Optional module-owned surfaces include:
 
 - `.github/CODEOWNERS` - Defines code ownership for automatic PR review requests; replace the `@OWNER` placeholder.
 - `.github/copilot-instructions.md` - The repo-wide constitution for all code changes, including safety rules, pre-commit discipline, and instruction-file references.
-- `.github/dependabot.yml` - Dependabot configuration for automated dependency updates.
+<!-- template-sync: begin github-platform-reference-only -->
+- `.github/dependabot.yml` - GitHub Dependabot configuration for GitHub-hosted dependency update automation.
+<!-- template-sync: end github-platform-reference-only -->
 - `.github/instructions/*.md` - Retained coding standards applied based on file patterns.
 - `.github/linting/PSScriptAnalyzerSettings.psd1` - PSScriptAnalyzer settings enforcing OTBS formatting for PowerShell.
 - `.github/workflows/auto-fix-precommit.yml` - Optional auto-fix workflow for pre-commit fixes on Copilot-agent branches.
@@ -193,16 +200,22 @@ pre-commit run ruff-check --all-files
 ```
 <!-- template-sync: end python-reference-only -->
 
-#### Data-File and GitHub Actions Validation
+#### Data-File Validation
 
-Data-file, GitHub Actions, and retained schema validation runs through `.pre-commit-config.yaml`.
+Data-file and retained schema validation run through `.pre-commit-config.yaml`.
+
+<!-- template-sync: begin github-actions-reference-only -->
+GitHub Actions validation also runs through `.pre-commit-config.yaml`.
+<!-- template-sync: end github-actions-reference-only -->
 
 - **`check-json`** - strict `.json` syntax validation. It does **not** validate `.jsonc`.
 - **`check-yaml`** - `.yml` and `.yaml` parse checks.
 <!-- template-sync: begin yaml-reference-only -->
 - **`yamllint`** - YAML style enforcement per `.yamllint.yml`.
 <!-- template-sync: end yaml-reference-only -->
+<!-- template-sync: begin github-actions-reference-only -->
 - **`actionlint`** - GitHub Actions workflow linting.
+<!-- template-sync: end github-actions-reference-only -->
 - **`check-jsonschema`** - present when schema-backed modules (the schema, template-sync support, or GitHub platform module) are retained; validates retained JSON Schema-backed files and selected load-bearing configuration against built-in vendor schemas.
 - **`check-metaschema`** - present when the schema or template-sync support module is retained; self-validates retained project-owned schemas.
 
@@ -212,8 +225,13 @@ Prettier is **opt-in** and is not part of the default data-file toolchain.
 pre-commit run --all-files
 pre-commit run check-json --all-files
 pre-commit run check-yaml --all-files
+```
+
+<!-- template-sync: begin github-actions-reference-only -->
+```bash
 pre-commit run actionlint --all-files
 ```
+<!-- template-sync: end github-actions-reference-only -->
 
 <!-- template-sync: begin yaml-reference-only -->
 ```bash
@@ -326,7 +344,10 @@ See `templates/terraform/Example.tftest.hcl` for a comprehensive Terraform test 
 This repository enforces code quality through retained validation surfaces:
 
 - **Markdown Linting and Link Checking:** markdownlint runs on pre-commit and in CI; offline Markdown link validation runs in CI.
-- **Data-File Validation:** `check-json`, `check-yaml`, and `actionlint` run through pre-commit.
+- **Data-File Validation:** `check-json` and `check-yaml` run through pre-commit.
+<!-- template-sync: begin github-actions-reference-only -->
+- **GitHub Actions Validation:** `actionlint` runs through pre-commit.
+<!-- template-sync: end github-actions-reference-only -->
 <!-- template-sync: begin yaml-reference-only -->
 - **YAML Style Validation:** `yamllint` runs through pre-commit when the YAML module is retained.
 <!-- template-sync: end yaml-reference-only -->

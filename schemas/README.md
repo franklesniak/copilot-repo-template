@@ -86,15 +86,19 @@ This repository distinguishes two schema categories. The distinction matters for
 
 The two categories are complementary. A downstream repository MAY use either, both, or neither.
 
+<!-- template-sync: begin github-platform-reference-only -->
+
 ### Real Repository Configuration Files Validated Through Built-in Schemas
 
 The following real, load-bearing repository configuration files are validated by default through `check-jsonschema --builtin-schema ...` hooks in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml):
 
 | File | Built-in schema identifier | Regression coverage |
 | --- | --- | --- |
-| [`.github/dependabot.yml`](../.github/dependabot.yml) | `vendor.dependabot` | When retained, `tests/test_dependabot_schema.py` validates the documented `tests/fixtures/dependabot/auto-assignment.yml` fixture |
+| [`.github/dependabot.yml`](../.github/dependabot.yml) | `vendor.dependabot` | GitHub-platform-only validation; when retained, `tests/test_dependabot_schema.py` validates the documented `tests/fixtures/dependabot/auto-assignment.yml` fixture |
 
-If a downstream repository deletes one of these files, it **MUST** also remove the corresponding `check-jsonschema` hook (and any matching `data-ci.yml` step) per the [downstream removal guidance in the ADR](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files).
+If a downstream repository deletes one of these files, it **MUST** also remove the corresponding `check-jsonschema` hook (and any matching `data-ci.yml` step) per the [downstream removal guidance in the ADR](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files). Azure DevOps-only adoptions do not retain `.github/dependabot.yml`, `validate-dependabot-config`, or `tests/test_dependabot_schema.py`; Azure DevOps security scanning and routine dependency version updates are documented as service-side/adopter-selected choices rather than as Dependabot schema validation.
+
+<!-- template-sync: end github-platform-reference-only -->
 
 ### Project-Owned Schema-Backed Files
 

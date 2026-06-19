@@ -45,6 +45,18 @@ def test_validation_commands_cover_every_manifest_module() -> None:
     assert modules <= set(sync_candidates.VALIDATION_COMMANDS_BY_MODULE)
 
 
+def test_validation_commands_keep_dependabot_github_scoped_and_azure_manual() -> None:
+    """Azure-only platform summaries must not require GitHub Dependabot validation."""
+    github_commands = sync_candidates.VALIDATION_COMMANDS_BY_MODULE["github-platform"]
+    azure_commands = sync_candidates.VALIDATION_COMMANDS_BY_MODULE["azure-devops-platform"]
+
+    assert any("validate-dependabot-config" in command for command in github_commands)
+    assert any("test_dependabot_schema.py" in command for command in github_commands)
+    assert not any("dependabot" in command.lower() for command in azure_commands)
+    assert any("dependency scanning" in command.lower() for command in azure_commands)
+    assert any("dependency update policy" in command.lower() for command in azure_commands)
+
+
 def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     """Run a test command and capture text output."""
     return subprocess.run(

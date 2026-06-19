@@ -21,7 +21,10 @@ This guide covers optional customizations you can make after completing the init
 - [Code of Conduct Configuration](#code-of-conduct-configuration)
 - [Pull Request Template Customization](#pull-request-template-customization)
   - [Adjusting the Data-File-Specific Pull Request Checklist](#adjusting-the-data-file-specific-pull-request-checklist)
+<!-- template-sync: begin github-platform-reference-only -->
 - [Dependabot Configuration](#dependabot-configuration)
+<!-- template-sync: end github-platform-reference-only -->
+- [Azure DevOps Security and Dependency Automation](#azure-devops-security-and-dependency-automation)
 - [Pre-commit Configuration](#pre-commit-configuration)
 - [Schema Validation Configuration](#schema-validation-configuration)
 - [JSON/YAML Starter Content (Opt-in)](#jsonyaml-starter-content-opt-in)
@@ -925,9 +928,13 @@ Choose one keyword and use it consistently across your project.
 
 ---
 
+<!-- template-sync: begin github-platform-reference-only -->
+
 ## Dependabot Configuration
 
 **File:** `.github/dependabot.yml`
+
+This section configures GitHub Dependabot for repositories that retain the GitHub platform module. Dependabot configuration in `.github/dependabot.yml` is a GitHub-hosted dependency update surface; it does not configure Azure DevOps-native dependency scanning or Azure DevOps routine dependency version updates.
 
 ### Adjusting Update Frequency
 
@@ -1023,6 +1030,38 @@ This template repository's own `.github/dependabot.yml` does not currently exerc
     prefix: "chore(deps)"
   open-pull-requests-limit: 10
 ```
+
+---
+
+<!-- template-sync: end github-platform-reference-only -->
+
+## Azure DevOps Security and Dependency Automation
+
+Azure DevOps support in this template means Azure DevOps Services. Azure DevOps Server behavior must be separately verified against current Microsoft documentation before documenting server-specific claims.
+
+Security scanning and routine dependency version updates are separate capabilities:
+
+- GitHub Advanced Security for Azure DevOps, or the standalone GitHub Secret Protection for Azure DevOps and GitHub Code Security for Azure DevOps products, can provide security scanning for Azure Repos when licensed, enabled, and configured.
+- Routine dependency version updates are an explicit adopter choice and require a separate Azure-compatible mechanism. This template does not enable Renovate, self-hosted Dependabot, or another dependency-update service by default.
+
+Product naming verified against Microsoft Learn on 2026-06-19:
+
+- The bundled [GitHub Advanced Security for Azure DevOps](https://learn.microsoft.com/azure/devops/repos/security/configure-github-advanced-security-features?view=azure-devops) feature set covers secret scanning push protection, repository secret scanning, dependency scanning, and code scanning.
+- [GitHub Secret Protection for Azure DevOps](https://learn.microsoft.com/azure/devops/repos/security/configure-github-advanced-security-features?view=azure-devops) covers push protection and secret scanning.
+- [GitHub Code Security for Azure DevOps](https://learn.microsoft.com/azure/devops/repos/security/configure-github-advanced-security-features?view=azure-devops) covers dependency alerts/scanning, CodeQL/code scanning, third-party findings, and the security overview.
+
+Dependency scanning behavior verified against Microsoft Learn on 2026-06-19:
+
+- [Dependency scanning](https://learn.microsoft.com/azure/devops/repos/security/github-advanced-security-dependency-scanning?view=azure-devops) requires either a pipeline configured with `AdvancedSecurity-Dependency-Scanning@1` or a repository with dependency scanning default setup enabled.
+- Enabling Advanced Security or Code Security alone does not execute dependency scanning automatically.
+- Default setup can cover the default branch and pull request builds targeting that branch; broader or more controlled coverage uses the [Advanced Security Dependency Scanning v1 task](https://learn.microsoft.com/azure/devops/pipelines/tasks/reference/advanced-security-dependency-scanning-v1?view=azure-pipelines) in the pipelines that should be scanned.
+- Microsoft still lists automatic Dependabot security-update PRs for Azure DevOps dependency scanning alerts as a [future roadmap item](https://learn.microsoft.com/azure/devops/release-notes/features-timeline), so do not document those PRs as available without rechecking the roadmap and feature documentation.
+
+For routine version updates, Renovate is the primary documented candidate to evaluate because Renovate documents [Azure DevOps platform support](https://docs.renovatebot.com/modules/platform/azure/). Keep that separate from Azure Pipelines file-update support: the Renovate [Azure Pipelines manager](https://docs.renovatebot.com/modules/manager/azure-pipelines/) is currently beta, opt-in, and disabled by default. If maintainers choose Renovate, decide the bot identity, permissions, schedules, repositories, and secret storage before enabling it.
+
+Self-hosted Dependabot on Azure Pipelines is only an optional pattern to evaluate when maintainers intentionally choose it. Scope any adoption to the source being followed, review the required Azure DevOps permissions, and store tokens or credentials only in the service's secret-management mechanism.
+
+Record the selected Azure DevOps security product and dependency update policy in the Azure DevOps Services adoption guidance path `.azuredevops/platform/adoption-guidance.md` during materialization.
 
 ---
 

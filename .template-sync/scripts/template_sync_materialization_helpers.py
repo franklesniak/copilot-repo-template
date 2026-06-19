@@ -68,6 +68,7 @@ INLINE_BLOCK_MODULES = {
     "schema-only": frozenset({"schema"}),
     "template-sync-support-only": frozenset({"template-sync-support"}),
     "schema-template-sync-support-only": frozenset({"schema", "template-sync-support"}),
+    "github-actions-only": frozenset({"github-actions"}),
     "github-platform-only": frozenset({"github-platform"}),
     "markdown-reference-only": frozenset({"markdown"}),
     "powershell-reference-only": frozenset({"powershell"}),
@@ -78,6 +79,7 @@ INLINE_BLOCK_MODULES = {
     "schema-reference-only": frozenset({"schema"}),
     "template-sync-support-reference-only": frozenset({"template-sync-support"}),
     "github-actions-reference-only": frozenset({"github-actions"}),
+    "github-platform-reference-only": frozenset({"github-platform"}),
 }
 # OR-retention (ANY) markers. A block in this family is retained when *at least
 # one* module it names is present in ``included_modules``; it is stripped only
