@@ -312,6 +312,15 @@ def test_azure_devops_url_overrides_validate_without_double_encoding() -> None:
             ),
         )
 
+    with pytest.raises(placeholder_helper.PlaceholderError, match="whitespace"):
+        placeholder_helper.build_replacement_context(
+            host_provider="azure-devops-services",
+            azure_devops_organization="contoso",
+            azure_devops_project="Microsoft 365",
+            azure_devops_project_url="https://dev.azure.com/contoso/Microsoft 365",
+            azure_devops_repository="downstream-template",
+        )
+
 
 def test_azure_provider_rejects_github_only_inputs_unless_dual() -> None:
     """Azure-only adoption rejects GitHub-only surfaces such as CODEOWNERS ownership."""

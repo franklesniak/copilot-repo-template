@@ -516,6 +516,10 @@ def quote_azure_devops_segment(value: str) -> str:
 def validate_azure_devops_url(raw_url: str, field_name: str) -> Any:
     """Parse and validate a credential-free Azure DevOps Services URL."""
     url = validate_single_line_non_empty(raw_url, field_name)
+    if re.search(r"\s", url):
+        raise PlaceholderError(
+            f"{field_name} must not contain whitespace; percent-encode spaces as %20."
+        )
     if INVALID_PERCENT_ENCODING_PATTERN.search(url):
         raise PlaceholderError(f"{field_name} contains malformed percent encoding.")
     parts = urlsplit(url)
