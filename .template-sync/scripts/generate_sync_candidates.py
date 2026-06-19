@@ -133,7 +133,9 @@ VALIDATION_COMMANDS_BY_MODULE = {
         "manual protected-file authorization review",
     ),
     "azure-devops-collaboration": ("manual Azure DevOps collaboration template and policy review",),
-    "azure-devops-platform": ("manual Azure DevOps Services project and security settings review",),
+    "azure-devops-platform": (
+        "manual Azure DevOps Services project, security product, dependency scanning, and dependency update policy review",
+    ),
     "azure-pipelines": ("manual Azure Pipelines validation or pipeline run review",),
     "baseline": (
         "pre-commit run --all-files",

@@ -102,6 +102,17 @@ MARKDOWN_SHARED_SURFACE_TOKENS = {
         "id: markdownlint-cli2",
     ),
 }
+GITHUB_ACTIONS_INLINE_BLOCK_COUNTS = {
+    ".pre-commit-config.yaml": 1,
+}
+GITHUB_ACTIONS_INLINE_MARKER_BEGIN = "# template-sync: begin github-actions-only"
+GITHUB_ACTIONS_INLINE_MARKER_END = "# template-sync: end github-actions-only"
+GITHUB_ACTIONS_SHARED_SURFACE_TOKENS = {
+    ".pre-commit-config.yaml": (
+        "https://github.com/rhysd/actionlint",
+        "id: actionlint",
+    ),
+}
 PYTHON_INLINE_BLOCK_COUNTS = {
     ".pre-commit-config.yaml": 1,
     ".github/dependabot.yml": 2,
@@ -308,7 +319,13 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         ".github/pull_request_template.md": 1,
     },
     "github-actions-reference-only": {
+        "README.md": 5,
         ".github/pull_request_template.md": 1,
+    },
+    "github-platform-reference-only": {
+        "README.md": 2,
+        "OPTIONAL_CONFIGURATIONS.md": 2,
+        "schemas/README.md": 1,
     },
 }
 # Single-module AND-retention reference-only markers. Each block is stripped when
@@ -323,6 +340,7 @@ REFERENCE_ONLY_MARKER_MODULES = {
     "schema-reference-only": "schema",
     "template-sync-support-reference-only": "template-sync-support",
     "github-actions-reference-only": "github-actions",
+    "github-platform-reference-only": "github-platform",
 }
 # OR-retention (ANY) reference-only markers. Each block is retained when at least
 # one named module is included and stripped only when all of them are excluded;
@@ -347,6 +365,8 @@ REFERENCE_ONLY_MANIFEST_PATTERNS = {
     "README.md": "README.md",
     "CONTRIBUTING.md": "CONTRIBUTING.md",
     ".github/pull_request_template.md": ".github/pull_request_template.md",
+    "OPTIONAL_CONFIGURATIONS.md": "OPTIONAL_CONFIGURATIONS.md",
+    "schemas/README.md": "schemas/**",
 }
 REFERENCE_ONLY_FORBIDDEN_ENTRY_POINT_TOKENS = {
     "markdown-reference-only": (
@@ -382,6 +402,12 @@ REFERENCE_ONLY_FORBIDDEN_ENTRY_POINT_TOKENS = {
         "check-metaschema",
         "pytest tests/test_schema_examples.py -v",
         "schemas/README.md",
+    ),
+}
+GITHUB_ACTIONS_REFERENCE_FORBIDDEN_TOKENS = {
+    "README.md": (
+        "`actionlint`",
+        "pre-commit run actionlint --all-files",
     ),
 }
 ISSUE_694_PARTIAL_PROTECTED_DOC_MODULES = {
@@ -1052,6 +1078,15 @@ def _strip_markdown_only_inline_blocks(relative_path: str) -> str:
         relative_path,
         MARKDOWN_INLINE_MARKER_BEGIN,
         MARKDOWN_INLINE_MARKER_END,
+    )
+
+
+def _strip_github_actions_only_inline_blocks(relative_path: str) -> str:
+    """Return file text after simulating a downstream sync without GitHub Actions."""
+    return _strip_inline_blocks(
+        relative_path,
+        GITHUB_ACTIONS_INLINE_MARKER_BEGIN,
+        GITHUB_ACTIONS_INLINE_MARKER_END,
     )
 
 
@@ -1951,6 +1986,7 @@ def test_template_sync_inline_markers_are_known_and_paired() -> None:
         {
             *TERRAFORM_INLINE_BLOCK_PATHS,
             *MARKDOWN_INLINE_BLOCK_PATHS,
+            *GITHUB_ACTIONS_INLINE_BLOCK_COUNTS,
             *PYTHON_INLINE_BLOCK_COUNTS,
             *YAML_INLINE_BLOCK_COUNTS,
             *SCHEMA_INLINE_BLOCK_COUNTS,
@@ -2090,6 +2126,56 @@ def test_non_markdown_sync_leaves_shared_surfaces_as_valid_yaml() -> None:
 def test_markdown_sync_retains_markdown_tooling_in_shared_surfaces() -> None:
     """A sync that includes Markdown must keep the current Markdown validation surface."""
     for relative_path, required_tokens in MARKDOWN_SHARED_SURFACE_TOKENS.items():
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        for required_token in required_tokens:
+            assert required_token in text, f"{relative_path}: {required_token}"
+
+
+def test_github_actions_inline_blocks_are_declared_for_template_sync() -> None:
+    """GitHub-actions-only inline blocks must be paired with manifest notes."""
+    mappings = _path_mapping_by_pattern()
+
+    for relative_path, expected_count in GITHUB_ACTIONS_INLINE_BLOCK_COUNTS.items():
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        assert text.count(GITHUB_ACTIONS_INLINE_MARKER_BEGIN) == expected_count
+        assert text.count(GITHUB_ACTIONS_INLINE_MARKER_END) == expected_count
+        _strip_github_actions_only_inline_blocks(relative_path)
+
+        mapping = mappings.get(relative_path)
+        assert mapping is not None, f"{relative_path} must have a manifest mapping"
+        notes = mapping.get("notes")
+        assert isinstance(notes, str), f"{relative_path} mapping must describe inline blocks"
+        assert "GitHub-actions-only inline block" in notes
+        assert "github-actions module is excluded" in notes
+
+
+def test_non_github_actions_sync_strips_actionlint_from_shared_surfaces() -> None:
+    """A simulated sync without GitHub Actions must remove actionlint."""
+    for relative_path, forbidden_tokens in GITHUB_ACTIONS_SHARED_SURFACE_TOKENS.items():
+        stripped_text = _strip_github_actions_only_inline_blocks(relative_path)
+        for forbidden_token in forbidden_tokens:
+            assert forbidden_token not in stripped_text, f"{relative_path}: {forbidden_token}"
+
+
+def test_non_github_actions_sync_leaves_shared_surfaces_as_valid_yaml() -> None:
+    """Stripping GitHub-actions-only blocks must not corrupt host YAML."""
+    for relative_path in GITHUB_ACTIONS_SHARED_SURFACE_TOKENS:
+        stripped_text = _strip_github_actions_only_inline_blocks(relative_path)
+        try:
+            parsed = yaml.safe_load(stripped_text)
+        except yaml.YAMLError as error:
+            raise AssertionError(
+                f"{relative_path}: stripped text is not valid YAML: {error}"
+            ) from error
+        assert isinstance(parsed, dict), (
+            f"{relative_path}: stripped YAML must load as a mapping, "
+            f"got {type(parsed).__name__}"
+        )
+
+
+def test_github_actions_sync_retains_actionlint_in_shared_surfaces() -> None:
+    """A sync that includes GitHub Actions must keep actionlint validation."""
+    for relative_path, required_tokens in GITHUB_ACTIONS_SHARED_SURFACE_TOKENS.items():
         text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
         for required_token in required_tokens:
             assert required_token in text, f"{relative_path}: {required_token}"
@@ -2510,6 +2596,26 @@ def test_reference_only_pruning_preserves_platform_protocol_headings() -> None:
         stripped_text = _strip_reference_only_blocks_for_modules(relative_path, included_modules)
         for required_heading in required_headings:
             assert required_heading in stripped_text, f"{relative_path}: {required_heading}"
+
+
+def test_github_actions_reference_pruning_removes_actionlint_from_shared_docs() -> None:
+    """Shared docs must not advertise actionlint when GitHub Actions are excluded."""
+    included_modules = {"baseline", "markdown"}
+
+    for relative_path, forbidden_tokens in GITHUB_ACTIONS_REFERENCE_FORBIDDEN_TOKENS.items():
+        stripped_text = _strip_inline_blocks_for_modules(relative_path, included_modules)
+        for forbidden_token in forbidden_tokens:
+            assert forbidden_token not in stripped_text, f"{relative_path}: {forbidden_token}"
+
+
+def test_github_actions_reference_pruning_retains_actionlint_for_github_actions() -> None:
+    """Shared docs that retain GitHub Actions must keep actionlint guidance."""
+    included_modules = {"baseline", "github-actions", "markdown"}
+
+    for relative_path, required_tokens in GITHUB_ACTIONS_REFERENCE_FORBIDDEN_TOKENS.items():
+        stripped_text = _strip_inline_blocks_for_modules(relative_path, included_modules)
+        for required_token in required_tokens:
+            assert required_token in stripped_text, f"{relative_path}: {required_token}"
 
 
 def test_pr_template_reference_pruning_follows_module_boundaries() -> None:

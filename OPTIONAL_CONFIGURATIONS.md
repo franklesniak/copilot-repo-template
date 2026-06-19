@@ -21,7 +21,10 @@ This guide covers optional customizations you can make after completing the init
 - [Code of Conduct Configuration](#code-of-conduct-configuration)
 - [Pull Request Template Customization](#pull-request-template-customization)
   - [Adjusting the Data-File-Specific Pull Request Checklist](#adjusting-the-data-file-specific-pull-request-checklist)
+<!-- template-sync: begin github-platform-reference-only -->
 - [Dependabot Configuration](#dependabot-configuration)
+<!-- template-sync: end github-platform-reference-only -->
+- [Azure DevOps Security and Dependency Automation](#azure-devops-security-and-dependency-automation)
 - [Pre-commit Configuration](#pre-commit-configuration)
 - [Schema Validation Configuration](#schema-validation-configuration)
 - [JSON/YAML Starter Content (Opt-in)](#jsonyaml-starter-content-opt-in)
@@ -925,9 +928,13 @@ Choose one keyword and use it consistently across your project.
 
 ---
 
+<!-- template-sync: begin github-platform-reference-only -->
+
 ## Dependabot Configuration
 
 **File:** `.github/dependabot.yml`
+
+This section configures GitHub Dependabot for repositories that retain the GitHub platform module. Dependabot configuration in `.github/dependabot.yml` is a GitHub-hosted dependency update surface; it does not configure Azure DevOps-native dependency scanning or Azure DevOps routine dependency version updates.
 
 ### Adjusting Update Frequency
 
@@ -1023,6 +1030,38 @@ This template repository's own `.github/dependabot.yml` does not currently exerc
     prefix: "chore(deps)"
   open-pull-requests-limit: 10
 ```
+
+---
+
+<!-- template-sync: end github-platform-reference-only -->
+
+## Azure DevOps Security and Dependency Automation
+
+Azure DevOps support in this template means Azure DevOps Services. Azure DevOps Server behavior must be separately verified against current Microsoft documentation before documenting server-specific claims.
+
+Security scanning and routine dependency version updates are separate capabilities:
+
+- GitHub Advanced Security for Azure DevOps, or the standalone GitHub Secret Protection for Azure DevOps and GitHub Code Security for Azure DevOps products, can provide security scanning for Azure Repos when licensed, enabled, and configured.
+- Routine dependency version updates are an explicit adopter choice and require a separate Azure-compatible mechanism. This template does not enable Renovate, self-hosted Dependabot, or another dependency-update service by default.
+
+Product naming verified against Microsoft Learn on 2026-06-19:
+
+- The bundled [GitHub Advanced Security for Azure DevOps](https://learn.microsoft.com/azure/devops/repos/security/configure-github-advanced-security-features?view=azure-devops) feature set covers secret scanning push protection, repository secret scanning, dependency scanning, and code scanning.
+- [GitHub Secret Protection for Azure DevOps](https://learn.microsoft.com/azure/devops/repos/security/configure-github-advanced-security-features?view=azure-devops) covers push protection and secret scanning.
+- [GitHub Code Security for Azure DevOps](https://learn.microsoft.com/azure/devops/repos/security/configure-github-advanced-security-features?view=azure-devops) covers dependency alerts/scanning, CodeQL/code scanning, third-party findings, and the security overview.
+
+Dependency scanning behavior verified against Microsoft Learn on 2026-06-19:
+
+- [Dependency scanning](https://learn.microsoft.com/azure/devops/repos/security/github-advanced-security-dependency-scanning?view=azure-devops) requires either a pipeline configured with `AdvancedSecurity-Dependency-Scanning@1` or a repository with dependency scanning default setup enabled.
+- Enabling Advanced Security or Code Security alone does not execute dependency scanning automatically.
+- Default setup can cover the default branch and pull request builds targeting that branch; broader or more controlled coverage uses the [Advanced Security Dependency Scanning v1 task](https://learn.microsoft.com/azure/devops/pipelines/tasks/reference/advanced-security-dependency-scanning-v1?view=azure-pipelines) in the pipelines that should be scanned.
+- Microsoft still lists automatic Dependabot security-update PRs for Azure DevOps dependency scanning alerts as a [future roadmap item](https://learn.microsoft.com/azure/devops/release-notes/features-timeline), so do not document those PRs as available without rechecking the roadmap and feature documentation.
+
+For routine version updates, Renovate is the primary documented candidate to evaluate because Renovate documents [Azure DevOps platform support](https://docs.renovatebot.com/modules/platform/azure/). Keep that separate from Azure Pipelines file-update support: the Renovate [Azure Pipelines manager](https://docs.renovatebot.com/modules/manager/azure-pipelines/) is currently beta, opt-in, and disabled by default. If maintainers choose Renovate, decide the bot identity, permissions, schedules, repositories, and secret storage before enabling it.
+
+Self-hosted Dependabot on Azure Pipelines is only an optional pattern to evaluate when maintainers intentionally choose it. Scope any adoption to the source being followed, review the required Azure DevOps permissions, and store tokens or credentials only in the service's secret-management mechanism.
+
+Record the selected Azure DevOps security product and dependency update policy in the Azure DevOps Services adoption guidance path `.azuredevops/platform/adoption-guidance.md` during materialization.
 
 ---
 
@@ -1141,7 +1180,7 @@ If your project prefers Husky for git hooks:
 
 **Files:** `.pre-commit-config.yaml`, `schemas/`, project test directory (for example, `tests/`)
 
-This template ships `schemas/` with one clearly removable worked example and production schemas for template sync metadata (see [`schemas/README.md`](schemas/README.md)). **The default-enabled `check-jsonschema` configuration covers the worked example, `.template-sync/manifest.yml`, `.template-sync/marker.yml` when present, and one real load-bearing repository file: `.github/dependabot.yml` is validated against the bundled `vendor.dependabot` schema.** Beyond that, schema validation is opt-in and SHOULD be added per real schema-backed file family. If your downstream project does not need the worked example, follow the canonical [downstream removal checklist](schemas/README.md#downstream-removal-checklist) in `schemas/README.md` to remove it. Downstream repositories that use `.template-sync/marker.yml` SHOULD keep the marker schema hook so marker changes fail before review when they violate the contract.
+This template ships `schemas/` with one clearly removable worked example and production schemas for template sync metadata (see [`schemas/README.md`](schemas/README.md)). **The default-enabled `check-jsonschema` configuration covers the worked example, `.template-sync/manifest.yml`, and `.template-sync/marker.yml` when present. When the GitHub platform module is retained, it also validates one real load-bearing repository file: `.github/dependabot.yml` against the bundled `vendor.dependabot` schema.** Beyond that, schema validation is opt-in and SHOULD be added per real schema-backed file family. If your downstream project does not need the worked example, follow the canonical [downstream removal checklist](schemas/README.md#downstream-removal-checklist) in `schemas/README.md` to remove it. Downstream repositories that use `.template-sync/marker.yml` SHOULD keep the marker schema hook so marker changes fail before review when they violate the contract.
 
 ### When to Add `check-jsonschema`
 
@@ -1224,13 +1263,13 @@ If you remove the `skipif` guard, you MUST ensure `check-jsonschema` is installe
 
 ### Defaults Recap
 
-- The template ships **two** active `check-jsonschema` configurations by default:
+- The template ships the worked-example `check-jsonschema` configuration by default, plus the `vendor.dependabot` built-in schema hook when the GitHub platform module is retained:
   1. The worked-example schema (`schemas/example-config.schema.json`) and its valid example data files. A companion `check-metaschema` hook self-validates the schema against its declared JSON Schema Draft 2020-12 metaschema.
-  2. A `check-jsonschema --builtin-schema vendor.dependabot` hook that validates `.github/dependabot.yml` against the Dependabot built-in schema bundled with `check-jsonschema`. See the [Built-in Schema Validation for Real Load-Bearing Configuration Files](.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files) ADR for the policy, the explicit "Evaluated but deferred" negative-space record, and the downstream removal guidance.
+  2. When the GitHub platform module is retained, a `check-jsonschema --builtin-schema vendor.dependabot` hook that validates `.github/dependabot.yml` against the Dependabot built-in schema bundled with `check-jsonschema`. See the [Built-in Schema Validation for Real Load-Bearing Configuration Files](.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files) ADR for the policy, the explicit "Evaluated but deferred" negative-space record, and the downstream removal guidance.
 
   Downstream repositories MAY add additional `check-jsonschema` hook entries (project-owned `--schemafile` hooks for their own schema-backed file families, or additional `--builtin-schema` hooks for tool-owned configuration files), and MAY remove the worked example via the canonical [downstream removal checklist](schemas/README.md#downstream-removal-checklist). Hooks for files that a downstream repository deletes **MUST** be removed alongside the file.
-- The template ships active root tests that depend on `check-jsonschema` (declared in the root `pyproject.toml` `dev` group): [`tests/test_schema_examples.py`](tests/test_schema_examples.py) validates schema examples, and [`tests/test_dependabot_schema.py`](tests/test_dependabot_schema.py) validates the documented Dependabot auto-assignment fixture against `vendor.dependabot`. A starter version of the schema-example pattern is provided at `templates/python/tests/test_schema_examples.py` for downstream adoption.
-- Beyond the worked example and the wired built-in schema hooks, schema validation is opt-in; downstream repositories add real hooks and tests when they introduce additional real schemas, or when they want to enable additional `--builtin-schema` coverage.
+- The template ships active root tests that depend on `check-jsonschema` (declared in the root `pyproject.toml` `dev` group): [`tests/test_schema_examples.py`](tests/test_schema_examples.py) validates schema examples; when the GitHub platform module is retained, [`tests/test_dependabot_schema.py`](tests/test_dependabot_schema.py) validates the documented Dependabot auto-assignment fixture against `vendor.dependabot`. A starter version of the schema-example pattern is provided at `templates/python/tests/test_schema_examples.py` for downstream adoption.
+- Beyond the worked example and any wired built-in schema hooks, schema validation is opt-in; downstream repositories add real hooks and tests when they introduce additional real schemas, or when they want to enable additional `--builtin-schema` coverage.
 - Project-owned schemas SHOULD continue to live under `schemas/`. Built-in schemas referenced via `--builtin-schema` are **not** vendored into `schemas/`; their content tracks `check-jsonschema` releases.
 - JSONC, JSON5, ecosystem-specific YAML validators, and broader SchemaStore / catalog coverage remain opt-in unless a downstream repository explicitly ships them. See the dedicated subsections below for adoption guidance.
 
@@ -1517,7 +1556,7 @@ Adopters MAY add these as additional pre-commit hooks (or as separate CI jobs) w
 
 ## Future SchemaStore Validation for Repository Configuration Files
 
-**Status:** Mixed — `.github/dependabot.yml` is validated by default (see [Schema Validation Configuration](#schema-validation-configuration) and the [Built-in Schema Validation for Real Load-Bearing Configuration Files ADR](.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files)). Other candidates remain future work and are not enabled by default.
+**Status:** Mixed — when the GitHub platform module is retained, `.github/dependabot.yml` is validated by default (see [Schema Validation Configuration](#schema-validation-configuration) and the [Built-in Schema Validation for Real Load-Bearing Configuration Files ADR](.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files)). Other candidates remain future work and are not enabled by default.
 
 Several common repository configuration files have public schemas published on [SchemaStore](https://www.schemastore.org/) or maintained by their respective ecosystems. Wiring schema validation for any of the **deferred** candidates below is out of scope for the worked example shipped under `schemas/` and requires an explicit downstream project decision.
 

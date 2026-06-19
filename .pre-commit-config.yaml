@@ -49,6 +49,7 @@ repos:
         args: [-c, .yamllint.yml]
   # template-sync: end yaml-only
 
+  # template-sync: begin github-actions-only
   # GitHub Actions workflow linting
   # Note: First-run hook environment setup may fail on restricted networks
   # (actionlint downloads a Go toolchain to build the binary). CI is the
@@ -58,6 +59,7 @@ repos:
     rev: v1.7.12
     hooks:
       - id: actionlint
+  # template-sync: end github-actions-only
 
   # template-sync: begin python-only
   # Python formatting

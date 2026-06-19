@@ -347,9 +347,10 @@ template_manifest:
       requires_all:
         - baseline
       notes: >-
-        Contains a YAML-only inline block for yamllint, a Python-only inline
-        block for Python project hooks, a Schema-only inline block for schema
-        worked-example validators and schema self-validation hooks, a
+        Contains a YAML-only inline block for yamllint, a GitHub-actions-only
+        inline block for actionlint, a Python-only inline block for Python
+        project hooks, a Schema-only inline block for schema worked-example
+        validators and schema self-validation hooks, a
         Template-sync-support-only inline block for template sync schema example
         validators, runtime schema self-validation hooks, manifest, marker, and
         instruction-contract validators, a
@@ -357,7 +358,9 @@ template_manifest:
         validation, a Markdown-only inline block for markdownlint-cli2, and a
         Terraform-only inline block for repo-local Terraform hooks. Remove the
         delimited YAML block when the yaml module is excluded, remove the
-        delimited Python block when the python module is excluded, remove the
+        delimited GitHub-actions block when the github-actions module is
+        excluded, remove the delimited Python block when the python module is
+        excluded, remove the
         delimited Schema-only inline block when the schema module is excluded,
         remove the delimited Template-sync-support-only inline block when the
         template-sync-support module is excluded, remove the delimited
@@ -437,6 +440,12 @@ template_manifest:
     - pattern: 'schemas/**'
       requires_all:
         - schema
+      notes: >-
+        Contains Markdown-safe *-reference-only inline blocks, currently
+        github-platform-reference-only blocks for the optional GitHub Dependabot
+        built-in schema validation subsection in `schemas/README.md`. Remove
+        each delimited reference-only block when its module is excluded while
+        preserving retained schema guidance.
     - pattern: 'tests/test_schema_examples.py'
       requires_any:
         - schema
@@ -554,6 +563,12 @@ template_manifest:
     - pattern: 'OPTIONAL_CONFIGURATIONS.md'
       requires_all:
         - template-onboarding
+      notes: >-
+        Contains Markdown-safe *-reference-only inline blocks, currently
+        github-platform-reference-only blocks for GitHub Dependabot optional
+        configuration guidance. Remove each delimited reference-only block when
+        its module is excluded while preserving retained onboarding guidance
+        and Azure DevOps security/dependency automation choices.
     - pattern: 'TEMPLATE_MAINTENANCE.md'
       requires_all:
         - template-onboarding

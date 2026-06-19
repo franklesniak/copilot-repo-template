@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260619.0
+**Version:** 1.1.20260619.1
 
 ## Metadata
 
@@ -815,6 +815,10 @@ The current `*-only` marker forms are:
 # ...
 # template-sync: end template-sync-support-only
 
+# template-sync: begin github-actions-only
+# ...
+# template-sync: end github-actions-only
+
 # template-sync: begin github-platform-only
 # ...
 # template-sync: end github-platform-only
@@ -870,6 +874,10 @@ The current `*-reference-only` marker forms are Markdown-safe HTML comments:
 <!-- template-sync: begin github-actions-reference-only -->
 ...
 <!-- template-sync: end github-actions-reference-only -->
+
+<!-- template-sync: begin github-platform-reference-only -->
+...
+<!-- template-sync: end github-platform-reference-only -->
 ```
 
 Most `*-reference-only` markers name a single module and use the same AND-retention strip semantics as the `*-only` family. The `schema-template-sync-support-only` marker is a registered multi-module AND-retention family: it is retained only when both `schema` and `template-sync-support` are adopted. The `data-ci-reference-only` marker is the OR-retention exception: it names the OR-group `json`, `yaml`, `schema`, and `template-sync-support`, mirroring the `requires_any` relation of `.github/workflows/data-ci.yml`. It is retained when at least one of those modules is adopted and is stripped only when every one of them is excluded.
@@ -929,9 +937,16 @@ The current `markdown-reference-only`, `powershell-reference-only`, `python-refe
 - `README.md` and `CONTRIBUTING.md` for removable optional-stack references in shared baseline contributor-facing documentation.
 - `.github/pull_request_template.md` for removable Python, PowerShell, and schema checklist sections in the retained PR template.
 
-The current `github-actions-reference-only` inline block lives in:
+The current `github-actions-reference-only` inline blocks live in:
 
+- `README.md` for GitHub Actions-specific `actionlint` validation prose.
 - `.github/pull_request_template.md` for the GitHub Actions checklist section in the retained PR template.
+
+The current `github-platform-reference-only` inline blocks live in:
+
+- `README.md` for the GitHub Dependabot key-file rows.
+- `OPTIONAL_CONFIGURATIONS.md` for GitHub Dependabot optional configuration guidance.
+- `schemas/README.md` for GitHub Dependabot built-in schema validation guidance.
 
 The current `template-sync-support-reference-only` inline block lives in:
 
@@ -971,6 +986,10 @@ The current `github-platform-only` inline blocks live in:
 - `.pre-commit-config.yaml` for the `validate-dependabot-config` hook.
 - `.github/workflows/data-ci.yml` for Dependabot validation hook-list documentation and the dedicated `Run validate-dependabot-config` step.
 
+The current `github-actions-only` inline block lives in:
+
+- `.pre-commit-config.yaml` for the `actionlint` hook.
+
 The `schema-template-sync-support-only` inline marker family is registered for future blocks that require both `schema` and `template-sync-support`; no checked-in block currently uses it.
 
 The current `git-lfs-only` inline block lives in:
@@ -994,6 +1013,8 @@ After stripping `schema-only` blocks, a downstream repository that excludes `sch
 After stripping `template-sync-support-only` blocks, a downstream repository that excludes `template-sync-support` should be able to run `pre-commit run --all-files` and the retained data-file workflow without invoking template sync schema example validators, first-adoption quality suppression validators, runtime schema self-validation hooks, manifest validators, marker validators, or instruction-contract validators.
 
 After stripping `github-platform-only` blocks, a downstream repository that excludes `github-platform` should be able to run `pre-commit run --all-files` and the retained data-file workflow without retaining Dependabot validation hooks or invoking a missing `validate-dependabot-config` hook.
+
+After stripping `github-actions-only` blocks, a downstream repository that excludes `github-actions` should be able to run `pre-commit run --all-files` without retaining GitHub Actions-only `actionlint` hook installation or execution. Azure Pipelines validation is intentionally separate from this hook.
 
 After stripping `git-lfs-only` blocks, a downstream repository that excludes `git-lfs` should receive the baseline root `.gitattributes` without any `filter=lfs`, `diff=lfs`, or `merge=lfs` attributes.
 
