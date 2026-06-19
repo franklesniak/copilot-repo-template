@@ -12,6 +12,7 @@ import importlib
 import json
 import os
 import re
+import shlex
 import sys
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
@@ -599,7 +600,7 @@ def validate_azure_devops_project_url(
             segments[0].casefold() != organization.casefold() or segments[1] != project
         ):
             raise PlaceholderError(
-                "--azure-devops-project-url must use the selected organization " "and project path."
+                "--azure-devops-project-url must use the selected organization and project path."
             )
     else:
         account_name = parts.hostname[: -len(".visualstudio.com")]
@@ -1398,7 +1399,7 @@ def replace_contributing_clone_block(
         "### 1. Clone the Repository\n\n"
         "```bash\n"
         f"git clone {azure_context.clone_url}\n"
-        f"cd {azure_context.repository}\n"
+        f"cd {shlex.quote(azure_context.repository)}\n"
         "```\n"
     )
     return f"{text[:start]}{replacement}{text[end:]}", 1
