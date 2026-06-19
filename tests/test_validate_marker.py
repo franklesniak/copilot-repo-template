@@ -56,6 +56,8 @@ def _manifest(version: int = 2) -> dict[str, Any]:
         {"name": name, "description": description}
         for name, description in MODULE_DEFINITIONS.items()
     ]
+    if version == 3:
+        modules.append({"name": "azure-pipelines", "description": "Azure Pipelines files."})
     path_mappings: list[dict[str, Any]] = [
         {"pattern": "README.md", "requires_all": ["baseline"]},
         {"pattern": "CLAUDE.md", "requires_all": ["agent-instructions"]},
@@ -97,6 +99,7 @@ def _manifest(version: int = 2) -> dict[str, Any]:
         "downstream_retention": "Downstream repositories keep marker data for syncs.",
     }
 
+    compatibility_groups: list[dict[str, Any]] | None = None
     if version == 1:
         notes["known_limitations"] = [
             {
@@ -114,16 +117,36 @@ def _manifest(version: int = 2) -> dict[str, Any]:
             }
         )
         filtering["requires_any_semantics"] = "OR"
+        if version == 3:
+            path_mappings.append(
+                {
+                    "pattern": ".azuredevops/pipelines/**",
+                    "requires_all": ["azure-pipelines"],
+                }
+            )
+            compatibility_groups = [
+                {
+                    "name": "ci-host",
+                    "description": "CI host modules.",
+                    "default_modules": ["github-actions"],
+                    "alternatives": [
+                        {"host": "github", "modules": ["github-actions"]},
+                        {"host": "azure-devops", "modules": ["azure-pipelines"]},
+                    ],
+                    "mixed_hosts": "unsupported",
+                }
+            ]
 
-    return {
-        "template_manifest": {
-            "version": version,
-            "modules": modules,
-            "path_mappings": path_mappings,
-            "filtering": filtering,
-            "notes": notes,
-        }
+    template_manifest: dict[str, Any] = {
+        "version": version,
+        "modules": modules,
+        "path_mappings": path_mappings,
+        "filtering": filtering,
+        "notes": notes,
     }
+    if compatibility_groups is not None:
+        template_manifest["compatibility_groups"] = compatibility_groups
+    return {"template_manifest": template_manifest}
 
 
 def _marker(
@@ -307,6 +330,21 @@ def test_malformed_marker_data_is_rejected(marker_repo: Path) -> None:
 
     assert result.returncode == 1
     assert "Schema validation failed for .template-sync/marker.yml" in result.stderr
+
+
+def test_unsupported_mixed_host_selection_fails_with_actionable_message(
+    marker_repo: Path,
+) -> None:
+    """Unsupported compatibility groups fail before ordinary file consistency checks."""
+    _write_manifest(marker_repo, version=3)
+    _write_marker(marker_repo, ["baseline", "github-actions", "azure-pipelines"])
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 1
+    assert "Unsupported module compatibility selection(s)" in result.stderr
+    assert "Unsupported mixed-host selection in compatibility group ci-host" in result.stderr
+    assert "Select one host family" in result.stderr
 
 
 def test_missing_concrete_mapped_file_fails(marker_repo: Path) -> None:

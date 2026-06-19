@@ -17,6 +17,7 @@ SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "generate_sync_candidat
 SCRIPT_DIR = SCRIPT_PATH.parent
 MARKER_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-marker.schema.json"
 MANIFEST_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-manifest.schema.json"
+MANIFEST_PATH = REPO_ROOT / ".template-sync" / "manifest.yml"
 SOURCE_REPO = "https://github.com/franklesniak/copilot-repo-template.git"
 MODULE_DEFINITIONS = {
     "baseline": "Baseline files.",
@@ -34,6 +35,14 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import generate_sync_candidates as sync_candidates  # noqa: E402
+
+
+def test_validation_commands_cover_every_manifest_module() -> None:
+    """Retained-module summaries must have validation guidance for each module."""
+    manifest = yaml.safe_load(MANIFEST_PATH.read_text(encoding="utf-8"))
+    modules = {module["name"] for module in manifest["template_manifest"]["modules"]}
+
+    assert modules <= set(sync_candidates.VALIDATION_COMMANDS_BY_MODULE)
 
 
 def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:

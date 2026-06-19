@@ -14,12 +14,19 @@
         },
         {
           "$ref": "#/$defs/templateManifestV2"
+        },
+        {
+          "$ref": "#/$defs/templateManifestV3"
         }
       ]
     }
   },
   "$defs": {
     "moduleName": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "hostName": {
       "type": "string",
       "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
     },
@@ -51,6 +58,61 @@
       "minItems": 1,
       "items": {
         "$ref": "#/$defs/moduleDefinition"
+      }
+    },
+    "compatibilityAlternative": {
+      "type": "object",
+      "required": ["host", "modules"],
+      "additionalProperties": false,
+      "properties": {
+        "host": {
+          "$ref": "#/$defs/hostName"
+        },
+        "modules": {
+          "$ref": "#/$defs/moduleList"
+        }
+      }
+    },
+    "compatibilityGroup": {
+      "type": "object",
+      "required": [
+        "name",
+        "description",
+        "default_modules",
+        "alternatives",
+        "mixed_hosts"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/moduleName"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "default_modules": {
+          "$ref": "#/$defs/moduleList"
+        },
+        "alternatives": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/compatibilityAlternative"
+          }
+        },
+        "mixed_hosts": {
+          "type": "string",
+          "enum": ["allowed", "unsupported"]
+        }
+      }
+    },
+    "compatibilityGroups": {
+      "type": "array",
+      "description": "Host-family compatibility groups for mutually related optional modules.",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/compatibilityGroup"
       }
     },
     "pathMappingV1": {
@@ -257,6 +319,45 @@
         },
         "modules": {
           "$ref": "#/$defs/moduleDefinitions"
+        },
+        "path_mappings": {
+          "type": "array",
+          "description": "Ordered path patterns and the module relations required for each path.",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/pathMappingV2"
+          }
+        },
+        "filtering": {
+          "$ref": "#/$defs/filteringV2"
+        },
+        "notes": {
+          "$ref": "#/$defs/notesV2"
+        }
+      }
+    },
+    "templateManifestV3": {
+      "type": "object",
+      "required": [
+        "version",
+        "modules",
+        "compatibility_groups",
+        "path_mappings",
+        "filtering",
+        "notes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "integer",
+          "const": 3,
+          "description": "Manifest contract version."
+        },
+        "modules": {
+          "$ref": "#/$defs/moduleDefinitions"
+        },
+        "compatibility_groups": {
+          "$ref": "#/$defs/compatibilityGroups"
         },
         "path_mappings": {
           "type": "array",

@@ -6,8 +6,11 @@ template_sync:
     - git-lfs
     - agent-instructions
     - github-platform
+    - azure-devops-platform
     - github-actions
+    - azure-pipelines
     - github-templates
+    - azure-devops-collaboration
     - template-onboarding
     - template-sync-support
     - markdown

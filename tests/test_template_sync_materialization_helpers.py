@@ -19,6 +19,8 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from template_sync_materialization_helpers import (  # noqa: E402
     LocalPathOwnership,
+    ManifestCompatibilityAlternative,
+    ManifestCompatibilityGroup,
     MissingExpectedInlineBlockError,
     RepositoryPathError,
     classify_repository_file,
@@ -28,12 +30,14 @@ from template_sync_materialization_helpers import (  # noqa: E402
     is_template_managed_path,
     load_validated_manifest,
     load_validated_marker_decision_data,
+    parse_manifest_compatibility_groups,
     parse_manifest_mappings,
     remove_inline_block_family,
     remove_inline_blocks_for_modules,
     resolve_safe_repository_target_path,
     selected_local_path_ownership_for_path,
     selected_relation_for_path,
+    validate_module_compatibility,
 )
 
 SOURCE_REPO = "https://github.com/franklesniak/copilot-repo-template.git"
@@ -206,6 +210,65 @@ def test_mapping_classification_identifies_retained_excluded_and_unmapped_paths(
     assert is_retained_template_path("README.md", mappings, included_modules)
     assert is_excluded_template_path("templates/python/app.py", mappings, included_modules)
     assert not is_template_managed_path("docs/unmapped.md", mappings)
+
+
+def test_manifest_compatibility_groups_parse_and_validate_host_mixes() -> None:
+    """Compatibility helpers allow declared mixes and report unsupported host mixes."""
+    manifest = _manifest(
+        [
+            {"pattern": ".github/workflows/**", "requires_all": ["github-actions"]},
+            {"pattern": ".azuredevops/pipelines/**", "requires_all": ["azure-pipelines"]},
+        ]
+    )
+    manifest["template_manifest"]["modules"].extend(
+        [
+            {"name": "github-actions", "description": "GitHub Actions files."},
+            {"name": "azure-pipelines", "description": "Azure Pipelines files."},
+        ]
+    )
+    manifest["template_manifest"]["compatibility_groups"] = [
+        {
+            "name": "ci-host",
+            "description": "CI host modules.",
+            "default_modules": ["github-actions"],
+            "alternatives": [
+                {"host": "github", "modules": ["github-actions"]},
+                {"host": "azure-devops", "modules": ["azure-pipelines"]},
+            ],
+            "mixed_hosts": "allowed",
+        }
+    ]
+
+    groups = parse_manifest_compatibility_groups(manifest)
+
+    assert groups[0].default_modules == frozenset({"github-actions"})
+    assert not validate_module_compatibility({"github-actions", "azure-pipelines"}, groups)
+
+    unsupported_group = ManifestCompatibilityGroup(
+        name="ci-host",
+        description="CI host modules.",
+        default_modules=frozenset({"github-actions"}),
+        alternatives=(
+            ManifestCompatibilityAlternative(
+                host="github",
+                modules=frozenset({"github-actions"}),
+            ),
+            ManifestCompatibilityAlternative(
+                host="azure-devops",
+                modules=frozenset({"azure-pipelines"}),
+            ),
+        ),
+        mixed_hosts="unsupported",
+    )
+
+    errors = validate_module_compatibility(
+        {"github-actions", "azure-pipelines"},
+        (unsupported_group,),
+    )
+
+    assert len(errors) == 1
+    assert "Unsupported mixed-host selection in compatibility group ci-host" in errors[0]
+    assert "Select one host family" in errors[0]
 
 
 def test_protected_file_classification_uses_shared_rules() -> None:

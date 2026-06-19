@@ -38,6 +38,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     manifest_covers_directory,
     path_has_symlink_component,
     normalize_repository_path as normalize_repository_path,
+    parse_manifest_compatibility_groups,
     parse_manifest_mappings,
     parse_marker_decision_data,
     repository_relative_path,
@@ -45,6 +46,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     resolve_repo_root,
     selected_relation_for_path,
     unresolved_concrete_manifest_patterns,
+    validate_module_compatibility,
     validate_protected_file_decisions,
     validate_schema,
 )
@@ -466,6 +468,19 @@ def validate_marker_state(
         raise MarkerValidationError(
             "Marker includes module(s) that are not defined by the manifest: "
             + ", ".join(sorted(unknown_included_modules))
+        )
+    compatibility_groups = parse_manifest_compatibility_groups(
+        manifest,
+        module_names=manifest_modules,
+    )
+    compatibility_errors = validate_module_compatibility(
+        included_modules,
+        compatibility_groups,
+    )
+    if compatibility_errors:
+        raise MarkerValidationError(
+            "Unsupported module compatibility selection(s):\n"
+            + "\n".join(f"  - {error}" for error in compatibility_errors)
         )
 
     validate_local_path_ownership_semantics(repo_root, local_path_ownership, mappings)

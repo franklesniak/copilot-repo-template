@@ -93,6 +93,9 @@ DISCOVERY_SKIP_DIRS = frozenset(
 ADOPTION_MODE_MODULES = frozenset(
     {
         "agent-instructions",
+        "azure-devops-collaboration",
+        "azure-devops-platform",
+        "azure-pipelines",
         "baseline",
         "github-actions",
         "github-platform",
@@ -129,6 +132,9 @@ VALIDATION_COMMANDS_BY_MODULE = {
         "npm run lint:md",
         "manual protected-file authorization review",
     ),
+    "azure-devops-collaboration": ("manual Azure DevOps collaboration template and policy review",),
+    "azure-devops-platform": ("manual Azure DevOps Services project and security settings review",),
+    "azure-pipelines": ("manual Azure Pipelines validation or pipeline run review",),
     "baseline": (
         "pre-commit run --all-files",
         "placeholder and repository-identity review",

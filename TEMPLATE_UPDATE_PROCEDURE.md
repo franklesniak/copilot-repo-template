@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260617.1
+**Version:** 1.1.20260619.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-17
+- **Last Updated:** 2026-06-19
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the read-only first-adoption preflight/questionnaire mode, raw first-adoption state reporting, first-adoption quality-debt reports and suppressions, the adoption difficulties journal, one-shot first-adoption materialization, shell-safe first-adoption args files, package identity and collaboration-policy materialization, first-adoption structural convention assessment, first-adoption working-tree validation, downstream local path ownership records, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -680,8 +680,11 @@ When changing the taxonomy, update `.template-sync/manifest.yml` first, then upd
 | `git-lfs` | Opt-in Git LFS-managed attributes for selected opaque authoring and project formats in the baseline root `.gitattributes`. |
 | `agent-instructions` | Agent entry points, Copilot instructions, Cursor rules, reusable prompt guidance, and modular instruction docs. |
 | `github-platform` | Repository-level GitHub platform configuration that is not itself an issue template, PR template, CODEOWNERS file, or workflow. Includes Dependabot configuration, repository funding metadata, security-advisory configuration, code-scanning configuration outside of workflows, and similar repository-scope GitHub-only settings. Current example: `.github/dependabot.yml`. Likely future inhabitants include `.github/FUNDING.yml`, `.github/security/*`, and other repository-scope GitHub configuration files. |
+| `azure-devops-platform` | Azure DevOps Services project, security, and service configuration guidance that is not itself an Azure Pipelines file or Azure Repos collaboration template. |
 | `github-actions` | GitHub Actions workflow files under `.github/workflows/**`. |
+| `azure-pipelines` | Azure Pipelines CI assets and setup guidance under `.azuredevops/pipelines/**`. |
 | `github-templates` | GitHub issue templates, PR templates, CODEOWNERS, and GitHub collaboration surfaces. |
+| `azure-devops-collaboration` | Azure Repos PR templates, Azure Boards intake guidance, reviewer policies, and Azure DevOps Services security intake guidance. |
 | `template-onboarding` | Template adoption and template maintainer guidance that downstream repositories typically remove after adoption. |
 | `template-sync-support` | Committed files used to perform future template syncs, such as the sync procedure, sync marker, sync manifest, sync validation helper scripts, and future sync validation docs. |
 | `markdown` | Markdown linting, Markdown templates, docs guidance, and Markdown-only documentation assets. |
@@ -698,7 +701,7 @@ Apply the most specific matching row. The most-specific match wins: when an exac
 
 Manifest version 1 rows use `requires_all` only: the path is included in the per-file review only when every listed module appears in `included_modules`.
 
-Manifest version 2 rows MAY also use `requires_any`: the path is included only when every `requires_all` module appears in `included_modules` and, when `requires_any` is present, at least one `requires_any` module also appears in `included_modules`. A row with `requires_all` plus `requires_any` therefore means "all of these modules, plus at least one of these alternatives."
+Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is included only when every `requires_all` module appears in `included_modules` and, when `requires_any` is present, at least one `requires_any` module also appears in `included_modules`. A row with `requires_all` plus `requires_any` therefore means "all of these modules, plus at least one of these alternatives." Manifest version 3 additionally records compatibility groups for related host-family modules.
 
 | Path pattern | Module(s) |
 | --- | --- |
@@ -725,7 +728,9 @@ Manifest version 2 rows MAY also use `requires_any`: the path is included only w
 | `.github/ISSUE_TEMPLATE/**` | `github-templates` |
 | `.github/pull_request_template.md` | `github-templates` |
 | `.github/CODEOWNERS` | `github-templates` |
+| `.azuredevops/pull_request_template.*`, `.azuredevops/pull_request_template/**` | `azure-devops-collaboration` |
 | `.github/dependabot.yml` | `github-platform` |
+| `.azuredevops/platform/**` | `azure-devops-platform` |
 | `tests/test_dependabot_schema.py`, `tests/fixtures/dependabot/auto-assignment.yml` | `github-platform`, `schema` |
 | `.github/workflows/markdownlint.yml` | `markdown`, `github-actions` |
 | `.github/workflows/powershell-ci.yml` | `powershell`, `github-actions` |
@@ -736,6 +741,7 @@ Manifest version 2 rows MAY also use `requires_any`: the path is included only w
 | `.github/workflows/check-placeholders.yml` | `baseline`, `github-actions` |
 | `.github/scripts/replace-template-placeholders.py` | `baseline` |
 | `.github/workflows/auto-fix-precommit.yml` | `baseline`, `github-actions` |
+| `.azuredevops/pipelines/**` | `azure-pipelines` |
 | `.yamllint.yml` | `yaml` |
 | `.pre-commit-config.yaml` | `baseline` |
 | `.markdownlint.jsonc`, `.remarkignore`, `.remarkrc.mjs`, `package.json`, `package-lock.json`, `.github/scripts/lint-nested-markdown.js`, `.github/scripts/check-prohibited-placeholders.py` | `markdown` |
@@ -763,7 +769,7 @@ Manifest version 2 rows MAY also use `requires_any`: the path is included only w
 
 ### Manifest Version Migration
 
-Version 1 manifests remain valid for downstream repositories that have not adopted version 2. Treat every version 1 mapping as a `requires_all` mapping and ignore `requires_any`, because version 1 does not allow that field.
+Version 1 manifests remain valid for downstream repositories that have not adopted version 2 or version 3. Treat every version 1 mapping as a `requires_all` mapping and ignore `requires_any`, because version 1 does not allow that field. Version 3 keeps the version 2 path-mapping semantics and adds `compatibility_groups`.
 
 To migrate a manifest from version 1 to version 2:
 
