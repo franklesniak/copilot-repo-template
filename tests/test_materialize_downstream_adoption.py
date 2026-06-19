@@ -2676,6 +2676,7 @@ def test_placeholder_replacement_reuses_helper_and_missing_helper_fails(
     assert "placeholder helper is unavailable" in missing_result.stderr
 
 
+@pytest.mark.upstream_template_only
 def test_materializer_replays_azure_provider_fields_from_marker(
     tmp_path: Path,
 ) -> None:
