@@ -136,7 +136,7 @@
           "$ref": "#/$defs/singleLineNonEmptyString"
         },
         "azure_devops_organization_url": {
-          "$ref": "#/$defs/azureDevOpsHttpsUrl"
+          "$ref": "#/$defs/azureDevOpsOrganizationUrl"
         },
         "azure_devops_project": {
           "$ref": "#/$defs/singleLineNonEmptyString"
@@ -408,6 +408,22 @@
       "type": "string",
       "format": "uri",
       "pattern": "^https://(dev\\.azure\\.com|[^/?#@:]+\\.visualstudio\\.com)(:[0-9]+)?(/|$)",
+      "not": {
+        "anyOf": [
+          {
+            "pattern": "^https://[^/?#]*@"
+          },
+          {
+            "pattern": "[?#]"
+          }
+        ]
+      }
+    },
+    "azureDevOpsOrganizationUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "Azure DevOps Services organization root URL: https://dev.azure.com/<organization> or https://<organization>.visualstudio.com, with no extra path segments, mirroring validate_azure_devops_organization_url.",
+      "pattern": "^https://(dev\\.azure\\.com(:[0-9]+)?/[^/?#@]+/?|[^/?#@:]+\\.visualstudio\\.com(:[0-9]+)?/?)$",
       "not": {
         "anyOf": [
           {

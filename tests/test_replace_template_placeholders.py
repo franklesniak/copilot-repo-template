@@ -341,6 +341,23 @@ def test_azure_provider_rejects_github_only_inputs_unless_dual() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    "security_reporting_mode",
+    ["contact-only", "github-private-only", "both"],
+)
+def test_azure_only_rejects_security_reporting_mode(security_reporting_mode: str) -> None:
+    """Azure-only adoption rejects --security-reporting-mode (a no-op for this provider)."""
+    with pytest.raises(placeholder_helper.PlaceholderError, match="security-reporting-mode"):
+        placeholder_helper.build_replacement_context(
+            host_provider="azure-devops-services",
+            azure_devops_organization="contoso",
+            azure_devops_project="Platform",
+            azure_devops_repository="downstream-template",
+            security_contact="security@example.com",
+            security_reporting_mode=security_reporting_mode,
+        )
+
+
 def test_azure_security_reporting_renders_security_md_without_github_urls(
     tmp_path: Path,
 ) -> None:

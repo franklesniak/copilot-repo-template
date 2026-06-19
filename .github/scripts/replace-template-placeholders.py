@@ -760,7 +760,10 @@ def validate_provider_inputs(
         incompatible_inputs.append("--issue-label-policy/--issue-label")
     if discussions_policy is not None:
         incompatible_inputs.append("--discussions-policy")
-    if security_reporting_mode in {"github-private-only", "both"}:
+    if security_reporting_mode is not None:
+        # SECURITY.md rendering for Azure-only adoptions is driven by
+        # --azure-security-intake-policy/--security-contact, so any
+        # --security-reporting-mode value (including contact-only) is a no-op here.
         incompatible_inputs.append("--security-reporting-mode")
     if incompatible_inputs:
         raise PlaceholderError(
