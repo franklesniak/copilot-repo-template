@@ -1,0 +1,90 @@
+# Azure Pipelines Terraform validation.
+#
+# Azure Repos pull request validation is configured through branch policy build
+# validation. This YAML intentionally omits a `pr:` trigger.
+
+name: "$(Date:yyyyMMdd).$(Rev:r)"
+
+trigger:
+  branches:
+    include:
+      - "*"
+
+variables:
+  terraformVersion: "1.14.4"
+  tflintVersion: "v0.51.1"
+
+pool:
+  vmImage: "ubuntu-latest"
+
+steps:
+  - checkout: self
+
+  - bash: |
+      set -euo pipefail
+      sudo apt-get update
+      sudo apt-get install -y gnupg software-properties-common
+      wget -O- https://apt.releases.hashicorp.com/gpg |
+        gpg --dearmor |
+        sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg >/dev/null
+      echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" |
+        sudo tee /etc/apt/sources.list.d/hashicorp.list
+      sudo apt-get update
+      sudo apt-get install -y "terraform=$(terraformVersion)-*"
+      terraform version
+    displayName: "Install Terraform $(terraformVersion)"
+
+  - bash: |
+      set -euo pipefail
+      go install "github.com/terraform-linters/tflint@$(tflintVersion)"
+      echo "##vso[task.prependpath]$HOME/go/bin"
+      "$HOME/go/bin/tflint" --version
+    displayName: "Install TFLint $(tflintVersion)"
+
+  - bash: terraform fmt -check -recursive -diff
+    displayName: "Terraform format check"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: |
+      set -euo pipefail
+      mkdir -p "$HOME/.terraform.d/plugin-cache"
+      printf 'plugin_cache_dir = "%s/.terraform.d/plugin-cache"\n' "$HOME" > "$HOME/.terraformrc"
+
+      mapfile -t tf_dirs < <(find . -name '*.tf' -exec dirname {} \; | sort -u)
+      if [ "${#tf_dirs[@]}" -eq 0 ]; then
+        echo "No Terraform directories found. Skipping validate."
+        exit 0
+      fi
+
+      for dir in "${tf_dirs[@]}"; do
+        echo "=== Validating $dir ==="
+        terraform -chdir="$dir" init -backend=false
+        terraform -chdir="$dir" validate
+      done
+    displayName: "Terraform validate"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: |
+      set -euo pipefail
+      tflint --init
+      tflint --recursive --config "$(Build.SourcesDirectory)/.tflint.hcl"
+    displayName: "Run TFLint"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: |
+      set -euo pipefail
+      mapfile -t test_dirs < <(
+        find . -path './templates' -prune -o -name '*.tftest.hcl' -printf '%h\n' | sort -u
+      )
+      if [ "${#test_dirs[@]}" -eq 0 ]; then
+        echo "No Terraform test files (.tftest.hcl) found. Skipping tests."
+        exit 0
+      fi
+
+      for dir in "${test_dirs[@]}"; do
+        echo "=== Testing $dir ==="
+        terraform -chdir="$dir" init
+        terraform -chdir="$dir" test -verbose
+      done
+    displayName: "Run Terraform tests"
+    workingDirectory: "$(Build.SourcesDirectory)"

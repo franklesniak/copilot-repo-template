@@ -337,6 +337,63 @@ template_manifest:
       notes: >-
         Contains a Terraform-only inline block for aggregate pre-commit setup.
         Remove the delimited block when the terraform module is excluded.
+    - pattern: '.azuredevops/pipelines/README.md'
+      requires_all:
+        - azure-pipelines
+    - pattern: '.azuredevops/pipelines/precommit.yml'
+      requires_all:
+        - baseline
+        - azure-pipelines
+      notes: >-
+        Runs the aggregate pre-commit gate in Azure Pipelines. Contains a
+        Terraform-only inline block for setup required by repo-local Terraform
+        hooks. Remove the delimited block when the terraform module is excluded.
+    - pattern: '.azuredevops/pipelines/check-placeholders.yml'
+      requires_all:
+        - baseline
+        - azure-pipelines
+    - pattern: '.azuredevops/pipelines/markdownlint.yml'
+      requires_all:
+        - markdown
+        - azure-pipelines
+    - pattern: '.azuredevops/pipelines/powershell-ci.yml'
+      requires_all:
+        - powershell
+        - azure-pipelines
+    - pattern: '.azuredevops/pipelines/python-ci.yml'
+      requires_all:
+        - python
+        - azure-pipelines
+    - pattern: '.azuredevops/pipelines/terraform-ci.yml'
+      requires_all:
+        - terraform
+        - azure-pipelines
+    - pattern: '.azuredevops/pipelines/data-ci.yml'
+      requires_all:
+        - azure-pipelines
+      requires_any:
+        - json
+        - yaml
+        - schema
+        - template-sync-support
+      notes: >-
+        Runs retained data-file and template-sync hooks in Azure Pipelines
+        without GitHub Actions-only actionlint validation. Contains YAML-only
+        inline blocks for yamllint-specific documentation and the dedicated
+        yamllint CI step. Contains Schema-only inline blocks for worked-example
+        schema validation documentation and alias-based CI steps. Contains
+        Template-sync-support-only inline blocks for template sync schema
+        example validation, runtime schema self-validation, manifest, marker,
+        and instruction-contract validation documentation and alias-based CI
+        steps. Remove the delimited YAML blocks when the yaml module is
+        excluded, remove the delimited Schema-only inline blocks when the
+        schema module is excluded, and remove the delimited
+        Template-sync-support-only inline blocks when the template-sync-support
+        module is excluded. Retain this pipeline only when azure-pipelines is
+        adopted and at least one data-file or template-sync-support module is
+        adopted. Azure Pipelines service-schema validation remains
+        service-backed through Azure DevOps pipeline creation, queued runs, or
+        Azure Repos branch policy build validation.
     - pattern: '.azuredevops/pipelines/**'
       requires_all:
         - azure-pipelines

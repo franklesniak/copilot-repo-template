@@ -741,6 +741,13 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `.github/workflows/check-placeholders.yml` | `baseline`, `github-actions` |
 | `.github/scripts/replace-template-placeholders.py` | `baseline` |
 | `.github/workflows/auto-fix-precommit.yml` | `baseline`, `github-actions` |
+| `.azuredevops/pipelines/README.md` | `azure-pipelines` |
+| `.azuredevops/pipelines/precommit.yml`, `.azuredevops/pipelines/check-placeholders.yml` | `baseline`, `azure-pipelines` |
+| `.azuredevops/pipelines/markdownlint.yml` | `markdown`, `azure-pipelines` |
+| `.azuredevops/pipelines/powershell-ci.yml` | `powershell`, `azure-pipelines` |
+| `.azuredevops/pipelines/python-ci.yml` | `python`, `azure-pipelines` |
+| `.azuredevops/pipelines/terraform-ci.yml` | `terraform`, `azure-pipelines` |
+| `.azuredevops/pipelines/data-ci.yml` | `azure-pipelines`, plus one of `json`, `yaml`, `schema`, `template-sync-support` |
 | `.azuredevops/pipelines/**` | `azure-pipelines` |
 | `.yamllint.yml` | `yaml` |
 | `.pre-commit-config.yaml` | `baseline` |
@@ -970,16 +977,19 @@ The current `yaml-only` inline blocks live in:
 
 - `.pre-commit-config.yaml` for the `yamllint` hook that depends on `.yamllint.yml`.
 - `.github/workflows/data-ci.yml` for the `yamllint` hook-list documentation and the dedicated `Run yamllint` step.
+- `.azuredevops/pipelines/data-ci.yml` for the `yamllint` hook-list documentation and the dedicated `Run yamllint` step.
 
 The current `schema-only` inline blocks live in:
 
 - `.pre-commit-config.yaml` for worked-example schema validators and the `check-metaschema` schema self-validation hook.
 - `.github/workflows/data-ci.yml` for worked-example schema validation hook-list documentation and dedicated schema validation alias steps.
+- `.azuredevops/pipelines/data-ci.yml` for worked-example schema validation hook-list documentation and dedicated schema validation alias steps.
 
 The current `template-sync-support-only` inline blocks live in:
 
 - `.pre-commit-config.yaml` for template sync schema example validators, first-adoption quality suppression example validators, runtime schema self-validation hooks, the `validate-template-sync-manifest`, `validate-template-sync-marker`, `validate-template-sync-instruction-contracts`, `validate-first-adoption-quality-suppressions`, `validate-instruction-contracts-upstream`, and `validate-instruction-contracts-downstream` hooks.
 - `.github/workflows/data-ci.yml` for template sync schema example validation, first-adoption quality suppression validation, runtime schema self-validation, live template sync validation hook-list documentation, and the dedicated template sync validation alias steps.
+- `.azuredevops/pipelines/data-ci.yml` for template sync schema example validation, first-adoption quality suppression validation, runtime schema self-validation, live template sync validation hook-list documentation, and the dedicated template sync validation alias steps.
 
 The current `github-platform-only` inline blocks live in:
 
@@ -1001,6 +1011,7 @@ The current `terraform-only` inline blocks live in:
 - `.pre-commit-config.yaml` for the `terraform-fmt`, `terraform-validate`, and `terraform-tflint` repo-local hooks.
 - `.github/workflows/precommit-ci.yml` for the Terraform and TFLint setup steps required only when those hooks are retained.
 - `.github/workflows/auto-fix-precommit.yml` for the Terraform and TFLint setup steps required only when those hooks are retained.
+- `.azuredevops/pipelines/precommit.yml` for the Terraform and TFLint setup steps required only when those hooks are retained.
 
 After stripping `python-only` blocks, a downstream repository that excludes `python` should be able to run `pre-commit run --all-files` without retaining Python project formatters or linters such as Black and Ruff, and its Dependabot configuration should not retain the `pip` ecosystem.
 

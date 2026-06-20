@@ -57,6 +57,16 @@ def test_validation_commands_keep_dependabot_github_scoped_and_azure_manual() ->
     assert any("dependency update policy" in command.lower() for command in azure_commands)
 
 
+def test_validation_commands_keep_actionlint_github_actions_scoped() -> None:
+    """Azure Pipelines guidance must not require the GitHub Actions linter."""
+    github_actions_commands = sync_candidates.VALIDATION_COMMANDS_BY_MODULE["github-actions"]
+    azure_pipeline_commands = sync_candidates.VALIDATION_COMMANDS_BY_MODULE["azure-pipelines"]
+
+    assert any("actionlint" in command for command in github_actions_commands)
+    assert not any("actionlint" in command for command in azure_pipeline_commands)
+    assert any("Azure Pipelines" in command for command in azure_pipeline_commands)
+
+
 def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     """Run a test command and capture text output."""
     return subprocess.run(

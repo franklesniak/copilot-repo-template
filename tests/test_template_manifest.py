@@ -68,6 +68,7 @@ TERRAFORM_INLINE_BLOCK_PATHS = (
     ".pre-commit-config.yaml",
     ".github/workflows/auto-fix-precommit.yml",
     ".github/workflows/precommit-ci.yml",
+    ".azuredevops/pipelines/precommit.yml",
 )
 TERRAFORM_INLINE_MARKER_BEGIN = "# template-sync: begin terraform-only"
 TERRAFORM_INLINE_MARKER_END = "# template-sync: end terraform-only"
@@ -91,6 +92,12 @@ TERRAFORM_SHARED_SURFACE_TOKENS = {
         "terraform-linters/setup-tflint@v6",
         'terraform_version: "1.14.4"',
         'tflint_version: "v0.51.1"',
+    ),
+    ".azuredevops/pipelines/precommit.yml": (
+        "Install Terraform and TFLint",
+        'TERRAFORM_VERSION: "1.14.4"',
+        'TFLINT_VERSION: "v0.51.1"',
+        "github.com/terraform-linters/tflint",
     ),
 }
 MARKDOWN_INLINE_BLOCK_PATHS = (".pre-commit-config.yaml",)
@@ -136,6 +143,7 @@ PYTHON_SHARED_SURFACE_TOKENS = {
 YAML_INLINE_BLOCK_COUNTS = {
     ".pre-commit-config.yaml": 1,
     ".github/workflows/data-ci.yml": 2,
+    ".azuredevops/pipelines/data-ci.yml": 2,
 }
 YAML_INLINE_MARKER_BEGIN = "# template-sync: begin yaml-only"
 YAML_INLINE_MARKER_END = "# template-sync: end yaml-only"
@@ -150,10 +158,16 @@ YAML_SHARED_SURFACE_TOKENS = {
         "Run yamllint",
         "pre-commit run yamllint --all-files",
     ),
+    ".azuredevops/pipelines/data-ci.yml": (
+        "yamllint",
+        "Run yamllint",
+        "pre-commit run yamllint --all-files",
+    ),
 }
 SCHEMA_INLINE_BLOCK_COUNTS = {
     ".pre-commit-config.yaml": 1,
     ".github/workflows/data-ci.yml": 2,
+    ".azuredevops/pipelines/data-ci.yml": 2,
 }
 SCHEMA_INLINE_MARKER_BEGIN = "# template-sync: begin schema-only"
 SCHEMA_INLINE_MARKER_END = "# template-sync: end schema-only"
@@ -167,10 +181,15 @@ SCHEMA_SHARED_SURFACE_TOKENS = {
         "pre-commit run validate-example-config-valid-examples --all-files",
         "pre-commit run validate-example-config-schema --all-files",
     ),
+    ".azuredevops/pipelines/data-ci.yml": (
+        "pre-commit run validate-example-config-valid-examples --all-files",
+        "pre-commit run validate-example-config-schema --all-files",
+    ),
 }
 TEMPLATE_SYNC_SUPPORT_INLINE_BLOCK_COUNTS = {
     ".pre-commit-config.yaml": 1,
     ".github/workflows/data-ci.yml": 2,
+    ".azuredevops/pipelines/data-ci.yml": 2,
 }
 TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_BEGIN = "# template-sync: begin template-sync-support-only"
 TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_END = "# template-sync: end template-sync-support-only"
@@ -189,6 +208,18 @@ TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS = {
         "--skip-if-marker-present",
     ),
     ".github/workflows/data-ci.yml": (
+        "pre-commit run validate-template-sync-marker-valid-examples --all-files",
+        "pre-commit run validate-template-sync-instruction-contracts-valid-examples --all-files",
+        "pre-commit run validate-template-sync-manifest-schema --all-files",
+        "pre-commit run validate-template-sync-marker-schema --all-files",
+        "pre-commit run validate-template-sync-instruction-contracts-schema --all-files",
+        "pre-commit run validate-template-sync-manifest --all-files",
+        "pre-commit run validate-template-sync-marker --all-files",
+        "pre-commit run validate-template-sync-instruction-contracts --all-files",
+        "pre-commit run validate-instruction-contracts-upstream --all-files",
+        "pre-commit run validate-instruction-contracts-downstream --all-files",
+    ),
+    ".azuredevops/pipelines/data-ci.yml": (
         "pre-commit run validate-template-sync-marker-valid-examples --all-files",
         "pre-commit run validate-template-sync-instruction-contracts-valid-examples --all-files",
         "pre-commit run validate-template-sync-manifest-schema --all-files",
@@ -461,6 +492,15 @@ ONBOARDING_ONLY_REFERENCE_TOKENS = (
 SKIPPABLE_OPTIONAL_REFERENCE_PATHS = (
     "tests/test_dependabot_schema.py",
     "tests/fixtures/dependabot/auto-assignment.yml",
+)
+AZURE_PIPELINE_YAML_PATHS = (
+    ".azuredevops/pipelines/precommit.yml",
+    ".azuredevops/pipelines/check-placeholders.yml",
+    ".azuredevops/pipelines/markdownlint.yml",
+    ".azuredevops/pipelines/data-ci.yml",
+    ".azuredevops/pipelines/powershell-ci.yml",
+    ".azuredevops/pipelines/python-ci.yml",
+    ".azuredevops/pipelines/terraform-ci.yml",
 )
 UPSTREAM_TEMPLATE_BLOB_ROOT = "https://github.com/franklesniak/copilot-repo-template/blob/HEAD/"
 UPSTREAM_ONBOARDING_URL_RE = re.compile(
@@ -890,7 +930,7 @@ def _concrete_pattern_integrity_failures(
     if not marker_path.exists():
         return _unresolved_concrete_path_mapping_patterns(
             manifest,
-            _git_tracked_paths(repo_root),
+            _git_present_paths(repo_root),
             allowlist,
         )
 
@@ -1668,6 +1708,117 @@ def test_template_manifest_maps_azure_repos_pr_template_to_collaboration_module(
     )
 
 
+def test_template_manifest_maps_azure_pipelines_to_ci_host_and_stack_modules() -> None:
+    """Azure Pipelines CI files must be selectable without GitHub Actions."""
+    expected_relations = {
+        ".azuredevops/pipelines/README.md": ("azure-pipelines",),
+        ".azuredevops/pipelines/precommit.yml": ("baseline", "azure-pipelines"),
+        ".azuredevops/pipelines/check-placeholders.yml": ("baseline", "azure-pipelines"),
+        ".azuredevops/pipelines/markdownlint.yml": ("markdown", "azure-pipelines"),
+        ".azuredevops/pipelines/powershell-ci.yml": ("powershell", "azure-pipelines"),
+        ".azuredevops/pipelines/python-ci.yml": ("python", "azure-pipelines"),
+        ".azuredevops/pipelines/terraform-ci.yml": ("terraform", "azure-pipelines"),
+        ".azuredevops/pipelines/data-ci.yml": (
+            "azure-pipelines",
+            "json",
+            "yaml",
+            "schema",
+            "template-sync-support",
+        ),
+        ".azuredevops/pipelines/future-pipeline.yml": ("azure-pipelines",),
+    }
+
+    for relative_path, expected_modules in expected_relations.items():
+        assert _manifest_modules_for_path(relative_path) == expected_modules
+
+
+def test_template_manifest_azure_data_pipeline_uses_v2_boolean_semantics() -> None:
+    """The Azure data pipeline must require Azure Pipelines plus one owning module."""
+    data_ci_mapping = _path_mapping_by_pattern()[".azuredevops/pipelines/data-ci.yml"]
+
+    assert _relation_modules(data_ci_mapping, "requires_all") == ("azure-pipelines",)
+    assert _relation_modules(data_ci_mapping, "requires_any") == (
+        "json",
+        "yaml",
+        "schema",
+        "template-sync-support",
+    )
+    assert _path_mapping_matches_modules(data_ci_mapping, {"azure-pipelines", "json"})
+    assert _path_mapping_matches_modules(data_ci_mapping, {"azure-pipelines", "yaml"})
+    assert _path_mapping_matches_modules(data_ci_mapping, {"azure-pipelines", "schema"})
+    assert _path_mapping_matches_modules(
+        data_ci_mapping,
+        {"azure-pipelines", "template-sync-support"},
+    )
+    assert not _path_mapping_matches_modules(data_ci_mapping, {"azure-pipelines"})
+    assert not _path_mapping_matches_modules(data_ci_mapping, {"yaml", "schema"})
+    assert not _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "yaml"})
+
+
+def test_template_manifest_azure_stack_pipelines_require_matching_stack_modules() -> None:
+    """Most-specific Azure pipeline rows must not fall through to the broad glob."""
+    mappings = _path_mapping_by_pattern()
+
+    assert not _path_mapping_matches_modules(
+        mappings[".azuredevops/pipelines/markdownlint.yml"],
+        {"azure-pipelines"},
+    )
+    assert _path_mapping_matches_modules(
+        mappings[".azuredevops/pipelines/markdownlint.yml"],
+        {"azure-pipelines", "markdown"},
+    )
+    assert not _path_mapping_matches_modules(
+        mappings[".azuredevops/pipelines/terraform-ci.yml"],
+        {"azure-pipelines"},
+    )
+    assert _path_mapping_matches_modules(
+        mappings[".azuredevops/pipelines/terraform-ci.yml"],
+        {"azure-pipelines", "terraform"},
+    )
+    assert _path_mapping_matches_modules(
+        mappings[".azuredevops/pipelines/**"],
+        {"azure-pipelines"},
+    )
+
+
+def test_azure_pipeline_files_do_not_use_yaml_pr_triggers() -> None:
+    """Azure Repos PR validation is branch-policy based, not YAML pr-trigger based."""
+    for relative_path in AZURE_PIPELINE_YAML_PATHS:
+        document = yaml.safe_load((REPO_ROOT / relative_path).read_text(encoding="utf-8"))
+        assert isinstance(document, dict), f"{relative_path} must parse as a YAML mapping"
+        assert "pr" not in document, f"{relative_path} must omit YAML pr triggers"
+        assert "trigger" in document, f"{relative_path} must still define push CI triggers"
+
+
+def test_azure_pipeline_guidance_documents_branch_policy_and_service_validation() -> None:
+    """Azure Pipelines guidance must explain Azure Repos service boundaries."""
+    readme_text = (REPO_ROOT / ".azuredevops/pipelines/README.md").read_text(encoding="utf-8")
+
+    assert "branch policy build validation" in readme_text
+    assert "Do not depend on YAML `pr` triggers" in readme_text
+    assert "service-schema validation is service-backed" in readme_text
+    assert "learn.microsoft.com/azure/devops/pipelines/yaml-schema/pr" in readme_text
+    assert "learn.microsoft.com/azure/devops/repos/git/branch-policies" in readme_text
+
+
+def test_azure_pipeline_yaml_exercises_expressions_and_macros() -> None:
+    """Azure Pipelines YAML fixtures should cover compile-time and macro syntax."""
+    combined_text = "\n".join(
+        (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        for relative_path in AZURE_PIPELINE_YAML_PATHS
+    )
+
+    assert "${{ " in combined_text
+    assert "$(" in combined_text
+
+
+def test_azure_pipeline_yaml_does_not_require_actionlint() -> None:
+    """Azure Pipelines assets must not carry GitHub Actions-only validation."""
+    for relative_path in AZURE_PIPELINE_YAML_PATHS:
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        assert "actionlint" not in text, relative_path
+
+
 def test_template_manifest_module_names_are_unique() -> None:
     """Each module name must be declared exactly once."""
     names = [name for name, _description in _module_rows_from_manifest()]
@@ -1717,8 +1868,8 @@ def test_top_level_python_tests_map_to_python_module() -> None:
     assert _manifest_modules_for_path("tests/test_example.py") == ("python",)
 
 
-def test_template_manifest_concrete_patterns_resolve_to_tracked_files() -> None:
-    """Concrete manifest patterns must point at tracked paths unless allowlisted."""
+def test_template_manifest_concrete_patterns_resolve_to_present_files() -> None:
+    """Concrete manifest patterns must point at present paths unless allowlisted."""
     assert CONCRETE_PATTERN_ALLOWLIST == {
         ".template-sync/marker.yml": (
             "Downstream-local retained marker; mapped because downstream repos carry "
