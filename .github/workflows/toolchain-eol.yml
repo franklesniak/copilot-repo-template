@@ -14,9 +14,8 @@ on:
   workflow_dispatch:
     inputs:
       warning-window-days:
-        description: "Days before EOL that should fail the check"
+        description: "Days before EOL that should fail the check. Leave blank to use the TOOLCHAIN_EOL_WARNING_DAYS default."
         required: false
-        default: "180"
 
 permissions:
   contents: read
