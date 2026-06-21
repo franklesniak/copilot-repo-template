@@ -39,6 +39,7 @@ This guide covers optional customizations you can make after completing the init
 - [Markdown Link Checking Configuration](#markdown-link-checking-configuration)
 - [Nested Markdown Linting Configuration](#nested-markdown-linting-configuration)
 - [Markdown Lint Workflow Configuration](#markdown-lint-workflow-configuration)
+- [Toolchain End-of-Life Monitoring](#toolchain-end-of-life-monitoring)
 - [Copilot Documentation Instructions Configuration](#copilot-documentation-instructions-configuration)
 - [Copilot Python Instructions Configuration](#copilot-python-instructions-configuration)
 - [Copilot PowerShell Instructions Configuration](#copilot-powershell-instructions-configuration)
@@ -2054,6 +2055,74 @@ rm -f .github/workflows/markdownlint.yml
 ```
 
 > **Note:** Removing the CI workflow does not affect local linting. You can still run `npm run lint:md` locally or use pre-commit hooks to lint Markdown files before committing.
+
+---
+
+## Toolchain End-of-Life Monitoring
+
+**Files:** `.github/workflows/toolchain-eol.yml`, `.github/scripts/check-toolchain-eol.js`, `tests/toolchain-eol/`
+
+The optional Toolchain EOL workflow checks whether monitored Node.js release lines used by this repository are approaching or past end-of-life. It complements Dependabot: Dependabot updates dependency manifests and GitHub Actions `uses:` references, but it does not currently provide runtime-EOL monitoring for values such as `node-version`, Azure Pipelines Node task inputs, or `engines.node`.
+
+The scanner uses the official Node.js release schedule JSON as its authoritative data source:
+
+```text
+https://raw.githubusercontent.com/nodejs/Release/main/schedule.json
+```
+
+The workflow is fail-only. It uses least-privilege `contents: read` permissions and fails the scheduled or manually triggered run when a monitored Node.js line is within the configured warning window or is already EOL. It does not open or update tracking issues.
+
+### Monitored Selector Classes
+
+The scanner inventories checked-in Node.js selectors from live CI and package configuration surfaces:
+
+- `ci-runtime`: GitHub Actions `actions/setup-node` `node-version` and `node-version-file` inputs, GitHub Actions matrix-fed Node selectors, Azure Pipelines `UseNode@1` and `NodeTool@0` Node selectors, Azure checked-in parameter defaults and `values:`, Azure variables and `$(...)` macro references, Azure matrix values, and referenced repository version files such as `.nvmrc` or `.node-version`.
+- `support-floor`: root `package.json` `engines.node`, plus `package-lock.json` `packages[""].engines.node` as the root-package mirror and consistency check.
+
+The scanner intentionally ignores GitHub Actions wrapper versions such as `actions/setup-node@v6`; the runtime selector is the `node-version` or `node-version-file` input. It also ignores transitive `package-lock.json` package descriptors under `node_modules/**`, because those describe dependency constraints rather than this repository's support policy.
+
+Documentation and example scanning is not implemented. Documentation snippets are therefore out of scope for required live-policy failures unless a downstream repository extends the scanner and declares those findings as monitored policy.
+
+### Warning Window
+
+The default warning window is 180 days before the Node.js line's EOL date. A line at or past EOL fails regardless of the warning-window value.
+
+The default is configured in `.github/workflows/toolchain-eol.yml`:
+
+```yaml
+env:
+  TOOLCHAIN_EOL_WARNING_DAYS: "180"
+```
+
+Maintainers can change the committed default by editing that environment value, or run a manual `workflow_dispatch` check with a different `warning-window-days` input while testing a runtime change.
+
+### Schedule and Manual Runs
+
+The workflow runs monthly through `schedule` and also supports `workflow_dispatch` for manual checks after runtime-selector changes.
+
+GitHub scheduled workflows run on the repository default branch. Scheduled runs can be delayed or dropped during periods of high GitHub Actions load, and scheduled workflows in public repositories can be disabled after repository inactivity. Keep `workflow_dispatch` available so maintainers can run the check manually when those platform limitations matter.
+
+### Local Test Command
+
+Run the scanner's focused fixture tests with:
+
+```bash
+npm run test:toolchain-eol
+```
+
+Those tests use fixture Node.js release-schedule data and cover selector discovery, classification, support-floor range parsing, warning-window behavior, and package-lock transitive-engine exclusion.
+
+### Removing or Replacing the Workflow
+
+Downstream adopters that do not want optional runtime-EOL monitoring can remove these files and update `package.json` / `package-lock.json` if the scanner-only dependencies are no longer needed:
+
+- `.github/workflows/toolchain-eol.yml`
+- `.github/scripts/check-toolchain-eol.js`
+- `tests/toolchain-eol/`
+- the `test:toolchain-eol` npm script
+- direct scanner parser dependencies that are otherwise unused, such as `semver` or `yaml`
+
+Downstream adopters may replace this scanner with a maintained third-party EOL-check Action, or with a narrower `endoflife.date` API check for known pinned runtimes, if they accept the reduced selector-inventory precision. In this template, Node.js schedule data from the official Node.js release repository remains the authoritative source.
 
 ---
 
