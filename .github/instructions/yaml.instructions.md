@@ -7,15 +7,15 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.5.20260520.0
+**Version:** 1.6.20260621.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-20
-- **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by [JSON Writing Style](./json.instructions.md)) or generated YAML artifacts that are owned by another tool's serializer.
-- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md), [`.yamllint.yml`](../../.yamllint.yml), [Data-File CI Workflow (`data-ci.yml`)](../workflows/data-ci.yml), [Schemas README](../../schemas/README.md), [Schema Example Tests (`tests/test_schema_examples.py`)](../../tests/test_schema_examples.py), [Template Design Decision — Dedicated JSON and YAML Instruction Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-json-and-yaml-instruction-files), [Template Design Decision — Baseline JSON/YAML Linting Stack](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-baseline-jsonyaml-linting-stack), [Template Design Decision — yamllint truthy.check-keys Default](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-truthycheck-keys-default), [Template Design Decision — yamllint line-length Warning Level Default](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-line-length-warning-level-default), [Template Design Decision — Dedicated Data-File CI Workflow (`data-ci.yml`)](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-data-file-ci-workflow-data-ciyml), [Template Design Decision — Prettier Deferral for Data Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-prettier-deferral-for-data-files), [Template Design Decision — Built-in Schema Validation for Real Load-Bearing Configuration Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files)
+- **Last Updated:** 2026-06-21
+- **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by the companion JSON guide, if present) or generated YAML artifacts that are owned by another tool's serializer.
+- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md) (companion guide, if present)
 
 ## Purpose and Scope
 
@@ -42,13 +42,13 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - **[Actions]** Comments documenting where a GitHub Actions `with:` tool-version input is pinned, or that such a value must stay aligned across files, **SHOULD** describe the membership criterion instead of a hardcoded workflow-file list; if a concrete file list is included for convenience, it **SHOULD** be labeled as a non-authoritative snapshot.
 - **[Schemas]** Schema-backed YAML **MUST** pass any schema validator wired into pre-commit or CI; where no validator is wired up for a particular file family, authors **SHOULD** run the appropriate validator locally before committing.
 - **[Naming]** YAML filenames **SHOULD** be lowercase kebab-case; GitHub Actions workflows **MUST** use the `.yml` extension; project-owned YAML **MUST** choose `.yml` or `.yaml` and use it consistently.
-- **[IssueForms]** In `.github/ISSUE_TEMPLATE/*.yml`, repo-internal targets in both issue-form `value:` Markdown links (e.g., `bug_report.yml`) and `config.yml` `contact_links` `url:` fields **MUST** use absolute `https://github.com/OWNER/REPO/...` URLs (with `blob/HEAD` for file links); relative paths **MUST NOT** be used. The two file types fail for different reasons: `value:` Markdown blocks render at `/{owner}/{repo}/issues/new?...` so relative paths resolve against that URL and 404, while `contact_links` `url:` fields are not Markdown at all — GitHub validates them as absolute URLs at form-load time and rejects relative values outright.
+- **[IssueForms]** In `.github/ISSUE_TEMPLATE/*.yml`, repo-internal targets in both issue-form `value:` Markdown links (e.g., `bug_report.yml`) and `config.yml` `contact_links` `url:` fields **MUST** use absolute GitHub URLs such as `https://github.com/<owner>/<repo>/blob/HEAD/<path>` for file links; relative paths **MUST NOT** be used. Template repositories MAY ship a documented placeholder form for adopters to replace, but the final rendered URL still needs the real host, owner, and repository. The two file types fail for different reasons: `value:` Markdown blocks render at `/{owner}/{repo}/issues/new?...` so relative paths resolve against that URL and 404, while `contact_links` `url:` fields are not Markdown at all — GitHub validates them as absolute URLs at form-load time and rejects relative values outright.
 
 ## Dialect and Consumer Policy
 
 - Authors **SHOULD** target **YAML 1.2-compatible** values and avoid relying on parser-specific extensions.
 - Authors **MUST** avoid the YAML 1.1 *non-lowercase-`true`/`false`* truthy tokens that this guide does not permit as booleans (`y`, `Y`, `yes`, `Yes`, `YES`, `n`, `N`, `no`, `No`, `NO`, `on`, `On`, `ON`, `off`, `Off`, `OFF`, `True`, `TRUE`, `False`, `FALSE`); only lowercase `true` and `false` are allowed as booleans (see "Booleans, Nulls, and Numbers"). Many widely-deployed parsers (including those used by GitHub Actions, `js-yaml` defaults, and some legacy PyYAML configurations) still resolve some or all of these YAML 1.1 tokens as booleans, so any string value that would otherwise match one of them **MUST** be quoted.
-- Ecosystem-specific validators (for example, Kubernetes manifest validators, OpenAPI validators, Helm validators, Ansible validators) **SHOULD** be adopted only when the repository actually uses those ecosystems. Generic YAML guidance **MUST NOT** require validators that are irrelevant to the repository's stack. The shipped baseline (`check-yaml`, `yamllint`, `actionlint`, and `check-jsonschema` for the worked-example schema and selected real load-bearing configuration files validated against built-in vendor schemas) is described in [Schema-backed YAML](#schema-backed-yaml).
+- Ecosystem-specific validators (for example, Kubernetes manifest validators, OpenAPI validators, Helm validators, Ansible validators) **SHOULD** be adopted only when the repository actually uses those ecosystems. Generic YAML guidance **MUST NOT** require validators that are irrelevant to the repository's stack. The repository's pre-commit configuration and CI definitions are the authoritative inventory of active YAML validators.
 
 ## Formatting Rules
 
@@ -93,7 +93,7 @@ Quote style guidance:
 
 The GitHub Actions workflow trigger key `on:` is a well-known YAML 1.1 truthy hazard. Under YAML 1.1 resolution rules, the unquoted bare key `on` is parsed as the boolean `true`. GitHub Actions itself parses workflows correctly because it does not rely on YAML 1.1 truthy resolution for keys, but **lint tooling** that is YAML 1.1-aware (notably `yamllint`'s `truthy` rule) will flag the `on:` key as a truthy violation by default.
 
-This repository ships a [`yamllint` configuration at `.yamllint.yml`](../../.yamllint.yml) that intentionally sets `truthy.check-keys: false` so that the idiomatic GitHub Actions `on:` key is preserved without per-file exception comments:
+Repositories that lint GitHub Actions workflow YAML with `yamllint` SHOULD configure the `truthy` rule so key names are not treated as booleans. In `yamllint`, that means setting `truthy.check-keys: false`:
 
 ```yaml
 rules:
@@ -101,7 +101,7 @@ rules:
     check-keys: false
 ```
 
-This configuration preserves the idiomatic GitHub Actions `on:` key while still flagging YAML 1.1 truthy hazards in **values**. Authors **MAY** alternatively quote the key as `"on":` to satisfy a stricter `truthy.check-keys: true` configuration, but this form is **non-idiomatic** in the GitHub Actions ecosystem and **SHOULD NOT** be adopted unless a downstream policy requires it.
+This configuration preserves the idiomatic GitHub Actions `on:` key while still flagging YAML 1.1 truthy hazards in **values**. Authors **MAY** alternatively quote the key as `"on":` to satisfy a stricter `truthy.check-keys: true` configuration, but this form is **non-idiomatic** in the GitHub Actions ecosystem and **SHOULD NOT** be adopted unless a repository policy requires it.
 
 ## GitHub Actions Setup Version Pins
 
@@ -164,7 +164,7 @@ This rule applies to all workflow files under `.github/workflows/` and to any ot
 
 This rule applies only to documentation/navigation comments. It **MUST NOT** affect the `uses:` line itself, action input values, SHA pins, version pins, or any other intentionally pinned executable configuration.
 
-The `<owner>/<repo>` placeholder used throughout this section is **metasyntactic** — it stands for any upstream GitHub Actions repository (for example, `actions/checkout`, `peter-evans/create-pull-request`). It is **not** a template-adopter substitution placeholder, and it is distinct from the literal `OWNER/REPO` adopter-substitution convention covered by [`.github/instructions/docs.instructions.md`](./docs.instructions.md). Authors **MUST NOT** rewrite metasyntactic `<owner>/<repo>` references in workflow comments to `OWNER/REPO`, and adopters **MUST NOT** substitute their repository name into these metasyntactic references.
+The `<owner>/<repo>` placeholder used throughout this section is **metasyntactic** — it stands for any upstream GitHub Actions repository (for example, `actions/checkout`, `peter-evans/create-pull-request`). It is **not** a template-adopter substitution placeholder for the current repository. Authors **MUST NOT** rewrite metasyntactic `<owner>/<repo>` references in workflow comments to a repository-specific placeholder, and adopters **MUST NOT** substitute their repository name into these metasyntactic references.
 
 Pinned documentation URLs go stale because Dependabot updates `uses:` references but does not rewrite arbitrary adjacent comment text.
 
@@ -227,14 +227,14 @@ GitHub issue forms render their `value:` Markdown blocks at the URL `/{owner}/{r
 
 To make these links robust across non-GitHub.com renderers, GitHub Mobile, email notifications, and copied/quoted content, the following rules apply to all files matching `.github/ISSUE_TEMPLATE/*.yml` (including `config.yml`):
 
-- Markdown links to repo-internal files (for example, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `README.md`) **MUST** use full absolute URLs of the form `https://github.com/OWNER/REPO/blob/HEAD/<path>`. The `OWNER/REPO` placeholder follows this template's placeholder convention (see the comment block at the top of `CONTRIBUTING.md`) and is enforced by `.github/workflows/check-placeholders.yml` **if the downstream repository keeps that workflow**. The workflow is optional and may be removed once placeholders are substituted, so authors and adopters MUST NOT rely on it as an unconditional CI guardrail.
-- Repo-internal references that are not file paths (for example, the GitHub Security tab) **MUST** likewise use absolute URLs, such as `https://github.com/OWNER/REPO/security`.
+- Markdown links to repo-internal files (for example, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `README.md`) **MUST** use full absolute URLs of the form `https://github.com/<owner>/<repo>/blob/HEAD/<path>` after any template placeholders are substituted.
+- Repo-internal references that are not file paths (for example, the GitHub Security tab) **MUST** likewise use absolute URLs, such as `https://github.com/<owner>/<repo>/security`.
 - Relative paths such as `../blob/HEAD/<file>`, `blob/HEAD/<file>`, `./<file>`, or bare relative refs such as `(security)` **MUST NOT** be used in issue-form `value:` Markdown blocks or in `contact_links` URLs.
-- Use `blob/HEAD` rather than `blob/main` so the URL works regardless of the repository's default branch name.
-- The `github.com` host is the assumed default; **GHES adopters MUST replace `github.com` with their GHES host** (e.g., `github.company.com`). The host substitution is not enforced by CI today (even when `.github/workflows/check-placeholders.yml` is kept, it only validates `OWNER/REPO`), so each affected file SHOULD include a brief inline YAML comment reminding adopters of the host substitution, mirroring the convention already used in `.github/ISSUE_TEMPLATE/config.yml`.
-- The literal `https://github.com/OWNER/REPO/...` example URL is permitted to appear in didactic prose inside the style-guide files under `.github/instructions/**`; section [6] of `.github/workflows/check-placeholders.yml` skips those files specifically so adopters are not forced to edit instructional prose to satisfy placeholder CI. Section [6] also skips the workflow file itself (`.github/workflows/check-placeholders.yml`) to avoid self-referential matches against the literal URL embedded in its own grep patterns. Any other YAML file under `.github/` (i.e., not `.github/instructions/**` and not `.github/workflows/check-placeholders.yml`) that contains the literal `https://github.com/OWNER/REPO` substring outside a YAML comment line is treated as a live template placeholder and **MUST** be customized by adopters. (Sections [5] and [6] of the placeholder workflow filter YAML comment lines before matching, so a commented example such as `# https://github.com/OWNER/REPO/...` will not by itself cause CI to fail; authors **SHOULD NOT** rely on that filter to ship live template URLs disguised as comments.)
+- Use `blob/HEAD` rather than `blob/main` so file URLs work regardless of the repository's default branch name.
+- Repositories hosted on GitHub Enterprise Server **MUST** use their own host instead of `github.com` (for example, `https://github.company.com/<owner>/<repo>/blob/HEAD/<path>`).
+- Template repositories that intentionally ship unresolved URL placeholders **MUST** document their placeholder convention and substitution process in repository-local guidance. Placeholder validation, if any, is a repository-specific safety net; authors and adopters MUST still review the final rendered URLs.
 
-This rule is mirrored in [`.github/instructions/docs.instructions.md`](./docs.instructions.md) (which governs `.github/pull_request_template.md` and applies to `**/*.md`). The two instruction files are intentionally self-contained: each restates the rule rather than relying on the other so that downstream repositories may remove either file independently without losing the guidance.
+If the repository also keeps Markdown documentation rules for issue templates or pull request templates, those rules SHOULD restate this behavior in their own scope so YAML and Markdown guidance remain independently understandable.
 
 ## Conservative YAML Subset
 
@@ -274,20 +274,20 @@ Choose the indicator that matches the consumer's expectations. When passing a mu
 
 ## Schema-backed YAML
 
-YAML files that have a published schema **SHOULD** be validated against that schema, using the same MUST/SHOULD/MAY tiers applied to JSON in [JSON Writing Style](./json.instructions.md). This repository wires schema and ecosystem validators into pre-commit and re-runs them in [`.github/workflows/data-ci.yml`](../workflows/data-ci.yml); files covered by those hooks **MUST** pass them. For file families that do not yet have a hook configured, authors **SHOULD** run the appropriate validator locally before committing. The shipped pipeline is described below; CI/pre-commit integration is owned by the repository's tooling configuration rather than by this guide.
+YAML files that have a published schema **SHOULD** be validated against that schema. Files covered by schema or ecosystem validators in the repository's pre-commit hooks or CI **MUST** pass those validators. For file families that do not yet have a configured validator, authors **SHOULD** run the appropriate validator locally before committing and SHOULD add a file-family-scoped validator when the contract becomes durable.
 
 Validation tiers:
 
-- **MUST tier** (files whose schema validator is wired into pre-commit or CI **MUST** pass it; where the validator is not wired up, authors **SHOULD** run it locally before committing): GitHub Actions workflows (`.github/workflows/*.yml`); pre-commit configuration (`.pre-commit-config.yaml`); any YAML file whose schema is published and stable and whose consumer requires structural correctness.
-- **SHOULD tier**: linter configuration files (for example, `.yamllint.yml`) when a schema is available and a validator is convenient to run.
+- **MUST tier**: load-bearing YAML consumed by build, deploy, runtime, release automation, or other automated policy where malformed structure would cause incorrect behavior; GitHub Actions workflows under `.github/workflows/`; pre-commit configuration; and any YAML file whose schema is published and stable and whose consumer requires structural correctness.
+- **SHOULD tier**: durable fixtures, examples, policy documents, configuration contracts, and linter configuration files when a schema is available and a validator is convenient to run.
 - **MAY tier**: optional or experimental configuration formats whose schema may change.
 
-Shipped validators in this repository (extend as needed for new ecosystems):
+Common validator categories:
 
-- **`yamllint`** — YAML style enforcement, configured in [`.yamllint.yml`](../../.yamllint.yml) and run through [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) and [`.github/workflows/data-ci.yml`](../workflows/data-ci.yml).
-- **`check-yaml`** (from `pre-commit/pre-commit-hooks`) — parse-checks YAML files; runs through pre-commit and `data-ci.yml`.
-- **`actionlint`** — GitHub Actions workflow linter; runs through pre-commit and `data-ci.yml` for any workflow file under `.github/workflows/`.
-- **`check-jsonschema`** — generic JSON Schema validation for YAML and JSON files. Used today for (a) the worked-example schema (`schemas/example-config.schema.json`) and its valid example data, and (b) selected real load-bearing repository configuration files (for example, `.github/dependabot.yml`) validated against built-in vendor schemas shipped with `check-jsonschema`. See [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) for the authoritative list of active hooks. Add file-family-scoped hooks (project-owned `--schemafile` or additional `--builtin-schema` hooks) for additional schema-backed YAML as needed.
+- **Syntax and style validators** (for example, `check-yaml` and `yamllint`) catch parser errors and repository style drift.
+- **Ecosystem validators** (for example, `actionlint` for GitHub Actions workflows) catch consumer-specific structure and behavior errors.
+- **Schema validators** (for example, `check-jsonschema`) validate YAML files against project-owned schemas or mature external schemas. Add file-family-scoped hooks for additional schema-backed YAML as durable contracts are introduced.
+- **Active hook list.** The repository's pre-commit configuration and CI definitions are the authoritative inventory of active validators. Repository-specific schema inventories, worked examples, removal checklists, and future validation candidates SHOULD live in the repository's schema documentation, if present.
 
 Additional ecosystem-specific validators (for example, `kubeval`/`kubeconform` for Kubernetes, `helm lint` for Helm charts, `ansible-lint` for Ansible) **SHOULD** be adopted **only** when the repository actually uses the ecosystem. Generic YAML guidance **MUST NOT** mandate validators for ecosystems the repository does not use.
 
@@ -307,7 +307,7 @@ A YAML change is "done" when **all** of the following are true:
 - All booleans are lowercase `true` / `false`; no `yes`/`no`/`on`/`off` as boolean values.
 - The conservative subset is respected (no anchors, aliases, merge keys, custom tags, multi-document files, or flow style except where necessary and justified).
 - Comments explain **why**, not **what**; behavior is not documented only in comments.
-- `yamllint` (configured in [`.yamllint.yml`](../../.yamllint.yml)) and `check-yaml` pass under the repository's pre-commit configuration.
+- The repository's configured YAML syntax and style validators pass.
 - Any schema or ecosystem validator wired into pre-commit or CI passes for the affected files (for example, `actionlint` for workflow files, `check-jsonschema` for schema-backed YAML covered by an active hook). When no such validator is wired up for the file family being changed, authors **SHOULD** run the applicable validator locally before committing.
-- Pre-commit hooks pass locally (`pre-commit run --all-files`) and in CI, including the dedicated [`.github/workflows/data-ci.yml`](../workflows/data-ci.yml) data-file workflow.
+- Pre-commit hooks pass locally (`pre-commit run --all-files`) and in the repository's configured CI.
 - No secrets are committed; GitHub Actions workflows declare least-privilege `permissions:`.
