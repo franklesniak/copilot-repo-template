@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.6.20260617.1
+**Version:** 1.6.20260621.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-17
+- **Last Updated:** 2026-06-21
 - **Scope:** Defines documentation standards for Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) files in this repository, including specs, design docs, runbooks, ADRs, instruction files, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -112,12 +112,22 @@ Tier 2 documents MAY adopt YAML front matter later if a real tool consumes it, s
 
 This subsection applies to Tier 1 documents and to any other document that intentionally carries the metadata header block. The fields referenced in this subsection (`Last Updated`, and the optional `Version` line) are defined in the Tier 1 bullet list above; this subsection adds normative synchronization rules for those fields and does not redefine their semantics.
 
+For this subsection:
+
+- The published baseline is the pre-change version already present on the branch the change lands on: the pull request base branch, normally `main`, or, for a direct commit, the branch being committed to.
+- The finalization point is the last author- or agent-controlled update before the change is merged, added to an automated merge queue, or committed directly to that branch. `<revision>` is computed at the finalization point. If automated merge machinery changes the target branch after the finalization point, the landed value is not a violation of this rule; correct any resulting metadata drift in a follow-up change.
+
 - When a commit modifies the rendered content or documentation meaning of a document that carries the metadata header block, the `Last Updated` field in that document MUST be bumped to the current UTC date in `YYYY-MM-DD` form as part of the same commit.
 - If the document also carries a `**Version:** <major>.<minor>.<YYYYMMDD>.<revision>` line, the embedded `<YYYYMMDD>` segment MUST be updated in the same commit so that it matches the new `Last Updated` value.
 - Revision convention for the `<revision>` segment of `**Version:**`:
-  - When `<YYYYMMDD>` changes in a commit, `<revision>` MUST reset to `0`.
-  - When a further same-day commit modifies the document, `<revision>` MUST increment by `1` (for example, `...20260502.0` → `...20260502.1`).
-  - `<major>` and `<minor>` are out of scope for this synchronization rule and follow the document's own semantic-versioning conventions.
+  - `<revision>` counts same-day published updates relative to the published baseline. It is evaluated at the finalization point, not per feature-branch, work-in-progress, or iteration commit.
+  - After setting `<major>.<minor>` under the document's own conventions and `<YYYYMMDD>` to the current UTC date, `<revision>` MUST be `0` when the resulting `<major>.<minor>.<YYYYMMDD>` differs from the published baseline's `<major>.<minor>.<YYYYMMDD>`, including when no published baseline exists.
+  - When the published baseline already carries the same `<major>.<minor>.<YYYYMMDD>` at revision `N`, `<revision>` MUST be `N + 1`.
+  - Intra-PR iteration commits target the single correct final revision rather than incrementing once per commit, and the published baseline is re-checked at the finalization point.
+  - Examples:
+    - Same-day published update keeping the same `<major>.<minor>`: published baseline `1.6.20260502.0` → this change `1.6.20260502.1` (same `<major>.<minor>.<YYYYMMDD>`, so `N + 1`).
+    - Next-day update: published baseline `1.6.20260502.1`, change finalized 2026-05-03 UTC → `1.6.20260503.0` (`<YYYYMMDD>` differs, so reset to `0`).
+  - This synchronization rule does not govern when `<major>` or `<minor>` are incremented; those continue to follow the document's own semantic-versioning conventions. For `<revision>` computation, the `**Version:**` value is treated as an ordered four-segment tuple ranked `<major>`, then `<minor>`, then `<YYYYMMDD>`, then `<revision>` — the same component precedence Microsoft documents for `System.Version`. `<revision>` is the lowest-precedence segment and MUST reset to `0` whenever any higher-order segment changes relative to the published baseline.
 - Exemption for trivial mechanical changes. The bump MAY be omitted for commits that do not alter rendered content or documentation meaning, including pure file-mode changes, line-ending normalization, end-of-file newline fixes, or trailing-whitespace-only fixes produced by pre-commit hooks. The trailing-whitespace exemption MUST NOT be applied when the change removes or alters a Markdown hard line break (two or more trailing spaces, or a trailing backslash, immediately before a newline), because such whitespace is rendering-significant; in that case the change alters rendered content and the bump is required. Automated commits made by the auto-fix workflow (`.github/workflows/auto-fix-precommit.yml`) MAY omit the bump when they only apply those mechanical fixes, subject to the same hard-line-break carve-out.
 - This rule applies to all documents in the repository that carry the metadata header block, including but not limited to `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.hermes.md`, and `.cursor/rules/*.mdc`.
 
