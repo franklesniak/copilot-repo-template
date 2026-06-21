@@ -212,7 +212,7 @@ steps:
 
 - uses: actions/setup-dotnet@v4
   with:
-    dotnet-version: '8.x'
+    dotnet-version: '10.x'
 ```
 
 **Non-compliant Azure Pipelines:**
