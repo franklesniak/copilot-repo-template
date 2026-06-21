@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.5.20260621.0
+**Version:** 1.5.20260621.1
 
 ## Metadata
 
@@ -194,7 +194,7 @@ For the rationale, see the **Workflow Version Pinning and Dependabot Coherence**
 
 ### Tool versions passed as action inputs or shell arguments
 
-Tool versions that are not managed by Dependabot — for example, the `node-version` input passed to `actions/setup-node@v6` — **SHOULD** still avoid unnecessary duplication. If the same tool version is required in multiple workflow jobs or steps, prefer a single source of truth where GitHub Actions supports one, such as a workflow-level `env:` value for the CLI/tool version.
+Tool versions that are not managed by Dependabot — for example, the value of the `node-version` input passed to `actions/setup-node@v6` — **SHOULD** still avoid unnecessary duplication. If the same tool version is required in multiple workflow jobs or steps, prefer a single source of truth where GitHub Actions supports one, such as a workflow-level `env:` value for the CLI/tool version.
 
 ### Asymmetry: workflow-level `env:` for action versions vs. tool versions
 
@@ -219,7 +219,7 @@ If a Dependabot-managed dependency genuinely cannot be represented only through 
 ### Concrete examples in this repository
 
 - Pinned action majors such as `actions/checkout@v6`, `actions/setup-python@v6`, `actions/cache@v5`, and `actions/setup-node@v6` appear repeatedly in workflow `uses:` lines. These are acceptable because each occurrence is a normal Dependabot-managed `uses:` reference.
-- In Markdown CI, the `node-version` input in [`.github/workflows/markdownlint.yml`](workflows/markdownlint.yml) is the source of truth for the Node.js version installed by `actions/setup-node@v6`. This is a Node.js version (not the `actions/setup-node` action version), so it is **not** a Dependabot `uses:` desynchronization case. It is a useful candidate for a future single source of truth (such as a workflow-level `env:` value) if duplication grows; refactoring existing workflows to that shape is out of scope for this rule.
+- In Markdown CI, the value of the `node-version` input in [`.github/workflows/markdownlint.yml`](workflows/markdownlint.yml) is the source of truth for the Node.js version installed by `actions/setup-node@v6`. This is a Node.js version (not the `actions/setup-node` action version), so it is **not** a Dependabot `uses:` desynchronization case. It is a useful candidate for a future single source of truth (such as a workflow-level `env:` value) if duplication grows; refactoring existing workflows to that shape is out of scope for this rule.
 
 ## Repository Self-Containment
 
