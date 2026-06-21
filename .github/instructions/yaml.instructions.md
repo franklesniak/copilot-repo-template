@@ -7,14 +7,14 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.6.20260621.0
+**Version:** 1.6.20260621.1
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
 - **Last Updated:** 2026-06-21
-- **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by the companion JSON guide, if present) or generated YAML artifacts that are owned by another tool's serializer.
+- **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, Azure Pipelines YAML, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by the companion JSON guide, if present) or generated YAML artifacts that are owned by another tool's serializer.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md) (companion guide, if present)
 
 ## Purpose and Scope
@@ -37,7 +37,8 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - **[All]** **SHOULD NOT** use anchors, aliases, merge keys, custom tags, or multi-document files unless required and supported by the consumer.
 - **[All]** **MUST NOT** commit secrets in YAML.
 - **[Actions]** **MUST** apply least-privilege `permissions:` on GitHub Actions workflows.
-- **[Actions]** `setup-*` action `with.*-version:` inputs (for example, `python-version`, `node-version`, `go-version`, and `dotnet-version`) in workflow files under `.github/workflows/` **MUST** pin to a literal release-line selector and **MUST NOT** use a broad floating selector such as `'3.x'`, `'latest'`, or `'*'`. The required granularity follows each ecosystem's release model: Python and Go **MUST** use major.minor (for example, `"3.13"` or `"1.21"`); Node.js **MAY** use major for an LTS line (for example, `"20"`) or major.minor (for example, `"20.18"`); .NET **MAY** use the most specific stable SDK channel selector documented by `actions/setup-dotnet`, such as major.minor.x (for example, `"8.0.x"`); for other ecosystems, use the most specific stable release-line selector documented by the action's README.
+- **[Actions]** `setup-*` action `with.*-version:` inputs (for example, `python-version`, `node-version`, `go-version`, and `dotnet-version`) in workflow files under `.github/workflows/` **MUST** resolve from checked-in release-line selectors and **MUST NOT** use a broad floating selector such as `'3.x'`, `'latest'`, or `'*'`. The required granularity follows each ecosystem's release model: Python and Go **MUST** use major.minor (for example, `"3.13"` or `"1.26"`); Node.js **MAY** use major for an LTS line (for example, `"24"`) or major.minor (for example, `"24.17"`); .NET **MAY** use the most specific stable SDK channel selector documented by `actions/setup-dotnet`, such as major.minor.x (for example, `"10.0.x"`); for other ecosystems, use the most specific stable release-line selector documented by the action's README.
+- **[AzurePipelines]** Repositories that use Azure Pipelines language/runtime/SDK tool-installer tasks **MUST** explicitly provide checked-in compliant selectors for in-scope `version` or `versionSpec` inputs and **MUST NOT** rely on broad task defaults, queue-time-only values, `"latest"`, `"*"`, comparator/operator ranges, or composite ranges.
 - **[Actions]** Documentation/navigation comments above `uses:` lines **MUST** use versionless upstream URLs; the `uses:` line remains the authoritative action version.
 - **[Actions]** Comments documenting where a GitHub Actions `with:` tool-version input is pinned, or that such a value must stay aligned across files, **SHOULD** describe the membership criterion instead of a hardcoded workflow-file list; if a concrete file list is included for convenience, it **SHOULD** be labeled as a non-authoritative snapshot.
 - **[Schemas]** Schema-backed YAML **MUST** pass any schema validator wired into pre-commit or CI; where no validator is wired up for a particular file family, authors **SHOULD** run the appropriate validator locally before committing.
@@ -71,10 +72,10 @@ Version pins **MUST** be quoted. Common examples:
 ```yaml
 python-version: "3.13"
 api-version: "1.0"
-node-version: "20"
+node-version: "24"
 ```
 
-Without quotes, `3.13` is parsed as the float `3.13` (which compares equal to `3.130`), `1.0` is parsed as the float `1.0` (which loses the trailing zero), and `20` is parsed as the integer `20`.
+Without quotes, `3.13` is parsed as the float `3.13` (which compares equal to `3.130`), `1.0` is parsed as the float `1.0` (which loses the trailing zero), and `24` is parsed as the integer `24`.
 
 Quote style guidance:
 
@@ -105,18 +106,45 @@ This configuration preserves the idiomatic GitHub Actions `on:` key while still 
 
 ## GitHub Actions Setup Version Pins
 
-GitHub Actions workflow files under `.github/workflows/` that use `setup-*` actions **MUST** pass literal release-line selectors to `with.*-version:` inputs such as `python-version`, `node-version`, `go-version`, and `dotnet-version`. Broad floating selectors such as `'3.x'`, `'latest'`, and `'*'` **MUST NOT** be used for these inputs.
+GitHub Actions workflow files under `.github/workflows/` that use `setup-*` actions **MUST** pass checked-in release-line selectors to `with.*-version:` inputs such as `python-version`, `node-version`, `go-version`, and `dotnet-version`. Broad floating selectors such as `'3.x'`, `'latest'`, and `'*'` **MUST NOT** be used for these inputs. When a setup action input is fed by indirection, such as a checked-in matrix value, every checked-in value that can feed the selector **MUST** satisfy the same rule.
 
-The required selector granularity follows each ecosystem's release model:
+Repositories that use Azure Pipelines language/runtime/SDK tool-installer tasks **MUST** explicitly provide checked-in selectors for in-scope `version` and `versionSpec` inputs. This Azure Pipelines rule is construct-conditional: it applies wherever Azure Pipelines YAML is stored when the repository uses those tasks, including repository-root `azure-pipelines.yml`, configured custom pipeline paths, and `.azuredevops/` pipeline layouts. It is not limited to one hardcoded directory name.
 
-- Python and Go **MUST** use major.minor selectors, such as `"3.13"` or `"1.21"`.
-- Node.js **MAY** use a major selector for an LTS line, such as `"20"`, or a major.minor selector, such as `"20.18"`.
-- .NET **MAY** use the most specific stable SDK channel selector documented by `actions/setup-dotnet`, such as major.minor.x (`"8.0.x"`).
-- Other ecosystems **MUST** use the most specific stable release-line selector documented by the setup action's README.
+The Azure Pipelines selector may be provided by a literal task input, a checked-in parameter default, a checked-in parameter `values:` entry, a checked-in variable or matrix value, or a checked-in repository version file such as `.nvmrc` when the task supports reading the selector from a file. Values supplied only at queue time or from external, non-repository sources do not satisfy this rule. For top-level parameters that feed a selector, the checked-in default **MUST** be compliant; if the parameter can be changed at queue time, constrain `values:` to compliant selectors where practical, or document that static YAML review can guarantee only the checked-in default.
 
-This rule protects CI determinism. Broad floating selectors couple workflow results to GitHub runner-image refreshes, setup action manifests, tool-cache contents, and download resolution behavior. A runner or toolchain refresh can then move CI to a different interpreter or runtime line and break a previously passing workflow even though the workflow file did not change.
+In-scope Azure Pipelines tasks include both `version`- and `versionSpec`-named inputs:
 
-This is a stronger, separate rule from the requirement to quote all version pins. Quoting keeps YAML parsers from coercing version-looking strings to numbers; release-line specificity keeps setup actions from resolving to a different runtime line over time.
+- `UseNode@1` `version`.
+- `NodeTool@0` `versionSpec`, for legacy pipelines. When `NodeTool@0` uses `versionSource: fromFile`, the referenced repository file, such as `.nvmrc`, **MUST** contain a compliant, reviewable release-line selector.
+- `UsePythonVersion@0` `versionSpec`.
+- `GoTool@0` `version`.
+- `UseDotNet@2` `version` when `useGlobalJson` is not used.
+
+`UseRubyVersion@0`'s documented default selector `>= 2.4` is non-compliant with this explicit-selector rule and determinism rationale. This guide does not define durable compliant Ruby selector forms or Ruby granularity rules.
+
+The required selector granularity follows each ecosystem's release model. These bullets define the coarsest acceptable selector form, not recommended runtime currency:
+
+- Python **MUST** use major.minor selectors, such as `"3.13"`.
+- Node.js **MAY** use a major selector for a release line, such as `"24"`, or a major.minor selector, such as `"24.17"`.
+- .NET **MAY** use the most specific stable SDK channel selector documented by the setup action or tool-installer task, such as major.minor.x (`"10.0.x"`), or an exact major.minor.patch version. For `UseDotNet@2`, bare major.minor such as `"10.0"` is not a valid `version` form.
+- Go **MUST** use major.minor selectors, such as `"1.26"`.
+- Other ecosystems **MUST** use the most specific stable release-line selector documented by the setup action or tool-installer task.
+
+Selectors narrower than the coarsest acceptable form are also compliant for ecosystems where exact versions are covered by the task or action behavior, because they are at least as deterministic. For Microsoft-hosted Azure Pipelines agents, tool-cache tasks such as `UseNode@1`, `NodeTool@0`, `UsePythonVersion@0`, and `GoTool@0` resolve the newest installed or available version matching the selector, and an exact patch that is not pre-installed may need to be downloaded or may be unavailable. Prefer the release-line granularity above for those tasks unless an exact pin is specifically required. On self-hosted agents, `UsePythonVersion@0` cannot download missing Python versions, so exact Python pins require the desired version to be present in the agent tool cache. `UseDotNet@2` is less dependent on preinstalled hosted-agent contents because it is designed to acquire the requested SDK or runtime from the internet or local cache.
+
+The distinction between allowed and prohibited selectors is granularity per ecosystem, not `.x` spelling by itself. For Node.js selectors whose task or action uses SemVer X-range rules, `"24"`, `"24.x"`, and `"24.*"` all select the Node.js 24 line. Prefer bare-major `"24"` for readability, but do not classify `"24.x"` as prohibited when a Node major selector is allowed. By contrast, `"3.x"` is prohibited for Python because Python selectors must be at least major.minor.
+
+Range-style Azure Pipelines tasks such as `UseNode@1`, `NodeTool@0`, and `UsePythonVersion@0` **MUST NOT** use bare `"*"`, comparator/operator ranges such as `">=18.0.0"`, `">=20 <21"`, `"^20.0.0"`, or `"~20.18.0"`, or composite/OR ranges such as `"20 || 22"`. These expressions are rejected because they are not direct, reviewable release-line selectors for this guide's CI-determinism rule, even when their breadth appears close to an allowed release line. Channel-syntax tasks such as `UseDotNet@2` **MUST NOT** use a selector broader than the required channel granularity; `"10.x"` is task-valid but guide-noncompliant because this guide requires the narrower `"10.0.x"` channel or an exact SDK/runtime version. `GoTool@0` **MUST NOT** use a selector broader than major.minor. `"latest"` **MUST NOT** be used for any in-scope language/runtime/SDK toolchain selector.
+
+For tasks exposing `checkLatest`, such as `UseNode@1` and `NodeTool@0`, `checkLatest: true` **SHOULD NOT** be used on Microsoft-hosted agents unless re-resolution to the newest matching version is intentional and documented. Because the default is already `false`, an explicit `checkLatest: false` is illustrative, not required. `UsePythonVersion@0`, `UseDotNet@2`, and `GoTool@0` do not expose `checkLatest`; do not add that input to those tasks. For tasks exposing prerelease or preview toggles, such as `UsePythonVersion@0` `allowUnstable` and `UseDotNet@2` `includePreviewVersions`, `true` **SHOULD NOT** be used unless the workflow intentionally tests prerelease versions and documents that intent.
+
+This rule protects CI determinism. Broad floating selectors and hidden task defaults couple workflow results to runner-image refreshes, setup action manifests, task defaults, tool-cache contents, and download resolution behavior. A runner, task, or toolchain refresh can then move CI to a different interpreter, runtime, or SDK line and break a previously passing workflow even though the workflow file did not change.
+
+This is a stronger, separate rule from the requirement to quote all version pins. Quoting keeps YAML parsers from coercing version-looking strings to numbers; release-line specificity keeps setup actions and tool-installer tasks from resolving to a different runtime line over time.
+
+Example version numbers in this section reflect supported release lines at authoring time and may be refreshed when they reach end-of-life. The normative rule is the selector form and checked-in provenance, not the specific version number shown.
+
+This section is limited to GitHub Actions setup actions and Azure Pipelines language/runtime/SDK toolchain installers. It does not cover Azure Pipelines CLI installers such as `KubectlInstaller@0`, `HelmInstaller@1`, or `KubeloginInstaller@0`; Azure Pipelines agent image labels such as `vmImage: "ubuntu-latest"`; `JavaToolInstaller@0` or `JavaToolInstaller@1`; `UseDotNet@2` with `useGlobalJson: true`; runtime currency or end-of-life policy for any toolchain; or Terraform and TFLint versions installed through shell commands instead of Azure `Use*` or `*Tool` task selectors.
 
 **Compliant:**
 
@@ -127,11 +155,48 @@ This is a stronger, separate rule from the requirement to quote all version pins
 
 - uses: actions/setup-node@v6
   with:
-    node-version: "20"
+    node-version: "24"
 
 - uses: actions/setup-dotnet@v4
   with:
-    dotnet-version: "8.0.x"
+    dotnet-version: "10.0.x"
+```
+
+**Compliant Azure Pipelines:**
+
+```yaml
+parameters:
+  - name: nodeVersion
+    type: string
+    default: "24"
+    values:
+      - "24"
+      - "22"
+  - name: pythonVersion
+    type: string
+    default: "3.13"
+    values:
+      - "3.13"
+      - "3.14"
+
+steps:
+  - task: UseNode@1
+    inputs:
+      version: ${{ parameters.nodeVersion }}
+      # checkLatest defaults to false; shown for emphasis only.
+      checkLatest: false
+
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: ${{ parameters.pythonVersion }}
+
+  - task: UseDotNet@2
+    inputs:
+      version: "10.0.x"
+
+  - task: GoTool@0
+    inputs:
+      version: "1.26"
 ```
 
 **Non-compliant:**
@@ -148,6 +213,32 @@ This is a stronger, separate rule from the requirement to quote all version pins
 - uses: actions/setup-dotnet@v4
   with:
     dotnet-version: '8.x'
+```
+
+**Non-compliant Azure Pipelines:**
+
+```yaml
+steps:
+  - task: UseNode@1
+    # Non-compliant: relies on the task's default selector.
+
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: "3.x"
+      allowUnstable: true
+
+  - task: UseDotNet@2
+    inputs:
+      version: "10.x"
+      includePreviewVersions: true
+
+  - task: NodeTool@0
+    inputs:
+      versionSpec: ">=18.0.0"
+      checkLatest: true
+
+  - task: UseRubyVersion@0
+    # Non-compliant: relies on the task's documented broad default selector.
 ```
 
 ## GitHub Actions Documentation Comment URLs
