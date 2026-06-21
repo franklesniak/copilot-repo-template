@@ -347,8 +347,8 @@ placeholder: |
 
 # Node.js project example:
 placeholder: |
-  Node.js 20.10.0
-  npm 10.2.3
+  Node.js 24.x
+  npm 11.x
 
 # .NET project example:
 placeholder: |
@@ -1956,13 +1956,13 @@ on:
 
 ### Changing Node.js Version
 
-The workflow uses Node.js 20 by default:
+The workflow uses Node.js 24 by default:
 
 ```yaml
 - name: Setup Node.js
   uses: actions/setup-node@v6
   with:
-    node-version: '20'
+    node-version: '24'
 ```
 
 **To use a different Node.js version:**
@@ -3656,7 +3656,7 @@ The template includes an `engines` field:
 ```json
 {
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   }
 }
 ```

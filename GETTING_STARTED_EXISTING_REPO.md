@@ -2589,7 +2589,7 @@ git push origin feature/adopt-template-features
 | Markdown lint finds many errors | Stricter rules than before | Adjust `.markdownlint.jsonc` or fix files |
 | Python CI fails on imports | Different package structure | Update the mypy `targets` array in workflow |
 | PSScriptAnalyzer fails | Code does not match the adopted analyzer rules | Run with `-Fix`, apply the analyzer debt triage workflow, or add narrow justified suppressions |
-| npm install fails | Node.js version mismatch | Update Node.js to v20+ (see `engines` in package.json) |
+| npm install fails | Node.js version mismatch | Update Node.js to v22+ (see `engines` in package.json) |
 | Placeholder check fails | OWNER/REPO not replaced | Search and replace all placeholders |
 
 ---
@@ -2716,7 +2716,7 @@ Instead, update your existing README to document any new development requirement
 
 ### Prerequisites
 
-- Node.js 20+ (for markdown linting)
+- Node.js 22+ (for markdown linting)
 - Python 3.13 or 3.14 (for pre-commit hooks)
 - PowerShell (for PSScriptAnalyzer)
 
