@@ -207,7 +207,7 @@ function collectGithubMatrixValues(matrix, key) {
 
 function resolveGithubExpression(value, matrix) {
     if (typeof value !== 'string') {
-        return uniqueValues([value]);
+        return uniqueValues([value]).map((rawValue) => ({ rawValue, origin: 'literal' }));
     }
 
     const matrixMatch = value.match(/^\s*\$\{\{\s*matrix\.([A-Za-z0-9_.-]+)\s*\}\}\s*$/);

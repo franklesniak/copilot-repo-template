@@ -299,3 +299,39 @@ test('reports package-lock root engine drift without reading transitive engines 
     );
     assert(!inventory.selectors.some((selector) => selector.rawValue === '>=8'));
 });
+
+test('handles unquoted numeric GitHub Actions node-version selectors', () => {
+    const repoRoot = makeTempRepo();
+    writeFile(
+        repoRoot,
+        '.github/workflows/numeric.yml',
+        `
+name: Numeric
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+`,
+    );
+
+    const inventory = scanner.collectNodeSelectors(repoRoot);
+    assert.deepEqual(inventory.problems, []);
+
+    const keys = inventory.selectors.map(selectorKey);
+    assert(keys.includes('ci-runtime|github-actions:setup-node node-version|literal|24|.github/workflows/numeric.yml'));
+    assert(!inventory.selectors.some((selector) => selector.rawValue === 'undefined'));
+
+    // A non-string selector must still evaluate cleanly rather than cascading
+    // into a false "unable to parse" inventory problem.
+    const evaluation = scanner.evaluateSelectors(inventory.selectors, FIXTURE_SCHEDULE, {
+        asOfDate: '2026-01-15',
+        warningWindowDays: 180,
+    });
+    assert.deepEqual(evaluation.problems, []);
+    assert.equal(evaluation.findings[0].releaseLine, 24);
+});
