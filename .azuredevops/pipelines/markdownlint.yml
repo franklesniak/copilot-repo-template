@@ -1,0 +1,69 @@
+# Azure Pipelines Markdown validation.
+#
+# Azure Repos pull request validation is configured through branch policy build
+# validation. This YAML intentionally omits a `pr:` trigger.
+
+name: "$(Date:yyyyMMdd).$(Rev:r)"
+
+trigger:
+  branches:
+    include:
+      - "*"
+
+parameters:
+  - name: nodeVersion
+    type: string
+    default: "24"
+  - name: pythonVersion
+    type: string
+    default: "3.13"
+
+pool:
+  vmImage: "ubuntu-latest"
+
+steps:
+  - checkout: self
+
+  - task: UseNode@1
+    displayName: "Use Node.js ${{ parameters.nodeVersion }}"
+    inputs:
+      version: ${{ parameters.nodeVersion }}
+
+  - task: UsePythonVersion@0
+    displayName: "Use Python ${{ parameters.pythonVersion }}"
+    inputs:
+      versionSpec: ${{ parameters.pythonVersion }}
+
+  - bash: |
+      set -euo pipefail
+      npm ci --ignore-scripts
+    displayName: "Install Node dependencies"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: |
+      set -euo pipefail
+      python -m pip install --upgrade pip
+      python -m pip install -e ".[dev]"
+    displayName: "Install Python dependencies"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: |
+      set +e
+      npm run lint:md
+      outer_status=$?
+      npm run lint:md:nested
+      nested_status=$?
+      npm run lint:md:links
+      links_status=$?
+      pytest tests/test_materialize_downstream_adoption.py -k passes_nested_markdown_lint -v
+      generated_status=$?
+
+      if [ "$outer_status" -ne 0 ] ||
+        [ "$nested_status" -ne 0 ] ||
+        [ "$links_status" -ne 0 ] ||
+        [ "$generated_status" -ne 0 ]; then
+        echo "##vso[task.logissue type=error]Markdown checks failed. Check the logs above for details."
+        exit 1
+      fi
+    displayName: "Run Markdown checks"
+    workingDirectory: "$(Build.SourcesDirectory)"
