@@ -38,7 +38,7 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - **[All]** **MUST NOT** commit secrets in YAML.
 - **[Actions]** **MUST** apply least-privilege `permissions:` on GitHub Actions workflows.
 - **[Actions]** `setup-*` action `with.*-version:` inputs (for example, `python-version`, `node-version`, `go-version`, and `dotnet-version`) in workflow files under `.github/workflows/` **MUST** resolve from checked-in release-line selectors and **MUST NOT** use a broad floating selector such as `'3.x'`, `'latest'`, or `'*'`. The required granularity follows each ecosystem's release model: Python and Go **MUST** use major.minor (for example, `"3.13"` or `"1.26"`); Node.js **MAY** use major for an LTS line (for example, `"24"`) or major.minor (for example, `"24.17"`); .NET **MAY** use the most specific stable SDK channel selector documented by `actions/setup-dotnet`, such as major.minor.x (for example, `"10.0.x"`); for other ecosystems, use the most specific stable release-line selector documented by the action's README.
-- **[AzurePipelines]** Repositories that use Azure Pipelines language/runtime/SDK tool-installer tasks **MUST** explicitly provide checked-in compliant selectors for in-scope `version` or `versionSpec` inputs and **MUST NOT** rely on broad task defaults, queue-time-only values, `"latest"`, `"*"`, comparator/operator ranges, or composite ranges.
+- **[AzurePipelines]** Repositories that use Azure Pipelines language/runtime/SDK tool-installer tasks **MUST** explicitly provide checked-in compliant selectors for in-scope `version` or `versionSpec` inputs and **MUST NOT** rely on broad task defaults, queue-time-only values, `"latest"`, bare `"*"`, comparator/operator ranges, or composite ranges.
 - **[Actions]** Documentation/navigation comments above `uses:` lines **MUST** use versionless upstream URLs; the `uses:` line remains the authoritative action version.
 - **[Actions]** Comments documenting where a GitHub Actions `with:` tool-version input is pinned, or that such a value must stay aligned across files, **SHOULD** describe the membership criterion instead of a hardcoded workflow-file list; if a concrete file list is included for convenience, it **SHOULD** be labeled as a non-authoritative snapshot.
 - **[Schemas]** Schema-backed YAML **MUST** pass any schema validator wired into pre-commit or CI; where no validator is wired up for a particular file family, authors **SHOULD** run the appropriate validator locally before committing.
@@ -125,7 +125,7 @@ In-scope Azure Pipelines tasks include both `version`- and `versionSpec`-named i
 The required selector granularity follows each ecosystem's release model. These bullets define the coarsest acceptable selector form, not recommended runtime currency:
 
 - Python **MUST** use major.minor selectors, such as `"3.13"`.
-- Node.js **MAY** use a major selector for a release line, such as `"24"`, or a major.minor selector, such as `"24.17"`.
+- Node.js **MAY** use a major selector for an LTS line, such as `"24"`, or a major.minor selector, such as `"24.17"`.
 - .NET **MAY** use the most specific stable SDK channel selector documented by the setup action or tool-installer task, such as major.minor.x (`"10.0.x"`), or an exact major.minor.patch version. For `UseDotNet@2`, bare major.minor such as `"10.0"` is not a valid `version` form.
 - Go **MUST** use major.minor selectors, such as `"1.26"`.
 - Other ecosystems **MUST** use the most specific stable release-line selector documented by the setup action or tool-installer task.
