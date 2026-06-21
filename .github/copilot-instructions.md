@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.5.20260609.0
+**Version:** 1.5.20260621.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-09
+- **Last Updated:** 2026-06-21
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
@@ -194,7 +194,7 @@ For the rationale, see the **Workflow Version Pinning and Dependabot Coherence**
 
 ### Tool versions passed as action inputs or shell arguments
 
-Tool versions that are not managed by Dependabot — for example, `node-version: "20"` passed to `actions/setup-node@v6` — **SHOULD** still avoid unnecessary duplication. If the same tool version is required in multiple workflow jobs or steps, prefer a single source of truth where GitHub Actions supports one, such as a workflow-level `env:` value for the CLI/tool version.
+Tool versions that are not managed by Dependabot — for example, the `node-version` input passed to `actions/setup-node@v6` — **SHOULD** still avoid unnecessary duplication. If the same tool version is required in multiple workflow jobs or steps, prefer a single source of truth where GitHub Actions supports one, such as a workflow-level `env:` value for the CLI/tool version.
 
 ### Asymmetry: workflow-level `env:` for action versions vs. tool versions
 
@@ -208,7 +208,7 @@ The two categories are **not** symmetric, and the difference is the entire point
 Action wrapper versions and the tool versions they install are **separate pins** that travel through different channels:
 
 - `actions/setup-node@v6` is the setup action version (managed by Dependabot via `uses:`).
-- `node-version: "20"` is the Node.js version installed by that setup action (not managed by Dependabot; manually maintained).
+- The `node-version` input's value is the Node.js version installed by that setup action (not managed by Dependabot; manually maintained).
 
 Both pins exist in the same workflow step, but they update on different cadences and through different mechanisms. Do not conflate them.
 
@@ -219,7 +219,7 @@ If a Dependabot-managed dependency genuinely cannot be represented only through 
 ### Concrete examples in this repository
 
 - Pinned action majors such as `actions/checkout@v6`, `actions/setup-python@v6`, `actions/cache@v5`, and `actions/setup-node@v6` appear repeatedly in workflow `uses:` lines. These are acceptable because each occurrence is a normal Dependabot-managed `uses:` reference.
-- `node-version: "20"` is passed to `actions/setup-node@v6` in [`.github/workflows/markdownlint.yml`](workflows/markdownlint.yml). This is a Node.js version (not the `actions/setup-node` action version), so it is **not** a Dependabot `uses:` desynchronization case. It is a useful candidate for a future single source of truth (such as a workflow-level `env:` value) if duplication grows; refactoring existing workflows to that shape is out of scope for this rule.
+- In Markdown CI, the `node-version` input in [`.github/workflows/markdownlint.yml`](workflows/markdownlint.yml) is the source of truth for the Node.js version installed by `actions/setup-node@v6`. This is a Node.js version (not the `actions/setup-node` action version), so it is **not** a Dependabot `uses:` desynchronization case. It is a useful candidate for a future single source of truth (such as a workflow-level `env:` value) if duplication grows; refactoring existing workflows to that shape is out of scope for this rule.
 
 ## Repository Self-Containment
 
