@@ -1,0 +1,112 @@
+# Azure Pipelines PowerShell validation.
+#
+# Azure Repos pull request validation is configured through branch policy build
+# validation. This YAML intentionally omits a `pr:` trigger.
+
+name: "$(Date:yyyyMMdd).$(Rev:r)"
+
+trigger:
+  branches:
+    include:
+      - "*"
+
+parameters:
+  - name: gateMode
+    type: string
+    default: "strict"
+
+jobs:
+  - job: lint
+    displayName: "PSScriptAnalyzer"
+    pool:
+      vmImage: "ubuntu-latest"
+    variables:
+      PSSCRIPTANALYZER_GATE_MODE: "${{ parameters.gateMode }}"
+    steps:
+      - checkout: self
+
+      - task: PowerShell@2
+        displayName: "Install PSScriptAnalyzer"
+        inputs:
+          pwsh: true
+          targetType: "inline"
+          script: |
+            if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
+              Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser -ErrorAction Stop
+            }
+            Import-Module PSScriptAnalyzer
+
+      - task: PowerShell@2
+        displayName: "Run PSScriptAnalyzer"
+        inputs:
+          pwsh: true
+          targetType: "inline"
+          script: |
+            $repositoryRoot = "$(Build.SourcesDirectory)"
+            $settingsPath = Join-Path -Path $repositoryRoot -ChildPath ".github/linting/PSScriptAnalyzerSettings.psd1"
+            $gateHelperPath = Join-Path -Path $repositoryRoot -ChildPath "src/tools/Resolve-PSScriptAnalyzerGate.ps1"
+            . $gateHelperPath
+
+            $ps1Files = Get-ChildItem -LiteralPath $repositoryRoot -Filter "*.ps1" -Recurse -File |
+              Where-Object { $_.FullName -notmatch "node_modules" }
+
+            if ($ps1Files.Count -eq 0) {
+              Write-Output "Skipping PSScriptAnalyzer - no PowerShell files found."
+              return
+            }
+
+            $analyzerFindings = [System.Collections.Generic.List[object]]::new()
+            foreach ($file in $ps1Files) {
+              Write-Output "Analyzing: $($file.FullName)"
+              $analyzerFindings.AddRange(@(
+                Invoke-ScriptAnalyzer -Path $file.FullName -Settings $settingsPath
+              ))
+            }
+
+            $gateResult = Resolve-PSScriptAnalyzerGate `
+              -Mode $env:PSSCRIPTANALYZER_GATE_MODE `
+              -AnalyzerFinding $analyzerFindings `
+              -RepositoryRoot $repositoryRoot `
+              -AnnotationFormat AzurePipelines
+
+            foreach ($annotationCommand in $gateResult.AnnotationCommands) {
+              Write-Output $annotationCommand
+            }
+
+            foreach ($summaryLine in $gateResult.SummaryLines) {
+              Write-Output $summaryLine
+            }
+
+            if ($gateResult.ShouldFail) {
+              Write-Error "PSScriptAnalyzer gate failed. See annotations and summary above."
+              exit 1
+            }
+
+            Write-Output "PowerShell lint gate passed."
+
+  - job: pester
+    displayName: "Pester"
+    strategy:
+      matrix:
+        linux:
+          imageName: "ubuntu-latest"
+        windows:
+          imageName: "windows-latest"
+        macos:
+          imageName: "macos-latest"
+    pool:
+      vmImage: "$(imageName)"
+    steps:
+      - checkout: self
+
+      - task: PowerShell@2
+        displayName: "Run Pester tests"
+        inputs:
+          pwsh: true
+          targetType: "inline"
+          script: |
+            if (-not (Get-Module -ListAvailable -Name Pester)) {
+              Install-Module -Name Pester -MinimumVersion 5.0 -Force -Scope CurrentUser -ErrorAction Stop
+            }
+            Import-Module Pester
+            Invoke-Pester -Path "$(Build.SourcesDirectory)/tests/" -Output Detailed

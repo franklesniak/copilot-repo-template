@@ -1,0 +1,85 @@
+# Azure Pipelines Python validation.
+#
+# Azure Repos pull request validation is configured through branch policy build
+# validation. This YAML intentionally omits a `pr:` trigger.
+
+name: "$(Date:yyyyMMdd).$(Rev:r)"
+
+trigger:
+  branches:
+    include:
+      - "*"
+
+jobs:
+  - job: type_check
+    displayName: "Type Check (mypy)"
+    pool:
+      vmImage: "ubuntu-latest"
+    variables:
+      pythonVersion: "3.13"
+    steps:
+      - checkout: self
+
+      - task: UsePythonVersion@0
+        displayName: "Use Python $(pythonVersion)"
+        inputs:
+          versionSpec: "$(pythonVersion)"
+
+      - bash: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+        displayName: "Install dependencies"
+        workingDirectory: "$(Build.SourcesDirectory)"
+
+      - bash: |
+          set -euo pipefail
+          targets=(src tests)
+          if [ -d .template-sync/scripts ]; then
+            targets+=(.template-sync/scripts)
+          fi
+          python -m mypy "${targets[@]}"
+        displayName: "Run mypy"
+        workingDirectory: "$(Build.SourcesDirectory)"
+
+  - job: test
+    displayName: "Test"
+    strategy:
+      matrix:
+        linux_py313:
+          imageName: "ubuntu-latest"
+          pythonVersion: "3.13"
+        linux_py314:
+          imageName: "ubuntu-latest"
+          pythonVersion: "3.14"
+        windows_py313:
+          imageName: "windows-latest"
+          pythonVersion: "3.13"
+        windows_py314:
+          imageName: "windows-latest"
+          pythonVersion: "3.14"
+        macos_py313:
+          imageName: "macos-latest"
+          pythonVersion: "3.13"
+        macos_py314:
+          imageName: "macos-latest"
+          pythonVersion: "3.14"
+    pool:
+      vmImage: "$(imageName)"
+    steps:
+      - checkout: self
+
+      - task: UsePythonVersion@0
+        displayName: "Use Python $(pythonVersion)"
+        inputs:
+          versionSpec: "$(pythonVersion)"
+
+      - script: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+        displayName: "Install dependencies"
+        workingDirectory: "$(Build.SourcesDirectory)"
+
+      - script: pytest tests/ -v --cov --cov-report=term-missing
+        displayName: "Run tests with coverage"
+        workingDirectory: "$(Build.SourcesDirectory)"

@@ -1,0 +1,62 @@
+# Azure Pipelines placeholder audit.
+#
+# Azure Repos pull request validation is configured through branch policy build
+# validation. This YAML intentionally omits a `pr:` trigger.
+
+name: "$(Date:yyyyMMdd).$(Rev:r)"
+
+trigger:
+  branches:
+    include:
+      - "*"
+
+parameters:
+  - name: pythonVersion
+    type: string
+    default: "3.14"
+
+pool:
+  vmImage: "ubuntu-latest"
+
+steps:
+  - checkout: self
+
+  - task: UsePythonVersion@0
+    displayName: "Use Python ${{ parameters.pythonVersion }}"
+    inputs:
+      versionSpec: ${{ parameters.pythonVersion }}
+
+  - bash: |
+      set -euo pipefail
+      python .github/scripts/replace-template-placeholders.py scan --repo-root .
+    displayName: "Check for unresolved placeholders"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: |
+      set -euo pipefail
+      echo "Checking for common placeholder patterns..."
+
+      patterns=("your-org" "your-repo" "YOUR_ORG" "YOUR_REPO")
+      found_warnings=false
+
+      if [ -d ".github/ISSUE_TEMPLATE" ]; then
+        for pattern in "${patterns[@]}"; do
+          if grep -rn "$pattern" .github/ISSUE_TEMPLATE/ 2>/dev/null | grep -v "^[^:]*:[0-9]*:[[:space:]]*#"; then
+            echo "##vso[task.logissue type=warning]Found potential placeholder pattern '$pattern' in issue templates"
+            found_warnings=true
+          fi
+        done
+      fi
+
+      if [ -f "README.md" ] && grep -n "^# Project Name$" README.md; then
+        echo "##vso[task.logissue type=warning;sourcepath=README.md]Found 'Project Name' placeholder in README.md"
+        found_warnings=true
+      fi
+
+      if [ "$found_warnings" = "true" ]; then
+        echo "Placeholder warnings found. Review the warnings above."
+      else
+        echo "No placeholder warnings found."
+      fi
+    displayName: "Check for warning-only placeholder patterns"
+    workingDirectory: "$(Build.SourcesDirectory)"

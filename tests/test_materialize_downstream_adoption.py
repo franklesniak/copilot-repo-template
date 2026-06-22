@@ -798,6 +798,8 @@ def azure_provider_cli_args_for_modules(included_modules: tuple[str, ...]) -> tu
         provider_fields["host_provider"],
         "--security-contact",
         "security@example.com",
+        "--vscode-title",
+        provider_fields["azure_devops_repository"],
     ]
     if provider_fields["host_provider"] == "dual":
         args.extend(["--repository", "octocat/hello-world"])
@@ -1293,6 +1295,31 @@ def test_materialized_optional_pruning_retained_tests_have_no_stale_markers(
                     assert not stripped_line.startswith(
                         f"<!-- template-sync: end {marker_name}"
                     ), f"{relative_path}: {marker_name}"
+
+
+def test_materialized_azure_pipelines_without_github_actions_omits_actionlint(
+    tmp_path: Path,
+) -> None:
+    """Azure-only CI adoption must not retain GitHub Actions-only validation."""
+    target_root = materialize_module_fixture(
+        tmp_path,
+        ("baseline", "azure-pipelines", "yaml"),
+    )
+
+    assert (target_root / ".azuredevops" / "pipelines" / "README.md").is_file()
+    assert (target_root / ".azuredevops" / "pipelines" / "precommit.yml").is_file()
+    assert (target_root / ".azuredevops" / "pipelines" / "check-placeholders.yml").is_file()
+    assert (target_root / ".azuredevops" / "pipelines" / "data-ci.yml").is_file()
+    assert not (target_root / ".github" / "workflows").exists()
+    assert not (target_root / ".azuredevops" / "pipelines" / "markdownlint.yml").exists()
+
+    precommit_text = read_file(target_root / ".pre-commit-config.yaml")
+    data_pipeline_text = read_file(target_root / ".azuredevops" / "pipelines" / "data-ci.yml")
+
+    assert "github-actions-only" not in precommit_text
+    assert "actionlint" not in precommit_text
+    assert "actionlint" not in data_pipeline_text
+    assert "pre-commit run yamllint --all-files" in data_pipeline_text
 
 
 def test_materialized_template_sync_support_only_first_adoption_plan_omits_powershell(

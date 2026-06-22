@@ -1,0 +1,146 @@
+# Azure Pipelines data-file and template-sync validation.
+#
+# Azure Repos pull request validation is configured through branch policy build
+# validation. This YAML intentionally omits a `pr:` trigger.
+#
+# Hooks executed from .pre-commit-config.yaml:
+#   - check-json
+#   - check-toml
+#   - check-yaml
+# template-sync: begin yaml-only
+#   - yamllint
+# template-sync: end yaml-only
+# template-sync: begin schema-only
+#   - validate-example-config-valid-examples
+#   - validate-example-config-schema
+# template-sync: end schema-only
+# template-sync: begin template-sync-support-only
+#   - validate-template-sync-marker-valid-examples
+#   - validate-template-sync-instruction-contracts-valid-examples
+#   - validate-first-adoption-quality-suppressions-valid-examples
+#   - validate-template-sync-manifest-schema
+#   - validate-template-sync-marker-schema
+#   - validate-template-sync-instruction-contracts-schema
+#   - validate-first-adoption-quality-suppressions-schema
+#   - validate-template-sync-manifest
+#   - validate-template-sync-marker
+#   - validate-template-sync-instruction-contracts
+#   - validate-first-adoption-quality-suppressions
+#   - validate-instruction-contracts-upstream
+#   - validate-instruction-contracts-downstream
+# template-sync: end template-sync-support-only
+#
+# Azure Pipelines service-schema validation is service-backed. This pipeline
+# runs local YAML parse/style checks, not Azure DevOps task schema validation.
+
+name: "$(Date:yyyyMMdd).$(Rev:r)"
+
+trigger:
+  branches:
+    include:
+      - "*"
+
+parameters:
+  - name: pythonVersion
+    type: string
+    default: "3.14"
+
+pool:
+  vmImage: "ubuntu-latest"
+
+steps:
+  - checkout: self
+
+  - task: UsePythonVersion@0
+    displayName: "Use Python ${{ parameters.pythonVersion }}"
+    inputs:
+      versionSpec: ${{ parameters.pythonVersion }}
+
+  - bash: |
+      set -euo pipefail
+      python -m pip install --upgrade pip
+      python -m pip install pre-commit
+    displayName: "Install pre-commit"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run check-json --all-files
+    displayName: "Run check-json"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run check-toml --all-files
+    displayName: "Run check-toml"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run check-yaml --all-files
+    displayName: "Run check-yaml"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  # template-sync: begin yaml-only
+  - bash: pre-commit run yamllint --all-files
+    displayName: "Run yamllint"
+    workingDirectory: "$(Build.SourcesDirectory)"
+  # template-sync: end yaml-only
+
+  # template-sync: begin schema-only
+  - bash: pre-commit run validate-example-config-valid-examples --all-files
+    displayName: "Run validate-example-config-valid-examples"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run validate-example-config-schema --all-files
+    displayName: "Run validate-example-config-schema"
+    workingDirectory: "$(Build.SourcesDirectory)"
+  # template-sync: end schema-only
+
+  # template-sync: begin template-sync-support-only
+  - bash: pre-commit run validate-template-sync-marker-valid-examples --all-files
+    displayName: "Run validate-template-sync-marker-valid-examples"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run validate-template-sync-instruction-contracts-valid-examples --all-files
+    displayName: "Run validate-template-sync-instruction-contracts-valid-examples"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run validate-first-adoption-quality-suppressions-valid-examples --all-files
+    displayName: "Run validate-first-adoption-quality-suppressions-valid-examples"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run validate-template-sync-manifest-schema --all-files
+    displayName: "Run validate-template-sync-manifest-schema"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run validate-template-sync-marker-schema --all-files
+    displayName: "Run validate-template-sync-marker-schema"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run validate-template-sync-instruction-contracts-schema --all-files
+    displayName: "Run validate-template-sync-instruction-contracts-schema"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run validate-first-adoption-quality-suppressions-schema --all-files
+    displayName: "Run validate-first-adoption-quality-suppressions-schema"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run validate-template-sync-manifest --all-files
+    displayName: "Run validate-template-sync-manifest"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run validate-template-sync-marker --all-files
+    displayName: "Run validate-template-sync-marker"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run validate-template-sync-instruction-contracts --all-files
+    displayName: "Run validate-template-sync-instruction-contracts"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run validate-first-adoption-quality-suppressions --all-files
+    displayName: "Run validate-first-adoption-quality-suppressions"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run validate-instruction-contracts-upstream --all-files
+    displayName: "Run validate-instruction-contracts-upstream"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run validate-instruction-contracts-downstream --all-files
+    displayName: "Run validate-instruction-contracts-downstream"
+    workingDirectory: "$(Build.SourcesDirectory)"
+  # template-sync: end template-sync-support-only
