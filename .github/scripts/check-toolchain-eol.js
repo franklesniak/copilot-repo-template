@@ -404,7 +404,7 @@ function collectAzureMatrixValues(strategy, key) {
     return uniqueValues(values);
 }
 
-function resolveAzureSelectorValue(value, context) {
+function resolveAzureSelectorValue(value, context, sourcePath, problems) {
     if (typeof value !== 'string') {
         return [{ rawValue: value, origin: 'literal' }];
     }
@@ -416,9 +416,23 @@ function resolveAzureSelectorValue(value, context) {
         const parameterName = parameterMatch[1];
         const parameter = context.parameters.get(parameterName);
         if (!parameter) {
+            problems.push({
+                path: sourcePath,
+                message:
+                    `Azure Pipelines parameter "${parameterName}" referenced by ${value.trim()} is not ` +
+                    'declared in this file, so its Node.js selector cannot be verified from checked-in YAML.',
+            });
             return [];
         }
         const values = uniqueValues([parameter.defaultValue, ...parameter.values]);
+        if (values.length === 0) {
+            problems.push({
+                path: sourcePath,
+                message:
+                    `Azure Pipelines parameter "${parameterName}" has no checked-in default or values, ` +
+                    'so its Node.js selector cannot be verified from checked-in YAML.',
+            });
+        }
         return values.map((rawValue) => ({
             rawValue,
             origin:
@@ -436,7 +450,17 @@ function resolveAzureSelectorValue(value, context) {
             values.push(context.variables.get(variableName));
         }
         values.push(...collectAzureMatrixValues(context.strategy, variableName));
-        return uniqueValues(values).map((rawValue) => ({
+        const resolvedValues = uniqueValues(values);
+        if (resolvedValues.length === 0) {
+            problems.push({
+                path: sourcePath,
+                message:
+                    `Azure Pipelines variable "${variableName}" referenced by ${value.trim()} is not defined ` +
+                    'by a checked-in variable or matrix, so its Node.js selector cannot be verified from ' +
+                    'checked-in YAML (it may be provided only at queue time).',
+            });
+        }
+        return resolvedValues.map((rawValue) => ({
             rawValue,
             origin: `variable-or-matrix.${variableName}`,
         }));
@@ -461,7 +485,7 @@ function collectAzureStepSelectors(repoRoot, relativePipelinePath, steps, contex
         const taskName = step.task.trim();
         const inputs = step.inputs || {};
         if (/^UseNode@1$/i.test(taskName) && Object.prototype.hasOwnProperty.call(inputs, 'version')) {
-            for (const resolved of resolveAzureSelectorValue(inputs.version, context)) {
+            for (const resolved of resolveAzureSelectorValue(inputs.version, context, relativePipelinePath, problems)) {
                 addSelector(selectors, {
                     selectorClass: 'ci-runtime',
                     sourceType: 'azure-pipelines:UseNode@1 version',
@@ -478,7 +502,7 @@ function collectAzureStepSelectors(repoRoot, relativePipelinePath, steps, contex
                 /^fromFile$/i.test(versionSource) &&
                 Object.prototype.hasOwnProperty.call(inputs, 'versionFilePath')
             ) {
-                for (const resolved of resolveAzureSelectorValue(inputs.versionFilePath, context)) {
+                for (const resolved of resolveAzureSelectorValue(inputs.versionFilePath, context, relativePipelinePath, problems)) {
                     for (const selector of readVersionFileSelector(
                         repoRoot,
                         resolved.rawValue,
@@ -490,7 +514,7 @@ function collectAzureStepSelectors(repoRoot, relativePipelinePath, steps, contex
                     }
                 }
             } else if (Object.prototype.hasOwnProperty.call(inputs, 'versionSpec')) {
-                for (const resolved of resolveAzureSelectorValue(inputs.versionSpec, context)) {
+                for (const resolved of resolveAzureSelectorValue(inputs.versionSpec, context, relativePipelinePath, problems)) {
                     addSelector(selectors, {
                         selectorClass: 'ci-runtime',
                         sourceType: 'azure-pipelines:NodeTool@0 versionSpec',

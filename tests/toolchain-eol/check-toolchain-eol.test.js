@@ -404,3 +404,39 @@ test('aborts the schedule fetch after the configured timeout', async () => {
         global.fetch = originalFetch;
     }
 });
+
+test('reports unresolved Azure parameter and macro selector references', () => {
+    const repoRoot = makeTempRepo();
+    writeFile(
+        repoRoot,
+        '.azuredevops/pipelines/external-param.yml',
+        `
+steps:
+  - task: UseNode@1
+    inputs:
+      version: \${{ parameters.nodeVersion }}
+`,
+    );
+    writeFile(
+        repoRoot,
+        '.azuredevops/pipelines/external-macro.yml',
+        `
+steps:
+  - task: UseNode@1
+    inputs:
+      version: "$(nodeVersion)"
+`,
+    );
+
+    const inventory = scanner.collectNodeSelectors(repoRoot);
+
+    // Neither reference resolves from checked-in YAML, so each is reported as a
+    // problem instead of being silently dropped, and no selector is invented.
+    assert.equal(inventory.problems.length, 2);
+    assert(
+        inventory.problems.every((problem) =>
+            /cannot be verified from checked-in YAML/.test(problem.message),
+        ),
+    );
+    assert.equal(inventory.selectors.length, 0);
+});
