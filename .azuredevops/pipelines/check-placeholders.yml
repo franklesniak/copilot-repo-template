@@ -41,7 +41,7 @@ steps:
 
       if [ -d ".github/ISSUE_TEMPLATE" ]; then
         for pattern in "${patterns[@]}"; do
-          if grep -rn "$pattern" .github/ISSUE_TEMPLATE/ 2>/dev/null | grep -v "^[[:space:]]*#"; then
+          if grep -rn "$pattern" .github/ISSUE_TEMPLATE/ 2>/dev/null | grep -v "^[^:]*:[0-9]*:[[:space:]]*#"; then
             echo "##vso[task.logissue type=warning]Found potential placeholder pattern '$pattern' in issue templates"
             found_warnings=true
           fi
