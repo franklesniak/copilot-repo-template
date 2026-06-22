@@ -10,6 +10,7 @@ The prompts are operator aids. [GETTING_STARTED_EXISTING_REPO.md](https://github
 - You have an existing repository where you want to adopt template features.
 - You have access to GitHub Copilot Chat or another AI coding agent with repository access.
 - You have read through [GETTING_STARTED_EXISTING_REPO.md](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md) to understand what the template provides.
+- For Azure DevOps Services adoption, you can identify the target Azure DevOps organization, project, and Azure Repos repository, or you are ready to record those decisions as manual follow-up during preflight.
 
 ## Model Recommendation
 
@@ -73,6 +74,8 @@ For first adoption, apply the template’s first-adoption preflight model:
 - If I intentionally defer a required manual action or maintainer policy decision, plan to record it in `_TODO-repo-init.md`.
 - If GitHub settings cannot be safely queried or changed with available tooling, distinguish between facts that are unknown, decisions I need to make, and manual follow-up actions that should be recorded.
 - If GitHub settings are involved, verify current official GitHub documentation before recommending branch protection/ruleset, default branch, Discussions, label, or security-reporting configuration.
+- If Azure DevOps Services settings are involved, verify current Microsoft Learn documentation before recommending Azure Repos PR templates, branch policies, required reviewers, Copilot review enablement, Azure Boards linkage, or Azure DevOps security/dependency automation choices.
+- Do not invent Azure DevOps organization, project, repository, branch-policy, billing, Copilot preview, or service-connection state. If Azure DevOps connector/API tooling is unavailable or insufficient, distinguish unknown facts from owner decisions and manual follow-up actions.
 
 Pay special attention to these maintainer decisions:
 
@@ -87,6 +90,7 @@ Pay special attention to these maintainer decisions:
 For module selection:
 
 - Derive possible modules from the current `.template-sync/manifest.yml`; do not assume a stale module list.
+- Treat GitHub and Azure DevOps host modules as host-specific choices. GitHub remains the default for GitHub-hosted repositories; Azure DevOps Services support is additive through the Azure DevOps modules and should not make Azure DevOps mandatory for GitHub-only adopters.
 - Consider all plausible module selections and meaningful permutations for this repository. You may group invalid, dominated, redundant, or nonsensical permutations, but explain why they were grouped instead of individually scored.
 - Develop a defensible evaluation rubric.
 - Score the options in a table.
@@ -117,6 +121,7 @@ For protected files and template-derived governance/collaboration files:
 - Propose `tailored` adoption only for specific files or file sets where broader downstream rewriting is genuinely justified.
 - If protected files need edits, list each path, proposed decision, adoption mode, scope, reason, and exact authorization question.
 - Preserve any required instruction-contract anchors unless I explicitly authorize and record a waiver/removal. Pay particular attention to retained agent protocols such as code-review handling and automated review-loop sections.
+- Preserve host-specific review protocols only when their required modules are retained or explicitly authorized. GitHub-only adopters should not be required to keep Azure DevOps-only instruction-contract anchors unless they retain the relevant Azure DevOps module.
 
 For implementation planning:
 

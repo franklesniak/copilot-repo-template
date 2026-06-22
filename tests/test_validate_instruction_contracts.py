@@ -57,6 +57,10 @@ def _manifest() -> dict[str, Any]:
                     "description": "Template sync support files.",
                 },
                 {
+                    "name": "azure-devops-collaboration",
+                    "description": "Azure DevOps collaboration files.",
+                },
+                {
                     "name": "schema",
                     "description": "Schema files.",
                 },
@@ -100,6 +104,27 @@ def _contracts(
     if required_phrases is not None:
         contract["required_phrases"] = required_phrases
     return {"instruction_contracts": [contract]}
+
+
+def _host_specific_contracts() -> dict[str, Any]:
+    """Build contract fixtures for default GitHub and optional Azure DevOps protocols."""
+    return {
+        "instruction_contracts": [
+            {
+                "path": "CLAUDE.md",
+                "requires_modules": ["agent-instructions"],
+                "required_headings": ["## Handling Code Review Comments"],
+            },
+            {
+                "path": "GEMINI.md",
+                "requires_modules": [
+                    "agent-instructions",
+                    "azure-devops-collaboration",
+                ],
+                "required_headings": ["## Azure DevOps PR Review Protocol"],
+            },
+        ]
+    }
 
 
 def _marker(
@@ -412,6 +437,44 @@ def test_upstream_mode_skip_if_marker_present_runs_when_marker_absent(
 
     assert result.returncode == 1
     assert "CLAUDE.md: missing required heading: ## Handling Code Review Comments" in result.stdout
+
+
+def test_downstream_skips_azure_devops_contract_when_module_excluded(
+    tmp_path: Path,
+) -> None:
+    """Azure-specific contracts are not mandatory for GitHub-only adopters."""
+    _write_common_contract_repo(tmp_path, _host_specific_contracts())
+    _write_yaml(tmp_path, ".template-sync/marker.yml", _marker(["agent-instructions"]))
+    _write_text(tmp_path, "CLAUDE.md", "# Agent Instructions\n\n## Handling Code Review Comments\n")
+
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+
+    assert result.returncode == 0, result.stderr
+    assert "Instruction-contract validation passed." in result.stdout
+    assert "Contracts checked: 1" in result.stdout
+    assert "GEMINI.md (requires: agent-instructions, azure-devops-collaboration)" in result.stdout
+
+
+def test_downstream_checks_azure_devops_contract_when_module_retained(
+    tmp_path: Path,
+) -> None:
+    """Azure-specific contracts are enforced only when their Azure module is retained."""
+    _write_common_contract_repo(tmp_path, _host_specific_contracts())
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["agent-instructions", "azure-devops-collaboration"]),
+    )
+    _write_text(tmp_path, "CLAUDE.md", "# Agent Instructions\n\n## Handling Code Review Comments\n")
+    _write_text(tmp_path, "GEMINI.md", "# Agent Instructions\n")
+
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+
+    assert result.returncode == 1
+    assert "Instruction-contract validation failed." in result.stdout
+    assert (
+        "GEMINI.md: missing required heading: ## Azure DevOps PR Review Protocol" in result.stdout
+    )
 
 
 def test_downstream_duplicate_waiver_pairs_fail(tmp_path: Path) -> None:
