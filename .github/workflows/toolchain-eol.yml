@@ -44,12 +44,9 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Check monitored Node.js selectors
+        env:
+          WARNING_WINDOW_DAYS: ${{ inputs['warning-window-days'] || env.TOOLCHAIN_EOL_WARNING_DAYS }}
         run: |
-          warning_window="${{ inputs['warning-window-days'] }}"
-          if [ -z "$warning_window" ]; then
-            warning_window="$TOOLCHAIN_EOL_WARNING_DAYS"
-          fi
-
           node .github/scripts/check-toolchain-eol.js \
             --schedule-url "$NODE_RELEASE_SCHEDULE_URL" \
-            --warning-window-days "$warning_window"
+            --warning-window-days "$WARNING_WINDOW_DAYS"
