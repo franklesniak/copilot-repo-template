@@ -15,6 +15,7 @@ const DEFAULT_NODE_SCHEDULE_URL =
     'https://raw.githubusercontent.com/nodejs/Release/main/schedule.json';
 const DEFAULT_WARNING_WINDOW_DAYS = 180;
 const MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
+const DEFAULT_FETCH_TIMEOUT_MS = 15000;
 
 function toPosixPath(filePath) {
     return filePath.split(path.sep).join('/');
@@ -687,11 +688,25 @@ async function loadSchedule(options) {
     }
 
     const scheduleUrl = options.scheduleUrl || DEFAULT_NODE_SCHEDULE_URL;
-    const response = await fetch(scheduleUrl);
-    if (!response.ok) {
-        throw new Error(`failed to fetch Node.js release schedule from ${scheduleUrl}: ${response.status}`);
+    const timeoutMs = Number(options.fetchTimeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const response = await fetch(scheduleUrl, { signal: controller.signal });
+        if (!response.ok) {
+            throw new Error(`failed to fetch Node.js release schedule from ${scheduleUrl}: ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        if (error && error.name === 'AbortError') {
+            throw new Error(
+                `timed out after ${timeoutMs}ms fetching Node.js release schedule from ${scheduleUrl}.`,
+            );
+        }
+        throw error;
+    } finally {
+        clearTimeout(timer);
     }
-    return await response.json();
 }
 
 function parseArgs(argv) {

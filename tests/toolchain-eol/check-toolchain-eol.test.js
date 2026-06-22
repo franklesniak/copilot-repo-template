@@ -379,3 +379,28 @@ test('classifies a selector evaluated on its EOL date as eol', () => {
     assert.equal(result.findings[0].daysUntilEol, 0);
     assert.equal(result.findings[0].status, 'eol');
 });
+
+test('aborts the schedule fetch after the configured timeout', async () => {
+    const originalFetch = global.fetch;
+    // Simulate a stalled endpoint: the promise never settles on its own but
+    // honors the abort signal the way the real fetch does.
+    global.fetch = (url, opts) =>
+        new Promise((resolve, reject) => {
+            opts.signal.addEventListener('abort', () => {
+                const abortError = new Error('aborted');
+                abortError.name = 'AbortError';
+                reject(abortError);
+            });
+        });
+    try {
+        await assert.rejects(
+            scanner.loadSchedule({
+                scheduleUrl: 'https://example.invalid/schedule.json',
+                fetchTimeoutMs: 20,
+            }),
+            /timed out after 20ms/,
+        );
+    } finally {
+        global.fetch = originalFetch;
+    }
+});
