@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260621.0
+**Version:** 1.1.20260622.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-21
+- **Last Updated:** 2026-06-22
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the read-only first-adoption preflight/questionnaire mode, raw first-adoption state reporting, first-adoption quality-debt reports and suppressions, the adoption difficulties journal, one-shot first-adoption materialization, shell-safe first-adoption args files, package identity and collaboration-policy materialization, first-adoption structural convention assessment, first-adoption working-tree validation, downstream local path ownership records, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
