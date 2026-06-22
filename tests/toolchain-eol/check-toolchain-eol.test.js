@@ -335,3 +335,13 @@ jobs:
     assert.deepEqual(evaluation.problems, []);
     assert.equal(evaluation.findings[0].releaseLine, 24);
 });
+
+test('escapes percent before CR/LF in GitHub Actions annotation data', () => {
+    // A literal "%0A" in the text must not be decodable as a newline by the
+    // runner command processor: the percent is escaped first, yielding "%250A".
+    assert.equal(scanner.escapeWorkflowData('before%0Aafter'), 'before%250Aafter');
+    // Real control characters are still encoded.
+    assert.equal(scanner.escapeWorkflowData('a\r\nb'), 'a%0D%0Ab');
+    // A bare percent is encoded.
+    assert.equal(scanner.escapeWorkflowData('100%'), '100%25');
+});

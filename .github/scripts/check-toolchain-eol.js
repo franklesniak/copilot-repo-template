@@ -747,9 +747,24 @@ function githubAnnotationLevel(finding) {
     return finding.status === 'supported' ? 'notice' : 'error';
 }
 
+function escapeWorkflowData(value) {
+    // Percent MUST be escaped first; otherwise a literal "%0A" in the text would
+    // be decoded as a newline by the runner command processor (and our own
+    // inserted %0D/%0A escapes would be double-encoded).
+    return String(value)
+        .replace(/%/g, '%25')
+        .replace(/\r/g, '%0D')
+        .replace(/\n/g, '%0A');
+}
+
+function escapeWorkflowProperty(value) {
+    return escapeWorkflowData(value)
+        .replace(/:/g, '%3A')
+        .replace(/,/g, '%2C');
+}
+
 function printGithubAnnotation(level, pathName, message) {
-    const escapedMessage = message.replace(/\r/g, '%0D').replace(/\n/g, '%0A');
-    console.log(`::${level} file=${pathName}::${escapedMessage}`);
+    console.log(`::${level} file=${escapeWorkflowProperty(pathName)}::${escapeWorkflowData(message)}`);
 }
 
 function renderTextReport(result, options) {
@@ -843,6 +858,7 @@ module.exports = {
     DEFAULT_NODE_SCHEDULE_URL,
     DEFAULT_WARNING_WINDOW_DAYS,
     collectNodeSelectors,
+    escapeWorkflowData,
     evaluateSelectors,
     loadSchedule,
     normalizeNodeSchedule,
