@@ -661,7 +661,9 @@ function evaluateSelectors(selectors, scheduleJson, options = {}) {
         const eolDate = parseUtcDateOnly(scheduleEntry.eolDate);
         const daysUntilEol = Math.floor((eolDate.getTime() - asOfDate.getTime()) / MILLIS_PER_DAY);
         let status = 'supported';
-        if (daysUntilEol < 0) {
+        if (daysUntilEol <= 0) {
+            // The schedule's end date is the EOL date itself, so "at EOL"
+            // (daysUntilEol === 0) gets the same stronger signal as "past EOL".
             status = 'eol';
         } else if (daysUntilEol <= warningWindowDays) {
             status = 'near-eol';

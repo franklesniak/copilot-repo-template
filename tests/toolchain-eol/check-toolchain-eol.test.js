@@ -355,3 +355,27 @@ test('escapes percent before CR/LF in GitHub Actions annotation data', () => {
     // A bare percent is encoded.
     assert.equal(scanner.escapeWorkflowData('100%'), '100%25');
 });
+
+test('classifies a selector evaluated on its EOL date as eol', () => {
+    const selectors = [
+        {
+            toolchain: 'node',
+            selectorClass: 'ci-runtime',
+            sourceType: 'github-actions:setup-node node-version',
+            origin: 'literal',
+            path: '.github/workflows/on-eol-date.yml',
+            rawValue: '22',
+        },
+    ];
+
+    // FIXTURE_SCHEDULE v22 end is 2026-07-01; evaluating on that exact date
+    // means daysUntilEol === 0, which must be the stronger "eol" signal.
+    const result = scanner.evaluateSelectors(selectors, FIXTURE_SCHEDULE, {
+        asOfDate: '2026-07-01',
+        warningWindowDays: 180,
+    });
+
+    assert.deepEqual(result.problems, []);
+    assert.equal(result.findings[0].daysUntilEol, 0);
+    assert.equal(result.findings[0].status, 'eol');
+});
