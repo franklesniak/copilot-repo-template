@@ -173,6 +173,7 @@ ISSUE_693_EXCLUDED_DOC_REFERENCES = {
         "templates/yaml/",
         "schemas/README.md",
         "schemas/example-config",
+        "docs/azure-devops-support.md",
         "pre-commit run yamllint --all-files",
         "terraform test -verbose",
         "TFLint",
@@ -190,6 +191,7 @@ ISSUE_693_EXCLUDED_DOC_REFERENCES = {
         ".yamllint.yml",
         "schemas/README.md",
         "schemas/example-config",
+        "docs/azure-devops-support.md",
         "pytest tests/ -v --cov --cov-report=term-missing",
         "mypy src tests",
         "terraform-fmt",
@@ -2106,6 +2108,35 @@ def test_materialized_contributing_data_ci_reference_block(
     else:
         assert "**Data CI**" not in generated_text
         assert ".github/workflows/data-ci.yml" not in generated_text
+
+
+@pytest.mark.parametrize("module_name", sorted(AZURE_TEMPLATE_MODULES))
+def test_materialized_azure_support_guide_retained_by_any_azure_module(
+    tmp_path: Path,
+    module_name: str,
+) -> None:
+    """Any Azure host module retains the durable Azure DevOps guide."""
+    target_root = materialize_module_fixture(tmp_path, ("baseline", module_name))
+
+    guide_path = target_root / "docs" / "azure-devops-support.md"
+    assert guide_path.is_file()
+    assert "Azure DevOps Services Support Guide" in read_file(guide_path)
+
+
+def test_materialized_all_azure_modules_retain_guide_and_reference_links(
+    tmp_path: Path,
+) -> None:
+    """A full Azure host selection keeps the guide and guarded shared-doc links."""
+    target_root = materialize_module_fixture(
+        tmp_path, ("baseline", *sorted(AZURE_TEMPLATE_MODULES))
+    )
+
+    assert (target_root / "docs" / "azure-devops-support.md").is_file()
+    readme_text = read_file(target_root / "README.md")
+    contributing_text = read_file(target_root / "CONTRIBUTING.md")
+
+    assert "docs/azure-devops-support.md" in readme_text
+    assert "docs/azure-devops-support.md" in contributing_text
 
 
 def test_excluded_module_report_retains_or_group_block_without_cleanup(

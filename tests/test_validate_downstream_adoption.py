@@ -35,6 +35,8 @@ MODULE_DEFINITIONS = {
     "github-platform": "GitHub platform files.",
     "github-actions": "GitHub Actions workflows.",
     "github-templates": "GitHub collaboration surfaces.",
+    "azure-devops-platform": "Azure DevOps platform files.",
+    "azure-pipelines": "Azure Pipelines files.",
     "azure-devops-collaboration": "Azure DevOps collaboration surfaces.",
     "template-onboarding": "Template onboarding files.",
     "template-sync-support": "Template sync support files.",
@@ -148,6 +150,14 @@ def _manifest() -> dict[str, Any]:
                 {
                     "pattern": ".azuredevops/pull_request_template.md",
                     "requires_all": ["azure-devops-collaboration"],
+                },
+                {
+                    "pattern": "docs/azure-devops-support.md",
+                    "requires_any": [
+                        "azure-devops-platform",
+                        "azure-pipelines",
+                        "azure-devops-collaboration",
+                    ],
                 },
                 {"pattern": ".yamllint.yml", "requires_all": ["yaml"]},
                 {
@@ -461,6 +471,68 @@ def test_or_group_inline_block_is_valid_when_any_member_module_retained(
 
     assert result.returncode == 0, result.stdout
     assert "data-ci-reference-only" not in result.stdout
+
+
+def test_azure_guide_or_group_inline_block_is_reported_without_azure_modules(
+    tmp_path: Path,
+) -> None:
+    """GitHub-only adopters must not retain Azure guide reference blocks."""
+    _write_common_downstream_repo(
+        tmp_path,
+        readme_text=(
+            "# Downstream\n\n"
+            "<!-- template-sync: begin azure-devops-guide-reference-only -->\n"
+            "See [Azure guide](docs/azure-devops-support.md).\n"
+            "<!-- template-sync: end azure-devops-guide-reference-only -->\n"
+        ),
+    )
+
+    result = _run_validator(tmp_path, "--require-marker")
+
+    assert result.returncode == 1
+    assert "azure-devops-guide-reference-only remains" in result.stdout
+    assert "at least one of the excluded module(s)" in result.stdout
+
+
+def test_azure_guide_or_group_inline_block_is_valid_when_one_azure_module_retained(
+    tmp_path: Path,
+) -> None:
+    """The Azure guide marker is valid while any Azure host module is retained."""
+    retained_modules = [*PARTIAL_MODULES, "azure-pipelines"]
+    _write_common_downstream_repo(
+        tmp_path,
+        marker=_marker(retained_modules),
+        readme_text=(
+            "# Downstream\n\n"
+            "<!-- template-sync: begin azure-devops-guide-reference-only -->\n"
+            "See [Azure guide](docs/azure-devops-support.md).\n"
+            "<!-- template-sync: end azure-devops-guide-reference-only -->\n"
+        ),
+    )
+    _write_text(tmp_path, "docs/azure-devops-support.md", "# Azure DevOps Services Support\n")
+
+    result = _run_validator(tmp_path, "--require-marker")
+
+    assert result.returncode == 0, result.stdout
+    assert "azure-devops-guide-reference-only" not in result.stdout
+
+
+def test_github_only_downstream_adoption_reports_unguarded_azure_guide_link(
+    tmp_path: Path,
+) -> None:
+    """GitHub-only adopters cannot keep unguarded relative links to the Azure guide."""
+    _write_common_downstream_repo(
+        tmp_path,
+        readme_text=("# Downstream\n\n" "See [Azure guide](docs/azure-devops-support.md).\n"),
+    )
+
+    result = _run_validator(tmp_path, "--require-marker")
+
+    assert result.returncode == 1
+    assert "Retained Markdown relative link targets excluded module(s)" in result.stdout
+    assert "README.md:3: docs/azure-devops-support.md -> docs/azure-devops-support.md" in (
+        result.stdout
+    )
 
 
 def test_retained_markdown_relative_link_to_excluded_module_is_reported(

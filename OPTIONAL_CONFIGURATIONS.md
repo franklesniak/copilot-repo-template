@@ -1040,29 +1040,33 @@ This template repository's own `.github/dependabot.yml` does not currently exerc
 
 Azure DevOps support in this template means Azure DevOps Services. Azure DevOps Server behavior must be separately verified against current Microsoft documentation before documenting server-specific claims.
 
+<!-- template-sync: begin azure-devops-guide-reference-only -->
+See the durable [Azure DevOps Services Support Guide](docs/azure-devops-support.md) for host-wide Azure Repos, Azure Pipelines, Azure Boards, security scanning, dependency-update, and validation boundaries.
+<!-- template-sync: end azure-devops-guide-reference-only -->
+
 Security scanning and routine dependency version updates are separate capabilities:
 
 - GitHub Advanced Security for Azure DevOps, or the standalone GitHub Secret Protection for Azure DevOps and GitHub Code Security for Azure DevOps products, can provide security scanning for Azure Repos when licensed, enabled, and configured.
 - Routine dependency version updates are an explicit adopter choice and require a separate Azure-compatible mechanism. This template does not enable Renovate, self-hosted Dependabot, or another dependency-update service by default.
 
-Product naming verified against Microsoft Learn on 2026-06-19:
+Product naming verified against Microsoft Learn on 2026-06-22:
 
 - The bundled [GitHub Advanced Security for Azure DevOps](https://learn.microsoft.com/azure/devops/repos/security/configure-github-advanced-security-features?view=azure-devops) feature set covers secret scanning push protection, repository secret scanning, dependency scanning, and code scanning.
 - [GitHub Secret Protection for Azure DevOps](https://learn.microsoft.com/azure/devops/repos/security/configure-github-advanced-security-features?view=azure-devops) covers push protection and secret scanning.
 - [GitHub Code Security for Azure DevOps](https://learn.microsoft.com/azure/devops/repos/security/configure-github-advanced-security-features?view=azure-devops) covers dependency alerts/scanning, CodeQL/code scanning, third-party findings, and the security overview.
 
-Dependency scanning behavior verified against Microsoft Learn on 2026-06-19:
+Dependency scanning behavior verified against Microsoft Learn on 2026-06-22:
 
 - [Dependency scanning](https://learn.microsoft.com/azure/devops/repos/security/github-advanced-security-dependency-scanning?view=azure-devops) requires either a pipeline configured with `AdvancedSecurity-Dependency-Scanning@1` or a repository with dependency scanning default setup enabled.
 - Enabling Advanced Security or Code Security alone does not execute dependency scanning automatically.
 - Default setup can cover the default branch and pull request builds targeting that branch; broader or more controlled coverage uses the [Advanced Security Dependency Scanning v1 task](https://learn.microsoft.com/azure/devops/pipelines/tasks/reference/advanced-security-dependency-scanning-v1?view=azure-pipelines) in the pipelines that should be scanned.
 - Microsoft still lists automatic Dependabot security-update PRs for Azure DevOps dependency scanning alerts as a [future roadmap item](https://learn.microsoft.com/azure/devops/release-notes/features-timeline), so do not document those PRs as available without rechecking the roadmap and feature documentation.
 
-For routine version updates, Renovate is the primary documented candidate to evaluate because Renovate documents [Azure DevOps platform support](https://docs.renovatebot.com/modules/platform/azure/). Keep that separate from Azure Pipelines file-update support: the Renovate [Azure Pipelines manager](https://docs.renovatebot.com/modules/manager/azure-pipelines/) is currently beta, opt-in, and disabled by default. If maintainers choose Renovate, decide the bot identity, permissions, schedules, repositories, and secret storage before enabling it.
+For routine version updates, Renovate is the primary documented candidate to evaluate because Renovate documents [Azure DevOps platform support](https://docs.renovatebot.com/modules/platform/azure/). Keep that separate from Azure Pipelines file-update support: the Renovate [Azure Pipelines manager](https://docs.renovatebot.com/modules/manager/azure-pipelines/) is opt-in and disabled by default in current Renovate docs. Recheck that manager page for its current stability label before enabling it, because historical guidance has changed over time. If maintainers choose Renovate, decide the bot identity, permissions, schedules, repositories, and secret storage before enabling it.
 
 Self-hosted Dependabot on Azure Pipelines is only an optional pattern to evaluate when maintainers intentionally choose it. Scope any adoption to the source being followed, review the required Azure DevOps permissions, and store tokens or credentials only in the service's secret-management mechanism.
 
-Record the selected Azure DevOps security product and dependency update policy in the Azure DevOps Services adoption guidance path `.azuredevops/platform/adoption-guidance.md` during materialization.
+Record the selected Azure DevOps security product and dependency update policy in the Azure DevOps Services adoption guidance path `.azuredevops/platform/adoption-guidance.md` during materialization. Keep durable template-wide guidance in the Azure DevOps Services support guide when an Azure host module is retained.
 
 ---
 

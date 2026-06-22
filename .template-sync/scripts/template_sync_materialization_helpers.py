@@ -90,6 +90,9 @@ INLINE_BLOCK_MODULES = {
 # workflow row, whose file requires ``github-actions`` plus any one of
 # ``json``, ``yaml``, ``schema``, ``template-sync-support``).
 INLINE_BLOCK_ANY_MODULES = {
+    "azure-devops-guide-reference-only": frozenset(
+        {"azure-devops-platform", "azure-pipelines", "azure-devops-collaboration"}
+    ),
     "data-ci-reference-only": frozenset({"json", "yaml", "schema", "template-sync-support"}),
 }
 

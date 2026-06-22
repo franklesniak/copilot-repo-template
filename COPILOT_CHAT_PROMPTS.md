@@ -91,6 +91,9 @@ For module selection:
 
 - Derive possible modules from the current `.template-sync/manifest.yml`; do not assume a stale module list.
 - Treat GitHub and Azure DevOps host modules as host-specific choices. GitHub remains the default for GitHub-hosted repositories; Azure DevOps Services support is additive through the Azure DevOps modules and should not make Azure DevOps mandatory for GitHub-only adopters.
+<!-- template-sync: begin azure-devops-guide-reference-only -->
+- Use `docs/azure-devops-support.md` as the durable template reference for Azure DevOps Services hosting, security scanning, dependency-update, and service-validation boundaries.
+<!-- template-sync: end azure-devops-guide-reference-only -->
 - Consider all plausible module selections and meaningful permutations for this repository. You may group invalid, dominated, redundant, or nonsensical permutations, but explain why they were grouped instead of individually scored.
 - Develop a defensible evaluation rubric.
 - Score the options in a table.

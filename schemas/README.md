@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-21
+- **Last Updated:** 2026-06-22
 - **Scope:** Conventions for JSON Schemas that describe load-bearing JSON and YAML files in this repository, the template sync manifest, marker, instruction-contract, and first-adoption quality suppression schemas, plus a clearly removable worked example (`example-config.schema.json` with valid and invalid example data) wired into pre-commit and data CI to demonstrate the schema-validation pipeline end to end.
 - **Related:** [JSON Authoring Standards](../.github/instructions/json.instructions.md), [YAML Authoring Standards](../.github/instructions/yaml.instructions.md), [Repository Copilot Instructions](../.github/copilot-instructions.md), [Template Design Decisions — Schema Location at Repository Root](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-location-at-repository-root), [Template Design Decisions — Schema Validation Tiers](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-validation-tiers), [Template Design Decisions — Built-in Schema Validation for Real Load-Bearing Configuration Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files), [Template Design Decisions — `additionalProperties` Policy](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-additionalproperties-policy), [Template Design Decisions — Testing Beyond Linting for JSON/YAML](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-testing-beyond-linting-for-jsonyaml)
 
@@ -105,6 +105,10 @@ The following real, load-bearing repository configuration files are validated by
 If a downstream repository deletes one of these files, it **MUST** also remove the corresponding `check-jsonschema` hook (and any matching `data-ci.yml` step) per the [downstream removal guidance in the ADR](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files). Azure DevOps-only adoptions do not retain `.github/dependabot.yml`, `validate-dependabot-config`, or `tests/test_dependabot_schema.py`; Azure DevOps security scanning and routine dependency version updates are documented as service-side/adopter-selected choices rather than as Dependabot schema validation.
 
 <!-- template-sync: end github-platform-reference-only -->
+
+<!-- template-sync: begin azure-devops-guide-reference-only -->
+For Azure DevOps-only adoptions, see the [Azure DevOps Services Support Guide](../docs/azure-devops-support.md) for host-specific service boundaries.
+<!-- template-sync: end azure-devops-guide-reference-only -->
 
 ### Project-Owned Schema-Backed Files
 
