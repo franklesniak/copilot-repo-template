@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260622.0
+**Version:** 1.1.20260622.1
 
 ## Metadata
 
