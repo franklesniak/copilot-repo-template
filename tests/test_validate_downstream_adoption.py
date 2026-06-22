@@ -523,7 +523,7 @@ def test_github_only_downstream_adoption_reports_unguarded_azure_guide_link(
     """GitHub-only adopters cannot keep unguarded relative links to the Azure guide."""
     _write_common_downstream_repo(
         tmp_path,
-        readme_text=("# Downstream\n\n" "See [Azure guide](docs/azure-devops-support.md).\n"),
+        readme_text="# Downstream\n\nSee [Azure guide](docs/azure-devops-support.md).\n",
     )
 
     result = _run_validator(tmp_path, "--require-marker")
