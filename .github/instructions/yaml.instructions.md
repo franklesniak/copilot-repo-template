@@ -7,13 +7,13 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.6.20260621.1
+**Version:** 1.6.20260622.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-21
+- **Last Updated:** 2026-06-22
 - **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, Azure Pipelines YAML, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by the companion JSON guide, if present) or generated YAML artifacts that are owned by another tool's serializer.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md) (companion guide, if present)
 
@@ -41,6 +41,7 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - **[AzurePipelines]** Repositories that use Azure Pipelines language/runtime/SDK tool-installer tasks **MUST** explicitly provide checked-in compliant selectors for in-scope `version` or `versionSpec` inputs and **MUST NOT** rely on broad task defaults, queue-time-only values, `"latest"`, bare `"*"`, comparator/operator ranges, or composite ranges.
 - **[Actions]** Documentation/navigation comments above `uses:` lines **MUST** use versionless upstream URLs; the `uses:` line remains the authoritative action version.
 - **[Actions]** Comments documenting where a GitHub Actions `with:` tool-version input is pinned, or that such a value must stay aligned across files, **SHOULD** describe the membership criterion instead of a hardcoded workflow-file list; if a concrete file list is included for convenience, it **SHOULD** be labeled as a non-authoritative snapshot.
+- **[Actions]** Optional `workflow_dispatch` string inputs that also need defaults on non-dispatch triggers **SHOULD** derive the effective value from a single source, using a fallback only in keys where the needed contexts are available, rather than duplicating an unmarked input `default:` and `env:` literal.
 - **[Schemas]** Schema-backed YAML **MUST** pass any schema validator wired into pre-commit or CI; where no validator is wired up for a particular file family, authors **SHOULD** run the appropriate validator locally before committing.
 - **[Naming]** YAML filenames **SHOULD** be lowercase kebab-case; GitHub Actions workflows **MUST** use the `.yml` extension; project-owned YAML **MUST** choose `.yml` or `.yaml` and use it consistently.
 - **[IssueForms]** In `.github/ISSUE_TEMPLATE/*.yml`, repo-internal targets in both issue-form `value:` Markdown links (e.g., `bug_report.yml`) and `config.yml` `contact_links` `url:` fields **MUST** use absolute GitHub URLs such as `https://github.com/<owner>/<repo>/blob/HEAD/<path>` for file links; relative paths **MUST NOT** be used. Template repositories MAY ship a documented placeholder form for adopters to replace, but the final rendered URL still needs the real host, owner, and repository. The two file types fail for different reasons: `value:` Markdown blocks render at `/{owner}/{repo}/issues/new?...` so relative paths resolve against that URL and 404, while `contact_links` `url:` fields are not Markdown at all — GitHub validates them as absolute URLs at form-load time and rejects relative values outright.
@@ -311,6 +312,91 @@ This guidance applies to comments in workflow files under `.github/workflows/` a
   with:
     tflint_version: "v0.51.1"
 ```
+
+## GitHub Actions Input Default Single Source of Truth
+
+The single-source-of-truth principle above also applies when a GitHub Actions workflow exposes an optional `workflow_dispatch` string input whose blank value should fall back to a default used by non-dispatch triggers. A `workflow_dispatch` input `default:` pre-fills or supplies the manual-dispatch input path; it is not a workflow-wide default for `push`, `pull_request`, `schedule`, or other non-dispatch events.
+
+When an optional `workflow_dispatch` string input needs the same default on manual and non-dispatch triggers, authors **SHOULD** define that default in one place and derive the effective value from the input. They **SHOULD NOT** duplicate an unmarked literal in both the input `default:` and a workflow- or job-level `env:` value that nothing keeps in sync.
+
+Use a workflow- or job-level `env:` value as the single source when more than one step consumes the default. For a single consumer, an inline literal fallback such as `${{ inputs.<name> || 'literal' }}` is acceptable. A `vars` value is also acceptable when the durable source of truth intentionally lives in repository, organization, or environment settings rather than in the workflow file.
+
+Prefer expression fallback only in workflow keys where GitHub's context-availability rules permit both `inputs` and the chosen default context. Step-level `env:` and step `with:` are common safe locations for `${{ inputs.<name> || env.<NAME> }}`. Do not present that expression as valid in every workflow key: for example, the `env` context is not available at `jobs.<job_id>.env`, even though `inputs` is available there.
+
+Do not make direct expression interpolation inside `run:` the preferred shell pattern. For inline scripts, map the expression into a step `env:` variable and reference the quoted shell variable in `run:`. This follows GitHub's intermediate-environment-variable pattern for handling untrusted input and avoids shell word splitting.
+
+Treat free-form manual string inputs conservatively as user-supplied. A shell fallback such as quoted `[ -z "$x" ]` is acceptable only as a shell-step-scoped alternative, and it SHOULD read from mapped step environment variables rather than interpolating `${{ ... }}` directly into the script. The `-z` test checks string length and is portable across ordinary POSIX `sh` and Bash use in the quoted `[ -z "$x" ]` form.
+
+When omitting the input `default:` means blank should use the configured default, the input `description:` **SHOULD** state the fallback behavior, such as "Blank uses the `REPORT_FORMAT` env value." Dropping `default:` may mean the manual-dispatch form no longer pre-fills that field. Authors who intentionally want the manual-dispatch form to show the default **MAY** keep the input `default:`, but they **SHOULD** mark it as an aligned duplicate of the single source, for example: `# Keep this default aligned with env.REPORT_FORMAT; it exists only to prefill the manual-dispatch form.`
+
+The `||` fallback returns the right-hand value whenever the left-hand value is falsy. GitHub documents falsy values as `false`, `0`, `-0`, an empty string (`""` or `''`), and `null`, and the runner implementation returns the first truthy operand value, or the last evaluated operand value when none are truthy. Because of that behavior, the positive recommendation here is limited to optional string inputs where blank is the only fallback trigger. For Boolean inputs, number inputs, and string inputs where an explicit empty string is meaningful, authors **MUST** use explicit comparison or type-specific handling instead.
+
+Use the `inputs` context rather than `github.event.inputs` for this pattern. GitHub documents that `inputs` preserves Boolean values as Booleans while `github.event.inputs` converts them to strings; authors **MUST NOT** use `github.event.inputs` to work around Boolean falsiness. Avoid the `||` fallback pattern for Booleans instead.
+
+When the needed context is not available at a particular workflow key, a prior step can normalize the effective value and expose it through step outputs or job outputs for downstream consumption. Prior-step outputs can feed later steps in the same job, and job outputs can feed dependent jobs through `needs.<job_id>.outputs`, but a step cannot retroactively provide values to same-job keys evaluated before that step runs.
+
+**Compliant:**
+
+```yaml
+name: Report
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      report_format:
+        description: "Optional. Blank uses the REPORT_FORMAT env value."
+        required: false
+        type: string
+
+permissions: {}
+
+env:
+  REPORT_FORMAT: "sarif"
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show effective format
+        env:
+          EFFECTIVE_REPORT_FORMAT: ${{ inputs.report_format || env.REPORT_FORMAT }}
+        run: printf 'Using report format: %s\n' "$EFFECTIVE_REPORT_FORMAT"
+```
+
+**Non-compliant:**
+
+```yaml
+name: Report
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      report_format:
+        description: "Report format."
+        required: false
+        # Non-compliant: an independent, unmarked duplicate of REPORT_FORMAT
+        # that nothing keeps in sync, so the two defaults can drift apart.
+        default: "sarif"
+        type: string
+
+permissions: {}
+
+env:
+  REPORT_FORMAT: "sarif"
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show effective format
+        env:
+          EFFECTIVE_REPORT_FORMAT: ${{ inputs.report_format || env.REPORT_FORMAT }}
+        run: printf 'Using report format: %s\n' "$EFFECTIVE_REPORT_FORMAT"
+```
+
+The non-compliant example is non-compliant because the two defaults are independent and unmarked, not because an input `default:` is always forbidden; keeping a `default:` is acceptable when it is intentionally retained for manual-dispatch UI prefill and explicitly marked as aligned with the single source.
 
 ## Issue-form Markdown Links in `.github/ISSUE_TEMPLATE/*.yml`
 
