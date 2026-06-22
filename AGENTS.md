@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for OpenAI Codex CLI
 
-**Version:** 1.4.20260527.0
+**Version:** 1.5.20260622.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-27
+- **Last Updated:** 2026-06-22
 - **Scope:** Agent-specific entry point for OpenAI Codex CLI and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
@@ -115,7 +115,7 @@ During downstream template adoption and stack selection, perform non-protected c
 
 ## GitHub Plugin Usage
 
-This section is retained Codex platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Codex GitHub plugin protocol for the retained Codex entry point.
+This section is retained as Codex platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Codex GitHub plugin protocol for the retained Codex entry point.
 
 Codex can use the OpenAI-curated GitHub plugin (`github@openai-curated`) in this repository when the user has installed and authorized it. The plugin is the preferred mechanism for any operation that touches remote GitHub state.
 
@@ -126,9 +126,22 @@ Codex can use the OpenAI-curated GitHub plugin (`github@openai-curated`) in this
 
 The `.codex/config.toml` file at the repository root declares `[plugins."github@openai-curated"] enabled = true` so that trusted Codex checkouts can opt the plugin in by default. Enabling the plugin in this file does not, by itself, grant GitHub authorization: actual access still depends on the GitHub app/connector installation, the Codex account performing the operation, and the repository's permissions.
 
+## Azure DevOps PR Review Protocol
+
+This section is retained as Codex host-specific protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Azure DevOps PR review protocol for the retained Codex entry point.
+
+Use this protocol only for Azure DevOps Services pull requests hosted in Azure Repos. The GitHub plugin protocol and GitHub Copilot workflow above remain primary/default for GitHub-hosted repositories; do not substitute GitHub plugin, `gh`, or GitHub GraphQL operations for Azure Repos state.
+
+- Azure Repos Copilot code review is a limited public preview for Azure DevOps Services. It requires sign-up, organization-level enablement by a Project Collection Administrator, repository-level enablement by a repository owner or administrator, and individual-user opt-in through Preview features unless the administrator enables it for the organization. It requires Azure billing through a subscription linked to the Azure DevOps organization; Azure DevOps review usage does not draw down GitHub Copilot plan AI credits. Treat licensing and pricing details as preview-specific and documentation-driven, and do not assume GitHub-hosted Copilot review entitlements cover Azure Repos review usage.
+- Copilot review is requested manually from the Azure Repos PR Reviewers list by selecting **Request** next to **GitHub Copilot**. If Azure DevOps tooling supports reviewer operations, Codex MAY inspect or add ordinary reviewers through Azure DevOps Pull Request Reviewers APIs, but MUST NOT claim API-triggered Copilot preview review unless the available tooling explicitly verifies that behavior.
+- Copilot always leaves a **Comment** review, never approves or requests changes, does not satisfy required-reviewer policies, and does not block merging. Copilot does not read replies, does not follow up, and does not automatically re-review after new commits; a fresh review requires another manual request.
+- Codex has no autonomous Azure DevOps wake-up. Mentions such as `@codex` route Azure DevOps comments only when the user's runtime explicitly forwards them into the active Codex session.
+- When Azure DevOps connector/API tooling is available and safely authenticated, Codex MAY inspect PR reviewers, threads, comments, thread status, and PR statuses through Azure DevOps REST APIs, and MAY post replies/comments, update thread status, or create PR statuses. When tooling is missing or insufficient, state the needed manual owner action instead.
+- Authentication guidance must stay high-level and secure: prefer Microsoft Entra authentication, service principals or managed identities for automation, Azure DevOps service connections for pipeline scenarios, secure local tool configuration, or environment variables. Treat tokens as opaque values, do not decode claims, and never embed PATs, bearer tokens, service connections, credential-bearing clone URLs, or secret-like placeholders in repository files, commands, logs, or comments.
+
 ## PR Review Workflow (Codex-adapted)
 
-This section is retained Codex platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Codex PR review protocol for the retained Codex entry point.
+This section is retained as Codex platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Codex PR review protocol for the retained Codex entry point.
 
 This workflow adapts the Claude-targeted process documented in `CLAUDE.md` for Codex's capabilities and runtime limitations. Use it when responding to review feedback on a pull request. All GitHub-side reads and writes in the steps below SHOULD go through the GitHub plugin first; fall back to `gh`, GraphQL, or manual owner action only when the plugin does not expose the needed capability (see **Fallbacks for unsupported plugin capabilities** below).
 

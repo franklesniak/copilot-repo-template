@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.5.20260621.0
+**Version:** 1.6.20260622.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-21
+- **Last Updated:** 2026-06-22
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
@@ -339,6 +339,36 @@ When explicitly authorized to modify high-priority shared guidance in `.github/c
 
 - Remove agent files for platforms you do not use
 - Keep the remaining agent files limited to minimal inline summaries plus any necessary platform-specific guidance
+
+## Host-Specific PR Review Protocols
+
+The GitHub plugin protocol and GitHub Copilot review workflows remain the primary/default protocol for GitHub-hosted repositories. Azure DevOps support is additive and host-specific; agents MUST NOT rename, weaken, or replace the GitHub protocol when documenting or operating against Azure Repos.
+
+### Azure DevOps Services with Azure Repos
+
+Use this protocol only for pull requests hosted in Azure DevOps Services with Azure Repos. Azure DevOps Server is out of scope unless the current task verifies the relevant behavior against current Microsoft documentation and records any server-specific differences.
+
+For Azure Repos Copilot code review, agents MUST follow current Microsoft Learn behavior:
+
+- GitHub Copilot code review for Azure Repos is a limited public preview for Azure DevOps Services, requires sign-up, has limited support/no preview SLA, and can change.
+- Enablement is a three-scope model: a Project Collection Administrator enables organization access, a repository owner or administrator enables the repository, and each user opts in through Preview features unless an administrator enables the preview for the organization.
+- The repository must be a Git repository in Azure Repos; TFVC is not supported.
+- Billing requires an Azure subscription linked to the Azure DevOps organization, and usage is billed through Azure Cost Management. Azure DevOps review usage does not draw down GitHub Copilot plan AI credits.
+- Treat licensing and pricing details as preview-specific and documentation-driven. Do not assume GitHub Copilot plan credits or GitHub-hosted Copilot review entitlements cover Azure Repos review usage.
+- Copilot review is requested manually from the Azure Repos PR Reviewers list by selecting **Request** next to **GitHub Copilot**. Do not claim an agent can trigger the Copilot preview through an API unless the available Azure DevOps connector/API tooling explicitly exposes and verifies that behavior.
+- Copilot always leaves a **Comment** review. It never approves or requests changes, so it does not satisfy required-reviewer policies and does not block merging.
+- Copilot comments behave like ordinary review comments for human readers, but Copilot does not read replies, does not follow up, and does not automatically re-review after new commits. A fresh review requires requesting Copilot again.
+
+When an agent works on an Azure Repos PR review:
+
+- **No autonomous wake-up.** Agents MUST NOT promise webhook-driven wake-up, background polling, or scheduled review responses. The workflow runs only inside an active agent session or through explicit user-provided context.
+- **Mention routing is runtime-dependent.** Mentions such as `@codex`, `@claude`, or other agent names are only conventions unless the user's runtime explicitly routes Azure DevOps comments into the active agent session.
+- **Review requests.** Ask the owner to request GitHub Copilot review manually when needed. If tooling supports Azure DevOps reviewer operations, it MAY use Azure DevOps Pull Request Reviewers REST APIs to inspect reviewers or add ordinary reviewers, while recognizing that required branch-policy reviewers and Copilot preview requests may remain manual owner actions.
+- **Inspection.** Prefer available Azure DevOps connector/API tooling for PR metadata. When REST fallback is needed and safely authenticated, agents MAY inspect reviewers, PR threads, thread comments, thread status, and PR statuses through the Azure DevOps Pull Request Reviewers, Pull Request Threads, Pull Request Thread Comments, and Pull Request Statuses REST APIs.
+- **Replies and statuses.** When tooling supports it, agents MAY post PR thread replies/comments, update thread status, or create PR statuses. If tooling is absent or insufficient, state the manual owner action required instead of substituting GitHub plugin, `gh`, or GitHub GraphQL operations.
+- **Authentication.** Keep authentication guidance high-level and secure. Prefer Microsoft Entra authentication, service principals or managed identities for automation, Azure DevOps service connections for pipeline scenarios, secure local tool configuration, or environment variables as appropriate. Use personal access tokens sparingly and only when the recommended Microsoft options are unavailable for the scenario. Treat tokens as opaque values; do not decode or inspect claims. Never embed PATs, bearer tokens, service connections, credential-bearing clone URLs, or secret-like placeholders in repository files, command examples, logs, or comments.
+
+Manual owner actions for Azure DevOps commonly include enabling the preview at organization/repository/user scopes, linking billing, requesting or re-requesting Copilot review, satisfying required-reviewer or branch-policy approval, and applying thread/status changes when no Azure DevOps connector/API support is available.
 
 ## Linting and Validation Configurations
 

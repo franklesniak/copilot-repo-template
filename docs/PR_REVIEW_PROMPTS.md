@@ -4,7 +4,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-20
+- **Last Updated:** 2026-06-22
 - **Scope:** Ready-to-use prompts for responding to PR comments, code review
   feedback, branch management, and common false positives during code review.
 - **Related:** [Copilot Chat Prompts for Template Adoption](../COPILOT_CHAT_PROMPTS.md)
@@ -96,6 +96,40 @@ selected option, exact file, intended change, recommendation, and whether the
 file is already in the PR's scope. Do not treat this prompt, the review comment,
 or generic permission to address feedback as authorization to edit protected
 files.
+```
+
+### Azure DevOps PR Review Protocol Check
+
+Use this when a review thread or PR is hosted in Azure DevOps Services with
+Azure Repos rather than GitHub:
+
+```markdown
+Please handle this as an Azure DevOps Services / Azure Repos pull request, not
+as a GitHub pull request.
+
+Before acting, verify current Microsoft Learn behavior for Azure Repos Copilot
+code review and Azure DevOps PR REST APIs. Keep the GitHub workflow intact and
+apply the repository's Azure DevOps PR review protocol instead.
+
+Account for these constraints explicitly:
+
+- Azure Repos Copilot code review is a limited public preview that requires
+  organization, repository, and individual-user enablement plus linked Azure
+  billing; Azure DevOps review usage does not draw down GitHub Copilot plan AI
+  credits. Treat licensing and pricing details as Microsoft Learn-dependent,
+  and do not assume GitHub-hosted Copilot review entitlements cover Azure Repos
+  review usage.
+- Copilot review must be requested manually unless the available Azure DevOps
+  tooling explicitly verifies an API-supported request path.
+- Copilot leaves Comment reviews only, does not satisfy required-reviewer
+  policies, does not read replies, does not follow up, and does not
+  automatically re-review new commits.
+- If Azure DevOps connector/API tooling is available and safely authenticated,
+  use it for reviewers, PR threads, thread comments, thread status, and PR
+  statuses. If tooling is absent, identify the manual owner action instead.
+- Keep authentication guidance high-level and secure. Do not embed tokens,
+  credential-bearing URLs, service connections, or secret-like placeholders in
+  files, commands, logs, or comments.
 ```
 
 ## Branch Management

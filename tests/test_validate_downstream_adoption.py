@@ -35,6 +35,7 @@ MODULE_DEFINITIONS = {
     "github-platform": "GitHub platform files.",
     "github-actions": "GitHub Actions workflows.",
     "github-templates": "GitHub collaboration surfaces.",
+    "azure-devops-collaboration": "Azure DevOps collaboration surfaces.",
     "template-onboarding": "Template onboarding files.",
     "template-sync-support": "Template sync support files.",
     "markdown": "Markdown files.",
@@ -144,6 +145,10 @@ def _manifest() -> dict[str, Any]:
                     "requires_any": ["yaml", "schema", "template-sync-support"],
                 },
                 {"pattern": ".github/ISSUE_TEMPLATE/**", "requires_all": ["github-templates"]},
+                {
+                    "pattern": ".azuredevops/pull_request_template.md",
+                    "requires_all": ["azure-devops-collaboration"],
+                },
                 {"pattern": ".yamllint.yml", "requires_all": ["yaml"]},
                 {
                     "pattern": "schemas/template-sync-manifest.schema.json",
@@ -192,7 +197,15 @@ def _contracts() -> dict[str, Any]:
                 "requires_modules": ["agent-instructions"],
                 "required_headings": ["## GitHub Plugin Usage"],
                 "required_phrases": ["Protected Instruction Files"],
-            }
+            },
+            {
+                "path": "GEMINI.md",
+                "requires_modules": [
+                    "agent-instructions",
+                    "azure-devops-collaboration",
+                ],
+                "required_headings": ["## Azure DevOps PR Review Protocol"],
+            },
         ]
     }
 
@@ -292,6 +305,26 @@ def test_partial_downstream_adoption_without_python_project_files_passes(
     assert "python" not in retained_modules
     assert not (tmp_path / "pyproject.toml").exists()
     assert not (tmp_path / "src" / "copilot_repo_template").exists()
+
+
+def test_github_only_downstream_adoption_skips_azure_devops_contract(
+    tmp_path: Path,
+) -> None:
+    """GitHub-only adopters do not need Azure DevOps protocol anchors or files."""
+    _write_common_downstream_repo(tmp_path)
+
+    result = _run_validator(tmp_path, "--require-marker")
+
+    assert result.returncode == 0, result.stderr
+    assert "Downstream adoption validation passed." in result.stdout
+    assert not (tmp_path / "GEMINI.md").exists()
+    assert not (tmp_path / ".azuredevops").exists()
+
+    retained_modules = _section_entries(result.stdout, "Retained modules")
+    excluded_modules = _section_entries(result.stdout, "Excluded modules")
+
+    assert "azure-devops-collaboration" in excluded_modules
+    assert "azure-devops-collaboration" not in retained_modules
 
 
 def test_excluded_module_leftover_is_reported(tmp_path: Path) -> None:
