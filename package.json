@@ -7,7 +7,7 @@
     "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.pytest_cache\"",
     "lint:md:links": "remark . --quiet --frail --ignore-path .remarkignore",
     "lint:md:nested": "node .github/scripts/lint-nested-markdown.js",
-    "test:toolchain-eol": "node --test tests/toolchain-eol/*.test.js"
+    "test:toolchain-eol": "node --test tests/toolchain-eol/"
   },
   "keywords": [
     "template",
