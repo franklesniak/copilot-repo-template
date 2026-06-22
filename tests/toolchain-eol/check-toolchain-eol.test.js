@@ -2,15 +2,25 @@ const assert = require('assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const test = require('node:test');
+const { test, after } = require('node:test');
 
 const scanner = require('../../.github/scripts/check-toolchain-eol.js');
 
 const FIXTURE_SCHEDULE = require('./fixtures/node-schedule.json');
 
+const createdTempRepos = [];
+
 function makeTempRepo() {
-    return fs.mkdtempSync(path.join(os.tmpdir(), 'toolchain-eol-'));
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'toolchain-eol-'));
+    createdTempRepos.push(repoRoot);
+    return repoRoot;
 }
+
+after(() => {
+    for (const repoRoot of createdTempRepos) {
+        fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+});
 
 function writeFile(repoRoot, relativePath, content) {
     const filePath = path.join(repoRoot, relativePath);
