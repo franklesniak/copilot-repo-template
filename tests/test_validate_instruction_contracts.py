@@ -169,6 +169,19 @@ def _run_validator(repo_root: Path, *extra_args: str) -> subprocess.CompletedPro
     )
 
 
+def _section_entries(output: str, heading: str) -> set[str]:
+    """Return bullet entries rendered under a named output section."""
+    entries: set[str] = set()
+    in_section = False
+    for line in output.splitlines():
+        if line and not line.startswith(" ") and line.endswith(":"):
+            in_section = line == f"{heading}:"
+            continue
+        if in_section and line.startswith("  - "):
+            entries.add(line.removeprefix("  - ").strip())
+    return entries
+
+
 def test_mode_is_required(tmp_path: Path) -> None:
     """The validator must not fall back to implicit mode detection."""
     result = _run_validator(tmp_path)
@@ -451,8 +464,18 @@ def test_downstream_skips_azure_devops_contract_when_module_excluded(
 
     assert result.returncode == 0, result.stderr
     assert "Instruction-contract validation passed." in result.stdout
+    # CLAUDE.md is checked while the Azure-only GEMINI.md contract is skipped
+    # because azure-devops-collaboration is not retained. Assert on these stable
+    # signals rather than the exact skipped-contract line, whose module ordering
+    # and phrasing are incidental formatting details.
     assert "Contracts checked: 1" in result.stdout
-    assert "GEMINI.md (requires: agent-instructions, azure-devops-collaboration)" in result.stdout
+    skipped_entries = _section_entries(
+        result.stdout, "Contracts skipped by downstream module selection"
+    )
+    assert len(skipped_entries) == 1
+    (skipped_entry,) = skipped_entries
+    assert skipped_entry.startswith("GEMINI.md ")
+    assert "azure-devops-collaboration" in skipped_entry
 
 
 def test_downstream_checks_azure_devops_contract_when_module_retained(
