@@ -25,7 +25,7 @@ service:
   # "1.0" would lose its trailing zero.
   pythonVersion: "3.13"
   apiVersion: "1.0"
-  nodeVersion: "20"
+  nodeVersion: "24"
 
   # YAML 1.1 truthy-looking strings MUST be quoted when they are intended
   # as strings; otherwise many widely-deployed YAML parsers (including

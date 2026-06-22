@@ -6,7 +6,8 @@
   "scripts": {
     "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.pytest_cache\"",
     "lint:md:links": "remark . --quiet --frail --ignore-path .remarkignore",
-    "lint:md:nested": "node .github/scripts/lint-nested-markdown.js"
+    "lint:md:nested": "node .github/scripts/lint-nested-markdown.js",
+    "test:toolchain-eol": "node --test tests/toolchain-eol/"
   },
   "keywords": [
     "template",
@@ -16,7 +17,7 @@
   "author": "Frank Lesniak",
   "license": "MIT",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "devDependencies": {
     "glob": "^13.0.6",
@@ -25,6 +26,8 @@
     "markdownlint": "^0.41.0",
     "markdownlint-cli2": "^0.22.1",
     "remark-cli": "^12.0.1",
-    "remark-validate-links": "^13.1.0"
+    "remark-validate-links": "^13.1.0",
+    "semver": "^7.8.5",
+    "yaml": "^2.9.0"
   }
 }

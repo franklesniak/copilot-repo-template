@@ -13,7 +13,7 @@ trigger:
 parameters:
   - name: nodeVersion
     type: string
-    default: "20"
+    default: "24"
   - name: pythonVersion
     type: string
     default: "3.13"
@@ -24,10 +24,10 @@ pool:
 steps:
   - checkout: self
 
-  - task: NodeTool@0
+  - task: UseNode@1
     displayName: "Use Node.js ${{ parameters.nodeVersion }}"
     inputs:
-      versionSpec: ${{ parameters.nodeVersion }}
+      version: ${{ parameters.nodeVersion }}
 
   - task: UsePythonVersion@0
     displayName: "Use Python ${{ parameters.pythonVersion }}"

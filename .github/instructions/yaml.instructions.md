@@ -7,15 +7,15 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.5.20260520.0
+**Version:** 1.6.20260622.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-20
-- **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by [JSON Writing Style](./json.instructions.md)) or generated YAML artifacts that are owned by another tool's serializer.
-- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md), [`.yamllint.yml`](../../.yamllint.yml), [Data-File CI Workflow (`data-ci.yml`)](../workflows/data-ci.yml), [Schemas README](../../schemas/README.md), [Schema Example Tests (`tests/test_schema_examples.py`)](../../tests/test_schema_examples.py), [Template Design Decision — Dedicated JSON and YAML Instruction Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-json-and-yaml-instruction-files), [Template Design Decision — Baseline JSON/YAML Linting Stack](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-baseline-jsonyaml-linting-stack), [Template Design Decision — yamllint truthy.check-keys Default](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-truthycheck-keys-default), [Template Design Decision — yamllint line-length Warning Level Default](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-yamllint-line-length-warning-level-default), [Template Design Decision — Dedicated Data-File CI Workflow (`data-ci.yml`)](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-data-file-ci-workflow-data-ciyml), [Template Design Decision — Prettier Deferral for Data Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-prettier-deferral-for-data-files), [Template Design Decision — Built-in Schema Validation for Real Load-Bearing Configuration Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files)
+- **Last Updated:** 2026-06-22
+- **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, Azure Pipelines YAML, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by the companion JSON guide, if present) or generated YAML artifacts that are owned by another tool's serializer.
+- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md) (companion guide, if present)
 
 ## Purpose and Scope
 
@@ -37,18 +37,20 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - **[All]** **SHOULD NOT** use anchors, aliases, merge keys, custom tags, or multi-document files unless required and supported by the consumer.
 - **[All]** **MUST NOT** commit secrets in YAML.
 - **[Actions]** **MUST** apply least-privilege `permissions:` on GitHub Actions workflows.
-- **[Actions]** `setup-*` action `with.*-version:` inputs (for example, `python-version`, `node-version`, `go-version`, and `dotnet-version`) in workflow files under `.github/workflows/` **MUST** pin to a literal release-line selector and **MUST NOT** use a broad floating selector such as `'3.x'`, `'latest'`, or `'*'`. The required granularity follows each ecosystem's release model: Python and Go **MUST** use major.minor (for example, `"3.13"` or `"1.21"`); Node.js **MAY** use major for an LTS line (for example, `"20"`) or major.minor (for example, `"20.18"`); .NET **MAY** use the most specific stable SDK channel selector documented by `actions/setup-dotnet`, such as major.minor.x (for example, `"8.0.x"`); for other ecosystems, use the most specific stable release-line selector documented by the action's README.
+- **[Actions]** `setup-*` action `with.*-version:` inputs (for example, `python-version`, `node-version`, `go-version`, and `dotnet-version`) in workflow files under `.github/workflows/` **MUST** resolve from checked-in release-line selectors and **MUST NOT** use a broad floating selector such as `'3.x'`, `'latest'`, or `'*'`. The required granularity follows each ecosystem's release model: Python and Go **MUST** use major.minor (for example, `"3.13"` or `"1.26"`); Node.js **MAY** use major for an LTS line (for example, `"24"`) or major.minor (for example, `"24.17"`); .NET **MAY** use the most specific stable SDK channel selector documented by `actions/setup-dotnet`, such as major.minor.x (for example, `"10.0.x"`); for other ecosystems, use the most specific stable release-line selector documented by the action's README.
+- **[AzurePipelines]** Repositories that use Azure Pipelines language/runtime/SDK tool-installer tasks **MUST** explicitly provide checked-in compliant selectors for in-scope `version` or `versionSpec` inputs and **MUST NOT** rely on broad task defaults, queue-time-only values, `"latest"`, bare `"*"`, comparator/operator ranges, or composite ranges.
 - **[Actions]** Documentation/navigation comments above `uses:` lines **MUST** use versionless upstream URLs; the `uses:` line remains the authoritative action version.
 - **[Actions]** Comments documenting where a GitHub Actions `with:` tool-version input is pinned, or that such a value must stay aligned across files, **SHOULD** describe the membership criterion instead of a hardcoded workflow-file list; if a concrete file list is included for convenience, it **SHOULD** be labeled as a non-authoritative snapshot.
+- **[Actions]** Optional `workflow_dispatch` string inputs that also need defaults on non-dispatch triggers **SHOULD** derive the effective value from a single source, using a fallback only in keys where the needed contexts are available, rather than duplicating an unmarked input `default:` and `env:` literal.
 - **[Schemas]** Schema-backed YAML **MUST** pass any schema validator wired into pre-commit or CI; where no validator is wired up for a particular file family, authors **SHOULD** run the appropriate validator locally before committing.
 - **[Naming]** YAML filenames **SHOULD** be lowercase kebab-case; GitHub Actions workflows **MUST** use the `.yml` extension; project-owned YAML **MUST** choose `.yml` or `.yaml` and use it consistently.
-- **[IssueForms]** In `.github/ISSUE_TEMPLATE/*.yml`, repo-internal targets in both issue-form `value:` Markdown links (e.g., `bug_report.yml`) and `config.yml` `contact_links` `url:` fields **MUST** use absolute `https://github.com/OWNER/REPO/...` URLs (with `blob/HEAD` for file links); relative paths **MUST NOT** be used. The two file types fail for different reasons: `value:` Markdown blocks render at `/{owner}/{repo}/issues/new?...` so relative paths resolve against that URL and 404, while `contact_links` `url:` fields are not Markdown at all — GitHub validates them as absolute URLs at form-load time and rejects relative values outright.
+- **[IssueForms]** In `.github/ISSUE_TEMPLATE/*.yml`, repo-internal targets in both issue-form `value:` Markdown links (e.g., `bug_report.yml`) and `config.yml` `contact_links` `url:` fields **MUST** use absolute GitHub URLs such as `https://github.com/<owner>/<repo>/blob/HEAD/<path>` for file links; relative paths **MUST NOT** be used. Template repositories MAY ship a documented placeholder form for adopters to replace, but the final rendered URL still needs the real host, owner, and repository. The two file types fail for different reasons: `value:` Markdown blocks render at `/{owner}/{repo}/issues/new?...` so relative paths resolve against that URL and 404, while `contact_links` `url:` fields are not Markdown at all — GitHub validates them as absolute URLs at form-load time and rejects relative values outright.
 
 ## Dialect and Consumer Policy
 
 - Authors **SHOULD** target **YAML 1.2-compatible** values and avoid relying on parser-specific extensions.
 - Authors **MUST** avoid the YAML 1.1 *non-lowercase-`true`/`false`* truthy tokens that this guide does not permit as booleans (`y`, `Y`, `yes`, `Yes`, `YES`, `n`, `N`, `no`, `No`, `NO`, `on`, `On`, `ON`, `off`, `Off`, `OFF`, `True`, `TRUE`, `False`, `FALSE`); only lowercase `true` and `false` are allowed as booleans (see "Booleans, Nulls, and Numbers"). Many widely-deployed parsers (including those used by GitHub Actions, `js-yaml` defaults, and some legacy PyYAML configurations) still resolve some or all of these YAML 1.1 tokens as booleans, so any string value that would otherwise match one of them **MUST** be quoted.
-- Ecosystem-specific validators (for example, Kubernetes manifest validators, OpenAPI validators, Helm validators, Ansible validators) **SHOULD** be adopted only when the repository actually uses those ecosystems. Generic YAML guidance **MUST NOT** require validators that are irrelevant to the repository's stack. The shipped baseline (`check-yaml`, `yamllint`, `actionlint`, and `check-jsonschema` for the worked-example schema and selected real load-bearing configuration files validated against built-in vendor schemas) is described in [Schema-backed YAML](#schema-backed-yaml).
+- Ecosystem-specific validators (for example, Kubernetes manifest validators, OpenAPI validators, Helm validators, Ansible validators) **SHOULD** be adopted only when the repository actually uses those ecosystems. Generic YAML guidance **MUST NOT** require validators that are irrelevant to the repository's stack. The repository's pre-commit configuration and CI definitions are the authoritative inventory of active YAML validators.
 
 ## Formatting Rules
 
@@ -71,10 +73,10 @@ Version pins **MUST** be quoted. Common examples:
 ```yaml
 python-version: "3.13"
 api-version: "1.0"
-node-version: "20"
+node-version: "24"
 ```
 
-Without quotes, `3.13` is parsed as the float `3.13` (which compares equal to `3.130`), `1.0` is parsed as the float `1.0` (which loses the trailing zero), and `20` is parsed as the integer `20`.
+Without quotes, `3.13` is parsed as the float `3.13` (which compares equal to `3.130`), `1.0` is parsed as the float `1.0` (which loses the trailing zero), and `24` is parsed as the integer `24`.
 
 Quote style guidance:
 
@@ -93,7 +95,7 @@ Quote style guidance:
 
 The GitHub Actions workflow trigger key `on:` is a well-known YAML 1.1 truthy hazard. Under YAML 1.1 resolution rules, the unquoted bare key `on` is parsed as the boolean `true`. GitHub Actions itself parses workflows correctly because it does not rely on YAML 1.1 truthy resolution for keys, but **lint tooling** that is YAML 1.1-aware (notably `yamllint`'s `truthy` rule) will flag the `on:` key as a truthy violation by default.
 
-This repository ships a [`yamllint` configuration at `.yamllint.yml`](../../.yamllint.yml) that intentionally sets `truthy.check-keys: false` so that the idiomatic GitHub Actions `on:` key is preserved without per-file exception comments:
+Repositories that lint GitHub Actions workflow YAML with `yamllint` SHOULD configure the `truthy` rule so key names are not treated as booleans. In `yamllint`, that means setting `truthy.check-keys: false`:
 
 ```yaml
 rules:
@@ -101,22 +103,49 @@ rules:
     check-keys: false
 ```
 
-This configuration preserves the idiomatic GitHub Actions `on:` key while still flagging YAML 1.1 truthy hazards in **values**. Authors **MAY** alternatively quote the key as `"on":` to satisfy a stricter `truthy.check-keys: true` configuration, but this form is **non-idiomatic** in the GitHub Actions ecosystem and **SHOULD NOT** be adopted unless a downstream policy requires it.
+This configuration preserves the idiomatic GitHub Actions `on:` key while still flagging YAML 1.1 truthy hazards in **values**. Authors **MAY** alternatively quote the key as `"on":` to satisfy a stricter `truthy.check-keys: true` configuration, but this form is **non-idiomatic** in the GitHub Actions ecosystem and **SHOULD NOT** be adopted unless a repository policy requires it.
 
 ## GitHub Actions Setup Version Pins
 
-GitHub Actions workflow files under `.github/workflows/` that use `setup-*` actions **MUST** pass literal release-line selectors to `with.*-version:` inputs such as `python-version`, `node-version`, `go-version`, and `dotnet-version`. Broad floating selectors such as `'3.x'`, `'latest'`, and `'*'` **MUST NOT** be used for these inputs.
+GitHub Actions workflow files under `.github/workflows/` that use `setup-*` actions **MUST** pass checked-in release-line selectors to `with.*-version:` inputs such as `python-version`, `node-version`, `go-version`, and `dotnet-version`. Broad floating selectors such as `'3.x'`, `'latest'`, and `'*'` **MUST NOT** be used for these inputs. When a setup action input is fed by indirection, such as a checked-in matrix value, every checked-in value that can feed the selector **MUST** satisfy the same rule.
 
-The required selector granularity follows each ecosystem's release model:
+Repositories that use Azure Pipelines language/runtime/SDK tool-installer tasks **MUST** explicitly provide checked-in selectors for in-scope `version` and `versionSpec` inputs. This Azure Pipelines rule is construct-conditional: it applies wherever Azure Pipelines YAML is stored when the repository uses those tasks, including repository-root `azure-pipelines.yml`, configured custom pipeline paths, and `.azuredevops/` pipeline layouts. It is not limited to one hardcoded directory name.
 
-- Python and Go **MUST** use major.minor selectors, such as `"3.13"` or `"1.21"`.
-- Node.js **MAY** use a major selector for an LTS line, such as `"20"`, or a major.minor selector, such as `"20.18"`.
-- .NET **MAY** use the most specific stable SDK channel selector documented by `actions/setup-dotnet`, such as major.minor.x (`"8.0.x"`).
-- Other ecosystems **MUST** use the most specific stable release-line selector documented by the setup action's README.
+The Azure Pipelines selector may be provided by a literal task input, a checked-in parameter default, a checked-in parameter `values:` entry, a checked-in variable or matrix value, or a checked-in repository version file such as `.nvmrc` when the task supports reading the selector from a file. Values supplied only at queue time or from external, non-repository sources do not satisfy this rule. For top-level parameters that feed a selector, the checked-in default **MUST** be compliant; if the parameter can be changed at queue time, constrain `values:` to compliant selectors where practical, or document that static YAML review can guarantee only the checked-in default.
 
-This rule protects CI determinism. Broad floating selectors couple workflow results to GitHub runner-image refreshes, setup action manifests, tool-cache contents, and download resolution behavior. A runner or toolchain refresh can then move CI to a different interpreter or runtime line and break a previously passing workflow even though the workflow file did not change.
+In-scope Azure Pipelines tasks include both `version`- and `versionSpec`-named inputs:
 
-This is a stronger, separate rule from the requirement to quote all version pins. Quoting keeps YAML parsers from coercing version-looking strings to numbers; release-line specificity keeps setup actions from resolving to a different runtime line over time.
+- `UseNode@1` `version`.
+- `NodeTool@0` `versionSpec`, for legacy pipelines. When `NodeTool@0` uses `versionSource: fromFile`, the referenced repository file, such as `.nvmrc`, **MUST** contain a compliant, reviewable release-line selector.
+- `UsePythonVersion@0` `versionSpec`.
+- `GoTool@0` `version`.
+- `UseDotNet@2` `version` when `useGlobalJson` is not used.
+
+`UseRubyVersion@0`'s documented default selector `>= 2.4` is non-compliant with this explicit-selector rule and determinism rationale. This guide does not define durable compliant Ruby selector forms or Ruby granularity rules.
+
+The required selector granularity follows each ecosystem's release model. These bullets define the coarsest acceptable selector form, not recommended runtime currency:
+
+- Python **MUST** use major.minor selectors, such as `"3.13"`.
+- Node.js **MAY** use a major selector for an LTS line, such as `"24"`, or a major.minor selector, such as `"24.17"`.
+- .NET **MAY** use the most specific stable SDK channel selector documented by the setup action or tool-installer task, such as major.minor.x (`"10.0.x"`), or an exact major.minor.patch version. For `UseDotNet@2`, bare major.minor such as `"10.0"` is not a valid `version` form.
+- Go **MUST** use major.minor selectors, such as `"1.26"`.
+- Other ecosystems **MUST** use the most specific stable release-line selector documented by the setup action or tool-installer task.
+
+Selectors narrower than the coarsest acceptable form are also compliant for ecosystems where exact versions are covered by the task or action behavior, because they are at least as deterministic. For Microsoft-hosted Azure Pipelines agents, tool-cache tasks such as `UseNode@1`, `NodeTool@0`, `UsePythonVersion@0`, and `GoTool@0` resolve the newest installed or available version matching the selector, and an exact patch that is not pre-installed may need to be downloaded or may be unavailable. Prefer the release-line granularity above for those tasks unless an exact pin is specifically required. On self-hosted agents, `UsePythonVersion@0` cannot download missing Python versions, so exact Python pins require the desired version to be present in the agent tool cache. `UseDotNet@2` is less dependent on preinstalled hosted-agent contents because it is designed to acquire the requested SDK or runtime from the internet or local cache.
+
+The distinction between allowed and prohibited selectors is granularity per ecosystem, not `.x` spelling by itself. For Node.js selectors whose task or action uses SemVer X-range rules, `"24"`, `"24.x"`, and `"24.*"` all select the Node.js 24 line. Prefer bare-major `"24"` for readability, but do not classify `"24.x"` as prohibited when a Node major selector is allowed. By contrast, `"3.x"` is prohibited for Python because Python selectors must be at least major.minor.
+
+Range-style Azure Pipelines tasks such as `UseNode@1`, `NodeTool@0`, and `UsePythonVersion@0` **MUST NOT** use bare `"*"`, comparator/operator ranges such as `">=18.0.0"`, `">=20 <21"`, `"^20.0.0"`, or `"~20.18.0"`, or composite/OR ranges such as `"20 || 22"`. These expressions are rejected because they are not direct, reviewable release-line selectors for this guide's CI-determinism rule, even when their breadth appears close to an allowed release line. Channel-syntax tasks such as `UseDotNet@2` **MUST NOT** use a selector broader than the required channel granularity; `"10.x"` is task-valid but guide-noncompliant because this guide requires the narrower `"10.0.x"` channel or an exact SDK/runtime version. `GoTool@0` **MUST NOT** use a selector broader than major.minor. `"latest"` **MUST NOT** be used for any in-scope language/runtime/SDK toolchain selector.
+
+For tasks exposing `checkLatest`, such as `UseNode@1` and `NodeTool@0`, `checkLatest: true` **SHOULD NOT** be used on Microsoft-hosted agents unless re-resolution to the newest matching version is intentional and documented. Because the default is already `false`, an explicit `checkLatest: false` is illustrative, not required. `UsePythonVersion@0`, `UseDotNet@2`, and `GoTool@0` do not expose `checkLatest`; do not add that input to those tasks. For tasks exposing prerelease or preview toggles, such as `UsePythonVersion@0` `allowUnstable` and `UseDotNet@2` `includePreviewVersions`, `true` **SHOULD NOT** be used unless the workflow intentionally tests prerelease versions and documents that intent.
+
+This rule protects CI determinism. Broad floating selectors and hidden task defaults couple workflow results to runner-image refreshes, setup action manifests, task defaults, tool-cache contents, and download resolution behavior. A runner, task, or toolchain refresh can then move CI to a different interpreter, runtime, or SDK line and break a previously passing workflow even though the workflow file did not change.
+
+This is a stronger, separate rule from the requirement to quote all version pins. Quoting keeps YAML parsers from coercing version-looking strings to numbers; release-line specificity keeps setup actions and tool-installer tasks from resolving to a different runtime line over time.
+
+Example version numbers in this section reflect supported release lines at authoring time and may be refreshed when they reach end-of-life. The normative rule is the selector form and checked-in provenance, not the specific version number shown.
+
+This section is limited to GitHub Actions setup actions and Azure Pipelines language/runtime/SDK toolchain installers. It does not cover Azure Pipelines CLI installers such as `KubectlInstaller@0`, `HelmInstaller@1`, or `KubeloginInstaller@0`; Azure Pipelines agent image labels such as `vmImage: "ubuntu-latest"`; `JavaToolInstaller@0` or `JavaToolInstaller@1`; `UseDotNet@2` with `useGlobalJson: true`; runtime currency or end-of-life policy for any toolchain; or Terraform and TFLint versions installed through shell commands instead of Azure `Use*` or `*Tool` task selectors.
 
 **Compliant:**
 
@@ -127,11 +156,48 @@ This is a stronger, separate rule from the requirement to quote all version pins
 
 - uses: actions/setup-node@v6
   with:
-    node-version: "20"
+    node-version: "24"
 
 - uses: actions/setup-dotnet@v4
   with:
-    dotnet-version: "8.0.x"
+    dotnet-version: "10.0.x"
+```
+
+**Compliant Azure Pipelines:**
+
+```yaml
+parameters:
+  - name: nodeVersion
+    type: string
+    default: "24"
+    values:
+      - "24"
+      - "22"
+  - name: pythonVersion
+    type: string
+    default: "3.13"
+    values:
+      - "3.13"
+      - "3.14"
+
+steps:
+  - task: UseNode@1
+    inputs:
+      version: ${{ parameters.nodeVersion }}
+      # checkLatest defaults to false; shown for emphasis only.
+      checkLatest: false
+
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: ${{ parameters.pythonVersion }}
+
+  - task: UseDotNet@2
+    inputs:
+      version: "10.0.x"
+
+  - task: GoTool@0
+    inputs:
+      version: "1.26"
 ```
 
 **Non-compliant:**
@@ -147,7 +213,33 @@ This is a stronger, separate rule from the requirement to quote all version pins
 
 - uses: actions/setup-dotnet@v4
   with:
-    dotnet-version: '8.x'
+    dotnet-version: '10.x'
+```
+
+**Non-compliant Azure Pipelines:**
+
+```yaml
+steps:
+  - task: UseNode@1
+    # Non-compliant: relies on the task's default selector.
+
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: "3.x"
+      allowUnstable: true
+
+  - task: UseDotNet@2
+    inputs:
+      version: "10.x"
+      includePreviewVersions: true
+
+  - task: NodeTool@0
+    inputs:
+      versionSpec: ">=18.0.0"
+      checkLatest: true
+
+  - task: UseRubyVersion@0
+    # Non-compliant: relies on the task's documented broad default selector.
 ```
 
 ## GitHub Actions Documentation Comment URLs
@@ -164,7 +256,7 @@ This rule applies to all workflow files under `.github/workflows/` and to any ot
 
 This rule applies only to documentation/navigation comments. It **MUST NOT** affect the `uses:` line itself, action input values, SHA pins, version pins, or any other intentionally pinned executable configuration.
 
-The `<owner>/<repo>` placeholder used throughout this section is **metasyntactic** — it stands for any upstream GitHub Actions repository (for example, `actions/checkout`, `peter-evans/create-pull-request`). It is **not** a template-adopter substitution placeholder, and it is distinct from the literal `OWNER/REPO` adopter-substitution convention covered by [`.github/instructions/docs.instructions.md`](./docs.instructions.md). Authors **MUST NOT** rewrite metasyntactic `<owner>/<repo>` references in workflow comments to `OWNER/REPO`, and adopters **MUST NOT** substitute their repository name into these metasyntactic references.
+The `<owner>/<repo>` placeholder used throughout this section is **metasyntactic** — it stands for any upstream GitHub Actions repository (for example, `actions/checkout`, `peter-evans/create-pull-request`). It is **not** a template-adopter substitution placeholder for the current repository. Authors **MUST NOT** rewrite metasyntactic `<owner>/<repo>` references in workflow comments to a repository-specific placeholder, and adopters **MUST NOT** substitute their repository name into these metasyntactic references.
 
 Pinned documentation URLs go stale because Dependabot updates `uses:` references but does not rewrite arbitrary adjacent comment text.
 
@@ -221,20 +313,105 @@ This guidance applies to comments in workflow files under `.github/workflows/` a
     tflint_version: "v0.51.1"
 ```
 
+## GitHub Actions Input Default Single Source of Truth
+
+The single-source-of-truth principle above also applies when a GitHub Actions workflow exposes an optional `workflow_dispatch` string input whose blank value should fall back to a default used by non-dispatch triggers. A `workflow_dispatch` input `default:` pre-fills or supplies the manual-dispatch input path; it is not a workflow-wide default for `push`, `pull_request`, `schedule`, or other non-dispatch events.
+
+When an optional `workflow_dispatch` string input needs the same default on manual and non-dispatch triggers, authors **SHOULD** define that default in one place and derive the effective value from the input. They **SHOULD NOT** duplicate an unmarked literal in both the input `default:` and a workflow- or job-level `env:` value that nothing keeps in sync.
+
+Use a workflow- or job-level `env:` value as the single source when more than one step consumes the default. For a single consumer, an inline literal fallback such as `${{ inputs.<name> || 'literal' }}` is acceptable. A `vars` value is also acceptable when the durable source of truth intentionally lives in repository, organization, or environment settings rather than in the workflow file.
+
+Prefer expression fallback only in workflow keys where GitHub's context-availability rules permit both `inputs` and the chosen default context. Step-level `env:` and step `with:` are common safe locations for `${{ inputs.<name> || env.<NAME> }}`. Do not present that expression as valid in every workflow key: for example, the `env` context is not available at `jobs.<job_id>.env`, even though `inputs` is available there.
+
+Do not make direct expression interpolation inside `run:` the preferred shell pattern. For inline scripts, map the expression into a step `env:` variable and reference the quoted shell variable in `run:`. This follows GitHub's intermediate-environment-variable pattern for handling untrusted input and avoids shell word splitting.
+
+Treat free-form manual string inputs conservatively as user-supplied. A shell fallback such as quoted `[ -z "$x" ]` is acceptable only as a shell-step-scoped alternative, and it SHOULD read from mapped step environment variables rather than interpolating `${{ ... }}` directly into the script. The `-z` test checks string length and is portable across ordinary POSIX `sh` and Bash use in the quoted `[ -z "$x" ]` form.
+
+When omitting the input `default:` means blank should use the configured default, the input `description:` **SHOULD** state the fallback behavior, such as "Blank uses the `REPORT_FORMAT` env value." Dropping `default:` may mean the manual-dispatch form no longer pre-fills that field. Authors who intentionally want the manual-dispatch form to show the default **MAY** keep the input `default:`, but they **SHOULD** mark it as an aligned duplicate of the single source, for example: `# Keep this default aligned with env.REPORT_FORMAT; it exists only to prefill the manual-dispatch form.`
+
+The `||` fallback returns the right-hand value whenever the left-hand value is falsy. GitHub documents falsy values as `false`, `0`, `-0`, an empty string (`""` or `''`), and `null`, and the runner implementation returns the first truthy operand value, or the last evaluated operand value when none are truthy. Because of that behavior, the positive recommendation here is limited to optional string inputs where blank is the only fallback trigger. For Boolean inputs, number inputs, and string inputs where an explicit empty string is meaningful, authors **MUST** use explicit comparison or type-specific handling instead.
+
+Use the `inputs` context rather than `github.event.inputs` for this pattern. GitHub documents that `inputs` preserves Boolean values as Booleans while `github.event.inputs` converts them to strings; authors **MUST NOT** use `github.event.inputs` to work around Boolean falsiness. Avoid the `||` fallback pattern for Booleans instead.
+
+When the needed context is not available at a particular workflow key, a prior step can normalize the effective value and expose it through step outputs or job outputs for downstream consumption. Prior-step outputs can feed later steps in the same job, and job outputs can feed dependent jobs through `needs.<job_id>.outputs`, but a step cannot retroactively provide values to same-job keys evaluated before that step runs.
+
+**Compliant:**
+
+```yaml
+name: Report
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      report_format:
+        description: "Optional. Blank uses the REPORT_FORMAT env value."
+        required: false
+        type: string
+
+permissions: {}
+
+env:
+  REPORT_FORMAT: "sarif"
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show effective format
+        env:
+          EFFECTIVE_REPORT_FORMAT: ${{ inputs.report_format || env.REPORT_FORMAT }}
+        run: printf 'Using report format: %s\n' "$EFFECTIVE_REPORT_FORMAT"
+```
+
+**Non-compliant:**
+
+```yaml
+name: Report
+
+on:
+  push:
+  workflow_dispatch:
+    inputs:
+      report_format:
+        description: "Report format."
+        required: false
+        # Non-compliant: an independent, unmarked duplicate of REPORT_FORMAT
+        # that nothing keeps in sync, so the two defaults can drift apart.
+        default: "sarif"
+        type: string
+
+permissions: {}
+
+env:
+  REPORT_FORMAT: "sarif"
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show effective format
+        env:
+          EFFECTIVE_REPORT_FORMAT: ${{ inputs.report_format || env.REPORT_FORMAT }}
+        run: printf 'Using report format: %s\n' "$EFFECTIVE_REPORT_FORMAT"
+```
+
+The non-compliant example is non-compliant because the two defaults are independent and unmarked, not because an input `default:` is always forbidden; keeping a `default:` is acceptable when it is intentionally retained for manual-dispatch UI prefill and explicitly marked as aligned with the single source.
+
 ## Issue-form Markdown Links in `.github/ISSUE_TEMPLATE/*.yml`
 
 GitHub issue forms render their `value:` Markdown blocks at the URL `/{owner}/{repo}/issues/new?...`, **not** at the source-file path. As a result, relative links inside those blocks resolve against the rendering URL and frequently produce 404s. For example, `[SECURITY.md](blob/HEAD/SECURITY.md)` resolves to `/{owner}/{repo}/issues/blob/HEAD/SECURITY.md` (404), and `[Security tab](security)` resolves to `/{owner}/{repo}/issues/security` (404). The same hazard applies to `contact_links` URLs in `.github/ISSUE_TEMPLATE/config.yml`, which GitHub itself rejects when given a relative path.
 
 To make these links robust across non-GitHub.com renderers, GitHub Mobile, email notifications, and copied/quoted content, the following rules apply to all files matching `.github/ISSUE_TEMPLATE/*.yml` (including `config.yml`):
 
-- Markdown links to repo-internal files (for example, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `README.md`) **MUST** use full absolute URLs of the form `https://github.com/OWNER/REPO/blob/HEAD/<path>`. The `OWNER/REPO` placeholder follows this template's placeholder convention (see the comment block at the top of `CONTRIBUTING.md`) and is enforced by `.github/workflows/check-placeholders.yml` **if the downstream repository keeps that workflow**. The workflow is optional and may be removed once placeholders are substituted, so authors and adopters MUST NOT rely on it as an unconditional CI guardrail.
-- Repo-internal references that are not file paths (for example, the GitHub Security tab) **MUST** likewise use absolute URLs, such as `https://github.com/OWNER/REPO/security`.
+- Markdown links to repo-internal files (for example, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `README.md`) **MUST** use full absolute URLs of the form `https://github.com/<owner>/<repo>/blob/HEAD/<path>` after any template placeholders are substituted.
+- Repo-internal references that are not file paths (for example, the GitHub Security tab) **MUST** likewise use absolute URLs, such as `https://github.com/<owner>/<repo>/security`.
 - Relative paths such as `../blob/HEAD/<file>`, `blob/HEAD/<file>`, `./<file>`, or bare relative refs such as `(security)` **MUST NOT** be used in issue-form `value:` Markdown blocks or in `contact_links` URLs.
-- Use `blob/HEAD` rather than `blob/main` so the URL works regardless of the repository's default branch name.
-- The `github.com` host is the assumed default; **GHES adopters MUST replace `github.com` with their GHES host** (e.g., `github.company.com`). The host substitution is not enforced by CI today (even when `.github/workflows/check-placeholders.yml` is kept, it only validates `OWNER/REPO`), so each affected file SHOULD include a brief inline YAML comment reminding adopters of the host substitution, mirroring the convention already used in `.github/ISSUE_TEMPLATE/config.yml`.
-- The literal `https://github.com/OWNER/REPO/...` example URL is permitted to appear in didactic prose inside the style-guide files under `.github/instructions/**`; section [6] of `.github/workflows/check-placeholders.yml` skips those files specifically so adopters are not forced to edit instructional prose to satisfy placeholder CI. Section [6] also skips the workflow file itself (`.github/workflows/check-placeholders.yml`) to avoid self-referential matches against the literal URL embedded in its own grep patterns. Any other YAML file under `.github/` (i.e., not `.github/instructions/**` and not `.github/workflows/check-placeholders.yml`) that contains the literal `https://github.com/OWNER/REPO` substring outside a YAML comment line is treated as a live template placeholder and **MUST** be customized by adopters. (Sections [5] and [6] of the placeholder workflow filter YAML comment lines before matching, so a commented example such as `# https://github.com/OWNER/REPO/...` will not by itself cause CI to fail; authors **SHOULD NOT** rely on that filter to ship live template URLs disguised as comments.)
+- Use `blob/HEAD` rather than `blob/main` so file URLs work regardless of the repository's default branch name.
+- Repositories hosted on GitHub Enterprise Server **MUST** use their own host instead of `github.com` (for example, `https://github.company.com/<owner>/<repo>/blob/HEAD/<path>`).
+- Template repositories that intentionally ship unresolved URL placeholders **MUST** document their placeholder convention and substitution process in repository-local guidance. Placeholder validation, if any, is a repository-specific safety net; authors and adopters MUST still review the final rendered URLs.
 
-This rule is mirrored in [`.github/instructions/docs.instructions.md`](./docs.instructions.md) (which governs `.github/pull_request_template.md` and applies to `**/*.md`). The two instruction files are intentionally self-contained: each restates the rule rather than relying on the other so that downstream repositories may remove either file independently without losing the guidance.
+If the repository also keeps Markdown documentation rules for issue templates or pull request templates, those rules SHOULD restate this behavior in their own scope so YAML and Markdown guidance remain independently understandable.
 
 ## Conservative YAML Subset
 
@@ -274,20 +451,20 @@ Choose the indicator that matches the consumer's expectations. When passing a mu
 
 ## Schema-backed YAML
 
-YAML files that have a published schema **SHOULD** be validated against that schema, using the same MUST/SHOULD/MAY tiers applied to JSON in [JSON Writing Style](./json.instructions.md). This repository wires schema and ecosystem validators into pre-commit and re-runs them in [`.github/workflows/data-ci.yml`](../workflows/data-ci.yml); files covered by those hooks **MUST** pass them. For file families that do not yet have a hook configured, authors **SHOULD** run the appropriate validator locally before committing. The shipped pipeline is described below; CI/pre-commit integration is owned by the repository's tooling configuration rather than by this guide.
+YAML files that have a published schema **SHOULD** be validated against that schema. Files covered by schema or ecosystem validators in the repository's pre-commit hooks or CI **MUST** pass those validators. For file families that do not yet have a configured validator, authors **SHOULD** run the appropriate validator locally before committing and SHOULD add a file-family-scoped validator when the contract becomes durable.
 
 Validation tiers:
 
-- **MUST tier** (files whose schema validator is wired into pre-commit or CI **MUST** pass it; where the validator is not wired up, authors **SHOULD** run it locally before committing): GitHub Actions workflows (`.github/workflows/*.yml`); pre-commit configuration (`.pre-commit-config.yaml`); any YAML file whose schema is published and stable and whose consumer requires structural correctness.
-- **SHOULD tier**: linter configuration files (for example, `.yamllint.yml`) when a schema is available and a validator is convenient to run.
+- **MUST tier**: load-bearing YAML consumed by build, deploy, runtime, release automation, or other automated policy where malformed structure would cause incorrect behavior; GitHub Actions workflows under `.github/workflows/`; pre-commit configuration; and any YAML file whose schema is published and stable and whose consumer requires structural correctness.
+- **SHOULD tier**: durable fixtures, examples, policy documents, configuration contracts, and linter configuration files when a schema is available and a validator is convenient to run.
 - **MAY tier**: optional or experimental configuration formats whose schema may change.
 
-Shipped validators in this repository (extend as needed for new ecosystems):
+Common validator categories:
 
-- **`yamllint`** — YAML style enforcement, configured in [`.yamllint.yml`](../../.yamllint.yml) and run through [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) and [`.github/workflows/data-ci.yml`](../workflows/data-ci.yml).
-- **`check-yaml`** (from `pre-commit/pre-commit-hooks`) — parse-checks YAML files; runs through pre-commit and `data-ci.yml`.
-- **`actionlint`** — GitHub Actions workflow linter; runs through pre-commit and `data-ci.yml` for any workflow file under `.github/workflows/`.
-- **`check-jsonschema`** — generic JSON Schema validation for YAML and JSON files. Used today for (a) the worked-example schema (`schemas/example-config.schema.json`) and its valid example data, and (b) selected real load-bearing repository configuration files (for example, `.github/dependabot.yml`) validated against built-in vendor schemas shipped with `check-jsonschema`. See [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) for the authoritative list of active hooks. Add file-family-scoped hooks (project-owned `--schemafile` or additional `--builtin-schema` hooks) for additional schema-backed YAML as needed.
+- **Syntax and style validators** (for example, `check-yaml` and `yamllint`) catch parser errors and repository style drift.
+- **Ecosystem validators** (for example, `actionlint` for GitHub Actions workflows) catch consumer-specific structure and behavior errors.
+- **Schema validators** (for example, `check-jsonschema`) validate YAML files against project-owned schemas or mature external schemas. Add file-family-scoped hooks for additional schema-backed YAML as durable contracts are introduced.
+- **Active hook list.** The repository's pre-commit configuration and CI definitions are the authoritative inventory of active validators. Repository-specific schema inventories, worked examples, removal checklists, and future validation candidates SHOULD live in the repository's schema documentation, if present.
 
 Additional ecosystem-specific validators (for example, `kubeval`/`kubeconform` for Kubernetes, `helm lint` for Helm charts, `ansible-lint` for Ansible) **SHOULD** be adopted **only** when the repository actually uses the ecosystem. Generic YAML guidance **MUST NOT** mandate validators for ecosystems the repository does not use.
 
@@ -307,7 +484,7 @@ A YAML change is "done" when **all** of the following are true:
 - All booleans are lowercase `true` / `false`; no `yes`/`no`/`on`/`off` as boolean values.
 - The conservative subset is respected (no anchors, aliases, merge keys, custom tags, multi-document files, or flow style except where necessary and justified).
 - Comments explain **why**, not **what**; behavior is not documented only in comments.
-- `yamllint` (configured in [`.yamllint.yml`](../../.yamllint.yml)) and `check-yaml` pass under the repository's pre-commit configuration.
+- The repository's configured YAML syntax and style validators pass.
 - Any schema or ecosystem validator wired into pre-commit or CI passes for the affected files (for example, `actionlint` for workflow files, `check-jsonschema` for schema-backed YAML covered by an active hook). When no such validator is wired up for the file family being changed, authors **SHOULD** run the applicable validator locally before committing.
-- Pre-commit hooks pass locally (`pre-commit run --all-files`) and in CI, including the dedicated [`.github/workflows/data-ci.yml`](../workflows/data-ci.yml) data-file workflow.
+- Pre-commit hooks pass locally (`pre-commit run --all-files`) and in the repository's configured CI.
 - No secrets are committed; GitHub Actions workflows declare least-privilege `permissions:`.

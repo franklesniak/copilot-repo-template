@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-16
+- **Last Updated:** 2026-06-21
 - **Scope:** Durable design-decision record for this repository template, including rationale for GitHub configuration, instruction files, validation policy, template structure, maintenance conventions, and the documentation-tier inventory below.
 - **Related:** [Repository Copilot Instructions](copilot-instructions.md), [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -887,7 +887,7 @@ The template sync manifest uses version 2 semantics for path mappings. Version 2
 
 ### Design Decision: package.json Minimal Configuration
 
-The template ships with minimal package.json configuration (no repository field, no engines field, generic metadata) to reduce template adoption friction.
+The template ships with minimal package.json configuration (no repository field, an explicit Node.js support floor through `engines.node`, and generic metadata) to reduce template adoption friction.
 
 **Rationale:**
 
@@ -902,7 +902,7 @@ The template ships with minimal package.json configuration (no repository field,
 **Trade-offs:**
 
 - Users creating Node.js applications must manually add metadata fields
-- No validation for Node.js version requirements
+- Node.js version requirements are advisory by default in npm: `engines.node` declares the support floor and npm warns on mismatch unless `engine-strict` is enabled, where it becomes an install error
 - Users must consult README for customization guidance
 
 ---

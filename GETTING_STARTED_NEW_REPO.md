@@ -199,8 +199,8 @@ You should see version numbers for each command. If any command shows an error, 
 git version 2.43.0.windows.1
 Python 3.12.1
 pip 23.3.2 from C:\Users\YourName\AppData\Local\Programs\Python\Python312\Lib\site-packages\pip (python 3.12)
-v20.10.0
-10.2.3
+v24.17.0
+11.17.0
 ```
 
 ---
@@ -308,8 +308,8 @@ You should see version numbers for each command.
 git version 2.39.3 (Apple Git-145)
 Python 3.12.1
 pip 23.3.2 from /opt/homebrew/lib/python3.12/site-packages/pip (python 3.12)
-v20.10.0
-10.2.3
+v24.17.0
+11.17.0
 ```
 
 > **Note:** On macOS, use `python3` instead of `python` to ensure you're using Python 3.

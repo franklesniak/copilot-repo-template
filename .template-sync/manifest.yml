@@ -278,6 +278,10 @@ template_manifest:
       requires_all:
         - markdown
         - github-actions
+    - pattern: '.github/workflows/toolchain-eol.yml'
+      requires_all:
+        - markdown
+        - github-actions
     - pattern: '.github/workflows/powershell-ci.yml'
       requires_all:
         - powershell
@@ -443,6 +447,9 @@ template_manifest:
     - pattern: '.github/scripts/lint-nested-markdown.js'
       requires_all:
         - markdown
+    - pattern: '.github/scripts/check-toolchain-eol.js'
+      requires_all:
+        - markdown
     - pattern: '.github/scripts/check-prohibited-placeholders.py'
       requires_all:
         - markdown
@@ -450,6 +457,12 @@ template_manifest:
       requires_all:
         - baseline
     - pattern: 'tests/test_check_prohibited_placeholders.py'
+      requires_all:
+        - markdown
+    - pattern: 'tests/toolchain-eol/check-toolchain-eol.test.js'
+      requires_all:
+        - markdown
+    - pattern: 'tests/toolchain-eol/fixtures/**'
       requires_all:
         - markdown
     - pattern: 'templates/markdown/**'

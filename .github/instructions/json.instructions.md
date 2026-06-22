@@ -7,15 +7,15 @@ description: "JSON authoring standards: strict-by-default, schema-backed, determ
 
 # JSON Writing Style
 
-**Version:** 1.2.20260523.0
+**Version:** 1.3.20260621.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-23
+- **Last Updated:** 2026-06-21
 - **Scope:** Defines authoring standards for JSON and JSONC files in this repository, including configuration, schemas, fixtures, generated metadata, and machine-readable contracts. Covers dialect policy, formatting, key ordering, naming, data modeling, schema usage, comments, security, and generated output.
-- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [YAML Writing Style](./yaml.instructions.md), [Schemas README](../../schemas/README.md), [Schema Example Tests (`tests/test_schema_examples.py`)](../../tests/test_schema_examples.py), [Data-File CI Workflow (`data-ci.yml`)](../workflows/data-ci.yml), [Template Design Decision — Dedicated JSON and YAML Instruction Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-json-and-yaml-instruction-files), [Template Design Decision — Baseline JSON/YAML Linting Stack](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-baseline-jsonyaml-linting-stack), [Template Design Decision — Dedicated Data-File CI Workflow (`data-ci.yml`)](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-dedicated-data-file-ci-workflow-data-ciyml), [Template Design Decision — JSON5 Exclusion by Default](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-json5-exclusion-by-default), [Template Design Decision — `additionalProperties` Policy](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-additionalproperties-policy), [Template Design Decision — Built-in Schema Validation for Real Load-Bearing Configuration Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files)
+- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [YAML Writing Style](./yaml.instructions.md) (companion guide, if present)
 
 ## Purpose and Scope
 
@@ -46,7 +46,7 @@ This repository recognizes two JSON dialects: strict JSON and JSONC. Other diale
 
 - Files with the `.json` extension **MUST** be strict JSON as defined by [RFC 8259](https://www.rfc-editor.org/rfc/rfc8259). Strict JSON **MUST NOT** contain comments, trailing commas, unquoted keys, single-quoted strings, or any other non-RFC 8259 syntax.
 - Files with the `.jsonc` extension **MAY** be used **only** when the consuming tool explicitly documents support for JSONC (for example, the TypeScript compiler reading `tsconfig.json`, and some VS Code settings files). When in doubt, prefer `.json`.
-- The repository's `check-json` pre-commit hook validates `.json` files only. JSONC is **not** validated by `check-json`. Downstream repositories that need stronger enforcement for `.jsonc` files **SHOULD** add JSONC-aware tooling (for example, a JSONC-aware parser, linter, or schema validator) rather than retrofitting `check-json`.
+- The common `check-json` pre-commit hook validates `.json` files only. JSONC is **not** validated by `check-json`. Repositories that need stronger enforcement for `.jsonc` files **SHOULD** add JSONC-aware tooling (for example, a JSONC-aware parser, linter, or schema validator) rather than retrofitting `check-json`.
 - JSON5 is **not** included in this repository's defaults and **MUST NOT** be introduced without an explicit, documented project decision. The `applyTo` glob for this guide intentionally omits `.json5`.
 
 ## Formatting
@@ -111,16 +111,13 @@ Schema location and shape:
 - Project-owned **closed** schemas **SHOULD** set `"additionalProperties": false` so that unknown keys are caught early.
 - Ecosystem-mirroring schemas (schemas that describe an external format the project does not own, for example, a third-party config) **MAY** leave additional properties open and **SHOULD** document why in the schema's `description` or in a sibling `README.md`.
 
-Shipped JSON validation tooling in this repository:
+Validation tooling:
 
-- **`check-json`** — strict `.json` syntax validation, wired into [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) with an anchored `\.json$` pattern. JSONC files are intentionally excluded from `check-json`; downstream repositories that need stronger JSONC enforcement **SHOULD** add JSONC-aware tooling rather than retrofitting `check-json`.
-- **`check-jsonschema`** — JSON Schema validation. Wired in today for (a) the worked-example schema (`schemas/example-config.schema.json`) and its valid example data files under `schemas/examples/example-config/valid/`, and (b) selected real load-bearing repository configuration files (for example, `.github/dependabot.yml`) validated against built-in vendor schemas shipped with `check-jsonschema`. Documented optional keys for a default-validated vendor configuration file must stay within the surface accepted by the pinned built-in schema, or the hook must be moved to an opt-in path; when retained, `tests/test_dependabot_schema.py` guards the documented Dependabot auto-assignment fixture. See [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) for the authoritative list of active hooks. Add additional file-family-scoped hooks (project-owned `--schemafile` hooks for new schema-backed JSON families, or additional `--builtin-schema` hooks for tool-owned configuration files) as they are introduced.
-- **`check-metaschema`** — self-validates the worked-example schema against its declared JSON Schema Draft 2020-12 metaschema.
-- **Schema example tests** — [`tests/test_schema_examples.py`](../../tests/test_schema_examples.py) auto-discovers schema/example pairs under `schemas/` and asserts that valid examples pass and invalid examples fail. Invalid example fixtures are intentionally **not** wired into a `check-jsonschema` pre-commit hook (the hook would treat their expected failure as a hook failure); they are exercised exclusively through this test module.
-- **Dependabot built-in schema regression test** — When retained, `tests/test_dependabot_schema.py` validates the documented Dependabot auto-assignment fixture against the pinned `vendor.dependabot` built-in schema so documented optional guidance cannot drift beyond the default validator.
-- **Data-file CI** — [`.github/workflows/data-ci.yml`](../workflows/data-ci.yml) re-runs `check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, and `check-metaschema` so JSON and YAML enforcement can be made a required check via branch protection independent of the Python CI job.
-
-See [Schemas README](../../schemas/README.md) for the worked example, the canonical downstream-removal checklist, and the future-work candidates that downstream repositories may opt into.
+- **Syntax validation.** Strict `.json` files **MUST** pass the repository's configured JSON syntax validator. When `check-json` is used, it validates strict JSON only; JSONC files need a JSONC-aware parser, linter, or schema validator if the repository wants automated JSONC enforcement.
+- **Schema validation.** Schema-backed JSON files **MUST** pass every schema validator configured for their file family in the repository's pre-commit hooks or CI. Where no hook exists yet for a schema-backed file family, authors **SHOULD** run the applicable validator locally before committing and SHOULD add a file-family-scoped validator when the contract becomes durable.
+- **Schema self-validation.** Project-owned schemas **SHOULD** be self-validated against their declared metaschema when the repository's validator supports that check.
+- **Example fixture tests.** Repositories that keep valid and invalid schema examples **SHOULD** test both sides of the contract: valid examples pass, and invalid examples fail. Invalid examples **MUST NOT** be wired directly into a normal passing schema-validation hook unless that hook is explicitly designed to expect failure.
+- **Active hook list.** The repository's pre-commit configuration and CI definitions are the authoritative inventory of active validators. Repository-specific schema inventories, worked examples, removal checklists, and future validation candidates SHOULD live in the repository's schema documentation, if present.
 
 ## Comments and Documentation
 
@@ -156,4 +153,4 @@ A JSON change is considered done when **all** of the following hold:
 - Strict JSON contains no comments; documentation lives in schemas and sibling docs.
 - No secrets are committed; example values are obviously fake.
 - Generated JSON is reproducible, stably formatted, stably ordered when ordering is non-semantic, and identifies its source or generation command.
-- `check-json` and any project-specific JSON or JSONC validators pass; `check-jsonschema` and `check-metaschema` pass for any schema-backed file family wired into pre-commit (see [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml) for the authoritative active-hook list); [`tests/test_schema_examples.py`](../../tests/test_schema_examples.py) passes after any schema or schema-example change; pre-commit and Markdown checks pass for any associated documentation changes.
+- The repository's configured JSON or JSONC validators pass; schema and metaschema validators pass for any schema-backed file family wired into pre-commit or CI; schema-example tests pass after any schema or schema-example change; pre-commit and Markdown checks pass for any associated documentation changes.
