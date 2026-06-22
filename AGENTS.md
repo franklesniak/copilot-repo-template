@@ -115,7 +115,7 @@ During downstream template adoption and stack selection, perform non-protected c
 
 ## GitHub Plugin Usage
 
-This section is retained Codex platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Codex GitHub plugin protocol for the retained Codex entry point.
+This section is retained as Codex platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Codex GitHub plugin protocol for the retained Codex entry point.
 
 Codex can use the OpenAI-curated GitHub plugin (`github@openai-curated`) in this repository when the user has installed and authorized it. The plugin is the preferred mechanism for any operation that touches remote GitHub state.
 
@@ -128,7 +128,7 @@ The `.codex/config.toml` file at the repository root declares `[plugins."github@
 
 ## Azure DevOps PR Review Protocol
 
-This section is retained Codex host-specific protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Azure DevOps PR review protocol for the retained Codex entry point.
+This section is retained as Codex host-specific protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Azure DevOps PR review protocol for the retained Codex entry point.
 
 Use this protocol only for Azure DevOps Services pull requests hosted in Azure Repos. The GitHub plugin protocol and GitHub Copilot workflow above remain primary/default for GitHub-hosted repositories; do not substitute GitHub plugin, `gh`, or GitHub GraphQL operations for Azure Repos state.
 
@@ -141,7 +141,7 @@ Use this protocol only for Azure DevOps Services pull requests hosted in Azure R
 
 ## PR Review Workflow (Codex-adapted)
 
-This section is retained Codex platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Codex PR review protocol for the retained Codex entry point.
+This section is retained as Codex platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Codex PR review protocol for the retained Codex entry point.
 
 This workflow adapts the Claude-targeted process documented in `CLAUDE.md` for Codex's capabilities and runtime limitations. Use it when responding to review feedback on a pull request. All GitHub-side reads and writes in the steps below SHOULD go through the GitHub plugin first; fall back to `gh`, GraphQL, or manual owner action only when the plugin does not expose the needed capability (see **Fallbacks for unsupported plugin capabilities** below).
 

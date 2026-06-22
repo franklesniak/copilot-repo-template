@@ -115,7 +115,7 @@ During downstream template adoption and stack selection, perform non-protected c
 
 ## Azure DevOps PR Review Protocol
 
-This section is retained Claude host-specific protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Azure DevOps PR review protocol for the retained Claude entry point.
+This section is retained as Claude host-specific protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Azure DevOps PR review protocol for the retained Claude entry point.
 
 Use this protocol only for Azure DevOps Services pull requests hosted in Azure Repos. The GitHub Copilot review-comment workflow and automated review loop below remain GitHub-hosted-repository protocol; do not use the GitHub automated review loop to promise Azure Repos Copilot polling, webhook wake-up, or automatic re-review.
 
@@ -132,7 +132,7 @@ PR comments and review comments that begin with `@copilot` are commands addresse
 
 ## Handling Code Review Comments
 
-This section is retained Claude platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Claude review-comment protocol for the retained Claude entry point.
+This section is retained as Claude platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Claude review-comment protocol for the retained Claude entry point.
 
 When a code review comment is received from GitHub Copilot, a human reviewer, or any other code reviewer on a pull request, follow this process for **each** comment:
 
@@ -222,7 +222,7 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
 ## Automated Review Loop
 
-This section is retained Claude platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Claude automated review-loop protocol for the retained Claude entry point.
+This section is retained as Claude platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Claude automated review-loop protocol for the retained Claude entry point.
 
 When a pull request is created or when the owner posts a PR comment containing `@claude start review loop`, initiate the following automated review cycle.
 
