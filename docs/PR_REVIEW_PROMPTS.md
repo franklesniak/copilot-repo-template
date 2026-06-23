@@ -103,6 +103,10 @@ files.
 Use this when a review thread or PR is hosted in Azure DevOps Services with
 Azure Repos rather than GitHub:
 
+<!-- template-sync: begin azure-devops-guide-reference-only -->
+For broader host guidance, see [Azure DevOps Services Support Guide](azure-devops-support.md).
+<!-- template-sync: end azure-devops-guide-reference-only -->
+
 ```markdown
 Please handle this as an Azure DevOps Services / Azure Repos pull request, not
 as a GitHub pull request.

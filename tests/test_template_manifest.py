@@ -358,6 +358,14 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "OPTIONAL_CONFIGURATIONS.md": 2,
         "schemas/README.md": 1,
     },
+    "azure-devops-guide-reference-only": {
+        "README.md": 2,
+        "CONTRIBUTING.md": 1,
+        "OPTIONAL_CONFIGURATIONS.md": 1,
+        "COPILOT_CHAT_PROMPTS.md": 1,
+        "docs/PR_REVIEW_PROMPTS.md": 1,
+        "schemas/README.md": 1,
+    },
 }
 # Single-module AND-retention reference-only markers. Each block is stripped when
 # its one named module is excluded.
@@ -377,6 +385,11 @@ REFERENCE_ONLY_MARKER_MODULES = {
 # one named module is included and stripped only when all of them are excluded;
 # this mirrors the manifest ``requires_any`` relation for the guarded file.
 ANY_REFERENCE_ONLY_MARKER_MODULES = {
+    "azure-devops-guide-reference-only": (
+        "azure-devops-platform",
+        "azure-pipelines",
+        "azure-devops-collaboration",
+    ),
     "data-ci-reference-only": ("json", "yaml", "schema", "template-sync-support"),
 }
 PROTECTED_ENTRY_POINT_REFERENCE_PATHS = (
@@ -397,6 +410,8 @@ REFERENCE_ONLY_MANIFEST_PATTERNS = {
     "CONTRIBUTING.md": "CONTRIBUTING.md",
     ".github/pull_request_template.md": ".github/pull_request_template.md",
     "OPTIONAL_CONFIGURATIONS.md": "OPTIONAL_CONFIGURATIONS.md",
+    "COPILOT_CHAT_PROMPTS.md": "COPILOT_CHAT_PROMPTS.md",
+    "docs/PR_REVIEW_PROMPTS.md": "docs/PR_REVIEW_PROMPTS.md",
     "schemas/README.md": "schemas/**",
 }
 REFERENCE_ONLY_FORBIDDEN_ENTRY_POINT_TOKENS = {
@@ -441,6 +456,19 @@ GITHUB_ACTIONS_REFERENCE_FORBIDDEN_TOKENS = {
         "pre-commit run actionlint --all-files",
     ),
 }
+AZURE_DEVOPS_GUIDE_MODULES = (
+    "azure-devops-platform",
+    "azure-pipelines",
+    "azure-devops-collaboration",
+)
+AZURE_DEVOPS_GUIDE_REFERENCE_PATHS = (
+    "README.md",
+    "CONTRIBUTING.md",
+    "OPTIONAL_CONFIGURATIONS.md",
+    "COPILOT_CHAT_PROMPTS.md",
+    "docs/PR_REVIEW_PROMPTS.md",
+    "schemas/README.md",
+)
 ISSUE_694_PARTIAL_PROTECTED_DOC_MODULES = {
     "baseline",
     "agent-instructions",
@@ -1708,6 +1736,19 @@ def test_template_manifest_maps_azure_repos_pr_template_to_collaboration_module(
     )
 
 
+def test_template_manifest_azure_support_guide_uses_any_azure_module_relation() -> None:
+    """The durable Azure DevOps guide survives any Azure host module selection."""
+    guide_mapping = _path_mapping_by_pattern()["docs/azure-devops-support.md"]
+
+    assert _relation_modules(guide_mapping, "requires_all") == ()
+    assert _relation_modules(guide_mapping, "requires_any") == AZURE_DEVOPS_GUIDE_MODULES
+    for module_name in AZURE_DEVOPS_GUIDE_MODULES:
+        assert _path_mapping_matches_modules(guide_mapping, {module_name})
+    assert _path_mapping_matches_modules(guide_mapping, set(AZURE_DEVOPS_GUIDE_MODULES))
+    assert not _path_mapping_matches_modules(guide_mapping, {"github-platform"})
+    assert not _path_mapping_matches_modules(guide_mapping, {"baseline"})
+
+
 def test_template_manifest_maps_azure_pipelines_to_ci_host_and_stack_modules() -> None:
     """Azure Pipelines CI files must be selectable without GitHub Actions."""
     expected_relations = {
@@ -2767,6 +2808,43 @@ def test_github_actions_reference_pruning_retains_actionlint_for_github_actions(
         stripped_text = _strip_inline_blocks_for_modules(relative_path, included_modules)
         for required_token in required_tokens:
             assert required_token in stripped_text, f"{relative_path}: {required_token}"
+
+
+def test_azure_devops_guide_reference_pruning_removes_links_for_github_only_modules() -> None:
+    """GitHub-only materialization must not retain links to the excluded Azure guide."""
+    included_modules = {
+        "baseline",
+        "agent-instructions",
+        "github-actions",
+        "github-platform",
+        "github-templates",
+        "markdown",
+        "schema",
+        "template-onboarding",
+    }
+
+    for relative_path in AZURE_DEVOPS_GUIDE_REFERENCE_PATHS:
+        stripped_text = _strip_inline_blocks_for_modules(relative_path, included_modules)
+        assert "azure-devops-support.md" not in stripped_text, relative_path
+
+
+@pytest.mark.parametrize("module_name", AZURE_DEVOPS_GUIDE_MODULES)
+def test_azure_devops_guide_reference_pruning_retains_links_for_azure_modules(
+    module_name: str,
+) -> None:
+    """Any Azure host module retains guarded links to the durable Azure guide."""
+    included_modules = {
+        "baseline",
+        "agent-instructions",
+        "markdown",
+        "schema",
+        "template-onboarding",
+        module_name,
+    }
+
+    for relative_path in AZURE_DEVOPS_GUIDE_REFERENCE_PATHS:
+        stripped_text = _strip_inline_blocks_for_modules(relative_path, included_modules)
+        assert "azure-devops-support.md" in stripped_text, f"{relative_path}: {module_name}"
 
 
 def test_pr_template_reference_pruning_follows_module_boundaries() -> None:

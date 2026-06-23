@@ -1,7 +1,7 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.1.20260622.0
+**Version:** 1.1.20260622.1
 
 ## Metadata
 
@@ -731,6 +731,7 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `.azuredevops/pull_request_template.*`, `.azuredevops/pull_request_template/**` | `azure-devops-collaboration` |
 | `.github/dependabot.yml` | `github-platform` |
 | `.azuredevops/platform/**` | `azure-devops-platform` |
+| `docs/azure-devops-support.md` | one of `azure-devops-platform`, `azure-pipelines`, `azure-devops-collaboration` |
 | `tests/test_dependabot_schema.py`, `tests/fixtures/dependabot/auto-assignment.yml` | `github-platform`, `schema` |
 | `.github/workflows/markdownlint.yml` | `markdown`, `github-actions` |
 | `.github/workflows/toolchain-eol.yml` | `markdown`, `github-actions` |
@@ -881,6 +882,10 @@ The current `*-reference-only` marker forms are Markdown-safe HTML comments:
 ...
 <!-- template-sync: end data-ci-reference-only -->
 
+<!-- template-sync: begin azure-devops-guide-reference-only -->
+...
+<!-- template-sync: end azure-devops-guide-reference-only -->
+
 <!-- template-sync: begin github-actions-reference-only -->
 ...
 <!-- template-sync: end github-actions-reference-only -->
@@ -890,7 +895,7 @@ The current `*-reference-only` marker forms are Markdown-safe HTML comments:
 <!-- template-sync: end github-platform-reference-only -->
 ```
 
-Most `*-reference-only` markers name a single module and use the same AND-retention strip semantics as the `*-only` family. The `schema-template-sync-support-only` marker is a registered multi-module AND-retention family: it is retained only when both `schema` and `template-sync-support` are adopted. The `data-ci-reference-only` marker is the OR-retention exception: it names the OR-group `json`, `yaml`, `schema`, and `template-sync-support`, mirroring the `requires_any` relation of `.github/workflows/data-ci.yml`. It is retained when at least one of those modules is adopted and is stripped only when every one of them is excluded.
+Most `*-reference-only` markers name a single module and use the same AND-retention strip semantics as the `*-only` family. The `schema-template-sync-support-only` marker is a registered multi-module AND-retention family: it is retained only when both `schema` and `template-sync-support` are adopted. Two reference-only marker families use OR-retention: `data-ci-reference-only` names the OR-group `json`, `yaml`, `schema`, and `template-sync-support`, mirroring the `requires_any` relation of `.github/workflows/data-ci.yml`; `azure-devops-guide-reference-only` names the OR-group `azure-devops-platform`, `azure-pipelines`, and `azure-devops-collaboration`, mirroring the `requires_any` relation of `docs/azure-devops-support.md`. Each is retained when at least one of its modules is adopted and is stripped only when every one of them is excluded.
 
 These inline blocks let a downstream repository keep the containing baseline or cross-module file while removing toolchain assumptions for a module it did not adopt. During Step 6, after path mapping decides whether the containing file itself is in scope, apply these rules:
 
@@ -966,6 +971,10 @@ The current `data-ci-reference-only` inline block lives in:
 
 - `CONTRIBUTING.md` for the Data CI workflow row, and `README.md` for the `.github/workflows/data-ci.yml` key-file bullet, each retained when any of `json`, `yaml`, `schema`, or `template-sync-support` is adopted and removed only when all four are excluded.
 - `.github/pull_request_template.md` for the generic retained data-file checklist section.
+
+The current `azure-devops-guide-reference-only` inline blocks live in:
+
+- `README.md`, `CONTRIBUTING.md`, `OPTIONAL_CONFIGURATIONS.md`, `COPILOT_CHAT_PROMPTS.md`, `docs/PR_REVIEW_PROMPTS.md`, and `schemas/README.md` for optional links to `docs/azure-devops-support.md`, retained when any of `azure-devops-platform`, `azure-pipelines`, or `azure-devops-collaboration` is adopted and removed only when all three are excluded.
 
 The current `python-only` inline block lives in:
 

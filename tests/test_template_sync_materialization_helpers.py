@@ -332,6 +332,39 @@ def test_inline_block_removal_trims_markdown_fence_trailing_blank_run() -> None:
     )
 
 
+def test_azure_devops_guide_reference_only_uses_or_retention() -> None:
+    """Azure guide references strip only when every Azure host module is absent."""
+    text = (
+        "top\n"
+        "<!-- template-sync: begin azure-devops-guide-reference-only -->\n"
+        "See docs/azure-devops-support.md.\n"
+        "<!-- template-sync: end azure-devops-guide-reference-only -->\n"
+        "bottom\n"
+    )
+
+    assert (
+        remove_inline_blocks_for_modules(
+            text,
+            {"baseline", "github-actions", "github-platform", "github-templates"},
+            relative_path="README.md",
+        )
+        == "top\nbottom\n"
+    )
+    for module_name in (
+        "azure-devops-platform",
+        "azure-pipelines",
+        "azure-devops-collaboration",
+    ):
+        assert (
+            remove_inline_blocks_for_modules(
+                text,
+                {"baseline", module_name},
+                relative_path="README.md",
+            )
+            == text
+        )
+
+
 def test_inline_block_removal_requires_expected_family() -> None:
     """Materialization callers get a typed error when an expected family is absent."""
     with pytest.raises(MissingExpectedInlineBlockError):

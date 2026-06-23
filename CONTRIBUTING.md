@@ -296,6 +296,10 @@ Data files and GitHub Actions workflow files are first-class validation surfaces
 
 See [`schemas/README.md`](schemas/README.md) for schema conventions and the canonical downstream removal checklist for the worked example.
 <!-- template-sync: end schema-reference-only -->
+<!-- template-sync: begin azure-devops-guide-reference-only -->
+
+For Azure DevOps Services-hosted adoptions, see [`docs/azure-devops-support.md`](docs/azure-devops-support.md) for host-specific branch policy, Azure Pipelines, security scanning, dependency-update, and service-validation boundaries.
+<!-- template-sync: end azure-devops-guide-reference-only -->
 
 ### CI Workflows
 

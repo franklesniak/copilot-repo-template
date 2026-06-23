@@ -97,6 +97,9 @@ Optional module-owned surfaces include:
 - `.template-sync/` - template-sync marker, manifest, and helper scripts.
 - `schemas/template-sync-*.schema.json` - template-sync schema contracts, with matching `schemas/examples/template-sync-*` fixtures where provided.
 <!-- template-sync: end template-sync-support-reference-only -->
+<!-- template-sync: begin azure-devops-guide-reference-only -->
+- `docs/azure-devops-support.md` - Durable Azure DevOps Services hosting, security, dependency-update, and validation guidance for optional Azure host modules.
+<!-- template-sync: end azure-devops-guide-reference-only -->
 
 #### Key Files Explained
 
@@ -158,6 +161,9 @@ Optional module-owned surfaces include:
 <!-- template-sync: begin terraform-reference-only -->
 - **Terraform:** [`.github/instructions/terraform.instructions.md`](.github/instructions/terraform.instructions.md), Terraform files, and `.github/workflows/terraform-ci.yml`.
 <!-- template-sync: end terraform-reference-only -->
+<!-- template-sync: begin azure-devops-guide-reference-only -->
+- **Azure DevOps Services:** [Azure DevOps Services Support Guide](docs/azure-devops-support.md), retained only when an Azure DevOps host module is adopted.
+<!-- template-sync: end azure-devops-guide-reference-only -->
 
 > **JSON note:** `check-json` validates strict `.json` files only; it does **not** validate `.jsonc`. JSONC is allowed where the consuming tool supports it, and stricter enforcement requires JSONC-aware tooling.
 
