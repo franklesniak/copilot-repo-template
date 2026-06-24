@@ -123,7 +123,9 @@ Prettier is **opt-in** and is **not** part of the default data-file toolchain. (
 
 When the `github-actions` module is retained, the dedicated [`.github/workflows/data-ci.yml`](workflows/data-ci.yml) workflow re-runs the repository's retained data-file pre-commit hooks (JSON, TOML, YAML, and GitHub Actions checks plus the retained schema-validation alias hooks) so retained data-file enforcement can be required via branch protection independent of language-specific CI jobs. That workflow file is the authoritative list of the hooks it executes.
 
+<!-- template-sync: begin azure-devops-guide-reference-only -->
 When the `azure-pipelines` module is retained, `.azuredevops/pipelines/data-ci.yml` re-runs retained data-file and template-sync hooks in Azure Pipelines without GitHub Actions-only `actionlint`. Azure Pipelines YAML registration, service-schema validation, queued runs, and Azure Repos branch-policy build validation remain Azure DevOps Services setup and verification tasks. For Azure DevOps Services security scanning, dependency-update choices, URL forms, and service-validation boundaries, use the durable Azure DevOps Services support guide at `docs/azure-devops-support.md` when that guide is retained.
+<!-- template-sync: end azure-devops-guide-reference-only -->
 
 <!-- template-sync: begin yaml-reference-only -->
 When YAML style validation is retained, the dedicated data-file workflow or
