@@ -7,13 +7,13 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.9.20260616.1
+**Version:** 1.9.20260623.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-16
+- **Last Updated:** 2026-06-23
 - **Scope:** Defines Python coding standards for all Python files in this repository, including modules, scripts, tests, and tooling. Covers style, structure, error handling, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -68,7 +68,7 @@ This baseline is not dogma.  When external constraints require modern Python (e.
 - **[All]** **SHOULD** use Black for formatting and Ruff for linting.
 - **[This repo]** `pre-commit run --all-files` is the authoritative local gate because it runs the pinned hook versions from `.pre-commit-config.yaml`.
 - **[This repo]** Targeted pre-commit hook runs, such as `pre-commit run black --all-files` when Python formatting is the only concern, are useful fast checks but **MUST NOT** replace the aggregate `pre-commit run --all-files` gate.
-- **[This repo]** Running hook tools directly outside pre-commit, for example `ruff` or `npm run lint:md`, **MAY** help during iteration but **MUST NOT** replace the aggregate gate; type checking (`mypy`) and tests (`pytest`) are enforced separately by [`.github/workflows/python-ci.yml`](../workflows/python-ci.yml).
+- **[This repo]** Running hook tools directly outside pre-commit, for example `ruff` or `npm run lint:md`, **MAY** help during iteration but **MUST NOT** replace the aggregate gate; type checking (`mypy`) and tests (`pytest`) are enforced separately by the retained Python CI surface for the selected host, such as `.github/workflows/python-ci.yml` for GitHub Actions or `.azuredevops/pipelines/python-ci.yml` for Azure Pipelines.
 - **[This repo]** In the active root configuration, Black is the Python formatter enforced by the pinned `psf/black` pre-commit hook, and Ruff is lint-only through `ruff-check`; there is no active `ruff-format` hook and no root `[tool.ruff]` table.
 - **[This repo]** The root `[tool.black]` `target-version` list **MUST** stay aligned with the active Python support window to prevent formatter/runtime mismatches and stale syntax allowances, and **MUST** remain explicit so Black does not fall back to inferring unsupported or prerelease Python grammar targets from `[project].requires-python`.
 - **[This repo]** `ruff format` **MUST NOT** be used to apply or validate Python formatting unless a future toolchain change explicitly adopts Ruff formatting.
@@ -438,7 +438,7 @@ def load_args_file(path: Path) -> dict[str, object]:
 - Tests for non-trivial CLI behavior **SHOULD** exercise at least one observable difference for each meaningful mode or flag family, especially for mutually exclusive modes and for flags that choose between reporting-only and writing behavior.
 - A test that calls `pytest.skip()` or uses `@pytest.mark.skipif` because an external, provisionable prerequisite is unavailable, such as a Node toolchain, `node_modules`, a compiled binary, or another language runtime, **MUST** have at least one CI path that provisions that prerequisite and exercises the protected behavior without taking the skip. Otherwise CI can pass while the behavior the test is meant to protect remains unenforced.
 - This requirement covers prerequisites that CI can reasonably install, build, or otherwise provision. It does **NOT** apply to skips that gate on local or platform capabilities CI cannot reasonably provide on every runner, such as symlink creation support in a particular OS or filesystem environment. Such skips **SHOULD** still describe the missing capability in the skip reason.
-- When the prerequisite belongs to another toolchain already provisioned by an existing workflow, such as the Node setup plus `npm ci` in [`.github/workflows/markdownlint.yml`](../workflows/markdownlint.yml), the regression **SHOULD** run in the workflow or job that owns or already provisions that prerequisite rather than adding a redundant install to an unrelated job, as long as that CI path exercises the non-skipped behavior.
+- When the prerequisite belongs to another toolchain already provisioned by an existing workflow or pipeline, such as the Node setup plus `npm ci` in the retained Markdown lint CI surface (`.github/workflows/markdownlint.yml` for GitHub Actions or `.azuredevops/pipelines/markdownlint.yml` for Azure Pipelines), the regression **SHOULD** run in the workflow, pipeline, or job that owns or already provisions that prerequisite rather than adding a redundant install to an unrelated job, as long as that CI path exercises the non-skipped behavior.
 - A PR that adds such a conditionally skipped test **SHOULD** identify the CI workflow or job that exercises the non-skipped path so reviewers can confirm the behavior is actually enforced.
 - Tests **SHOULD NOT** read from or monkeypatch private (single-underscore-prefixed) attributes or methods of production classes.
 - When a test needs to substitute collaborators or inject fixtures that production code would normally build internally, production code **SHOULD** expose a narrow public seam (for example, a keyword-only `__init__` parameter or another explicit injection point) rather than relying on tests to monkeypatch private internals.

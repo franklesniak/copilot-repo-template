@@ -359,6 +359,12 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "schemas/README.md": 1,
     },
     "azure-devops-guide-reference-only": {
+        ".github/copilot-instructions.md": 1,
+        ".cursor/rules/repository-instructions.mdc": 2,
+        ".hermes.md": 2,
+        "AGENTS.md": 2,
+        "CLAUDE.md": 2,
+        "GEMINI.md": 2,
         "README.md": 2,
         "CONTRIBUTING.md": 1,
         "OPTIONAL_CONFIGURATIONS.md": 1,

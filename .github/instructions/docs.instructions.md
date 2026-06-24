@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.6.20260622.0
+**Version:** 1.6.20260623.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-22
+- **Last Updated:** 2026-06-23
 - **Scope:** Defines documentation standards for Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) files in this repository, including specs, design docs, runbooks, ADRs, instruction files, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -36,6 +36,8 @@ Repository-specific paths, workflow names, validation commands, and examples **S
 Template-specific mechanisms, including unresolved repository placeholders, template materialization, reference-only marker families, downstream adoption validators, and excluded-module cleanup reporting, apply only to repositories that intentionally use those mechanisms. Non-template repositories **SHOULD** use their real host, owner, repository name, paths, and validation commands instead of carrying template-placeholder requirements. Template repositories that keep placeholder substitution **MUST** document the placeholder convention and substitution process in repository-local guidance.
 
 GitHub-specific rendering rules apply to GitHub-hosted or GitHub-rendered surfaces. Repositories hosted elsewhere **SHOULD** keep the underlying portability requirement, such as using absolute URLs where the host renderer cannot resolve relative links, and substitute the equivalent host-specific URL shape.
+
+For this template's host modules, documentation **MUST** keep GitHub as the primary/default platform and describe Azure DevOps Services as optional additive module support. When retained protected or shared docs refer to Azure DevOps Services setup, validation, security scanning, dependency-update choices, or organization URL forms, prefer the durable Azure DevOps Services support guide when that guide is retained. If the reference is a Markdown link from a file that can be retained without the Azure guide, guard it with the registered `azure-devops-guide-reference-only` marker or use non-link path prose instead.
 
 ## Core Principles
 
@@ -309,7 +311,7 @@ Determine this condition from [the template-sync manifest](https://github.com/fr
 
 When this exception applies, authors **SHOULD** choose one of these remedies based on the reference's intent:
 
-- **Existing `*-reference-only` inline block** — preferred when the reference is module-specific and should disappear with the target module. Enclose the sentence, paragraph, bullet, or table row in an appropriate existing reference-only inline block. Use only an existing registered marker family; if none fits the target module, use one of the other remedies or open a separate issue to add marker support and tests. A reference-only block is a materialization/removal boundary, not a Markdown-link safe harbor: any Markdown link inside the block must still avoid repo-relative targets that can be excluded independently of the linking file. Use an upstream-template URL or neutral wording inside the block when a link or path mention would otherwise point to an excludable target. Marker examples, when needed, must stay inline within prose or inline code; authors **MUST NOT** place registered marker begin/end lines on their own lines, even inside fenced code blocks, because the template-sync scanners treat those lines as real content-stripping boundaries without code-fence awareness.
+- **Existing `*-reference-only` inline block** — preferred when the reference is module-specific and should disappear with the target module. Enclose the sentence, paragraph, bullet, or table row in an appropriate existing reference-only inline block. Use only an existing registered marker family; if none fits the target module, use one of the other remedies or open a separate issue to add marker support and tests. Use `azure-devops-guide-reference-only` for links to the durable Azure DevOps Services support guide that should be retained when any Azure DevOps host module is retained and stripped only when all Azure DevOps host modules are excluded. A reference-only block is a materialization/removal boundary, not a Markdown-link safe harbor: any Markdown link inside the block must still avoid repo-relative targets that can be excluded independently of the linking file. Use an upstream-template URL or neutral wording inside the block when a link or path mention would otherwise point to an excludable target. Marker examples, when needed, must stay inline within prose or inline code; authors **MUST NOT** place registered marker begin/end lines on their own lines, even inside fenced code blocks, because the template-sync scanners treat those lines as real content-stripping boundaries without code-fence awareness.
 - **Literal absolute upstream-template URL** — preferred when a durable pointer should survive downstream exclusion. Use a Markdown link with descriptive text whose target is `https://github.com/franklesniak/copilot-repo-template/blob/HEAD/<path>`. This follows the repository's upstream-template URL convention. GitHub file URLs accept identifiers that resolve to commits, including branch names, tags, and commit SHAs. Use the literal upstream-template URL, **not** `https://github.com/OWNER/REPO/blob/HEAD/<path>`: `OWNER/REPO` is substituted to the adopter's repository during adoption, so an `OWNER/REPO` link to an excluded-module file can dangle exactly like a relative link. Write the reference as `[descriptive text](URL)` rather than a bare URL.
 - **Neutral wording** — preferred when retained prose does not need a hard link. Keep the prose and describe the target generically, such as "a different module's instruction file," instead of linking a file that may be absent downstream.
 

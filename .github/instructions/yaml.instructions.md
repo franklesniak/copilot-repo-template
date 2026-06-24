@@ -7,13 +7,13 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.6.20260622.0
+**Version:** 1.6.20260623.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-22
+- **Last Updated:** 2026-06-23
 - **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, Azure Pipelines YAML, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by the companion JSON guide, if present) or generated YAML artifacts that are owned by another tool's serializer.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md) (companion guide, if present)
 
@@ -39,6 +39,7 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - **[Actions]** **MUST** apply least-privilege `permissions:` on GitHub Actions workflows.
 - **[Actions]** `setup-*` action `with.*-version:` inputs (for example, `python-version`, `node-version`, `go-version`, and `dotnet-version`) in workflow files under `.github/workflows/` **MUST** resolve from checked-in release-line selectors and **MUST NOT** use a broad floating selector such as `'3.x'`, `'latest'`, or `'*'`. The required granularity follows each ecosystem's release model: Python and Go **MUST** use major.minor (for example, `"3.13"` or `"1.26"`); Node.js **MAY** use major for an LTS line (for example, `"24"`) or major.minor (for example, `"24.17"`); .NET **MAY** use the most specific stable SDK channel selector documented by `actions/setup-dotnet`, such as major.minor.x (for example, `"10.0.x"`); for other ecosystems, use the most specific stable release-line selector documented by the action's README.
 - **[AzurePipelines]** Repositories that use Azure Pipelines language/runtime/SDK tool-installer tasks **MUST** explicitly provide checked-in compliant selectors for in-scope `version` or `versionSpec` inputs and **MUST NOT** rely on broad task defaults, queue-time-only values, `"latest"`, bare `"*"`, comparator/operator ranges, or composite ranges.
+- **[AzurePipelines]** Azure Pipelines YAML **MUST** pass retained host-neutral local YAML hooks, and pipeline schema/branch-policy validation **MUST** be treated as Azure DevOps Services-backed validation rather than `actionlint`.
 - **[Actions]** Documentation/navigation comments above `uses:` lines **MUST** use versionless upstream URLs; the `uses:` line remains the authoritative action version.
 - **[Actions]** Comments documenting where a GitHub Actions `with:` tool-version input is pinned, or that such a value must stay aligned across files, **SHOULD** describe the membership criterion instead of a hardcoded workflow-file list; if a concrete file list is included for convenience, it **SHOULD** be labeled as a non-authoritative snapshot.
 - **[Actions]** Optional `workflow_dispatch` string inputs that also need defaults on non-dispatch triggers **SHOULD** derive the effective value from a single source, using a fallback only in keys where the needed contexts are available, rather than duplicating an unmarked input `default:` and `env:` literal.
@@ -455,14 +456,14 @@ YAML files that have a published schema **SHOULD** be validated against that sch
 
 Validation tiers:
 
-- **MUST tier**: load-bearing YAML consumed by build, deploy, runtime, release automation, or other automated policy where malformed structure would cause incorrect behavior; GitHub Actions workflows under `.github/workflows/`; pre-commit configuration; and any YAML file whose schema is published and stable and whose consumer requires structural correctness.
+- **MUST tier**: load-bearing YAML consumed by build, deploy, runtime, release automation, or other automated policy where malformed structure would cause incorrect behavior; GitHub Actions workflows under `.github/workflows/`; Azure Pipelines YAML when the `azure-pipelines` module or an equivalent Azure Pipelines surface is retained; pre-commit configuration; and any YAML file whose schema is published and stable and whose consumer requires structural correctness.
 - **SHOULD tier**: durable fixtures, examples, policy documents, configuration contracts, and linter configuration files when a schema is available and a validator is convenient to run.
 - **MAY tier**: optional or experimental configuration formats whose schema may change.
 
 Common validator categories:
 
 - **Syntax and style validators** (for example, `check-yaml` and `yamllint`) catch parser errors and repository style drift.
-- **Ecosystem validators** (for example, `actionlint` for GitHub Actions workflows) catch consumer-specific structure and behavior errors.
+- **Ecosystem validators** (for example, `actionlint` for GitHub Actions workflows) catch consumer-specific structure and behavior errors. `actionlint` is GitHub Actions-specific and **MUST NOT** be treated as validation for Azure Pipelines YAML; validate Azure Pipelines through Azure DevOps Services pipeline creation, queued runs, or Azure Repos branch-policy build validation.
 - **Schema validators** (for example, `check-jsonschema`) validate YAML files against project-owned schemas or mature external schemas. Add file-family-scoped hooks for additional schema-backed YAML as durable contracts are introduced.
 - **Active hook list.** The repository's pre-commit configuration and CI definitions are the authoritative inventory of active validators. Repository-specific schema inventories, worked examples, removal checklists, and future validation candidates SHOULD live in the repository's schema documentation, if present.
 
@@ -485,6 +486,6 @@ A YAML change is "done" when **all** of the following are true:
 - The conservative subset is respected (no anchors, aliases, merge keys, custom tags, multi-document files, or flow style except where necessary and justified).
 - Comments explain **why**, not **what**; behavior is not documented only in comments.
 - The repository's configured YAML syntax and style validators pass.
-- Any schema or ecosystem validator wired into pre-commit or CI passes for the affected files (for example, `actionlint` for workflow files, `check-jsonschema` for schema-backed YAML covered by an active hook). When no such validator is wired up for the file family being changed, authors **SHOULD** run the applicable validator locally before committing.
+- Any schema or ecosystem validator wired into pre-commit or CI passes for the affected files (for example, `actionlint` for GitHub Actions workflow files, `check-jsonschema` for schema-backed YAML covered by an active hook). When no such validator is wired up for the file family being changed, authors **SHOULD** run the applicable validator locally before committing. For Azure Pipelines YAML, service-backed validation through Azure DevOps Services pipeline creation, queued runs, or Azure Repos branch-policy build validation should be recorded when it cannot be performed in the current task.
 - Pre-commit hooks pass locally (`pre-commit run --all-files`) and in the repository's configured CI.
 - No secrets are committed; GitHub Actions workflows declare least-privilege `permissions:`.
