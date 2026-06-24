@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.6.20260622.0
+**Version:** 1.6.20260623.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-22
+- **Last Updated:** 2026-06-23
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
@@ -107,7 +107,9 @@ In addition to formatting, linting, trailing-whitespace, and end-of-file fixes, 
 <!-- template-sync: begin yaml-reference-only -->
 - `yamllint` — enforces YAML style per `.yamllint.yml`.
 <!-- template-sync: end yaml-reference-only -->
-- `actionlint` — lints GitHub Actions workflow files.
+- `actionlint` — lints GitHub Actions workflow files when the
+  `github-actions` module is retained. It is not an Azure Pipelines
+  validator.
 - `check-jsonschema` — JSON Schema validation for retained schema-backed configuration. It validates selected real load-bearing repository configuration files (for example, `.github/dependabot.yml`) against built-in vendor schemas shipped with `check-jsonschema`, retained template-sync schemas, and any future retained schema-backed file families that downstream maintainers wire up in `.pre-commit-config.yaml`. Documented optional keys for default-validated vendor configuration files must stay within the surface accepted by the pinned built-in schema, or the hook must be moved to an opt-in path.
 - `check-metaschema` — self-validates retained project-owned schemas against their declared JSON Schema metaschema, where configured in `.pre-commit-config.yaml`.
 
@@ -119,10 +121,13 @@ In addition to formatting, linting, trailing-whitespace, and end-of-file fixes, 
 
 Prettier is **opt-in** and is **not** part of the default data-file toolchain. (This framing has been re-verified against the built-in schema validation ADR and remains correct.)
 
-The dedicated [`.github/workflows/data-ci.yml`](workflows/data-ci.yml) workflow re-runs the repository's retained data-file pre-commit hooks (JSON, TOML, YAML, and GitHub Actions checks plus the retained schema-validation alias hooks) so retained data-file enforcement can be required via branch protection independent of language-specific CI jobs. That workflow file is the authoritative list of the hooks it executes.
+When the `github-actions` module is retained, the dedicated [`.github/workflows/data-ci.yml`](workflows/data-ci.yml) workflow re-runs the repository's retained data-file pre-commit hooks (JSON, TOML, YAML, and GitHub Actions checks plus the retained schema-validation alias hooks) so retained data-file enforcement can be required via branch protection independent of language-specific CI jobs. That workflow file is the authoritative list of the hooks it executes.
+
+When the `azure-pipelines` module is retained, `.azuredevops/pipelines/data-ci.yml` re-runs retained data-file and template-sync hooks in Azure Pipelines without GitHub Actions-only `actionlint`. Azure Pipelines YAML registration, service-schema validation, queued runs, and Azure Repos branch-policy build validation remain Azure DevOps Services setup and verification tasks. For Azure DevOps Services security scanning, dependency-update choices, URL forms, and service-validation boundaries, use the durable Azure DevOps Services support guide at `docs/azure-devops-support.md` when that guide is retained.
 
 <!-- template-sync: begin yaml-reference-only -->
-When YAML style validation is retained, the dedicated data-file workflow also re-runs `yamllint`.
+When YAML style validation is retained, the dedicated data-file workflow or
+pipeline also re-runs `yamllint`.
 <!-- template-sync: end yaml-reference-only -->
 
 <!-- template-sync: begin schema-reference-only -->
@@ -134,7 +139,7 @@ When YAML style validation is retained, the dedicated data-file workflow also re
 > - Valid example fixtures under `schemas/examples/<name>/valid/`.
 > - Invalid example fixtures under `schemas/examples/<name>/invalid/`.
 > - The pre-commit hook scope in `.pre-commit-config.yaml`.
-> - `.github/workflows/data-ci.yml` only when **adding or removing a hook ID** (for example, introducing a new `check-yaml-custom` hook), or when adding, removing, or renaming an explicit CI step or hook alias that the workflow invokes by name. Changes to an **existing** hook's `files:` regex (including `check-jsonschema` scope changes) are picked up automatically, because each `data-ci.yml` step invokes hooks by ID via `pre-commit run <hook-id> --all-files`.
+> - `.github/workflows/data-ci.yml` only when the `github-actions` module is retained and the change is **adding or removing a hook ID** (for example, introducing a new `check-yaml-custom` hook), or when adding, removing, or renaming an explicit CI step or hook alias that the workflow invokes by name. Apply the same condition to `.azuredevops/pipelines/data-ci.yml` when the `azure-pipelines` module is retained. Changes to an **existing** hook's `files:` regex (including `check-jsonschema` scope changes) are picked up automatically, because each `data-ci.yml` step invokes hooks by ID via `pre-commit run <hook-id> --all-files`.
 > - The **Built-in Schema Validation for Real Load-Bearing Configuration Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md) when **adding or removing** a default validated real load-bearing configuration file (for example, when wiring or unwiring a new built-in vendor schema).
 > - Any documentation that references the schema or the validation policy (for example, `schemas/README.md`, `README.md`, `CONTRIBUTING.md`, and `OPTIONAL_CONFIGURATIONS.md`).
 <!-- template-sync: end schema-reference-only -->
@@ -180,7 +185,7 @@ This repository includes an auto-fix workflow (`.github/workflows/auto-fix-preco
 
 ## Workflow Version Pinning
 
-GitHub Actions workflow files in this repository (`.github/workflows/*.yml`) reference both **action versions** (in `uses:` lines) and **tool versions** (passed to actions or shell commands as inputs or arguments). The two categories have different update mechanisms and different rules. Conflating them — or mirroring an action version into a secondary location that Dependabot does not rewrite — produces partial updates where the declared action version moves but related literals silently drift to the old version. The rules below prevent that drift.
+GitHub Actions workflow files in this repository (`.github/workflows/*.yml`) reference both **action versions** (in `uses:` lines) and **tool versions** (passed to actions or shell commands as inputs or arguments). The two categories have different update mechanisms and different rules. Conflating them — or mirroring an action version into a secondary location that Dependabot does not rewrite — produces partial updates where the declared action version moves but related literals silently drift to the old version. The rules below prevent that drift. This section governs GitHub Actions only; Azure Pipelines task selector guidance lives in the YAML writing style and Azure DevOps Services support guide when those files are retained.
 
 For the rationale, see the **Workflow Version Pinning and Dependabot Coherence** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md).
 
@@ -214,7 +219,7 @@ Both pins exist in the same workflow step, but they update on different cadences
 
 ### When a Dependabot-managed dependency cannot be expressed without duplication
 
-If a Dependabot-managed dependency genuinely cannot be represented only through Dependabot-managed declarations, and Dependabot would otherwise produce partial updates, add an appropriate `.github/dependabot.yml` `ignore:` entry with a YAML comment explaining why the dependency is intentionally not auto-updated. Use this escape hatch sparingly: it disables automation for that dependency, so it should be applied only when the partial-update problem cannot be solved by removing the duplication or by deriving secondary behavior from a stable source.
+If a Dependabot-managed dependency genuinely cannot be represented only through Dependabot-managed declarations, and Dependabot would otherwise produce partial updates, add an appropriate `.github/dependabot.yml` `ignore:` entry with a YAML comment explaining why the dependency is intentionally not auto-updated. Use this escape hatch sparingly: it disables automation for that dependency, so it should be applied only when the partial-update problem cannot be solved by removing the duplication or by deriving secondary behavior from a stable source. Dependabot configuration is a GitHub platform surface; Azure DevOps Services dependency scanning and routine dependency-update choices are documented separately in the durable Azure DevOps Services support guide when that guide is retained.
 
 ### Concrete examples in this repository
 
@@ -261,7 +266,7 @@ For each PR-sized change:
 - Add/adjust tests for new behavior.
   - Python: pytest tests in `tests/`
   - PowerShell: Pester tests in `tests/PowerShell/`
-- For data-file changes, run the applicable validation hooks via `pre-commit run --all-files` so that retained checks such as `check-json`, `check-yaml`, `actionlint`, and configured `check-jsonschema` / `check-metaschema` hooks pass before committing.
+- For data-file changes, run the applicable validation hooks via `pre-commit run --all-files` so that retained checks such as `check-json`, `check-yaml`, GitHub Actions-only `actionlint`, and configured `check-jsonschema` / `check-metaschema` hooks pass before committing.
   <!-- template-sync: begin yaml-reference-only -->
   - When YAML style validation is retained, `yamllint` must also pass.
   <!-- template-sync: end yaml-reference-only -->
@@ -443,6 +448,15 @@ pre-commit run yamllint --all-files
 pre-commit run actionlint --all-files
 ```
 
+Run `actionlint` only when GitHub Actions workflow files are retained.
+
+**Azure Pipelines:**
+
+Run host-neutral repository hooks locally, then validate retained Azure Pipelines
+YAML through Azure DevOps Services pipeline creation, queued runs, or Azure
+Repos branch-policy build validation. Do not substitute `actionlint` for Azure
+Pipelines validation.
+
 <!-- template-sync: begin schema-reference-only -->
 
 ```bash
@@ -462,7 +476,10 @@ This repository includes retained testing infrastructure for the adopted languag
 - Python: pytest, configured by `pyproject.toml` (`[tool.pytest.ini_options]`) and located under `tests/`.
 <!-- template-sync: end python-reference-only -->
 <!-- template-sync: begin powershell-reference-only -->
-- PowerShell: Pester 5.x, configured inline in `.github/workflows/powershell-ci.yml` and located under `tests/PowerShell/`.
+- PowerShell: Pester 5.x, configured inline in the retained host CI surface
+  (`.github/workflows/powershell-ci.yml` for GitHub Actions or
+  `.azuredevops/pipelines/powershell-ci.yml` for Azure Pipelines) and located
+  under `tests/PowerShell/`.
 <!-- template-sync: end powershell-reference-only -->
 <!-- template-sync: begin terraform-reference-only -->
 - Terraform: Terraform test framework, located under `modules/*/tests/` or `tests/`.

@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.6.20260622.0
+**Version:** 1.6.20260623.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-22
+- **Last Updated:** 2026-06-23
 - **Scope:** Agent-specific entry point for Claude Code and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
@@ -68,10 +68,12 @@ During downstream template adoption and stack selection, perform non-protected c
   - Retained YAML checks include YAML parsing (`check-yaml`) and style (`yamllint`).
   <!-- template-sync: end yaml-reference-only -->
   - Retained GitHub Actions checks include GitHub Actions linting (`actionlint`).
+  - Retained Azure Pipelines assets require host-neutral local hooks plus Azure DevOps Services pipeline creation, queued runs, or branch-policy build validation; `actionlint` does not validate Azure Pipelines YAML.
   <!-- template-sync: begin schema-reference-only -->
   - Retained schema checks include JSON Schema validation (`check-jsonschema`) and schema self-validation (`check-metaschema`).
   <!-- template-sync: end schema-reference-only -->
-  - The dedicated [`.github/workflows/data-ci.yml`](.github/workflows/data-ci.yml) workflow re-runs retained data-file hooks so adopted data-file enforcement can be required via branch protection.
+  - When the `github-actions` module is retained, the dedicated [`.github/workflows/data-ci.yml`](.github/workflows/data-ci.yml) workflow re-runs retained data-file hooks so adopted data-file enforcement can be required via branch protection.
+  - When the `azure-pipelines` module is retained, `.azuredevops/pipelines/data-ci.yml` re-runs retained data-file hooks; pipeline YAML and branch-policy validation remain Azure DevOps Services-backed.
   - Retained data-file authoring guidance lives in the matching module docs.
   <!-- template-sync: begin json-reference-only -->
   - JSON guidance: [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md).
@@ -118,6 +120,8 @@ During downstream template adoption and stack selection, perform non-protected c
 This section is retained as Claude host-specific protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Azure DevOps PR review protocol for the retained Claude entry point.
 
 Use this protocol only for Azure DevOps Services pull requests hosted in Azure Repos. The GitHub Copilot review-comment workflow and automated review loop below remain GitHub-hosted-repository protocol; do not use the GitHub automated review loop to promise Azure Repos Copilot polling, webhook wake-up, or automatic re-review.
+
+For broader Azure DevOps Services module setup, validation, security scanning, dependency-update, and URL-form guidance, use the durable Azure DevOps Services support guide at `docs/azure-devops-support.md` when that guide is retained.
 
 - Azure Repos Copilot code review is a limited public preview for Azure DevOps Services. It requires sign-up, organization-level enablement by a Project Collection Administrator, repository-level enablement by a repository owner or administrator, and individual-user opt-in through Preview features unless the administrator enables it for the organization. It requires Azure billing through a subscription linked to the Azure DevOps organization; Azure DevOps review usage does not draw down GitHub Copilot plan AI credits. Treat licensing and pricing details as preview-specific and documentation-driven, and do not assume GitHub-hosted Copilot review entitlements cover Azure Repos review usage.
 - Copilot review is requested manually from the Azure Repos PR Reviewers list by selecting **Request** next to **GitHub Copilot**. If Azure DevOps tooling supports reviewer operations, Claude MAY inspect or add ordinary reviewers through Azure DevOps Pull Request Reviewers APIs, but MUST NOT claim API-triggered Copilot preview review unless the available tooling explicitly verifies that behavior.
