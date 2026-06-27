@@ -346,11 +346,12 @@ def bound_diagnostic_text(
 ) -> str:
     """Return redacted diagnostic text capped by bytes and lines.
 
-    The returned text, including any appended truncation markers, stays within
-    ``max_bytes`` and ``max_lines`` by reserving budget for the markers rather
-    than appending them past the caps. When a cap is too small to hold the
-    markers themselves, the markers are still emitted so the truncation stays
-    visible.
+    The returned text, including any truncation markers, always stays within
+    ``max_lines``: when more truncation markers would be emitted than
+    ``max_lines`` allows, they are collapsed onto a single line. It also stays
+    within ``max_bytes`` except when a single (possibly collapsed) marker is
+    itself larger than ``max_bytes``, in which case the marker is still emitted
+    so the truncation stays visible.
     """
     if max_bytes <= 0:
         raise FirstAdoptionCheckError("--doctor-max-bytes must be greater than zero.")
@@ -358,27 +359,35 @@ def bound_diagnostic_text(
         raise FirstAdoptionCheckError("--doctor-max-lines must be greater than zero.")
 
     bounded = redact_diagnostic_text(value)
-    markers: list[str] = []
+    reasons: list[str] = []
     encoded = bounded.encode("utf-8")
     if len(encoded) > max_bytes:
         bounded = encoded[:max_bytes].decode("utf-8", errors="ignore")
-        markers.append(f"[truncated: byte limit {max_bytes} bytes]")
+        reasons.append(f"byte limit {max_bytes} bytes")
 
     lines = bounded.splitlines()
     if len(lines) > max_lines:
-        markers.append(f"[truncated: line limit {max_lines} lines]")
+        reasons.append(f"line limit {max_lines} lines")
+
+    if not reasons:
+        return "\n".join(lines)
+
+    # Render one marker per reason, but collapse them onto a single line when
+    # separate lines would need more than ``max_lines`` allows, so the marker
+    # lines themselves never breach the line cap.
+    if len(reasons) > max_lines:
+        marker_lines = [f"[truncated: {'; '.join(reasons)}]"]
+    else:
+        marker_lines = [f"[truncated: {reason}]" for reason in reasons]
 
     # Reserve line budget for the marker lines so the rendered output never
     # exceeds ``max_lines`` once the markers are appended.
-    line_budget = max(0, max_lines - len(markers))
+    line_budget = max(0, max_lines - len(marker_lines))
     payload = "\n".join(lines[:line_budget])
-
-    if not markers:
-        return payload
 
     # Reserve byte budget for the marker block (and its separating newline) so
     # the rendered output also honors ``max_bytes`` once the markers are added.
-    marker_block = "\n".join(markers)
+    marker_block = "\n".join(marker_lines)
     separator = "\n" if payload else ""
     byte_budget = max_bytes - len(marker_block.encode("utf-8")) - len(separator.encode("utf-8"))
     byte_budget = max(0, byte_budget)

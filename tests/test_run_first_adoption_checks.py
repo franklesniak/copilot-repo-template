@@ -256,6 +256,22 @@ def test_diagnostic_text_marker_emitted_when_cap_too_small() -> None:
     assert bounded == "[truncated: byte limit 10 bytes]"
 
 
+def test_diagnostic_text_collapses_markers_when_line_cap_too_small() -> None:
+    """Both truncations with max_lines=1 collapse to a single in-cap marker line."""
+    crowded = "\n".join("x" * 40 for _ in range(10))
+
+    bounded = first_adoption.bound_diagnostic_text(
+        crowded,
+        max_bytes=120,
+        max_lines=1,
+    )
+
+    rendered_lines = bounded.split("\n")
+    assert len(rendered_lines) == 1
+    assert rendered_lines[0] == "[truncated: byte limit 120 bytes; line limit 1 lines]"
+    assert len(bounded.encode("utf-8")) <= 120
+
+
 def test_pre_commit_prefix_falls_back_when_console_shim_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
