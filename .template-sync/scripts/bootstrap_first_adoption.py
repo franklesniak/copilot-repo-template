@@ -8,7 +8,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NoReturn, TextIO
+from typing import Any, NoReturn, TextIO, TypedDict
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -55,7 +55,18 @@ STATUS_DISPLAY = {
     ),
     RESOLVED_STATUS: "resolved",
 }
-OWNER_DECISION_TEMPLATES = (
+
+
+class OwnerDecisionTemplate(TypedDict):
+    """Static template describing one owner decision recorded before pruning."""
+
+    key: str
+    category: str
+    question: str
+    dependent_files: tuple[str, ...]
+
+
+OWNER_DECISION_TEMPLATES: tuple[OwnerDecisionTemplate, ...] = (
     {
         "key": "manual.github.private_vulnerability_reporting",
         "category": "manual_github_setting",
