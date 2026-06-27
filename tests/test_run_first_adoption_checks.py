@@ -220,6 +220,42 @@ def test_diagnostic_text_is_redacted_and_bounded() -> None:
     assert "[truncated: byte limit 20 bytes]" in byte_bounded
 
 
+def test_diagnostic_text_truncation_markers_stay_within_caps() -> None:
+    """Truncation markers are reserved within the caps, not appended past them."""
+    many_lines = "\n".join(f"line {index}" for index in range(20))
+
+    line_bounded = first_adoption.bound_diagnostic_text(
+        many_lines,
+        max_bytes=4096,
+        max_lines=3,
+    )
+
+    rendered_lines = line_bounded.split("\n")
+    assert len(rendered_lines) == 3
+    assert rendered_lines[-1] == "[truncated: line limit 3 lines]"
+    assert len(line_bounded.encode("utf-8")) <= 4096
+
+    byte_bounded = first_adoption.bound_diagnostic_text(
+        "x" * 500,
+        max_bytes=80,
+        max_lines=40,
+    )
+
+    assert len(byte_bounded.encode("utf-8")) <= 80
+    assert "[truncated: byte limit 80 bytes]" in byte_bounded
+
+
+def test_diagnostic_text_marker_emitted_when_cap_too_small() -> None:
+    """A marker is still surfaced when the cap cannot hold both payload and marker."""
+    bounded = first_adoption.bound_diagnostic_text(
+        "x" * 200,
+        max_bytes=10,
+        max_lines=40,
+    )
+
+    assert bounded == "[truncated: byte limit 10 bytes]"
+
+
 def test_pre_commit_prefix_falls_back_when_console_shim_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

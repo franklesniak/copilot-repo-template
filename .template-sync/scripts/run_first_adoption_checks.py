@@ -344,7 +344,14 @@ def bound_diagnostic_text(
     max_bytes: int = DEFAULT_DIAGNOSTIC_MAX_BYTES,
     max_lines: int = DEFAULT_DIAGNOSTIC_MAX_LINES,
 ) -> str:
-    """Return redacted diagnostic text capped by bytes and lines."""
+    """Return redacted diagnostic text capped by bytes and lines.
+
+    The returned text, including any appended truncation markers, stays within
+    ``max_bytes`` and ``max_lines`` by reserving budget for the markers rather
+    than appending them past the caps. When a cap is too small to hold the
+    markers themselves, the markers are still emitted so the truncation stays
+    visible.
+    """
     if max_bytes <= 0:
         raise FirstAdoptionCheckError("--doctor-max-bytes must be greater than zero.")
     if max_lines <= 0:
@@ -359,13 +366,27 @@ def bound_diagnostic_text(
 
     lines = bounded.splitlines()
     if len(lines) > max_lines:
-        lines = lines[:max_lines]
         markers.append(f"[truncated: line limit {max_lines} lines]")
 
-    rendered = "\n".join(lines)
-    if markers:
-        rendered = "\n".join(part for part in (rendered, *markers) if part)
-    return rendered
+    # Reserve line budget for the marker lines so the rendered output never
+    # exceeds ``max_lines`` once the markers are appended.
+    line_budget = max(0, max_lines - len(markers))
+    payload = "\n".join(lines[:line_budget])
+
+    if not markers:
+        return payload
+
+    # Reserve byte budget for the marker block (and its separating newline) so
+    # the rendered output also honors ``max_bytes`` once the markers are added.
+    marker_block = "\n".join(markers)
+    separator = "\n" if payload else ""
+    byte_budget = max_bytes - len(marker_block.encode("utf-8")) - len(separator.encode("utf-8"))
+    byte_budget = max(0, byte_budget)
+    payload_encoded = payload.encode("utf-8")
+    if len(payload_encoded) > byte_budget:
+        payload = payload_encoded[:byte_budget].decode("utf-8", errors="ignore")
+        separator = "\n" if payload else ""
+    return f"{payload}{separator}{marker_block}"
 
 
 def command_succeeds(
