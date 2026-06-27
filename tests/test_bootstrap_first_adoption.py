@@ -426,3 +426,15 @@ def test_existing_durable_path_status_flags_symlinks(tmp_path: Path) -> None:
     assert bootstrap.existing_durable_path_status(broken) == symlink_status
     assert bootstrap.existing_durable_path_status(target) == "found"
     assert bootstrap.existing_durable_path_status(tmp_path / "absent.yml") == "missing"
+
+
+def test_read_existing_todo_state_rejects_symlinked_checklist(tmp_path: Path) -> None:
+    """A symlink (even broken) at the checklist path is rejected on read, not treated as missing."""
+    todo_path = tmp_path / "_TODO-repo-init.md"
+    try:
+        todo_path.symlink_to(tmp_path / "missing-target.md")  # broken symlink
+    except (OSError, NotImplementedError):
+        pytest.skip("Filesystem does not support symlink creation")
+
+    with pytest.raises(bootstrap.FirstAdoptionBootstrapError):
+        bootstrap.read_existing_todo_state(todo_path)

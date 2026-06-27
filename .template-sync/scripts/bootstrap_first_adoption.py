@@ -663,9 +663,17 @@ def format_bootstrap_todo(
 
 def read_existing_todo_state(todo_path: Path) -> tuple[str | None, ExistingBootstrapState]:
     """Return existing checklist text and parsed bootstrap state details."""
+    # Reject symlinks before the existence check: Path.exists() follows symlinks,
+    # so a broken symlink would otherwise read as "missing" instead of being flagged
+    # (write mode refuses symlinks at this path), matching write_todo_if_requested.
+    if todo_path.is_symlink():
+        raise FirstAdoptionBootstrapError(
+            f"First-adoption checklist `{todo_path.name}` is a symlink; "
+            "replace it with a regular file or remove it before bootstrapping."
+        )
     if not todo_path.exists():
         return None, ExistingBootstrapState(state=None, start=None, end=None)
-    if not todo_path.is_file() or todo_path.is_symlink():
+    if not todo_path.is_file():
         raise FirstAdoptionBootstrapError(
             f"First-adoption checklist exists but is not a regular file: {todo_path.name}"
         )
