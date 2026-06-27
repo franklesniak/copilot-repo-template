@@ -249,6 +249,24 @@ def test_append_state_block_preserves_trailing_note_spaces() -> None:
     assert bootstrap.find_existing_state(updated).state is not None
 
 
+def test_find_existing_state_tolerates_end_marker_inside_json_value() -> None:
+    """An end-marker string copied into a JSON value must not truncate parsing."""
+    state = bootstrap.default_bootstrap_state(
+        ledger_rows=(),
+        marker_data=bootstrap.sync_candidates.empty_marker_data(),
+    )
+    target_key = state["decisions"][0]["key"]
+    # A maintainer pastes the end-marker text into a free-form notes field.
+    state["decisions"][0]["notes"] = f"see {bootstrap.BOOTSTRAP_STATE_END} here"
+    todo_text = bootstrap.bootstrap_contract_section(state)
+
+    parsed = bootstrap.find_existing_state(todo_text).state
+
+    assert parsed is not None
+    decisions = bootstrap.decision_by_key(parsed)
+    assert decisions[target_key]["notes"] == f"see {bootstrap.BOOTSTRAP_STATE_END} here"
+
+
 def test_write_todo_rejects_symlinked_checklist_path(tmp_path: Path) -> None:
     """A symlink at the checklist path is rejected before any write is attempted."""
     target = tmp_path / "outside-target.md"

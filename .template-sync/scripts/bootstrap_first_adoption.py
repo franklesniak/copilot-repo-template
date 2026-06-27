@@ -257,9 +257,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=("auto", "always", "never"),
         default="auto",
         help=(
-            "Control whether the report prints a draft marker. auto prints it when "
-            "template-sync support appears retained or when no marker exists yet. "
-            "Default: auto."
+            "Control whether the report prints a draft marker. auto prints it when an "
+            "existing marker retains template-sync support, or when no marker exists yet "
+            "but a manifest is present. Default: auto."
         ),
     )
     parser.add_argument(
@@ -362,7 +362,12 @@ def find_existing_state(text: str) -> ExistingBootstrapState:
     if json_start == -1:
         raise FirstAdoptionBootstrapError("Bootstrap state block begin marker is incomplete.")
     json_start += 1
-    end_index = text.find(BOOTSTRAP_STATE_END, json_start)
+    # Bound the end-marker search to the current block (up to the next begin marker, or
+    # end of text) and take the last end marker within it, so an end-marker string copied
+    # into a JSON value cannot truncate parsing early.
+    next_begin = text.find(BOOTSTRAP_STATE_BEGIN, json_start)
+    block_limit = next_begin if next_begin != -1 else len(text)
+    end_index = text.rfind(BOOTSTRAP_STATE_END, json_start, block_limit)
     if end_index == -1:
         raise FirstAdoptionBootstrapError("Bootstrap state block end marker is missing.")
 
@@ -377,7 +382,7 @@ def find_existing_state(text: str) -> ExistingBootstrapState:
         raise FirstAdoptionBootstrapError("Bootstrap state block must contain a JSON object.")
     if parsed.get("schema_version") != BOOTSTRAP_STATE_SCHEMA_VERSION:
         raise FirstAdoptionBootstrapError(
-            "Unsupported bootstrap state schema_version: " f"{parsed.get('schema_version')!r}"
+            f"Unsupported bootstrap state schema_version: {parsed.get('schema_version')!r}"
         )
     block_end = end_index + len(BOOTSTRAP_STATE_END)
     return ExistingBootstrapState(state=parsed, start=begin_index, end=block_end)
@@ -662,7 +667,7 @@ def read_existing_todo_state(todo_path: Path) -> tuple[str | None, ExistingBoots
         return None, ExistingBootstrapState(state=None, start=None, end=None)
     if not todo_path.is_file() or todo_path.is_symlink():
         raise FirstAdoptionBootstrapError(
-            "First-adoption checklist exists but is not a regular file: " f"{todo_path.name}"
+            f"First-adoption checklist exists but is not a regular file: {todo_path.name}"
         )
     try:
         text = todo_path.read_text(encoding="utf-8")
