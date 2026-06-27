@@ -391,5 +391,38 @@ def test_existing_marker_is_preserved_by_write_draft_marker(tmp_path: Path) -> N
         assert error.code == 1
     else:  # pragma: no cover - defensive assertion
         raise AssertionError("Expected marker overwrite refusal")
-
     assert (tmp_path / ".template-sync" / "marker.yml").read_text(encoding="utf-8") == before
+
+
+def test_write_draft_marker_without_preview_still_creates_marker(tmp_path: Path) -> None:
+    """--write-draft-marker writes the marker even when --draft-marker never hides the preview."""
+    _init_fixture_repo(tmp_path)
+
+    output = _run_bootstrap(tmp_path, "--write", "--write-draft-marker", "--draft-marker", "never")
+
+    marker_path = tmp_path / ".template-sync" / "marker.yml"
+    assert marker_path.is_file()
+    assert "created from validated draft marker" in output
+    # The preview is suppressed, so the draft-marker preview section is not printed.
+    assert "## Draft `.template-sync/marker.yml`" not in output
+    marker = yaml.safe_load(marker_path.read_text(encoding="utf-8"))
+    parse_marker_decision_data(marker, validate_protected_decision_integrity=True)
+
+
+def test_existing_durable_path_status_flags_symlinks(tmp_path: Path) -> None:
+    """A symlinked or broken-symlink durable path is reported as a symlink, not found/missing."""
+    target = tmp_path / "real-marker.yml"
+    target.write_text("template_sync:\n  source_repo: x\n", encoding="utf-8")
+    linked = tmp_path / "linked-marker.yml"
+    broken = tmp_path / "broken-marker.yml"
+    try:
+        linked.symlink_to(target)
+        broken.symlink_to(tmp_path / "does-not-exist.yml")
+    except (OSError, NotImplementedError):
+        pytest.skip("Filesystem does not support symlink creation")
+
+    symlink_status = "present as a symlink (write mode will refuse it)"
+    assert bootstrap.existing_durable_path_status(linked) == symlink_status
+    assert bootstrap.existing_durable_path_status(broken) == symlink_status
+    assert bootstrap.existing_durable_path_status(target) == "found"
+    assert bootstrap.existing_durable_path_status(tmp_path / "absent.yml") == "missing"

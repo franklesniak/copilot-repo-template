@@ -1118,6 +1118,18 @@ def format_validation_plan(
     return "\n".join(lines)
 
 
+def existing_durable_path_status(path: Path) -> str:
+    """Describe a durable-state path, flagging symlinks the writer would refuse.
+
+    ``Path.is_file()`` follows symlinks, so a symlinked target would read as
+    ``found`` and a broken symlink as ``missing`` even though write mode rejects
+    symlinks. Report symlinks distinctly so the summary matches write behavior.
+    """
+    if path.is_symlink():
+        return "present as a symlink (write mode will refuse it)"
+    return "found" if path.is_file() else "missing"
+
+
 def format_existing_state_summary(
     *,
     todo_text: str | None,
@@ -1127,8 +1139,8 @@ def format_existing_state_summary(
     """Render detected durable-state files and parser behavior."""
     todo_status = "found" if todo_text is not None else "missing"
     state_status = "found" if existing_state.state is not None else "missing"
-    journal_status = "found" if inputs.journal_path.is_file() else "missing"
-    marker_status = "found" if inputs.marker_path.is_file() else "missing"
+    journal_status = existing_durable_path_status(inputs.journal_path)
+    marker_status = existing_durable_path_status(inputs.marker_path)
     return "\n".join(
         [
             f"- `{repository_relative_path(inputs.todo_path, inputs.repo_root)}`: {todo_status}",
@@ -1391,13 +1403,19 @@ def main(argv: list[str] | None = None, *, stdout: TextIO = sys.stdout) -> int:
                 f"Unable to read journal scaffold: {os_error_summary(error)}"
             ) from error
 
-        marker_text: str | None = None
-        if should_print_draft_marker(
+        # The preview decision and the write decision are independent: a draft
+        # marker may be needed for writing (--write --write-draft-marker) even when
+        # the preview is suppressed (--draft-marker never). Compute the marker text
+        # when either path needs it, but only surface the preview when printing.
+        print_draft_marker = should_print_draft_marker(
             mode=args.draft_marker,
             marker_path=marker_path,
             marker_data=inputs.marker_data,
             manifest_path=manifest_path,
-        ):
+        )
+        needs_marker_for_write = args.write and args.write_draft_marker
+        marker_text: str | None = None
+        if print_draft_marker or needs_marker_for_write:
             marker_document = draft_marker_document(
                 source_repo=args.source_repo,
                 manifest_modules=inputs.manifest_modules,
@@ -1410,6 +1428,7 @@ def main(argv: list[str] | None = None, *, stdout: TextIO = sys.stdout) -> int:
                 repo_root=repo_root,
             )
             marker_text = marker_yaml(marker_document)
+        marker_preview_text = marker_text if print_draft_marker else None
 
         write_result = perform_writes(
             inputs=inputs,
@@ -1425,7 +1444,7 @@ def main(argv: list[str] | None = None, *, stdout: TextIO = sys.stdout) -> int:
                 inputs=inputs,
                 todo_text=todo_text,
                 journal_text=journal_text,
-                marker_text=marker_text,
+                marker_text=marker_preview_text,
                 existing_todo_text=existing_todo_text,
                 existing_state=existing_state,
                 merged_state=merged_state,
