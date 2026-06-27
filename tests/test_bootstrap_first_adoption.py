@@ -253,7 +253,10 @@ def test_write_todo_rejects_symlinked_checklist_path(tmp_path: Path) -> None:
     """A symlink at the checklist path is rejected before any write is attempted."""
     target = tmp_path / "outside-target.md"
     todo_path = tmp_path / "_TODO-repo-init.md"
-    todo_path.symlink_to(target)  # broken symlink: the target does not exist
+    try:
+        todo_path.symlink_to(target)  # broken symlink: the target does not exist
+    except (OSError, NotImplementedError):
+        pytest.skip("Filesystem does not support symlink creation")
 
     state = bootstrap.default_bootstrap_state(
         ledger_rows=(),
