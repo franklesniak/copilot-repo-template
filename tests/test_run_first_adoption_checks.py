@@ -65,6 +65,33 @@ def _recording_runner(records: list[tuple[str, ...]]) -> Callable[[Sequence[str]
     return run
 
 
+def _scripted_probe_executor(
+    actions: dict[tuple[str, ...], first_adoption.ProbeExecution | BaseException],
+) -> tuple[
+    Callable[[Sequence[str], Path, float], first_adoption.ProbeExecution],
+    list[tuple[tuple[str, ...], float]],
+]:
+    """Return a fake doctor probe executor that records commands and timeouts."""
+    records: list[tuple[tuple[str, ...], float]] = []
+
+    def execute(
+        command: Sequence[str],
+        _repo_root: Path,
+        timeout_seconds: float,
+    ) -> first_adoption.ProbeExecution:
+        command_tuple = tuple(command)
+        records.append((command_tuple, timeout_seconds))
+        action = actions.get(
+            command_tuple,
+            FileNotFoundError(2, "No such file or directory"),
+        )
+        if isinstance(action, BaseException):
+            raise action
+        return action
+
+    return execute, records
+
+
 def _queued_status_reader(*snapshots: tuple[str, ...]) -> Callable[[Path], tuple[str, ...]]:
     """Return a Git status reader that consumes a fixed sequence of snapshots."""
     remaining_snapshots = list(snapshots)
@@ -136,6 +163,216 @@ def test_fix_mode_is_explicit() -> None:
     args = first_adoption.parse_args(["--fix"])
 
     assert args.run_mode == first_adoption.FIX_MODE
+
+
+def test_doctor_mode_is_explicit() -> None:
+    """The CLI exposes an explicit doctor mode with bounded diagnostic controls."""
+    args = first_adoption.parse_args(
+        [
+            "--doctor",
+            "--doctor-timeout",
+            "1.5",
+            "--doctor-max-bytes",
+            "80",
+            "--doctor-max-lines",
+            "3",
+        ]
+    )
+
+    assert args.run_mode == first_adoption.DOCTOR_MODE
+    assert args.doctor_timeout == 1.5
+    assert args.doctor_max_bytes == 80
+    assert args.doctor_max_lines == 3
+
+
+def test_diagnostic_text_is_redacted_and_bounded() -> None:
+    """Doctor diagnostics redact likely credentials before deterministic truncation."""
+    diagnostic = "\n".join(
+        [
+            "token=abc123",
+            "password: hunter2",
+            "Authorization: Bearer secret-token",
+            "https://user:secret@example.test/repo.git",
+            "line five",
+            "",
+        ]
+    )
+
+    bounded = first_adoption.bound_diagnostic_text(
+        diagnostic,
+        max_bytes=200,
+        max_lines=3,
+    )
+
+    assert "token=***" in bounded
+    assert "password: ***" in bounded
+    assert "secret-token" not in bounded
+    assert "abc123" not in bounded
+    assert "hunter2" not in bounded
+    assert "[truncated: line limit 3 lines]" in bounded
+
+    byte_bounded = first_adoption.bound_diagnostic_text(
+        "safe-prefix-" + ("x" * 100),
+        max_bytes=20,
+        max_lines=20,
+    )
+
+    assert "[truncated: byte limit 20 bytes]" in byte_bounded
+
+
+def test_pre_commit_prefix_falls_back_when_console_shim_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validation plans prefer a working module form when the console shim fails."""
+
+    def fake_which(name: str) -> str | None:
+        return "pre-commit" if name == "pre-commit" else None
+
+    def fake_command_succeeds(
+        command: Sequence[str],
+        *,
+        timeout_seconds: float = 5.0,
+    ) -> bool:
+        del timeout_seconds
+        return tuple(command) == (sys.executable, "-m", "pre_commit", "--version")
+
+    monkeypatch.setattr(first_adoption.shutil, "which", fake_which)
+    monkeypatch.setattr(first_adoption, "command_succeeds", fake_command_succeeds)
+
+    assert first_adoption.default_pre_commit_prefix() == (
+        sys.executable,
+        "-m",
+        "pre_commit",
+        "run",
+        "--files",
+    )
+
+
+def test_doctor_mode_reports_probe_states_without_running_validation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Doctor mode reports environment states without running hooks or fixers."""
+    monkeypatch.setattr(first_adoption, "default_npm_executable", lambda: "npm")
+    _write_text(
+        tmp_path,
+        ".pre-commit-config.yaml",
+        "\n".join(
+            [
+                "repos:",
+                "  - repo: local",
+                "    hooks:",
+                "      - id: yamllint",
+                "      - id: black",
+                "",
+            ]
+        ),
+    )
+    powershell_flags = first_adoption.POWERSHELL_PROBE_FLAGS
+    sys_python = (sys.executable, "-m")
+    actions: dict[tuple[str, ...], first_adoption.ProbeExecution | BaseException] = {
+        ("git", "--version"): first_adoption.ProbeExecution(0, "git version 2\n", ""),
+        (*sys_python, first_adoption.PYTHON_DOCTOR_MODULE): first_adoption.ProbeExecution(
+            0,
+            "platform ok\n",
+            "",
+        ),
+        ("pre-commit", "--version"): first_adoption.ProbeExecution(
+            1,
+            "",
+            "broken shim token=abc123\n",
+        ),
+        (*sys_python, "pre_commit", "--version"): first_adoption.ProbeExecution(
+            0,
+            "pre-commit 4.0\n",
+            "",
+        ),
+        ("pytest", "--version"): FileNotFoundError(2, "No such file or directory"),
+        (*sys_python, "pytest", "--version"): first_adoption.ProbeExecution(
+            0,
+            "pytest 8.0\n",
+            "",
+        ),
+        ("node", "--version"): subprocess.TimeoutExpired(
+            ("node", "--version"),
+            1.5,
+            output="api_key=node-secret\n",
+            stderr="",
+        ),
+        ("npm", "--version"): first_adoption.ProbeExecution(0, "11.0.0\n", ""),
+        ("yamllint", "--version"): FileNotFoundError(2, "No such file or directory"),
+        (*sys_python, "yamllint", "--version"): first_adoption.ProbeExecution(
+            1,
+            "",
+            "ModuleNotFoundError: No module named yamllint\n",
+        ),
+        (
+            "pwsh",
+            *powershell_flags,
+            first_adoption.POWERSHELL_VERSION_PROBE,
+        ): first_adoption.ProbeExecution(0, "7.4.0\n", ""),
+        (
+            "pwsh",
+            *powershell_flags,
+            first_adoption.PSSCRIPTANALYZER_PROBE,
+        ): first_adoption.ProbeExecution(0, "1.23.0\n", ""),
+        (
+            "powershell",
+            *powershell_flags,
+            first_adoption.POWERSHELL_VERSION_PROBE,
+        ): first_adoption.ProbeExecution(0, "5.1\n", ""),
+        (
+            "powershell",
+            *powershell_flags,
+            first_adoption.PSSCRIPTANALYZER_PROBE,
+        ): first_adoption.ProbeExecution(
+            1,
+            "",
+            "PSScriptAnalyzer module not available\n",
+        ),
+    }
+    probe_executor, records = _scripted_probe_executor(actions)
+    stdout = io.StringIO()
+
+    result = first_adoption.run_first_adoption_doctor(
+        tmp_path,
+        probe_timeout_seconds=1.5,
+        max_output_bytes=120,
+        max_output_lines=4,
+        probe_executor=probe_executor,
+        time_source=_incrementing_time_source(),
+        stdout=stdout,
+    )
+
+    output = stdout.getvalue()
+    assert result == 0
+    assert records
+    assert not any("run" in command and "--files" in command for command, _timeout in records)
+    assert not any("--fix" in command for command, _timeout in records)
+    assert {timeout for _command, timeout in records} == {1.5}
+    assert "Run mode: doctor" in output
+    assert "does not run validation hooks" in output
+    assert "pre-commit console" in output
+    assert "Availability: failed" in output
+    assert "broken shim token=***" in output
+    assert "abc123" not in output
+    assert "Node.js executable" in output
+    assert "Availability: timed-out" in output
+    assert "Timed out after 1.500s." in output
+    assert "api_key=***" in output
+    assert "pytest console" in output
+    assert "Availability: unavailable" in output
+    assert "yamllint was not directly available" in output
+    assert "PSScriptAnalyzer module (pwsh)" in output
+    assert "PSScriptAnalyzer module (powershell)" in output
+    assert "PSScriptAnalyzer module not available" in output
+    assert "Use PSScriptAnalyzer host: pwsh" in output
+    assert "pre_commit run --files" in output
+    assert "Use pytest invocation:" in output
+    assert "Doctor mode does not run pre-commit hooks" in output
+    assert "Hook IDs detected in .pre-commit-config.yaml" in output
+    assert "    - yamllint" in output
+    assert "    - black" in output
 
 
 def test_check_plan_assigns_stable_group_labels(
