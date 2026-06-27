@@ -536,7 +536,7 @@ def default_bootstrap_state(
 
     return {
         "schema_version": BOOTSTRAP_STATE_SCHEMA_VERSION,
-        "state_owner": "first_adoption_bootstrap.py",
+        "state_owner": "bootstrap_first_adoption.py",
         "contract": {
             "description": (
                 "Tools parse only this JSON block between exact bootstrap delimiters. "
@@ -608,8 +608,10 @@ def replace_or_append_state_block(text: str, state: dict[str, Any]) -> str:
     existing = find_existing_state(text)
     block = state_block_text(state)
     if existing.start is None or existing.end is None:
-        separator = "\n\n" if text.endswith("\n") else "\n\n"
-        return f"{text.rstrip()}{separator}{bootstrap_contract_section(state)}\n"
+        # Trim only trailing newlines so rendering-significant trailing spaces in
+        # free-form notes survive; plain rstrip() would also strip those spaces.
+        body = text.rstrip("\n")
+        return f"{body}\n\n{bootstrap_contract_section(state)}\n"
     return text[: existing.start] + block + text[existing.end :]
 
 
@@ -845,6 +847,11 @@ def write_todo_if_requested(
     todo_relative = repository_relative_path(todo_path, repo_root)
     if not write:
         return "not written; default mode is read-only"
+    if todo_path.is_symlink():
+        raise FirstAdoptionBootstrapError(
+            f"Refusing to write checklist `{todo_relative}` because it is a symlink. "
+            "Replace it with a regular file or remove it before writing."
+        )
     if not todo_path.exists():
         try:
             todo_path.parent.mkdir(parents=True, exist_ok=True)
@@ -854,7 +861,7 @@ def write_todo_if_requested(
                 f"Unable to write checklist {todo_relative}: {os_error_summary(error)}"
             ) from error
         return "created"
-    if not todo_path.is_file() or todo_path.is_symlink():
+    if not todo_path.is_file():
         raise FirstAdoptionBootstrapError(
             f"Refusing to update checklist `{todo_relative}` because it is not a regular file."
         )

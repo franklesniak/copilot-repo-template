@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml  # type: ignore[import-untyped]
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -231,6 +232,46 @@ def test_existing_todo_state_update_preserves_free_form_notes(tmp_path: Path) ->
     assert decision["answer"] == "Owner chose to leave it disabled."
     assert decision["evidence"] == "Maintainer note 2026-06-27"
     assert "manual.github.discussions" in decisions
+
+
+def test_append_state_block_preserves_trailing_note_spaces() -> None:
+    """Appending the state block keeps rendering-significant trailing spaces."""
+    state = bootstrap.default_bootstrap_state(
+        ledger_rows=(),
+        marker_data=bootstrap.sync_candidates.empty_marker_data(),
+    )
+    # Two trailing spaces form a Markdown hard line break and must survive.
+    original = "# Repository Initialization Checklist\n\nFree-form note.  \n"
+
+    updated = bootstrap.replace_or_append_state_block(original, state)
+
+    assert updated.startswith("# Repository Initialization Checklist\n\nFree-form note.  \n\n")
+    assert bootstrap.find_existing_state(updated).state is not None
+
+
+def test_write_todo_rejects_symlinked_checklist_path(tmp_path: Path) -> None:
+    """A symlink at the checklist path is rejected before any write is attempted."""
+    target = tmp_path / "outside-target.md"
+    todo_path = tmp_path / "_TODO-repo-init.md"
+    todo_path.symlink_to(target)  # broken symlink: the target does not exist
+
+    state = bootstrap.default_bootstrap_state(
+        ledger_rows=(),
+        marker_data=bootstrap.sync_candidates.empty_marker_data(),
+    )
+
+    with pytest.raises(bootstrap.FirstAdoptionBootstrapError):
+        bootstrap.write_todo_if_requested(
+            todo_path=todo_path,
+            todo_text="# Repository Initialization Checklist",
+            merged_state=state,
+            repo_root=tmp_path,
+            write=True,
+            update_existing_todo_state=False,
+        )
+
+    assert todo_path.is_symlink()
+    assert not target.exists()  # the symlink target was not written through
 
 
 def test_resumed_run_uses_structured_state_not_markdown_checkboxes(tmp_path: Path) -> None:
