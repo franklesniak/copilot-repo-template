@@ -608,6 +608,22 @@ Use repository files and Git metadata for discoverable facts, such as the reposi
 
 The default adoption mode for protected files and template-derived governance, community, process, workflow, and collaboration files is `minimal-preservation`: keep upstream wording and structure, substitute placeholders, trim sections owned by unadopted manifest modules, fix broken links, and record required local overrides in `.template-sync/marker.yml` when template sync support is retained. Select `tailored` only when the maintainer explicitly wants broader downstream rewriting for a specific file or file set. Record that choice before editing so agents do not repeatedly prompt when the default applies.
 
+When the `.template-sync` helpers are still present, run the bootstrap command before pruning or finalizing policy-dependent files:
+
+```bash
+python .template-sync/scripts/bootstrap_first_adoption.py
+```
+
+The default mode is read-only. It prints the proposed `_TODO-repo-init.md`, `_ADOPTION-DIFFICULTIES.md`, an optional draft `.template-sync/marker.yml`, protected-file authorization questions reused from the existing preflight output, raw first-adoption state, and a runnable validation plan sourced from `.template-sync/scripts/run_first_adoption_checks.py`.
+
+To create missing bootstrap files after reviewing the report, run:
+
+```bash
+python .template-sync/scripts/bootstrap_first_adoption.py --write
+```
+
+Use `--update-existing-todo-state` only when you want the command to insert or refresh the bootstrap-owned structured state block inside an existing `_TODO-repo-init.md`; free-form Markdown notes outside that block are preserved. Use `--write-draft-marker` only when you intentionally want to create a missing validated draft marker. Existing marker content is never overwritten by the bootstrap command.
+
 Create `_TODO-repo-init.md` from this example and replace bracketed notes only after the maintainer confirms them:
 
 ```markdown

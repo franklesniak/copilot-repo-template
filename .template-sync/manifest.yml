@@ -542,6 +542,9 @@ template_manifest:
     - pattern: 'tests/test_generate_sync_candidates.py'
       requires_all:
         - template-sync-support
+    - pattern: 'tests/test_bootstrap_first_adoption.py'
+      requires_all:
+        - template-sync-support
     - pattern: 'tests/test_first_adoption_state.*'
       requires_all:
         - template-sync-support
