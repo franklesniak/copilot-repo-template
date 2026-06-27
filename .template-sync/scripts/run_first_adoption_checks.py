@@ -17,6 +17,9 @@ from pathlib import Path
 from typing import NoReturn, TextIO
 
 DEFAULT_MAX_COMMAND_LENGTH = 30000 if os.name == "nt" else 100000
+DEFAULT_PROBE_TIMEOUT_SECONDS = 10.0
+DEFAULT_DIAGNOSTIC_MAX_BYTES = 4096
+DEFAULT_DIAGNOSTIC_MAX_LINES = 40
 GIT_FILE_LIST_COMMAND = (
     "git",
     "ls-files",
@@ -32,6 +35,7 @@ GIT_STATUS_COMMAND = (
     "--untracked-files=all",
 )
 PRE_COMMIT_EXECUTABLE_PREFIX = ("pre-commit", "run", "--files")
+PRE_COMMIT_CONFIG_PATH = ".pre-commit-config.yaml"
 PLACEHOLDER_SCRIPT = ".github/scripts/replace-template-placeholders.py"
 MARKER_PATH = ".template-sync/marker.yml"
 MARKER_VALIDATOR_SCRIPT = ".template-sync/scripts/validate_marker.py"
@@ -56,11 +60,38 @@ MARKDOWN_FIXER_GROUP = "markdown-fixer"
 MARKDOWN_SCRIPT_GROUP = "markdown-script"
 CHECK_MODE = "check"
 FIX_MODE = "fix"
+DOCTOR_MODE = "doctor"
 CHANGED_FILES_EXIT_CODE = 2
+PROBE_AVAILABLE = "available"
+PROBE_UNAVAILABLE = "unavailable"
+PROBE_FAILED = "failed"
+PROBE_TIMED_OUT = "timed-out"
+PYTHON_DOCTOR_MODULE = "platform"
+POWERSHELL_PROBE_FLAGS = ("-NoProfile", "-NonInteractive", "-Command")
+PSSCRIPTANALYZER_PROBE = (
+    "$module = Get-Module -ListAvailable PSScriptAnalyzer | "
+    "Sort-Object Version -Descending | Select-Object -First 1; "
+    "if ($null -eq $module) { "
+    "Write-Error 'PSScriptAnalyzer module not available'; exit 1 }; "
+    "$module.Version.ToString()"
+)
+POWERSHELL_VERSION_PROBE = "$PSVersionTable.PSVersion.ToString()"
+PRE_COMMIT_HOOK_ID_PATTERN = re.compile(r"^\s*-\s+id:\s*['\"]?(?P<id>[^'\"\s#]+)")
+CREDENTIAL_ASSIGNMENT_PATTERN = re.compile(
+    r"(?i)\b(?P<key>token|secret|password|passwd|api[_-]?key|access[_-]?token)"
+    r"(?P<separator>\s*[:=]\s*)"
+    r"(?P<value>[^\s,;]+)"
+)
+AUTHORIZATION_HEADER_PATTERN = re.compile(
+    r"(?i)\b(?P<prefix>authorization\s*:\s*(?:bearer|basic)\s+)(?P<value>[^\s]+)"
+)
+URL_USERINFO_PATTERN = re.compile(r"(?i)(?P<scheme>[a-z][a-z0-9+.-]*://)(?P<userinfo>[^/\s@]+@)")
+SCHEME_RELATIVE_USERINFO_PATTERN = re.compile(r"(?P<prefix>^|[^\w:])//(?P<userinfo>[^/\s@]+@)")
 
 CommandRunner = Callable[[Sequence[str], Path], int]
 GitStatusReader = Callable[[Path], tuple[str, ...]]
 TimeSource = Callable[[], datetime]
+ProbeExecutor = Callable[[Sequence[str], Path, float], "ProbeExecution"]
 
 
 class FirstAdoptionCheckError(RuntimeError):
@@ -89,6 +120,42 @@ class PlannedCommand:
 
     group_label: str
     command: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ProbeExecution:
+    """Raw subprocess result for a small doctor probe command."""
+
+    return_code: int | None
+    stdout: str
+    stderr: str
+    timed_out: bool = False
+
+
+@dataclass(frozen=True)
+class DoctorProbe:
+    """One non-mutating first-adoption doctor probe."""
+
+    group_label: str
+    name: str
+    command: tuple[str, ...]
+    note: str = ""
+
+
+@dataclass(frozen=True)
+class DoctorProbeResult:
+    """Rendered result for one first-adoption doctor probe."""
+
+    group_label: str
+    name: str
+    command: tuple[str, ...]
+    availability_state: str
+    exit_code: int | None
+    elapsed_time: str
+    timed_out: bool
+    stdout: str
+    stderr: str
+    note: str = ""
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -137,12 +204,50 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "discard the edits intentionally, then rerun with --check."
         ),
     )
+    mode_group.add_argument(
+        "--doctor",
+        dest="run_mode",
+        action="store_const",
+        const=DOCTOR_MODE,
+        help=(
+            "Run non-mutating environment/tool probes with per-command timeouts "
+            "and bounded diagnostics. Doctor mode does not run validation hooks "
+            "or fixers."
+        ),
+    )
     parser.add_argument(
         "--plan-only",
         action="store_true",
         help=(
             "Print Git-visible file collection results, notes, and the planned "
             "validation commands without running those validation commands."
+        ),
+    )
+    parser.add_argument(
+        "--doctor-timeout",
+        type=float,
+        default=DEFAULT_PROBE_TIMEOUT_SECONDS,
+        help=(
+            "Per-probe timeout in seconds for --doctor. "
+            f"Default: {DEFAULT_PROBE_TIMEOUT_SECONDS:.1f}."
+        ),
+    )
+    parser.add_argument(
+        "--doctor-max-bytes",
+        type=int,
+        default=DEFAULT_DIAGNOSTIC_MAX_BYTES,
+        help=(
+            "Maximum captured diagnostic bytes per stdout/stderr stream in --doctor. "
+            f"Default: {DEFAULT_DIAGNOSTIC_MAX_BYTES}."
+        ),
+    )
+    parser.add_argument(
+        "--doctor-max-lines",
+        type=int,
+        default=DEFAULT_DIAGNOSTIC_MAX_LINES,
+        help=(
+            "Maximum captured diagnostic lines per stdout/stderr stream in --doctor. "
+            f"Default: {DEFAULT_DIAGNOSTIC_MAX_LINES}."
         ),
     )
     return parser.parse_args(argv)
@@ -217,6 +322,227 @@ def elapsed_seconds(started_at: datetime, ended_at: datetime) -> float:
 def format_elapsed_time(started_at: datetime, ended_at: datetime) -> str:
     """Return a stable elapsed-time string."""
     return f"{elapsed_seconds(started_at, ended_at):.3f}s"
+
+
+def redact_diagnostic_text(value: str) -> str:
+    """Redact obvious credentials from doctor diagnostic text."""
+    redacted = URL_USERINFO_PATTERN.sub(r"\g<scheme>***@", value)
+    redacted = SCHEME_RELATIVE_USERINFO_PATTERN.sub(
+        lambda match: f"{match.group('prefix')}//***@",
+        redacted,
+    )
+    redacted = AUTHORIZATION_HEADER_PATTERN.sub(r"\g<prefix>***", redacted)
+    return CREDENTIAL_ASSIGNMENT_PATTERN.sub(
+        r"\g<key>\g<separator>***",
+        redacted,
+    )
+
+
+def bound_diagnostic_text(
+    value: str,
+    *,
+    max_bytes: int = DEFAULT_DIAGNOSTIC_MAX_BYTES,
+    max_lines: int = DEFAULT_DIAGNOSTIC_MAX_LINES,
+) -> str:
+    """Return redacted diagnostic text capped by bytes and lines.
+
+    The returned text, including any truncation markers, always stays within
+    ``max_lines``: when more truncation markers would be emitted than
+    ``max_lines`` allows, they are collapsed onto a single line. It also stays
+    within ``max_bytes`` except when a single (possibly collapsed) marker is
+    itself larger than ``max_bytes``, in which case the marker is still emitted
+    so the truncation stays visible.
+    """
+    if max_bytes <= 0:
+        raise FirstAdoptionCheckError("--doctor-max-bytes must be greater than zero.")
+    if max_lines <= 0:
+        raise FirstAdoptionCheckError("--doctor-max-lines must be greater than zero.")
+
+    bounded = redact_diagnostic_text(value)
+    reasons: list[str] = []
+    encoded = bounded.encode("utf-8")
+    if len(encoded) > max_bytes:
+        bounded = encoded[:max_bytes].decode("utf-8", errors="ignore")
+        reasons.append(f"byte limit {max_bytes} bytes")
+
+    lines = bounded.splitlines()
+    if len(lines) > max_lines:
+        reasons.append(f"line limit {max_lines} lines")
+
+    if not reasons:
+        return "\n".join(lines)
+
+    # Render one marker per reason, but collapse them onto a single line when
+    # separate lines would need more than ``max_lines`` allows, so the marker
+    # lines themselves never breach the line cap.
+    if len(reasons) > max_lines:
+        marker_lines = [f"[truncated: {'; '.join(reasons)}]"]
+    else:
+        marker_lines = [f"[truncated: {reason}]" for reason in reasons]
+
+    # Reserve line budget for the marker lines so the rendered output never
+    # exceeds ``max_lines`` once the markers are appended.
+    line_budget = max(0, max_lines - len(marker_lines))
+    payload = "\n".join(lines[:line_budget])
+
+    # Reserve byte budget for the marker block (and its separating newline) so
+    # the rendered output also honors ``max_bytes`` once the markers are added.
+    marker_block = "\n".join(marker_lines)
+    separator = "\n" if payload else ""
+    byte_budget = max_bytes - len(marker_block.encode("utf-8")) - len(separator.encode("utf-8"))
+    byte_budget = max(0, byte_budget)
+    payload_encoded = payload.encode("utf-8")
+    if len(payload_encoded) > byte_budget:
+        payload = payload_encoded[:byte_budget].decode("utf-8", errors="ignore")
+        separator = "\n" if payload else ""
+    return f"{payload}{separator}{marker_block}"
+
+
+def command_succeeds(
+    command: Sequence[str],
+    *,
+    timeout_seconds: float = 5.0,
+) -> bool:
+    """Return whether a small command executes successfully."""
+    try:
+        result = subprocess.run(
+            list(command),
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=timeout_seconds,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return result.returncode == 0
+
+
+def decode_timeout_stream(value: bytes | str | None) -> str:
+    """Decode optional timeout output captured by ``subprocess``."""
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
+def execute_probe_command(
+    command: Sequence[str],
+    repo_root: Path,
+    timeout_seconds: float,
+) -> ProbeExecution:
+    """Run one non-mutating doctor probe command and capture its diagnostics."""
+    result = subprocess.run(
+        list(command),
+        cwd=repo_root,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout_seconds,
+    )
+    return ProbeExecution(
+        return_code=result.returncode,
+        stdout=result.stdout,
+        stderr=result.stderr,
+    )
+
+
+def python_module_invocation_forms() -> tuple[tuple[str, ...], ...]:
+    """Return candidate Python module invocation prefixes."""
+    forms = (
+        (sys.executable, "-m"),
+        ("python", "-m"),
+        ("python3", "-m"),
+        ("py", "-m"),
+    )
+    unique_forms: list[tuple[str, ...]] = []
+    for form in forms:
+        if form not in unique_forms:
+            unique_forms.append(form)
+    return tuple(unique_forms)
+
+
+def python_form_display_name(form: Sequence[str]) -> str:
+    """Return a stable display name for a Python module invocation prefix."""
+    executable = form[0]
+    if executable == sys.executable:
+        return "sys.executable -m"
+    return f"{executable} -m"
+
+
+def probe_availability_state(execution: ProbeExecution) -> str:
+    """Return the doctor availability state represented by a raw execution."""
+    if execution.timed_out:
+        return PROBE_TIMED_OUT
+    if execution.return_code == 0:
+        return PROBE_AVAILABLE
+    return PROBE_FAILED
+
+
+def run_doctor_probe(
+    probe: DoctorProbe,
+    *,
+    repo_root: Path,
+    timeout_seconds: float,
+    max_output_bytes: int,
+    max_output_lines: int,
+    probe_executor: ProbeExecutor,
+    time_source: TimeSource,
+) -> DoctorProbeResult:
+    """Run one doctor probe and return a bounded diagnostic result."""
+    if timeout_seconds <= 0:
+        raise FirstAdoptionCheckError("--doctor-timeout must be greater than zero.")
+
+    started_at = time_source()
+    try:
+        execution = probe_executor(probe.command, repo_root, timeout_seconds)
+    except subprocess.TimeoutExpired as error:
+        stdout = decode_timeout_stream(error.stdout)
+        stderr = decode_timeout_stream(error.stderr)
+        timeout_message = f"Timed out after {timeout_seconds:.3f}s."
+        stderr = "\n".join(part for part in (stderr, timeout_message) if part)
+        execution = ProbeExecution(
+            return_code=None,
+            stdout=stdout,
+            stderr=stderr,
+            timed_out=True,
+        )
+        availability_state = PROBE_TIMED_OUT
+    except OSError as error:
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        execution = ProbeExecution(
+            return_code=None,
+            stdout="",
+            stderr=error_summary,
+        )
+        availability_state = PROBE_UNAVAILABLE
+    else:
+        availability_state = probe_availability_state(execution)
+    ended_at = time_source()
+
+    return DoctorProbeResult(
+        group_label=probe.group_label,
+        name=probe.name,
+        command=tuple(probe.command),
+        availability_state=availability_state,
+        exit_code=execution.return_code,
+        elapsed_time=format_elapsed_time(started_at, ended_at),
+        timed_out=execution.timed_out,
+        stdout=bound_diagnostic_text(
+            execution.stdout,
+            max_bytes=max_output_bytes,
+            max_lines=max_output_lines,
+        ),
+        stderr=bound_diagnostic_text(
+            execution.stderr,
+            max_bytes=max_output_bytes,
+            max_lines=max_output_lines,
+        ),
+        note=probe.note,
+    )
 
 
 def run_external_command(command: Sequence[str], repo_root: Path) -> int:
@@ -299,14 +625,131 @@ def collect_present_regular_files(
 
 def default_pre_commit_prefix() -> tuple[str, ...]:
     """Return the preferred pre-commit command prefix for this environment."""
-    if shutil.which("pre-commit") is not None:
+    if shutil.which("pre-commit") is not None and command_succeeds(("pre-commit", "--version")):
         return PRE_COMMIT_EXECUTABLE_PREFIX
+    for python_form in python_module_invocation_forms():
+        if command_succeeds((*python_form, "pre_commit", "--version")):
+            return (*python_form, "pre_commit", "run", "--files")
     return (sys.executable, "-m", "pre_commit", "run", "--files")
 
 
 def default_npm_executable() -> str:
     """Return an npm executable name or path suitable for direct subprocess use."""
     return shutil.which("npm") or shutil.which("npm.cmd") or "npm"
+
+
+def build_doctor_probes(repo_root: Path) -> tuple[DoctorProbe, ...]:
+    """Build the first-adoption doctor probe inventory."""
+    del repo_root
+    probes: list[DoctorProbe] = [
+        DoctorProbe(
+            group_label="git",
+            name="Git executable",
+            command=("git", "--version"),
+        ),
+    ]
+
+    for python_form in python_module_invocation_forms():
+        probes.append(
+            DoctorProbe(
+                group_label="python",
+                name=f"Python module invocation ({python_form_display_name(python_form)})",
+                command=(*python_form, PYTHON_DOCTOR_MODULE),
+            )
+        )
+
+    probes.append(
+        DoctorProbe(
+            group_label=PRE_COMMIT_GROUP,
+            name="pre-commit console",
+            command=("pre-commit", "--version"),
+        )
+    )
+    for python_form in python_module_invocation_forms():
+        probes.append(
+            DoctorProbe(
+                group_label=PRE_COMMIT_GROUP,
+                name=f"pre_commit module ({python_form_display_name(python_form)})",
+                command=(*python_form, "pre_commit", "--version"),
+            )
+        )
+
+    probes.append(
+        DoctorProbe(
+            group_label="pytest",
+            name="pytest console",
+            command=("pytest", "--version"),
+        )
+    )
+    for python_form in python_module_invocation_forms():
+        probes.append(
+            DoctorProbe(
+                group_label="pytest",
+                name=f"pytest module ({python_form_display_name(python_form)})",
+                command=(*python_form, "pytest", "--version"),
+            )
+        )
+
+    probes.extend(
+        (
+            DoctorProbe(
+                group_label="node",
+                name="Node.js executable",
+                command=("node", "--version"),
+            ),
+            DoctorProbe(
+                group_label="npm",
+                name="npm executable",
+                command=(default_npm_executable(), "--version"),
+            ),
+        )
+    )
+
+    probes.append(
+        DoctorProbe(
+            group_label="yamllint",
+            name="yamllint console",
+            command=("yamllint", "--version"),
+        )
+    )
+    for python_form in python_module_invocation_forms():
+        probes.append(
+            DoctorProbe(
+                group_label="yamllint",
+                name=f"yamllint module ({python_form_display_name(python_form)})",
+                command=(*python_form, "yamllint", "--version"),
+            )
+        )
+
+    for powershell_host in ("pwsh", "powershell"):
+        probes.extend(
+            (
+                DoctorProbe(
+                    group_label="powershell",
+                    name=f"PowerShell host ({powershell_host})",
+                    command=(
+                        powershell_host,
+                        *POWERSHELL_PROBE_FLAGS,
+                        POWERSHELL_VERSION_PROBE,
+                    ),
+                ),
+                DoctorProbe(
+                    group_label="PSScriptAnalyzer",
+                    name=f"PSScriptAnalyzer module ({powershell_host})",
+                    command=(
+                        powershell_host,
+                        *POWERSHELL_PROBE_FLAGS,
+                        PSSCRIPTANALYZER_PROBE,
+                    ),
+                    note=(
+                        "PSScriptAnalyzer is checked inside this PowerShell host; "
+                        "module availability is not shared across hosts."
+                    ),
+                ),
+            )
+        )
+
+    return tuple(probes)
 
 
 def pre_commit_commands(
@@ -777,6 +1220,189 @@ def print_total_elapsed_time(
     )
 
 
+def print_indented_diagnostic(value: str, *, stdout: TextIO) -> None:
+    """Print a bounded stdout/stderr diagnostic block."""
+    if not value:
+        print("    <empty>", file=stdout, flush=True)
+        return
+    for line in value.splitlines():
+        print(f"    {line}", file=stdout, flush=True)
+
+
+def print_doctor_probe_results(
+    results: Sequence[DoctorProbeResult],
+    *,
+    stdout: TextIO,
+) -> None:
+    """Print doctor probe results with stable fields."""
+    print(f"Doctor probes executed ({len(results)}):", file=stdout, flush=True)
+    for index, result in enumerate(results, start=1):
+        exit_code = "<none>" if result.exit_code is None else str(result.exit_code)
+        timed_out = "yes" if result.timed_out else "no"
+        print(f"  {index}. [{result.group_label}] {result.name}", file=stdout, flush=True)
+        print(f"     Command: {format_command(result.command)}", file=stdout, flush=True)
+        print(f"     Availability: {result.availability_state}", file=stdout, flush=True)
+        print(f"     Exit code: {exit_code}", file=stdout, flush=True)
+        print(f"     Timed out: {timed_out}", file=stdout, flush=True)
+        print(f"     Elapsed time: {result.elapsed_time}", file=stdout, flush=True)
+        if result.note:
+            print(f"     Note: {result.note}", file=stdout, flush=True)
+        print("     stdout:", file=stdout, flush=True)
+        print_indented_diagnostic(result.stdout, stdout=stdout)
+        print("     stderr:", file=stdout, flush=True)
+        print_indented_diagnostic(result.stderr, stdout=stdout)
+
+
+def pre_commit_managed_hook_ids(repo_root: Path) -> tuple[str, ...]:
+    """Return hook IDs declared in the pre-commit config, best effort."""
+    config_path = repo_root / PRE_COMMIT_CONFIG_PATH
+    if not config_path.exists():
+        return ()
+    if not is_present_regular_file(config_path):
+        raise FirstAdoptionCheckError(f"Expected a regular file: {PRE_COMMIT_CONFIG_PATH}")
+    try:
+        config_text = config_path.read_text(encoding="utf-8-sig")
+    except OSError as error:
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        raise FirstAdoptionCheckError(
+            f"Unable to read {PRE_COMMIT_CONFIG_PATH} ({error_summary})."
+        ) from error
+
+    hook_ids: list[str] = []
+    for line in config_text.splitlines():
+        match = PRE_COMMIT_HOOK_ID_PATTERN.match(line)
+        if match is not None:
+            hook_ids.append(match.group("id"))
+    return tuple(hook_ids)
+
+
+def print_pre_commit_managed_hook_notes(repo_root: Path, *, stdout: TextIO) -> None:
+    """Print doctor notes for hooks intentionally left to pre-commit."""
+    hook_ids = pre_commit_managed_hook_ids(repo_root)
+    print("Pre-commit-managed hook note:", file=stdout, flush=True)
+    print(
+        "  Doctor mode does not run pre-commit hooks or direct-probe every hook "
+        "entrypoint. pre-commit creates language-specific hook environments; "
+        "--check and --fix remain the surfaces for actual hook execution.",
+        file=stdout,
+        flush=True,
+    )
+    if not hook_ids:
+        print(f"  No hook IDs were detected in {PRE_COMMIT_CONFIG_PATH}.", file=stdout, flush=True)
+        return
+    print(f"  Hook IDs detected in {PRE_COMMIT_CONFIG_PATH}:", file=stdout, flush=True)
+    for hook_id in hook_ids:
+        print(f"    - {hook_id}", file=stdout, flush=True)
+
+
+def result_command_ends_with(result: DoctorProbeResult, suffix: Sequence[str]) -> bool:
+    """Return whether a probe command ends with ``suffix``."""
+    return len(result.command) >= len(suffix) and tuple(result.command[-len(suffix) :]) == tuple(
+        suffix
+    )
+
+
+def first_available_result(
+    results: Sequence[DoctorProbeResult],
+    group_label: str,
+    *,
+    command_suffix: Sequence[str] | None = None,
+) -> DoctorProbeResult | None:
+    """Return the first available result in a group, optionally by command suffix."""
+    for result in results:
+        if result.group_label != group_label or result.availability_state != PROBE_AVAILABLE:
+            continue
+        if command_suffix is not None and not result_command_ends_with(result, command_suffix):
+            continue
+        return result
+    return None
+
+
+def doctor_recommendations(results: Sequence[DoctorProbeResult]) -> tuple[str, ...]:
+    """Return concise recommendations from doctor probe results."""
+    recommendations: list[str] = []
+
+    pre_commit_console = first_available_result(
+        results,
+        PRE_COMMIT_GROUP,
+        command_suffix=("--version",),
+    )
+    if pre_commit_console is not None and pre_commit_console.command[0] == "pre-commit":
+        recommendations.append(
+            "Use pre-commit validation prefix: " f"{format_command(PRE_COMMIT_EXECUTABLE_PREFIX)}"
+        )
+    else:
+        pre_commit_module = first_available_result(
+            results,
+            PRE_COMMIT_GROUP,
+            command_suffix=("pre_commit", "--version"),
+        )
+        if pre_commit_module is None:
+            recommendations.append(
+                "No working pre-commit invocation was detected; install pre-commit "
+                "in an available Python environment before --check or --fix."
+            )
+        else:
+            prefix = (*pre_commit_module.command[:-2], "pre_commit", "run", "--files")
+            recommendations.append(f"Use pre-commit validation prefix: {format_command(prefix)}")
+
+    pytest_console = first_available_result(results, "pytest", command_suffix=("--version",))
+    if pytest_console is not None and pytest_console.command[0] == "pytest":
+        recommendations.append("Use pytest invocation: pytest")
+    else:
+        pytest_module = first_available_result(
+            results,
+            "pytest",
+            command_suffix=("pytest", "--version"),
+        )
+        if pytest_module is not None:
+            recommendations.append(
+                f"Use pytest invocation: {format_command((*pytest_module.command[:-1],))}"
+            )
+
+    yamllint_console = first_available_result(results, "yamllint", command_suffix=("--version",))
+    if yamllint_console is not None and yamllint_console.command[0] == "yamllint":
+        recommendations.append("Use yamllint invocation: yamllint")
+    else:
+        yamllint_module = first_available_result(
+            results,
+            "yamllint",
+            command_suffix=("yamllint", "--version"),
+        )
+        if yamllint_module is None:
+            recommendations.append(
+                "yamllint was not directly available; if the YAML module is retained, "
+                "let pre-commit manage the yamllint hook environment or install "
+                "yamllint locally for direct use."
+            )
+        else:
+            recommendations.append(
+                "Use yamllint invocation: " f"{format_command((*yamllint_module.command[:-1],))}"
+            )
+
+    pssa_result = first_available_result(results, "PSScriptAnalyzer")
+    if pssa_result is None:
+        recommendations.append(
+            "No PowerShell host with PSScriptAnalyzer was detected; install the "
+            "module in the intended host before running PowerShell analyzer checks."
+        )
+    else:
+        recommendations.append(f"Use PSScriptAnalyzer host: {pssa_result.command[0]}")
+
+    return tuple(recommendations)
+
+
+def print_doctor_recommendations(
+    results: Sequence[DoctorProbeResult],
+    *,
+    stdout: TextIO,
+) -> None:
+    """Print recommended invocation forms from successful doctor probes."""
+    print("Doctor recommendations:", file=stdout, flush=True)
+    for recommendation in doctor_recommendations(results):
+        print(f"  - {recommendation}", file=stdout, flush=True)
+
+
 def print_status_entries(status_lines: Sequence[str], *, stdout: TextIO) -> None:
     """Print one Git status snapshot as a deterministic bullet list."""
     if not status_lines:
@@ -865,6 +1491,52 @@ def run_planned_command(
         flush=True,
     )
     return return_code
+
+
+def run_first_adoption_doctor(
+    repo_root: Path,
+    *,
+    probe_timeout_seconds: float = DEFAULT_PROBE_TIMEOUT_SECONDS,
+    max_output_bytes: int = DEFAULT_DIAGNOSTIC_MAX_BYTES,
+    max_output_lines: int = DEFAULT_DIAGNOSTIC_MAX_LINES,
+    probe_executor: ProbeExecutor = execute_probe_command,
+    time_source: TimeSource = default_time_source,
+    stdout: TextIO = sys.stdout,
+) -> int:
+    """Run non-mutating first-adoption environment probes."""
+    run_started_at = time_source()
+    print("Run mode: doctor", file=stdout, flush=True)
+    print(
+        "Doctor mode runs small non-mutating environment/tool probes only. It does "
+        "not run validation hooks, fixers, generated validation commands, or "
+        "repository-setting changes.",
+        file=stdout,
+        flush=True,
+    )
+    print(
+        f"Probe timeout: {probe_timeout_seconds:.3f}s; diagnostic caps: "
+        f"{max_output_bytes} bytes and {max_output_lines} lines per stream.",
+        file=stdout,
+        flush=True,
+    )
+
+    results = tuple(
+        run_doctor_probe(
+            probe,
+            repo_root=repo_root,
+            timeout_seconds=probe_timeout_seconds,
+            max_output_bytes=max_output_bytes,
+            max_output_lines=max_output_lines,
+            probe_executor=probe_executor,
+            time_source=time_source,
+        )
+        for probe in build_doctor_probes(repo_root)
+    )
+    print_doctor_probe_results(results, stdout=stdout)
+    print_pre_commit_managed_hook_notes(repo_root, stdout=stdout)
+    print_doctor_recommendations(results, stdout=stdout)
+    print_total_elapsed_time(run_started_at, time_source(), stdout=stdout)
+    return 0
 
 
 def run_first_adoption_checks(
@@ -984,6 +1656,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         repo_root = resolve_repo_root(args.repo_root)
+        if args.run_mode == DOCTOR_MODE:
+            if args.plan_only:
+                raise FirstAdoptionCheckError("--plan-only cannot be combined with --doctor.")
+            return run_first_adoption_doctor(
+                repo_root,
+                probe_timeout_seconds=args.doctor_timeout,
+                max_output_bytes=args.doctor_max_bytes,
+                max_output_lines=args.doctor_max_lines,
+            )
         return run_first_adoption_checks(
             repo_root,
             max_command_length=args.max_command_length,
