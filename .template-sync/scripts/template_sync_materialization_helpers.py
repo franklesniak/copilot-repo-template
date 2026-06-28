@@ -542,7 +542,16 @@ def validate_marker_yaml_text(
 
 
 def ensure_regular_repository_file_target(target_path: Path, relative_path: str) -> None:
-    """Raise when an existing write target is not a regular repository file."""
+    """Raise when an existing write target is not a regular file.
+
+    This guard inspects target_path only, rejecting an existing symlink,
+    directory, or other non-regular file. It does not verify that target_path
+    is contained within the repository root or that its ancestors are
+    symlink-free. Callers must establish that precondition first by resolving
+    the target through resolve_safe_repository_target_path (or by using
+    write_repository_relative_file_bytes), which enforce repository containment
+    and symlink-ancestor safety.
+    """
     if target_path.is_symlink() or (target_path.exists() and not target_path.is_file()):
         raise TemplateSyncMaterializationError(
             f"Cannot reconcile {relative_path}: the target path exists but is not a "
@@ -556,7 +565,14 @@ def write_repository_file_bytes(
     relative_path: str,
     bytes_content: bytes,
 ) -> None:
-    """Write bytes to a repository target after enforcing regular-file safety."""
+    """Write bytes to a target after enforcing regular-file safety.
+
+    Like ensure_regular_repository_file_target, this writer only enforces that
+    target_path is a regular file; it does not enforce repository containment
+    or symlink-ancestor safety. Pass a target_path already resolved by
+    resolve_safe_repository_target_path, or call
+    write_repository_relative_file_bytes, when those guarantees are required.
+    """
     ensure_regular_repository_file_target(target_path, relative_path)
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_bytes(bytes_content)
