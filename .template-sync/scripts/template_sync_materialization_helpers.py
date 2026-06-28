@@ -1594,6 +1594,24 @@ def markdown_fence_context_for_path(relative_path: str) -> str | None:
     return None
 
 
+def fence_context_for_path(relative_path: str) -> str:
+    """Return the fence-parsing context for opaque Markdown content in a file.
+
+    Unlike :func:`markdown_fence_context_for_path` (which returns ``None`` for
+    non-Markdown files because their inline markers are never fence-suppressed),
+    this always returns a context for callers that treat fenced Markdown as
+    opaque, such as blank-line hygiene and reference-link scanning. Markdown
+    files (``.md``/``.mdc``) use the standard context, which recognizes
+    blockquote- and list-contained fences indented up to three spaces. Other
+    files (notably YAML issue forms) embed Markdown inside ``value: |`` block
+    scalars whose fences are indented further, so they use the embedded context,
+    which allows arbitrary leading indentation.
+    """
+    if Path(relative_path).suffix.lower() in MARKDOWN_RENDERED_SUFFIXES:
+        return MARKDOWN_FENCE_CONTEXT
+    return EMBEDDED_MARKDOWN_FENCE_CONTEXT
+
+
 def blank_line_limit_for_path(relative_path: str) -> int:
     """Return the post-pruning blank-line limit for a retained text file."""
     if Path(relative_path).suffix.lower() in YAML_SUFFIXES:
@@ -2003,7 +2021,12 @@ def html_inline_marker(marker_name: str, kind: str) -> str:
     return f"<!-- template-sync: {kind} {marker_name} -->"
 
 
-def apply_blank_line_hygiene(text: str, *, max_consecutive_blank_lines: int = 2) -> str:
+def apply_blank_line_hygiene(
+    text: str,
+    *,
+    max_consecutive_blank_lines: int = 2,
+    fence_context: str = MARKDOWN_FENCE_CONTEXT,
+) -> str:
     """Collapse excessive blank-line runs after inline-block removal.
 
     Fenced code blocks are treated as opaque: blank lines inside a fence are
@@ -2014,6 +2037,11 @@ def apply_blank_line_hygiene(text: str, *, max_consecutive_blank_lines: int = 2)
     removes live blocks, and those are collapsed to
     ``max_consecutive_blank_lines`` (the caller passes one for YAML, two
     otherwise, via ``blank_line_limit_for_path``).
+
+    ``fence_context`` selects how fences are recognized; the caller passes the
+    file-type-appropriate context (via ``fence_context_for_path``) so that
+    deeply-indented fences inside YAML ``value: |`` block scalars are also
+    treated as opaque.
     """
     hygienic_lines: list[str] = []
     blank_run = 0
@@ -2037,7 +2065,7 @@ def apply_blank_line_hygiene(text: str, *, max_consecutive_blank_lines: int = 2)
                     continue
                 active_fence = None
 
-            open_fence = parse_markdown_fence_open(body, MARKDOWN_FENCE_CONTEXT)
+            open_fence = parse_markdown_fence_open(body, fence_context)
             if open_fence is not None:
                 active_fence = open_fence
             blank_run = 0
@@ -2144,6 +2172,7 @@ def remove_inline_block_family(
         return apply_blank_line_hygiene(
             stripped_text,
             max_consecutive_blank_lines=blank_line_limit_for_path(relative_path),
+            fence_context=fence_context_for_path(relative_path),
         )
     return stripped_text
 

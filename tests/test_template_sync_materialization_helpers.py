@@ -308,6 +308,37 @@ def test_inline_block_removal_uses_yaml_blank_line_limit() -> None:
     )
 
 
+def test_inline_block_removal_preserves_indented_yaml_fenced_blanks() -> None:
+    """Deeply-indented YAML block-scalar fenced examples keep their blank runs."""
+    text = (
+        "# template-sync: begin python-only\n"
+        "removed\n"
+        "# template-sync: end python-only\n"
+        "\n"
+        "        ```\n"
+        "        first\n"
+        "\n"
+        "\n"
+        "\n"
+        "        second\n"
+        "        ```\n"
+    )
+
+    expected = "".join(
+        [
+            "\n",
+            "        ```\n",
+            "        first\n",
+            "\n",
+            "\n",
+            "\n",
+            "        second\n",
+            "        ```\n",
+        ]
+    )
+    assert remove_inline_block_family(text, "python-only", relative_path="fixture.yml") == expected
+
+
 def test_inline_block_removal_preserves_markdown_blank_line_allowance() -> None:
     """Markdown pruning can retain markdownlint's configured two-blank allowance."""
     text = (

@@ -25,10 +25,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     DEFAULT_MANIFEST_SCHEMA_PATH,
     DEFAULT_MARKER_PATH,
     DEFAULT_MARKER_SCHEMA_PATH,
-    EMBEDDED_MARKDOWN_FENCE_CONTEXT,
     INLINE_BLOCK_ANY_MODULES,
-    MARKDOWN_FENCE_CONTEXT,
-    MARKDOWN_RENDERED_SUFFIXES,
     InlineBlockError,
     DeferredProtectedCandidate,
     LocalOverride,
@@ -37,6 +34,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     ProtectedFileDecision,
     TemplateSyncMaterializationError,
     collect_live_inline_block_spans,
+    fence_context_for_path,
     git_present_paths,
     inline_block_families_to_prune,
     inline_block_module_requirement,
@@ -764,19 +762,12 @@ def link_targets_outside_fences(path: Path) -> tuple[tuple[int, str], ...]:
     except OSError:
         return ()
 
-    # Markdown-rendered files (.md/.mdc) use the standard Markdown fence context
-    # so blockquote- and list-contained fences are recognized. YAML reference
-    # files (issue forms) embed Markdown inside ``value: |`` block scalars and
-    # need the embedded context's arbitrary leading indentation; reserve it for
-    # those.
-    if path.suffix.lower() in MARKDOWN_RENDERED_SUFFIXES:
-        fence_context = MARKDOWN_FENCE_CONTEXT
-    else:
-        fence_context = EMBEDDED_MARKDOWN_FENCE_CONTEXT
-
+    # Reference links can live in Markdown files or YAML issue forms; select the
+    # fence context by file type so deeply-indented YAML block-scalar fences are
+    # recognized too (see ``fence_context_for_path``).
     for line_number, line in lines_outside_markdown_fences(
         text,
-        fence_context=fence_context,
+        fence_context=fence_context_for_path(path.name),
     ):
         for match in MARKDOWN_INLINE_LINK_RE.finditer(line):
             targets.append((line_number, normalize_markdown_target(match.group("target"))))
