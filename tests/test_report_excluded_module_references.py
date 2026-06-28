@@ -697,6 +697,37 @@ def test_yaml_embedded_fenced_links_are_skipped(tmp_path: Path) -> None:
     assert not any(".github/ISSUE_TEMPLATE/fenced_example.yml:9" in line for line in findings)
 
 
+def test_markdown_blockquote_fenced_links_use_standard_fence_context(tmp_path: Path) -> None:
+    """Links inside blockquote-contained Markdown fences are ignored for .md files."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "report_excluded_module_references_blockquote_fence", SCRIPT_PATH
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    content = "".join(
+        [
+            "> ```\n",
+            "> [inside](templates/json/example.json)\n",
+            "> ```\n",
+            "[outside](schemas/example-config.schema.json)\n",
+        ]
+    )
+    md_path = tmp_path / "doc.md"
+    md_path.write_text(content, encoding="utf-8")
+
+    targets = [target for _, target in module.link_targets_outside_fences(md_path)]
+
+    # The blockquote-fenced link is recognized as fenced (the standard Markdown
+    # context handles the ``>`` container), so only the unfenced link is live.
+    assert "schemas/example-config.schema.json" in targets
+    assert "templates/json/example.json" not in targets
+
+
 def test_fenced_registered_marker_examples_are_not_live_blocks(tmp_path: Path) -> None:
     """Markdown fenced marker examples are not reported as retained live markers."""
     _write_common_repo(tmp_path, include_reference_content=False)
