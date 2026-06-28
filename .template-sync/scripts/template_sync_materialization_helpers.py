@@ -546,8 +546,8 @@ def ensure_regular_repository_file_target(target_path: Path, relative_path: str)
     if target_path.is_symlink() or (target_path.exists() and not target_path.is_file()):
         raise TemplateSyncMaterializationError(
             f"Cannot reconcile {relative_path}: the target path exists but is not a "
-            "regular file (for example a directory or a symlink). Resolve the "
-            "conflict in the downstream repository, then rerun."
+            f"regular file (for example a directory or a symlink). Resolve the "
+            f"conflict in the downstream repository, then rerun."
         )
 
 
