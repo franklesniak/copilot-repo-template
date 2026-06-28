@@ -241,9 +241,15 @@ import materialize_downstream_adoption as materializer  # noqa: E402
 
 
 def write_file(path: Path, content: str) -> None:
-    """Write a UTF-8 fixture file."""
+    """Write a UTF-8 fixture file with LF newlines on every platform.
+
+    Newline translation is disabled so generated fixtures (notably the
+    decisions.yml exercised by the yamllint assertions) keep LF endings on
+    Windows and satisfy yamllint's unix new-lines rule, matching the
+    repository's LF-normalized files.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    path.write_text(content, encoding="utf-8", newline="\n")
 
 
 class _IndentSequenceDumper(yaml.SafeDumper):
