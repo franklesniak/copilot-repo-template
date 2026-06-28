@@ -386,6 +386,32 @@ def test_required_heading_inside_fenced_code_block_is_not_satisfied(tmp_path: Pa
     assert "CLAUDE.md: missing required heading: ## Handling Code Review Comments" in result.stdout
 
 
+def test_blockquote_fence_closure_allows_later_required_heading(
+    tmp_path: Path,
+) -> None:
+    """Instruction contracts use the shared GFM containing-block fence boundary."""
+    _write_common_contract_repo(
+        tmp_path,
+        _contracts(required_headings=["## Handling Code Review Comments"]),
+    )
+    _write_text(
+        tmp_path,
+        "CLAUDE.md",
+        (
+            "# Agent Instructions\n\n"
+            "> ```\n"
+            "> ## Handling Code Review Comments\n"
+            "\n"
+            "## Handling Code Review Comments\n"
+        ),
+    )
+
+    result = _run_validator(tmp_path, "--mode", "upstream-template")
+
+    assert result.returncode == 0, result.stderr
+    assert "Instruction-contract validation passed." in result.stdout
+
+
 def test_required_phrase_inside_fenced_code_block_is_not_satisfied(tmp_path: Path) -> None:
     """A phrase nested inside a fenced code block must not satisfy the contract."""
     _write_common_contract_repo(

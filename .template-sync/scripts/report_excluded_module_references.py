@@ -26,18 +26,23 @@ from template_sync_materialization_helpers import (  # noqa: E402
     DEFAULT_MARKER_PATH,
     DEFAULT_MARKER_SCHEMA_PATH,
     INLINE_BLOCK_ANY_MODULES,
-    INLINE_BLOCK_MARKER_RE,
+    InlineBlockError,
     DeferredProtectedCandidate,
     LocalOverride,
     ManifestMapping,
     PathRelation,
     ProtectedFileDecision,
     TemplateSyncMaterializationError,
+    collect_live_inline_block_spans,
+    fence_context_for_path,
     git_present_paths,
+    inline_block_families_to_prune,
     inline_block_module_requirement,
     is_locally_overridden,
     is_protected_instruction_path,
     iter_safe_repository_files,
+    lines_outside_markdown_fences,
+    live_inline_marker_lines,
     load_json_mapping,
     load_validated_marker_decision_data,
     load_yaml_mapping,
@@ -52,10 +57,6 @@ from template_sync_materialization_helpers import (  # noqa: E402
 )
 
 REFERENCE_LINK_FILE_SUFFIXES = frozenset({".md", ".mdc", ".yml", ".yaml"})
-# Allow arbitrary leading whitespace so fences are recognized inside YAML
-# block scalars (for example issue-form ``value: |`` Markdown), not only in
-# Markdown indented up to three spaces.
-MARKDOWN_FENCE_RE = re.compile(r"^(?: {0,3}>)* *(?P<fence>`{3,}|~{3,})")
 MARKDOWN_INLINE_LINK_RE = re.compile(
     r"(?<!!)\[[^\]\n]+\]\((?P<target><[^>\n]+>|[^)\s\n]+)(?:\s+[^)\n]*)?\)"
 )
@@ -514,11 +515,15 @@ def build_scope_lines(repo_root: Path, state: ReportState) -> tuple[str, ...]:
             text = resolve_repo_path(repo_root, relative_path).read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        for line in text.splitlines():
-            match = INLINE_BLOCK_MARKER_RE.match(line)
-            if match is None:
-                continue
-            name = match.group("name")
+        try:
+            marker_families = inline_block_families_to_prune(
+                text,
+                state.included_modules,
+                relative_path=relative_path,
+            )
+        except InlineBlockError:
+            continue
+        for name in marker_families:
             required_modules = inline_block_module_requirement(name)
             if required_modules is None:
                 continue
@@ -582,37 +587,22 @@ def collect_inline_blocks(repo_root: Path, relative_path: str) -> tuple[InlineBl
     """Return complete template-sync inline blocks in a text file."""
     path = resolve_repo_path(repo_root, relative_path)
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return ()
 
-    blocks: list[InlineBlock] = []
-    open_marker: tuple[str, int, list[str]] | None = None
-    for line_number, line in enumerate(lines, 1):
-        match = INLINE_BLOCK_MARKER_RE.match(line)
-        if match is None:
-            if open_marker is not None:
-                open_marker[2].append(line)
-            continue
-
-        marker_name = match.group("name")
-        if match.group("kind") == "begin":
-            open_marker = (marker_name, line_number, [])
-            continue
-        if open_marker is None:
-            continue
-        begin_name, begin_line_number, content_lines = open_marker
-        if begin_name == marker_name:
-            blocks.append(
-                InlineBlock(
-                    path=relative_path,
-                    marker_name=marker_name,
-                    line_number=begin_line_number,
-                    content_lines=tuple(content_lines),
-                )
-            )
-        open_marker = None
-    return tuple(blocks)
+    return tuple(
+        InlineBlock(
+            path=relative_path,
+            marker_name=block.marker_name,
+            line_number=block.line_number,
+            content_lines=block.content_lines,
+        )
+        for block in collect_live_inline_block_spans(
+            text,
+            relative_path=relative_path,
+        )
+    )
 
 
 def inline_block_findings(repo_root: Path, state: ReportState) -> tuple[Finding, ...]:
@@ -624,7 +614,23 @@ def inline_block_findings(repo_root: Path, state: ReportState) -> tuple[Finding,
         relation = selected_relation_for_path(relative_path, state.mappings)
         if relation is None or not relation.is_retained_by(state.included_modules):
             continue
-        blocks = collect_inline_blocks(repo_root, relative_path)
+        try:
+            blocks = collect_inline_blocks(repo_root, relative_path)
+        except InlineBlockError as error:
+            findings.append(
+                Finding(
+                    rule_id="inline-block.invalid",
+                    category=finding_category_for_path(relative_path, CATEGORY_REQUIRED),
+                    module="unknown",
+                    path=relative_path,
+                    line_number=error.line_number,
+                    # Use the bare message: Finding.render() prints the location
+                    # separately via ``location``, so str(error) (which embeds a
+                    # "{path}:{line}: " prefix) would duplicate it in the report.
+                    detail=error.message,
+                )
+            )
+            continue
         for block in blocks:
             required_modules = inline_block_module_requirement(block.marker_name)
             if required_modules is None:
@@ -751,26 +757,18 @@ def extract_workflow_run_commands(lines: tuple[str, ...]) -> tuple[str, ...]:
 def link_targets_outside_fences(path: Path) -> tuple[tuple[int, str], ...]:
     """Return Markdown-style link targets outside fenced code blocks."""
     targets: list[tuple[int, str]] = []
-    active_fence: str | None = None
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        text = path.read_text(encoding="utf-8")
     except OSError:
         return ()
 
-    for line_number, line in enumerate(lines, 1):
-        fence_match = MARKDOWN_FENCE_RE.match(line)
-        # Fence handling applies to every reference-link file, including YAML
-        # (REFERENCE_LINK_FILE_SUFFIXES), so links inside fenced code blocks in
-        # YAML-embedded Markdown are not mistaken for live references.
-        if fence_match is not None:
-            fence = fence_match.group("fence")
-            if active_fence is None:
-                active_fence = fence
-            elif fence[0] == active_fence[0] and len(fence) >= len(active_fence):
-                active_fence = None
-            continue
-        if active_fence is not None:
-            continue
+    # Reference links can live in Markdown files or YAML issue forms; select the
+    # fence context by file type so deeply-indented YAML block-scalar fences are
+    # recognized too (see ``fence_context_for_path``).
+    for line_number, line in lines_outside_markdown_fences(
+        text,
+        fence_context=fence_context_for_path(path.name),
+    ):
         for match in MARKDOWN_INLINE_LINK_RE.finditer(line):
             targets.append((line_number, normalize_markdown_target(match.group("target"))))
         reference_match = MARKDOWN_REFERENCE_DEFINITION_RE.match(line)
@@ -902,19 +900,27 @@ def line_without_upstream_template_urls(line: str) -> str:
     return UPSTREAM_TEMPLATE_URL_RE.sub("", without_links)
 
 
-def lines_outside_inline_blocks(text: str) -> tuple[tuple[int, str], ...]:
+def lines_outside_inline_blocks(
+    text: str,
+    *,
+    relative_path: str,
+) -> tuple[tuple[int, str], ...]:
     """Return text lines outside template-sync inline blocks."""
     lines: list[tuple[int, str]] = []
     active_block_name: str | None = None
 
-    for line_number, line in enumerate(text.splitlines(), 1):
-        marker_match = INLINE_BLOCK_MARKER_RE.match(line)
-        if marker_match is not None:
-            marker_name = marker_match.group("name")
-            if marker_match.group("kind") == "begin" and active_block_name is None:
-                active_block_name = marker_name
+    try:
+        live_lines = live_inline_marker_lines(text, relative_path=relative_path)
+    except InlineBlockError:
+        return tuple(enumerate(text.splitlines(), 1))
+
+    for line_number, line, marker in live_lines:
+        line = line.rstrip("\r\n")
+        if marker is not None:
+            if marker.kind == "begin" and active_block_name is None:
+                active_block_name = marker.name
                 continue
-            if marker_match.group("kind") == "end" and marker_name == active_block_name:
+            if marker.kind == "end" and marker.name == active_block_name:
                 active_block_name = None
                 continue
 
@@ -1004,7 +1010,10 @@ def protected_document_prose_reference_findings_for_text(
     if path_tokens is None:
         path_tokens = excluded_path_reference_tokens(state)
 
-    for line_number, line in lines_outside_inline_blocks(text):
+    for line_number, line in lines_outside_inline_blocks(
+        text,
+        relative_path=relative_path,
+    ):
         searchable_line = line_without_upstream_template_urls(line)
         for module, token, resolved_path in path_tokens:
             if token not in searchable_line:
@@ -1066,10 +1075,17 @@ def protected_document_prose_reference_findings(
     return tuple(findings)
 
 
-def active_contact_link_urls(text: str) -> tuple[tuple[int, str], ...]:
+def active_contact_link_urls(
+    text: str,
+    *,
+    relative_path: str,
+) -> tuple[tuple[int, str], ...]:
     """Return active issue-template contact-link URL values outside inline blocks."""
     targets: list[tuple[int, str]] = []
-    for line_number, line in lines_outside_inline_blocks(text):
+    for line_number, line in lines_outside_inline_blocks(
+        text,
+        relative_path=relative_path,
+    ):
         if line.lstrip().startswith("#"):
             continue
         match = CONTACT_LINK_URL_RE.match(line)
@@ -1106,7 +1122,10 @@ def collaboration_template_reference_findings(
             if module not in state.excluded_modules:
                 continue
             for token in paths_and_tokens.get(relative_path, ()):
-                for line_number, line in lines_outside_inline_blocks(text):
+                for line_number, line in lines_outside_inline_blocks(
+                    text,
+                    relative_path=relative_path,
+                ):
                     searchable_line = line_without_upstream_template_urls(line)
                     if token not in searchable_line:
                         continue
@@ -1126,7 +1145,10 @@ def collaboration_template_reference_findings(
 
         if relative_path != ".github/ISSUE_TEMPLATE/config.yml":
             continue
-        for line_number, target in active_contact_link_urls(text):
+        for line_number, target in active_contact_link_urls(
+            text,
+            relative_path=relative_path,
+        ):
             target_path = resolve_github_blob_target(target)
             if target_path is None:
                 continue

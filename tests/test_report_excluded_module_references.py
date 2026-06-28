@@ -573,6 +573,24 @@ def test_invalid_explicit_module_is_runtime_failure(tmp_path: Path) -> None:
     assert "not defined by the manifest" in result.stderr
 
 
+def test_inline_block_invalid_finding_reports_location_once(tmp_path: Path) -> None:
+    """A structural inline-block error reports its location once in the finding."""
+    _write_common_repo(tmp_path)
+    _write_text(
+        tmp_path,
+        ".pre-commit-config.yaml",
+        "repos: []\n# template-sync: begin python-only\n",
+    )
+
+    result = _run_report(tmp_path)
+
+    findings = _finding_lines(result.stdout)
+    invalid = [line for line in findings if line.startswith("inline-block.invalid")]
+    assert invalid, result.stdout
+    assert invalid[0].count(".pre-commit-config.yaml") == 1, invalid[0]
+    assert "Unclosed template-sync inline marker: python-only" in invalid[0]
+
+
 def test_dependabot_local_override_keeps_ecosystem_from_stale(tmp_path: Path) -> None:
     """A locally overridden scanned file keeps its Dependabot ecosystem non-stale."""
     _write_common_repo(
@@ -679,6 +697,68 @@ def test_yaml_embedded_fenced_links_are_skipped(tmp_path: Path) -> None:
     assert not any(".github/ISSUE_TEMPLATE/fenced_example.yml:9" in line for line in findings)
 
 
+def test_markdown_blockquote_fenced_links_use_standard_fence_context(tmp_path: Path) -> None:
+    """Links inside blockquote-contained Markdown fences are ignored for .md files."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "report_excluded_module_references_blockquote_fence", SCRIPT_PATH
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+
+    content = "".join(
+        [
+            "> ```\n",
+            "> [inside](templates/json/example.json)\n",
+            "> ```\n",
+            "[outside](schemas/example-config.schema.json)\n",
+        ]
+    )
+    md_path = tmp_path / "doc.md"
+    md_path.write_text(content, encoding="utf-8")
+
+    targets = [target for _, target in module.link_targets_outside_fences(md_path)]
+
+    # The blockquote-fenced link is recognized as fenced (the standard Markdown
+    # context handles the ``>`` container), so only the unfenced link is live.
+    assert "schemas/example-config.schema.json" in targets
+    assert "templates/json/example.json" not in targets
+
+
+def test_fenced_registered_marker_examples_are_not_live_blocks(tmp_path: Path) -> None:
+    """Markdown fenced marker examples are not reported as retained live markers."""
+    _write_common_repo(tmp_path, include_reference_content=False)
+    _write_text(
+        tmp_path,
+        "README.md",
+        (
+            "# Downstream\n\n"
+            "```markdown\n"
+            "<!-- template-sync: begin python-reference-only -->\n"
+            "Example marker only.\n"
+            "<!-- template-sync: end python-reference-only -->\n"
+            "```\n"
+        ),
+    )
+
+    result = _run_report(tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    findings = _finding_lines(result.stdout)
+    assert not any("README.md" in line and "inline-block" in line for line in findings)
+
+    excluded_scopes = _section_entries(result.stdout, "Excluded module scopes")
+    python_scope = next(
+        (line for line in excluded_scopes if line.startswith("python | ")),
+        "",
+    )
+    assert "README.md" not in python_scope
+    assert "python-reference-only" in python_scope
+
+
 def test_active_contact_link_urls_preserves_fragment_and_quoted_urls() -> None:
     """Contact-link URL extraction keeps ``#`` fragments and quoted scalars."""
     import importlib.util
@@ -706,7 +786,13 @@ def test_active_contact_link_urls_preserves_fragment_and_quoted_urls() -> None:
         "    url: https://example.com/docs # see the docs\n"
     )
 
-    extracted = [url for _, url in module.active_contact_link_urls(text)]
+    extracted = [
+        url
+        for _, url in module.active_contact_link_urls(
+            text,
+            relative_path=".github/ISSUE_TEMPLATE/config.yml",
+        )
+    ]
 
     # A ``#`` fragment (quoted or unquoted) must be retained, while a genuine
     # trailing YAML comment (``#`` after whitespace) is still stripped.

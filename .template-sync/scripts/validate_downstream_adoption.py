@@ -14,17 +14,19 @@ from urllib.parse import unquote, urlsplit
 import validate_instruction_contracts
 import validate_marker
 from template_sync_materialization_helpers import (
+    MARKDOWN_FENCE_CONTEXT,
     INLINE_BLOCK_ANY_MODULES,
-    INLINE_BLOCK_MARKER_RE,
+    InlineBlockError,
     ManifestMapping,
     PathRelation,
+    collect_live_inline_block_spans,
     inline_block_module_requirement,
+    lines_outside_markdown_fences,
 )
 
 DEFAULT_CONTRACTS_PATH = validate_instruction_contracts.DEFAULT_CONTRACTS_PATH
 DEFAULT_CONTRACTS_SCHEMA_PATH = validate_instruction_contracts.DEFAULT_CONTRACTS_SCHEMA_PATH
 MARKDOWN_FILE_SUFFIXES = frozenset({".md", ".mdc"})
-MARKDOWN_FENCE_RE = re.compile(r"^(?: {0,3}>)* {0,3}(?P<fence>`{3,}|~{3,})")
 MARKDOWN_INLINE_LINK_RE = re.compile(
     r"(?<!!)\[[^\]\n]+\]\((?P<target><[^>\n]+>|[^)\s\n]+)(?:\s+[^)\n]*)?\)"
 )
@@ -398,7 +400,7 @@ def validate_inline_blocks(
     for relative_path in relative_paths:
         path = validate_marker.resolve_repo_path(repo_root, relative_path)
         try:
-            lines = path.read_text(encoding="utf-8").splitlines()
+            text = path.read_text(encoding="utf-8")
         except OSError as error:
             error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
             failures.append(
@@ -410,19 +412,32 @@ def validate_inline_blocks(
             )
             continue
 
-        stack: list[tuple[str, int]] = []
-        for line_number, line in enumerate(lines, 1):
-            match = INLINE_BLOCK_MARKER_RE.match(line)
-            if match is None:
-                continue
+        try:
+            blocks = collect_live_inline_block_spans(
+                text,
+                relative_path=relative_path,
+            )
+        except InlineBlockError as error:
+            # Store the bare message: the renderer prepends "{path}:{line}: "
+            # itself, so str(error) (which already embeds that prefix) would
+            # duplicate the location in the final output.
+            failures.append(
+                InlineBlockFailure(
+                    path=relative_path,
+                    line_number=error.line_number or 0,
+                    message=error.message,
+                )
+            )
+            continue
 
-            marker_name = match.group("name")
+        for block in blocks:
+            marker_name = block.marker_name
             module_requirement = inline_block_module_requirement(marker_name)
             if module_requirement is None:
                 failures.append(
                     InlineBlockFailure(
                         path=relative_path,
-                        line_number=line_number,
+                        line_number=block.line_number,
                         message=f"Unknown template-sync inline marker family: {marker_name}",
                     )
                 )
@@ -434,7 +449,7 @@ def validate_inline_blocks(
                     failures.append(
                         InlineBlockFailure(
                             path=relative_path,
-                            line_number=line_number,
+                            line_number=block.line_number,
                             message=(
                                 f"Inline block {marker_name} remains but requires at "
                                 f"least one of the excluded module(s): {excluded}"
@@ -446,7 +461,7 @@ def validate_inline_blocks(
                 failures.append(
                     InlineBlockFailure(
                         path=relative_path,
-                        line_number=line_number,
+                        line_number=block.line_number,
                         message=(
                             f"Inline block {marker_name} remains but requires "
                             f"excluded module(s): {excluded}"
@@ -454,67 +469,17 @@ def validate_inline_blocks(
                     )
                 )
 
-            if match.group("kind") == "begin":
-                if stack:
-                    failures.append(
-                        InlineBlockFailure(
-                            path=relative_path,
-                            line_number=line_number,
-                            message="Nested template-sync inline marker",
-                        )
-                    )
-                stack.append((marker_name, line_number))
-            else:
-                if not stack:
-                    failures.append(
-                        InlineBlockFailure(
-                            path=relative_path,
-                            line_number=line_number,
-                            message="Unmatched template-sync inline marker end",
-                        )
-                    )
-                    continue
-                begin_name, begin_line_number = stack.pop()
-                if marker_name != begin_name:
-                    failures.append(
-                        InlineBlockFailure(
-                            path=relative_path,
-                            line_number=line_number,
-                            message=(
-                                f"End marker {marker_name!r} does not match begin marker "
-                                f"{begin_name!r} from line {begin_line_number}"
-                            ),
-                        )
-                    )
-
-        for marker_name, line_number in stack:
-            failures.append(
-                InlineBlockFailure(
-                    path=relative_path,
-                    line_number=line_number,
-                    message=f"Unclosed template-sync inline marker: {marker_name}",
-                )
-            )
-
     return tuple(failures)
 
 
 def markdown_link_targets_outside_fences(path: Path) -> tuple[tuple[int, str], ...]:
     """Return Markdown link targets outside fenced code blocks."""
     targets: list[tuple[int, str]] = []
-    open_fence: str | None = None
-    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        fence_match = MARKDOWN_FENCE_RE.match(line)
-        if fence_match is not None:
-            fence = fence_match.group("fence")
-            if open_fence is None:
-                open_fence = fence
-            elif fence[0] == open_fence[0] and len(fence) >= len(open_fence):
-                open_fence = None
-            continue
-        if open_fence is not None:
-            continue
-
+    text = path.read_text(encoding="utf-8")
+    for line_number, line in lines_outside_markdown_fences(
+        text,
+        fence_context=MARKDOWN_FENCE_CONTEXT,
+    ):
         for match in MARKDOWN_INLINE_LINK_RE.finditer(line):
             targets.append((line_number, normalize_markdown_target(match.group("target"))))
         reference_match = MARKDOWN_REFERENCE_DEFINITION_RE.match(line)
