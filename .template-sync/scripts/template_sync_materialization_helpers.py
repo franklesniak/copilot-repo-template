@@ -2009,10 +2009,11 @@ def apply_blank_line_hygiene(text: str, *, max_consecutive_blank_lines: int = 2)
     Fenced code blocks are treated as opaque: blank lines inside a fence are
     preserved verbatim. Fence-aware pruning never removes inline blocks inside
     fences, so any blank run within a fence is original example content that
-    must not be altered (markdownlint MD012 and yamllint both ignore fenced
-    code blocks). Excess blank runs only arise outside fences, where pruning
+    must not be altered (markdownlint MD012 already ignores blank lines inside
+    fenced code). Excess blank runs only arise outside fences, where pruning
     removes live blocks, and those are collapsed to
-    ``max_consecutive_blank_lines``.
+    ``max_consecutive_blank_lines`` (the caller passes one for YAML, two
+    otherwise, via ``blank_line_limit_for_path``).
     """
     hygienic_lines: list[str] = []
     blank_run = 0
