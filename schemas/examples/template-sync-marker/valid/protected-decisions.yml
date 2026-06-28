@@ -1,6 +1,6 @@
 template_sync:
   source_repo: https://github.com/franklesniak/copilot-repo-template.git
-  last_reviewed_template_commit: "0123456789abcdef0123456789abcdef01234567"
+  last_reviewed_template_commit: 0123456789abcdef0123456789abcdef01234567
   included_modules:
     - baseline
     - agent-instructions

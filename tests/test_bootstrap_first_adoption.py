@@ -354,7 +354,8 @@ def test_write_draft_marker_validates_and_creates_absent_marker(tmp_path: Path) 
     output = _run_bootstrap(tmp_path, "--write", "--write-draft-marker")
 
     marker_path = tmp_path / ".template-sync" / "marker.yml"
-    marker = yaml.safe_load(marker_path.read_text(encoding="utf-8"))
+    marker_text = marker_path.read_text(encoding="utf-8")
+    marker = yaml.safe_load(marker_text)
     assert "created from validated draft marker" in output
     assert marker["template_sync"]["source_repo"] == SOURCE_REPO
     assert marker["template_sync"]["included_modules"] == [
@@ -363,6 +364,7 @@ def test_write_draft_marker_validates_and_creates_absent_marker(tmp_path: Path) 
         "markdown",
         "template-sync-support",
     ]
+    assert marker_text == bootstrap.format_marker_yaml(marker)
     parse_marker_decision_data(marker, validate_protected_decision_integrity=True)
 
 

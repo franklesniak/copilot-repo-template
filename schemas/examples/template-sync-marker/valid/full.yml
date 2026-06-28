@@ -1,6 +1,6 @@
 template_sync:
   source_repo: https://github.com/franklesniak/copilot-repo-template.git
-  last_reviewed_template_commit: "0123456789abcdef0123456789abcdef01234567"
+  last_reviewed_template_commit: 0123456789abcdef0123456789abcdef01234567
   included_modules:
     - baseline
     - git-lfs
@@ -70,7 +70,7 @@ template_sync:
       overlap_exception_reason: Documented local schema lives near retained template schemas.
   deferred_protected_candidates:
     - path: .github/copilot-instructions.md
-      source_commit: "89abcdef0123456789abcdef0123456789abcdef"
+      source_commit: 89abcdef0123456789abcdef0123456789abcdef
       reason: Protected governance file needs explicit owner authorization.
   protected_file_decisions:
     - path: CLAUDE.md
