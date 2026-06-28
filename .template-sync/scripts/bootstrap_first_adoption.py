@@ -18,19 +18,18 @@ import first_adoption_state  # noqa: E402
 import generate_sync_candidates as sync_candidates  # noqa: E402
 import initialize_adoption_journal  # noqa: E402
 import run_first_adoption_checks as first_adoption_checks  # noqa: E402
-from materialize_downstream_adoption import marker_yaml  # noqa: E402
 from template_sync_materialization_helpers import (  # noqa: E402
     DEFAULT_MANIFEST_PATH,
     DEFAULT_MANIFEST_SCHEMA_PATH,
     DEFAULT_MARKER_PATH,
     DEFAULT_MARKER_SCHEMA_PATH,
     TemplateSyncMaterializationError,
-    load_json_mapping,
+    format_marker_yaml,
     os_error_summary,
-    parse_marker_decision_data,
     repository_relative_path,
     resolve_safe_repository_target_path,
-    validate_schema,
+    validate_marker_yaml_text,
+    write_repository_relative_file_bytes,
 )
 
 BOOTSTRAP_STATE_SCHEMA_VERSION = 1
@@ -783,12 +782,12 @@ def validate_marker_document(
     marker_schema_path: Path,
     repo_root: Path,
 ) -> None:
-    """Validate marker schema and protected-decision integrity."""
-    marker_schema = load_json_mapping(marker_schema_path, repo_root)
-    validate_schema(marker_document, marker_schema, marker_path, repo_root)
-    parse_marker_decision_data(
-        marker_document,
-        validate_protected_decision_integrity=True,
+    """Validate the formatted marker schema and protected-decision integrity."""
+    validate_marker_yaml_text(
+        format_marker_yaml(marker_document),
+        repo_root=repo_root,
+        marker_path=repository_relative_path(marker_path, repo_root),
+        marker_schema_path=repository_relative_path(marker_schema_path, repo_root),
     )
 
 
@@ -838,11 +837,19 @@ def write_draft_marker_if_requested(
             "Edit or validate the existing marker instead."
         )
     try:
-        marker_path.parent.mkdir(parents=True, exist_ok=True)
-        marker_path.write_text(marker_text, encoding="utf-8")
-    except OSError as error:
+        write_repository_relative_file_bytes(
+            repo_root,
+            marker_relative,
+            marker_text.encode("utf-8"),
+            field_name="marker path",
+        )
+    except (OSError, TemplateSyncMaterializationError) as error:
+        if isinstance(error, OSError):
+            error_summary = os_error_summary(error)
+        else:
+            error_summary = str(error)
         raise FirstAdoptionBootstrapError(
-            f"Unable to write draft marker {marker_relative}: {os_error_summary(error)}"
+            f"Unable to write draft marker {marker_relative}: {error_summary}"
         ) from error
     return "created from validated draft marker"
 
@@ -1435,7 +1442,7 @@ def main(argv: list[str] | None = None, *, stdout: TextIO = sys.stdout) -> int:
                 marker_schema_path=marker_schema_path,
                 repo_root=repo_root,
             )
-            marker_text = marker_yaml(marker_document)
+            marker_text = format_marker_yaml(marker_document)
         marker_preview_text = marker_text if print_draft_marker else None
 
         write_result = perform_writes(

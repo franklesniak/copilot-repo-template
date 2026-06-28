@@ -241,14 +241,48 @@ import materialize_downstream_adoption as materializer  # noqa: E402
 
 
 def write_file(path: Path, content: str) -> None:
-    """Write a UTF-8 fixture file."""
+    """Write a UTF-8 fixture file with LF newlines on every platform.
+
+    Newline translation is disabled so generated fixtures (notably the
+    decisions.yml exercised by the yamllint assertions) keep LF endings on
+    Windows and satisfy yamllint's unix new-lines rule, matching the
+    repository's LF-normalized files.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    path.write_text(content, encoding="utf-8", newline="\n")
+
+
+class _IndentSequenceDumper(yaml.SafeDumper):
+    """SafeDumper that indents block sequences under their mapping key.
+
+    The repository ``.yamllint.yml`` enables ``indentation.indent-sequences``,
+    so fixture YAML must nest sequence items one level deeper than the key that
+    introduces them. The default PyYAML emitter writes indentless sequences,
+    which would make generated fixtures such as ``decisions.yml`` violate the
+    repository yamllint configuration.
+    """
+
+    def increase_indent(self, flow: bool = False, indentless: bool = False) -> None:
+        """Force block sequences to use ordinary nested indentation."""
+        super().increase_indent(flow=flow, indentless=False)
+
+    def ignore_aliases(self, data: object) -> bool:
+        """Keep generated fixture YAML free of anchors and aliases."""
+        return True
 
 
 def write_yaml(path: Path, data: dict[str, Any]) -> None:
-    """Write a YAML fixture file."""
-    write_file(path, yaml.safe_dump(data, sort_keys=False))
+    """Write a YAML fixture file using the repository's indent-sequence style."""
+    write_file(
+        path,
+        yaml.dump(
+            data,
+            Dumper=_IndentSequenceDumper,
+            sort_keys=False,
+            default_flow_style=False,
+            width=120,
+        ),
+    )
 
 
 def write_json(path: Path, data: dict[str, Any]) -> None:
@@ -299,6 +333,36 @@ def check_jsonschema_command() -> list[str] | None:
     if importlib.util.find_spec("check_jsonschema") is not None:
         return [sys.executable, "-m", "check_jsonschema"]
     return None
+
+
+def yamllint_command() -> list[str] | None:
+    """Resolve a direct yamllint command for generated temporary files."""
+    executable = shutil.which("yamllint")
+    if executable is not None:
+        return [executable]
+    if importlib.util.find_spec("yamllint") is not None:
+        return [sys.executable, "-m", "yamllint"]
+    return None
+
+
+def assert_yamllint_clean(*paths: Path) -> None:
+    """Assert paths pass yamllint under the repository configuration."""
+    command = yamllint_command()
+    if command is None:
+        pytest.skip("yamllint executable or importable module is required for this assertion")
+    result = subprocess.run(
+        [
+            *command,
+            "-c",
+            str(REPO_ROOT / ".yamllint.yml"),
+            *(str(path) for path in paths),
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def prepare_template(
@@ -1312,6 +1376,27 @@ def test_materialized_optional_pruning_retained_tests_have_no_stale_markers(
                     ), f"{relative_path}: {marker_name}"
 
 
+@pytest.mark.upstream_template_only
+def test_materialized_full_adoption_yaml_surfaces_are_yamllint_clean(
+    tmp_path: Path,
+) -> None:
+    """A full retained fixture writes YAML surfaces clean under the repo config."""
+    if yamllint_command() is None:
+        pytest.skip("yamllint executable or importable module is required for this assertion")
+    target_root = materialize_module_fixture(
+        tmp_path,
+        FULL_TEMPLATE_MODULES,
+        authorize_protected_files=True,
+    )
+    yaml_paths = tuple(
+        sorted(path for pattern in ("*.yml", "*.yaml") for path in target_root.rglob(pattern))
+    )
+
+    assert target_root / ".template-sync" / "marker.yml" in yaml_paths
+    assert target_root / ".github" / "workflows" / "data-ci.yml" in yaml_paths
+    assert_yamllint_clean(*yaml_paths)
+
+
 def test_materialized_azure_pipelines_without_github_actions_omits_actionlint(
     tmp_path: Path,
 ) -> None:
@@ -2243,6 +2328,89 @@ def test_materialization_preview_reports_pruned_live_marker_families(
     pruning_preview = section_entries(result.stdout, "Pruning preview")
     assert pruning_preview == {"README.md: python-reference-only"}
     assert "Computed marker preview:" in result.stdout
+
+
+def test_computed_marker_preview_uses_canonical_marker_yaml(tmp_path: Path) -> None:
+    """Preview-only computed marker output is the canonical marker YAML with prefixes."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(
+        template_root,
+        [
+            {"pattern": "README.md", "requires_all": ["baseline"]},
+        ],
+    )
+    write_file(template_root / "README.md", "template readme\n")
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+    )
+
+    assert result.returncode == 0, result.stderr
+    expected_marker = materializer.marker_yaml(
+        {"template_sync": {"source_repo": SOURCE_REPO, "included_modules": ["baseline"]}}
+    )
+    expected_preview = "".join(f"  {line}\n" for line in expected_marker.rstrip("\n").splitlines())
+    assert result.stdout.split("Computed marker preview:\n", maxsplit=1)[1] == expected_preview
+    assert not (target_root / ".template-sync" / "marker.yml").exists()
+
+
+def materialized_marker_fixture(tmp_path: Path) -> Path:
+    """Materialize a minimal fixture that writes a computed marker."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(
+        template_root,
+        [
+            {"pattern": ".template-sync/marker.yml", "requires_all": ["template-sync-support"]},
+        ],
+    )
+    write_yaml(
+        target_root / "decisions.yml",
+        marker_document(
+            ["template-sync-support"],
+            local_overrides=[
+                {
+                    "path": "README.md",
+                    "reason": "Review local README changes later.",
+                    "default_decision": "DEFER",
+                }
+            ],
+        ),
+    )
+
+    result = run_materialize(template_root, target_root, "--decisions-file", "decisions.yml")
+
+    assert result.returncode == 0, result.stderr
+    return target_root / ".template-sync" / "marker.yml"
+
+
+def test_materialized_marker_yaml_is_canonical(tmp_path: Path) -> None:
+    """Generated marker writes use canonical YAML before reaching disk."""
+    marker_path = materialized_marker_fixture(tmp_path)
+    marker_text = read_file(marker_path)
+    marker_document_data = load_yaml(marker_path)
+    assert isinstance(marker_document_data, dict)
+    assert marker_text == materializer.marker_yaml(marker_document_data)
+    assert "  included_modules:\n    - template-sync-support\n" in marker_text
+    assert "  local_overrides:\n    - path: README.md\n" in marker_text
+    assert not marker_text.startswith("---")
+
+
+def test_materialized_marker_yaml_is_yamllint_clean(tmp_path: Path) -> None:
+    """Generated marker writes pass yamllint under the repository config."""
+    if yamllint_command() is None:
+        pytest.skip("yamllint executable or importable module is required for this assertion")
+    marker_path = materialized_marker_fixture(tmp_path)
+
+    assert_yamllint_clean(marker_path)
 
 
 def test_materialized_no_python_adoption_prunes_dependabot_pip_ecosystem(

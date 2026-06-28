@@ -35,6 +35,8 @@ from template_sync_materialization_helpers import (  # noqa: E402
     ProtectedFileDecision,
     TemplateSyncMaterializationError,
     classify_repository_file,
+    ensure_regular_repository_file_target,
+    format_marker_yaml,
     is_protected_instruction_path,
     inline_block_families_to_prune,
     iter_safe_repository_files,
@@ -47,8 +49,11 @@ from template_sync_materialization_helpers import (  # noqa: E402
     resolve_safe_repository_target_path,
     selected_relation_for_path,
     validate_inline_block_markers,
+    validate_marker_yaml_text,
     validate_protected_file_decisions,
     validate_schema,
+    write_repository_file_bytes,
+    write_repository_relative_file_bytes,
 )
 
 EXIT_SUCCESS = 0
@@ -1769,7 +1774,7 @@ def computed_marker_document(
 
 def marker_yaml(marker_document: dict[str, Any]) -> str:
     """Return deterministic marker YAML."""
-    return cast(str, yaml.safe_dump(marker_document, sort_keys=False, allow_unicode=False))
+    return format_marker_yaml(marker_document)
 
 
 def validate_computed_marker(
@@ -1777,20 +1782,17 @@ def validate_computed_marker(
     *,
     template_root: Path,
 ) -> None:
-    """Validate the computed marker document against the checked-in schema."""
-    schema_path = resolve_safe_repository_target_path(
-        template_root,
-        DEFAULT_MARKER_SCHEMA_PATH,
-        field_name="marker schema path",
-    )
-    schema = load_json_mapping(schema_path, template_root)
-    marker_path = resolve_safe_repository_target_path(
-        template_root,
+    """Validate the computed marker document and formatted marker YAML."""
+    validate_marker_yaml_text(marker_yaml(marker_document), repo_root=template_root)
+
+
+def marker_target_path(target_root: Path) -> Path:
+    """Return the safe target path for the repository marker."""
+    return resolve_safe_repository_target_path(
+        target_root,
         DEFAULT_MARKER_PATH,
         field_name="marker path",
     )
-    validate_schema(marker_document, schema, marker_path, template_root)
-    parse_marker_decision_data(marker_document, validate_protected_decision_integrity=True)
 
 
 def validate_inline_markers(text: str, *, relative_path: str) -> None:
@@ -2055,7 +2057,7 @@ def apply_license_preservation(
             "Cannot preserve downstream license text to root LICENSE because root "
             "LICENSE already exists. Resolve the license conflict before rerunning."
         )
-    write_staged_bytes(target_license_path, preservation.bytes_content)
+    write_staged_bytes(target_license_path, LICENSE_TARGET_PATH, preservation.bytes_content)
     summary.created.add(LICENSE_TARGET_PATH)
     summary.residual_cleanup_paths.add(preservation.source_path)
     summary.license_notes.append(
@@ -2173,10 +2175,9 @@ def conflict_for_protected_path(
     )
 
 
-def write_staged_bytes(target_path: Path, bytes_content: bytes) -> None:
+def write_staged_bytes(target_path: Path, relative_path: str, bytes_content: bytes) -> None:
     """Write materialized bytes to the target path."""
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    target_path.write_bytes(bytes_content)
+    write_repository_file_bytes(target_path, relative_path, bytes_content)
 
 
 def ensure_regular_target(target_path: Path, relative_path: str) -> None:
@@ -2187,12 +2188,10 @@ def ensure_regular_target(target_path: Path, relative_path: str) -> None:
     with the repository-relative ``relative_path`` lets the adopter resolve the
     conflict safely.
     """
-    if target_path.exists() and not target_path.is_file():
-        raise MaterializationError(
-            f"Cannot reconcile {relative_path}: the target path exists but is not a "
-            "regular file (for example a directory or a symlink to one). Resolve the "
-            "conflict in the downstream repository, then rerun."
-        )
+    try:
+        ensure_regular_repository_file_target(target_path, relative_path)
+    except TemplateSyncMaterializationError as error:
+        raise MaterializationError(str(error)) from error
 
 
 def reconcile_staged_files(
@@ -2258,10 +2257,10 @@ def reconcile_staged_files(
                 if is_identical:
                     summary.unchanged.add(relative_path)
                 elif target_exists:
-                    write_staged_bytes(target_path, staged_bytes)
+                    write_staged_bytes(target_path, relative_path, staged_bytes)
                     summary.updated.add(relative_path)
                 else:
-                    write_staged_bytes(target_path, staged_bytes)
+                    write_staged_bytes(target_path, relative_path, staged_bytes)
                     summary.created.add(relative_path)
                 continue
             if decision.decision == REMOVAL_DECISION:
@@ -2291,10 +2290,10 @@ def reconcile_staged_files(
                 if is_identical:
                     summary.unchanged.add(relative_path)
                 elif target_exists:
-                    write_staged_bytes(target_path, staged_bytes)
+                    write_staged_bytes(target_path, relative_path, staged_bytes)
                     summary.updated.add(relative_path)
                 else:
-                    write_staged_bytes(target_path, staged_bytes)
+                    write_staged_bytes(target_path, relative_path, staged_bytes)
                     summary.created.add(relative_path)
                 continue
             if local_override_decision == REMOVAL_DECISION:
@@ -2311,7 +2310,7 @@ def reconcile_staged_files(
             continue
 
         if not target_exists:
-            write_staged_bytes(target_path, staged_bytes)
+            write_staged_bytes(target_path, relative_path, staged_bytes)
             summary.created.add(relative_path)
         elif is_identical:
             summary.unchanged.add(relative_path)
@@ -2345,11 +2344,7 @@ def reconcile_marker(
         summary.computed_marker_preview = computed_marker_text
         return
 
-    marker_path = resolve_safe_repository_target_path(
-        target_root,
-        DEFAULT_MARKER_PATH,
-        field_name="marker path",
-    )
+    marker_path = marker_target_path(target_root)
     ensure_regular_target(marker_path, DEFAULT_MARKER_PATH)
     marker_bytes = computed_marker_text.encode("utf-8")
     existing_bytes = marker_path.read_bytes() if marker_path.exists() else None
@@ -2357,8 +2352,12 @@ def reconcile_marker(
         summary.marker_status = "unchanged"
         summary.marker_reason = "existing marker already equals computed marker"
         return
-    marker_path.parent.mkdir(parents=True, exist_ok=True)
-    marker_path.write_bytes(marker_bytes)
+    write_repository_relative_file_bytes(
+        target_root,
+        DEFAULT_MARKER_PATH,
+        marker_bytes,
+        field_name="marker path",
+    )
     summary.marker_status = "updated"
     summary.marker_reason = "computed marker written"
 

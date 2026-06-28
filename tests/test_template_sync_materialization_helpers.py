@@ -13,6 +13,9 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_DIR = REPO_ROOT / ".template-sync" / "scripts"
 MANIFEST_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-manifest.schema.json"
 MARKER_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-marker.schema.json"
+VALID_MARKER_EXAMPLE_PATHS = tuple(
+    sorted((REPO_ROOT / "schemas" / "examples" / "template-sync-marker" / "valid").glob("*.yml"))
+)
 
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
@@ -27,9 +30,12 @@ from template_sync_materialization_helpers import (  # noqa: E402
     MissingExpectedInlineBlockError,
     NestedInlineBlockError,
     RepositoryPathError,
+    TemplateSyncMaterializationError,
     UnclosedInlineBlockError,
     UnmatchedInlineBlockEndError,
     classify_repository_file,
+    ensure_regular_repository_file_target,
+    format_marker_yaml,
     inline_block_families_to_prune,
     is_excluded_template_path,
     is_protected_instruction_path,
@@ -46,7 +52,9 @@ from template_sync_materialization_helpers import (  # noqa: E402
     selected_local_path_ownership_for_path,
     selected_relation_for_path,
     validate_inline_block_markers,
+    validate_marker_yaml_text,
     validate_module_compatibility,
+    write_repository_relative_file_bytes,
 )
 
 SOURCE_REPO = "https://github.com/franklesniak/copilot-repo-template.git"
@@ -172,6 +180,70 @@ def test_marker_loader_schema_validates_decision_data(tmp_path: Path) -> None:
     assert marker_data.included_modules == frozenset({"baseline"})
     assert marker_data.local_overrides[0].matches("local/file.txt")
     assert marker_data.protected_decisions[0].path == "AGENTS.md"
+
+
+def test_format_marker_yaml_is_canonical_and_validates_serialized_text() -> None:
+    """Canonical marker YAML has yamllint-compatible sequence indentation."""
+    marker_document = _marker(["baseline", "template-sync-support"])
+
+    marker_text = format_marker_yaml(marker_document)
+    parsed = validate_marker_yaml_text(marker_text, repo_root=REPO_ROOT)
+
+    assert parsed == marker_document
+    assert not marker_text.startswith("---")
+    assert marker_text.endswith("\n")
+    assert not marker_text.endswith("\n\n")
+    assert "  included_modules:\n    - baseline\n    - template-sync-support\n" in marker_text
+    assert "  local_overrides:\n    - path: local/\n" in marker_text
+
+
+@pytest.mark.parametrize("example_path", VALID_MARKER_EXAMPLE_PATHS, ids=lambda path: path.name)
+def test_valid_marker_examples_match_canonical_formatter(example_path: Path) -> None:
+    """Committed valid marker examples stay in the canonical generated format."""
+    marker_text = example_path.read_text(encoding="utf-8")
+    marker_document = yaml.safe_load(marker_text)
+
+    assert isinstance(marker_document, dict)
+    assert format_marker_yaml(marker_document) == marker_text
+
+
+def test_repository_file_writer_creates_parent_directories(tmp_path: Path) -> None:
+    """Shared file writes create parents and write bytes exactly."""
+    target_path = tmp_path / ".template-sync" / "marker.yml"
+
+    written_path = write_repository_relative_file_bytes(
+        tmp_path,
+        ".template-sync/marker.yml",
+        b"marker\n",
+        field_name="marker path",
+    )
+
+    assert written_path == target_path
+    assert target_path.read_bytes() == b"marker\n"
+
+
+def test_regular_target_guard_rejects_existing_symlink_target(
+    tmp_path: Path,
+) -> None:
+    """Existing symlink targets are rejected even when they point at regular files."""
+    real_target = tmp_path / "real-marker.yml"
+    real_target.write_text("template_sync:\n  source_repo: x\n", encoding="utf-8")
+    symlink_target = tmp_path / ".template-sync" / "marker.yml"
+    symlink_target.parent.mkdir()
+    try:
+        symlink_target.symlink_to(real_target)
+    except (OSError, NotImplementedError) as error:
+        if isinstance(error, OSError):
+            detail = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        else:
+            detail = type(error).__name__
+        pytest.skip(f"Filesystem does not support symlink creation: {detail}")
+
+    with pytest.raises(TemplateSyncMaterializationError) as excinfo:
+        ensure_regular_repository_file_target(symlink_target, ".template-sync/marker.yml")
+
+    assert ".template-sync/marker.yml" in str(excinfo.value)
+    assert "not a regular file" in str(excinfo.value)
 
 
 def test_local_path_ownership_matching_uses_most_specific_record() -> None:

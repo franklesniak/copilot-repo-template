@@ -10,5 +10,5 @@ template_sync:
       default_decision: SKIP
   deferred_protected_candidates:
     - path: AGENTS.md
-      source_commit: "89abcdef0123456789abcdef0123456789abcdef"
+      source_commit: 89abcdef0123456789abcdef0123456789abcdef
       reason: Protected Codex instructions require explicit owner authorization.

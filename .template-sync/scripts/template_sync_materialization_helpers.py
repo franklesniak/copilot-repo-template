@@ -9,7 +9,7 @@ import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Collection, Iterable
+from typing import Any, Collection, Iterable, cast
 
 import jsonschema
 import yaml  # type: ignore[import-untyped]
@@ -372,6 +372,18 @@ class RepositoryFileClassification:
         return not self.is_transformable_text
 
 
+class _MarkerYamlDumper(yaml.SafeDumper):
+    """PyYAML safe dumper that indents block sequences under mapping keys."""
+
+    def increase_indent(self, flow: bool = False, indentless: bool = False) -> None:
+        """Force block sequences to use ordinary nested indentation."""
+        super().increase_indent(flow=flow, indentless=False)
+
+    def ignore_aliases(self, data: object) -> bool:
+        """Keep generated marker YAML free of anchors and aliases."""
+        return True
+
+
 def os_error_summary(error: OSError) -> str:
     """Return an OSError summary that avoids implicit filesystem paths."""
     return f"{type(error).__name__}: {error.strerror or 'I/O error'}"
@@ -470,6 +482,117 @@ def validate_schema(
     raise TemplateSyncMaterializationError(
         f"Schema validation failed for {relative_path}:\n{messages}"
     )
+
+
+def format_marker_yaml(marker_document: dict[str, Any]) -> str:
+    """Return canonical deterministic YAML for a template-sync marker document."""
+    marker_text = cast(
+        str,
+        yaml.dump(
+            marker_document,
+            Dumper=_MarkerYamlDumper,
+            sort_keys=False,
+            allow_unicode=False,
+            default_flow_style=False,
+            width=120,
+        ),
+    )
+    marker_text = marker_text.rstrip("\n") + "\n"
+    if marker_text.startswith("---"):
+        raise TemplateSyncMaterializationError(
+            "Formatted marker YAML must not include a document-start marker."
+        )
+    return marker_text
+
+
+def validate_marker_yaml_text(
+    marker_text: str,
+    *,
+    repo_root: Path,
+    marker_path: str = DEFAULT_MARKER_PATH,
+    marker_schema_path: str = DEFAULT_MARKER_SCHEMA_PATH,
+) -> dict[str, Any]:
+    """Parse, schema-validate, and integrity-check formatted marker YAML."""
+    marker_document_path = resolve_safe_repository_target_path(
+        repo_root,
+        marker_path,
+        field_name="marker path",
+    )
+    marker_relative_path = repository_relative_path(marker_document_path, repo_root)
+    try:
+        parsed = yaml.safe_load(marker_text)
+    except yaml.YAMLError as error:
+        raise TemplateSyncMaterializationError(
+            f"Invalid YAML in {marker_relative_path}: {error}"
+        ) from error
+    if not isinstance(parsed, dict):
+        raise TemplateSyncMaterializationError(
+            f"{marker_relative_path} must contain a YAML mapping."
+        )
+
+    schema_path = resolve_safe_repository_target_path(
+        repo_root,
+        marker_schema_path,
+        field_name="marker schema path",
+    )
+    marker_schema = load_json_mapping(schema_path, repo_root)
+    validate_schema(parsed, marker_schema, marker_document_path, repo_root)
+    parse_marker_decision_data(parsed, validate_protected_decision_integrity=True)
+    return parsed
+
+
+def ensure_regular_repository_file_target(target_path: Path, relative_path: str) -> None:
+    """Raise when an existing write target is not a regular file.
+
+    This guard inspects target_path only, rejecting an existing symlink,
+    directory, or other non-regular file. It does not verify that target_path
+    is contained within the repository root or that its ancestors are
+    symlink-free. Callers must establish that precondition first by resolving
+    the target through resolve_safe_repository_target_path (or by using
+    write_repository_relative_file_bytes), which enforce repository containment
+    and symlink-ancestor safety.
+    """
+    if target_path.is_symlink() or (target_path.exists() and not target_path.is_file()):
+        raise TemplateSyncMaterializationError(
+            f"Cannot reconcile {relative_path}: the target path exists but is not a "
+            f"regular file (for example a directory or a symlink). Resolve the "
+            f"conflict in the downstream repository, then rerun."
+        )
+
+
+def write_repository_file_bytes(
+    target_path: Path,
+    relative_path: str,
+    bytes_content: bytes,
+) -> None:
+    """Write bytes to a target after enforcing regular-file safety.
+
+    Like ensure_regular_repository_file_target, this writer only enforces that
+    target_path is a regular file; it does not enforce repository containment
+    or symlink-ancestor safety. Pass a target_path already resolved by
+    resolve_safe_repository_target_path, or call
+    write_repository_relative_file_bytes, when those guarantees are required.
+    """
+    ensure_regular_repository_file_target(target_path, relative_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_bytes(bytes_content)
+
+
+def write_repository_relative_file_bytes(
+    repo_root: Path,
+    relative_path: str,
+    bytes_content: bytes,
+    *,
+    field_name: str = "path",
+) -> Path:
+    """Resolve and write a repository-relative file target safely."""
+    target_path = resolve_safe_repository_target_path(
+        repo_root,
+        relative_path,
+        field_name=field_name,
+    )
+    write_repository_file_bytes(target_path, relative_path, bytes_content)
+    return target_path
 
 
 def load_validated_manifest(

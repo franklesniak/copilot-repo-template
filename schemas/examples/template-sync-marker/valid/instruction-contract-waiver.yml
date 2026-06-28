@@ -6,5 +6,5 @@ template_sync:
   instruction_contract_waivers:
     - path: CLAUDE.md
       anchor: '## Handling Code Review Comments'
-      reason: 'Downstream owner intentionally replaces the Claude review protocol.'
-      authorization_basis: 'Owner authorized waiving this CLAUDE.md anchor on 2026-05-27.'
+      reason: Downstream owner intentionally replaces the Claude review protocol.
+      authorization_basis: Owner authorized waiving this CLAUDE.md anchor on 2026-05-27.
