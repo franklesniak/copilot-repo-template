@@ -654,7 +654,13 @@ def test_embedded_markdown_fence_context_preserves_yaml_block_scalar_examples() 
 
 def test_standard_markdown_context_keeps_yaml_indented_fences_visible() -> None:
     """Standard Markdown mode does not apply global YAML block-scalar rules."""
-    text = "        ```\n" "        [inside](templates/python/example.py)\n" "        ```\n"
+    text = "".join(
+        [
+            "        ```\n",
+            "        [inside](templates/python/example.py)\n",
+            "        ```\n",
+        ]
+    )
 
     visible_lines = lines_outside_markdown_fences(
         text,
@@ -683,7 +689,12 @@ def test_standard_markdown_context_keeps_yaml_indented_fences_visible() -> None:
             NestedInlineBlockError,
         ),
         (
-            "# template-sync: begin python-only\n" "# template-sync: end terraform-only\n",
+            "".join(
+                [
+                    "# template-sync: begin python-only\n",
+                    "# template-sync: end terraform-only\n",
+                ]
+            ),
             MismatchedInlineBlockError,
         ),
     ],

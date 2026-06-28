@@ -624,7 +624,10 @@ def inline_block_findings(repo_root: Path, state: ReportState) -> tuple[Finding,
                     module="unknown",
                     path=relative_path,
                     line_number=error.line_number,
-                    detail=str(error),
+                    # Use the bare message: Finding.render() prints the location
+                    # separately via ``location``, so str(error) (which embeds a
+                    # "{path}:{line}: " prefix) would duplicate it in the report.
+                    detail=error.message,
                 )
             )
             continue

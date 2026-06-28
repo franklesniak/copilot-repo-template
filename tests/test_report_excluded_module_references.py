@@ -573,6 +573,24 @@ def test_invalid_explicit_module_is_runtime_failure(tmp_path: Path) -> None:
     assert "not defined by the manifest" in result.stderr
 
 
+def test_inline_block_invalid_finding_reports_location_once(tmp_path: Path) -> None:
+    """A structural inline-block error reports its location once in the finding."""
+    _write_common_repo(tmp_path)
+    _write_text(
+        tmp_path,
+        ".pre-commit-config.yaml",
+        "repos: []\n# template-sync: begin python-only\n",
+    )
+
+    result = _run_report(tmp_path)
+
+    findings = _finding_lines(result.stdout)
+    invalid = [line for line in findings if line.startswith("inline-block.invalid")]
+    assert invalid, result.stdout
+    assert invalid[0].count(".pre-commit-config.yaml") == 1, invalid[0]
+    assert "Unclosed template-sync inline marker: python-only" in invalid[0]
+
+
 def test_dependabot_local_override_keeps_ecosystem_from_stale(tmp_path: Path) -> None:
     """A locally overridden scanned file keeps its Dependabot ecosystem non-stale."""
     _write_common_repo(
