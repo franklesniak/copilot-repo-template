@@ -246,9 +246,37 @@ def write_file(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+class _IndentSequenceDumper(yaml.SafeDumper):
+    """SafeDumper that indents block sequences under their mapping key.
+
+    The repository ``.yamllint.yml`` enables ``indentation.indent-sequences``,
+    so fixture YAML must nest sequence items one level deeper than the key that
+    introduces them. The default PyYAML emitter writes indentless sequences,
+    which would make generated fixtures such as ``decisions.yml`` violate the
+    repository yamllint configuration.
+    """
+
+    def increase_indent(self, flow: bool = False, indentless: bool = False) -> None:
+        """Force block sequences to use ordinary nested indentation."""
+        super().increase_indent(flow=flow, indentless=False)
+
+    def ignore_aliases(self, data: object) -> bool:
+        """Keep generated fixture YAML free of anchors and aliases."""
+        return True
+
+
 def write_yaml(path: Path, data: dict[str, Any]) -> None:
-    """Write a YAML fixture file."""
-    write_file(path, yaml.safe_dump(data, sort_keys=False))
+    """Write a YAML fixture file using the repository's indent-sequence style."""
+    write_file(
+        path,
+        yaml.dump(
+            data,
+            Dumper=_IndentSequenceDumper,
+            sort_keys=False,
+            default_flow_style=False,
+            width=120,
+        ),
+    )
 
 
 def write_json(path: Path, data: dict[str, Any]) -> None:
@@ -1355,11 +1383,7 @@ def test_materialized_full_adoption_yaml_surfaces_are_yamllint_clean(
         authorize_protected_files=True,
     )
     yaml_paths = tuple(
-        sorted(
-            path
-            for pattern in ("*.yml", "*.yaml")
-            for path in target_root.rglob(pattern)
-        )
+        sorted(path for pattern in ("*.yml", "*.yaml") for path in target_root.rglob(pattern))
     )
 
     assert target_root / ".template-sync" / "marker.yml" in yaml_paths
@@ -2326,9 +2350,7 @@ def test_computed_marker_preview_uses_canonical_marker_yaml(tmp_path: Path) -> N
     expected_marker = materializer.marker_yaml(
         {"template_sync": {"source_repo": SOURCE_REPO, "included_modules": ["baseline"]}}
     )
-    expected_preview = "".join(
-        f"  {line}\n" for line in expected_marker.rstrip("\n").splitlines()
-    )
+    expected_preview = "".join(f"  {line}\n" for line in expected_marker.rstrip("\n").splitlines())
     assert result.stdout.split("Computed marker preview:\n", maxsplit=1)[1] == expected_preview
     assert not (target_root / ".template-sync" / "marker.yml").exists()
 
