@@ -58,6 +58,12 @@ EMBEDDED_MARKDOWN_FENCE_CONTEXT = "embedded-markdown"
 LIST_MARKER_RE = re.compile(
     r"^(?P<indent> {0,3})(?P<marker>(?:[-+*]|\d{1,9}[.)]))(?P<spaces> {1,4})(?P<rest>.*)$"
 )
+# Same as ``LIST_MARKER_RE`` but with no 0-3 space cap on the leading indent, so
+# list-contained fences inside deeply-indented YAML block scalars are recognized
+# under the embedded-Markdown fence context.
+EMBEDDED_LIST_MARKER_RE = re.compile(
+    r"^(?P<indent> *)(?P<marker>(?:[-+*]|\d{1,9}[.)]))(?P<spaces> {1,4})(?P<rest>.*)$"
+)
 # AND-retention markers. A block in this family is retained only when *every*
 # module it names is present in ``included_modules``; it is stripped when *any*
 # named module is excluded (see ``remove_inline_blocks_for_modules``). This is
@@ -1628,13 +1634,19 @@ def consume_blockquote_prefix(
     line: str,
     *,
     max_depth: int | None = None,
+    allow_arbitrary_indent: bool = False,
 ) -> tuple[int, int]:
-    """Return ``(depth, offset)`` after consuming Markdown blockquote prefixes."""
+    """Return ``(depth, offset)`` after consuming Markdown blockquote prefixes.
+
+    ``allow_arbitrary_indent`` lifts GFM's 0-3 space limit on the indentation
+    preceding each ``>`` so blockquote-contained fences inside deeply-indented
+    YAML ``value: |`` block scalars are recognized as well.
+    """
     depth = 0
     offset = 0
     while max_depth is None or depth < max_depth:
         spaces = 0
-        while offset < len(line) and line[offset] == " " and spaces < 3:
+        while offset < len(line) and line[offset] == " " and (allow_arbitrary_indent or spaces < 3):
             offset += 1
             spaces += 1
         if offset >= len(line) or line[offset] != ">":
@@ -1705,25 +1717,22 @@ def parse_fence_close_from_content(
 
 
 def parse_markdown_fence_open(line: str, fence_context: str) -> MarkdownFence | None:
-    """Return active fence state when ``line`` opens a fenced-code block."""
-    allow_arbitrary_indent = fence_context == EMBEDDED_MARKDOWN_FENCE_CONTEXT
-    if allow_arbitrary_indent:
-        opened = parse_fence_open_from_content(line, allow_arbitrary_indent=True)
-        if opened is None:
-            return None
-        character, length, info = opened
-        return MarkdownFence(
-            character=character,
-            length=length,
-            info=info,
-            quote_depth=0,
-            list_content_indent=None,
-            allow_arbitrary_indent=True,
-        )
+    """Return active fence state when ``line`` opens a fenced-code block.
 
-    quote_depth, quote_offset = consume_blockquote_prefix(line)
+    Both contexts recognize blockquote- and list-contained fences; the embedded
+    context (``allow_arbitrary_indent``) lifts GFM's 0-3 space indentation caps
+    so containing-block fences inside deeply-indented YAML ``value: |`` block
+    scalars are recognized as opaque too.
+    """
+    allow_arbitrary_indent = fence_context == EMBEDDED_MARKDOWN_FENCE_CONTEXT
+
+    quote_depth, quote_offset = consume_blockquote_prefix(
+        line, allow_arbitrary_indent=allow_arbitrary_indent
+    )
     content = line[quote_offset:]
-    list_match = LIST_MARKER_RE.match(content)
+
+    list_marker_re = EMBEDDED_LIST_MARKER_RE if allow_arbitrary_indent else LIST_MARKER_RE
+    list_match = list_marker_re.match(content)
     if list_match is not None:
         list_content_indent = (
             len(list_match.group("indent"))
@@ -1732,7 +1741,7 @@ def parse_markdown_fence_open(line: str, fence_context: str) -> MarkdownFence | 
         )
         opened = parse_fence_open_from_content(
             list_match.group("rest"),
-            allow_arbitrary_indent=False,
+            allow_arbitrary_indent=allow_arbitrary_indent,
         )
         if opened is not None:
             character, length, info = opened
@@ -1742,10 +1751,10 @@ def parse_markdown_fence_open(line: str, fence_context: str) -> MarkdownFence | 
                 info=info,
                 quote_depth=quote_depth,
                 list_content_indent=list_content_indent,
-                allow_arbitrary_indent=False,
+                allow_arbitrary_indent=allow_arbitrary_indent,
             )
 
-    opened = parse_fence_open_from_content(content, allow_arbitrary_indent=False)
+    opened = parse_fence_open_from_content(content, allow_arbitrary_indent=allow_arbitrary_indent)
     if opened is None:
         return None
     character, length, info = opened
@@ -1755,7 +1764,7 @@ def parse_markdown_fence_open(line: str, fence_context: str) -> MarkdownFence | 
         info=info,
         quote_depth=quote_depth,
         list_content_indent=None,
-        allow_arbitrary_indent=False,
+        allow_arbitrary_indent=allow_arbitrary_indent,
     )
 
 
@@ -1765,6 +1774,7 @@ def active_fence_content(line: str, active_fence: MarkdownFence) -> str | None:
         quote_depth, quote_offset = consume_blockquote_prefix(
             line,
             max_depth=active_fence.quote_depth,
+            allow_arbitrary_indent=active_fence.allow_arbitrary_indent,
         )
         if quote_depth < active_fence.quote_depth:
             return None

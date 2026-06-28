@@ -701,6 +701,46 @@ def test_standard_markdown_context_keeps_yaml_indented_fences_visible() -> None:
     assert (2, "        [inside](templates/python/example.py)") in visible_lines
 
 
+def test_embedded_fence_context_recognizes_blockquote_contained_fences() -> None:
+    """Embedded-Markdown mode treats deeply-indented blockquote fences as opaque."""
+    text = "".join(
+        [
+            "        > ```\n",
+            "        > [inside](templates/python/example.py)\n",
+            "        > ```\n",
+            "        [outside](templates/python/example.py)\n",
+        ]
+    )
+
+    visible_lines = lines_outside_markdown_fences(
+        text,
+        fence_context=EMBEDDED_MARKDOWN_FENCE_CONTEXT,
+    )
+
+    assert (2, "        > [inside](templates/python/example.py)") not in visible_lines
+    assert (4, "        [outside](templates/python/example.py)") in visible_lines
+
+
+def test_embedded_fence_context_recognizes_list_contained_fences() -> None:
+    """Embedded-Markdown mode treats deeply-indented list-item fences as opaque."""
+    text = "".join(
+        [
+            "        - ```\n",
+            "          [inside](templates/python/example.py)\n",
+            "          ```\n",
+            "        [outside](templates/python/example.py)\n",
+        ]
+    )
+
+    visible_lines = lines_outside_markdown_fences(
+        text,
+        fence_context=EMBEDDED_MARKDOWN_FENCE_CONTEXT,
+    )
+
+    assert (2, "          [inside](templates/python/example.py)") not in visible_lines
+    assert (4, "        [outside](templates/python/example.py)") in visible_lines
+
+
 @pytest.mark.parametrize(
     ("text", "error_type"),
     [
