@@ -18,16 +18,24 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from template_sync_materialization_helpers import (  # noqa: E402
+    EMBEDDED_MARKDOWN_FENCE_CONTEXT,
+    MARKDOWN_FENCE_CONTEXT,
     LocalPathOwnership,
     ManifestCompatibilityAlternative,
     ManifestCompatibilityGroup,
+    MismatchedInlineBlockError,
     MissingExpectedInlineBlockError,
+    NestedInlineBlockError,
     RepositoryPathError,
+    UnclosedInlineBlockError,
+    UnmatchedInlineBlockEndError,
     classify_repository_file,
+    inline_block_families_to_prune,
     is_excluded_template_path,
     is_protected_instruction_path,
     is_retained_template_path,
     is_template_managed_path,
+    lines_outside_markdown_fences,
     load_validated_manifest,
     load_validated_marker_decision_data,
     parse_manifest_compatibility_groups,
@@ -37,6 +45,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     resolve_safe_repository_target_path,
     selected_local_path_ownership_for_path,
     selected_relation_for_path,
+    validate_inline_block_markers,
     validate_module_compatibility,
 )
 
@@ -279,8 +288,8 @@ def test_protected_file_classification_uses_shared_rules() -> None:
     assert not is_protected_instruction_path("README.md")
 
 
-def test_inline_block_removal_preserves_blank_line_hygiene() -> None:
-    """Removing an inline block collapses lint-hostile blank-line runs."""
+def test_inline_block_removal_uses_yaml_blank_line_limit() -> None:
+    """Removing a YAML inline block collapses runs to yamllint's one-blank limit."""
     text = (
         "top\n"
         "\n"
@@ -295,17 +304,14 @@ def test_inline_block_removal_preserves_blank_line_hygiene() -> None:
 
     assert (
         remove_inline_block_family(text, "python-only", relative_path="fixture.yml")
-        == "top\n\n\nbottom\n"
+        == "top\n\nbottom\n"
     )
 
 
-def test_inline_block_removal_trims_markdown_fence_trailing_blank_run() -> None:
-    """Stripped blocks do not leave MD012-hostile trailing blanks in Markdown fences."""
+def test_inline_block_removal_preserves_markdown_blank_line_allowance() -> None:
+    """Markdown pruning can retain markdownlint's configured two-blank allowance."""
     text = (
-        "```markdown\n"
-        "<!-- template-sync: begin markdown-reference-only -->\n"
-        "retained\n"
-        "<!-- template-sync: end markdown-reference-only -->\n"
+        "top\n"
         "\n"
         "<!-- template-sync: begin python-reference-only -->\n"
         "removed\n"
@@ -315,7 +321,8 @@ def test_inline_block_removal_trims_markdown_fence_trailing_blank_run() -> None:
         "removed\n"
         "<!-- template-sync: end terraform-reference-only -->\n"
         "\n"
-        "```\n"
+        "\n"
+        "bottom\n"
     )
 
     assert (
@@ -324,12 +331,290 @@ def test_inline_block_removal_trims_markdown_fence_trailing_blank_run() -> None:
             {"markdown"},
             relative_path="fixture.md",
         )
-        == "```markdown\n"
-        "<!-- template-sync: begin markdown-reference-only -->\n"
-        "retained\n"
-        "<!-- template-sync: end markdown-reference-only -->\n"
+        == "top\n\n\nbottom\n"
+    )
+
+
+def test_markdown_fenced_marker_examples_are_not_pruned() -> None:
+    """Registered marker lines inside Markdown fences are documentation examples."""
+    text = (
+        "# Example\n\n"
+        "```markdown\n"
+        "<!-- template-sync: begin python-reference-only -->\n"
+        "Example only.\n"
+        "<!-- template-sync: end python-reference-only -->\n"
+        "```\n"
+        "live\n"
+    )
+
+    assert (
+        remove_inline_blocks_for_modules(
+            text,
+            {"baseline", "markdown"},
+            relative_path="README.md",
+        )
+        == text
+    )
+    assert (
+        inline_block_families_to_prune(
+            text,
+            {"baseline", "markdown"},
+            relative_path="README.md",
+        )
+        == ()
+    )
+
+
+@pytest.mark.parametrize("indent", ["", " ", "  ", "   "])
+def test_markdown_fenced_marker_examples_may_be_indented_up_to_three_spaces(
+    indent: str,
+) -> None:
+    """Fence-aware marker pruning follows GFM's 0-3 space fence indentation."""
+    text = (
+        f"{indent}```\n"
+        "<!-- template-sync: begin python-reference-only -->\n"
+        "Example only.\n"
+        "<!-- template-sync: end python-reference-only -->\n"
+        f"{indent}```\n"
+    )
+
+    assert (
+        remove_inline_blocks_for_modules(
+            text,
+            {"baseline", "markdown"},
+            relative_path="README.md",
+        )
+        == text
+    )
+
+
+def test_non_markdown_fenced_marker_lines_remain_live() -> None:
+    """Non-Markdown text files keep existing marker semantics."""
+    text = (
+        "```\n"
+        "# template-sync: begin python-only\n"
+        "removed\n"
+        "# template-sync: end python-only\n"
         "```\n"
     )
+
+    assert (
+        remove_inline_blocks_for_modules(
+            text,
+            {"baseline"},
+            relative_path="fixture.txt",
+        )
+        == "```\n```\n"
+    )
+
+
+def test_blockquote_fenced_marker_examples_are_not_pruned() -> None:
+    """Blockquote-prefixed Markdown fences suppress marker pruning inside them."""
+    text = (
+        "> ```\n"
+        "> <!-- template-sync: begin python-reference-only -->\n"
+        "> Example only.\n"
+        "> <!-- template-sync: end python-reference-only -->\n"
+        "> ```\n"
+    )
+
+    assert (
+        remove_inline_blocks_for_modules(
+            text,
+            {"baseline", "markdown"},
+            relative_path="README.md",
+        )
+        == text
+    )
+
+
+def test_blockquote_containing_block_closure_restores_live_markers() -> None:
+    """A blockquote-contained unclosed fence does not hide later unquoted markers."""
+    text = (
+        "> ```\n"
+        "> <!-- template-sync: begin python-reference-only -->\n"
+        "> Example only.\n"
+        "\n"
+        "<!-- template-sync: begin python-reference-only -->\n"
+        "Live block.\n"
+        "<!-- template-sync: end python-reference-only -->\n"
+    )
+
+    assert (
+        remove_inline_blocks_for_modules(
+            text,
+            {"baseline", "markdown"},
+            relative_path="README.md",
+        )
+        == "> ```\n> <!-- template-sync: begin python-reference-only -->\n"
+        "> Example only.\n\n"
+    )
+
+
+@pytest.mark.parametrize(
+    ("list_opener", "continuation_indent"),
+    [
+        ("- ```", "  "),
+        ("10. ```", "    "),
+    ],
+)
+def test_list_item_containing_block_closure_restores_live_markers(
+    list_opener: str,
+    continuation_indent: str,
+) -> None:
+    """A list-item-contained unclosed fence does not hide following live markers."""
+    text = (
+        f"{list_opener}\n"
+        f"{continuation_indent}<!-- template-sync: begin python-reference-only -->\n"
+        f"{continuation_indent}Example only.\n"
+        "\n"
+        "<!-- template-sync: begin python-reference-only -->\n"
+        "Live block.\n"
+        "<!-- template-sync: end python-reference-only -->\n"
+    )
+
+    assert (
+        remove_inline_blocks_for_modules(
+            text,
+            {"baseline", "markdown"},
+            relative_path="README.md",
+        )
+        == f"{list_opener}\n"
+        f"{continuation_indent}<!-- template-sync: begin python-reference-only -->\n"
+        f"{continuation_indent}Example only.\n\n"
+    )
+
+
+@pytest.mark.parametrize(
+    ("text", "expected_pruned"),
+    [
+        pytest.param(
+            (
+                "```\n"
+                "~~~\n"
+                "<!-- template-sync: begin python-reference-only -->\n"
+                "Example only.\n"
+                "<!-- template-sync: end python-reference-only -->\n"
+                "```\n"
+            ),
+            False,
+            id="mismatched-close-character",
+        ),
+        pytest.param(
+            (
+                "````\n"
+                "```\n"
+                "<!-- template-sync: begin python-reference-only -->\n"
+                "Example only.\n"
+                "<!-- template-sync: end python-reference-only -->\n"
+                "````\n"
+            ),
+            False,
+            id="too-short-close",
+        ),
+        pytest.param(
+            (
+                "```\n"
+                "``` trailing\n"
+                "<!-- template-sync: begin python-reference-only -->\n"
+                "Example only.\n"
+                "<!-- template-sync: end python-reference-only -->\n"
+                "```\n"
+            ),
+            False,
+            id="close-with-trailing-text",
+        ),
+        pytest.param(
+            (
+                "```bad`info\n"
+                "<!-- template-sync: begin python-reference-only -->\n"
+                "Live because the opener is invalid.\n"
+                "<!-- template-sync: end python-reference-only -->\n"
+            ),
+            True,
+            id="invalid-backtick-info",
+        ),
+    ],
+)
+def test_markdown_fence_rules_control_marker_liveness(
+    text: str,
+    expected_pruned: bool,
+) -> None:
+    """Marker liveness follows same-character close and valid-info GFM rules."""
+    result = remove_inline_blocks_for_modules(
+        text,
+        {"baseline", "markdown"},
+        relative_path="README.md",
+    )
+
+    assert ("python-reference-only" not in result) is expected_pruned
+
+
+def test_embedded_markdown_fence_context_preserves_yaml_block_scalar_examples() -> None:
+    """Embedded-Markdown mode recognizes fences indented inside YAML scalars."""
+    text = (
+        "body:\n"
+        "  - type: markdown\n"
+        "    attributes:\n"
+        "      value: |\n"
+        "        ```\n"
+        "        [inside](templates/python/example.py)\n"
+        "        ```\n"
+        "        [outside](templates/python/example.py)\n"
+    )
+
+    visible_lines = lines_outside_markdown_fences(
+        text,
+        fence_context=EMBEDDED_MARKDOWN_FENCE_CONTEXT,
+    )
+
+    assert (6, "        [inside](templates/python/example.py)") not in visible_lines
+    assert (8, "        [outside](templates/python/example.py)") in visible_lines
+
+
+def test_standard_markdown_context_keeps_yaml_indented_fences_visible() -> None:
+    """Standard Markdown mode does not apply global YAML block-scalar rules."""
+    text = "        ```\n" "        [inside](templates/python/example.py)\n" "        ```\n"
+
+    visible_lines = lines_outside_markdown_fences(
+        text,
+        fence_context=MARKDOWN_FENCE_CONTEXT,
+    )
+
+    assert (2, "        [inside](templates/python/example.py)") in visible_lines
+
+
+@pytest.mark.parametrize(
+    ("text", "error_type"),
+    [
+        (
+            "# template-sync: end python-only\n",
+            UnmatchedInlineBlockEndError,
+        ),
+        (
+            "# template-sync: begin python-only\n",
+            UnclosedInlineBlockError,
+        ),
+        (
+            "# template-sync: begin python-only\n"
+            "# template-sync: begin terraform-only\n"
+            "# template-sync: end terraform-only\n"
+            "# template-sync: end python-only\n",
+            NestedInlineBlockError,
+        ),
+        (
+            "# template-sync: begin python-only\n" "# template-sync: end terraform-only\n",
+            MismatchedInlineBlockError,
+        ),
+    ],
+)
+def test_live_inline_marker_validation_reports_structural_errors(
+    text: str,
+    error_type: type[Exception],
+) -> None:
+    """Shared validation raises typed errors for malformed live markers."""
+    with pytest.raises(error_type):
+        validate_inline_block_markers(text, relative_path="fixture.yml")
 
 
 def test_azure_devops_guide_reference_only_uses_or_retention() -> None:

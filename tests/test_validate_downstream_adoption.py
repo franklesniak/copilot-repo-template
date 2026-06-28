@@ -447,6 +447,28 @@ def test_excluded_inline_block_leftover_is_reported(tmp_path: Path) -> None:
     assert "python-only remains but requires excluded module(s): python" in result.stdout
 
 
+def test_fenced_inline_block_example_in_markdown_is_not_reported(
+    tmp_path: Path,
+) -> None:
+    """Downstream inline-block validation ignores fenced Markdown examples."""
+    _write_common_downstream_repo(
+        tmp_path,
+        readme_text=(
+            "# Downstream\n\n"
+            "```markdown\n"
+            "<!-- template-sync: begin python-reference-only -->\n"
+            "Example marker only.\n"
+            "<!-- template-sync: end python-reference-only -->\n"
+            "```\n"
+        ),
+    )
+
+    result = _run_validator(tmp_path, "--require-marker")
+
+    assert result.returncode == 0, result.stdout
+    assert "python-reference-only remains" not in result.stdout
+
+
 def test_or_group_inline_block_is_valid_when_any_member_module_retained(
     tmp_path: Path,
 ) -> None:
@@ -551,6 +573,30 @@ def test_retained_markdown_relative_link_to_excluded_module_is_reported(
     assert "README.md:3: templates/json/example.json -> templates/json/example.json" in (
         result.stdout
     )
+
+
+def test_blockquote_fence_closure_keeps_later_markdown_link_live(
+    tmp_path: Path,
+) -> None:
+    """Shared GFM fence handling does not hide content after a block quote ends."""
+    _write_common_downstream_repo(
+        tmp_path,
+        readme_text=(
+            "# Downstream\n\n"
+            "> ```\n"
+            "> [fenced json](templates/json/example.json)\n"
+            "\n"
+            "See [JSON starter](templates/json/example.json).\n"
+        ),
+    )
+
+    result = _run_validator(tmp_path, "--require-marker")
+
+    assert result.returncode == 1
+    assert "README.md:6: templates/json/example.json -> templates/json/example.json" in (
+        result.stdout
+    )
+    assert "README.md:4:" not in result.stdout
 
 
 def test_instruction_contract_failures_are_composed(tmp_path: Path) -> None:

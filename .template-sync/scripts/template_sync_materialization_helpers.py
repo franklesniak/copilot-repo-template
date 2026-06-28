@@ -51,9 +51,14 @@ INLINE_BLOCK_MARKER_RE = re.compile(
     r"(?P<kind>begin|end)\s+"
     r"(?P<name>[a-z0-9-]+-(?:reference-)?only)\s*(?:-->)?\s*$"
 )
-CODE_FENCE_OPEN_RE = re.compile(r"^(?P<indent> {0,3})(?P<fence>`{3,}|~{3,})(?P<info>.*)$")
-CODE_FENCE_CLOSE_RE = re.compile(r"^(?P<indent> {0,3})(?P<fence>`{3,}|~{3,})\s*$")
 MARKDOWN_FENCE_INFO = frozenset({"markdown", "md"})
+MARKDOWN_RENDERED_SUFFIXES = frozenset({".md", ".mdc"})
+YAML_SUFFIXES = frozenset({".yml", ".yaml"})
+MARKDOWN_FENCE_CONTEXT = "markdown"
+EMBEDDED_MARKDOWN_FENCE_CONTEXT = "embedded-markdown"
+LIST_MARKER_RE = re.compile(
+    r"^(?P<indent> {0,3})(?P<marker>(?:[-+*]|\d{1,9}[.)]))(?P<spaces> {1,4})(?P<rest>.*)$"
+)
 # AND-retention markers. A block in this family is retained only when *every*
 # module it names is present in ``included_modules``; it is stripped when *any*
 # named module is excluded (see ``remove_inline_blocks_for_modules``). This is
@@ -313,6 +318,36 @@ class InlineBlockMarker:
     name: str
     line_number: int
     line: str
+
+
+@dataclass(frozen=True)
+class InlineBlockSpan:
+    """One complete live template-sync inline block in a text file."""
+
+    marker_name: str
+    line_number: int
+    content_lines: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class MarkdownLineState:
+    """One Markdown-rendered line classified by fenced-code visibility."""
+
+    line_number: int
+    line: str
+    is_fenced: bool
+
+
+@dataclass(frozen=True)
+class MarkdownFence:
+    """Active line-oriented Markdown fenced-code block state."""
+
+    character: str
+    length: int
+    info: str
+    quote_depth: int
+    list_content_indent: int | None
+    allow_arbitrary_indent: bool
 
 
 @dataclass(frozen=True)
@@ -1552,6 +1587,242 @@ def inline_block_module_requirement(marker_name: str) -> frozenset[str] | None:
     return INLINE_BLOCK_ANY_MODULES.get(marker_name)
 
 
+def markdown_fence_context_for_path(relative_path: str) -> str | None:
+    """Return the fence context for live inline markers in ``relative_path``."""
+    if Path(relative_path).suffix.lower() in MARKDOWN_RENDERED_SUFFIXES:
+        return MARKDOWN_FENCE_CONTEXT
+    return None
+
+
+def blank_line_limit_for_path(relative_path: str) -> int:
+    """Return the post-pruning blank-line limit for a retained text file."""
+    if Path(relative_path).suffix.lower() in YAML_SUFFIXES:
+        return 1
+    return 2
+
+
+def line_body(line: str) -> str:
+    """Return ``line`` without a trailing text line ending."""
+    return line.rstrip("\r\n")
+
+
+def consume_blockquote_prefix(
+    line: str,
+    *,
+    max_depth: int | None = None,
+) -> tuple[int, int]:
+    """Return ``(depth, offset)`` after consuming Markdown blockquote prefixes."""
+    depth = 0
+    offset = 0
+    while max_depth is None or depth < max_depth:
+        spaces = 0
+        while offset < len(line) and line[offset] == " " and spaces < 3:
+            offset += 1
+            spaces += 1
+        if offset >= len(line) or line[offset] != ">":
+            offset -= spaces
+            break
+        offset += 1
+        depth += 1
+        if offset < len(line) and line[offset] == " ":
+            offset += 1
+    return depth, offset
+
+
+def line_is_outside_list_item(line: str, content_indent: int) -> bool:
+    """Return whether ``line`` ends a conservative list-item containing block."""
+    if not line.strip():
+        return False
+    leading_spaces = len(line) - len(line.lstrip(" "))
+    return leading_spaces < content_indent
+
+
+def parse_fence_open_from_content(
+    content: str,
+    *,
+    allow_arbitrary_indent: bool,
+) -> tuple[str, int, str] | None:
+    """Return opening fence ``(character, length, info)`` from Markdown content."""
+    leading_spaces = len(content) - len(content.lstrip(" "))
+    if not allow_arbitrary_indent and leading_spaces > 3:
+        return None
+    stripped = content[leading_spaces:]
+    if not stripped.startswith(("```", "~~~")):
+        return None
+
+    fence_character = stripped[0]
+    fence_length = 0
+    while fence_length < len(stripped) and stripped[fence_length] == fence_character:
+        fence_length += 1
+    if fence_length < 3:
+        return None
+
+    info = stripped[fence_length:]
+    if fence_character == "`" and "`" in info:
+        return None
+    return fence_character, fence_length, info
+
+
+def parse_fence_close_from_content(
+    content: str,
+    *,
+    fence_character: str,
+    minimum_length: int,
+    allow_arbitrary_indent: bool,
+) -> bool:
+    """Return whether Markdown content closes the active fenced-code block."""
+    leading_spaces = len(content) - len(content.lstrip(" "))
+    if not allow_arbitrary_indent and leading_spaces > 3:
+        return False
+    stripped = content[leading_spaces:]
+    if not stripped.startswith(fence_character * minimum_length):
+        return False
+
+    fence_length = 0
+    while fence_length < len(stripped) and stripped[fence_length] == fence_character:
+        fence_length += 1
+    if fence_length < minimum_length:
+        return False
+    return stripped[fence_length:].strip(" ") == ""
+
+
+def parse_markdown_fence_open(line: str, fence_context: str) -> MarkdownFence | None:
+    """Return active fence state when ``line`` opens a fenced-code block."""
+    allow_arbitrary_indent = fence_context == EMBEDDED_MARKDOWN_FENCE_CONTEXT
+    if allow_arbitrary_indent:
+        opened = parse_fence_open_from_content(line, allow_arbitrary_indent=True)
+        if opened is None:
+            return None
+        character, length, info = opened
+        return MarkdownFence(
+            character=character,
+            length=length,
+            info=info,
+            quote_depth=0,
+            list_content_indent=None,
+            allow_arbitrary_indent=True,
+        )
+
+    quote_depth, quote_offset = consume_blockquote_prefix(line)
+    content = line[quote_offset:]
+    list_match = LIST_MARKER_RE.match(content)
+    if list_match is not None:
+        list_content_indent = (
+            len(list_match.group("indent"))
+            + len(list_match.group("marker"))
+            + len(list_match.group("spaces"))
+        )
+        opened = parse_fence_open_from_content(
+            list_match.group("rest"),
+            allow_arbitrary_indent=False,
+        )
+        if opened is not None:
+            character, length, info = opened
+            return MarkdownFence(
+                character=character,
+                length=length,
+                info=info,
+                quote_depth=quote_depth,
+                list_content_indent=list_content_indent,
+                allow_arbitrary_indent=False,
+            )
+
+    opened = parse_fence_open_from_content(content, allow_arbitrary_indent=False)
+    if opened is None:
+        return None
+    character, length, info = opened
+    return MarkdownFence(
+        character=character,
+        length=length,
+        info=info,
+        quote_depth=quote_depth,
+        list_content_indent=None,
+        allow_arbitrary_indent=False,
+    )
+
+
+def active_fence_content(line: str, active_fence: MarkdownFence) -> str | None:
+    """Return line content inside ``active_fence`` or ``None`` if its container ended."""
+    if active_fence.quote_depth:
+        quote_depth, quote_offset = consume_blockquote_prefix(
+            line,
+            max_depth=active_fence.quote_depth,
+        )
+        if quote_depth < active_fence.quote_depth:
+            return None
+        content = line[quote_offset:]
+    else:
+        content = line
+
+    if active_fence.list_content_indent is None:
+        return content
+    if line_is_outside_list_item(content, active_fence.list_content_indent):
+        return None
+    if len(content) >= active_fence.list_content_indent:
+        return content[active_fence.list_content_indent :]
+    return ""
+
+
+def markdown_line_states(
+    lines: Iterable[str],
+    *,
+    fence_context: str,
+) -> tuple[MarkdownLineState, ...]:
+    """Classify Markdown-rendered lines as fenced-code or live content."""
+    states: list[MarkdownLineState] = []
+    active_fence: MarkdownFence | None = None
+
+    for line_number, raw_line in enumerate(lines, 1):
+        line = line_body(raw_line)
+        if active_fence is not None:
+            content = active_fence_content(line, active_fence)
+            if content is not None:
+                is_close = parse_fence_close_from_content(
+                    content,
+                    fence_character=active_fence.character,
+                    minimum_length=active_fence.length,
+                    allow_arbitrary_indent=active_fence.allow_arbitrary_indent,
+                )
+                states.append(
+                    MarkdownLineState(
+                        line_number=line_number,
+                        line=raw_line,
+                        is_fenced=True,
+                    )
+                )
+                if is_close:
+                    active_fence = None
+                continue
+            active_fence = None
+
+        active_fence = parse_markdown_fence_open(line, fence_context)
+        states.append(
+            MarkdownLineState(
+                line_number=line_number,
+                line=raw_line,
+                is_fenced=active_fence is not None,
+            )
+        )
+
+    return tuple(states)
+
+
+def lines_outside_markdown_fences(
+    text: str,
+    *,
+    fence_context: str,
+) -> tuple[tuple[int, str], ...]:
+    """Return lines that are not inside Markdown fenced-code blocks."""
+    return tuple(
+        (state.line_number, state.line)
+        for state in markdown_line_states(
+            text.splitlines(),
+            fence_context=fence_context,
+        )
+        if not state.is_fenced
+    )
+
+
 def parse_inline_block_marker(
     line: str,
     *,
@@ -1578,6 +1849,150 @@ def parse_inline_block_marker(
     )
 
 
+def live_inline_marker_for_line(
+    line: str,
+    *,
+    line_number: int,
+    relative_path: str,
+    is_fenced: bool,
+) -> InlineBlockMarker | None:
+    """Parse a live inline marker line while ignoring fenced-code examples."""
+    if is_fenced:
+        return None
+    return parse_inline_block_marker(
+        line,
+        line_number=line_number,
+        relative_path=relative_path,
+    )
+
+
+def live_inline_marker_lines(
+    text: str,
+    *,
+    relative_path: str,
+) -> tuple[tuple[int, str, InlineBlockMarker | None], ...]:
+    """Return text lines paired with live inline markers for ``relative_path``."""
+    fence_context = markdown_fence_context_for_path(relative_path)
+    raw_lines = text.splitlines(keepends=True)
+    if fence_context is None:
+        states = tuple(
+            MarkdownLineState(
+                line_number=line_number,
+                line=line,
+                is_fenced=False,
+            )
+            for line_number, line in enumerate(raw_lines, 1)
+        )
+    else:
+        states = markdown_line_states(raw_lines, fence_context=fence_context)
+
+    return tuple(
+        (
+            state.line_number,
+            state.line,
+            live_inline_marker_for_line(
+                state.line,
+                line_number=state.line_number,
+                relative_path=relative_path,
+                is_fenced=state.is_fenced,
+            ),
+        )
+        for state in states
+    )
+
+
+def collect_live_inline_block_spans(
+    text: str,
+    *,
+    relative_path: str,
+) -> tuple[InlineBlockSpan, ...]:
+    """Return complete live inline-block spans using shared marker semantics."""
+    blocks: list[InlineBlockSpan] = []
+    open_marker: tuple[InlineBlockMarker, list[str]] | None = None
+
+    for _line_number, line, marker in live_inline_marker_lines(
+        text,
+        relative_path=relative_path,
+    ):
+        if marker is None:
+            if open_marker is not None:
+                open_marker[1].append(line.rstrip("\r\n"))
+            continue
+
+        if marker.kind == "begin":
+            if open_marker is not None:
+                raise NestedInlineBlockError(
+                    f"Nested template-sync inline marker inside {open_marker[0].name}",
+                    relative_path=relative_path,
+                    line_number=marker.line_number,
+                    marker_name=marker.name,
+                )
+            open_marker = (marker, [])
+            continue
+
+        if open_marker is None:
+            raise UnmatchedInlineBlockEndError(
+                "Unmatched template-sync inline marker end",
+                relative_path=relative_path,
+                line_number=marker.line_number,
+                marker_name=marker.name,
+            )
+        begin_marker, content_lines = open_marker
+        if begin_marker.name != marker.name:
+            raise MismatchedInlineBlockError(
+                f"End marker {marker.name!r} does not match begin marker "
+                f"{begin_marker.name!r} from line {begin_marker.line_number}",
+                relative_path=relative_path,
+                line_number=marker.line_number,
+                marker_name=marker.name,
+            )
+        blocks.append(
+            InlineBlockSpan(
+                marker_name=marker.name,
+                line_number=begin_marker.line_number,
+                content_lines=tuple(content_lines),
+            )
+        )
+        open_marker = None
+
+    if open_marker is not None:
+        begin_marker = open_marker[0]
+        raise UnclosedInlineBlockError(
+            f"Unclosed template-sync inline marker: {begin_marker.name}",
+            relative_path=relative_path,
+            line_number=begin_marker.line_number,
+            marker_name=begin_marker.name,
+        )
+    return tuple(blocks)
+
+
+def validate_inline_block_markers(text: str, *, relative_path: str) -> None:
+    """Validate live inline template-sync marker pairing for ``relative_path``."""
+    collect_live_inline_block_spans(text, relative_path=relative_path)
+
+
+def inline_block_families_to_prune(
+    text: str,
+    included_modules: Collection[str],
+    *,
+    relative_path: str,
+) -> tuple[str, ...]:
+    """Return live inline marker families that module pruning would remove."""
+    included_module_set = set(included_modules)
+    pruned_families: set[str] = set()
+    for block in collect_live_inline_block_spans(text, relative_path=relative_path):
+        required_modules = inline_block_module_requirement(block.marker_name)
+        if required_modules is None:
+            continue
+        if block.marker_name in INLINE_BLOCK_ANY_MODULES:
+            if included_module_set.isdisjoint(required_modules):
+                pruned_families.add(block.marker_name)
+            continue
+        if not required_modules.issubset(included_module_set):
+            pruned_families.add(block.marker_name)
+    return tuple(sorted(pruned_families))
+
+
 def hash_inline_marker(marker_name: str, kind: str) -> str:
     """Return a hash-comment inline marker string for a marker family."""
     return f"# template-sync: {kind} {marker_name}"
@@ -1594,15 +2009,6 @@ def is_markdown_fence_info(info: str) -> bool:
     return language in MARKDOWN_FENCE_INFO
 
 
-def matching_code_fence_close(line: str, fence_character: str, minimum_length: int) -> bool:
-    """Return whether ``line`` closes the active fenced code block."""
-    match = CODE_FENCE_CLOSE_RE.match(line)
-    if match is None:
-        return False
-    fence = match.group("fence")
-    return fence.startswith(fence_character) and len(fence) >= minimum_length
-
-
 def trim_trailing_blank_lines(lines: list[str], blank_run: int, maximum: int) -> int:
     """Trim a trailing blank-line run in ``lines`` to ``maximum`` entries."""
     while blank_run > maximum and lines and not lines[-1].strip():
@@ -1615,36 +2021,52 @@ def apply_blank_line_hygiene(text: str, *, max_consecutive_blank_lines: int = 2)
     """Collapse excessive blank-line runs after inline-block removal."""
     hygienic_lines: list[str] = []
     blank_run = 0
-    active_fence: tuple[str, int, bool] | None = None
+    active_fence: MarkdownFence | None = None
     fence_boundary_blank_lines = max(0, max_consecutive_blank_lines - 1)
 
     for line in text.splitlines(keepends=True):
         if line.strip():
+            body = line_body(line)
             if active_fence is not None:
-                fence_character, fence_length, is_markdown_fence = active_fence
-                if matching_code_fence_close(line, fence_character, fence_length):
-                    if is_markdown_fence:
-                        blank_run = trim_trailing_blank_lines(
-                            hygienic_lines,
-                            blank_run,
-                            fence_boundary_blank_lines,
-                        )
-                    active_fence = None
-                hygienic_lines.append(line)
-                blank_run = 0
-                continue
+                content = active_fence_content(body, active_fence)
+                if content is not None:
+                    if parse_fence_close_from_content(
+                        content,
+                        fence_character=active_fence.character,
+                        minimum_length=active_fence.length,
+                        allow_arbitrary_indent=active_fence.allow_arbitrary_indent,
+                    ):
+                        if is_markdown_fence_info(active_fence.info):
+                            blank_run = trim_trailing_blank_lines(
+                                hygienic_lines,
+                                blank_run,
+                                fence_boundary_blank_lines,
+                            )
+                        active_fence = None
+                    hygienic_lines.append(line)
+                    blank_run = 0
+                    continue
+                if is_markdown_fence_info(active_fence.info):
+                    blank_run = trim_trailing_blank_lines(
+                        hygienic_lines,
+                        blank_run,
+                        fence_boundary_blank_lines,
+                    )
+                active_fence = None
 
-            open_match = CODE_FENCE_OPEN_RE.match(line)
-            if open_match is not None:
-                fence = open_match.group("fence")
-                active_fence = (
-                    fence[0],
-                    len(fence),
-                    is_markdown_fence_info(open_match.group("info")),
-                )
+            open_fence = parse_markdown_fence_open(body, MARKDOWN_FENCE_CONTEXT)
+            if open_fence is not None:
+                active_fence = open_fence
             blank_run = 0
             hygienic_lines.append(line)
             continue
+
+        if active_fence is not None and is_markdown_fence_info(active_fence.info):
+            blank_run += 1
+            if blank_run <= max_consecutive_blank_lines:
+                hygienic_lines.append(line)
+            continue
+
         blank_run += 1
         if blank_run <= max_consecutive_blank_lines:
             hygienic_lines.append(line)
@@ -1671,12 +2093,10 @@ def remove_inline_block_family(
     stack: list[InlineBlockMarker] = []
     removed_blocks = 0
 
-    for line_number, line in enumerate(text.splitlines(keepends=True), 1):
-        marker = parse_inline_block_marker(
-            line,
-            line_number=line_number,
-            relative_path=relative_path,
-        )
+    for _line_number, line, marker in live_inline_marker_lines(
+        text,
+        relative_path=relative_path,
+    ):
         is_removing_target = bool(stack and stack[-1].name == marker_name)
 
         if marker is None:
@@ -1690,7 +2110,7 @@ def remove_inline_block_family(
                 raise NestedInlineBlockError(
                     f"Nested template-sync inline marker inside {open_marker.name}",
                     relative_path=relative_path,
-                    line_number=line_number,
+                    line_number=marker.line_number,
                     marker_name=marker.name,
                 )
             stack.append(marker)
@@ -1704,7 +2124,7 @@ def remove_inline_block_family(
             raise UnmatchedInlineBlockEndError(
                 "Unmatched template-sync inline marker end",
                 relative_path=relative_path,
-                line_number=line_number,
+                line_number=marker.line_number,
                 marker_name=marker.name,
             )
 
@@ -1714,7 +2134,7 @@ def remove_inline_block_family(
                 f"End marker {marker.name!r} does not match begin marker "
                 f"{begin_marker.name!r} from line {begin_marker.line_number}",
                 relative_path=relative_path,
-                line_number=line_number,
+                line_number=marker.line_number,
                 marker_name=marker.name,
             )
         if marker.name != marker_name:
@@ -1734,10 +2154,15 @@ def remove_inline_block_family(
             relative_path=relative_path,
             marker_name=marker_name,
         )
+    if removed_blocks == 0:
+        return text
 
     stripped_text = "".join(output_lines)
     if preserve_blank_line_hygiene:
-        return apply_blank_line_hygiene(stripped_text)
+        return apply_blank_line_hygiene(
+            stripped_text,
+            max_consecutive_blank_lines=blank_line_limit_for_path(relative_path),
+        )
     return stripped_text
 
 

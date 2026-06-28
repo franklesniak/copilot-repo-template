@@ -679,6 +679,37 @@ def test_yaml_embedded_fenced_links_are_skipped(tmp_path: Path) -> None:
     assert not any(".github/ISSUE_TEMPLATE/fenced_example.yml:9" in line for line in findings)
 
 
+def test_fenced_registered_marker_examples_are_not_live_blocks(tmp_path: Path) -> None:
+    """Markdown fenced marker examples are not reported as retained live markers."""
+    _write_common_repo(tmp_path, include_reference_content=False)
+    _write_text(
+        tmp_path,
+        "README.md",
+        (
+            "# Downstream\n\n"
+            "```markdown\n"
+            "<!-- template-sync: begin python-reference-only -->\n"
+            "Example marker only.\n"
+            "<!-- template-sync: end python-reference-only -->\n"
+            "```\n"
+        ),
+    )
+
+    result = _run_report(tmp_path)
+
+    assert result.returncode == 0, result.stderr
+    findings = _finding_lines(result.stdout)
+    assert not any("README.md" in line and "inline-block" in line for line in findings)
+
+    excluded_scopes = _section_entries(result.stdout, "Excluded module scopes")
+    python_scope = next(
+        (line for line in excluded_scopes if line.startswith("python | ")),
+        "",
+    )
+    assert "README.md" not in python_scope
+    assert "python-reference-only" in python_scope
+
+
 def test_active_contact_link_urls_preserves_fragment_and_quoted_urls() -> None:
     """Contact-link URL extraction keeps ``#`` fragments and quoted scalars."""
     import importlib.util
@@ -706,7 +737,13 @@ def test_active_contact_link_urls_preserves_fragment_and_quoted_urls() -> None:
         "    url: https://example.com/docs # see the docs\n"
     )
 
-    extracted = [url for _, url in module.active_contact_link_urls(text)]
+    extracted = [
+        url
+        for _, url in module.active_contact_link_urls(
+            text,
+            relative_path=".github/ISSUE_TEMPLATE/config.yml",
+        )
+    ]
 
     # A ``#`` fragment (quoted or unquoted) must be retained, while a genuine
     # trailing YAML comment (``#`` after whitespace) is still stripped.

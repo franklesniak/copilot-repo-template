@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 import validate_marker
+from template_sync_materialization_helpers import (
+    MARKDOWN_FENCE_CONTEXT,
+    lines_outside_markdown_fences,
+)
 
 DEFAULT_CONTRACTS_PATH = ".template-sync/instruction-contracts.yml"
 DEFAULT_CONTRACTS_SCHEMA_PATH = "schemas/template-sync-instruction-contracts.schema.json"
@@ -451,29 +455,13 @@ def strip_fenced_code_blocks(text: str) -> str:
     Required anchors must appear as live Markdown content; example anchors
     nested in a fenced code block should not satisfy the contract.
     """
-    lines = text.splitlines()
-    out: list[str] = []
-    open_fence: str | None = None
-    for line in lines:
-        stripped = line.lstrip()
-        if open_fence is None:
-            if stripped.startswith("```") or stripped.startswith("~~~"):
-                fence_char = stripped[0]
-                run = 0
-                while run < len(stripped) and stripped[run] == fence_char:
-                    run += 1
-                if run >= 3:
-                    open_fence = fence_char * run
-                    continue
-            out.append(line)
-        else:
-            fence_char = open_fence[0]
-            run = 0
-            while run < len(stripped) and stripped[run] == fence_char:
-                run += 1
-            if run >= len(open_fence) and stripped[run:].strip() == "":
-                open_fence = None
-    return "\n".join(out)
+    return "\n".join(
+        line
+        for _line_number, line in lines_outside_markdown_fences(
+            text,
+            fence_context=MARKDOWN_FENCE_CONTEXT,
+        )
+    )
 
 
 def heading_is_present(text: str, heading: str) -> bool:

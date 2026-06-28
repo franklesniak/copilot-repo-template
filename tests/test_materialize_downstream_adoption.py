@@ -261,6 +261,19 @@ def read_file(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def section_entries(output: str, heading: str) -> set[str]:
+    """Return bullet entries rendered under a named output section."""
+    entries: set[str] = set()
+    in_section = False
+    for line in output.splitlines():
+        if line and not line.startswith(" ") and line.endswith(":"):
+            in_section = line == f"{heading}:"
+            continue
+        if in_section and line.startswith("  - "):
+            entries.add(line.removeprefix("  - ").strip())
+    return entries
+
+
 def copy_template_file(template_root: Path, relative_path: str) -> None:
     """Copy a repository template file into a fixture template root."""
     destination = template_root / relative_path
@@ -2183,6 +2196,53 @@ def test_excluded_module_report_retains_or_group_block_without_cleanup(
     # (neither a cleanup finding nor an excluded-module scope row) for the excluded
     # json/yaml/schema members.
     assert "data-ci-reference-only" not in report_result.stdout, report_result.stdout
+
+
+def test_materialization_preview_reports_pruned_live_marker_families(
+    tmp_path: Path,
+) -> None:
+    """Pruning preview reports live marker families and ignores fenced examples."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(
+        template_root,
+        [
+            {"pattern": "README.md", "requires_all": ["baseline"]},
+        ],
+    )
+    write_file(
+        template_root / "README.md",
+        (
+            "# Fixture\n\n"
+            "```markdown\n"
+            "<!-- template-sync: begin python-reference-only -->\n"
+            "Example marker only.\n"
+            "<!-- template-sync: end python-reference-only -->\n"
+            "```\n\n"
+            "<!-- template-sync: begin python-reference-only -->\n"
+            "Live Python reference.\n"
+            "<!-- template-sync: end python-reference-only -->\n"
+        ),
+    )
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-modules",
+        "baseline,markdown",
+    )
+
+    assert result.returncode == 0, result.stderr
+    generated_text = read_file(target_root / "README.md")
+    assert "Example marker only." in generated_text
+    assert "Live Python reference." not in generated_text
+
+    pruning_preview = section_entries(result.stdout, "Pruning preview")
+    assert pruning_preview == {"README.md: python-reference-only"}
+    assert "Computed marker preview:" in result.stdout
 
 
 def test_materialized_no_python_adoption_prunes_dependabot_pip_ecosystem(

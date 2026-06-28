@@ -28,7 +28,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     DEFAULT_MARKER_SCHEMA_PATH,
     REMOVAL_DECISION,
     DeferredProtectedCandidate,
-    InlineBlockMarker,
+    InlineBlockError,
     LocalOverride,
     ManifestMapping,
     MarkerDecisionData,
@@ -36,16 +36,17 @@ from template_sync_materialization_helpers import (  # noqa: E402
     TemplateSyncMaterializationError,
     classify_repository_file,
     is_protected_instruction_path,
+    inline_block_families_to_prune,
     iter_safe_repository_files,
     load_json_mapping,
     load_yaml_mapping,
     os_error_summary,
-    parse_inline_block_marker,
     parse_manifest_mappings,
     parse_marker_decision_data,
     remove_inline_blocks_for_modules,
     resolve_safe_repository_target_path,
     selected_relation_for_path,
+    validate_inline_block_markers,
     validate_protected_file_decisions,
     validate_schema,
 )
@@ -432,6 +433,7 @@ class Summary:
     placeholder_notes: list[str] = field(default_factory=list)
     license_notes: list[str] = field(default_factory=list)
     residual_cleanup_paths: set[str] = field(default_factory=set)
+    pruning_preview: set[str] = field(default_factory=set)
     conflicts: list[Conflict] = field(default_factory=list)
     marker_status: str = "preview-only"
     marker_reason: str = ""
@@ -1793,41 +1795,10 @@ def validate_computed_marker(
 
 def validate_inline_markers(text: str, *, relative_path: str) -> None:
     """Validate inline template-sync marker pairing before module pruning."""
-    stack: list[InlineBlockMarker] = []
-    for line_number, line in enumerate(text.splitlines(keepends=True), 1):
-        marker = parse_inline_block_marker(
-            line,
-            line_number=line_number,
-            relative_path=relative_path,
-        )
-        if marker is None:
-            continue
-        if marker.kind == "begin":
-            if stack:
-                open_marker = stack[-1]
-                raise MaterializationError(
-                    f"{relative_path}:{line_number}: Nested template-sync inline marker "
-                    f"inside {open_marker.name}."
-                )
-            stack.append(marker)
-            continue
-        if not stack:
-            raise MaterializationError(
-                f"{relative_path}:{line_number}: Unmatched template-sync inline marker end."
-            )
-        begin_marker = stack.pop()
-        if begin_marker.name != marker.name:
-            raise MaterializationError(
-                f"{relative_path}:{line_number}: End marker {marker.name!r} does not "
-                f"match begin marker {begin_marker.name!r} from line "
-                f"{begin_marker.line_number}."
-            )
-    if stack:
-        marker = stack[-1]
-        raise MaterializationError(
-            f"{relative_path}:{marker.line_number}: Unclosed template-sync inline marker: "
-            f"{marker.name}."
-        )
+    try:
+        validate_inline_block_markers(text, relative_path=relative_path)
+    except InlineBlockError as error:
+        raise MaterializationError(str(error)) from error
 
 
 def write_staged_candidate(
@@ -1875,6 +1846,13 @@ def write_staged_candidate(
         else:
             assert classification.text is not None
             validate_inline_markers(classification.text, relative_path=relative_path)
+            pruned_families = inline_block_families_to_prune(
+                classification.text,
+                included_modules,
+                relative_path=relative_path,
+            )
+            if pruned_families:
+                summary.pruning_preview.add(f"{relative_path}: {', '.join(pruned_families)}")
             filtered_text = remove_inline_blocks_for_modules(
                 classification.text,
                 included_modules,
@@ -2462,6 +2440,7 @@ def print_summary(summary: Summary) -> None:
     print_section("Placeholder notes", summary.placeholder_notes)
     print_section("License preservation notes", summary.license_notes)
     print_section("Residual manual-cleanup paths", summary.residual_cleanup_paths)
+    print_section("Pruning preview", summary.pruning_preview)
     print("Marker:")
     print(f"  - {summary.marker_status}: {summary.marker_reason}")
     if summary.recorded_conflicts:
