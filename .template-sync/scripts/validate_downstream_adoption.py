@@ -418,11 +418,14 @@ def validate_inline_blocks(
                 relative_path=relative_path,
             )
         except InlineBlockError as error:
+            # Store the bare message: the renderer prepends "{path}:{line}: "
+            # itself, so str(error) (which already embeds that prefix) would
+            # duplicate the location in the final output.
             failures.append(
                 InlineBlockFailure(
                     path=relative_path,
                     line_number=error.line_number or 0,
-                    message=str(error),
+                    message=error.message,
                 )
             )
             continue

@@ -353,11 +353,28 @@ def test_inline_block_removal_preserves_blank_runs_inside_fenced_code() -> None:
         "tail\n"
     )
 
-    assert remove_inline_block_family(
-        text,
-        "terraform-reference-only",
-        relative_path="README.md",
-    ) == ("```python\n" "first = 1\n" "\n" "\n" "\n" "second = 2\n" "```\n" "\n" "\n" "tail\n")
+    expected = "".join(
+        [
+            "```python\n",
+            "first = 1\n",
+            "\n",
+            "\n",
+            "\n",
+            "second = 2\n",
+            "```\n",
+            "\n",
+            "\n",
+            "tail\n",
+        ]
+    )
+    assert (
+        remove_inline_block_family(
+            text,
+            "terraform-reference-only",
+            relative_path="README.md",
+        )
+        == expected
+    )
 
 
 def test_inline_block_removal_preserves_trailing_blanks_in_markdown_fence() -> None:
@@ -376,11 +393,26 @@ def test_inline_block_removal_preserves_trailing_blanks_in_markdown_fence() -> N
         "tail\n"
     )
 
-    assert remove_inline_block_family(
-        text,
-        "terraform-reference-only",
-        relative_path="README.md",
-    ) == ("```markdown\n" "Example heading\n" "\n" "\n" "```\n" "\n" "\n" "tail\n")
+    expected = "".join(
+        [
+            "```markdown\n",
+            "Example heading\n",
+            "\n",
+            "\n",
+            "```\n",
+            "\n",
+            "\n",
+            "tail\n",
+        ]
+    )
+    assert (
+        remove_inline_block_family(
+            text,
+            "terraform-reference-only",
+            relative_path="README.md",
+        )
+        == expected
+    )
 
 
 def test_markdown_fenced_marker_examples_are_not_pruned() -> None:

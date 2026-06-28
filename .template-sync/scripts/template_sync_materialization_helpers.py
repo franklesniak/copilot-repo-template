@@ -125,6 +125,7 @@ class InlineBlockError(TemplateSyncMaterializationError):
         if line_number is not None:
             location = f"{location}:{line_number}"
         super().__init__(f"{location}: {message}")
+        self.message = message
         self.relative_path = relative_path
         self.line_number = line_number
         self.marker_name = marker_name

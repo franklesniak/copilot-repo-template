@@ -447,6 +447,30 @@ def test_excluded_inline_block_leftover_is_reported(tmp_path: Path) -> None:
     assert "python-only remains but requires excluded module(s): python" in result.stdout
 
 
+def test_inline_block_structural_error_reports_location_once(tmp_path: Path) -> None:
+    """A structural inline-block error renders its path:line location only once."""
+    _write_common_downstream_repo(
+        tmp_path,
+        readme_text=(
+            "# Downstream\n"
+            "\n"
+            "<!-- template-sync: begin python-reference-only -->\n"
+            "Unterminated inline block.\n"
+        ),
+    )
+
+    result = _run_validator(tmp_path, "--require-marker")
+
+    assert result.returncode == 1
+    consistency_lines = [
+        line for line in result.stdout.splitlines() if "Inline-block consistency:" in line
+    ]
+    assert consistency_lines, result.stdout
+    failure_line = consistency_lines[0]
+    assert failure_line.count("README.md") == 1, failure_line
+    assert "Unclosed template-sync inline marker: python-reference-only" in failure_line
+
+
 def test_fenced_inline_block_example_in_markdown_is_not_reported(
     tmp_path: Path,
 ) -> None:
