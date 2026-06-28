@@ -51,7 +51,6 @@ INLINE_BLOCK_MARKER_RE = re.compile(
     r"(?P<kind>begin|end)\s+"
     r"(?P<name>[a-z0-9-]+-(?:reference-)?only)\s*(?:-->)?\s*$"
 )
-MARKDOWN_FENCE_INFO = frozenset({"markdown", "md"})
 MARKDOWN_RENDERED_SUFFIXES = frozenset({".md", ".mdc"})
 YAML_SUFFIXES = frozenset({".yml", ".yaml"})
 MARKDOWN_FENCE_CONTEXT = "markdown"
@@ -2003,26 +2002,20 @@ def html_inline_marker(marker_name: str, kind: str) -> str:
     return f"<!-- template-sync: {kind} {marker_name} -->"
 
 
-def is_markdown_fence_info(info: str) -> bool:
-    """Return whether a code-fence info string names Markdown content."""
-    language = info.strip().split(maxsplit=1)[0].lower() if info.strip() else ""
-    return language in MARKDOWN_FENCE_INFO
-
-
-def trim_trailing_blank_lines(lines: list[str], blank_run: int, maximum: int) -> int:
-    """Trim a trailing blank-line run in ``lines`` to ``maximum`` entries."""
-    while blank_run > maximum and lines and not lines[-1].strip():
-        lines.pop()
-        blank_run -= 1
-    return blank_run
-
-
 def apply_blank_line_hygiene(text: str, *, max_consecutive_blank_lines: int = 2) -> str:
-    """Collapse excessive blank-line runs after inline-block removal."""
+    """Collapse excessive blank-line runs after inline-block removal.
+
+    Fenced code blocks are treated as opaque: blank lines inside a fence are
+    preserved verbatim. Fence-aware pruning never removes inline blocks inside
+    fences, so any blank run within a fence is original example content that
+    must not be altered (markdownlint MD012 and yamllint both ignore fenced
+    code blocks). Excess blank runs only arise outside fences, where pruning
+    removes live blocks, and those are collapsed to
+    ``max_consecutive_blank_lines``.
+    """
     hygienic_lines: list[str] = []
     blank_run = 0
     active_fence: MarkdownFence | None = None
-    fence_boundary_blank_lines = max(0, max_consecutive_blank_lines - 1)
 
     for line in text.splitlines(keepends=True):
         if line.strip():
@@ -2036,22 +2029,10 @@ def apply_blank_line_hygiene(text: str, *, max_consecutive_blank_lines: int = 2)
                         minimum_length=active_fence.length,
                         allow_arbitrary_indent=active_fence.allow_arbitrary_indent,
                     ):
-                        if is_markdown_fence_info(active_fence.info):
-                            blank_run = trim_trailing_blank_lines(
-                                hygienic_lines,
-                                blank_run,
-                                fence_boundary_blank_lines,
-                            )
                         active_fence = None
                     hygienic_lines.append(line)
                     blank_run = 0
                     continue
-                if is_markdown_fence_info(active_fence.info):
-                    blank_run = trim_trailing_blank_lines(
-                        hygienic_lines,
-                        blank_run,
-                        fence_boundary_blank_lines,
-                    )
                 active_fence = None
 
             open_fence = parse_markdown_fence_open(body, MARKDOWN_FENCE_CONTEXT)
@@ -2061,10 +2042,9 @@ def apply_blank_line_hygiene(text: str, *, max_consecutive_blank_lines: int = 2)
             hygienic_lines.append(line)
             continue
 
-        if active_fence is not None and is_markdown_fence_info(active_fence.info):
-            blank_run += 1
-            if blank_run <= max_consecutive_blank_lines:
-                hygienic_lines.append(line)
+        if active_fence is not None:
+            # Preserve blank lines inside fenced code blocks verbatim.
+            hygienic_lines.append(line)
             continue
 
         blank_run += 1

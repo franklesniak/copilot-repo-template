@@ -335,6 +335,54 @@ def test_inline_block_removal_preserves_markdown_blank_line_allowance() -> None:
     )
 
 
+def test_inline_block_removal_preserves_blank_runs_inside_fenced_code() -> None:
+    """Blank-line runs inside fenced code examples survive inline-block pruning."""
+    text = (
+        "```python\n"
+        "first = 1\n"
+        "\n"
+        "\n"
+        "\n"
+        "second = 2\n"
+        "```\n"
+        "\n"
+        "<!-- template-sync: begin terraform-reference-only -->\n"
+        "terraform note\n"
+        "<!-- template-sync: end terraform-reference-only -->\n"
+        "\n"
+        "tail\n"
+    )
+
+    assert remove_inline_block_family(
+        text,
+        "terraform-reference-only",
+        relative_path="README.md",
+    ) == ("```python\n" "first = 1\n" "\n" "\n" "\n" "second = 2\n" "```\n" "\n" "\n" "tail\n")
+
+
+def test_inline_block_removal_preserves_trailing_blanks_in_markdown_fence() -> None:
+    """A fenced Markdown example keeps its trailing blank lines after pruning."""
+    text = (
+        "```markdown\n"
+        "Example heading\n"
+        "\n"
+        "\n"
+        "```\n"
+        "\n"
+        "<!-- template-sync: begin terraform-reference-only -->\n"
+        "terraform note\n"
+        "<!-- template-sync: end terraform-reference-only -->\n"
+        "\n"
+        "tail\n"
+    )
+
+    assert remove_inline_block_family(
+        text,
+        "terraform-reference-only",
+        relative_path="README.md",
+    ) == ("```markdown\n" "Example heading\n" "\n" "\n" "```\n" "\n" "\n" "tail\n")
+
+
 def test_markdown_fenced_marker_examples_are_not_pruned() -> None:
     """Registered marker lines inside Markdown fences are documentation examples."""
     text = (
