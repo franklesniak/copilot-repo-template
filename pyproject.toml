@@ -51,6 +51,13 @@ dev = [
     "jsonschema>=4.18.0",
     "types-jsonschema>=4.26.0.20260518",
     "PyYAML>=6.0.3",
+    # yamllint backs the generated-YAML assertions in
+    # tests/test_materialize_downstream_adoption.py (the marker and full
+    # adoption surfaces); without it those assertions skip instead of running
+    # under `pip install -e ".[dev]"`. The floor matches the yamllint
+    # pre-commit hook `rev` in .pre-commit-config.yaml so the tests exercise
+    # the same linter that the hook enforces.
+    "yamllint>=1.38.0",
     # check-jsonschema validates schema examples (tests/test_schema_examples.py)
     # and the documented Dependabot fixture (tests/test_dependabot_schema.py).
     # It is pinned to the exact version of the check-jsonschema pre-commit hook
