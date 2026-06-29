@@ -2182,6 +2182,65 @@ def test_format_github_metadata_renders_backtick_unsafe_values_without_breaking_
     assert "`area\\|core`" in labels_row
 
 
+def test_github_boolean_observation_classifies_missing_vs_malformed() -> None:
+    """Missing boolean fields are manual-review; present non-bools are malformed."""
+    observed = sync_candidates.github_boolean_observation(
+        setting="discussions", value=True, source="REST", observed_at="t", basis="rest"
+    )
+    assert observed.observed is True
+    assert observed.value is True
+    assert observed.basis == "rest"
+
+    missing = sync_candidates.github_boolean_observation(
+        setting="discussions", value=None, source="REST", observed_at="t", basis="rest"
+    )
+    assert missing.observed is False
+    assert missing.value is None
+    assert missing.basis == "manual-review"
+
+    malformed = sync_candidates.github_boolean_observation(
+        setting="discussions", value="yes", source="REST", observed_at="t", basis="rest"
+    )
+    assert malformed.observed is False
+    assert malformed.basis == "malformed-response"
+    assert any("was not a boolean" in value for _key, value in malformed.diagnostics)
+
+
+def test_github_metadata_missing_discussions_is_manual_review_not_malformed(
+    tmp_path: Path,
+) -> None:
+    """A successful payload without a Discussions flag is unobserved manual-review, not malformed."""
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        raise FileNotFoundError(2, "No such file or directory", command[0])
+
+    rest_client = FakeRestClient(
+        _metadata_rest_success_responses(
+            {
+                "full_name": "example/project",
+                "visibility": "public",
+                "default_branch": "main",
+                # has_discussions / hasDiscussionsEnabled intentionally omitted.
+            },
+            [],
+        )
+    )
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "example/project",
+        include_metadata=True,
+        command_runner=runner,
+        rest_client=rest_client,
+        clock=_fixed_clock,
+    )
+
+    discussions = _observation(metadata, "discussions")
+    assert discussions.observed is False
+    assert discussions.value is None
+    assert discussions.basis == "manual-review"
+
+
 def test_github_api_base_validation_rejects_credential_bearing_urls() -> None:
     """The API base must not preserve or print credential-bearing URLs."""
     with pytest.raises(sync_candidates.CandidateGenerationError) as exc_info:

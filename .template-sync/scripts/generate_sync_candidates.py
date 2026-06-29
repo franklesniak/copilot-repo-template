@@ -2310,13 +2310,26 @@ def github_boolean_observation(
     basis: str,
     diagnostics: tuple[tuple[str, str], ...] = (),
 ) -> GitHubObservation:
-    """Return an observed or malformed boolean setting observation."""
+    """Return an observed, unobserved, or malformed boolean setting observation."""
     if isinstance(value, bool):
         return github_observation(
             setting=setting,
             value=value,
             observed=True,
             basis=basis,
+            source=source,
+            observed_at=observed_at,
+            diagnostics=diagnostics,
+        )
+    if value is None:
+        # A missing field in an otherwise-successful payload is unobserved, not
+        # malformed (e.g. Discussions on older API versions, or an endpoint object
+        # that omits the expected boolean). Record it as manual-review with whatever
+        # caller diagnostics already explain the absence, consistent with the other
+        # missing-field observations.
+        return unobserved_github_observation(
+            setting=setting,
+            basis="manual-review",
             source=source,
             observed_at=observed_at,
             diagnostics=diagnostics,
