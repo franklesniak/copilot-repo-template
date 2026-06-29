@@ -94,6 +94,20 @@ def _run_report(repo_root: Path, *extra_args: str) -> subprocess.CompletedProces
     )
 
 
+def test_reporter_script_entrypoint_help_smoke() -> None:
+    """The excluded-module reporter remains executable through its script entry point."""
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--help"],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "usage: report_excluded_module_references.py" in result.stdout
+
+
 def _manifest() -> dict[str, Any]:
     """Build a schema-valid manifest fixture with cross-module cleanup surfaces."""
     return {

@@ -6,7 +6,7 @@ import argparse
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, NoReturn, cast
 
 import validate_marker
 from template_sync_materialization_helpers import (
@@ -224,15 +224,23 @@ def load_manifest_modules(
 
 
 def _required_string_list(
-    raw_contract: dict[str, Any],
+    raw_contract: dict[str, object],
     field_name: str,
 ) -> tuple[str, ...]:
     """Return a tuple from an optional schema-validated string list."""
     values = raw_contract.get(field_name, [])
-    if not isinstance(values, list) or not all(isinstance(value, str) for value in values):
-        path = raw_contract.get("path", "<unknown>")
+    if not isinstance(values, list):
+        path_value = raw_contract.get("path")
+        path = path_value if isinstance(path_value, str) else "<unknown>"
         raise InstructionContractValidationError(f"{path} {field_name} must be a string list.")
-    return tuple(values)
+    string_values: list[str] = []
+    for value in cast(list[object], values):
+        if not isinstance(value, str):
+            path_value = raw_contract.get("path")
+            path = path_value if isinstance(path_value, str) else "<unknown>"
+            raise InstructionContractValidationError(f"{path} {field_name} must be a string list.")
+        string_values.append(value)
+    return tuple(string_values)
 
 
 def parse_contracts(
@@ -243,12 +251,14 @@ def parse_contracts(
     raw_contracts = contracts_document.get("instruction_contracts")
     if not isinstance(raw_contracts, list):
         raise InstructionContractValidationError("instruction_contracts must be a list.")
+    raw_contracts = cast(list[object], raw_contracts)
 
     contracts: list[InstructionContract] = []
     seen_paths: set[str] = set()
     for raw_contract in raw_contracts:
         if not isinstance(raw_contract, dict):
             raise InstructionContractValidationError("Each instruction contract must be a mapping.")
+        raw_contract = cast(dict[str, object], raw_contract)
 
         raw_path = raw_contract.get("path")
         if not isinstance(raw_path, str):
@@ -315,15 +325,20 @@ def parse_instruction_contract_waivers(
     template_sync = marker_document.get("template_sync")
     if not isinstance(template_sync, dict):
         raise InstructionContractValidationError("Marker must contain template_sync mapping.")
+    template_sync = cast(dict[str, object], template_sync)
 
     waivers: list[InstructionContractWaiver] = []
     seen_pairs: set[tuple[str, str]] = set()
     duplicate_pairs: set[tuple[str, str]] = set()
-    for raw_waiver in template_sync.get("instruction_contract_waivers", []):
+    raw_waivers = template_sync.get("instruction_contract_waivers", [])
+    if not isinstance(raw_waivers, list):
+        raise InstructionContractValidationError("instruction_contract_waivers must be a list.")
+    for raw_waiver in cast(list[object], raw_waivers):
         if not isinstance(raw_waiver, dict):
             raise InstructionContractValidationError(
                 "Each instruction contract waiver must be a mapping."
             )
+        raw_waiver = cast(dict[str, object], raw_waiver)
         raw_path = raw_waiver.get("path")
         anchor = raw_waiver.get("anchor")
         reason = raw_waiver.get("reason")

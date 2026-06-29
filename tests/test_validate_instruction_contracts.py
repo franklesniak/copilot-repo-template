@@ -8,8 +8,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import pytest
 import yaml  # type: ignore[import-untyped]
+
+from tests._pytest_compat import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "validate_instruction_contracts.py"

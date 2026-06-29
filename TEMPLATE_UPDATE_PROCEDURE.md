@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.2.20260627.1
+**Version:** 1.2.20260629.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-27
+- **Last Updated:** 2026-06-29
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the first-adoption bootstrap command, the read-only first-adoption preflight/questionnaire mode, raw first-adoption state reporting, first-adoption quality-debt reports and suppressions, the adoption difficulties journal, one-shot first-adoption materialization, shell-safe first-adoption args files, package identity and collaboration-policy materialization, first-adoption structural convention assessment, first-adoption working-tree validation and doctor diagnostics, downstream local path ownership records, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -756,9 +756,11 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `.github/workflows/python-ci.yml` | `python`, `github-actions` |
 | `.github/workflows/precommit-ci.yml` | `baseline`, `github-actions` |
 | `.github/workflows/terraform-ci.yml` | `terraform`, `github-actions` |
-| `.github/workflows/data-ci.yml` | `github-actions`, plus one of `json`, `yaml`, `schema`, `template-sync-support` |
+| `.github/workflows/data-ci.yml` | `github-actions`, plus one of `baseline`, `json`, `yaml`, `schema`, `template-sync-support` |
+| `.github/template-placeholders.json` | `baseline` |
 | `.github/workflows/check-placeholders.yml` | `baseline`, `github-actions` |
 | `.github/scripts/replace-template-placeholders.py` | `baseline` |
+| `.github/scripts/validate-placeholder-schema-examples.py` | `baseline` |
 | `.github/workflows/auto-fix-precommit.yml` | `baseline`, `github-actions` |
 | `.azuredevops/pipelines/README.md` | `azure-pipelines` |
 | `.azuredevops/pipelines/precommit.yml`, `.azuredevops/pipelines/check-placeholders.yml` | `baseline`, `azure-pipelines` |
@@ -766,7 +768,7 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `.azuredevops/pipelines/powershell-ci.yml` | `powershell`, `azure-pipelines` |
 | `.azuredevops/pipelines/python-ci.yml` | `python`, `azure-pipelines` |
 | `.azuredevops/pipelines/terraform-ci.yml` | `terraform`, `azure-pipelines` |
-| `.azuredevops/pipelines/data-ci.yml` | `azure-pipelines`, plus one of `json`, `yaml`, `schema`, `template-sync-support` |
+| `.azuredevops/pipelines/data-ci.yml` | `azure-pipelines`, plus one of `baseline`, `json`, `yaml`, `schema`, `template-sync-support` |
 | `.azuredevops/pipelines/**` | `azure-pipelines` |
 | `.yamllint.yml` | `yaml` |
 | `.pre-commit-config.yaml` | `baseline` |
@@ -780,14 +782,16 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `templates/json/**` | `json` |
 | `templates/yaml/**` | `yaml` |
 | `schemas/template-sync-manifest.schema.json`, `schemas/template-sync-marker.schema.json`, `schemas/template-sync-instruction-contracts.schema.json`, `schemas/first-adoption-quality-suppressions.schema.json` | `template-sync-support` |
+| `schemas/template-placeholders.schema.json` | `baseline` |
 | `schemas/examples/template-sync-marker/**`, `schemas/examples/template-sync-instruction-contracts/**`, `schemas/examples/first-adoption-quality-suppressions/**` | `template-sync-support` |
+| `schemas/examples/template-placeholders/**` | `baseline` |
 | `schemas/**` | `schema` |
 | `tests/test_schema_examples.py` | one of `schema`, `template-sync-support` |
 | `tests/test_generate_sync_candidates.py`, `tests/test_bootstrap_first_adoption.py`, `tests/test_first_adoption_state.*`, `tests/test_initialize_adoption_journal.*`, `tests/test_report_excluded_module_references.py`, `tests/test_materialize_downstream_adoption.*` | `template-sync-support` |
 | `tests/test_run_first_adoption_checks.*`, `tests/test_first_adoption_quality_reports.*` | `template-sync-support` |
 | `tests/test_template_manifest.py`, `tests/test_template_sync_materialization_helpers.py`, `tests/test_validate_marker.py`, `tests/test_validate_downstream_adoption.py`, `tests/test_validate_instruction_contracts.py` | `template-sync-support` |
 | `.github/scripts/terraform_hooks.py`, `tests/test_terraform_hooks.py` | `terraform` |
-| `templates/python/**`, `pyproject.toml`, `src/copilot_repo_template/**`, `tests/*.py`, `tests/**/*.py` | `python` |
+| `templates/python/**`, `pyproject.toml`, `pyrightconfig.json`, `src/copilot_repo_template/**`, `tests/*.py`, `tests/**/*.py` | `python` |
 | `templates/terraform/**`, `docs/terraform/**`, `modules/**`, `tests/**/*.tftest.hcl`, `.tflint.hcl`, `*.tf`, `*.tfvars`, `*.tftpl`, `*.tfbackend` | `terraform` |
 | `README.md` | `baseline` |
 | `TEMPLATE_UPDATE_PROCEDURE.md` | `template-sync-support` |
@@ -803,7 +807,7 @@ To migrate a manifest from version 1 to version 2:
 
 1. Change `template_manifest.version` from `1` to `2`.
 2. Leave existing `requires_all` rows unchanged unless a path truly has cross-module alternatives.
-3. Add `requires_any` only for rows where a containing file should be retained when at least one alternative module is adopted. For example, `.github/workflows/data-ci.yml` uses `requires_all: [github-actions]` plus `requires_any: [json, yaml, schema]`.
+3. Add `requires_any` only for rows where a containing file should be retained when at least one alternative module is adopted. For example, `.github/workflows/data-ci.yml` uses `requires_all: [github-actions]` plus `requires_any: [baseline, json, yaml, schema, template-sync-support]`.
 4. Add `filtering.requires_any_semantics: OR`.
 5. Remove any `known_limitations` entry whose only purpose was to record a cross-module relation that is now expressed by `requires_any`.
 6. Validate the manifest with `pre-commit run validate-template-sync-manifest --all-files` and run [`tests/test_template_manifest.py`](tests/test_template_manifest.py).
@@ -912,7 +916,7 @@ The current `*-reference-only` marker forms are Markdown-safe HTML comments:
 <!-- template-sync: end github-platform-reference-only -->
 ```
 
-Most `*-reference-only` markers name a single module and use the same AND-retention strip semantics as the `*-only` family. The `schema-template-sync-support-only` marker is a registered multi-module AND-retention family: it is retained only when both `schema` and `template-sync-support` are adopted. Two reference-only marker families use OR-retention: `data-ci-reference-only` names the OR-group `json`, `yaml`, `schema`, and `template-sync-support`, mirroring the `requires_any` relation of `.github/workflows/data-ci.yml`; `azure-devops-guide-reference-only` names the OR-group `azure-devops-platform`, `azure-pipelines`, and `azure-devops-collaboration`, mirroring the `requires_any` relation of `docs/azure-devops-support.md`. Each is retained when at least one of its modules is adopted and is stripped only when every one of them is excluded.
+Most `*-reference-only` markers name a single module and use the same AND-retention strip semantics as the `*-only` family. The `schema-template-sync-support-only` marker is a registered multi-module AND-retention family: it is retained only when both `schema` and `template-sync-support` are adopted. Two reference-only marker families use OR-retention: `data-ci-reference-only` names the OR-group `baseline`, `json`, `yaml`, `schema`, and `template-sync-support`, mirroring the `requires_any` relation of `.github/workflows/data-ci.yml`; `azure-devops-guide-reference-only` names the OR-group `azure-devops-platform`, `azure-pipelines`, and `azure-devops-collaboration`, mirroring the `requires_any` relation of `docs/azure-devops-support.md`. Each is retained when at least one of its modules is adopted and is stripped only when every one of them is excluded.
 
 These inline blocks let a downstream repository keep the containing baseline or cross-module file while removing toolchain assumptions for a module it did not adopt. During Step 6, after path mapping decides whether the containing file itself is in scope, apply these rules:
 
@@ -986,7 +990,7 @@ The current `template-sync-support-reference-only` inline block lives in:
 
 The current `data-ci-reference-only` inline block lives in:
 
-- `CONTRIBUTING.md` for the Data CI workflow row, and `README.md` for the `.github/workflows/data-ci.yml` key-file bullet, each retained when any of `json`, `yaml`, `schema`, or `template-sync-support` is adopted and removed only when all four are excluded.
+- `CONTRIBUTING.md` for the Data CI workflow row, and `README.md` for the `.github/workflows/data-ci.yml` key-file bullet, each retained when any of `baseline`, `json`, `yaml`, `schema`, or `template-sync-support` is adopted and removed only when all five are excluded.
 - `.github/pull_request_template.md` for the generic retained data-file checklist section.
 
 The current `azure-devops-guide-reference-only` inline blocks live in:
@@ -1484,7 +1488,7 @@ Before module-specific validators, verify structural consistency for retained mo
 | `json` | `pre-commit run check-json --all-files` |
 | `yaml` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files` |
 | `schema` | `pre-commit run validate-example-config-valid-examples --all-files`, `pre-commit run validate-example-config-schema --all-files`, and `pytest tests/test_schema_examples.py -v` after worked-example schema or schema-example changes |
-| `python` | `python -m pytest -m "not upstream_template_only"` for downstream template-support tests, `pytest tests/ -v --cov --cov-report=term-missing` for full upstream-template coverage when the full suite is retained, `pre-commit run check-toml --all-files` |
+| `python` | `python -m pytest -m "not upstream_template_only"` for downstream template-support tests, `python -m pyright --project pyrightconfig.json`, `pytest tests/ -m "not slow" -v --cov --cov-report=term-missing` for default upstream-template coverage, `pytest tests/ -m slow -v --no-cov` for explicit slow template tests when retained, `pre-commit run check-toml --all-files` |
 | `terraform` | `terraform fmt -check -recursive`, `tflint --recursive`, `terraform test -verbose`, `pytest tests/test_terraform_hooks.py -v` after terraform-hook script changes |
 
 Run `pre-commit run --all-files` before committing when the downstream repository uses pre-commit. During first adoption, run `python .template-sync/scripts/run_first_adoption_checks.py --check` before that first commit when the helper is present, because `pre-commit run --all-files` primarily evaluates tracked files and may miss copied but untracked non-ignored adoption files. If the helper or any validator changes files, inspect those changes, keep or discard them intentionally, and rerun the relevant check command before finalizing. If a repository intentionally removed a module and its validation tooling, record that in the sync summary rather than reintroducing validation commands blindly.

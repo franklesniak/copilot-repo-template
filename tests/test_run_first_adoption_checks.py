@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import io
 import shutil
 import subprocess
@@ -9,8 +10,9 @@ import sys
 from collections.abc import Callable, Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any, cast
 
-import pytest
+from tests._pytest_compat import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "run_first_adoption_checks.py"
@@ -19,7 +21,16 @@ SCRIPT_DIR = SCRIPT_PATH.parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-import run_first_adoption_checks as first_adoption  # noqa: E402
+first_adoption = cast(Any, importlib.import_module("run_first_adoption_checks"))
+
+
+def test_decode_timeout_stream_handles_text_and_bytes_like_values() -> None:
+    """Timeout stream decoding accepts every subprocess timeout stream shape."""
+    assert first_adoption.decode_timeout_stream(None) == ""
+    assert first_adoption.decode_timeout_stream("plain text") == "plain text"
+    assert first_adoption.decode_timeout_stream(b"bytes text") == "bytes text"
+    assert first_adoption.decode_timeout_stream(bytearray(b"bytearray text")) == "bytearray text"
+    assert first_adoption.decode_timeout_stream(memoryview(b"memoryview text")) == "memoryview text"
 
 
 def _run_git(repo_root: Path, *args: str) -> str:
@@ -66,9 +77,9 @@ def _recording_runner(records: list[tuple[str, ...]]) -> Callable[[Sequence[str]
 
 
 def _scripted_probe_executor(
-    actions: dict[tuple[str, ...], first_adoption.ProbeExecution | BaseException],
+    actions: dict[tuple[str, ...], Any | BaseException],
 ) -> tuple[
-    Callable[[Sequence[str], Path, float], first_adoption.ProbeExecution],
+    Callable[[Sequence[str], Path, float], Any],
     list[tuple[tuple[str, ...], float]],
 ]:
     """Return a fake doctor probe executor that records commands and timeouts."""
@@ -78,7 +89,7 @@ def _scripted_probe_executor(
         command: Sequence[str],
         _repo_root: Path,
         timeout_seconds: float,
-    ) -> first_adoption.ProbeExecution:
+    ) -> Any:
         command_tuple = tuple(command)
         records.append((command_tuple, timeout_seconds))
         action = actions.get(
@@ -273,7 +284,7 @@ def test_diagnostic_text_collapses_markers_when_line_cap_too_small() -> None:
 
 
 def test_pre_commit_prefix_falls_back_when_console_shim_fails(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """Validation plans prefer a working module form when the console shim fails."""
 
@@ -302,7 +313,7 @@ def test_pre_commit_prefix_falls_back_when_console_shim_fails(
 
 def test_doctor_mode_reports_probe_states_without_running_validation(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """Doctor mode reports environment states without running hooks or fixers."""
     monkeypatch.setattr(first_adoption, "default_npm_executable", lambda: "npm")
@@ -322,7 +333,7 @@ def test_doctor_mode_reports_probe_states_without_running_validation(
     )
     powershell_flags = first_adoption.POWERSHELL_PROBE_FLAGS
     sys_python = (sys.executable, "-m")
-    actions: dict[tuple[str, ...], first_adoption.ProbeExecution | BaseException] = {
+    actions: dict[tuple[str, ...], Any | BaseException] = {
         ("git", "--version"): first_adoption.ProbeExecution(0, "git version 2\n", ""),
         (*sys_python, first_adoption.PYTHON_DOCTOR_MODULE): first_adoption.ProbeExecution(
             0,
@@ -429,7 +440,7 @@ def test_doctor_mode_reports_probe_states_without_running_validation(
 
 def test_check_plan_assigns_stable_group_labels(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """Planned validation commands carry stable group labels."""
     monkeypatch.setattr(
@@ -464,7 +475,7 @@ def test_check_plan_assigns_stable_group_labels(
 
 def test_quality_reports_are_planned_before_fixers_when_helper_exists(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """The first-adoption runner inventories quality debt before fix-mode commands."""
     monkeypatch.setattr(
@@ -495,7 +506,7 @@ def test_quality_reports_are_planned_before_fixers_when_helper_exists(
 
 def test_powershell_quality_report_is_skipped_when_marker_excludes_powershell(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """Marker-derived module state suppresses stale PowerShell report commands."""
     monkeypatch.setattr(
@@ -528,7 +539,7 @@ def test_powershell_quality_report_is_skipped_when_marker_excludes_powershell(
 
 def test_azure_marker_plans_host_setup_quality_report(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """Azure DevOps module retention schedules the host setup report."""
     monkeypatch.setattr(
@@ -560,7 +571,7 @@ def test_azure_marker_plans_host_setup_quality_report(
 
 def test_marker_module_detection_ignores_sibling_string_lists(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """Sibling marker lists like issue_labels are not read as retained modules."""
     monkeypatch.setattr(
@@ -663,7 +674,7 @@ def test_ignored_files_are_not_collected(tmp_path: Path) -> None:
 
 def test_plan_only_prints_collection_notes_and_plan_without_running(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """Plan-only mode prints discovery and plan details without validation commands."""
     monkeypatch.setattr(
@@ -707,7 +718,7 @@ def test_plan_only_prints_collection_notes_and_plan_without_running(
 
 def test_fix_mode_plan_only_prints_fix_mode_without_running(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """Plan-only mode can preview the explicit fix-mode command plan."""
     monkeypatch.setattr(
@@ -754,7 +765,7 @@ def test_marker_absent_does_not_run_marker_validator(tmp_path: Path) -> None:
 
 def test_timing_output_uses_injected_time_source_and_prints_cold_start_guidance(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """Command timing and total elapsed output are deterministic in tests."""
     monkeypatch.setattr(
@@ -799,7 +810,7 @@ def test_timing_output_uses_injected_time_source_and_prints_cold_start_guidance(
 
 def test_unchanged_git_status_passes_after_validation(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """A stable dirty status from before the run is not treated as a new mutation."""
     monkeypatch.setattr(
@@ -826,7 +837,7 @@ def test_unchanged_git_status_passes_after_validation(
 
 def test_changed_git_status_exits_distinctly_after_validation(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """A command-induced Git status change is reported and exits distinctly."""
     monkeypatch.setattr(
@@ -861,7 +872,7 @@ def test_changed_git_status_exits_distinctly_after_validation(
 
 def test_fix_mode_tolerates_mutations_without_failing(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """Fix mode reports command-induced mutations but exits zero."""
     monkeypatch.setattr(
@@ -894,7 +905,7 @@ def test_fix_mode_tolerates_mutations_without_failing(
 
 def test_check_mode_reports_command_failure_before_changed_files(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """A failing command takes exit-code precedence over a mutated work tree."""
     monkeypatch.setattr(
@@ -927,7 +938,7 @@ def test_check_mode_reports_command_failure_before_changed_files(
 
 def test_git_status_lines_reports_oserror_as_check_error(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """A missing git executable surfaces as FirstAdoptionCheckError, not a raw OSError."""
 
@@ -944,7 +955,7 @@ def test_git_status_lines_reports_oserror_as_check_error(
 
 def test_collect_present_regular_files_reports_oserror_as_check_error(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """A missing git executable surfaces as FirstAdoptionCheckError, not a raw OSError."""
 
@@ -984,7 +995,7 @@ def test_marker_present_runs_marker_validator(tmp_path: Path) -> None:
 
 def test_multiple_failures_are_reported_by_default(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """The runner continues through the plan and reports every failing command."""
     monkeypatch.setattr(
@@ -1301,10 +1312,14 @@ def test_package_markdown_scripts_run_when_present(tmp_path: Path) -> None:
 
 
 def test_pre_commit_prefix_falls_back_to_python_module(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """The runner works when the pre-commit console script is not on PATH."""
-    monkeypatch.setattr(first_adoption.shutil, "which", lambda _name: None)
+
+    def missing_executable(_name: str) -> None:
+        return None
+
+    monkeypatch.setattr(first_adoption.shutil, "which", missing_executable)
 
     prefix = first_adoption.default_pre_commit_prefix()
 
@@ -1312,7 +1327,7 @@ def test_pre_commit_prefix_falls_back_to_python_module(
 
 
 def test_npm_executable_prefers_cmd_shim_on_windows_style_path(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """The runner can use npm.cmd when bare npm is not directly executable."""
 

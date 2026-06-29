@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
+import contextlib
+import fnmatch
+import importlib
 import importlib.util
+import io
 import json
 import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-import pytest
 import yaml  # type: ignore[import-untyped]
+
+from tests._pytest_compat import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "materialize_downstream_adoption.py"
@@ -54,6 +60,7 @@ FULL_TEMPLATE_MODULES = (
     "python",
     "terraform",
 )
+StructuredObject = dict[str, Any]
 AZURE_TEMPLATE_MODULES = frozenset(
     ("azure-devops-platform", "azure-pipelines", "azure-devops-collaboration")
 )
@@ -63,7 +70,7 @@ DOWNSTREAM_PYTEST_MODULES = tuple(
     for module_name in FULL_TEMPLATE_MODULES
     if module_name not in {"agent-instructions", "git-lfs", "powershell", "terraform"}
 )
-OPTIONAL_PRUNING_FIXTURES = (
+OPTIONAL_PRUNING_FIXTURES: tuple[Any, ...] = (
     pytest.param(
         ("baseline", "python", "schema", "template-sync-support"),
         False,
@@ -113,7 +120,7 @@ GIT_LFS_MANAGED_ATTRIBUTE_PATHS = (
     "assets/source/model.fbx",
     "assets/source/plan.dwg",
 )
-OPTIONAL_STACK_OWNED_PATHS = {
+OPTIONAL_STACK_OWNED_PATHS: dict[str, tuple[str, ...]] = {
     "powershell": (
         ".github/instructions/powershell.instructions.md",
         ".github/linting/PSScriptAnalyzerSettings.psd1",
@@ -130,7 +137,7 @@ OPTIONAL_STACK_OWNED_PATHS = {
         "templates/terraform/Example.tftest.hcl",
     ),
 }
-OPTIONAL_STACK_INLINE_MARKERS = {
+OPTIONAL_STACK_INLINE_MARKERS: dict[str, tuple[str, ...]] = {
     "powershell": ("powershell-reference-only",),
     "terraform": ("terraform-only", "terraform-reference-only"),
 }
@@ -156,7 +163,7 @@ TEMPLATE_SYNC_SUPPORT_README_REFERENCES = (
     "schemas/template-sync-",
     "validate_downstream_adoption.py",
 )
-ISSUE_693_EXCLUDED_DOC_REFERENCES = {
+ISSUE_693_EXCLUDED_DOC_REFERENCES: dict[str, tuple[str, ...]] = {
     "README.md": (
         "pyproject.toml",
         ".github/workflows/python-ci.yml",
@@ -202,7 +209,7 @@ ISSUE_693_EXCLUDED_DOC_REFERENCES = {
         "TFLint",
     ),
 }
-ISSUE_693_RETAINED_DOC_REFERENCES = {
+ISSUE_693_RETAINED_DOC_REFERENCES: dict[str, tuple[str, ...]] = {
     "README.md": (
         "npm run lint:md",
         "Invoke-Pester -Path tests/ -Output Detailed",
@@ -237,7 +244,8 @@ NESTED_MARKDOWN_LINT_NODE_MODULES = (
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-import materialize_downstream_adoption as materializer  # noqa: E402
+materializer = cast(Any, importlib.import_module("materialize_downstream_adoption"))
+excluded_reporter = cast(Any, importlib.import_module("report_excluded_module_references"))
 
 
 def write_file(path: Path, content: str) -> None:
@@ -295,6 +303,41 @@ def read_file(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def run_in_process_cli(
+    command: list[str],
+    main: Callable[[list[str]], int],
+) -> subprocess.CompletedProcess[str]:
+    """Run an imported CLI main function and return a CompletedProcess-shaped result."""
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    argv = command[2:]
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        try:
+            returncode = main(argv)
+        except SystemExit as error:
+            returncode = error.code if isinstance(error.code, int) else 1
+    return subprocess.CompletedProcess(
+        args=command,
+        returncode=returncode,
+        stdout=stdout.getvalue(),
+        stderr=stderr.getvalue(),
+    )
+
+
+def test_materializer_script_entrypoint_help_smoke() -> None:
+    """The materializer remains executable through its script entry point."""
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--help"],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "usage: materialize_downstream_adoption.py" in result.stdout
+
+
 def section_entries(output: str, heading: str) -> set[str]:
     """Return bullet entries rendered under a named output section."""
     entries: set[str] = set()
@@ -350,6 +393,7 @@ def assert_yamllint_clean(*paths: Path) -> None:
     command = yamllint_command()
     if command is None:
         pytest.skip("yamllint executable or importable module is required for this assertion")
+    assert command is not None
     result = subprocess.run(
         [
             *command,
@@ -372,6 +416,26 @@ def prepare_template(
     include_placeholder_helper: bool = False,
 ) -> None:
     """Create the minimal template-side contract files for a fixture run."""
+    effective_path_mappings = [dict(mapping) for mapping in path_mappings]
+    if include_placeholder_helper:
+        placeholder_manifest = json.loads(
+            (REPO_ROOT / ".github" / "template-placeholders.json").read_text(encoding="utf-8")
+        )
+        path_groups = placeholder_manifest["pathGroups"]
+        placeholder_paths = {path for group_paths in path_groups.values() for path in group_paths}
+        placeholder_paths.update(
+            path
+            for token_spec in placeholder_manifest.get("tokens", [])
+            for path in token_spec.get("pathPatterns", [])
+        )
+        for relative_path in sorted(placeholder_paths):
+            if any(
+                fnmatch.fnmatchcase(relative_path, mapping["pattern"])
+                for mapping in effective_path_mappings
+            ):
+                continue
+            effective_path_mappings.append({"pattern": relative_path, "requires_all": ["baseline"]})
+
     manifest = {
         "template_manifest": {
             "version": 2,
@@ -400,7 +464,7 @@ def prepare_template(
                 {"name": "python", "description": "Python files."},
                 {"name": "markdown", "description": "Markdown files."},
             ],
-            "path_mappings": path_mappings,
+            "path_mappings": effective_path_mappings,
             "filtering": {
                 "default_semantics": "AND",
                 "requires_any_semantics": "OR",
@@ -431,6 +495,14 @@ def prepare_template(
             REPO_ROOT / ".github" / "scripts" / "replace-template-placeholders.py",
             helper_path,
         )
+        shutil.copyfile(
+            REPO_ROOT / ".github" / "template-placeholders.json",
+            template_root / ".github" / "template-placeholders.json",
+        )
+        shutil.copyfile(
+            REPO_ROOT / "schemas" / "template-placeholders.schema.json",
+            schema_root / "template-placeholders.schema.json",
+        )
 
 
 def prepare_security_reporting_template(template_root: Path) -> None:
@@ -459,16 +531,33 @@ def load_yaml(path: Path) -> object:
     return yaml.safe_load(read_file(path))
 
 
+def as_mapping(value: object, message: str) -> StructuredObject:
+    """Return ``value`` after asserting it is a structured mapping."""
+    assert isinstance(value, dict), message
+    return cast(StructuredObject, value)
+
+
+def as_list(value: object, message: str) -> list[Any]:
+    """Return ``value`` after asserting it is a list."""
+    assert isinstance(value, list), message
+    return cast(list[Any], value)
+
+
+def as_string_list(value: object, message: str) -> list[str]:
+    """Return ``value`` after asserting it is a list of strings."""
+    values = as_list(value, message)
+    assert all(isinstance(item, str) for item in values), message
+    return cast(list[str], values)
+
+
 def dependabot_update_ecosystems(path: Path) -> set[str]:
     """Return Dependabot package ecosystems from a generated config."""
-    document = load_yaml(path)
-    assert isinstance(document, dict)
-    updates = document.get("updates")
-    assert isinstance(updates, list)
+    document = as_mapping(load_yaml(path), "Dependabot config must be a mapping")
+    updates = as_list(document.get("updates"), "Dependabot updates must be a list")
     ecosystems: set[str] = set()
     for update in updates:
-        assert isinstance(update, dict)
-        ecosystem = update.get("package-ecosystem")
+        update_mapping = as_mapping(update, "Dependabot update must be a mapping")
+        ecosystem = update_mapping.get("package-ecosystem")
         assert isinstance(ecosystem, str)
         ecosystems.add(ecosystem)
     return ecosystems
@@ -503,26 +592,24 @@ def security_contact_link(config: object) -> dict[str, object]:
 
 def contact_link_by_name(config: object, name: str) -> dict[str, object]:
     """Return a named contact link from parsed issue-template config."""
-    assert isinstance(config, dict)
-    contact_links = config["contact_links"]
-    assert isinstance(contact_links, list)
+    config_mapping = as_mapping(config, "issue-template config must be a mapping")
+    contact_links = as_list(config_mapping["contact_links"], "contact_links must be a list")
     for contact_link in contact_links:
-        assert isinstance(contact_link, dict)
-        if contact_link.get("name") == name:
-            return contact_link
+        contact_link_mapping = as_mapping(contact_link, "contact link must be a mapping")
+        if contact_link_mapping.get("name") == name:
+            return contact_link_mapping
     raise AssertionError(f"{name} contact link not found")
 
 
 def assert_issue_form_shape(bug_report: object) -> None:
     """Assert the generated bug-report issue form has the expected structure."""
-    assert isinstance(bug_report, dict)
-    body = bug_report["body"]
-    assert isinstance(body, list)
+    bug_report_mapping = as_mapping(bug_report, "bug-report form must be a mapping")
+    body = as_list(bug_report_mapping["body"], "bug-report body must be a list")
     assert body
     for item in body:
-        assert isinstance(item, dict)
-        assert isinstance(item.get("type"), str)
-        assert isinstance(item.get("attributes"), dict)
+        item_mapping = as_mapping(item, "bug-report body item must be a mapping")
+        assert isinstance(item_mapping.get("type"), str)
+        assert isinstance(item_mapping.get("attributes"), dict)
 
 
 def run_materialize(
@@ -531,21 +618,16 @@ def run_materialize(
     *args: str,
 ) -> subprocess.CompletedProcess[str]:
     """Run the materialization helper against fixture repositories."""
-    return subprocess.run(
-        [
-            sys.executable,
-            str(SCRIPT_PATH),
-            "--template-root",
-            str(template_root),
-            "--target-root",
-            str(target_root),
-            *args,
-        ],
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+    command = [
+        sys.executable,
+        str(SCRIPT_PATH),
+        "--template-root",
+        str(template_root),
+        "--target-root",
+        str(target_root),
+        *args,
+    ]
+    return run_in_process_cli(command, materializer.main)
 
 
 def retained_protected_paths_for_modules(included_modules: tuple[str, ...]) -> tuple[str, ...]:
@@ -815,9 +897,15 @@ def run_excluded_module_report(
         # caller's included_modules would otherwise be silently ignored. Assert
         # the marker records the same module set so drift between the test's
         # intent and the materialized marker is caught rather than hidden.
-        marker_data = load_yaml(marker_path)
-        assert isinstance(marker_data, dict), marker_path
-        recorded_modules = marker_data["template_sync"]["included_modules"]
+        marker_data = as_mapping(load_yaml(marker_path), f"{marker_path} must be a mapping")
+        template_sync = as_mapping(
+            marker_data["template_sync"],
+            f"{marker_path} template_sync must be a mapping",
+        )
+        recorded_modules = as_string_list(
+            template_sync["included_modules"],
+            f"{marker_path} included_modules must be a list of strings",
+        )
         assert set(recorded_modules) == set(included_modules), (
             f"marker included_modules {sorted(recorded_modules)!r} do not match "
             f"requested {sorted(included_modules)!r}"
@@ -829,19 +917,14 @@ def run_excluded_module_report(
             for module_name in included_modules
             for argument in ("--included-module", module_name)
         ]
-    return subprocess.run(
-        [
-            sys.executable,
-            str(REPORT_SCRIPT_PATH),
-            "--repo-root",
-            str(repo_root),
-            *module_args,
-        ],
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+    command = [
+        sys.executable,
+        str(REPORT_SCRIPT_PATH),
+        "--repo-root",
+        str(repo_root),
+        *module_args,
+    ]
+    return run_in_process_cli(command, excluded_reporter.main)
 
 
 def marker_document(
@@ -889,7 +972,7 @@ def azure_provider_cli_args_for_modules(included_modules: tuple[str, ...]) -> tu
 
 
 def test_materializer_help_documents_security_reporting_modes(
-    capsys: pytest.CaptureFixture[str],
+    capsys: Any,
 ) -> None:
     """The materializer help output documents every supported reporting mode."""
     with pytest.raises(SystemExit) as error:
@@ -903,7 +986,7 @@ def test_materializer_help_documents_security_reporting_modes(
 
 
 def test_materializer_help_documents_license_preservation(
-    capsys: pytest.CaptureFixture[str],
+    capsys: Any,
 ) -> None:
     """The materializer help output documents license-preservation inputs."""
     with pytest.raises(SystemExit) as error:
@@ -915,6 +998,7 @@ def test_materializer_help_documents_license_preservation(
     assert "--license-source-path" in captured.out
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "source_path",
     [
@@ -967,16 +1051,19 @@ def test_preserve_existing_license_source_to_root_license_and_records_override(
     assert "Residual manual-cleanup paths:" in result.stdout
     assert source_path in result.stdout
 
-    marker = load_yaml(target_root / ".template-sync" / "marker.yml")
-    assert isinstance(marker, dict)
-    template_sync = marker["template_sync"]
-    assert isinstance(template_sync, dict)
-    local_overrides = template_sync["local_overrides"]
-    assert isinstance(local_overrides, list)
-    license_override = next(
-        override
+    marker = as_mapping(
+        load_yaml(target_root / ".template-sync" / "marker.yml"),
+        "marker must be a mapping",
+    )
+    template_sync = as_mapping(marker["template_sync"], "template_sync must be a mapping")
+    local_overrides = as_list(template_sync["local_overrides"], "local_overrides must be a list")
+    override_mappings = [
+        cast(StructuredObject, override)
         for override in local_overrides
-        if isinstance(override, dict) and override.get("path") == "LICENSE"
+        if isinstance(override, dict)
+    ]
+    license_override = next(
+        override for override in override_mappings if override.get("path") == "LICENSE"
     )
     assert license_override["default_decision"] == "SKIP"
     assert source_path in license_override["reason"]
@@ -1290,6 +1377,7 @@ def test_read_license_source_bytes_reports_unreadable_source_without_absolute_pa
     assert str(secret_path) not in message
 
 
+@pytest.mark.slow
 @pytest.mark.upstream_template_only
 def test_materialized_downstream_pytest_gate_collects(
     tmp_path: Path,
@@ -1317,6 +1405,7 @@ def test_materialized_downstream_pytest_gate_passes(
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize(
     ("included_modules", "authorize_protected_files"),
     OPTIONAL_PRUNING_FIXTURES,
@@ -1336,9 +1425,15 @@ def test_materialized_optional_pruning_retained_tests_have_no_stale_markers(
     run_git(target_root, "add", ".")
 
     report_result = run_excluded_module_report(target_root, included_modules)
-    marker = load_yaml(target_root / ".template-sync" / "marker.yml")
-    assert isinstance(marker, dict)
-    recorded_modules = marker["template_sync"]["included_modules"]
+    marker = as_mapping(
+        load_yaml(target_root / ".template-sync" / "marker.yml"),
+        "marker must be a mapping",
+    )
+    template_sync = as_mapping(marker["template_sync"], "template_sync must be a mapping")
+    recorded_modules = as_string_list(
+        template_sync["included_modules"],
+        "included_modules must be a list of strings",
+    )
     assert set(recorded_modules) == set(included_modules)
 
     assert report_result.returncode == 0, report_result.stderr
@@ -1376,6 +1471,7 @@ def test_materialized_optional_pruning_retained_tests_have_no_stale_markers(
                     ), f"{relative_path}: {marker_name}"
 
 
+@pytest.mark.slow
 @pytest.mark.upstream_template_only
 def test_materialized_full_adoption_yaml_surfaces_are_yamllint_clean(
     tmp_path: Path,
@@ -1422,6 +1518,7 @@ def test_materialized_azure_pipelines_without_github_actions_omits_actionlint(
     assert "pre-commit run yamllint --all-files" in data_pipeline_text
 
 
+@pytest.mark.slow
 def test_materialized_template_sync_support_only_first_adoption_plan_omits_powershell(
     tmp_path: Path,
 ) -> None:
@@ -1454,6 +1551,7 @@ def test_materialized_template_sync_support_only_first_adoption_plan_omits_power
     assert "first_adoption_quality_reports.py powershell" not in result.stdout
 
 
+@pytest.mark.slow
 def test_materialized_gitattributes_baseline_lf_pins_survive_optional_stack_exclusion(
     tmp_path: Path,
 ) -> None:
@@ -1741,7 +1839,7 @@ def test_materializer_failure_cleans_temporary_worktree(tmp_path: Path) -> None:
 
 def test_cleanup_retries_once_and_verifies_worktree_absence(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """Cleanup retries the remove command once before verifying worktree state."""
     template_repo = tmp_path / "template-repo"
@@ -1791,8 +1889,8 @@ def test_cleanup_retries_once_and_verifies_worktree_absence(
 
 def test_successful_materialization_cleanup_failure_exits_dedicated_code(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
+    monkeypatch: Any,
+    capsys: Any,
 ) -> None:
     """Successful materialization plus cleanup failure has a dedicated exit code."""
     template_root = tmp_path / "template"
@@ -1801,7 +1899,7 @@ def test_successful_materialization_cleanup_failure_exits_dedicated_code(
     prepare_template(template_root, [{"pattern": "README.md", "requires_all": ["baseline"]}])
     write_file(template_root / "README.md", "template readme\n")
 
-    def fake_cleanup(source_checkout: materializer.SourceCheckout) -> materializer.CleanupFailure:
+    def fake_cleanup(source_checkout: Any) -> Any:
         source_checkout.summary.cleanup_status = "failed"
         source_checkout.summary.cleanup_failure = "simulated cleanup failure"
         source_checkout.summary.temporary_checkout_path = str(tmp_path / "stale-worktree")
@@ -1839,8 +1937,8 @@ def test_successful_materialization_cleanup_failure_exits_dedicated_code(
 
 def test_materialization_failure_plus_cleanup_failure_preserves_primary_error(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
+    monkeypatch: Any,
+    capsys: Any,
 ) -> None:
     """Cleanup failure diagnostics do not replace the materialization failure."""
     template_root = tmp_path / "template"
@@ -1849,7 +1947,7 @@ def test_materialization_failure_plus_cleanup_failure_preserves_primary_error(
     prepare_template(template_root, [{"pattern": "SECURITY.md", "requires_all": ["baseline"]}])
     write_file(template_root / "SECURITY.md", "Email [security contact email]\n")
 
-    def fake_cleanup(source_checkout: materializer.SourceCheckout) -> materializer.CleanupFailure:
+    def fake_cleanup(source_checkout: Any) -> Any:
         source_checkout.summary.cleanup_status = "failed"
         return materializer.CleanupFailure(
             detail="simulated cleanup failure",
@@ -1957,6 +2055,7 @@ def test_retained_files_excluded_files_inline_blocks_and_unmapped_paths(
         ),
     ],
 )
+@pytest.mark.slow
 def test_materialized_template_update_procedure_passes_nested_markdown_lint(
     tmp_path: Path,
     included_modules: tuple[str, ...],
@@ -2005,6 +2104,7 @@ def test_materialized_template_update_procedure_passes_nested_markdown_lint(
     assert lint_result.returncode == 0, lint_result.stdout + lint_result.stderr
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("relative_path", ISSUE_693_BASELINE_DOCS)
 def test_materialized_partial_adoption_strips_shared_baseline_doc_stale_references(
     tmp_path: Path,
@@ -2069,6 +2169,7 @@ def test_materialized_partial_adoption_strips_shared_baseline_doc_stale_referenc
     )
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("template_sync_support_included", [False, True])
 def test_materialized_readme_template_sync_support_reference_block(
     tmp_path: Path,
@@ -2113,6 +2214,7 @@ def test_materialized_readme_template_sync_support_reference_block(
             assert reference not in generated_text, reference
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("template_sync_support_included", [False, True])
 def test_materialized_contributing_template_sync_support_reference_block(
     tmp_path: Path,
@@ -2159,46 +2261,23 @@ def test_materialized_contributing_template_sync_support_reference_block(
 @pytest.mark.parametrize(
     ("included_data_module", "expect_data_ci_row"),
     [
-        pytest.param(None, False, id="all-data-modules-excluded"),
+        pytest.param(None, True, id="baseline-only-placeholder-checks"),
         pytest.param("json", True, id="json-included"),
     ],
 )
 def test_materialized_contributing_data_ci_reference_block(
-    tmp_path: Path,
     included_data_module: str | None,
     expect_data_ci_row: bool,
 ) -> None:
-    """The Data CI row materializes when any OR-group data module is adopted."""
-    target_root = tmp_path / "contributing-data-ci"
-    target_root.mkdir()
+    """The Data CI row materializes for baseline placeholder and data checks."""
     included_modules: tuple[str, ...] = NO_DATA_NO_TEMPLATE_SYNC_MODULES
     if included_data_module is not None:
         included_modules = (*included_modules, included_data_module)
-    module_args = [
-        argument
-        for module_name in included_modules
-        for argument in ("--included-module", module_name)
-    ]
-
-    result = run_materialize(
-        REPO_ROOT,
-        target_root,
-        "--source-repo",
-        SOURCE_REPO,
-        "--last-reviewed-template-commit",
-        FULL_SHA,
-        "--repository",
-        "octocat/hello-world",
-        "--security-contact",
-        "security@example.com",
-        "--allow-conflicts",
-        *module_args,
+    generated_text = materializer.remove_inline_blocks_for_modules(
+        read_file(REPO_ROOT / "CONTRIBUTING.md"),
+        included_modules,
+        relative_path="CONTRIBUTING.md",
     )
-
-    assert result.returncode == 0, result.stderr
-    generated_path = target_root / "CONTRIBUTING.md"
-    assert generated_path.is_file(), result.stdout
-    generated_text = read_file(generated_path)
 
     if expect_data_ci_row:
         assert "**Data CI**" in generated_text
@@ -2237,6 +2316,7 @@ def test_materialized_all_azure_modules_retain_guide_and_reference_links(
     assert "docs/azure-devops-support.md" in contributing_text
 
 
+@pytest.mark.slow
 def test_excluded_module_report_retains_or_group_block_without_cleanup(
     tmp_path: Path,
 ) -> None:
@@ -2396,8 +2476,7 @@ def test_materialized_marker_yaml_is_canonical(tmp_path: Path) -> None:
     """Generated marker writes use canonical YAML before reaching disk."""
     marker_path = materialized_marker_fixture(tmp_path)
     marker_text = read_file(marker_path)
-    marker_document_data = load_yaml(marker_path)
-    assert isinstance(marker_document_data, dict)
+    marker_document_data = as_mapping(load_yaml(marker_path), "marker must be a mapping")
     assert marker_text == materializer.marker_yaml(marker_document_data)
     assert "  included_modules:\n    - template-sync-support\n" in marker_text
     assert "  local_overrides:\n    - path: README.md\n" in marker_text
@@ -2413,6 +2492,7 @@ def test_materialized_marker_yaml_is_yamllint_clean(tmp_path: Path) -> None:
     assert_yamllint_clean(marker_path)
 
 
+@pytest.mark.slow
 def test_materialized_no_python_adoption_prunes_dependabot_pip_ecosystem(
     tmp_path: Path,
 ) -> None:
@@ -2464,6 +2544,7 @@ def test_materialized_no_python_adoption_prunes_dependabot_pip_ecosystem(
     assert "dependabot-ecosystem.stale | required_cleanup | python |" not in report_result.stdout
 
 
+@pytest.mark.slow
 def test_materialized_full_adoption_keeps_all_dependabot_ecosystems(
     tmp_path: Path,
 ) -> None:
@@ -3048,9 +3129,11 @@ def test_materializer_replays_azure_provider_fields_from_marker(
     assert "https://dev.azure.com/contoso/Microsoft%20365/_git/downstream-template" in (
         contributing_text
     )
-    marker = load_yaml(target_root / ".template-sync" / "marker.yml")
-    assert isinstance(marker, dict)
-    template_sync = marker["template_sync"]
+    marker = as_mapping(
+        load_yaml(target_root / ".template-sync" / "marker.yml"),
+        "marker must be a mapping",
+    )
+    template_sync = as_mapping(marker["template_sync"], "template_sync must be a mapping")
     assert template_sync["host_provider"] == "azure-devops-services"
     assert template_sync["azure_devops_project"] == "Microsoft 365"
     assert template_sync["azure_security_product_enablement"] == "github-secret-protection"

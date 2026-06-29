@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import sys
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
-import pytest
+from tests._pytest_compat import pytest
 
 HOOK_PATH = (
     Path(__file__).resolve().parents[1] / ".github" / "scripts" / "check-prohibited-placeholders.py"
@@ -461,7 +462,7 @@ def test_markdown_outside_docs_is_not_scanned(tmp_path: Path) -> None:
 
 def test_main_reports_actionable_failure_message(
     tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
+    capsys: Any,
 ) -> None:
     """CLI output includes path, line, matched text, remediation, and suppression syntax."""
     write_file(

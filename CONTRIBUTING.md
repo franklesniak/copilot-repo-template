@@ -310,7 +310,7 @@ This repository includes retained GitHub Actions workflows that run automaticall
 - **Markdown Lint** (`.github/workflows/markdownlint.yml`) - Validates Markdown formatting and local links.
 - **PowerShell CI** (`.github/workflows/powershell-ci.yml`) - Runs PSScriptAnalyzer and Pester on PowerShell files.
 <!-- template-sync: begin data-ci-reference-only -->
-- **Data CI** (`.github/workflows/data-ci.yml`) - Runs retained data-file, GitHub Actions, template-sync, and schema validation hooks.
+- **Data CI** (`.github/workflows/data-ci.yml`) - Runs retained baseline placeholder, data-file, GitHub Actions, template-sync, and schema validation hooks.
 <!-- template-sync: end data-ci-reference-only -->
 <!-- template-sync: begin python-reference-only -->
 - **Python CI** (`.github/workflows/python-ci.yml`) - Runs type checking and pytest on Python files.
@@ -357,9 +357,18 @@ Before submitting a pull request, ensure the retained test suites pass locally.
 <!-- template-sync: begin python-reference-only -->
 #### Python Tests
 
+The committed VS Code settings include the repository's script search paths so
+a fresh checkout can be opened without creating a repo-local virtual
+environment first. Install the dev extras in your selected Python environment
+before running the validation commands. In CI, GitHub Actions exposes the
+`run_slow_tests` manual workflow input, and Azure Pipelines exposes the
+`runSlowTests` runtime parameter, both defaulting to `false`.
+
 ```bash
 pip install -e ".[dev]"
-pytest tests/ -v --cov --cov-report=term-missing
+python -m pyright --project pyrightconfig.json
+pytest tests/ -m "not slow" -v --cov --cov-report=term-missing
+pytest tests/ -m slow -v --no-cov
 python -m mypy src tests
 ```
 <!-- template-sync: end python-reference-only -->

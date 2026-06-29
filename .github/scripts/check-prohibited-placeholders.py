@@ -319,9 +319,9 @@ def find_violations_in_text(text: str, display_path: str) -> list[Violation]:
 
     for line_number, raw_line in enumerate(text.splitlines(), start=1):
         if active_fence is not None:
-            fence_line = normalize_for_fence_closing(raw_line, active_fence)
+            closing_line = normalize_for_fence_closing(raw_line, active_fence)
             if is_closing_fence(
-                fence_line,
+                closing_line,
                 active_fence.character,
                 active_fence.minimum_length,
             ):
@@ -330,10 +330,10 @@ def find_violations_in_text(text: str, display_path: str) -> list[Violation]:
 
         commentless_line, is_in_html_comment = strip_html_comments(raw_line, is_in_html_comment)
 
-        fence_line = normalize_for_fence_opening(commentless_line, list_contexts)
-        opening_fence = parse_opening_fence(fence_line.content)
+        opening_fence_line = normalize_for_fence_opening(commentless_line, list_contexts)
+        opening_fence = parse_opening_fence(opening_fence_line.content)
         if opening_fence is not None:
-            active_fence = build_active_fence(opening_fence, fence_line)
+            active_fence = build_active_fence(opening_fence, opening_fence_line)
             continue
 
         if ALLOW_TBD_PATTERN.search(raw_line):

@@ -8,7 +8,7 @@ import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NoReturn, TextIO, TypedDict
+from typing import Any, NoReturn, TextIO, TypedDict, cast
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -25,6 +25,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     DEFAULT_MARKER_SCHEMA_PATH,
     TemplateSyncMaterializationError,
     format_marker_yaml,
+    is_string_list,
     os_error_summary,
     repository_relative_path,
     resolve_safe_repository_target_path,
@@ -379,6 +380,7 @@ def find_existing_state(text: str) -> ExistingBootstrapState:
         ) from error
     if not isinstance(parsed, dict):
         raise FirstAdoptionBootstrapError("Bootstrap state block must contain a JSON object.")
+    parsed = cast(dict[str, Any], parsed)
     if parsed.get("schema_version") != BOOTSTRAP_STATE_SCHEMA_VERSION:
         raise FirstAdoptionBootstrapError(
             f"Unsupported bootstrap state schema_version: {parsed.get('schema_version')!r}"
@@ -409,10 +411,8 @@ def normalize_decision(raw_decision: dict[str, Any]) -> dict[str, Any]:
             f"Bootstrap decision {key} has unsupported status: {status!r}"
         )
 
-    dependent_files = raw_decision.get("dependent_files", [])
-    if not isinstance(dependent_files, list) or not all(
-        isinstance(item, str) for item in dependent_files
-    ):
+    raw_dependent_files = raw_decision.get("dependent_files", [])
+    if not is_string_list(raw_dependent_files):
         raise FirstAdoptionBootstrapError(
             f"Bootstrap decision {key} dependent_files must be a string list."
         )
@@ -426,7 +426,7 @@ def normalize_decision(raw_decision: dict[str, Any]) -> dict[str, Any]:
         "evidence": raw_decision.get("evidence", ""),
         "owner": raw_decision.get("owner", ""),
         "updated_utc": raw_decision.get("updated_utc", ""),
-        "dependent_files": dependent_files,
+        "dependent_files": raw_dependent_files,
         "dependent_file_status": raw_decision.get("dependent_file_status", "not_finalized"),
         "notes": raw_decision.get("notes", ""),
     }
@@ -439,10 +439,10 @@ def decision_by_key(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
         raise FirstAdoptionBootstrapError("Bootstrap state decisions must be a list.")
 
     decisions: dict[str, dict[str, Any]] = {}
-    for raw_decision in raw_decisions:
+    for raw_decision in cast(list[object], raw_decisions):
         if not isinstance(raw_decision, dict):
             raise FirstAdoptionBootstrapError("Every bootstrap decision must be a mapping.")
-        decision = normalize_decision(raw_decision)
+        decision = normalize_decision(cast(dict[str, Any], raw_decision))
         key = decision["key"]
         if key in decisions:
             raise FirstAdoptionBootstrapError(f"Duplicate bootstrap decision key: {key}")

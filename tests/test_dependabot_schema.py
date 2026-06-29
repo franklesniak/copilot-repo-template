@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import importlib.metadata
 import shutil
 import subprocess
@@ -9,8 +10,9 @@ import sys
 from importlib.util import find_spec
 from pathlib import Path
 
-import pytest
 import yaml  # type: ignore[import-untyped]
+
+from tests._pytest_compat import pytest
 
 
 def check_jsonschema_command() -> list[str] | None:

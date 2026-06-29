@@ -113,7 +113,7 @@ Optional module-owned surfaces include:
 - `.github/workflows/auto-fix-precommit.yml` - Optional auto-fix workflow for pre-commit fixes on Copilot-agent branches.
 - `.github/workflows/check-placeholders.yml` - Transitional OWNER/REPO and `@OWNER` placeholder check.
 <!-- template-sync: begin data-ci-reference-only -->
-- `.github/workflows/data-ci.yml` - Data-file and template-sync validation workflow, present when a data-file or template-sync module is retained.
+- `.github/workflows/data-ci.yml` - Baseline placeholder, data-file, and template-sync validation workflow, present when baseline or a data-file/template-sync module is retained.
 <!-- template-sync: end data-ci-reference-only -->
 - `.github/workflows/markdownlint.yml` - Markdown linting and offline link-validation workflow.
 - `.github/workflows/powershell-ci.yml` - PowerShell linting and Pester testing workflow.
@@ -302,10 +302,20 @@ Findings are informational and do not make the command fail. The command exits n
 <!-- template-sync: begin python-reference-only -->
 #### Python Tests
 
-Python tests use pytest with coverage reporting.
+Python tests use pytest with coverage reporting. The default local gate excludes
+tests marked `slow`; run those explicitly when validating template-only
+end-to-end behavior. In CI, GitHub Actions exposes the `run_slow_tests` manual
+workflow input, and Azure Pipelines exposes the `runSlowTests` runtime
+parameter, both defaulting to `false`. The committed VS Code settings include
+the repository's script search paths so a fresh checkout can be opened without
+creating a repo-local virtual environment first. Install the dev extras in your
+selected Python environment before running the validation commands.
 
 ```bash
-pytest tests/ -v --cov --cov-report=term-missing
+pip install -e ".[dev]"
+python -m pyright --project pyrightconfig.json
+pytest tests/ -m "not slow" -v --cov --cov-report=term-missing
+pytest tests/ -m slow -v --no-cov
 pytest tests/test_example.py -v
 ```
 <!-- template-sync: end python-reference-only -->

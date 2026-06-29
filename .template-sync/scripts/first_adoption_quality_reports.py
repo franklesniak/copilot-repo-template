@@ -15,7 +15,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import NoReturn, Protocol, TextIO
+from typing import NoReturn, Protocol, TextIO, cast
 
 import yaml  # type: ignore[import-untyped]
 
@@ -301,10 +301,11 @@ def load_marker_template_sync(repo_root: Path) -> dict[str, object] | None:
         ) from error
     if not isinstance(marker_document, dict):
         raise FirstAdoptionQualityError(f"{MARKER_PATH} must contain a YAML mapping.")
+    marker_document = cast(dict[str, object], marker_document)
     template_sync = marker_document.get("template_sync")
     if not isinstance(template_sync, dict):
         raise FirstAdoptionQualityError(f"{MARKER_PATH} must contain template_sync mapping.")
-    return template_sync
+    return cast(dict[str, object], template_sync)
 
 
 def marker_modules(template_sync: Mapping[str, object]) -> frozenset[str]:
@@ -312,7 +313,7 @@ def marker_modules(template_sync: Mapping[str, object]) -> frozenset[str]:
     raw_modules = template_sync.get("included_modules")
     if not isinstance(raw_modules, list):
         return frozenset()
-    return frozenset(item for item in raw_modules if isinstance(item, str))
+    return frozenset(item for item in cast(list[object], raw_modules) if isinstance(item, str))
 
 
 def build_host_setup_report(repo_root: Path) -> HostSetupReport:
@@ -416,7 +417,9 @@ def collect_git_files(
     stdout: TextIO | None = None,
 ) -> GitFileCollection:
     """Collect tracked and adoption-visible files for quality reports."""
-    commands = [GIT_TRACKED_FILES_COMMAND if tracked_only else GIT_VISIBLE_FILES_COMMAND]
+    commands: list[tuple[str, ...]] = [
+        GIT_TRACKED_FILES_COMMAND if tracked_only else GIT_VISIBLE_FILES_COMMAND
+    ]
     if include_ignored and not tracked_only:
         commands.append(GIT_IGNORED_FILES_COMMAND)
 
@@ -733,6 +736,7 @@ def parse_path_reference_suppression(raw_entry: object, *, index: int) -> PathRe
         raise FirstAdoptionQualityError(
             f"path-reference suppression {index} must be a JSON object."
         )
+    raw_entry = cast(dict[str, object], raw_entry)
 
     allowed_keys = {
         "category",
@@ -810,6 +814,7 @@ def load_quality_suppressions(repo_root: Path, suppression_path: str) -> Quality
 
     if not isinstance(raw_data, dict):
         raise FirstAdoptionQualityError(f"{suppression_path} must contain a JSON object.")
+    raw_data = cast(dict[str, object], raw_data)
     allowed_sections = {"path-reference"}
     unknown_sections = sorted(set(raw_data) - allowed_sections)
     if unknown_sections:
@@ -824,6 +829,7 @@ def load_quality_suppressions(repo_root: Path, suppression_path: str) -> Quality
     path_reference_section = raw_data["path-reference"]
     if not isinstance(path_reference_section, dict):
         raise FirstAdoptionQualityError("'path-reference' must be a JSON object.")
+    path_reference_section = cast(dict[str, object], path_reference_section)
     section_unknown_keys = sorted(set(path_reference_section) - {"suppressions"})
     if section_unknown_keys:
         raise FirstAdoptionQualityError(
@@ -835,7 +841,7 @@ def load_quality_suppressions(repo_root: Path, suppression_path: str) -> Quality
 
     suppressions = tuple(
         parse_path_reference_suppression(raw_entry, index=index)
-        for index, raw_entry in enumerate(raw_suppressions, start=1)
+        for index, raw_entry in enumerate(cast(list[object], raw_suppressions), start=1)
     )
     return QualitySuppressions(path_reference=suppressions)
 
@@ -991,8 +997,11 @@ def load_package_scripts(repo_root: Path) -> dict[str, object]:
             f"Unable to read package.json ({error_summary})."
         ) from error
 
-    scripts = package_data.get("scripts") if isinstance(package_data, dict) else None
-    return scripts if isinstance(scripts, dict) else {}
+    if not isinstance(package_data, dict):
+        return {}
+    package_data = cast(dict[str, object], package_data)
+    scripts = package_data.get("scripts")
+    return cast(dict[str, object], scripts) if isinstance(scripts, dict) else {}
 
 
 def npm_executable() -> str | None:

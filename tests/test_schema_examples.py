@@ -46,7 +46,7 @@ import sys
 from importlib.util import find_spec
 from pathlib import Path
 
-import pytest
+from tests._pytest_compat import pytest
 
 
 def _check_jsonschema_command() -> list[str] | None:

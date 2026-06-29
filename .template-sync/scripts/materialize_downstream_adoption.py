@@ -38,6 +38,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     ensure_regular_repository_file_target,
     format_marker_yaml,
     is_protected_instruction_path,
+    is_string_list,
     inline_block_families_to_prune,
     iter_safe_repository_files,
     load_json_mapping,
@@ -252,7 +253,7 @@ STRING_ARGS_FILE_FIELDS = frozenset(
 )
 LIST_STRING_ARGS_FILE_FIELDS = frozenset({"included_modules", "issue_labels", "package_keywords"})
 BOOLEAN_ARGS_FILE_FIELDS = frozenset({"preserve_existing_license", "allow_conflicts"})
-CLI_FLAGS = {
+CLI_FLAGS: dict[str, tuple[str, ...]] = {
     "template_root": ("--template-root",),
     "template_ref": ("--template-ref",),
     "template_revision": ("--template-revision",),
@@ -305,6 +306,7 @@ CLI_FLAGS = {
 MARKER_COPY_FIELDS = (
     "local_overrides",
     "local_path_ownership",
+    "placeholder_waivers",
     "protected_file_decisions",
     "deferred_protected_candidates",
     "instruction_contract_waivers",
@@ -416,6 +418,21 @@ class Conflict:
     recorded: bool
 
 
+def empty_string_set() -> set[str]:
+    """Return a typed empty string set for dataclass defaults."""
+    return set()
+
+
+def empty_string_list() -> list[str]:
+    """Return a typed empty string list for dataclass defaults."""
+    return []
+
+
+def empty_conflict_list() -> list[Conflict]:
+    """Return a typed empty conflict list for dataclass defaults."""
+    return []
+
+
 @dataclass
 class Summary:
     """Deterministic operation summary emitted after reconciliation."""
@@ -423,23 +440,23 @@ class Summary:
     retained_modules: list[str]
     excluded_modules: list[str]
     default_adoption_mode: str
-    created: set[str] = field(default_factory=set)
-    updated: set[str] = field(default_factory=set)
-    unchanged: set[str] = field(default_factory=set)
-    skipped: set[str] = field(default_factory=set)
-    protected: set[str] = field(default_factory=set)
-    locally_overridden: set[str] = field(default_factory=set)
-    deferred: set[str] = field(default_factory=set)
-    recorded_removals: set[str] = field(default_factory=set)
-    unmapped: set[str] = field(default_factory=set)
-    excluded_paths: set[str] = field(default_factory=set)
-    byte_only: set[str] = field(default_factory=set)
-    placeholder_related: set[str] = field(default_factory=set)
-    placeholder_notes: list[str] = field(default_factory=list)
-    license_notes: list[str] = field(default_factory=list)
-    residual_cleanup_paths: set[str] = field(default_factory=set)
-    pruning_preview: set[str] = field(default_factory=set)
-    conflicts: list[Conflict] = field(default_factory=list)
+    created: set[str] = field(default_factory=empty_string_set)
+    updated: set[str] = field(default_factory=empty_string_set)
+    unchanged: set[str] = field(default_factory=empty_string_set)
+    skipped: set[str] = field(default_factory=empty_string_set)
+    protected: set[str] = field(default_factory=empty_string_set)
+    locally_overridden: set[str] = field(default_factory=empty_string_set)
+    deferred: set[str] = field(default_factory=empty_string_set)
+    recorded_removals: set[str] = field(default_factory=empty_string_set)
+    unmapped: set[str] = field(default_factory=empty_string_set)
+    excluded_paths: set[str] = field(default_factory=empty_string_set)
+    byte_only: set[str] = field(default_factory=empty_string_set)
+    placeholder_related: set[str] = field(default_factory=empty_string_set)
+    placeholder_notes: list[str] = field(default_factory=empty_string_list)
+    license_notes: list[str] = field(default_factory=empty_string_list)
+    residual_cleanup_paths: set[str] = field(default_factory=empty_string_set)
+    pruning_preview: set[str] = field(default_factory=empty_string_set)
+    conflicts: list[Conflict] = field(default_factory=empty_conflict_list)
     marker_status: str = "preview-only"
     marker_reason: str = ""
     computed_marker_preview: str | None = None
@@ -489,7 +506,7 @@ def load_json_args_file(path: Path) -> dict[str, Any]:
         raise MaterializationError(f"--args-file: invalid JSON ({error}).") from error
     if not isinstance(parsed, dict):
         raise MaterializationError("--args-file must contain a JSON object.")
-    return parsed
+    return cast(dict[str, Any], parsed)
 
 
 def load_yaml_args_file(path: Path) -> dict[str, Any]:
@@ -500,7 +517,7 @@ def load_yaml_args_file(path: Path) -> dict[str, Any]:
         raise MaterializationError(f"--args-file: invalid YAML ({error}).") from error
     if not isinstance(parsed, dict):
         raise MaterializationError("--args-file must contain a YAML mapping.")
-    return parsed
+    return cast(dict[str, Any], parsed)
 
 
 def load_args_file_mapping(raw_path: str, args_format: str | None) -> dict[str, Any]:
@@ -517,7 +534,9 @@ def load_args_file_mapping(raw_path: str, args_format: str | None) -> dict[str, 
 def cli_supplied_fields(argv: Sequence[str]) -> set[str]:
     """Return argument destinations supplied directly on the command line."""
     supplied: set[str] = set()
-    flag_to_field = {flag: field_name for field_name, flags in CLI_FLAGS.items() for flag in flags}
+    flag_to_field: dict[str, str] = {
+        flag: field_name for field_name, flags in CLI_FLAGS.items() for flag in flags
+    }
     for token in argv:
         flag = token.split("=", 1)[0]
         field_name = flag_to_field.get(flag)
@@ -555,7 +574,7 @@ def validate_args_file_value(field_name: str, value: Any) -> Any:
             raise MaterializationError(f"--args-file field {field_name!r} must be a string.")
         return value
     if field_name in LIST_STRING_ARGS_FILE_FIELDS:
-        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        if not is_string_list(value):
             raise MaterializationError(
                 f"--args-file field {field_name!r} must be a list of strings."
             )
@@ -1245,6 +1264,7 @@ def cleanup_source_checkout(source_checkout: SourceCheckout) -> CleanupFailure |
         return None
 
     remove_args = ["worktree", "remove", "--force", str(temporary_checkout_path)]
+    detail = ""
     try:
         first_result = run_git(template_repo, remove_args)
         retried = False
@@ -1364,14 +1384,19 @@ def load_validated_manifest_context(
     template_manifest = manifest.get("template_manifest")
     if not isinstance(template_manifest, dict):
         raise MaterializationError("Manifest must contain template_manifest mapping.")
+    template_manifest = cast(dict[str, Any], template_manifest)
     raw_modules = template_manifest.get("modules")
     if not isinstance(raw_modules, list):
         raise MaterializationError("Manifest module definitions must be a list.")
-    module_order = tuple(
-        module["name"]
-        for module in raw_modules
-        if isinstance(module, dict) and isinstance(module.get("name"), str)
-    )
+    module_order_parts: list[str] = []
+    for module in cast(list[object], raw_modules):
+        if not isinstance(module, dict):
+            continue
+        module_record = cast(dict[str, Any], module)
+        module_name = module_record.get("name")
+        if isinstance(module_name, str):
+            module_order_parts.append(module_name)
+    module_order = tuple(module_order_parts)
     if set(module_order) != set(module_names):
         raise MaterializationError("Manifest module order does not match parsed modules.")
     return manifest, module_order, mappings
@@ -1459,7 +1484,7 @@ def load_decisions(
         raw_template_sync = marker_document.get("template_sync")
         if not isinstance(raw_template_sync, dict):
             raise MaterializationError("--decisions-file must contain template_sync mapping.")
-        marker_template_sync = raw_template_sync
+        marker_template_sync = cast(dict[str, Any], raw_template_sync)
 
     cli_modules = split_cli_modules(args)
     marker_modules = marker_data.included_modules if marker_data is not None else None
@@ -1668,7 +1693,7 @@ def resolve_license_source_argument(args: argparse.Namespace, target_root: Path)
             + ", ".join(candidates)
             + ". Pass --license-source-path with the owner-approved source path."
         )
-    return candidates[0]
+    return next(iter(candidates))
 
 
 def read_license_source_bytes(
@@ -1910,6 +1935,7 @@ def run_placeholder_helper(
     args: argparse.Namespace,
     template_root: Path,
     staging_root: Path,
+    decisions: Decisions,
     summary: Summary,
 ) -> None:
     """Run the existing approved placeholder helper against the staging tree."""
@@ -1933,7 +1959,13 @@ def run_placeholder_helper(
         "replace",
         "--repo-root",
         str(staging_root),
+        "--scan-mode",
+        "retained-hard",
+        "--manifest",
+        str(template_root / DEFAULT_MANIFEST_PATH),
     ]
+    for module_name in sorted(decisions.included_modules):
+        command.extend(["--retained-module", module_name])
     if args.host_provider is not None:
         command.extend(["--host-provider", args.host_provider])
     if args.repository is not None:
@@ -1987,6 +2019,14 @@ def run_placeholder_helper(
 
     with tempfile.TemporaryDirectory(prefix="template-adoption-byte-only-") as byte_directory:
         byte_root = Path(byte_directory)
+        scan_input_path = byte_root / "placeholder-scan-inputs.json"
+        scan_input = {
+            "local_overrides": decisions.raw_marker_fields.get("local_overrides", []),
+            "placeholder_waivers": decisions.raw_marker_fields.get("placeholder_waivers", []),
+        }
+        scan_input_path.write_text(json.dumps(scan_input, indent=2) + "\n", encoding="utf-8")
+        command.extend(["--local-overrides-file", str(scan_input_path)])
+        command.extend(["--placeholder-waivers-file", str(scan_input_path)])
         moved_byte_only_paths: list[tuple[Path, Path]] = []
         for relative_path in sorted(summary.byte_only):
             source = staging_root / relative_path
@@ -2510,6 +2550,7 @@ def materialize(args: argparse.Namespace) -> Summary:
                 args=args,
                 template_root=template_root,
                 staging_root=staging_root,
+                decisions=decisions,
                 summary=summary,
             )
             if license_preservation is not None:

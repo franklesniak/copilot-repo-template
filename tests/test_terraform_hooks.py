@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-import pytest
+from tests._pytest_compat import pytest
 
 HOOK_PATH = Path(__file__).resolve().parents[1] / ".github" / "scripts" / "terraform_hooks.py"
 HOOK_SPEC = importlib.util.spec_from_file_location("terraform_hooks", HOOK_PATH)
@@ -35,6 +36,16 @@ def write_file(path: Path, content: str = "") -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def fake_binary(name: str) -> str:
+    """Return a deterministic fake executable path for tests."""
+    return f"{name}-bin"
+
+
+def missing_binary(_name: str) -> None:
+    """Pretend a requested executable is unavailable."""
+    return None
+
+
 def test_terraform_format_uses_ci_command(tmp_path: Path) -> None:
     """Terraform format mirrors the repository CI format command."""
     write_file(tmp_path / "templates" / "terraform" / "Example.tftest.hcl")
@@ -42,7 +53,7 @@ def test_terraform_format_uses_ci_command(tmp_path: Path) -> None:
 
     result = terraform_hooks.run_terraform_format(
         root=tmp_path,
-        resolve=lambda name: f"{name}-bin",
+        resolve=fake_binary,
         runner=recorder,
     )
 
@@ -64,7 +75,7 @@ def test_terraform_validate_discovers_only_tf_directories(tmp_path: Path) -> Non
 
     result = terraform_hooks.run_terraform_validate(
         root=tmp_path,
-        resolve=lambda name: f"{name}-bin",
+        resolve=fake_binary,
         runner=recorder,
     )
 
@@ -83,7 +94,7 @@ def test_tflint_uses_absolute_repo_config_path(tmp_path: Path) -> None:
 
     result = terraform_hooks.run_tflint(
         root=tmp_path,
-        resolve=lambda name: f"{name}-bin",
+        resolve=fake_binary,
         runner=recorder,
     )
 
@@ -114,7 +125,7 @@ def test_missing_terraform_message_is_actionable(tmp_path: Path) -> None:
     write_file(tmp_path / "main.tf", 'resource "terraform_data" "example" {}\n')
 
     with pytest.raises(terraform_hooks.MissingExecutableError) as error:
-        terraform_hooks.run_terraform_validate(root=tmp_path, resolve=lambda name: None)
+        terraform_hooks.run_terraform_validate(root=tmp_path, resolve=missing_binary)
 
     message = str(error.value)
     assert "`terraform`" in message
@@ -127,7 +138,7 @@ def test_missing_tflint_message_is_actionable_when_tf_files_exist(tmp_path: Path
     write_file(tmp_path / "main.tf", 'resource "terraform_data" "example" {}\n')
 
     with pytest.raises(terraform_hooks.MissingExecutableError) as error:
-        terraform_hooks.run_tflint(root=tmp_path, resolve=lambda name: None)
+        terraform_hooks.run_tflint(root=tmp_path, resolve=missing_binary)
 
     message = str(error.value)
     assert "`tflint`" in message
@@ -169,7 +180,7 @@ def test_missing_tflint_config_raises_actionable_error(tmp_path: Path) -> None:
     with pytest.raises(terraform_hooks.MissingConfigurationError) as error:
         terraform_hooks.run_tflint(
             root=tmp_path,
-            resolve=lambda name: f"{name}-bin",
+            resolve=fake_binary,
             runner=fail_runner,
         )
 
@@ -179,7 +190,7 @@ def test_missing_tflint_config_raises_actionable_error(tmp_path: Path) -> None:
     assert terraform_hooks.TFLINT_CONFIG_REFERENCE_URL in message
 
 
-def test_subprocess_runner_disables_shell(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_subprocess_runner_disables_shell(monkeypatch: Any, tmp_path: Path) -> None:
     """The subprocess boundary must not invoke a shell."""
     recorded: dict[str, Any] = {}
 

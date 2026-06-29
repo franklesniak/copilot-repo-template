@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import fnmatch
+import importlib
 import json
 import os
 import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Collection, Iterable, cast
+from typing import Any, Collection, Iterable, TypeGuard, cast
 
-import jsonschema
 import yaml  # type: ignore[import-untyped]
 
 DEFAULT_MARKER_PATH = ".template-sync/marker.yml"
@@ -98,12 +98,14 @@ INLINE_BLOCK_MODULES = {
 # ``requires_any`` relation, so it can guard prose that documents a file which
 # is itself materialized under OR semantics (for example the data-file CI
 # workflow row, whose file requires ``github-actions`` plus any one of
-# ``json``, ``yaml``, ``schema``, ``template-sync-support``).
+# ``baseline``, ``json``, ``yaml``, ``schema``, ``template-sync-support``).
 INLINE_BLOCK_ANY_MODULES = {
     "azure-devops-guide-reference-only": frozenset(
         {"azure-devops-platform", "azure-pipelines", "azure-devops-collaboration"}
     ),
-    "data-ci-reference-only": frozenset({"json", "yaml", "schema", "template-sync-support"}),
+    "data-ci-reference-only": frozenset(
+        {"baseline", "json", "yaml", "schema", "template-sync-support"}
+    ),
 }
 
 
@@ -442,7 +444,7 @@ def load_json_mapping(path: Path, repo_root: Path) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         relative_path = repository_relative_path(path, repo_root)
         raise TemplateSyncMaterializationError(f"{relative_path} must contain a JSON object.")
-    return parsed
+    return cast(dict[str, Any], parsed)
 
 
 def load_yaml_mapping(path: Path, repo_root: Path) -> dict[str, Any]:
@@ -462,14 +464,21 @@ def load_yaml_mapping(path: Path, repo_root: Path) -> dict[str, Any]:
     if not isinstance(parsed, dict):
         relative_path = repository_relative_path(path, repo_root)
         raise TemplateSyncMaterializationError(f"{relative_path} must contain a YAML mapping.")
-    return parsed
+    return cast(dict[str, Any], parsed)
 
 
 def validate_schema(
     document: dict[str, Any], schema: dict[str, Any], document_path: Path, repo_root: Path
 ) -> None:
     """Validate a loaded document against a Draft 2020-12 JSON Schema."""
-    validator = jsonschema.Draft202012Validator(schema)
+    try:
+        jsonschema_module = cast(Any, importlib.import_module("jsonschema"))
+    except ImportError as error:
+        raise TemplateSyncMaterializationError(
+            "jsonschema is unavailable. Install jsonschema, or run this through "
+            "the pre-commit hook, which declares the validator dependency."
+        ) from error
+    validator = jsonschema_module.Draft202012Validator(schema)
     errors = sorted(validator.iter_errors(document), key=lambda error: error.json_path)
     if not errors:
         return
@@ -484,20 +493,24 @@ def validate_schema(
     )
 
 
+def dump_marker_yaml_object(marker_document: dict[str, Any]) -> object:
+    """Return PyYAML output as an object for cross-checker runtime narrowing."""
+    return yaml.dump(
+        marker_document,
+        Dumper=_MarkerYamlDumper,
+        sort_keys=False,
+        allow_unicode=False,
+        default_flow_style=False,
+        width=120,
+    )
+
+
 def format_marker_yaml(marker_document: dict[str, Any]) -> str:
     """Return canonical deterministic YAML for a template-sync marker document."""
-    marker_text = cast(
-        str,
-        yaml.dump(
-            marker_document,
-            Dumper=_MarkerYamlDumper,
-            sort_keys=False,
-            allow_unicode=False,
-            default_flow_style=False,
-            width=120,
-        ),
-    )
-    marker_text = marker_text.rstrip("\n") + "\n"
+    dumped_marker = dump_marker_yaml_object(marker_document)
+    if not isinstance(dumped_marker, str):
+        raise TemplateSyncMaterializationError("Formatted marker YAML must be text.")
+    marker_text = dumped_marker.rstrip("\n") + "\n"
     if marker_text.startswith("---"):
         raise TemplateSyncMaterializationError(
             "Formatted marker YAML must not include a document-start marker."
@@ -529,6 +542,7 @@ def validate_marker_yaml_text(
         raise TemplateSyncMaterializationError(
             f"{marker_relative_path} must contain a YAML mapping."
         )
+    marker_document = cast(dict[str, Any], parsed)
 
     schema_path = resolve_safe_repository_target_path(
         repo_root,
@@ -536,9 +550,9 @@ def validate_marker_yaml_text(
         field_name="marker schema path",
     )
     marker_schema = load_json_mapping(schema_path, repo_root)
-    validate_schema(parsed, marker_schema, marker_document_path, repo_root)
-    parse_marker_decision_data(parsed, validate_protected_decision_integrity=True)
-    return parsed
+    validate_schema(marker_document, marker_schema, marker_document_path, repo_root)
+    parse_marker_decision_data(marker_document, validate_protected_decision_integrity=True)
+    return marker_document
 
 
 def ensure_regular_repository_file_target(target_path: Path, relative_path: str) -> None:
@@ -666,16 +680,24 @@ def normalize_manifest_pattern(raw_pattern: str) -> str:
     return raw_pattern
 
 
+def is_string_list(value: object) -> TypeGuard[list[str]]:
+    """Return whether ``value`` is a list containing only strings."""
+    if not isinstance(value, list):
+        return False
+    return all(isinstance(item, str) for item in cast(list[object], value))
+
+
 def relation_modules(mapping: dict[str, Any], relation_key: str) -> frozenset[str]:
     """Return module names for one manifest relation key."""
     modules = mapping.get(relation_key, [])
     if not isinstance(modules, list):
         pattern = mapping.get("pattern", "<unknown>")
         raise TemplateSyncMaterializationError(f"{pattern} {relation_key} must be a list.")
-    if not all(isinstance(module, str) for module in modules):
+    module_items = cast(list[object], modules)
+    if not all(isinstance(module, str) for module in module_items):
         pattern = mapping.get("pattern", "<unknown>")
         raise TemplateSyncMaterializationError(f"{pattern} {relation_key} values must be strings.")
-    return frozenset(modules)
+    return frozenset(cast(list[str], module_items))
 
 
 def parse_manifest_module_names(manifest: dict[str, Any]) -> frozenset[str]:
@@ -683,17 +705,24 @@ def parse_manifest_module_names(manifest: dict[str, Any]) -> frozenset[str]:
     template_manifest = manifest.get("template_manifest")
     if not isinstance(template_manifest, dict):
         raise TemplateSyncMaterializationError("Manifest must contain template_manifest mapping.")
+    template_manifest = cast(dict[str, Any], template_manifest)
 
     raw_modules = template_manifest.get("modules")
     if not isinstance(raw_modules, list):
         raise TemplateSyncMaterializationError("template_manifest.modules must be a list.")
     module_names: set[str] = set()
-    for module in raw_modules:
-        if not isinstance(module, dict) or not isinstance(module.get("name"), str):
+    for module in cast(list[object], raw_modules):
+        if not isinstance(module, dict):
             raise TemplateSyncMaterializationError(
                 "Every manifest module must define a string name."
             )
-        module_names.add(module["name"])
+        module_record = cast(dict[str, Any], module)
+        module_name = module_record.get("name")
+        if not isinstance(module_name, str):
+            raise TemplateSyncMaterializationError(
+                "Every manifest module must define a string name."
+            )
+        module_names.add(module_name)
     return frozenset(module_names)
 
 
@@ -706,6 +735,7 @@ def parse_manifest_mappings(
     template_manifest = manifest.get("template_manifest")
     if not isinstance(template_manifest, dict):
         raise TemplateSyncMaterializationError("Manifest must contain template_manifest mapping.")
+    template_manifest = cast(dict[str, Any], template_manifest)
 
     module_names = set(parse_manifest_module_names(manifest))
 
@@ -714,20 +744,21 @@ def parse_manifest_mappings(
         raise TemplateSyncMaterializationError("template_manifest.path_mappings must be a list.")
 
     mappings: list[ManifestMapping] = []
-    for raw_mapping in raw_path_mappings:
+    for raw_mapping in cast(list[object], raw_path_mappings):
         if not isinstance(raw_mapping, dict):
             raise TemplateSyncMaterializationError("Every path mapping must be a mapping.")
-        raw_pattern = raw_mapping.get("pattern")
+        mapping = cast(dict[str, Any], raw_mapping)
+        raw_pattern = mapping.get("pattern")
         if not isinstance(raw_pattern, str):
             raise TemplateSyncMaterializationError(
                 "Every path mapping must define a string pattern."
             )
-        notes = raw_mapping.get("notes")
+        notes = mapping.get("notes")
         if notes is not None and not isinstance(notes, str):
             raise TemplateSyncMaterializationError(f"{raw_pattern} notes must be a string.")
 
-        requires_all = relation_modules(raw_mapping, "requires_all")
-        requires_any = relation_modules(raw_mapping, "requires_any")
+        requires_all = relation_modules(mapping, "requires_all")
+        requires_any = relation_modules(mapping, "requires_any")
         if not requires_all and not requires_any:
             raise TemplateSyncMaterializationError(
                 f"{raw_pattern} must reference at least one module."
@@ -757,9 +788,10 @@ def compatibility_modules(raw_modules: object, field_name: str) -> frozenset[str
         raise TemplateSyncMaterializationError(f"{field_name} must be a list.")
     if not raw_modules:
         raise TemplateSyncMaterializationError(f"{field_name} must not be empty.")
-    if not all(isinstance(module, str) for module in raw_modules):
+    module_items = cast(list[object], raw_modules)
+    if not all(isinstance(module, str) for module in module_items):
         raise TemplateSyncMaterializationError(f"{field_name} values must be strings.")
-    return frozenset(raw_modules)
+    return frozenset(cast(list[str], module_items))
 
 
 def parse_manifest_compatibility_groups(
@@ -772,6 +804,7 @@ def parse_manifest_compatibility_groups(
     template_manifest = manifest.get("template_manifest")
     if not isinstance(template_manifest, dict):
         raise TemplateSyncMaterializationError("Manifest must contain template_manifest mapping.")
+    template_manifest = cast(dict[str, Any], template_manifest)
 
     raw_groups = template_manifest.get("compatibility_groups")
     if raw_groups is None:
@@ -784,20 +817,21 @@ def parse_manifest_compatibility_groups(
     known_modules = set(module_names or parse_manifest_module_names(manifest))
     group_names: set[str] = set()
     groups: list[ManifestCompatibilityGroup] = []
-    for index, raw_group in enumerate(raw_groups, 1):
+    for index, raw_group in enumerate(cast(list[object], raw_groups), 1):
         group_field = f"template_manifest.compatibility_groups[{index}]"
         if not isinstance(raw_group, dict):
             raise TemplateSyncMaterializationError(f"{group_field} must be a mapping.")
+        group_record = cast(dict[str, Any], raw_group)
 
-        name = raw_group.get("name")
-        description = raw_group.get("description")
-        mixed_hosts = raw_group.get("mixed_hosts")
-        raw_alternatives = raw_group.get("alternatives")
+        name = group_record.get("name")
+        description = group_record.get("description")
+        mixed_hosts = group_record.get("mixed_hosts")
+        raw_alternatives = group_record.get("alternatives")
         if not isinstance(name, str):
             raise TemplateSyncMaterializationError(f"{group_field}.name must be a string.")
         if not isinstance(description, str):
             raise TemplateSyncMaterializationError(f"{group_field}.description must be a string.")
-        if mixed_hosts not in {"allowed", "unsupported"}:
+        if not isinstance(mixed_hosts, str) or mixed_hosts not in {"allowed", "unsupported"}:
             raise TemplateSyncMaterializationError(
                 f"{group_field}.mixed_hosts must be allowed or unsupported."
             )
@@ -806,7 +840,7 @@ def parse_manifest_compatibility_groups(
         group_names.add(name)
 
         default_modules = compatibility_modules(
-            raw_group.get("default_modules"),
+            group_record.get("default_modules"),
             f"{group_field}.default_modules",
         )
         if not isinstance(raw_alternatives, list) or not raw_alternatives:
@@ -818,11 +852,15 @@ def parse_manifest_compatibility_groups(
         alternative_hosts: set[str] = set()
         alternative_modules: set[str] = set()
         module_hosts: dict[str, str] = {}
-        for alternative_index, raw_alternative in enumerate(raw_alternatives, 1):
+        for alternative_index, raw_alternative in enumerate(
+            cast(list[object], raw_alternatives),
+            1,
+        ):
             alternative_field = f"{group_field}.alternatives[{alternative_index}]"
             if not isinstance(raw_alternative, dict):
                 raise TemplateSyncMaterializationError(f"{alternative_field} must be a mapping.")
-            host = raw_alternative.get("host")
+            alternative_record = cast(dict[str, Any], raw_alternative)
+            host = alternative_record.get("host")
             if not isinstance(host, str):
                 raise TemplateSyncMaterializationError(
                     f"{alternative_field}.host must be a string."
@@ -834,7 +872,7 @@ def parse_manifest_compatibility_groups(
             alternative_hosts.add(host)
 
             modules = compatibility_modules(
-                raw_alternative.get("modules"),
+                alternative_record.get("modules"),
                 f"{alternative_field}.modules",
             )
             for module in modules:
@@ -920,16 +958,35 @@ def optional_marker_string(
     return value
 
 
+def marker_record_list(
+    template_sync: dict[str, Any],
+    field_name: str,
+    record_name: str,
+) -> list[dict[str, Any]]:
+    """Return a marker field that must be absent or a list of mappings."""
+    raw_records = template_sync.get(field_name, [])
+    if not isinstance(raw_records, list):
+        raise TemplateSyncMaterializationError(f"{record_name} must be a list.")
+    records: list[dict[str, Any]] = []
+    for raw_record in cast(list[object], raw_records):
+        if not isinstance(raw_record, dict):
+            raise TemplateSyncMaterializationError(
+                f"Each {record_name.removeprefix('template_sync.')} record must be a mapping."
+            )
+        records.append(cast(dict[str, Any], raw_record))
+    return records
+
+
 def parse_protected_file_decisions(
     template_sync: dict[str, Any],
 ) -> tuple[ProtectedFileDecision, ...]:
     """Extract normalized protected-file decision records from ``template_sync``."""
     protected_decisions: list[ProtectedFileDecision] = []
-    for raw_decision in template_sync.get("protected_file_decisions", []):
-        if not isinstance(raw_decision, dict):
-            raise TemplateSyncMaterializationError(
-                "Each protected file decision must be a mapping."
-            )
+    for raw_decision in marker_record_list(
+        template_sync,
+        "protected_file_decisions",
+        "template_sync.protected_file_decisions",
+    ):
         raw_path = raw_decision.get("path")
         decision = raw_decision.get("decision")
         if not isinstance(raw_path, str) or not isinstance(decision, str):
@@ -986,11 +1043,11 @@ def parse_local_path_ownership(
     local_path_ownership: list[LocalPathOwnership] = []
     duplicate_paths: set[str] = set()
     seen_paths: set[str] = set()
-    for raw_record in template_sync.get("local_path_ownership", []):
-        if not isinstance(raw_record, dict):
-            raise TemplateSyncMaterializationError(
-                "Each local path ownership record must be a mapping."
-            )
+    for raw_record in marker_record_list(
+        template_sync,
+        "local_path_ownership",
+        "template_sync.local_path_ownership",
+    ):
         raw_path = raw_record.get("path")
         reason = raw_record.get("reason")
         if not isinstance(raw_path, str) or not isinstance(reason, str):
@@ -1032,6 +1089,7 @@ def parse_marker_decision_data(
     template_sync = marker.get("template_sync")
     if not isinstance(template_sync, dict):
         raise TemplateSyncMaterializationError("Marker must contain template_sync mapping.")
+    template_sync = cast(dict[str, Any], template_sync)
 
     last_reviewed = template_sync.get("last_reviewed_template_commit")
     if last_reviewed is not None and not isinstance(last_reviewed, str):
@@ -1040,18 +1098,18 @@ def parse_marker_decision_data(
         )
 
     raw_included_modules = template_sync.get("included_modules")
-    if not isinstance(raw_included_modules, list) or not all(
-        isinstance(module, str) for module in raw_included_modules
-    ):
+    if not is_string_list(raw_included_modules):
         raise TemplateSyncMaterializationError(
             "template_sync.included_modules must be a list of strings."
         )
     included_modules = frozenset(raw_included_modules)
 
     local_overrides: list[LocalOverride] = []
-    for raw_override in template_sync.get("local_overrides", []):
-        if not isinstance(raw_override, dict):
-            raise TemplateSyncMaterializationError("Each local override must be a mapping.")
+    for raw_override in marker_record_list(
+        template_sync,
+        "local_overrides",
+        "template_sync.local_overrides",
+    ):
         raw_path = raw_override.get("path")
         default_decision = raw_override.get("default_decision")
         reason = raw_override.get("reason")
@@ -1077,11 +1135,11 @@ def parse_marker_decision_data(
         )
 
     deferred_candidates: list[DeferredProtectedCandidate] = []
-    for raw_candidate in template_sync.get("deferred_protected_candidates", []):
-        if not isinstance(raw_candidate, dict):
-            raise TemplateSyncMaterializationError(
-                "Each deferred protected candidate must be a mapping."
-            )
+    for raw_candidate in marker_record_list(
+        template_sync,
+        "deferred_protected_candidates",
+        "template_sync.deferred_protected_candidates",
+    ):
         raw_path = raw_candidate.get("path")
         source_commit = raw_candidate.get("source_commit")
         reason = raw_candidate.get("reason")

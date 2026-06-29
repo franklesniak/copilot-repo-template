@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-import pytest
+from tests._pytest_compat import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ATTRIBUTES_TO_CHECK = ("text", "eol", "filter", "diff", "merge")

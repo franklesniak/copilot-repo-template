@@ -6,8 +6,8 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-22
-- **Scope:** Conventions for JSON Schemas that describe load-bearing JSON and YAML files in this repository, the template sync manifest, marker, instruction-contract, and first-adoption quality suppression schemas, plus a clearly removable worked example (`example-config.schema.json` with valid and invalid example data) wired into pre-commit and data CI to demonstrate the schema-validation pipeline end to end.
+- **Last Updated:** 2026-06-28
+- **Scope:** Conventions for JSON Schemas that describe load-bearing JSON and YAML files in this repository, the baseline placeholder manifest schema, the template sync manifest, marker, instruction-contract, and first-adoption quality suppression schemas, plus a clearly removable worked example (`example-config.schema.json` with valid and invalid example data) wired into pre-commit and data CI to demonstrate the schema-validation pipeline end to end.
 - **Related:** [JSON Authoring Standards](../.github/instructions/json.instructions.md), [YAML Authoring Standards](../.github/instructions/yaml.instructions.md), [Repository Copilot Instructions](../.github/copilot-instructions.md), [Template Design Decisions — Schema Location at Repository Root](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-location-at-repository-root), [Template Design Decisions — Schema Validation Tiers](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-validation-tiers), [Template Design Decisions — Built-in Schema Validation for Real Load-Bearing Configuration Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files), [Template Design Decisions — `additionalProperties` Policy](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-additionalproperties-policy), [Template Design Decisions — Testing Beyond Linting for JSON/YAML](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-testing-beyond-linting-for-jsonyaml)
 
 ## Purpose
@@ -71,7 +71,7 @@ Schemas whose root type is `object` SHOULD define:
 
 ## Validation
 
-Schema-backed files are validated by pre-commit and the dedicated data-file CI workflow ([`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml)). This template ships a worked example (see [Worked Example](#worked-example) below) so the validation pipeline is exercised end to end out of the box, and it ships production schemas for the template sync manifest, marker, instruction contracts, and first-adoption quality suppressions (see [Template Sync Manifest Schema](#template-sync-manifest-schema), [Template Sync Marker Schema](#template-sync-marker-schema), [Template Sync Instruction Contracts Schema](#template-sync-instruction-contracts-schema), and [First-Adoption Quality Suppressions Schema](#first-adoption-quality-suppressions-schema)). Downstream repositories that do not use general schema-backed data files SHOULD remove the worked example using the [Downstream Removal Checklist](#downstream-removal-checklist). Repositories that keep `template-sync-support` SHOULD retain the template-sync production schemas and their template-sync example fixtures even when they remove the general `schema` module. See the JSON authoring standards for the schema-validation policy and tier guidance.
+Schema-backed files are validated by pre-commit and the dedicated data-file CI workflow ([`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml)). This template ships a worked example (see [Worked Example](#worked-example) below) so the validation pipeline is exercised end to end out of the box, and it ships production schemas for the baseline placeholder manifest, template sync manifest, marker, instruction contracts, and first-adoption quality suppressions (see [Template Placeholder Manifest Schema](#template-placeholder-manifest-schema), [Template Sync Manifest Schema](#template-sync-manifest-schema), [Template Sync Marker Schema](#template-sync-marker-schema), [Template Sync Instruction Contracts Schema](#template-sync-instruction-contracts-schema), and [First-Adoption Quality Suppressions Schema](#first-adoption-quality-suppressions-schema)). Downstream repositories that do not use general schema-backed data files SHOULD remove the worked example using the [Downstream Removal Checklist](#downstream-removal-checklist). Repositories that keep the baseline placeholder helper SHOULD retain the placeholder manifest schema, manifest file, and placeholder-specific invalid-example validator. Repositories that keep `template-sync-support` SHOULD retain the template-sync production schemas and their template-sync example fixtures even when they remove the general `schema` module. See the JSON authoring standards for the schema-validation policy and tier guidance.
 
 ### Schema Categories
 
@@ -116,6 +116,7 @@ The following project-owned file families are validated by default through `chec
 
 | File | Schema |
 | --- | --- |
+| [`.github/template-placeholders.json`](../.github/template-placeholders.json) | [`template-placeholders.schema.json`](./template-placeholders.schema.json) |
 | [`.template-sync/manifest.yml`](../.template-sync/manifest.yml) | [`template-sync-manifest.schema.json`](./template-sync-manifest.schema.json) |
 | `.template-sync/marker.yml` when present | [`template-sync-marker.schema.json`](./template-sync-marker.schema.json) |
 | [`.template-sync/instruction-contracts.yml`](../.template-sync/instruction-contracts.yml) | [`template-sync-instruction-contracts.schema.json`](./template-sync-instruction-contracts.schema.json) |
@@ -240,6 +241,17 @@ How the worked example is validated:
 - The `invalid/` example data files are exercised by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py), which uses `check-jsonschema` to assert that each invalid example causes a non-zero exit code (and that each valid example exits cleanly). A starter version of this pattern, with the same discovery and assertion logic but with project-root resolution suitable for downstream repositories, is also available at [`templates/python/tests/test_schema_examples.py`](../templates/python/tests/test_schema_examples.py).
 - Invalid example data files MUST NOT be wired into a normal pre-commit hook because `check-jsonschema` would treat their (expected) failure as a hook failure.
 
+## Template Placeholder Manifest Schema
+
+[`template-placeholders.schema.json`](./template-placeholders.schema.json) defines the baseline JSON manifest consumed by [`.github/scripts/replace-template-placeholders.py`](../.github/scripts/replace-template-placeholders.py). The manifest is the source of truth for placeholder tokens, replacement sources, approved path scopes, scan finding kinds, finding contexts, and failure dispositions. It does not declare module ownership; the placeholder helper resolves path ownership through [`.template-sync/manifest.yml`](../.template-sync/manifest.yml) when classified scans are requested.
+
+How the placeholder manifest contract is validated:
+
+- The live manifest file is validated by the `Validate template placeholder manifest` `check-jsonschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) and by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+- Valid placeholder manifest fixtures under [`examples/template-placeholders/valid/`](./examples/template-placeholders/valid/) are validated by the `Validate template placeholder valid examples` hook and by the data-file CI workflow.
+- Invalid placeholder manifest fixtures under [`examples/template-placeholders/invalid/`](./examples/template-placeholders/invalid/) are exercised by [`.github/scripts/validate-placeholder-schema-examples.py`](../.github/scripts/validate-placeholder-schema-examples.py), which asserts they are rejected. That retained hook declares its own `jsonschema` dependency in pre-commit.
+- The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate template placeholder schema` hook.
+
 ## Template Sync Manifest Schema
 
 [`template-sync-manifest.schema.json`](./template-sync-manifest.schema.json) defines the shape of [`.template-sync/manifest.yml`](../.template-sync/manifest.yml), which is the source of truth for the downstream sync module taxonomy.
@@ -259,6 +271,8 @@ Downstream repositories that intentionally do not retain machine-assisted future
 [`template-sync-marker.schema.json`](./template-sync-marker.schema.json) defines the shape of the downstream sync marker at `.template-sync/marker.yml`. The schema validates marker contents only; marker placement is enforced by the `Validate template sync marker` hook's `files:` pattern in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml).
 
 The marker schema includes `template_sync.instruction_contract_waivers` for explicit waivers of missing required instruction-contract anchors. Each waiver requires `path`, `anchor`, `reason`, and `authorization_basis`; the instruction-contract validator reports applied waivers as `passed with waivers` rather than ordinary success.
+
+The marker schema includes `template_sync.placeholder_waivers` for explicit waivers of reviewed unresolved placeholder findings. Each waiver requires `path` or `path_pattern`, `token` or `finding_kind`, `reason`, `authorization_basis`, and `reviewed_scope`. Local overrides alone are not placeholder waivers; the placeholder helper reports local-override context but only a matching structured placeholder waiver changes the finding disposition to `waived-informational`.
 
 The marker schema includes `template_sync.local_path_ownership` for downstream-owned project paths that are not upstream template-managed manifest rows. Each record requires `path` and `reason`, with optional `overlap_exception_reason` only when semantic validation confirms the record is near a broad manifest-owned area. Exact paths such as `docs` cover only that normalized path; directory-prefix paths such as `docs/` cover the directory path and descendants. Glob-style paths such as `docs/**` are intentionally rejected. Local ownership records may name future paths, but validators reject unsafe lexical forms, existing symlink ancestors, exact collisions with concrete manifest-owned files, and exception reasons that do not correspond to broad manifest-area proximity.
 

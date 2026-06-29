@@ -11,7 +11,7 @@ from collections import Counter, defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, NoReturn
+from typing import Iterable, NoReturn, cast
 from urllib.parse import unquote, urlsplit
 
 import yaml  # type: ignore[import-untyped]
@@ -71,7 +71,7 @@ CONTACT_LINK_URL_RE = re.compile(
     r"""^\s*url:\s*(?P<target>(?P<quote>['"])[^'"\n]*(?P=quote)|[^\s#\n]\S*)\s*(?:#.*)?$"""
 )
 UPSTREAM_BLOB_PREFIX = "/franklesniak/copilot-repo-template/blob/HEAD/"
-DEPENDABOT_ECOSYSTEM_MODULES = {
+DEPENDABOT_ECOSYSTEM_MODULES: dict[str, tuple[str, tuple[str, ...]]] = {
     "npm": ("markdown", ("package.json", "package-lock.json")),
     "pip": ("python", ("pyproject.toml", "requirements.txt", "setup.py", "setup.cfg")),
     # Directory surfaces end with "/" so the prefix branch of
@@ -79,7 +79,7 @@ DEPENDABOT_ECOSYSTEM_MODULES = {
     "github-actions": ("github-actions", (".github/workflows/",)),
     "pre-commit": ("baseline", (".pre-commit-config.yaml",)),
 }
-GENERAL_VALIDATION_REFERENCES = {
+GENERAL_VALIDATION_REFERENCES: dict[str, dict[str, tuple[str, ...]]] = {
     "json": {
         ".pre-commit-config.yaml": ("check-json",),
         ".github/workflows/data-ci.yml": ("pre-commit run check-json --all-files",),
@@ -89,7 +89,7 @@ GENERAL_VALIDATION_REFERENCES = {
         ".github/workflows/data-ci.yml": ("pre-commit run check-yaml --all-files",),
     },
 }
-PROTECTED_DOCUMENT_TOOLING_REFERENCES = {
+PROTECTED_DOCUMENT_TOOLING_REFERENCES: dict[str, tuple[str, ...]] = {
     "python": (
         "pytest tests/ -v --cov --cov-report=term-missing",
         "mypy src tests",
@@ -458,16 +458,16 @@ def pattern_is_workflow(pattern: str) -> bool:
     return pattern.startswith(".github/workflows/") and pattern.endswith((".yml", ".yaml"))
 
 
-def load_yaml_file(repo_root: Path, relative_path: str) -> dict[str, Any] | None:
+def load_yaml_file(repo_root: Path, relative_path: str) -> dict[str, object] | None:
     """Load a YAML mapping if a retained file exists and parses as one."""
     path = resolve_repo_path(repo_root, relative_path)
     if not path.is_file():
         return None
     try:
-        parsed = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
+        parsed: object = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
     except (OSError, yaml.YAMLError):
         return None
-    return parsed if isinstance(parsed, dict) else None
+    return cast(dict[str, object], parsed) if isinstance(parsed, dict) else None
 
 
 def workflow_jobs(repo_root: Path, relative_path: str) -> tuple[str, ...]:
@@ -478,6 +478,7 @@ def workflow_jobs(repo_root: Path, relative_path: str) -> tuple[str, ...]:
     jobs = document.get("jobs")
     if not isinstance(jobs, dict):
         return ()
+    jobs = cast(dict[object, object], jobs)
     return tuple(sorted(str(job_name) for job_name in jobs if isinstance(job_name, str)))
 
 
@@ -1214,11 +1215,13 @@ def dependabot_findings(repo_root: Path, state: ReportState) -> tuple[Finding, .
     updates = document.get("updates")
     if not isinstance(updates, list):
         return ()
+    updates = cast(list[object], updates)
 
     findings: list[Finding] = []
     for update in updates:
         if not isinstance(update, dict):
             continue
+        update = cast(dict[object, object], update)
         ecosystem = update.get("package-ecosystem")
         if not isinstance(ecosystem, str):
             continue

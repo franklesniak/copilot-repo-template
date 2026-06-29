@@ -58,14 +58,16 @@ an equivalent script) to prove that the schema actually rejects them.
 
 from __future__ import annotations
 
+import importlib
 import os
 import shutil
 import subprocess
 import sys
 from importlib.util import find_spec
 from pathlib import Path
+from typing import Any, cast
 
-import pytest
+pytest = cast(Any, importlib.import_module("pytest"))
 
 
 def _check_jsonschema_command() -> list[str] | None:

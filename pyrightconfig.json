@@ -1,0 +1,27 @@
+{
+  "include": [
+    ".github/scripts",
+    ".template-sync/scripts",
+    "src",
+    "tests",
+    "templates/python/tests"
+  ],
+  "exclude": [
+    "**/__pycache__",
+    "**/.git",
+    "**/.mypy_cache",
+    "**/.pytest_cache",
+    "**/.ruff_cache",
+    "**/.venv",
+    "**/build",
+    "**/dist",
+    "**/node_modules"
+  ],
+  "extraPaths": [
+    ".github/scripts",
+    ".template-sync/scripts",
+    "src"
+  ],
+  "pythonVersion": "3.13",
+  "typeCheckingMode": "basic"
+}

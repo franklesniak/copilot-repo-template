@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import importlib
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any, cast
 
-import pytest
+from tests._pytest_compat import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "initialize_adoption_journal.py"
@@ -15,7 +17,7 @@ SCRIPT_DIR = SCRIPT_PATH.parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-import initialize_adoption_journal  # noqa: E402
+initialize_adoption_journal = cast(Any, importlib.import_module("initialize_adoption_journal"))
 
 
 def _write_scaffold(repo_root: Path, text: str = "# Adoption Difficulties Journal\n") -> Path:
