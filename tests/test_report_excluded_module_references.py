@@ -274,6 +274,8 @@ def _write_common_repo(
             "Python validation command: `pytest tests/ -v`.\n"
             "<!-- template-sync: end python-reference-only -->\n"
             "Terraform validation command: `terraform test`.\n"
+            "Pyright validation command: `python -m pyright --project pyrightconfig.json`.\n"
+            'Split pytest command: `pytest tests/ -m "not slow" -v --cov --cov-report=term-missing`.\n'
         ),
     )
     _write_text(
@@ -482,6 +484,20 @@ def test_marker_excluding_optional_modules_reports_cleanup_scope(tmp_path: Path)
         line.startswith(
             "protected-document.prose-reference | protected_file_authorization_needed | "
             "terraform | AGENTS.md:6 | terraform test documents excluded terraform tooling."
+        )
+        for line in findings
+    )
+    assert any(
+        line.startswith(
+            "protected-document.prose-reference | protected_file_authorization_needed | "
+            "python | AGENTS.md:7 | python -m pyright documents excluded python tooling."
+        )
+        for line in findings
+    )
+    assert any(
+        line.startswith(
+            "protected-document.prose-reference | protected_file_authorization_needed | "
+            "python | AGENTS.md:8 | pytest tests/ -m documents excluded python tooling."
         )
         for line in findings
     )

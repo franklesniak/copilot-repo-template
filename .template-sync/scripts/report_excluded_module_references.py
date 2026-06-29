@@ -91,7 +91,10 @@ GENERAL_VALIDATION_REFERENCES: dict[str, dict[str, tuple[str, ...]]] = {
 }
 PROTECTED_DOCUMENT_TOOLING_REFERENCES: dict[str, tuple[str, ...]] = {
     "python": (
-        "pytest tests/ -v --cov --cov-report=term-missing",
+        # ``pytest tests/ -m`` covers the split slow/non-slow invocations and
+        # ``python -m pyright`` the type-check command introduced with Pyright.
+        "pytest tests/ -m",
+        "python -m pyright",
         "mypy src tests",
         "Black (Python)",
         "Ruff (Python)",
