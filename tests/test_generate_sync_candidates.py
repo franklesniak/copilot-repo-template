@@ -1543,6 +1543,10 @@ def test_github_metadata_rest_auth_permission_and_rate_limit_are_not_version_ret
     )
 
     assert metadata.available is False
+    # The compatibility ``source`` summary must stay in the legacy vocabulary
+    # ("not requested" / "manual" / "gh" / "rest") and not leak a per-observation
+    # basis token such as "auth-required" or "rate-limited".
+    assert metadata.source == "manual"
     assert _observation(metadata, "repository").basis == expected_basis
     assert metadata.error is not None
     assert f"HTTP {status_code}: {message}" in metadata.error
@@ -2051,8 +2055,131 @@ def test_github_metadata_rest_private_vulnerability_404_is_not_disabled(
 
     assert private_reporting.value is None
     assert private_reporting.basis == "not-found-or-not-visible"
+    # An unavailable endpoint (payload is None) must keep the read's basis and must
+    # not be described as a malformed object.
+    assert all("was not an object" not in value for _key, value in private_reporting.diagnostics)
     assert "Private vulnerability reporting | `null` (not observed)" in rendered
     assert "Private vulnerability reporting | `false`" not in rendered
+
+
+def test_github_metadata_rest_private_vulnerability_non_object_is_malformed(
+    tmp_path: Path,
+) -> None:
+    """A present-but-non-object private-reporting payload is malformed, not unavailable."""
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="gh unavailable\n")
+
+    rest_client = FakeRestClient(
+        [
+            *_metadata_rest_success_responses(
+                {
+                    "full_name": "example/project",
+                    "visibility": "public",
+                    "default_branch": "main",
+                    "has_discussions": True,
+                },
+                [],
+            )[:-1],
+            _rest_result(200, ["unexpected"]),
+        ]
+    )
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "example/project",
+        include_metadata=True,
+        command_runner=runner,
+        rest_client=rest_client,
+        clock=_fixed_clock,
+    )
+
+    private_reporting = _observation(metadata, "private_vulnerability_reporting")
+    assert private_reporting.observed is False
+    assert private_reporting.basis == "malformed-response"
+    assert any("was not an object" in value for _key, value in private_reporting.diagnostics)
+
+
+def test_github_metadata_security_and_analysis_missing_is_manual_review(
+    tmp_path: Path,
+) -> None:
+    """A successful payload without security_and_analysis is manual-review, not permission-required."""
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        raise FileNotFoundError(2, "No such file or directory", command[0])
+
+    rest_client = FakeRestClient(
+        _metadata_rest_success_responses(
+            {
+                "full_name": "example/project",
+                "visibility": "public",
+                "default_branch": "main",
+                "has_discussions": True,
+            },
+            [],
+        )
+    )
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "example/project",
+        include_metadata=True,
+        command_runner=runner,
+        rest_client=rest_client,
+        clock=_fixed_clock,
+    )
+
+    security = _observation(metadata, "security_and_analysis")
+    assert security.observed is False
+    # A missing field in an otherwise-successful payload is not proof of a permission
+    # failure (it is also absent on older API versions, GHES, and for non-admin callers).
+    assert security.basis == "manual-review"
+    assert security.value is None
+    message = dict(security.diagnostics).get("message", "")
+    assert "security_and_analysis was not present" in message
+    assert "admin" in message
+
+
+def test_markdown_code_span_is_safe_for_backticks_pipes_and_newlines() -> None:
+    """The code-span helper survives backticks, pipes, CR/LF, and edge backticks."""
+    # No special characters: single-backtick span, no padding.
+    assert sync_candidates.markdown_code_span("plain") == "`plain`"
+    # Embedded backtick runs force a fence one backtick longer than the longest run.
+    assert sync_candidates.markdown_code_span("a`b") == "``a`b``"
+    assert sync_candidates.markdown_code_span("a``b") == "```a``b```"
+    # Leading/trailing backticks require space padding (CommonMark).
+    assert sync_candidates.markdown_code_span("`x`") == "`` `x` ``"
+    # Pipes are escaped so the GFM table parser keeps them inside the cell.
+    assert sync_candidates.markdown_code_span("a|b") == "`a\\|b`"
+    # CR/LF are flattened so a value cannot break out of its table row.
+    assert sync_candidates.markdown_code_span("a\r\nb") == "`a b`"
+    assert sync_candidates.markdown_code_span("a\nb") == "`a b`"
+    # Backslashes are preserved verbatim because they are literal inside a code span.
+    assert sync_candidates.markdown_code_span("C:\\path") == "`C:\\path`"
+
+
+def test_format_github_metadata_renders_backtick_unsafe_values_without_breaking_table() -> None:
+    """Labels containing backticks or pipes stay inside one well-formed table cell."""
+    observation = sync_candidates.GitHubObservation(
+        setting="labels",
+        value=["needs `review`", "area|core"],
+        observed=True,
+        basis="rest",
+        source="REST repos/example/project/labels",
+        observed_at="2026-06-29T12:34:56Z",
+        pagination="complete",
+    )
+    metadata = sync_candidates.GitHubMetadata(requested=True, observations=(observation,))
+
+    rendered = sync_candidates.format_github_metadata(metadata)
+    labels_row = next(line for line in rendered.splitlines() if line.startswith("| Labels "))
+
+    # Backticks/pipes in values must not add table columns: exactly four cells.
+    assert labels_row.count(" | ") == 3
+    # The backtick-containing label is fenced with a longer run and padded.
+    assert "`` needs `review` ``" in labels_row
+    # The pipe is escaped so it stays inside the cell instead of splitting the row.
+    assert "`area\\|core`" in labels_row
 
 
 def test_github_api_base_validation_rejects_credential_bearing_urls() -> None:

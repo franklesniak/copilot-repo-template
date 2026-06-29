@@ -451,10 +451,12 @@ class GitHubMetadata:
                 for observation in self.observations
             ):
                 return source
-        first_observation = next(iter(self.observations), None)
-        if first_observation is None:
-            return "manual"
-        return first_observation.basis
+        # Nothing was directly observed via ``gh`` or ``rest``. Preserve the legacy
+        # source vocabulary ("not requested" / "manual" / "gh" / "rest") instead of
+        # leaking a per-observation basis token (e.g. "auth-required") that callers
+        # would misread as a discovery source. The specific basis remains visible
+        # per setting in the ledger and in ``error``.
+        return "manual"
 
     @property
     def repository(self) -> str | None:
@@ -2661,13 +2663,21 @@ def repository_observations_from_payload(
         observations.append(
             unobserved_github_observation(
                 setting="security_and_analysis",
-                basis="permission-required",
+                # A missing field in an otherwise-successful repository payload is not
+                # proof of a permission failure: the block is also absent on older API
+                # versions, on GitHub Enterprise Server, and for callers without admin
+                # access. Classify it as manual-review (consistent with the other
+                # missing-field observations above) and keep the permission hint in the
+                # diagnostic instead of asserting it in the basis.
+                basis="manual-review",
                 source=source,
                 observed_at=observed_at,
                 diagnostics=observation_diagnostic_pairs(
                     (
                         "message",
-                        "security_and_analysis was not present; it may require additional permissions",
+                        "security_and_analysis was not present in the payload; it may require "
+                        "repository admin access or may be unavailable on this API version or "
+                        "GitHub Enterprise Server",
                     )
                 ),
             )
@@ -2697,11 +2707,24 @@ def private_vulnerability_reporting_observation(
     diagnostics: tuple[tuple[str, str], ...],
 ) -> GitHubObservation:
     """Return a private vulnerability reporting observation from an endpoint payload."""
+    # ``payload is None`` is how the REST/gh reads represent an unavailable endpoint
+    # (404, auth/permission failure, transport error, ...). Treat that as unobserved
+    # while preserving the read's own basis/diagnostics, matching
+    # ``branch_protection_observation``. Only a present-but-non-object payload is a
+    # genuine malformed response.
+    if payload is None:
+        return unobserved_github_observation(
+            setting="private_vulnerability_reporting",
+            basis=basis,
+            source=source,
+            observed_at=observed_at,
+            diagnostics=diagnostics,
+        )
     payload_object = json_object(payload)
     if payload_object is None:
         return unobserved_github_observation(
             setting="private_vulnerability_reporting",
-            basis=basis if basis != "gh" and basis != "rest" else "malformed-response",
+            basis="malformed-response",
             source=source,
             observed_at=observed_at,
             diagnostics=diagnostics
@@ -4420,9 +4443,40 @@ def format_working_tree(entries: tuple[str, ...]) -> str:
     return f"{len(entries)} changed or untracked path(s): " + "; ".join(visible) + suffix
 
 
-def markdown_table_cell(value: str) -> str:
-    """Escape one Markdown table cell."""
-    return value.replace("\\", "\\\\").replace("|", "\\|").replace("\n", " ")
+def markdown_code_span(value: str) -> str:
+    """Return ``value`` as a Markdown code span that is safe inside a GFM table cell.
+
+    The fence is chosen one backtick longer than the longest backtick run in
+    ``value`` so embedded backticks cannot terminate the span, and a space pads the
+    span when ``value`` starts or ends with a backtick (per CommonMark). Pipes are
+    escaped because a GFM table row is split on unescaped pipes before inline
+    parsing, even inside code spans, and CR/LF are flattened to spaces so a value
+    cannot break out of its row. Backslashes are left untouched: they are literal
+    inside a code span, so doubling them would corrupt the displayed text.
+    """
+    text = value.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+    text = text.replace("|", "\\|")
+    longest_run = 0
+    current_run = 0
+    for char in text:
+        if char == "`":
+            current_run += 1
+            longest_run = max(longest_run, current_run)
+        else:
+            current_run = 0
+    fence = "`" * (longest_run + 1)
+    pad = " " if text.startswith("`") or text.endswith("`") else ""
+    return f"{fence}{pad}{text}{pad}{fence}"
+
+
+def format_code_span_list(items: tuple[str, ...], empty_text: str, *, limit: int = 8) -> str:
+    """Return a compact, backtick-safe Markdown list of code spans for table cells."""
+    if not items:
+        return empty_text
+    visible = [markdown_code_span(item) for item in items[:limit]]
+    if len(items) > limit:
+        visible.append(f"{len(items) - limit} more")
+    return ", ".join(visible)
 
 
 def format_json_value(value: JsonValue, *, limit: int = 180) -> str:
@@ -4430,54 +4484,55 @@ def format_json_value(value: JsonValue, *, limit: int = 180) -> str:
     rendered = json.dumps(value, sort_keys=True)
     if len(rendered) > limit:
         rendered = f"{rendered[: limit - 3]}..."
-    return f"`{rendered}`"
+    return markdown_code_span(rendered)
 
 
 def format_github_observation_value(observation: GitHubObservation) -> str:
     """Return a human-readable typed observation value."""
     if not observation.observed:
-        return "`null` (not observed)"
+        return f"{markdown_code_span('null')} (not observed)"
     value = observation.value
     if isinstance(value, bool):
         state = "enabled" if value else "disabled"
-        return f"`{str(value).lower()}` ({state}, observed)"
+        return f"{markdown_code_span(str(value).lower())} ({state}, observed)"
     if isinstance(value, str):
-        return f"`{value}`"
+        return markdown_code_span(value)
     if isinstance(value, list):
         if not value:
             return "observed empty list"
         if all(isinstance(item, str) for item in value):
-            return format_limited_path_list(tuple(cast(list[str], value)), "observed empty list")
+            return format_code_span_list(tuple(cast(list[str], value)), "observed empty list")
         return format_json_value(value)
     if isinstance(value, dict):
         if not value:
             return "observed empty object"
         return format_json_value(value)
     if value is None:
-        return "`null`"
+        return markdown_code_span("null")
     return format_json_value(value)
 
 
 def format_github_observation_state(observation: GitHubObservation) -> str:
     """Return the observation state and completeness."""
     if not observation.observed:
-        return f"unobserved (`{observation.basis}`)"
+        return f"unobserved ({markdown_code_span(observation.basis)})"
     completeness = "partial" if observation.partial else "complete"
-    return f"observed {completeness} (`{observation.basis}`)"
+    return f"observed {completeness} ({markdown_code_span(observation.basis)})"
 
 
 def format_github_observation_evidence(observation: GitHubObservation) -> str:
     """Return compact, sanitized observation evidence."""
     details = [
-        f"source: `{observation.source}`",
-        f"observed_at: `{observation.observed_at}`",
-        f"pagination: `{observation.pagination}`",
+        f"source: {markdown_code_span(observation.source)}",
+        f"observed_at: {markdown_code_span(observation.observed_at)}",
+        f"pagination: {markdown_code_span(observation.pagination)}",
     ]
     if observation.partial_fields:
         details.append(
-            "partial fields: " + ", ".join(f"`{field}`" for field in observation.partial_fields)
+            "partial fields: "
+            + ", ".join(markdown_code_span(field) for field in observation.partial_fields)
         )
-    details.extend(f"{key}: `{value}`" for key, value in observation.diagnostics)
+    details.extend(f"{key}: {markdown_code_span(value)}" for key, value in observation.diagnostics)
     return "; ".join(details)
 
 
@@ -4505,14 +4560,18 @@ def format_github_metadata(metadata: GitHubMetadata) -> str:
     ]
     for observation in metadata.observations:
         label = GITHUB_METADATA_SETTING_LABELS.get(observation.setting, observation.setting)
+        # The value/state/evidence renderers already emit table-cell-safe content via
+        # markdown_code_span; the label is a controlled constant. So no separate
+        # whole-cell escaping pass is needed (and a backslash-doubling one would
+        # corrupt the code spans built above).
         lines.append(
             "| "
             + " | ".join(
                 (
-                    markdown_table_cell(label),
-                    markdown_table_cell(format_github_observation_value(observation)),
-                    markdown_table_cell(format_github_observation_state(observation)),
-                    markdown_table_cell(format_github_observation_evidence(observation)),
+                    label,
+                    format_github_observation_value(observation),
+                    format_github_observation_state(observation),
+                    format_github_observation_evidence(observation),
                 )
             )
             + " |"
