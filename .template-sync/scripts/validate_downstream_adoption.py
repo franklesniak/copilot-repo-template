@@ -638,8 +638,13 @@ def protected_guide_reference_obligation_applies(
             obligation.target_path,
             mappings,
         )
-        if target_relation is not None:
-            return not target_relation.is_retained_by(included_modules)
+        # An excluded target_path is stale on its own. A retained target_path does
+        # not clear the obligation: fall through to the target_modules check so a
+        # reference whose target modules are all excluded is still flagged (for
+        # example, the path lingers via a local override while the modules it
+        # documents are gone).
+        if target_relation is not None and not target_relation.is_retained_by(included_modules):
+            return True
     return validate_instruction_contracts.protected_guide_obligation_applies(
         obligation.target_modules,
         included_modules,

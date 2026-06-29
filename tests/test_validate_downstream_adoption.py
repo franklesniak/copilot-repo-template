@@ -715,6 +715,46 @@ def test_protected_guide_reference_obligation_ignores_local_override_without_wai
     assert "Local override: AGENTS.md" in result.stdout
 
 
+def test_protected_guide_reference_obligation_flags_excluded_modules_when_target_path_retained(
+    tmp_path: Path,
+) -> None:
+    """A retained target_path must not hide a reference whose target modules are all excluded."""
+    contracts = _contracts()
+    contracts["protected_guide_reference_obligations"] = [
+        {
+            "key": "agents-azure-devops-retained-target-reference",
+            "path": "AGENTS.md",
+            "reference_kind": "prose-reference",
+            # README.md stays retained (baseline) even though every target module is
+            # excluded, so the obligation must still be flagged via the target_modules
+            # staleness check rather than cleared by the retained target_path.
+            "target_path": "README.md",
+            "target_modules": [
+                "azure-devops-platform",
+                "azure-pipelines",
+                "azure-devops-collaboration",
+            ],
+            "tokens": ["Azure DevOps PR Review Protocol"],
+        }
+    ]
+    _write_common_downstream_repo(
+        tmp_path,
+        agents_text=(
+            "# Agent Instructions\n\n"
+            "## Protected Instruction Files\n\n"
+            "## GitHub Plugin Usage\n\n"
+            "Keep the Azure DevOps PR Review Protocol section for owner review.\n"
+        ),
+    )
+    _write_yaml(tmp_path, ".template-sync/instruction-contracts.yml", contracts)
+
+    result = _run_validator(tmp_path, "--require-marker")
+
+    assert result.returncode == 1
+    assert "Protected guide reference requires owner review" in result.stdout
+    assert "AGENTS.md:7: agents-azure-devops-retained-target-reference" in result.stdout
+
+
 def test_protected_guide_reference_waiver_passes_and_is_reported(
     tmp_path: Path,
 ) -> None:
