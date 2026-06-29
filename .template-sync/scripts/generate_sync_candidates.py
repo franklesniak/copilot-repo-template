@@ -156,7 +156,9 @@ VALIDATION_COMMANDS_BY_MODULE: dict[str, tuple[str, ...]] = {
     ),
     "powershell": ("Invoke-Pester -Path tests/ -Output Detailed",),
     "python": (
-        "pytest tests/ -v --cov --cov-report=term-missing",
+        'pytest tests/ -m "not slow" -v --cov --cov-report=term-missing',
+        "pytest tests/ -m slow -v --no-cov",
+        "python -m pyright --project pyrightconfig.json",
         "pre-commit run check-toml --all-files",
     ),
     "schema": (

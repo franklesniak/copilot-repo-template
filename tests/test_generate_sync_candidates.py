@@ -858,7 +858,7 @@ def test_summary_reports_clean_adoption_without_unresolved_decisions(tmp_path: P
     )
     assert "No unchecked items in machine-interpretable checklist sections." in result.stdout
     assert "python .template-sync/scripts/run_first_adoption_checks.py" in result.stdout
-    assert "pytest tests/ -v --cov --cov-report=term-missing" not in result.stdout
+    assert 'pytest tests/ -m "not slow" -v --cov --cov-report=term-missing' not in result.stdout
 
 
 def test_summary_reports_deferred_overrides_and_documented_todo_items(

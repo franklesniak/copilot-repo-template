@@ -438,7 +438,8 @@ REFERENCE_ONLY_FORBIDDEN_ENTRY_POINT_TOKENS = {
         "powershell.instructions.md",
     ),
     "python-reference-only": (
-        "pytest tests/ -v --cov --cov-report=term-missing",
+        'pytest tests/ -m "not slow" -v --cov --cov-report=term-missing',
+        "python -m pyright --project pyrightconfig.json",
         "python.instructions.md",
     ),
     "terraform-reference-only": (

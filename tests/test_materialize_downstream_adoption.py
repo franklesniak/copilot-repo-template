@@ -199,7 +199,7 @@ ISSUE_693_EXCLUDED_DOC_REFERENCES: dict[str, tuple[str, ...]] = {
         "schemas/README.md",
         "schemas/example-config",
         "docs/azure-devops-support.md",
-        "pytest tests/ -v --cov --cov-report=term-missing",
+        'pytest tests/ -m "not slow" -v --cov --cov-report=term-missing',
         "mypy src tests",
         "terraform-fmt",
         "terraform-validate",
