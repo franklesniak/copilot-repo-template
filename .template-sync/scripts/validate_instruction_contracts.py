@@ -128,7 +128,11 @@ class InstructionContractReport:
 
     @property
     def has_failures(self) -> bool:
-        """Return whether validation found unwaived missing files or anchors."""
+        """Return whether validation found unwaived failures.
+
+        A failure is any unwaived missing file, missing anchor, or stale
+        protected-guide section.
+        """
         return bool(
             self.missing_files or self.missing_anchors or self.stale_protected_guide_sections
         )
