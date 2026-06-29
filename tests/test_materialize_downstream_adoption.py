@@ -2179,6 +2179,7 @@ def test_materialized_template_update_procedure_passes_nested_markdown_lint(
     assert lint_result.returncode == 0, lint_result.stdout + lint_result.stderr
 
 
+@pytest.mark.upstream_template_only
 def test_materialized_github_powershell_profile_records_protected_guide_waivers(
     tmp_path: Path,
 ) -> None:

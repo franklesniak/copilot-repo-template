@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import json
 import os
 import re
@@ -10,7 +11,7 @@ import shutil
 import shlex
 import subprocess
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,6 +37,8 @@ GIT_STATUS_COMMAND = (
 )
 PRE_COMMIT_EXECUTABLE_PREFIX = ("pre-commit", "run", "--files")
 PRE_COMMIT_CONFIG_PATH = ".pre-commit-config.yaml"
+MANIFEST_PATH = ".template-sync/manifest.yml"
+PYTEST_CONFIG_PATH = "pyproject.toml"
 PLACEHOLDER_SCRIPT = ".github/scripts/replace-template-placeholders.py"
 MARKER_PATH = ".template-sync/marker.yml"
 MARKER_VALIDATOR_SCRIPT = ".template-sync/scripts/validate_marker.py"
@@ -52,7 +55,16 @@ MARKER_KEY_PATTERN = re.compile(
 MARKDOWN_MODULE_ITEM_PATTERN = re.compile(
     r"^ *-\s+(?:markdown|'markdown'|\"markdown\")(?:[ \t]+#.*)?[ \t]*$"
 )
+MANIFEST_PATH_MAPPINGS_KEY_PATTERN = re.compile(r"^(?P<indent> *)path_mappings\s*:\s*(?:#.*)?$")
+MANIFEST_LIST_ITEM_PATTERN = re.compile(r"^(?P<indent> *)-\s*(?P<body>.*)$")
+MANIFEST_MAPPING_FIELD_PATTERN = re.compile(
+    r"^(?P<indent> *)(?P<key>pattern|requires_all|requires_any)\s*:\s*(?P<value>.*)$"
+)
+MANIFEST_INLINE_FIELD_PATTERN = re.compile(
+    r"^(?P<key>pattern|requires_all|requires_any)\s*:\s*(?P<value>.*)$"
+)
 PRE_COMMIT_GROUP = "pre-commit"
+PYTEST_GROUP = "pytest"
 PLACEHOLDER_SCAN_GROUP = "placeholder-scan"
 MARKER_VALIDATION_GROUP = "marker-validation"
 QUALITY_REPORT_GROUP = "quality-report"
@@ -61,6 +73,9 @@ MARKDOWN_SCRIPT_GROUP = "markdown-script"
 CHECK_MODE = "check"
 FIX_MODE = "fix"
 DOCTOR_MODE = "doctor"
+PYTEST_MARKER_EXPRESSION = "not upstream_template_only"
+DOWNSTREAM_PYTEST_CANDIDATE_PATTERNS = ("tests/test_*.py",)
+UPSTREAM_ONLY_PYTEST_FILE_PATTERNS = ("tests/test_template_manifest.py",)
 CHANGED_FILES_EXIT_CODE = 2
 PROBE_AVAILABLE = "available"
 PROBE_UNAVAILABLE = "unavailable"
@@ -120,6 +135,41 @@ class PlannedCommand:
 
     group_label: str
     command: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ManifestPathMapping:
+    """One path-to-module relation read from the template sync manifest."""
+
+    pattern: str
+    requires_all: frozenset[str]
+    requires_any: frozenset[str]
+
+
+@dataclass(frozen=True)
+class ManifestPathRelation:
+    """The selected manifest module relation for one repository path."""
+
+    patterns: tuple[str, ...]
+    requires_all: frozenset[str]
+    requires_any: frozenset[str]
+
+    def is_retained_by(self, included_modules: Collection[str]) -> bool:
+        """Return whether ``included_modules`` satisfies this path relation."""
+        included_module_set = frozenset(included_modules)
+        if not self.requires_all.issubset(included_module_set):
+            return False
+        if self.requires_any and not self.requires_any.intersection(included_module_set):
+            return False
+        return True
+
+
+@dataclass(frozen=True)
+class RetainedModuleDecision:
+    """Retained module state and the source that supplied it."""
+
+    modules: frozenset[str]
+    source: str
 
 
 @dataclass(frozen=True)
@@ -248,6 +298,17 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help=(
             "Maximum captured diagnostic lines per stdout/stderr stream in --doctor. "
             f"Default: {DEFAULT_DIAGNOSTIC_MAX_LINES}."
+        ),
+    )
+    parser.add_argument(
+        "--retained-module",
+        action="append",
+        default=None,
+        metavar="MODULE",
+        dest="retained_modules",
+        help=(
+            "Pre-marker retained module decision. May be repeated. "
+            "Ignored when .template-sync/marker.yml is present."
         ),
     )
     return parser.parse_args(argv)
@@ -471,6 +532,16 @@ def python_form_display_name(form: Sequence[str]) -> str:
     if executable == sys.executable:
         return "sys.executable -m"
     return f"{executable} -m"
+
+
+def downstream_pytest_command() -> tuple[str, ...]:
+    """Return the official downstream-safe pytest gate command."""
+    return (sys.executable, "-m", "pytest", "-m", PYTEST_MARKER_EXPRESSION)
+
+
+def downstream_pytest_version_command() -> tuple[str, ...]:
+    """Return the doctor probe command for the gate's exact Python interpreter."""
+    return (sys.executable, "-m", "pytest", "--version")
 
 
 def probe_availability_state(execution: ProbeExecution) -> str:
@@ -821,6 +892,317 @@ def load_package_scripts(repo_root: Path) -> dict[str, object]:
     return cast(dict[str, object], scripts) if isinstance(scripts, dict) else {}
 
 
+def strip_yaml_inline_comment(raw_value: str) -> str:
+    """Return ``raw_value`` without an unquoted YAML-style inline comment."""
+    quote: str | None = None
+    escaped = False
+    for index, character in enumerate(raw_value):
+        if quote is not None:
+            if quote == '"' and character == "\\" and not escaped:
+                escaped = True
+                continue
+            if character == quote and not escaped:
+                quote = None
+            escaped = False
+            continue
+        if character in ("'", '"'):
+            quote = character
+            continue
+        if character == "#" and (index == 0 or raw_value[index - 1].isspace()):
+            return raw_value[:index].strip()
+    return raw_value.strip()
+
+
+def parse_manifest_scalar(raw_value: str) -> str:
+    """Parse the simple YAML scalar shapes used by manifest path mappings."""
+    value = strip_yaml_inline_comment(raw_value)
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        return value[1:-1]
+    return value
+
+
+def parse_manifest_inline_list(raw_value: str) -> tuple[str, ...] | None:
+    """Parse a simple inline sequence, or return ``None`` for block style."""
+    value = strip_yaml_inline_comment(raw_value)
+    if value == "":
+        return None
+    if value == "[]":
+        return ()
+    if value.startswith("[") and value.endswith("]"):
+        inner = value[1:-1].strip()
+        if not inner:
+            return ()
+        return tuple(parse_manifest_scalar(item) for item in inner.split(","))
+    return (parse_manifest_scalar(value),)
+
+
+def parse_manifest_path_mappings_text(manifest_text: str) -> tuple[ManifestPathMapping, ...]:
+    """Extract path mapping module relations from the manifest's YAML text.
+
+    The runner only needs the manifest's ``path_mappings`` relation surface and
+    intentionally avoids importing PyYAML so it can still explain why pytest is
+    skipped in minimal downstream environments.
+    """
+    mappings: list[ManifestPathMapping] = []
+    in_path_mappings = False
+    path_mappings_indent = 0
+    path_mapping_item_indent: int | None = None
+    current_pattern: str | None = None
+    current_requires_all: list[str] = []
+    current_requires_any: list[str] = []
+    active_sequence_key: str | None = None
+
+    def flush_current_mapping() -> None:
+        nonlocal current_pattern
+        if current_pattern is not None and (current_requires_all or current_requires_any):
+            mappings.append(
+                ManifestPathMapping(
+                    pattern=current_pattern,
+                    requires_all=frozenset(current_requires_all),
+                    requires_any=frozenset(current_requires_any),
+                )
+            )
+        current_pattern = None
+        current_requires_all.clear()
+        current_requires_any.clear()
+
+    def apply_mapping_field(key: str, raw_value: str) -> None:
+        nonlocal active_sequence_key, current_pattern
+        if key == "pattern":
+            current_pattern = parse_manifest_scalar(raw_value)
+            active_sequence_key = None
+            return
+
+        parsed_values = parse_manifest_inline_list(raw_value)
+        if parsed_values is None:
+            active_sequence_key = key
+            return
+        target = current_requires_all if key == "requires_all" else current_requires_any
+        target.extend(value for value in parsed_values if value)
+        active_sequence_key = None
+
+    for line in manifest_text.splitlines():
+        if is_marker_blank_or_comment_line(line):
+            continue
+        line_indent = marker_line_indent(line)
+        if not in_path_mappings:
+            key_match = MANIFEST_PATH_MAPPINGS_KEY_PATTERN.match(line)
+            if key_match is not None:
+                in_path_mappings = True
+                path_mappings_indent = len(key_match.group("indent"))
+            continue
+
+        if line_indent <= path_mappings_indent:
+            break
+
+        item_match = MANIFEST_LIST_ITEM_PATTERN.match(line)
+        if (
+            item_match is not None
+            and line_indent > path_mappings_indent
+            and (path_mapping_item_indent is None or line_indent == path_mapping_item_indent)
+        ):
+            path_mapping_item_indent = line_indent
+            flush_current_mapping()
+            active_sequence_key = None
+            body = item_match.group("body").strip()
+            if body:
+                inline_match = MANIFEST_INLINE_FIELD_PATTERN.match(body)
+                if inline_match is not None:
+                    apply_mapping_field(
+                        inline_match.group("key"),
+                        inline_match.group("value"),
+                    )
+            continue
+
+        if path_mapping_item_indent is None:
+            continue
+
+        field_match = MANIFEST_MAPPING_FIELD_PATTERN.match(line)
+        if field_match is not None and line_indent > path_mapping_item_indent:
+            apply_mapping_field(field_match.group("key"), field_match.group("value"))
+            continue
+
+        if item_match is not None and active_sequence_key is not None:
+            target = (
+                current_requires_all
+                if active_sequence_key == "requires_all"
+                else current_requires_any
+            )
+            value = parse_manifest_scalar(item_match.group("body"))
+            if value:
+                target.append(value)
+
+    if in_path_mappings:
+        flush_current_mapping()
+    return tuple(mappings)
+
+
+def load_manifest_path_mappings(repo_root: Path) -> tuple[ManifestPathMapping, ...]:
+    """Return path mapping relations from ``.template-sync/manifest.yml``."""
+    manifest_path = repo_root / MANIFEST_PATH
+    if not manifest_path.exists():
+        return ()
+    if not is_present_regular_file(manifest_path):
+        raise FirstAdoptionCheckError(f"Expected a regular file: {MANIFEST_PATH}")
+    try:
+        manifest_text = manifest_path.read_text(encoding="utf-8-sig")
+    except OSError as error:
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        raise FirstAdoptionCheckError(
+            f"Unable to read {MANIFEST_PATH} ({error_summary})."
+        ) from error
+    return parse_manifest_path_mappings_text(manifest_text)
+
+
+def has_manifest_wildcard(pattern: str) -> bool:
+    """Return whether ``pattern`` contains shell-style wildcard syntax."""
+    return any(wildcard in pattern for wildcard in "*?[")
+
+
+def manifest_pattern_specificity(pattern: str) -> tuple[int, int, int]:
+    """Return a sortable specificity rank for a manifest path pattern."""
+    is_exact = not has_manifest_wildcard(pattern)
+    literal_length = sum(1 for character in pattern if character not in "*?[]")
+    return (int(is_exact), literal_length, pattern.count("/"))
+
+
+def selected_manifest_relation_for_path(
+    relative_path: str,
+    mappings: Sequence[ManifestPathMapping],
+) -> ManifestPathRelation | None:
+    """Return the most-specific manifest relation for ``relative_path``."""
+    matches: list[tuple[tuple[int, int, int], ManifestPathMapping]] = []
+    for mapping in mappings:
+        if fnmatch.fnmatchcase(relative_path, mapping.pattern):
+            matches.append((manifest_pattern_specificity(mapping.pattern), mapping))
+
+    if not matches:
+        return None
+
+    best_specificity = max(specificity for specificity, _mapping in matches)
+    selected_mappings = [
+        mapping for specificity, mapping in matches if specificity == best_specificity
+    ]
+    return ManifestPathRelation(
+        patterns=tuple(mapping.pattern for mapping in selected_mappings),
+        requires_all=frozenset().union(*(mapping.requires_all for mapping in selected_mappings)),
+        requires_any=frozenset().union(*(mapping.requires_any for mapping in selected_mappings)),
+    )
+
+
+def retained_module_decision(
+    repo_root: Path,
+    explicit_retained_modules: Sequence[str] | None,
+) -> RetainedModuleDecision | None:
+    """Return marker or explicit retained-module state, if available."""
+    marker_modules = marker_included_modules(repo_root)
+    if marker_modules is not None:
+        return RetainedModuleDecision(modules=marker_modules, source="marker")
+    if explicit_retained_modules is not None:
+        return RetainedModuleDecision(
+            modules=frozenset(module for module in explicit_retained_modules if module),
+            source="explicit",
+        )
+    return None
+
+
+def path_matches_any_pattern(relative_path: str, patterns: Sequence[str]) -> bool:
+    """Return whether ``relative_path`` matches any shell-style pattern."""
+    return any(fnmatch.fnmatchcase(relative_path, pattern) for pattern in patterns)
+
+
+def is_downstream_pytest_candidate_path(relative_path: str) -> bool:
+    """Return whether ``relative_path`` should count toward pytest gate planning."""
+    return path_matches_any_pattern(
+        relative_path,
+        DOWNSTREAM_PYTEST_CANDIDATE_PATTERNS,
+    ) and not path_matches_any_pattern(relative_path, UPSTREAM_ONLY_PYTEST_FILE_PATTERNS)
+
+
+def downstream_pytest_candidate_paths(
+    files: Sequence[str],
+    *,
+    manifest_mappings: Sequence[ManifestPathMapping] = (),
+    retained_modules: Collection[str] | None = None,
+) -> tuple[str, ...]:
+    """Return retained pytest candidate paths for downstream gate planning."""
+    candidate_paths: list[str] = []
+    for relative_path in files:
+        if not is_downstream_pytest_candidate_path(relative_path):
+            continue
+        if retained_modules is None:
+            candidate_paths.append(relative_path)
+            continue
+        relation = selected_manifest_relation_for_path(relative_path, manifest_mappings)
+        if relation is not None and relation.is_retained_by(retained_modules):
+            candidate_paths.append(relative_path)
+    return tuple(sorted(candidate_paths))
+
+
+def is_pytest_configuration_retained(
+    repo_root: Path,
+    *,
+    manifest_mappings: Sequence[ManifestPathMapping],
+    retained_modules: Collection[str] | None,
+) -> bool:
+    """Return whether the retained profile includes the pytest configuration."""
+    if not optional_regular_file_exists(repo_root, PYTEST_CONFIG_PATH):
+        return False
+    if retained_modules is None:
+        return True
+    relation = selected_manifest_relation_for_path(PYTEST_CONFIG_PATH, manifest_mappings)
+    return relation is not None and relation.is_retained_by(retained_modules)
+
+
+def pytest_gate_plan(
+    repo_root: Path,
+    files: Sequence[str],
+    *,
+    explicit_retained_modules: Sequence[str] | None = None,
+) -> CheckPlan:
+    """Build the conditional downstream pytest gate command and skip notes."""
+    decision = retained_module_decision(repo_root, explicit_retained_modules)
+    manifest_mappings = load_manifest_path_mappings(repo_root) if decision is not None else ()
+    retained_modules = decision.modules if decision is not None else None
+
+    if not is_pytest_configuration_retained(
+        repo_root,
+        manifest_mappings=manifest_mappings,
+        retained_modules=retained_modules,
+    ):
+        return CheckPlan(
+            commands=(),
+            notes=(
+                f"Pytest gate skipped: pytest configuration pruned ({PYTEST_CONFIG_PATH} "
+                "is not retained by the current module state or is not present).",
+            ),
+        )
+
+    candidate_paths = downstream_pytest_candidate_paths(
+        files,
+        manifest_mappings=manifest_mappings,
+        retained_modules=retained_modules,
+    )
+    if not candidate_paths:
+        return CheckPlan(
+            commands=(),
+            notes=(
+                "Pytest gate skipped: pytest configuration retained, but no downstream "
+                "pytest candidate paths are retained.",
+            ),
+        )
+
+    return CheckPlan(
+        commands=(
+            PlannedCommand(
+                group_label=PYTEST_GROUP,
+                command=downstream_pytest_command(),
+            ),
+        ),
+        notes=(),
+    )
+
+
 def included_modules_from_marker_text(marker_text: str) -> frozenset[str]:
     """Return modules listed under the marker's ``included_modules`` block.
 
@@ -1125,6 +1507,7 @@ def build_check_plan(
     *,
     max_command_length: int = DEFAULT_MAX_COMMAND_LENGTH,
     run_mode: str = CHECK_MODE,
+    retained_modules: Sequence[str] | None = None,
 ) -> CheckPlan:
     """Build the first-adoption check command plan."""
     commands: list[PlannedCommand] = []
@@ -1166,6 +1549,14 @@ def build_check_plan(
     markdown_plan = markdown_commands_and_notes(repo_root)
     commands.extend(markdown_plan.commands)
     notes.extend(markdown_plan.notes)
+
+    pytest_plan = pytest_gate_plan(
+        repo_root,
+        files,
+        explicit_retained_modules=retained_modules,
+    )
+    commands.extend(pytest_plan.commands)
+    notes.extend(pytest_plan.notes)
 
     return CheckPlan(commands=tuple(commands), notes=tuple(notes))
 
@@ -1321,6 +1712,19 @@ def first_available_result(
     return None
 
 
+def result_for_exact_command(
+    results: Sequence[DoctorProbeResult],
+    group_label: str,
+    command: Sequence[str],
+) -> DoctorProbeResult | None:
+    """Return the result for exactly ``command`` in ``group_label``, if present."""
+    command_tuple = tuple(command)
+    for result in results:
+        if result.group_label == group_label and result.command == command_tuple:
+            return result
+    return None
+
+
 def doctor_recommendations(results: Sequence[DoctorProbeResult]) -> tuple[str, ...]:
     """Return concise recommendations from doctor probe results."""
     recommendations: list[str] = []
@@ -1349,19 +1753,21 @@ def doctor_recommendations(results: Sequence[DoctorProbeResult]) -> tuple[str, .
             prefix = (*pre_commit_module.command[:-2], "pre_commit", "run", "--files")
             recommendations.append(f"Use pre-commit validation prefix: {format_command(prefix)}")
 
-    pytest_console = first_available_result(results, "pytest", command_suffix=("--version",))
-    if pytest_console is not None and pytest_console.command[0] == "pytest":
-        recommendations.append("Use pytest invocation: pytest")
-    else:
-        pytest_module = first_available_result(
-            results,
-            "pytest",
-            command_suffix=("pytest", "--version"),
+    pytest_gate_probe = result_for_exact_command(
+        results,
+        PYTEST_GROUP,
+        downstream_pytest_version_command(),
+    )
+    if pytest_gate_probe is not None and pytest_gate_probe.availability_state == PROBE_AVAILABLE:
+        recommendations.append(
+            f"Use pytest invocation: {format_command(downstream_pytest_command())}"
         )
-        if pytest_module is not None:
-            recommendations.append(
-                f"Use pytest invocation: {format_command((*pytest_module.command[:-1],))}"
-            )
+    else:
+        recommendations.append(
+            "No working pytest module invocation was detected for the runner's "
+            "Python interpreter; install pytest in that environment before running "
+            f"{format_command(downstream_pytest_command())}."
+        )
 
     yamllint_console = first_available_result(results, "yamllint", command_suffix=("--version",))
     if yamllint_console is not None and yamllint_console.command[0] == "yamllint":
@@ -1548,6 +1954,7 @@ def run_first_adoption_checks(
     max_command_length: int = DEFAULT_MAX_COMMAND_LENGTH,
     run_mode: str = CHECK_MODE,
     plan_only: bool = False,
+    retained_modules: Sequence[str] | None = None,
     command_runner: CommandRunner = run_external_command,
     git_status_reader: GitStatusReader = git_status_lines,
     time_source: TimeSource = default_time_source,
@@ -1568,8 +1975,15 @@ def run_first_adoption_checks(
         files=collection.files,
         max_command_length=max_command_length,
         run_mode=run_mode,
+        retained_modules=retained_modules,
     )
-    for note in plan.notes:
+    notes = list(plan.notes)
+    if plan_only and any(command.group_label == PYTEST_GROUP for command in plan.commands):
+        notes.append(
+            "Plan-only mode: pytest tool availability was not evaluated; run --doctor "
+            "for environment/tool diagnostics."
+        )
+    for note in notes:
         print(note, file=stdout, flush=True)
     print_check_plan(plan, stdout=stdout)
 
@@ -1673,6 +2087,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             max_command_length=args.max_command_length,
             run_mode=args.run_mode,
             plan_only=args.plan_only,
+            retained_modules=args.retained_modules,
         )
     except FirstAdoptionCheckError as error:
         fail(str(error))

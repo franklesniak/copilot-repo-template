@@ -58,6 +58,41 @@ def _write_marker(repo_root: Path, text: str) -> None:
     _write_text(repo_root, ".template-sync/marker.yml", text)
 
 
+def _write_manifest(repo_root: Path, text: str) -> None:
+    """Write a template-sync manifest fixture."""
+    _write_text(repo_root, ".template-sync/manifest.yml", text)
+
+
+def _write_pytest_gate_manifest(repo_root: Path) -> None:
+    """Write a manifest fixture with pytest configuration and test mappings."""
+    _write_manifest(
+        repo_root,
+        "\n".join(
+            [
+                "template_manifest:",
+                "  path_mappings:",
+                "    - pattern: 'pyproject.toml'",
+                "      requires_all:",
+                "        - python",
+                "    - pattern: 'tests/test_run_first_adoption_checks.py'",
+                "      requires_all:",
+                "        - template-sync-support",
+                "    - pattern: 'tests/test_schema_examples.py'",
+                "      requires_any:",
+                "        - schema",
+                "        - template-sync-support",
+                "    - pattern: 'tests/test_template_manifest.py'",
+                "      requires_all:",
+                "        - template-sync-support",
+                "    - pattern: 'tests/*.py'",
+                "      requires_all:",
+                "        - python",
+                "",
+            ]
+        ),
+    )
+
+
 def _write_pytest_profile_root(tmp_path: Path) -> Path:
     """Create a temporary pytest root with the committed pytest configuration."""
     pytest_root = tmp_path / "pytest-root"
@@ -130,6 +165,26 @@ def _queued_time_source(*timestamps: datetime) -> Callable[[], datetime]:
     return now
 
 
+def _doctor_result(
+    group_label: str,
+    name: str,
+    command: tuple[str, ...],
+    availability_state: str,
+) -> Any:
+    """Build a minimal doctor probe result for recommendation tests."""
+    return first_adoption.DoctorProbeResult(
+        group_label=group_label,
+        name=name,
+        command=command,
+        availability_state=availability_state,
+        exit_code=0 if availability_state == first_adoption.PROBE_AVAILABLE else 1,
+        elapsed_time="0.000s",
+        timed_out=False,
+        stdout="",
+        stderr="",
+    )
+
+
 def _incrementing_time_source() -> Callable[[], datetime]:
     """Return a deterministic time source that advances one second per read."""
     current_timestamp: list[datetime] = [_utc_time(0)]
@@ -194,6 +249,20 @@ def test_doctor_mode_is_explicit() -> None:
     assert args.doctor_timeout == 1.5
     assert args.doctor_max_bytes == 80
     assert args.doctor_max_lines == 3
+
+
+def test_retained_module_cli_option_is_repeatable() -> None:
+    """Pre-marker retained module state can be supplied explicitly to the CLI."""
+    args = first_adoption.parse_args(
+        [
+            "--retained-module",
+            "python",
+            "--retained-module",
+            "template-sync-support",
+        ]
+    )
+
+    assert args.retained_modules == ["python", "template-sync-support"]
 
 
 def test_diagnostic_text_is_redacted_and_bounded() -> None:
@@ -431,7 +500,11 @@ def test_doctor_mode_reports_probe_states_without_running_validation(
     assert "PSScriptAnalyzer module not available" in output
     assert "Use PSScriptAnalyzer host: pwsh" in output
     assert "pre_commit run --files" in output
-    assert "Use pytest invocation:" in output
+    assert (
+        f"Use pytest invocation: "
+        f"{first_adoption.format_command(first_adoption.downstream_pytest_command())}"
+    ) in output
+    assert "Use pytest invocation: pytest" not in output
     assert "Doctor mode does not run pre-commit hooks" in output
     assert "Hook IDs detected in .pre-commit-config.yaml" in output
     assert "    - yamllint" in output
@@ -471,6 +544,268 @@ def test_check_plan_assigns_stable_group_labels(
     assert plan.commands[0].command == ("pre-commit", "run", "--files", "README.md")
     assert plan.commands[-2].command == ("npm", "run", "lint:md")
     assert plan.commands[-1].command == ("npm", "run", "lint:md:nested")
+
+
+def test_canonical_downstream_pytest_command_uses_runner_interpreter() -> None:
+    """The pytest gate command is a single sys.executable module-form tuple."""
+    assert first_adoption.downstream_pytest_command() == (
+        sys.executable,
+        "-m",
+        "pytest",
+        "-m",
+        "not upstream_template_only",
+    )
+
+
+def test_downstream_pytest_candidate_paths_use_manifest_retention() -> None:
+    """Candidate discovery applies the maintained candidate set and manifest state."""
+    mappings = first_adoption.parse_manifest_path_mappings_text(
+        "\n".join(
+            [
+                "template_manifest:",
+                "  path_mappings:",
+                "    - pattern: 'tests/test_run_first_adoption_checks.py'",
+                "      requires_all: [template-sync-support]",
+                "    - pattern: 'tests/test_template_manifest.py'",
+                "      requires_all: [template-sync-support]",
+                "    - pattern: 'tests/*.py'",
+                "      requires_all: [python]",
+                "",
+            ]
+        )
+    )
+
+    assert first_adoption.downstream_pytest_candidate_paths(
+        (
+            "tests/test_example.py",
+            "tests/test_run_first_adoption_checks.py",
+            "tests/test_template_manifest.py",
+        ),
+        manifest_mappings=mappings,
+        retained_modules={"template-sync-support"},
+    ) == ("tests/test_run_first_adoption_checks.py",)
+
+
+def test_check_plan_includes_pytest_from_explicit_retained_modules(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Explicit pre-marker module state can make the pytest gate applicable."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _write_pytest_gate_manifest(tmp_path)
+    _write_text(tmp_path, "pyproject.toml")
+    _write_text(tmp_path, "tests/test_run_first_adoption_checks.py")
+
+    plan = first_adoption.build_check_plan(
+        tmp_path,
+        ("pyproject.toml", "tests/test_run_first_adoption_checks.py"),
+        retained_modules=("python", "template-sync-support"),
+    )
+
+    assert plan.commands[-1] == first_adoption.PlannedCommand(
+        group_label=first_adoption.PYTEST_GROUP,
+        command=first_adoption.downstream_pytest_command(),
+    )
+    assert not any("Pytest gate skipped" in note for note in plan.notes)
+
+
+def test_marker_state_overrides_explicit_modules_and_file_presence(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Marker-derived module state prevents file presence from implying pytest."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _write_pytest_gate_manifest(tmp_path)
+    _write_text(tmp_path, "pyproject.toml")
+    _write_text(tmp_path, "tests/test_run_first_adoption_checks.py")
+    _write_marker(
+        tmp_path,
+        "template_sync:\n  included_modules:\n    - template-sync-support\n",
+    )
+    _write_text(tmp_path, ".template-sync/scripts/validate_marker.py")
+
+    plan = first_adoption.build_check_plan(
+        tmp_path,
+        ("pyproject.toml", "tests/test_run_first_adoption_checks.py"),
+        retained_modules=("python", "template-sync-support"),
+    )
+
+    assert not any(command.group_label == first_adoption.PYTEST_GROUP for command in plan.commands)
+    assert any("pytest configuration pruned" in note for note in plan.notes)
+
+
+def test_check_plan_uses_file_presence_fallback_without_module_decision(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Without marker or explicit state, pyproject plus test files plans pytest."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _write_text(tmp_path, "pyproject.toml")
+    _write_text(tmp_path, "tests/test_example.py")
+
+    plan = first_adoption.build_check_plan(tmp_path, ("pyproject.toml", "tests/test_example.py"))
+
+    assert any(command.group_label == first_adoption.PYTEST_GROUP for command in plan.commands)
+
+
+def test_check_plan_skips_pytest_when_configuration_pruned_but_tests_remain(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """The pytest gate needs retained config even when candidate tests remain."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _write_pytest_gate_manifest(tmp_path)
+    _write_text(tmp_path, "pyproject.toml")
+    _write_text(tmp_path, "tests/test_run_first_adoption_checks.py")
+
+    plan = first_adoption.build_check_plan(
+        tmp_path,
+        ("pyproject.toml", "tests/test_run_first_adoption_checks.py"),
+        retained_modules=("template-sync-support",),
+    )
+
+    assert not any(command.group_label == first_adoption.PYTEST_GROUP for command in plan.commands)
+    assert any("pytest configuration pruned" in note for note in plan.notes)
+
+
+def test_check_plan_skips_pytest_when_no_candidate_tests_retained(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """A retained pytest config alone is not enough to plan the downstream gate."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _write_pytest_gate_manifest(tmp_path)
+    _write_text(tmp_path, "pyproject.toml")
+
+    plan = first_adoption.build_check_plan(
+        tmp_path,
+        ("pyproject.toml",),
+        retained_modules=("python",),
+    )
+
+    assert not any(command.group_label == first_adoption.PYTEST_GROUP for command in plan.commands)
+    assert any("no downstream pytest candidate paths" in note for note in plan.notes)
+
+
+def test_plan_only_reports_pytest_command_without_availability_probe(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Plan-only prints the pytest gate and points environment checks to doctor."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _run_git(tmp_path, "init")
+    _write_pytest_gate_manifest(tmp_path)
+    _write_text(tmp_path, "pyproject.toml")
+    _write_text(tmp_path, "tests/test_run_first_adoption_checks.py")
+    commands: list[tuple[str, ...]] = []
+    stdout = io.StringIO()
+
+    result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        plan_only=True,
+        retained_modules=("python", "template-sync-support"),
+        command_runner=_recording_runner(commands),
+        git_status_reader=_queued_status_reader((), ()),
+        stdout=stdout,
+    )
+
+    output = stdout.getvalue()
+    assert result == 0
+    assert commands == []
+    assert (
+        f"[pytest] {first_adoption.format_command(first_adoption.downstream_pytest_command())}"
+        in output
+    )
+    assert "sys.executable -m pytest" not in output
+    assert "pytest tool availability was not evaluated" in output
+    assert "run --doctor" in output
+    assert "Doctor probes executed" not in output
+
+
+def test_doctor_recommends_exact_canonical_pytest_command() -> None:
+    """Doctor recommendations render the same command tuple as the gate plan."""
+    recommendations = first_adoption.doctor_recommendations(
+        (
+            _doctor_result(
+                first_adoption.PYTEST_GROUP,
+                "pytest console",
+                ("pytest", "--version"),
+                first_adoption.PROBE_AVAILABLE,
+            ),
+            _doctor_result(
+                first_adoption.PYTEST_GROUP,
+                "pytest module (sys.executable -m)",
+                first_adoption.downstream_pytest_version_command(),
+                first_adoption.PROBE_AVAILABLE,
+            ),
+        )
+    )
+
+    assert (
+        f"Use pytest invocation: "
+        f"{first_adoption.format_command(first_adoption.downstream_pytest_command())}"
+    ) in recommendations
+    assert "Use pytest invocation: pytest" not in recommendations
+    assert not any("sys.executable -m" in recommendation for recommendation in recommendations)
+
+
+def test_doctor_pytest_gate_verdict_ignores_alternate_working_forms() -> None:
+    """A working alternate pytest form does not make the gate interpreter ready."""
+    recommendations = first_adoption.doctor_recommendations(
+        (
+            _doctor_result(
+                first_adoption.PYTEST_GROUP,
+                "pytest console",
+                ("pytest", "--version"),
+                first_adoption.PROBE_AVAILABLE,
+            ),
+            _doctor_result(
+                first_adoption.PYTEST_GROUP,
+                "pytest module (sys.executable -m)",
+                first_adoption.downstream_pytest_version_command(),
+                first_adoption.PROBE_FAILED,
+            ),
+            _doctor_result(
+                first_adoption.PYTEST_GROUP,
+                "pytest module (python3 -m)",
+                ("python3", "-m", "pytest", "--version"),
+                first_adoption.PROBE_AVAILABLE,
+            ),
+        )
+    )
+
+    assert any(
+        "No working pytest module invocation was detected for the runner's Python interpreter"
+        in recommendation
+        for recommendation in recommendations
+    )
+    assert not any(
+        recommendation.startswith("Use pytest invocation:") for recommendation in recommendations
+    )
 
 
 def test_quality_reports_are_planned_before_fixers_when_helper_exists(
