@@ -350,6 +350,11 @@
       "type": "string",
       "minLength": 1
     },
+    "contractKey": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "description": "Kebab-case identifier matching a protected-guide obligation key declared in the instruction-contracts schema. Mirrors that schema's contractKey pattern so a malformed waiver key (spaces, uppercase, underscores) is rejected at validation time rather than silently failing to match any obligation."
+    },
     "singleLineNonEmptyString": {
       "type": "string",
       "minLength": 1,
@@ -658,7 +663,7 @@
           "$ref": "#/$defs/repositoryFilePath"
         },
         "contract_key": {
-          "$ref": "#/$defs/nonEmptyString"
+          "$ref": "#/$defs/contractKey"
         },
         "target_path": {
           "$ref": "#/$defs/repositoryFilePath"
