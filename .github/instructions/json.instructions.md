@@ -7,13 +7,13 @@ description: "JSON authoring standards: strict-by-default, schema-backed, determ
 
 # JSON Writing Style
 
-**Version:** 1.3.20260621.0
+**Version:** 1.4.20260629.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-21
+- **Last Updated:** 2026-06-29
 - **Scope:** Defines authoring standards for JSON and JSONC files in this repository, including configuration, schemas, fixtures, generated metadata, and machine-readable contracts. Covers dialect policy, formatting, key ordering, naming, data modeling, schema usage, comments, security, and generated output.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [YAML Writing Style](./yaml.instructions.md) (companion guide, if present)
 
@@ -110,6 +110,16 @@ Schema location and shape:
 - [JSON Schema Draft 2020-12](https://json-schema.org/draft/2020-12/schema) **SHOULD** be the default `$schema`, unless a specific consumer requires an earlier draft (for example, an OpenAPI version pinned to Draft-07). The chosen draft **SHOULD** be stated in the schema's `$schema` field and called out in the schema's accompanying documentation when it is not Draft 2020-12.
 - Project-owned **closed** schemas **SHOULD** set `"additionalProperties": false` so that unknown keys are caught early.
 - Ecosystem-mirroring schemas (schemas that describe an external format the project does not own, for example, a third-party config) **MAY** leave additional properties open and **SHOULD** document why in the schema's `description` or in a sibling `README.md`.
+
+Reference and discriminant constraints:
+
+When a property's value must correspond to an identifier, key, reference value, tag or discriminant value (such as a `kind` field; see [Data Modeling](#data-modeling) for tagged objects), module name, path-like key, or similar project-owned contract value whose shape or allowed values are constrained elsewhere in the same schema, a sibling schema, or another schema in the same schema-backed file family, that property **SHOULD** reuse the constraint rather than being left as a permissive non-empty string. Apply these rules:
+
+- **Reuse before restating.** Prefer a shared `$defs` subschema referenced with `$ref` when the shared constraint lives in the same schema. Use a cross-file `$ref` only when the repository's validator setup reliably resolves that reference.
+- **Closed value sets.** Prefer `enum` for a closed set, or `const` for a single fixed value, especially a branch-specific tag or discriminant value such as `kind`, when the value is stable and maintainable in schema.
+- **Mirror with a drift guard.** When a constraint must be mirrored instead of reused directly, mirror the exact project-owned constraint, including case sensitivity, separator style, and path-safety rules, and guard against drift with an enforced check when practical, such as a schema-example test, semantic validator, generated closed set with a reproducibility check, or unit test. If no executable drift guard is practical, document the source of truth and why manual synchronization is acceptable.
+- **Shape is not existence.** A `pattern` constrains lexical shape only; it does not prove that the referenced identifier exists. Whole-value patterns **SHOULD** be anchored with `^` and `$` unless substring matching is intentional and documented. Confirming referential existence requires a closed `enum` or `const`, a semantic validator, or a test.
+- **`format` is not a substitute.** Do not rely on `format` alone for project-specific identifier or reference constraints. JSON Schema Draft 2020-12 treats `format` as annotation by default unless assertion behavior is enabled by the validator or dialect; this repository's `check-jsonschema` usage checks supported formats by default and does not pass `--disable-formats`, while many JSON Schema validators do not check formats by default. When the contract requires a narrower constraint than `format` provides, pair `format` with an anchored project-owned `pattern`, a closed `enum` or `const`, or semantic validation.
 
 Validation tooling:
 
