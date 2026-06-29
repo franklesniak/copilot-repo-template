@@ -1683,6 +1683,52 @@ def test_github_metadata_rest_uses_ghes_api_base_override(tmp_path: Path) -> Non
     assert rest_client.requests[0].url == "https://github.company.com/api/v3/repos/octo/widget"
 
 
+def test_github_metadata_gh_targets_ghes_host_via_hostname(tmp_path: Path) -> None:
+    """A non-default API base routes authenticated gh reads to that host via --hostname."""
+    commands: list[list[str]] = []
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        if command[-1] == "/repos/octo/widget":
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        "full_name": "octo/widget",
+                        "visibility": "internal",
+                        "default_branch": "main",
+                        "has_discussions": True,
+                    }
+                ),
+                stderr="",
+            )
+        if "--paginate" in command:
+            return subprocess.CompletedProcess(command, 0, stdout="[]", stderr="")
+        return subprocess.CompletedProcess(
+            command, 0, stdout=json.dumps({"enabled": False}), stderr=""
+        )
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "octo/widget",
+        include_metadata=True,
+        command_runner=runner,
+        github_api_base="https://github.company.com/api/v3",
+        clock=_fixed_clock,
+    )
+
+    assert metadata.available is True
+    # gh was attempted first (not skipped) and observed the GHES repo.
+    assert metadata.source == "gh"
+    assert metadata.repository == "octo/widget"
+    # Every gh api call targets the GHES host instead of assuming github.com.
+    gh_calls = [command for command in commands if command[:2] == ["gh", "api"]]
+    assert gh_calls
+    assert all("--hostname" in command for command in gh_calls)
+    assert all("github.company.com" in command for command in gh_calls)
+
+
 def test_github_metadata_rest_retries_ghes_version_header_rejection(
     tmp_path: Path,
 ) -> None:

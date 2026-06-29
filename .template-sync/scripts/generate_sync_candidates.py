@@ -2449,9 +2449,16 @@ def read_github_cli_json(
     label: str,
     command_runner: CommandRunner,
     paginate: bool = False,
+    hostname: str | None = None,
 ) -> GitHubCliJsonRead:
-    """Read one GitHub API JSON payload through the GitHub CLI."""
+    """Read one GitHub API JSON payload through the GitHub CLI.
+
+    ``hostname`` targets a non-default (e.g. GHES) GitHub host via ``gh api
+    --hostname``; when ``None`` the GitHub CLI uses its configured default host.
+    """
     command = ["gh", "api"]
+    if hostname is not None:
+        command.extend(["--hostname", hostname])
     if paginate:
         command.extend(["--paginate", "--slurp"])
     command.append(endpoint_path)
@@ -2819,8 +2826,13 @@ def discover_github_metadata_with_gh(
     *,
     clock: Clock,
     command_runner: CommandRunner = run_command,
+    api_base_host: str | None = None,
 ) -> GitHubMetadata:
-    """Discover GitHub metadata through explicit read-only ``gh api`` calls."""
+    """Discover GitHub metadata through explicit read-only ``gh api`` calls.
+
+    ``api_base_host`` targets a non-default (e.g. GHES) host so authenticated ``gh``
+    reads work against that instance; when ``None`` the CLI uses its default host.
+    """
     observed_at = observed_at_timestamp(clock)
     repo_path = github_rest_repo_path(owner_name)
     if repo_path is None:
@@ -2842,6 +2854,7 @@ def discover_github_metadata_with_gh(
         endpoint_path=repo_path,
         label="gh repo metadata",
         command_runner=command_runner,
+        hostname=api_base_host,
     )
     repo_payload = json_object(repo_read.payload)
     if repo_payload is None:
@@ -2876,6 +2889,7 @@ def discover_github_metadata_with_gh(
             label="gh labels metadata",
             command_runner=command_runner,
             paginate=True,
+            hostname=api_base_host,
         )
         label_items = gh_paginated_collection_items(labels_read.payload)
         if label_items is None:
@@ -2914,6 +2928,7 @@ def discover_github_metadata_with_gh(
             label="gh rulesets metadata",
             command_runner=command_runner,
             paginate=True,
+            hostname=api_base_host,
         )
         ruleset_items = gh_paginated_collection_items(rulesets_read.payload)
         if ruleset_items is None:
@@ -2977,6 +2992,7 @@ def discover_github_metadata_with_gh(
             endpoint_path=branch_path,
             label="gh branch protection metadata",
             command_runner=command_runner,
+            hostname=api_base_host,
         )
         observations.append(
             branch_protection_observation(
@@ -2998,6 +3014,7 @@ def discover_github_metadata_with_gh(
             endpoint_path=private_vulnerability_path,
             label="gh private vulnerability reporting metadata",
             command_runner=command_runner,
+            hostname=api_base_host,
         )
         observations.append(
             private_vulnerability_reporting_observation(
@@ -3256,20 +3273,24 @@ def discover_github_metadata(
         )
 
     normalized_api_base = normalize_github_api_base(github_api_base)
-    if normalized_api_base != DEFAULT_GITHUB_API_BASE:
-        return discover_github_metadata_with_rest(
-            owner_name,
-            github_api_base=normalized_api_base,
-            rest_client=rest_client,
-            gh_error=None,
-            clock=clock,
-        )
+    # Always attempt authenticated ``gh`` first, then fall back to public REST. For a
+    # non-default (GHES) API base, target that host via ``gh api --hostname`` instead
+    # of skipping ``gh`` entirely; skipping it drops observable authenticated GHES
+    # metadata down to the unauthenticated REST path and breaks the documented
+    # gh-to-REST fallback. If ``gh`` is unavailable for the host, the REST fallback
+    # below still runs, so this is never worse than the REST-only path.
+    api_base_host = (
+        None
+        if normalized_api_base == DEFAULT_GITHUB_API_BASE
+        else github_api_base_host(github_api_base)
+    )
 
     gh_metadata = discover_github_metadata_with_gh(
         repo_root,
         owner_name,
         clock=clock,
         command_runner=command_runner,
+        api_base_host=api_base_host,
     )
     if gh_metadata.available:
         return gh_metadata
