@@ -880,14 +880,14 @@ def validate_contracts(
                     )
             if not stale_sections:
                 continue
-            waiver = find_protected_guide_waiver(
+            protected_guide_waiver = find_protected_guide_waiver(
                 protected_guide_waivers,
                 path=obligation.path,
                 contract_key=obligation.key,
                 target_modules=obligation.target_modules,
             )
-            if waiver is not None:
-                applied_protected_guide_waivers.append(waiver)
+            if protected_guide_waiver is not None:
+                applied_protected_guide_waivers.append(protected_guide_waiver)
             else:
                 stale_protected_guide_sections.extend(stale_sections)
 
@@ -967,16 +967,19 @@ def print_report(report: InstructionContractReport) -> None:
 
     if report.applied_protected_guide_waivers:
         print("\nProtected guide contract waivers applied:")
-        for waiver in report.applied_protected_guide_waivers:
-            print(f"  - {waiver.path}: {waiver.contract_key}")
-            if waiver.target_path is not None:
-                print(f"    target_path: {waiver.target_path}")
-            if waiver.target_module is not None:
-                print(f"    target_module: {waiver.target_module}")
-            if waiver.linked_local_override_path is not None:
-                print(f"    linked_local_override_path: {waiver.linked_local_override_path}")
-            print(f"    reason: {waiver.reason}")
-            print(f"    authorization_basis: {waiver.authorization_basis}")
+        for protected_guide_waiver in report.applied_protected_guide_waivers:
+            print(f"  - {protected_guide_waiver.path}: {protected_guide_waiver.contract_key}")
+            if protected_guide_waiver.target_path is not None:
+                print(f"    target_path: {protected_guide_waiver.target_path}")
+            if protected_guide_waiver.target_module is not None:
+                print(f"    target_module: {protected_guide_waiver.target_module}")
+            if protected_guide_waiver.linked_local_override_path is not None:
+                print(
+                    "    linked_local_override_path: "
+                    f"{protected_guide_waiver.linked_local_override_path}"
+                )
+            print(f"    reason: {protected_guide_waiver.reason}")
+            print(f"    authorization_basis: {protected_guide_waiver.authorization_basis}")
 
 
 def fail(message: str) -> NoReturn:

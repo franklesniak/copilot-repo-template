@@ -407,17 +407,18 @@ def instruction_contract_report_items(
             f"scope: {authorized_removal.authorized_scope}; "
             f"reason: {authorized_removal.reason})"
         )
-    for waiver in report.applied_protected_guide_waivers:
+    for protected_guide_waiver in report.applied_protected_guide_waivers:
         target_details = []
-        if waiver.target_path is not None:
-            target_details.append(f"target_path: {waiver.target_path}")
-        if waiver.target_module is not None:
-            target_details.append(f"target_module: {waiver.target_module}")
+        if protected_guide_waiver.target_path is not None:
+            target_details.append(f"target_path: {protected_guide_waiver.target_path}")
+        if protected_guide_waiver.target_module is not None:
+            target_details.append(f"target_module: {protected_guide_waiver.target_module}")
         target_suffix = "; " + "; ".join(target_details) if target_details else ""
         waiver_items.append(
             "Protected guide contract waiver: "
-            f"{waiver.path}: {waiver.contract_key}{target_suffix} "
-            f"(basis: {waiver.authorization_basis}; reason: {waiver.reason})"
+            f"{protected_guide_waiver.path}: {protected_guide_waiver.contract_key}{target_suffix} "
+            f"(basis: {protected_guide_waiver.authorization_basis}; "
+            f"reason: {protected_guide_waiver.reason})"
         )
 
     return tuple(failures), tuple(report.warnings), tuple(waiver_items)
