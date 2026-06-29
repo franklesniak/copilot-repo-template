@@ -227,6 +227,19 @@ class ProtectedFileDecision:
 
 
 @dataclass(frozen=True)
+class ProtectedGuideContractWaiver:
+    """A protected-guide obligation waiver recorded in the marker."""
+
+    path: str
+    contract_key: str
+    target_path: str | None
+    target_module: str | None
+    linked_local_override_path: str | None
+    reason: str
+    authorization_basis: str
+
+
+@dataclass(frozen=True)
 class MarkerPathOverlap:
     """Side-by-side marker records that apply to the same protected path."""
 
@@ -316,6 +329,7 @@ class MarkerDecisionData:
     local_path_ownership: tuple[LocalPathOwnership, ...]
     deferred_candidates: tuple[DeferredProtectedCandidate, ...]
     protected_decisions: tuple[ProtectedFileDecision, ...]
+    protected_guide_contract_waivers: tuple[ProtectedGuideContractWaiver, ...]
 
 
 @dataclass(frozen=True)
@@ -1036,6 +1050,104 @@ def parse_protected_file_decisions(
     return tuple(protected_decisions)
 
 
+def parse_protected_guide_contract_waivers(
+    template_sync: dict[str, Any],
+) -> tuple[ProtectedGuideContractWaiver, ...]:
+    """Extract normalized protected-guide contract waiver records from ``template_sync``."""
+    waivers: list[ProtectedGuideContractWaiver] = []
+    seen_keys: set[tuple[str, str, str | None, str | None]] = set()
+    duplicate_keys: set[tuple[str, str, str | None, str | None]] = set()
+    for raw_waiver in marker_record_list(
+        template_sync,
+        "protected_guide_contract_waivers",
+        "template_sync.protected_guide_contract_waivers",
+    ):
+        raw_path = raw_waiver.get("path")
+        contract_key = raw_waiver.get("contract_key")
+        reason = raw_waiver.get("reason")
+        authorization_basis = raw_waiver.get("authorization_basis")
+        if (
+            not isinstance(raw_path, str)
+            or not isinstance(contract_key, str)
+            or not isinstance(reason, str)
+            or not isinstance(authorization_basis, str)
+        ):
+            raise TemplateSyncMaterializationError(
+                "Each protected guide contract waiver must define string path, "
+                "contract_key, reason, and authorization_basis."
+            )
+        path, is_directory = normalize_repository_path(
+            raw_path,
+            "template_sync.protected_guide_contract_waivers[].path",
+        )
+        if is_directory:
+            raise TemplateSyncMaterializationError(
+                "template_sync.protected_guide_contract_waivers[].path must reference "
+                f"a file, not a directory: {raw_path}"
+            )
+
+        target_path = optional_marker_string(
+            raw_waiver,
+            "target_path",
+            "template_sync.protected_guide_contract_waivers[]",
+        )
+        if target_path is not None:
+            target_path, target_is_directory = normalize_repository_path(
+                target_path,
+                "template_sync.protected_guide_contract_waivers[].target_path",
+            )
+            if target_is_directory:
+                raise TemplateSyncMaterializationError(
+                    "template_sync.protected_guide_contract_waivers[].target_path must "
+                    f"reference a file, not a directory: {target_path}"
+                )
+        target_module = optional_marker_string(
+            raw_waiver,
+            "target_module",
+            "template_sync.protected_guide_contract_waivers[]",
+        )
+        linked_local_override_path = optional_marker_string(
+            raw_waiver,
+            "linked_local_override_path",
+            "template_sync.protected_guide_contract_waivers[]",
+        )
+        if linked_local_override_path is not None:
+            linked_local_override_path, _linked_is_directory = normalize_repository_path(
+                linked_local_override_path,
+                "template_sync.protected_guide_contract_waivers[].linked_local_override_path",
+            )
+
+        waiver_key = (path, contract_key, target_path, target_module)
+        if waiver_key in seen_keys:
+            duplicate_keys.add(waiver_key)
+        seen_keys.add(waiver_key)
+        waivers.append(
+            ProtectedGuideContractWaiver(
+                path=path,
+                contract_key=contract_key,
+                target_path=target_path,
+                target_module=target_module,
+                linked_local_override_path=linked_local_override_path,
+                reason=reason,
+                authorization_basis=authorization_basis,
+            )
+        )
+
+    if duplicate_keys:
+        formatted_keys = ", ".join(
+            (
+                f"({path}, {contract_key}, "
+                f"target_path={target_path or '<none>'}, "
+                f"target_module={target_module or '<none>'})"
+            )
+            for path, contract_key, target_path, target_module in sorted(duplicate_keys)
+        )
+        raise TemplateSyncMaterializationError(
+            "Duplicate protected_guide_contract_waivers key(s): " + formatted_keys
+        )
+    return tuple(waivers)
+
+
 def parse_local_path_ownership(
     template_sync: dict[str, Any],
 ) -> tuple[LocalPathOwnership, ...]:
@@ -1170,6 +1282,7 @@ def parse_marker_decision_data(
         )
 
     protected_decisions = parse_protected_file_decisions(template_sync)
+    protected_guide_contract_waivers = parse_protected_guide_contract_waivers(template_sync)
     local_path_ownership = parse_local_path_ownership(template_sync)
     local_override_tuple = tuple(local_overrides)
     deferred_candidate_tuple = tuple(deferred_candidates)
@@ -1187,6 +1300,7 @@ def parse_marker_decision_data(
         local_path_ownership=local_path_ownership,
         deferred_candidates=deferred_candidate_tuple,
         protected_decisions=protected_decisions,
+        protected_guide_contract_waivers=protected_guide_contract_waivers,
     )
 
 

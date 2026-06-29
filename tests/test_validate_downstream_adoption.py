@@ -227,6 +227,7 @@ def _marker(
     deferred_candidates: list[dict[str, str]] | None = None,
     protected_decisions: list[dict[str, str]] | None = None,
     waivers: list[dict[str, str]] | None = None,
+    protected_guide_waivers: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Build a schema-valid downstream marker fixture."""
     template_sync: dict[str, Any] = {
@@ -242,6 +243,8 @@ def _marker(
         template_sync["protected_file_decisions"] = protected_decisions
     if waivers is not None:
         template_sync["instruction_contract_waivers"] = waivers
+    if protected_guide_waivers is not None:
+        template_sync["protected_guide_contract_waivers"] = protected_guide_waivers
     return {"template_sync": template_sync}
 
 
@@ -635,6 +638,132 @@ def test_instruction_contract_failures_are_composed(tmp_path: Path) -> None:
     assert result.returncode == 1
     assert "Required downstream instruction contract anchor is missing" in result.stdout
     assert "AGENTS.md: heading: ## GitHub Plugin Usage" in result.stdout
+
+
+def test_protected_guide_section_obligations_are_composed(tmp_path: Path) -> None:
+    """Aggregate validation reports stale protected-guide sections."""
+    contracts = _contracts()
+    contracts["protected_guide_section_obligations"] = [
+        {
+            "key": "agents-azure-devops-pr-review-protocol",
+            "path": "AGENTS.md",
+            "target_modules": ["azure-devops-collaboration"],
+            "stale_headings": ["## Azure DevOps PR Review Protocol"],
+        }
+    ]
+    _write_common_downstream_repo(
+        tmp_path,
+        agents_text=(
+            "# Agent Instructions\n\n"
+            "## Protected Instruction Files\n\n"
+            "## GitHub Plugin Usage\n\n"
+            "## Azure DevOps PR Review Protocol\n"
+        ),
+    )
+    _write_yaml(tmp_path, ".template-sync/instruction-contracts.yml", contracts)
+
+    result = _run_validator(tmp_path, "--require-marker")
+
+    assert result.returncode == 1
+    assert "Protected guide section requires owner review" in result.stdout
+    assert "AGENTS.md: agents-azure-devops-pr-review-protocol" in result.stdout
+
+
+def test_protected_guide_reference_obligation_ignores_local_override_without_waiver(
+    tmp_path: Path,
+) -> None:
+    """Local overrides do not hide protected-guide reference obligations."""
+    contracts = _contracts()
+    contracts["protected_guide_reference_obligations"] = [
+        {
+            "key": "agents-azure-devops-support-guide-link",
+            "path": "AGENTS.md",
+            "reference_kind": "markdown-relative-link",
+            "target_path": "docs/azure-devops-support.md",
+            "target_modules": [
+                "azure-devops-platform",
+                "azure-pipelines",
+                "azure-devops-collaboration",
+            ],
+        }
+    ]
+    _write_common_downstream_repo(
+        tmp_path,
+        marker=_marker(
+            local_overrides=[
+                {
+                    "path": "AGENTS.md",
+                    "reason": "Protected guide requires owner review.",
+                    "default_decision": "SKIP",
+                }
+            ]
+        ),
+        agents_text=(
+            "# Agent Instructions\n\n"
+            "## Protected Instruction Files\n\n"
+            "## GitHub Plugin Usage\n\n"
+            "See [Azure guide](docs/azure-devops-support.md).\n"
+        ),
+    )
+    _write_yaml(tmp_path, ".template-sync/instruction-contracts.yml", contracts)
+
+    result = _run_validator(tmp_path, "--require-marker")
+
+    assert result.returncode == 1
+    assert "Protected guide reference requires owner review" in result.stdout
+    assert "AGENTS.md:7: agents-azure-devops-support-guide-link" in result.stdout
+    assert "Local override: AGENTS.md" in result.stdout
+
+
+def test_protected_guide_reference_waiver_passes_and_is_reported(
+    tmp_path: Path,
+) -> None:
+    """A matching protected-guide waiver turns the reference finding into a visible waiver."""
+    contracts = _contracts()
+    contracts["protected_guide_reference_obligations"] = [
+        {
+            "key": "agents-azure-devops-support-guide-path",
+            "path": "AGENTS.md",
+            "reference_kind": "prose-reference",
+            "target_path": "docs/azure-devops-support.md",
+            "target_modules": [
+                "azure-devops-platform",
+                "azure-pipelines",
+                "azure-devops-collaboration",
+            ],
+            "tokens": ["docs/azure-devops-support.md"],
+        }
+    ]
+    _write_common_downstream_repo(
+        tmp_path,
+        marker=_marker(
+            protected_guide_waivers=[
+                {
+                    "path": "AGENTS.md",
+                    "contract_key": "agents-azure-devops-support-guide-path",
+                    "target_path": "docs/azure-devops-support.md",
+                    "reason": "GitHub-only fixture keeps the protected guide reference.",
+                    "authorization_basis": "Owner authorized this protected-guide waiver.",
+                }
+            ]
+        ),
+        agents_text=(
+            "# Agent Instructions\n\n"
+            "## Protected Instruction Files\n\n"
+            "## GitHub Plugin Usage\n\n"
+            "Use docs/azure-devops-support.md when the guide is retained.\n"
+        ),
+    )
+    _write_yaml(tmp_path, ".template-sync/instruction-contracts.yml", contracts)
+
+    result = _run_validator(tmp_path, "--require-marker")
+
+    assert result.returncode == 0, result.stderr
+    assert "Downstream adoption validation passed with waivers." in result.stdout
+    assert "Protected guide contract waiver: AGENTS.md: agents-azure-devops-support-guide-path" in (
+        result.stdout
+    )
+    assert "target_path: docs/azure-devops-support.md" in result.stdout
 
 
 def test_waivers_deferred_items_and_commands_are_reported(tmp_path: Path) -> None:

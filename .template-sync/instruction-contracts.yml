@@ -9,3 +9,79 @@ instruction_contracts:
       - '### Resuming a paused loop'
     required_phrases:
       - 'Protected-file authorization checkpoint'
+protected_guide_section_obligations:
+  - key: agents-azure-devops-pr-review-protocol
+    path: AGENTS.md
+    target_modules:
+      - azure-devops-collaboration
+    stale_headings:
+      - '## Azure DevOps PR Review Protocol'
+  - key: claude-azure-devops-pr-review-protocol
+    path: CLAUDE.md
+    target_modules:
+      - azure-devops-collaboration
+    stale_headings:
+      - '## Azure DevOps PR Review Protocol'
+  - key: gemini-azure-devops-pr-review-protocol
+    path: GEMINI.md
+    target_modules:
+      - azure-devops-collaboration
+    stale_headings:
+      - '## Azure DevOps PR Review Protocol'
+  - key: hermes-azure-devops-pr-review-protocol
+    path: .hermes.md
+    target_modules:
+      - azure-devops-collaboration
+    stale_headings:
+      - '## Azure DevOps PR Review Protocol'
+protected_guide_reference_obligations:
+  - key: agents-azure-devops-support-guide-path
+    path: AGENTS.md
+    reference_kind: prose-reference
+    target_path: docs/azure-devops-support.md
+    target_modules:
+      - azure-devops-platform
+      - azure-pipelines
+      - azure-devops-collaboration
+    tokens:
+      - docs/azure-devops-support.md
+  - key: claude-azure-devops-support-guide-path
+    path: CLAUDE.md
+    reference_kind: prose-reference
+    target_path: docs/azure-devops-support.md
+    target_modules:
+      - azure-devops-platform
+      - azure-pipelines
+      - azure-devops-collaboration
+    tokens:
+      - docs/azure-devops-support.md
+  - key: gemini-azure-devops-support-guide-path
+    path: GEMINI.md
+    reference_kind: prose-reference
+    target_path: docs/azure-devops-support.md
+    target_modules:
+      - azure-devops-platform
+      - azure-pipelines
+      - azure-devops-collaboration
+    tokens:
+      - docs/azure-devops-support.md
+  - key: hermes-azure-devops-support-guide-path
+    path: .hermes.md
+    reference_kind: prose-reference
+    target_path: docs/azure-devops-support.md
+    target_modules:
+      - azure-devops-platform
+      - azure-pipelines
+      - azure-devops-collaboration
+    tokens:
+      - docs/azure-devops-support.md
+  - key: copilot-instructions-azure-devops-support-guide-path
+    path: .github/copilot-instructions.md
+    reference_kind: prose-reference
+    target_path: docs/azure-devops-support.md
+    target_modules:
+      - azure-devops-platform
+      - azure-pipelines
+      - azure-devops-collaboration
+    tokens:
+      - docs/azure-devops-support.md

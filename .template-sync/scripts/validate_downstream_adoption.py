@@ -76,6 +76,19 @@ class MarkdownLinkFailure:
 
 
 @dataclass(frozen=True)
+class ProtectedGuideReferenceFinding:
+    """A declared protected-guide reference that remains after its module is excluded."""
+
+    path: str
+    line_number: int
+    contract_key: str
+    reference_kind: str
+    target: str
+    target_path: str | None
+    target_modules: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class DownstreamAdoptionReport:
     """Aggregate downstream adoption validation result."""
 
@@ -194,6 +207,13 @@ def validation_commands(require_marker: bool) -> tuple[ValidationCommand, ...]:
             name="Retained Markdown relative links",
             command="in-process check: retained Markdown links do not target excluded modules",
         ),
+        ValidationCommand(
+            name="Protected guide references",
+            command=(
+                "in-process check: protected-guide section and reference obligations "
+                "are pruned or explicitly waived"
+            ),
+        ),
     )
 
 
@@ -220,25 +240,30 @@ def load_validated_marker_context(
     tuple[validate_marker.LocalOverride, ...],
     tuple[validate_marker.DeferredProtectedCandidate, ...],
     tuple[validate_marker.ProtectedFileDecision, ...],
+    tuple[validate_marker.ProtectedGuideContractWaiver, ...],
 ]:
     """Load a schema-valid marker and return parsed downstream state."""
     marker = validate_marker.load_yaml_mapping(marker_path, repo_root)
     marker_schema = validate_marker.load_json_mapping(marker_schema_path, repo_root)
     validate_marker.validate_schema(marker, marker_schema, marker_path, repo_root)
-    (
-        included_modules,
-        local_overrides,
-        _local_path_ownership,
-        deferred_candidates,
-        protected_decisions,
-    ) = validate_marker.parse_marker(marker)
+    marker_data = validate_marker.parse_marker_decision_data(marker)
+    included_modules = set(marker_data.included_modules)
+    local_overrides = marker_data.local_overrides
+    deferred_candidates = marker_data.deferred_candidates
+    protected_decisions = marker_data.protected_decisions
     unknown_modules = included_modules - manifest_modules
     if unknown_modules:
         raise DownstreamAdoptionValidationError(
             "Marker includes module(s) that are not defined by the manifest: "
             + ", ".join(sorted(unknown_modules))
         )
-    return included_modules, local_overrides, deferred_candidates, protected_decisions
+    return (
+        included_modules,
+        local_overrides,
+        deferred_candidates,
+        protected_decisions,
+        marker_data.protected_guide_contract_waivers,
+    )
 
 
 def marker_report_failures(report: validate_marker.MarkerValidationReport) -> tuple[str, ...]:
@@ -323,7 +348,13 @@ def instruction_contract_report_items(
         contracts_document,
         manifest_modules,
     )
-    included_modules, protected_decisions, waivers = (
+    protected_guide_section_obligations = (
+        validate_instruction_contracts.parse_protected_guide_section_obligations(
+            contracts_document,
+            manifest_modules,
+        )
+    )
+    included_modules, protected_decisions, waivers, protected_guide_waivers = (
         validate_instruction_contracts.load_marker_for_downstream(
             marker_path,
             marker_schema_path,
@@ -335,9 +366,11 @@ def instruction_contract_report_items(
         mode="downstream",
         repo_root=repo_root,
         contracts=contracts,
+        protected_guide_section_obligations=protected_guide_section_obligations,
         included_modules=included_modules,
         protected_decisions=protected_decisions,
         waivers=waivers,
+        protected_guide_waivers=protected_guide_waivers,
     )
 
     failures: list[str] = []
@@ -350,6 +383,13 @@ def instruction_contract_report_items(
         failures.append(
             "Required downstream instruction contract anchor is missing: "
             f"{missing_anchor.path}: {missing_anchor.anchor_type}: {missing_anchor.anchor}"
+        )
+    for stale_section in report.stale_protected_guide_sections:
+        failures.append(
+            "Protected guide section requires owner review for excluded module(s): "
+            f"{stale_section.path}: {stale_section.contract_key}: "
+            f"{stale_section.anchor_type}: {stale_section.anchor} "
+            f"(target modules: {', '.join(stale_section.target_modules)})"
         )
 
     waiver_items: list[str] = []
@@ -366,6 +406,18 @@ def instruction_contract_report_items(
             f"(basis: {authorized_removal.authorization_basis}; "
             f"scope: {authorized_removal.authorized_scope}; "
             f"reason: {authorized_removal.reason})"
+        )
+    for waiver in report.applied_protected_guide_waivers:
+        target_details = []
+        if waiver.target_path is not None:
+            target_details.append(f"target_path: {waiver.target_path}")
+        if waiver.target_module is not None:
+            target_details.append(f"target_module: {waiver.target_module}")
+        target_suffix = "; " + "; ".join(target_details) if target_details else ""
+        waiver_items.append(
+            "Protected guide contract waiver: "
+            f"{waiver.path}: {waiver.contract_key}{target_suffix} "
+            f"(basis: {waiver.authorization_basis}; reason: {waiver.reason})"
         )
 
     return tuple(failures), tuple(report.warnings), tuple(waiver_items)
@@ -572,6 +624,189 @@ def validate_retained_markdown_links(
     return tuple(failures)
 
 
+def protected_guide_reference_obligation_applies(
+    obligation: validate_instruction_contracts.ProtectedGuideReferenceObligation,
+    mappings: tuple[ManifestMapping, ...],
+    included_modules: set[str],
+) -> bool:
+    """Return whether a protected-guide reference obligation is stale downstream."""
+    if retained_relation(obligation.path, mappings, included_modules) is None:
+        return False
+    if obligation.target_path is not None:
+        target_relation = validate_marker.selected_relation_for_path(
+            obligation.target_path,
+            mappings,
+        )
+        if target_relation is not None:
+            return not target_relation.is_retained_by(included_modules)
+    return validate_instruction_contracts.protected_guide_obligation_applies(
+        obligation.target_modules,
+        included_modules,
+    )
+
+
+def protected_guide_markdown_reference_findings(
+    *,
+    repo_root: Path,
+    obligation: validate_instruction_contracts.ProtectedGuideReferenceObligation,
+    mappings: tuple[ManifestMapping, ...],
+    included_modules: set[str],
+) -> tuple[ProtectedGuideReferenceFinding, ...]:
+    """Return declared relative Markdown references to excluded protected-guide targets."""
+    if obligation.target_path is None:
+        return ()
+    findings: list[ProtectedGuideReferenceFinding] = []
+    link_failures = validate_retained_markdown_links(
+        repo_root,
+        (obligation.path,),
+        mappings,
+        included_modules,
+        (),
+    )
+    for link_failure in link_failures:
+        if link_failure.target_path != obligation.target_path:
+            continue
+        findings.append(
+            ProtectedGuideReferenceFinding(
+                path=link_failure.path,
+                line_number=link_failure.line_number,
+                contract_key=obligation.key,
+                reference_kind=obligation.reference_kind,
+                target=link_failure.target,
+                target_path=link_failure.target_path,
+                target_modules=obligation.target_modules,
+            )
+        )
+    return tuple(findings)
+
+
+def protected_guide_token_reference_findings(
+    *,
+    repo_root: Path,
+    obligation: validate_instruction_contracts.ProtectedGuideReferenceObligation,
+) -> tuple[ProtectedGuideReferenceFinding, ...]:
+    """Return declared absolute or prose tokens that remain outside fenced code."""
+    path = validate_marker.resolve_repo_path(repo_root, obligation.path)
+    try:
+        lines = lines_outside_markdown_fences(
+            path.read_text(encoding="utf-8"),
+            fence_context=MARKDOWN_FENCE_CONTEXT,
+        )
+    except OSError as error:
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        return (
+            ProtectedGuideReferenceFinding(
+                path=obligation.path,
+                line_number=0,
+                contract_key=obligation.key,
+                reference_kind=obligation.reference_kind,
+                target=f"Unable to read protected guide: {error_summary}",
+                target_path=obligation.target_path,
+                target_modules=obligation.target_modules,
+            ),
+        )
+
+    findings: list[ProtectedGuideReferenceFinding] = []
+    for line_number, line in lines:
+        for token in obligation.tokens:
+            if token not in line:
+                continue
+            findings.append(
+                ProtectedGuideReferenceFinding(
+                    path=obligation.path,
+                    line_number=line_number,
+                    contract_key=obligation.key,
+                    reference_kind=obligation.reference_kind,
+                    target=token,
+                    target_path=obligation.target_path,
+                    target_modules=obligation.target_modules,
+                )
+            )
+    return tuple(findings)
+
+
+def protected_guide_reference_report_items(
+    *,
+    repo_root: Path,
+    contracts_path: Path,
+    contracts_schema_path: Path,
+    manifest_modules: set[str],
+    mappings: tuple[ManifestMapping, ...],
+    included_modules: set[str],
+    protected_guide_waivers: tuple[validate_marker.ProtectedGuideContractWaiver, ...],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Return failures and waiver items for protected-guide reference obligations."""
+    contracts_document = validate_instruction_contracts.load_schema_validated_yaml(
+        contracts_path,
+        contracts_schema_path,
+        repo_root,
+    )
+    obligations = validate_instruction_contracts.parse_protected_guide_reference_obligations(
+        contracts_document,
+        manifest_modules,
+    )
+
+    failures: list[str] = []
+    waiver_items: list[str] = []
+    applied_waivers: list[validate_marker.ProtectedGuideContractWaiver] = []
+    for obligation in obligations:
+        if not protected_guide_reference_obligation_applies(
+            obligation,
+            mappings,
+            included_modules,
+        ):
+            continue
+        if obligation.reference_kind == "markdown-relative-link":
+            findings = protected_guide_markdown_reference_findings(
+                repo_root=repo_root,
+                obligation=obligation,
+                mappings=mappings,
+                included_modules=included_modules,
+            )
+        else:
+            findings = protected_guide_token_reference_findings(
+                repo_root=repo_root,
+                obligation=obligation,
+            )
+        if not findings:
+            continue
+
+        waiver = validate_instruction_contracts.find_protected_guide_waiver(
+            protected_guide_waivers,
+            path=obligation.path,
+            contract_key=obligation.key,
+            target_modules=obligation.target_modules,
+            target_path=obligation.target_path,
+        )
+        if waiver is not None:
+            applied_waivers.append(waiver)
+            continue
+
+        for finding in findings:
+            line = f":{finding.line_number}" if finding.line_number else ""
+            target_path = f" -> {finding.target_path}" if finding.target_path is not None else ""
+            failures.append(
+                "Protected guide reference requires owner review for excluded module(s): "
+                f"{finding.path}{line}: {finding.contract_key}: "
+                f"{finding.reference_kind}: {finding.target}{target_path} "
+                f"(target modules: {', '.join(finding.target_modules)})"
+            )
+
+    for waiver in dict.fromkeys(applied_waivers):
+        target_details = []
+        if waiver.target_path is not None:
+            target_details.append(f"target_path: {waiver.target_path}")
+        if waiver.target_module is not None:
+            target_details.append(f"target_module: {waiver.target_module}")
+        target_suffix = "; " + "; ".join(target_details) if target_details else ""
+        waiver_items.append(
+            "Protected guide contract waiver: "
+            f"{waiver.path}: {waiver.contract_key}{target_suffix} "
+            f"(basis: {waiver.authorization_basis}; reason: {waiver.reason})"
+        )
+    return tuple(failures), tuple(waiver_items)
+
+
 def local_override_waiver_items(
     local_overrides: tuple[validate_marker.LocalOverride, ...],
 ) -> tuple[str, ...]:
@@ -652,6 +887,7 @@ def build_report(
             local_overrides,
             deferred_candidates,
             parsed_protected_decisions,
+            protected_guide_waivers,
         ) = load_validated_marker_context(
             repo_root,
             marker_path,
@@ -716,6 +952,24 @@ def build_report(
             f"{link_failure.path}:{link_failure.line_number}: {link_failure.target} -> "
             f"{link_failure.target_path} ({link_failure.relation.description})"
         )
+
+    try:
+        reference_failures, reference_waivers = protected_guide_reference_report_items(
+            repo_root=repo_root,
+            contracts_path=contracts_path,
+            contracts_schema_path=contracts_schema_path,
+            manifest_modules=manifest_modules,
+            mappings=mappings,
+            included_modules=included_modules,
+            protected_guide_waivers=protected_guide_waivers,
+        )
+        failures.extend(reference_failures)
+        waivers.extend(reference_waivers)
+    except (
+        validate_marker.MarkerValidationError,
+        validate_instruction_contracts.InstructionContractValidationError,
+    ) as error:
+        failures.append(f"Protected guide reference validation: {error}")
 
     return DownstreamAdoptionReport(
         retained_modules=tuple(sorted(included_modules)),

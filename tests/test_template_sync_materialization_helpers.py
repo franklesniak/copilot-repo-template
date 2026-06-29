@@ -169,7 +169,17 @@ def test_manifest_loader_schema_validates_real_manifest() -> None:
 
 def test_marker_loader_schema_validates_decision_data(tmp_path: Path) -> None:
     """Marker-shaped decision data is loaded, schema-validated, and parsed."""
-    _write_yaml(tmp_path, ".template-sync/marker.yml", _marker(["baseline"]))
+    marker = _marker(["baseline"])
+    marker["template_sync"]["protected_guide_contract_waivers"] = [
+        {
+            "path": "AGENTS.md",
+            "contract_key": "agents-azure-devops-pr-review-protocol",
+            "target_module": "azure-devops-collaboration",
+            "reason": "GitHub-only fixture keeps protected guide text visible.",
+            "authorization_basis": "Fixture owner authorized this waiver.",
+        }
+    ]
+    _write_yaml(tmp_path, ".template-sync/marker.yml", marker)
 
     marker_data = load_validated_marker_decision_data(
         tmp_path,
@@ -181,6 +191,9 @@ def test_marker_loader_schema_validates_decision_data(tmp_path: Path) -> None:
     assert marker_data.included_modules == frozenset({"baseline"})
     assert marker_data.local_overrides[0].matches("local/file.txt")
     assert marker_data.protected_decisions[0].path == "AGENTS.md"
+    assert marker_data.protected_guide_contract_waivers[0].contract_key == (
+        "agents-azure-devops-pr-review-protocol"
+    )
 
 
 def test_format_marker_yaml_is_canonical_and_validates_serialized_text() -> None:

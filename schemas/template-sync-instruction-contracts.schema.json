@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/franklesniak/copilot-repo-template/HEAD/schemas/template-sync-instruction-contracts.schema.json",
   "title": "Template Sync Instruction Contracts",
-  "description": "Schema for .template-sync/instruction-contracts.yml, the required-anchor contract that protects platform-specific agent instruction protocols during upstream template validation and downstream marker-gated sync validation.",
+  "description": "Schema for .template-sync/instruction-contracts.yml, the required-anchor and protected-guide contract that protects platform-specific agent instruction protocols during upstream template validation and downstream marker-gated sync validation.",
   "type": "object",
   "required": ["instruction_contracts"],
   "additionalProperties": false,
@@ -14,6 +14,20 @@
       "items": {
         "$ref": "#/$defs/instructionContract"
       }
+    },
+    "protected_guide_section_obligations": {
+      "type": "array",
+      "description": "Protected-guide headings and phrases that become stale when a downstream adoption excludes the module family they describe.",
+      "items": {
+        "$ref": "#/$defs/protectedGuideSectionObligation"
+      }
+    },
+    "protected_guide_reference_obligations": {
+      "type": "array",
+      "description": "Protected-guide references that become stale when a downstream adoption excludes their target module family.",
+      "items": {
+        "$ref": "#/$defs/protectedGuideReferenceObligation"
+      }
     }
   },
   "$defs": {
@@ -24,6 +38,10 @@
     "nonEmptyString": {
       "type": "string",
       "minLength": 1
+    },
+    "contractKey": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
     },
     "repositoryFilePath": {
       "type": "string",
@@ -68,6 +86,105 @@
         },
         {
           "required": ["required_phrases"]
+        }
+      ]
+    },
+    "protectedGuideSectionObligation": {
+      "type": "object",
+      "required": ["key", "path", "target_modules"],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/contractKey"
+        },
+        "path": {
+          "$ref": "#/$defs/repositoryFilePath"
+        },
+        "target_modules": {
+          "type": "array",
+          "description": "Module family that keeps this protected-guide section relevant. Downstream validation applies the obligation only when none of these modules are retained.",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/moduleName"
+          }
+        },
+        "stale_headings": {
+          "$ref": "#/$defs/anchorList"
+        },
+        "stale_phrases": {
+          "$ref": "#/$defs/anchorList"
+        }
+      },
+      "anyOf": [
+        {
+          "required": ["stale_headings"]
+        },
+        {
+          "required": ["stale_phrases"]
+        }
+      ]
+    },
+    "protectedGuideReferenceObligation": {
+      "type": "object",
+      "required": ["key", "path", "reference_kind", "target_modules"],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/contractKey"
+        },
+        "path": {
+          "$ref": "#/$defs/repositoryFilePath"
+        },
+        "reference_kind": {
+          "type": "string",
+          "enum": ["markdown-relative-link", "absolute-url", "prose-reference"]
+        },
+        "target_path": {
+          "$ref": "#/$defs/repositoryFilePath"
+        },
+        "target_modules": {
+          "type": "array",
+          "description": "Module family that keeps this protected-guide reference relevant. Downstream validation applies the obligation only when none of these modules are retained, or when target_path is mapped and excluded.",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/moduleName"
+          }
+        },
+        "tokens": {
+          "$ref": "#/$defs/anchorList"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "reference_kind": {
+                "const": "markdown-relative-link"
+              }
+            },
+            "required": ["reference_kind"]
+          },
+          "then": {
+            "required": ["target_path"],
+            "not": {
+              "required": ["tokens"]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "reference_kind": {
+                "enum": ["absolute-url", "prose-reference"]
+              }
+            },
+            "required": ["reference_kind"]
+          },
+          "then": {
+            "required": ["tokens"]
+          }
         }
       ]
     }

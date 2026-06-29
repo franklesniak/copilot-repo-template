@@ -26,6 +26,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     MarkerPathOverlap,
     PathRelation,
     ProtectedFileDecision,
+    ProtectedGuideContractWaiver,
     TemplateSyncMaterializationError as MarkerValidationError,
     format_overlap_block,
     git_present_paths,
@@ -81,6 +82,7 @@ class MarkerValidationReport:
     omitted_local_path_suggestion_count: int
     deferred_candidates: tuple[DeferredProtectedCandidate, ...]
     protected_decisions: tuple[ProtectedFileDecision, ...]
+    protected_guide_contract_waivers: tuple[ProtectedGuideContractWaiver, ...]
     marker_path_overlaps: tuple[MarkerPathOverlap, ...]
     strict_local_path_ownership: bool
 
@@ -449,13 +451,12 @@ def validate_marker_state(
     validate_schema(manifest, manifest_schema, manifest_path, repo_root)
 
     manifest_modules, mappings = parse_manifest_mappings(manifest)
-    (
-        included_modules,
-        local_overrides,
-        local_path_ownership,
-        deferred_candidates,
-        protected_decisions,
-    ) = parse_marker(marker)
+    marker_data = parse_marker_decision_data(marker)
+    included_modules = set(marker_data.included_modules)
+    local_overrides = marker_data.local_overrides
+    local_path_ownership = marker_data.local_path_ownership
+    deferred_candidates = marker_data.deferred_candidates
+    protected_decisions = marker_data.protected_decisions
     overlaps = validate_protected_file_decisions(
         protected_decisions,
         local_overrides,
@@ -549,6 +550,7 @@ def validate_marker_state(
         omitted_local_path_suggestion_count=omitted_local_path_suggestion_count,
         deferred_candidates=deferred_candidates,
         protected_decisions=protected_decisions,
+        protected_guide_contract_waivers=marker_data.protected_guide_contract_waivers,
         marker_path_overlaps=overlaps,
         strict_local_path_ownership=strict_local_path_ownership,
     )
@@ -660,6 +662,19 @@ def print_report(report: MarkerValidationReport) -> None:
                 )
             if protected_decision.reason is not None:
                 print(f"    reason: {protected_decision.reason}")
+
+    if report.protected_guide_contract_waivers:
+        print("\nProtected guide contract waivers:")
+        for waiver in report.protected_guide_contract_waivers:
+            print(f"  - {waiver.path}: {waiver.contract_key}")
+            if waiver.target_path is not None:
+                print(f"    target_path: {waiver.target_path}")
+            if waiver.target_module is not None:
+                print(f"    target_module: {waiver.target_module}")
+            if waiver.linked_local_override_path is not None:
+                print(f"    linked_local_override_path: {waiver.linked_local_override_path}")
+            print(f"    reason: {waiver.reason}")
+            print(f"    authorization_basis: {waiver.authorization_basis}")
 
     remove_local_decisions = tuple(
         protected_decision
