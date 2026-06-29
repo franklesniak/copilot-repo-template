@@ -10,6 +10,19 @@
 #   - check-toml        — TOML syntax (any *.toml; covers .codex/config.toml
 #                         and any other TOML file added downstream)
 #   - check-yaml        — YAML parse check (.yml / .yaml)
+#   - validate-template-placeholders-manifest
+#                         — JSON Schema validation for
+#                           `.github/template-placeholders.json`.
+#   - validate-template-placeholders-valid-examples
+#                         — JSON Schema validation for valid placeholder
+#                           manifest fixtures under
+#                           `schemas/examples/template-placeholders/`.
+#   - validate-template-placeholders-schema
+#                         — JSON Schema metaschema validation for the
+#                           placeholder manifest schema.
+#   - validate-template-placeholders-invalid-examples
+#                         — Assert-fails validation proving invalid placeholder
+#                           manifest fixtures are rejected.
 # template-sync: begin yaml-only
 #   - yamllint          — YAML style enforcement per .yamllint.yml
 # template-sync: end yaml-only
@@ -164,6 +177,18 @@ jobs:
 
       - name: Run check-yaml
         run: pre-commit run check-yaml --all-files
+
+      - name: Run validate-template-placeholders-manifest
+        run: pre-commit run validate-template-placeholders-manifest --all-files
+
+      - name: Run validate-template-placeholders-valid-examples
+        run: pre-commit run validate-template-placeholders-valid-examples --all-files
+
+      - name: Run validate-template-placeholders-schema
+        run: pre-commit run validate-template-placeholders-schema --all-files
+
+      - name: Run validate-template-placeholders-invalid-examples
+        run: pre-commit run validate-template-placeholders-invalid-examples --all-files
 
       # template-sync: begin yaml-only
       - name: Run yamllint

@@ -5,6 +5,12 @@
 
 name: "$(Date:yyyyMMdd).$(Rev:r)"
 
+parameters:
+  - name: runSlowTests
+    displayName: "Run slow template tests"
+    type: boolean
+    default: false
+
 trigger:
   branches:
     include:
@@ -12,7 +18,7 @@ trigger:
 
 jobs:
   - job: type_check
-    displayName: "Type Check (mypy)"
+    displayName: "Type Check (mypy + Pyright)"
     pool:
       vmImage: "ubuntu-latest"
     variables:
@@ -40,6 +46,12 @@ jobs:
           fi
           python -m mypy "${targets[@]}"
         displayName: "Run mypy"
+        workingDirectory: "$(Build.SourcesDirectory)"
+
+      - bash: |
+          set -euo pipefail
+          python -m pyright --project pyrightconfig.json
+        displayName: "Run Pyright"
         workingDirectory: "$(Build.SourcesDirectory)"
 
   - job: test
@@ -80,6 +92,11 @@ jobs:
         displayName: "Install dependencies"
         workingDirectory: "$(Build.SourcesDirectory)"
 
-      - script: pytest tests/ -v --cov --cov-report=term-missing
-        displayName: "Run tests with coverage"
+      - script: pytest tests/ -m "not slow" -v --cov --cov-report=term-missing
+        displayName: "Run non-slow tests with coverage"
         workingDirectory: "$(Build.SourcesDirectory)"
+
+      - ${{ if eq(parameters.runSlowTests, true) }}:
+          - script: pytest tests/ -m slow -v --no-cov
+            displayName: "Run slow template tests"
+            workingDirectory: "$(Build.SourcesDirectory)"

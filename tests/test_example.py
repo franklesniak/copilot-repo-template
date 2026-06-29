@@ -9,9 +9,8 @@ This is a TEMPLATE FILE. Replace these tests with your actual test cases
 when using this template repository.
 """
 
-import pytest
-
 from copilot_repo_template.example import add_numbers, greet
+from tests._pytest_compat import pytest
 
 
 class TestGreet:

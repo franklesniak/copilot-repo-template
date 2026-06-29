@@ -8,45 +8,441 @@ eligible for substitution.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import importlib
 import json
 import os
 import re
 import shlex
 import sys
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
-from urllib.parse import quote, unquote, urlsplit, urlunsplit
+from typing import Any, cast
+from urllib.parse import SplitResult, quote, unquote, urlsplit, urlunsplit
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_PLACEHOLDER_MANIFEST_PATH = ".github/template-placeholders.json"
+DEFAULT_PLACEHOLDER_MANIFEST_SCHEMA_PATH = "schemas/template-placeholders.schema.json"
+DEFAULT_TEMPLATE_SYNC_MANIFEST_PATH = ".template-sync/manifest.yml"
+DEFAULT_TEMPLATE_SYNC_MARKER_PATH = ".template-sync/marker.yml"
+SCAN_MODE_DEFAULT = "default"
+SCAN_MODE_REPORT = "report"
+SCAN_MODE_RETAINED_HARD = "retained-hard"
+SCAN_MODES = (SCAN_MODE_DEFAULT, SCAN_MODE_REPORT, SCAN_MODE_RETAINED_HARD)
+CONTEXT_RETAINED_PATH = "retained-path"
+CONTEXT_EXCLUDED_MODULE_PATH = "excluded-module-path"
+CONTEXT_LOCAL_OVERRIDE = "local-override"
+CONTEXT_TEMPLATE_ONLY_DELETE = "template-only-delete"
+CONTEXT_UNKNOWN_PATH = "unknown-path"
+DISPOSITION_RETAINED_HARD_FAILURE = "retained-hard-failure"
+DISPOSITION_PRUNED_INFORMATIONAL = "pruned-informational"
+DISPOSITION_UNKNOWN_OWNER_REVIEW = "unknown-owner-review"
+DISPOSITION_WAIVED_INFORMATIONAL = "waived-informational"
+WAIVER_STATE_NONE = "none"
+WAIVER_STATE_APPLIED = "applied"
+WAIVER_STATE_NOT_APPLICABLE = "not-applicable"
+TOKEN_STYLE_LITERAL = "literal"
+TOKEN_STYLE_OWNER_REPO = "owner-repo-token"
+TOKEN_STYLE_GITHUB_URL = "github-url"
+GITHUB_URL_PREFIX = "https://github.com/OWNER/REPO"
+CONDUCT_CONTACT_SENTENCE_PLACEHOLDER = (
+    "To report a possible violation, contact us via: [INSERT CONTACT METHOD]"
+)
+StructuredObject = dict[str, Any]
 
-OWNER_REPO_TOKEN_PATHS = (
-    ".github/ISSUE_TEMPLATE/config.yml",
-    ".github/ISSUE_TEMPLATE/bug_report.yml",
-    ".github/pull_request_template.md",
-    "CONTRIBUTING.md",
-    "SECURITY.md",
+
+class PlaceholderError(RuntimeError):
+    """Raised when placeholder substitution or scanning cannot complete."""
+
+
+@dataclass(frozen=True)
+class PlaceholderTokenSpec:
+    """One placeholder token declared by the runtime JSON manifest."""
+
+    name: str
+    placeholder: str
+    replacement_source: str
+    replacement_style: str
+    finding_kind: str
+    paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class ManifestMapping:
+    """One path mapping row from the template-sync manifest."""
+
+    pattern: str
+    requires_all: frozenset[str]
+    requires_any: frozenset[str]
+
+
+@dataclass(frozen=True)
+class PathRelation:
+    """The manifest module relation selected for a repository path."""
+
+    patterns: tuple[str, ...]
+    requires_all: frozenset[str]
+    requires_any: frozenset[str]
+
+    @property
+    def description(self) -> str:
+        """Return a compact human-readable relation summary."""
+        parts: list[str] = []
+        if self.requires_all:
+            parts.append("requires all: " + ", ".join(sorted(self.requires_all)))
+        if self.requires_any:
+            parts.append("requires any: " + ", ".join(sorted(self.requires_any)))
+        return "; ".join(parts) if parts else "no module relation"
+
+    def is_retained_by(self, included_modules: Iterable[str]) -> bool:
+        """Return whether ``included_modules`` satisfies this path relation."""
+        included_module_set = set(included_modules)
+        if not self.requires_all.issubset(included_module_set):
+            return False
+        if self.requires_any and not self.requires_any.intersection(included_module_set):
+            return False
+        return True
+
+
+@dataclass(frozen=True)
+class LocalOverride:
+    """A marker or planning local override path."""
+
+    path: str
+    is_directory: bool
+
+    def matches(self, relative_path: str) -> bool:
+        """Return whether this override applies to ``relative_path``."""
+        if relative_path == self.path:
+            return True
+        return self.is_directory and relative_path.startswith(f"{self.path}/")
+
+
+@dataclass(frozen=True)
+class PlaceholderWaiver:
+    """A structured waiver for one narrow placeholder finding scope."""
+
+    path_pattern: str
+    token_or_kind: str
+    reason: str
+    authorization_basis: str
+    reviewed_scope: str
+
+    def matches(self, *, relative_path: str, token_name: str | None, finding_kind: str) -> bool:
+        """Return whether this waiver covers a finding."""
+        token_matches = self.token_or_kind in {finding_kind, token_name}
+        return token_matches and fnmatch.fnmatchcase(relative_path, self.path_pattern)
+
+
+def json_file_mapping(path: Path, display_path: str) -> dict[str, Any]:
+    """Load a JSON file that must contain an object."""
+    try:
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as error:
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        raise PlaceholderError(f"{display_path}: unable to read file ({error_summary}).") from error
+    except json.JSONDecodeError as error:
+        raise PlaceholderError(f"{display_path}: invalid JSON ({error}).") from error
+    if not isinstance(parsed, dict):
+        raise PlaceholderError(f"{display_path}: JSON document must be an object.")
+    return cast(StructuredObject, parsed)
+
+
+def string_list_value(value: Any, error_message: str) -> list[str]:
+    """Return a validated list of strings from untyped structured data."""
+    if not isinstance(value, list):
+        raise PlaceholderError(error_message)
+    items = cast(list[Any], value)
+    if not all(isinstance(item, str) for item in items):
+        raise PlaceholderError(error_message)
+    return cast(list[str], items)
+
+
+def safe_repository_path_pattern(value: str, field_name: str) -> str:
+    """Validate a manifest repository path pattern."""
+    if not value or value.startswith("/") or "\\" in value or "//" in value:
+        raise PlaceholderError(f"{field_name} must be a safe repository-relative path.")
+    parts = value.split("/")
+    if any(part in {"", ".", ".."} for part in parts):
+        raise PlaceholderError(f"{field_name} must not contain empty or traversal segments.")
+    return value
+
+
+def token_path_patterns(
+    token: dict[str, Any], path_groups: dict[str, tuple[str, ...]]
+) -> tuple[str, ...]:
+    """Return normalized path patterns for one manifest token."""
+    if "pathPatterns" in token:
+        return tuple(
+            string_list_value(
+                token["pathPatterns"],
+                "tokens[].pathPatterns must be a list of strings.",
+            )
+        )
+    raw_group_names = string_list_value(
+        token.get("pathGroups"),
+        "tokens[] must define pathPatterns or pathGroups.",
+    )
+    patterns: list[str] = []
+    for group_name in raw_group_names:
+        group_patterns = path_groups.get(group_name)
+        if group_patterns is None:
+            raise PlaceholderError(f"Unknown placeholder manifest path group: {group_name}.")
+        patterns.extend(group_patterns)
+    return tuple(dict.fromkeys(patterns))
+
+
+def normalized_manifest_path_groups(manifest: dict[str, Any]) -> dict[str, tuple[str, ...]]:
+    """Return path groups after structural validation."""
+    raw_path_groups = manifest.get("pathGroups")
+    if not isinstance(raw_path_groups, dict):
+        raise PlaceholderError("Placeholder manifest must define pathGroups.")
+    path_groups: dict[str, tuple[str, ...]] = {}
+    for group_name, raw_patterns in cast(dict[Any, Any], raw_path_groups).items():
+        if not isinstance(group_name, str):
+            raise PlaceholderError("Placeholder manifest path group names must be strings.")
+        patterns = string_list_value(
+            raw_patterns,
+            f"pathGroups.{group_name} must be a list of strings.",
+        )
+        path_groups[group_name] = tuple(
+            safe_repository_path_pattern(pattern, f"pathGroups.{group_name}[]")
+            for pattern in patterns
+        )
+    return path_groups
+
+
+def normalized_manifest_tokens(manifest: dict[str, Any]) -> tuple[PlaceholderTokenSpec, ...]:
+    """Return manifest tokens after structural and invariant validation."""
+    raw_tokens = manifest.get("tokens")
+    if not isinstance(raw_tokens, list):
+        raise PlaceholderError("Placeholder manifest must define tokens.")
+    path_groups = normalized_manifest_path_groups(manifest)
+    replacement_sources = manifest.get("replacementSources")
+    if not isinstance(replacement_sources, dict):
+        raise PlaceholderError("Placeholder manifest must define replacementSources.")
+    raw_finding_kinds = manifest.get("scanFindingKinds", [])
+    if not isinstance(raw_finding_kinds, list):
+        raw_finding_kinds = []
+    finding_kinds: set[str] = set()
+    for item in cast(list[Any], raw_finding_kinds):
+        if not isinstance(item, dict):
+            continue
+        raw_kind = cast(StructuredObject, item).get("kind")
+        if isinstance(raw_kind, str):
+            finding_kinds.add(raw_kind)
+    if not finding_kinds:
+        raise PlaceholderError("Placeholder manifest must define scanFindingKinds.")
+
+    tokens: list[PlaceholderTokenSpec] = []
+    seen_token_paths: set[tuple[str, str]] = set()
+    duplicate_token_paths: set[tuple[str, str]] = set()
+    for raw_token in cast(list[Any], raw_tokens):
+        if not isinstance(raw_token, dict):
+            raise PlaceholderError("Each placeholder manifest token must be an object.")
+        token = cast(StructuredObject, raw_token)
+        name = token.get("name")
+        placeholder = token.get("placeholder")
+        replacement_source = token.get("replacementSource")
+        replacement_style = token.get("replacementStyle")
+        finding_kind = token.get("findingKind")
+        if not all(
+            isinstance(value, str)
+            for value in (name, placeholder, replacement_source, replacement_style, finding_kind)
+        ):
+            raise PlaceholderError(
+                "Each placeholder manifest token must define string name, placeholder, "
+                "replacementSource, replacementStyle, and findingKind."
+            )
+        name = cast(str, name)
+        placeholder = cast(str, placeholder)
+        replacement_source = cast(str, replacement_source)
+        replacement_style = cast(str, replacement_style)
+        finding_kind = cast(str, finding_kind)
+        if replacement_source not in replacement_sources:
+            raise PlaceholderError(f"{name}: unknown replacementSource {replacement_source}.")
+        if replacement_style not in {
+            TOKEN_STYLE_LITERAL,
+            TOKEN_STYLE_OWNER_REPO,
+            TOKEN_STYLE_GITHUB_URL,
+        }:
+            raise PlaceholderError(f"{name}: unsupported replacementStyle {replacement_style}.")
+        if replacement_style == TOKEN_STYLE_OWNER_REPO and placeholder != "OWNER/REPO":
+            raise PlaceholderError(f"{name}: owner-repo-token style requires OWNER/REPO.")
+        if replacement_style == TOKEN_STYLE_GITHUB_URL and not placeholder.startswith(
+            GITHUB_URL_PREFIX
+        ):
+            raise PlaceholderError(f"{name}: github-url style requires a GitHub OWNER/REPO URL.")
+        if finding_kind not in finding_kinds:
+            raise PlaceholderError(f"{name}: unknown findingKind {finding_kind}.")
+        paths = tuple(
+            safe_repository_path_pattern(pattern, f"{name}.path")
+            for pattern in token_path_patterns(token, path_groups)
+        )
+        for path_pattern in paths:
+            key = (placeholder, path_pattern)
+            if key in seen_token_paths:
+                duplicate_token_paths.add(key)
+            seen_token_paths.add(key)
+        tokens.append(
+            PlaceholderTokenSpec(
+                name=name,
+                placeholder=placeholder,
+                replacement_source=replacement_source,
+                replacement_style=replacement_style,
+                finding_kind=finding_kind,
+                paths=paths,
+            )
+        )
+    if duplicate_token_paths:
+        rendered = ", ".join(f"{token} @ {path}" for token, path in sorted(duplicate_token_paths))
+        raise PlaceholderError("Duplicate placeholder token/path record(s): " + rendered + ".")
+    return tuple(tokens)
+
+
+def validate_placeholder_manifest_schema(
+    manifest: dict[str, Any],
+    schema: dict[str, Any],
+    *,
+    jsonschema_loader: Callable[[str], Any] = importlib.import_module,
+) -> None:
+    """Run optional full JSON Schema validation when jsonschema is importable."""
+    try:
+        jsonschema_module = jsonschema_loader("jsonschema")
+    except ImportError:
+        return
+    validator = jsonschema_module.Draft202012Validator(schema)
+    errors = sorted(validator.iter_errors(manifest), key=lambda error: error.json_path)
+    if errors:
+        messages = "\n".join(f"  - {error.json_path}: {error.message}" for error in errors[:10])
+        raise PlaceholderError(f"Placeholder manifest schema validation failed:\n{messages}")
+
+
+def validate_placeholder_manifest(
+    manifest: dict[str, Any],
+    *,
+    schema: dict[str, Any] | None = None,
+    jsonschema_loader: Callable[[str], Any] = importlib.import_module,
+) -> None:
+    """Validate the placeholder manifest with schema and stdlib fallback checks."""
+    if schema is not None:
+        validate_placeholder_manifest_schema(
+            manifest,
+            schema,
+            jsonschema_loader=jsonschema_loader,
+        )
+    if manifest.get("version") != 1:
+        raise PlaceholderError("Placeholder manifest version must be 1.")
+    normalized_manifest_tokens(manifest)
+    _ = renderer_path_group_paths(manifest)
+
+
+def load_placeholder_manifest(
+    *,
+    repo_root: Path = REPO_ROOT,
+    manifest_path: str = DEFAULT_PLACEHOLDER_MANIFEST_PATH,
+    schema_path: str = DEFAULT_PLACEHOLDER_MANIFEST_SCHEMA_PATH,
+    jsonschema_loader: Callable[[str], Any] = importlib.import_module,
+) -> dict[str, Any]:
+    """Load and validate the runtime placeholder manifest."""
+    manifest = json_file_mapping(repo_root / manifest_path, manifest_path)
+    schema = json_file_mapping(repo_root / schema_path, schema_path)
+    validate_placeholder_manifest(
+        manifest,
+        schema=schema,
+        jsonschema_loader=jsonschema_loader,
+    )
+    return manifest
+
+
+def renderer_path_group_paths(manifest: dict[str, Any]) -> dict[str, tuple[str, ...]]:
+    """Return renderer path groups expanded to concrete path patterns."""
+    path_groups = normalized_manifest_path_groups(manifest)
+    raw_renderer_groups = manifest.get("rendererPathGroups")
+    if not isinstance(raw_renderer_groups, dict):
+        raise PlaceholderError("Placeholder manifest must define rendererPathGroups.")
+    rendered: dict[str, tuple[str, ...]] = {}
+    for renderer_name, raw_group_names in cast(dict[Any, Any], raw_renderer_groups).items():
+        if not isinstance(renderer_name, str):
+            raise PlaceholderError("rendererPathGroups names must be strings.")
+        group_names = string_list_value(
+            raw_group_names,
+            f"rendererPathGroups.{renderer_name} must list path groups.",
+        )
+        paths: list[str] = []
+        for group_name in group_names:
+            if group_name not in path_groups:
+                raise PlaceholderError(f"rendererPathGroups.{renderer_name}: unknown {group_name}.")
+            paths.extend(path_groups[group_name])
+        rendered[renderer_name] = tuple(dict.fromkeys(paths))
+    return rendered
+
+
+def replacement_source_attribute(manifest: dict[str, Any], source_name: str) -> tuple[str, str]:
+    """Return ``(kind, attribute)`` for a replacement source."""
+    replacement_sources = manifest.get("replacementSources")
+    if not isinstance(replacement_sources, dict):
+        raise PlaceholderError("Placeholder manifest must define replacementSources.")
+    raw_source = cast(dict[Any, Any], replacement_sources).get(source_name)
+    if not isinstance(raw_source, dict):
+        raise PlaceholderError(f"Unknown replacement source: {source_name}.")
+    source = cast(StructuredObject, raw_source)
+    source_kind = source.get("kind")
+    attribute = source.get("attribute")
+    if not isinstance(source_kind, str) or not isinstance(attribute, str):
+        raise PlaceholderError(f"Replacement source {source_name} is malformed.")
+    return source_kind, attribute
+
+
+PLACEHOLDER_MANIFEST = load_placeholder_manifest()
+PLACEHOLDER_TOKEN_SPECS = normalized_manifest_tokens(PLACEHOLDER_MANIFEST)
+PLACEHOLDER_RENDERER_PATHS = renderer_path_group_paths(PLACEHOLDER_MANIFEST)
+GITHUB_URL_TOKEN_SPECS = tuple(
+    token for token in PLACEHOLDER_TOKEN_SPECS if token.replacement_style == TOKEN_STYLE_GITHUB_URL
 )
-GITHUB_URL_TOKEN_PATHS = (
-    ".github/ISSUE_TEMPLATE/config.yml",
-    ".github/ISSUE_TEMPLATE/bug_report.yml",
-    ".github/pull_request_template.md",
-    "CONTRIBUTING.md",
-    "SECURITY.md",
+GITHUB_URL_TOKEN_PATHS = tuple(
+    dict.fromkeys(path for token in GITHUB_URL_TOKEN_SPECS for path in token.paths)
 )
-APPROVED_GITHUB_URL_SUFFIXES = (
-    "/security/advisories/new",
-    "/blob/HEAD/CONTRIBUTING.md",
-    "/blob/HEAD/SECURITY.md",
-    "/discussions",
-    "/security",
-    "/issues",
-    ".git",
-    "#support",
-    "",
+APPROVED_GITHUB_URL_SUFFIXES = tuple(
+    token.placeholder.removeprefix(GITHUB_URL_PREFIX)
+    for token in sorted(
+        GITHUB_URL_TOKEN_SPECS, key=lambda item: len(item.placeholder), reverse=True
+    )
 )
+OWNER_REPO_TOKEN_PATHS = tuple(
+    token.paths[0:] for token in PLACEHOLDER_TOKEN_SPECS if token.placeholder == "OWNER/REPO"
+)[0]
+AZURE_DEVOPS_TOKEN_REPLACEMENT_SPECS = tuple(
+    (
+        token.name,
+        token.placeholder,
+        replacement_source_attribute(PLACEHOLDER_MANIFEST, token.replacement_source)[1],
+    )
+    for token in PLACEHOLDER_TOKEN_SPECS
+    if token.replacement_source.startswith("azure_devops.")
+)
+AZURE_DEVOPS_URL_TOKEN_PATHS = tuple(
+    dict.fromkeys(
+        path
+        for token in PLACEHOLDER_TOKEN_SPECS
+        if token.replacement_source.startswith("azure_devops.")
+        for path in token.paths
+    )
+)
+TOKEN_REPLACEMENT_SPECS = tuple(
+    (
+        token.name,
+        token.placeholder,
+        token.paths,
+        replacement_source_attribute(PLACEHOLDER_MANIFEST, token.replacement_source)[1],
+    )
+    for token in PLACEHOLDER_TOKEN_SPECS
+    if not token.replacement_source.startswith("azure_devops.")
+    and token.replacement_style != TOKEN_STYLE_GITHUB_URL
+)
+PACKAGE_METADATA_PATHS = PLACEHOLDER_RENDERER_PATHS["packageMetadata"]
+
 SECURITY_REPORTING_MODES = ("github-private-only", "contact-only", "both")
 SECURITY_CONTACT_REQUIRED_MODES = frozenset({"contact-only", "both"})
 ISSUE_LABEL_POLICIES = ("existing", "create-manual-follow-up", "omit", "custom")
@@ -67,50 +463,6 @@ HOST_PROVIDERS = (
 )
 GITHUB_HOST_PROVIDERS = frozenset({"github", "github-enterprise-server", "dual"})
 AZURE_DEVOPS_HOST_PROVIDERS = frozenset({"azure-devops-services", "dual"})
-AZURE_DEVOPS_URL_TOKEN_PATHS = (
-    ".azuredevops/platform/adoption-guidance.md",
-    ".azuredevops/pull_request_template.md",
-)
-AZURE_DEVOPS_TOKEN_REPLACEMENT_SPECS = (
-    ("azure devops organization", "AZURE_DEVOPS_ORGANIZATION", "organization"),
-    ("azure devops organization url", "AZURE_DEVOPS_ORGANIZATION_URL", "organization_url"),
-    ("azure devops project", "AZURE_DEVOPS_PROJECT", "project"),
-    ("azure devops project url", "AZURE_DEVOPS_PROJECT_URL", "project_url"),
-    ("azure devops repository", "AZURE_DEVOPS_REPOSITORY", "repository"),
-    (
-        "azure devops repository url",
-        "AZURE_DEVOPS_REPOSITORY_WEB_URL",
-        "repository_web_url",
-    ),
-    ("azure devops clone url", "AZURE_DEVOPS_CLONE_URL", "clone_url"),
-    ("azure devops default branch", "AZURE_DEVOPS_DEFAULT_BRANCH", "default_branch"),
-    ("azure boards policy", "AZURE_BOARDS_INTAKE_POLICY", "boards_policy"),
-    (
-        "azure repos pr template policy",
-        "AZURE_REPOS_PR_TEMPLATE_POLICY",
-        "pr_template_policy",
-    ),
-    (
-        "azure branch policy reviewer guidance",
-        "AZURE_BRANCH_POLICY_REVIEWER_GUIDANCE",
-        "branch_policy_reviewer_guidance",
-    ),
-    (
-        "azure security intake policy",
-        "AZURE_SECURITY_INTAKE_POLICY",
-        "security_intake_policy",
-    ),
-    (
-        "azure security product enablement",
-        "AZURE_SECURITY_PRODUCT_ENABLEMENT",
-        "security_product_enablement",
-    ),
-    (
-        "azure dependency update policy",
-        "AZURE_DEPENDENCY_UPDATE_POLICY",
-        "dependency_update_policy",
-    ),
-)
 AZURE_DEVOPS_BOARDS_POLICIES = ("work-items", "disabled", "manual-follow-up")
 AZURE_DEVOPS_PR_TEMPLATE_POLICIES = ("materialize", "disabled", "manual-follow-up")
 AZURE_DEVOPS_BRANCH_POLICY_POLICIES = ("required-reviewers", "manual-follow-up", "none")
@@ -148,32 +500,17 @@ ARGS_FILE_EXTENSION_FORMATS = {
     ".yaml": "yaml",
     ".yml": "yaml",
 }
-PACKAGE_METADATA_PATHS = ("package.json", "package-lock.json")
-CONDUCT_CONTACT_SENTENCE_PLACEHOLDER = (
-    "To report a possible violation, contact us via: [INSERT CONTACT METHOD]"
-)
-TOKEN_REPLACEMENT_SPECS = (
-    ("owner-repo token", "OWNER/REPO", OWNER_REPO_TOKEN_PATHS, "repository"),
-    ("codeowners owner", "@OWNER", (".github/CODEOWNERS",), "codeowners_owner"),
-    (
-        "code of conduct contact",
-        "[INSERT CONTACT METHOD]",
-        ("CODE_OF_CONDUCT.md",),
-        "conduct_contact",
-    ),
-    ("security contact", "[security contact email]", ("SECURITY.md",), "security_contact"),
-    (
-        "security contact todo",
-        "<!-- TODO: Replace with your security contact email -->",
-        ("SECURITY.md",),
-        "security_todo_replacement",
-    ),
-    (
-        "VS Code window title",
-        "Go to .vscode/settings.json and make this the name of the repo",
-        (".vscode/settings.json",),
-        "vscode_title",
-    ),
+SCAN_CLASSIFICATION_ARGS_FILE_FIELDS = frozenset(
+    {
+        "scan_mode",
+        "manifest",
+        "marker",
+        "retained_modules",
+        "retained_modules_csv",
+        "local_overrides_file",
+        "placeholder_waivers_file",
+        "template_only_delete_paths",
+    }
 )
 REPLACE_ARGS_FILE_FIELDS = (
     frozenset(
@@ -201,8 +538,11 @@ REPLACE_ARGS_FILE_FIELDS = (
         }
     )
     | AZURE_DEVOPS_ARGS_FILE_FIELDS
+    | SCAN_CLASSIFICATION_ARGS_FILE_FIELDS
 )
-SCAN_ARGS_FILE_FIELDS = frozenset({"repo_root", "repository"})
+SCAN_ARGS_FILE_FIELDS = (
+    frozenset({"repo_root", "repository"}) | SCAN_CLASSIFICATION_ARGS_FILE_FIELDS
+)
 STRING_ARGS_FILE_FIELDS = (
     frozenset(
         {
@@ -226,8 +566,25 @@ STRING_ARGS_FILE_FIELDS = (
         }
     )
     | AZURE_DEVOPS_ARGS_FILE_FIELDS
+    | frozenset(
+        {
+            "scan_mode",
+            "manifest",
+            "marker",
+            "retained_modules_csv",
+            "local_overrides_file",
+            "placeholder_waivers_file",
+        }
+    )
 )
-LIST_STRING_ARGS_FILE_FIELDS = frozenset({"issue_labels", "package_keywords"})
+LIST_STRING_ARGS_FILE_FIELDS = frozenset(
+    {
+        "issue_labels",
+        "package_keywords",
+        "retained_modules",
+        "template_only_delete_paths",
+    }
+)
 BOOLEAN_ARGS_FILE_FIELDS = frozenset({"dry_run"})
 REPLACE_CLI_FLAGS = {
     "repo_root": ("--repo-root",),
@@ -251,6 +608,14 @@ REPLACE_CLI_FLAGS = {
     "package_version": ("--package-version",),
     "package_keywords": ("--package-keyword",),
     "dry_run": ("--dry-run",),
+    "scan_mode": ("--scan-mode",),
+    "manifest": ("--manifest",),
+    "marker": ("--marker",),
+    "retained_modules": ("--retained-module",),
+    "retained_modules_csv": ("--retained-modules",),
+    "local_overrides_file": ("--local-overrides-file",),
+    "placeholder_waivers_file": ("--placeholder-waivers-file",),
+    "template_only_delete_paths": ("--template-only-delete-path",),
     "azure_devops_organization": ("--azure-devops-organization",),
     "azure_devops_organization_url": ("--azure-devops-organization-url",),
     "azure_devops_project": ("--azure-devops-project",),
@@ -269,6 +634,14 @@ REPLACE_CLI_FLAGS = {
 SCAN_CLI_FLAGS = {
     "repo_root": ("--repo-root",),
     "repository": ("--repository",),
+    "scan_mode": ("--scan-mode",),
+    "manifest": ("--manifest",),
+    "marker": ("--marker",),
+    "retained_modules": ("--retained-module",),
+    "retained_modules_csv": ("--retained-modules",),
+    "local_overrides_file": ("--local-overrides-file",),
+    "placeholder_waivers_file": ("--placeholder-waivers-file",),
+    "template_only_delete_paths": ("--template-only-delete-path",),
 }
 SKIPPED_DISCOVERY_DIRS = {
     ".git",
@@ -288,10 +661,6 @@ HOST_PATTERN = re.compile(r"^[A-Za-z0-9.-]+(?::[0-9]+)?$")
 OWNER_REPO_NON_PATH_SEGMENT_PATTERN = re.compile(r"(?<!/)OWNER/REPO(?![A-Za-z0-9_-])")
 URL_BOUNDARY_PATTERN = r"(?=$|[^A-Za-z0-9._~:/?#@!$&'*+,;=%-])"
 INVALID_PERCENT_ENCODING_PATTERN = re.compile(r"%(?![0-9A-Fa-f]{2})")
-
-
-class PlaceholderError(RuntimeError):
-    """Raised when placeholder substitution or scanning cannot complete."""
 
 
 @dataclass(frozen=True)
@@ -414,11 +783,25 @@ class ScanFinding:
     line_number: int
     matched_text: str
     message: str
+    token_name: str | None = None
+    manifest_relation: str | None = None
+    failure_disposition: str = DISPOSITION_RETAINED_HARD_FAILURE
+    context: str = CONTEXT_RETAINED_PATH
+    waiver_state: str = WAIVER_STATE_NOT_APPLICABLE
 
     def format_message(self) -> str:
         """Return a human-readable finding message."""
+        details = [self.message]
+        if self.token_name is not None:
+            details.append(f"token={self.token_name}")
+        if self.manifest_relation is not None:
+            details.append(f"relation={self.manifest_relation}")
+        details.append(f"context={self.context}")
+        details.append(f"disposition={self.failure_disposition}")
+        details.append(f"waiver={self.waiver_state}")
         return (
-            f"{self.path}:{self.line_number}: {self.kind}: " f"{self.matched_text} ({self.message})"
+            f"{self.path}:{self.line_number}: {self.kind}: "
+            f"{self.matched_text} ({'; '.join(details)})"
         )
 
 
@@ -513,7 +896,7 @@ def quote_azure_devops_segment(value: str) -> str:
     return quote(value, safe="")
 
 
-def validate_azure_devops_url(raw_url: str, field_name: str) -> Any:
+def validate_azure_devops_url(raw_url: str, field_name: str) -> SplitResult:
     """Parse and validate a credential-free Azure DevOps Services URL."""
     url = validate_single_line_non_empty(raw_url, field_name)
     if re.search(r"\s", url):
@@ -538,9 +921,12 @@ def validate_azure_devops_url(raw_url: str, field_name: str) -> Any:
     return parts
 
 
-def azure_devops_host_kind(parts: Any, field_name: str) -> str:
+def azure_devops_host_kind(parts: SplitResult, field_name: str) -> str:
     """Return the recognized Azure DevOps Services host shape."""
-    hostname = parts.hostname.lower()
+    hostname = parts.hostname
+    if hostname is None:
+        raise PlaceholderError(f"{field_name} must include a host.")
+    hostname = hostname.lower()
     if hostname == "dev.azure.com":
         return "dev.azure.com"
     if hostname.endswith(".visualstudio.com") and hostname != "visualstudio.com":
@@ -551,7 +937,7 @@ def azure_devops_host_kind(parts: Any, field_name: str) -> str:
     )
 
 
-def azure_devops_path_segments(parts: Any, field_name: str) -> tuple[str, ...]:
+def azure_devops_path_segments(parts: SplitResult, field_name: str) -> tuple[str, ...]:
     """Return decoded Azure DevOps URL path segments after structural validation."""
     path = parts.path.strip("/")
     if not path:
@@ -562,7 +948,7 @@ def azure_devops_path_segments(parts: Any, field_name: str) -> tuple[str, ...]:
     return tuple(unquote(segment) for segment in segments)
 
 
-def normalize_azure_devops_url(parts: Any) -> str:
+def normalize_azure_devops_url(parts: SplitResult) -> str:
     """Return an Azure DevOps URL without query, fragment, or trailing slash."""
     normalized_path = parts.path.rstrip("/")
     return urlunsplit(("https", parts.netloc, normalized_path, "", ""))
@@ -580,7 +966,10 @@ def validate_azure_devops_organization_url(raw_url: str, organization: str) -> s
                 "as its only path segment."
             )
     else:
-        account_name = parts.hostname[: -len(".visualstudio.com")]
+        hostname = parts.hostname
+        if hostname is None:
+            raise PlaceholderError("--azure-devops-organization-url must include a host.")
+        account_name = hostname[: -len(".visualstudio.com")]
         if segments or account_name.casefold() != organization.casefold():
             raise PlaceholderError(
                 "--azure-devops-organization-url must use the selected organization "
@@ -607,7 +996,10 @@ def validate_azure_devops_project_url(
                 "--azure-devops-project-url must use the selected organization and project path."
             )
     else:
-        account_name = parts.hostname[: -len(".visualstudio.com")]
+        hostname = parts.hostname
+        if hostname is None:
+            raise PlaceholderError("--azure-devops-project-url must include a host.")
+        account_name = hostname[: -len(".visualstudio.com")]
         if (
             len(segments) != 1
             or account_name.casefold() != organization.casefold()
@@ -642,7 +1034,10 @@ def validate_azure_devops_repository_url(
                 "and repository under /_git/."
             )
     else:
-        account_name = parts.hostname[: -len(".visualstudio.com")]
+        hostname = parts.hostname
+        if hostname is None:
+            raise PlaceholderError(f"{field_name} must include a host.")
+        account_name = hostname[: -len(".visualstudio.com")]
         if (
             len(segments) != 3
             or account_name.casefold() != organization.casefold()
@@ -1208,7 +1603,7 @@ def build_replacement_context(
         security_contact_section=validated_security_contact_section,
     )
     require_security_decision = repository is not None
-    resolved_security_reporting_mode = resolve_security_reporting_mode(
+    resolved_security_reporting_mode: str | None = resolve_security_reporting_mode(
         security_reporting_mode=security_reporting_mode,
         security_contact=validated_security_contact,
         security_contact_section=validated_security_contact_section,
@@ -1693,7 +2088,7 @@ def render_security_reporting_mode(
     """Render known security-reporting surfaces for the selected mode."""
     if context.security_reporting_mode is None and context.azure_devops is None:
         return ()
-    renderers = {
+    renderers: dict[str, tuple[Callable[[str, ReplacementContext], tuple[str, int]], ...]] = {
         "SECURITY.md": (replace_security_reporting_section,),
     }
     if context.uses_github_surfaces and context.security_reporting_mode is not None:
@@ -2031,7 +2426,7 @@ def load_json_object_from_text(text: str, display_path: str) -> dict[str, Any]:
         raise PlaceholderError(f"{display_path}: invalid JSON ({error}).") from error
     if not isinstance(parsed, dict):
         raise PlaceholderError(f"{display_path}: expected a JSON object.")
-    return parsed
+    return cast(StructuredObject, parsed)
 
 
 def dump_json_object(document: dict[str, Any]) -> str:
@@ -2108,7 +2503,7 @@ def root_package_lock_mapping(document: dict[str, Any]) -> dict[str, Any]:
             "`npm install --package-lock-only`), or omit package-lock.json from the "
             "adopted files so only package.json receives the identity update."
         )
-    root_package = packages.get("")
+    root_package = cast(dict[Any, Any], packages).get("")
     if not isinstance(root_package, dict):
         raise PlaceholderError(
             'package-lock.json has no root packages[""] entry, so its root identity '
@@ -2116,7 +2511,7 @@ def root_package_lock_mapping(document: dict[str, Any]) -> dict[str, Any]:
             "`npm install --package-lock-only`, or omit package-lock.json from the "
             "adopted files so only package.json receives the identity update."
         )
-    return root_package
+    return cast(StructuredObject, root_package)
 
 
 def update_package_lock_identity(
@@ -2216,11 +2611,14 @@ def build_replacement_rules(context: ReplacementContext) -> tuple[ReplacementRul
             )
 
     for name, placeholder, paths, attribute_name in TOKEN_REPLACEMENT_SPECS:
-        replacement = getattr(context, attribute_name)
-        if replacement is None:
+        raw_replacement = getattr(context, attribute_name)
+        if raw_replacement is None:
             continue
+        if not isinstance(raw_replacement, str):
+            raise AssertionError(f"Unexpected non-string replacement for {attribute_name}.")
+        replacement = raw_replacement
         replace = (
-            replace_owner_repo_token(context.repository)
+            replace_owner_repo_token(replacement)
             if placeholder == "OWNER/REPO"
             else replace_literal(placeholder, replacement)
         )
@@ -2327,33 +2725,561 @@ def replace_placeholders(
     return tuple(records)
 
 
-def build_unresolved_scan_patterns() -> (
-    tuple[tuple[str, str, re.Pattern[str], tuple[str, ...]], ...]
-):
-    """Return unresolved placeholder scan patterns from the replacement allowlist."""
-    patterns: list[tuple[str, str, re.Pattern[str], tuple[str, ...]]] = []
-    for suffix in APPROVED_GITHUB_URL_SUFFIXES:
-        placeholder = f"https://github.com/OWNER/REPO{suffix}"
-        pattern = re.compile(rf"{re.escape(placeholder)}{URL_BOUNDARY_PATTERN}")
-        patterns.append(
-            (f"github url {suffix or '/'}", placeholder, pattern, GITHUB_URL_TOKEN_PATHS)
+@dataclass(frozen=True)
+class ScanClassificationContext:
+    """Inputs used to classify placeholder scan findings."""
+
+    mappings: tuple[ManifestMapping, ...] = ()
+    included_modules: frozenset[str] | None = None
+    local_overrides: tuple[LocalOverride, ...] = ()
+    template_only_delete_paths: frozenset[str] = frozenset()
+    waivers: tuple[PlaceholderWaiver, ...] = ()
+
+    @property
+    def is_active(self) -> bool:
+        """Return whether classification inputs were supplied."""
+        return bool(
+            self.mappings
+            or self.included_modules is not None
+            or self.local_overrides
+            or self.template_only_delete_paths
+            or self.waivers
         )
-    for name, placeholder, paths, _attribute_name in TOKEN_REPLACEMENT_SPECS:
-        pattern = (
-            OWNER_REPO_NON_PATH_SEGMENT_PATTERN
-            if placeholder == "OWNER/REPO"
-            else re.compile(re.escape(placeholder))
+
+
+def has_wildcard(pattern: str) -> bool:
+    """Return whether ``pattern`` contains shell-style wildcard syntax."""
+    return any(wildcard in pattern for wildcard in "*?[")
+
+
+def pattern_specificity(pattern: str) -> tuple[int, int, int]:
+    """Return a sortable specificity rank for a manifest path pattern."""
+    is_exact = not has_wildcard(pattern)
+    literal_length = sum(1 for character in pattern if character not in "*?[]")
+    return (int(is_exact), literal_length, pattern.count("/"))
+
+
+def selected_relation_for_path(
+    relative_path: str,
+    mappings: tuple[ManifestMapping, ...],
+) -> PathRelation | None:
+    """Return the most-specific template-sync manifest relation for a path."""
+    matches: list[tuple[tuple[int, int, int], ManifestMapping]] = []
+    for mapping in mappings:
+        if fnmatch.fnmatchcase(relative_path, mapping.pattern):
+            matches.append((pattern_specificity(mapping.pattern), mapping))
+    if not matches:
+        return None
+
+    best_specificity = max(specificity for specificity, _mapping in matches)
+    selected = [mapping for specificity, mapping in matches if specificity == best_specificity]
+    return PathRelation(
+        patterns=tuple(mapping.pattern for mapping in selected),
+        requires_all=frozenset(module for mapping in selected for module in mapping.requires_all),
+        requires_any=frozenset(module for mapping in selected for module in mapping.requires_any),
+    )
+
+
+def validate_placeholder_manifest_path_scopes(
+    manifest: dict[str, Any],
+    mappings: tuple[ManifestMapping, ...],
+) -> None:
+    """Validate every placeholder path scope resolves through the template manifest."""
+    path_scopes = {path for token in normalized_manifest_tokens(manifest) for path in token.paths}
+    for paths in renderer_path_group_paths(manifest).values():
+        path_scopes.update(paths)
+
+    unknown_paths = sorted(
+        path_scope
+        for path_scope in path_scopes
+        if selected_relation_for_path(path_scope, mappings) is None
+    )
+    if unknown_paths:
+        raise PlaceholderError(
+            "Placeholder manifest path scope(s) have no template-sync manifest relation: "
+            + ", ".join(unknown_paths)
+            + "."
         )
-        patterns.append((name, placeholder, pattern, paths))
-    for name, placeholder, _attribute_name in AZURE_DEVOPS_TOKEN_REPLACEMENT_SPECS:
-        patterns.append(
-            (
-                name,
-                placeholder,
-                re.compile(re.escape(placeholder)),
-                AZURE_DEVOPS_URL_TOKEN_PATHS,
+
+
+def load_yaml_mapping(
+    path: Path,
+    display_path: str,
+    *,
+    yaml_module_loader: Callable[[str], Any] = importlib.import_module,
+) -> dict[str, Any]:
+    """Load a YAML mapping through an optional lazy dependency."""
+    try:
+        yaml_module = yaml_module_loader("yaml")
+    except ImportError as error:
+        raise PlaceholderError(
+            "YAML marker or manifest classification is unavailable because PyYAML "
+            "is not importable. Supply explicit retained modules only for an "
+            "unclassified scan, install PyYAML, or run through the repository's "
+            "pre-commit/test environment."
+        ) from error
+    try:
+        parsed = yaml_module.safe_load(path.read_text(encoding="utf-8-sig"))
+    except OSError as error:
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        raise PlaceholderError(f"{display_path}: unable to read file ({error_summary}).") from error
+    except yaml_module.YAMLError as error:
+        raise PlaceholderError(f"{display_path}: invalid YAML ({error}).") from error
+    if not isinstance(parsed, dict):
+        raise PlaceholderError(f"{display_path}: YAML document must be a mapping.")
+    return cast(StructuredObject, parsed)
+
+
+def parse_template_sync_manifest(
+    manifest: dict[str, Any],
+) -> tuple[frozenset[str], tuple[ManifestMapping, ...]]:
+    """Parse module names and path mappings from .template-sync/manifest.yml."""
+    root = manifest.get("template_manifest")
+    if not isinstance(root, dict):
+        raise PlaceholderError("Template-sync manifest must contain template_manifest mapping.")
+    root_mapping = cast(StructuredObject, root)
+    raw_modules = root_mapping.get("modules")
+    if not isinstance(raw_modules, list):
+        raise PlaceholderError("Template-sync manifest must define modules.")
+    modules: set[str] = set()
+    for raw_module in cast(list[Any], raw_modules):
+        if not isinstance(raw_module, dict):
+            raise PlaceholderError("Each template-sync manifest module must define a name.")
+        module = cast(StructuredObject, raw_module)
+        module_name = module.get("name")
+        if not isinstance(module_name, str):
+            raise PlaceholderError("Each template-sync manifest module must define a name.")
+        modules.add(module_name)
+
+    raw_mappings = root_mapping.get("path_mappings")
+    if not isinstance(raw_mappings, list):
+        raise PlaceholderError("Template-sync manifest must define path_mappings.")
+    mappings: list[ManifestMapping] = []
+    for raw_mapping in cast(list[Any], raw_mappings):
+        if not isinstance(raw_mapping, dict):
+            raise PlaceholderError("Each path mapping must define a pattern.")
+        mapping = cast(StructuredObject, raw_mapping)
+        pattern = mapping.get("pattern")
+        if not isinstance(pattern, str):
+            raise PlaceholderError("Each path mapping must define a pattern.")
+        requires_all = string_list_value(
+            mapping.get("requires_all", []),
+            "path_mappings[].requires_all must be a list of strings.",
+        )
+        requires_any = string_list_value(
+            mapping.get("requires_any", []),
+            "path_mappings[].requires_any must be a list of strings.",
+        )
+        mappings.append(
+            ManifestMapping(
+                pattern=pattern,
+                requires_all=frozenset(requires_all),
+                requires_any=frozenset(requires_any),
             )
         )
+    return frozenset(modules), tuple(mappings)
+
+
+def load_template_sync_manifest_context(
+    repo_root: Path,
+    manifest_path: str,
+    *,
+    yaml_module_loader: Callable[[str], Any] = importlib.import_module,
+) -> tuple[frozenset[str], tuple[ManifestMapping, ...]]:
+    """Load template-sync manifest modules and path mappings."""
+    raw_manifest_path = Path(manifest_path).expanduser()
+    resolved_manifest_path = (
+        raw_manifest_path if raw_manifest_path.is_absolute() else repo_root / raw_manifest_path
+    )
+    display_path = manifest_path if not raw_manifest_path.is_absolute() else "--manifest"
+    manifest = load_yaml_mapping(
+        resolved_manifest_path,
+        display_path,
+        yaml_module_loader=yaml_module_loader,
+    )
+    modules, mappings = parse_template_sync_manifest(manifest)
+    validate_placeholder_manifest_path_scopes(PLACEHOLDER_MANIFEST, mappings)
+    return modules, mappings
+
+
+def normalize_marker_path(raw_path: str, field_name: str) -> tuple[str, bool]:
+    """Normalize marker path notation and return ``(path, is_directory)``."""
+    if raw_path.endswith("/"):
+        normalized = raw_path.rstrip("/")
+        is_directory = True
+    else:
+        normalized = raw_path
+        is_directory = False
+    safe_repository_path_pattern(normalized, field_name)
+    if has_wildcard(normalized):
+        raise PlaceholderError(f"{field_name} must not contain glob wildcards.")
+    return normalized, is_directory
+
+
+def parse_local_overrides(raw_records: Any, field_name: str) -> tuple[LocalOverride, ...]:
+    """Parse marker-shaped local override records."""
+    if raw_records is None:
+        return ()
+    if not isinstance(raw_records, list):
+        raise PlaceholderError(f"{field_name} must be a list.")
+    overrides: list[LocalOverride] = []
+    for raw_record in cast(list[Any], raw_records):
+        if not isinstance(raw_record, dict):
+            raise PlaceholderError(f"{field_name}[] must define a string path.")
+        record = cast(StructuredObject, raw_record)
+        raw_path = record.get("path")
+        if not isinstance(raw_path, str):
+            raise PlaceholderError(f"{field_name}[] must define a string path.")
+        normalized_path, is_directory = normalize_marker_path(
+            raw_path,
+            f"{field_name}[].path",
+        )
+        overrides.append(LocalOverride(path=normalized_path, is_directory=is_directory))
+    return tuple(overrides)
+
+
+def parse_placeholder_waivers(raw_records: Any, field_name: str) -> tuple[PlaceholderWaiver, ...]:
+    """Parse normalized placeholder waiver records."""
+    if raw_records is None:
+        return ()
+    if not isinstance(raw_records, list):
+        raise PlaceholderError(f"{field_name} must be a list.")
+    waivers: list[PlaceholderWaiver] = []
+    for raw_record in cast(list[Any], raw_records):
+        if not isinstance(raw_record, dict):
+            raise PlaceholderError(f"{field_name}[] must be an object.")
+        record = cast(StructuredObject, raw_record)
+        raw_path_pattern = record.get("path_pattern", record.get("path"))
+        raw_token_or_kind = record.get("token", record.get("finding_kind"))
+        reason = record.get("reason")
+        authorization_basis = record.get("authorization_basis")
+        reviewed_scope = record.get("reviewed_scope")
+        if not all(
+            isinstance(value, str)
+            for value in (
+                raw_path_pattern,
+                raw_token_or_kind,
+                reason,
+                authorization_basis,
+                reviewed_scope,
+            )
+        ):
+            raise PlaceholderError(
+                f"{field_name}[] must define path or path_pattern, token or finding_kind, "
+                "reason, authorization_basis, and reviewed_scope as strings."
+            )
+        raw_path_pattern = cast(str, raw_path_pattern)
+        raw_token_or_kind = cast(str, raw_token_or_kind)
+        reason = cast(str, reason)
+        authorization_basis = cast(str, authorization_basis)
+        reviewed_scope = cast(str, reviewed_scope)
+        safe_repository_path_pattern(raw_path_pattern, f"{field_name}[].path")
+        waivers.append(
+            PlaceholderWaiver(
+                path_pattern=raw_path_pattern,
+                token_or_kind=raw_token_or_kind,
+                reason=reason,
+                authorization_basis=authorization_basis,
+                reviewed_scope=reviewed_scope,
+            )
+        )
+    return tuple(waivers)
+
+
+def marker_template_sync_mapping(marker: dict[str, Any]) -> dict[str, Any]:
+    """Return marker.template_sync after structural validation."""
+    template_sync = marker.get("template_sync")
+    if not isinstance(template_sync, dict):
+        raise PlaceholderError("Marker must contain template_sync mapping.")
+    return cast(StructuredObject, template_sync)
+
+
+def load_marker_scan_state(
+    repo_root: Path,
+    marker_path: str,
+    *,
+    yaml_module_loader: Callable[[str], Any] = importlib.import_module,
+) -> tuple[frozenset[str], tuple[LocalOverride, ...], tuple[PlaceholderWaiver, ...]]:
+    """Load included modules and placeholder scan records from a marker."""
+    marker = load_yaml_mapping(
+        repo_root / marker_path,
+        marker_path,
+        yaml_module_loader=yaml_module_loader,
+    )
+    template_sync = marker_template_sync_mapping(marker)
+    raw_modules = template_sync.get("included_modules")
+    modules = string_list_value(
+        raw_modules,
+        "template_sync.included_modules must be a list of strings.",
+    )
+    return (
+        frozenset(modules),
+        parse_local_overrides(
+            template_sync.get("local_overrides"), "template_sync.local_overrides"
+        ),
+        parse_placeholder_waivers(
+            template_sync.get("placeholder_waivers"),
+            "template_sync.placeholder_waivers",
+        ),
+    )
+
+
+def load_json_scan_records(path: str, repo_root: Path, field_name: str) -> Any:
+    """Load an explicit JSON scan input."""
+    raw_path = Path(path).expanduser()
+    resolved_path = raw_path if raw_path.is_absolute() else repo_root / raw_path
+    try:
+        return json.loads(resolved_path.read_text(encoding="utf-8"))
+    except OSError as error:
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        raise PlaceholderError(f"{field_name}: unable to read file ({error_summary}).") from error
+    except json.JSONDecodeError as error:
+        raise PlaceholderError(f"{field_name}: invalid JSON ({error}).") from error
+
+
+def scan_records_from_json_document(document: Any, field_name: str) -> Any:
+    """Return records from a list, direct object, or marker-shaped JSON object."""
+    if isinstance(document, list):
+        return cast(list[Any], document)
+    if isinstance(document, dict):
+        root = cast(StructuredObject, document)
+        if field_name in root:
+            return root[field_name]
+        template_sync = root.get("template_sync")
+        if isinstance(template_sync, dict) and field_name in template_sync:
+            return cast(StructuredObject, template_sync)[field_name]
+    raise PlaceholderError(f"JSON input must be a list or contain {field_name}.")
+
+
+def validate_active_modules(
+    active_modules: frozenset[str],
+    manifest_modules: frozenset[str],
+) -> None:
+    """Validate explicit active module names against the template-sync manifest."""
+    unknown_modules = active_modules - manifest_modules
+    if unknown_modules:
+        raise PlaceholderError(
+            "Unknown retained module(s): " + ", ".join(sorted(unknown_modules)) + "."
+        )
+
+
+def split_csv_values(value: str | None) -> tuple[str, ...]:
+    """Split a comma-separated CLI value into normalized non-empty items."""
+    if value is None:
+        return ()
+    return tuple(item.strip() for item in value.split(",") if item.strip())
+
+
+def classification_requested(args: argparse.Namespace) -> bool:
+    """Return whether scan classification inputs or modes are active."""
+    return (
+        getattr(args, "scan_mode", SCAN_MODE_DEFAULT) != SCAN_MODE_DEFAULT
+        or bool(getattr(args, "retained_modules", None))
+        or bool(getattr(args, "retained_modules_csv", None))
+        or bool(getattr(args, "marker", None))
+        or bool(getattr(args, "local_overrides_file", None))
+        or bool(getattr(args, "placeholder_waivers_file", None))
+        or bool(getattr(args, "template_only_delete_paths", None))
+    )
+
+
+def build_scan_classification_context(
+    args: argparse.Namespace,
+    repo_root: Path,
+) -> ScanClassificationContext:
+    """Build classified scan inputs from CLI arguments."""
+    if not classification_requested(args):
+        return ScanClassificationContext()
+
+    manifest_path = getattr(args, "manifest", None) or DEFAULT_TEMPLATE_SYNC_MANIFEST_PATH
+    manifest_modules, mappings = load_template_sync_manifest_context(repo_root, manifest_path)
+
+    explicit_modules = set(getattr(args, "retained_modules", None) or [])
+    explicit_modules.update(split_csv_values(getattr(args, "retained_modules_csv", None)))
+    included_modules: frozenset[str] | None = (
+        frozenset(explicit_modules) if explicit_modules else None
+    )
+    local_overrides: tuple[LocalOverride, ...] = ()
+    waivers: tuple[PlaceholderWaiver, ...] = ()
+
+    marker_path = getattr(args, "marker", None)
+    marker_candidate = repo_root / DEFAULT_TEMPLATE_SYNC_MARKER_PATH
+    if marker_path is None and included_modules is None and marker_candidate.is_file():
+        marker_path = DEFAULT_TEMPLATE_SYNC_MARKER_PATH
+    if marker_path is not None:
+        marker_modules, marker_overrides, marker_waivers = load_marker_scan_state(
+            repo_root,
+            marker_path,
+        )
+        if included_modules is None:
+            included_modules = marker_modules
+        local_overrides = (*local_overrides, *marker_overrides)
+        waivers = (*waivers, *marker_waivers)
+
+    if included_modules is None:
+        raise PlaceholderError(
+            "Classified placeholder scans require explicit --retained-module values "
+            "or a readable .template-sync/marker.yml with included_modules."
+        )
+    validate_active_modules(included_modules, manifest_modules)
+
+    local_overrides_file = getattr(args, "local_overrides_file", None)
+    if local_overrides_file is not None:
+        document = load_json_scan_records(local_overrides_file, repo_root, "--local-overrides-file")
+        local_overrides = (
+            *local_overrides,
+            *parse_local_overrides(
+                scan_records_from_json_document(document, "local_overrides"),
+                "local_overrides",
+            ),
+        )
+
+    placeholder_waivers_file = getattr(args, "placeholder_waivers_file", None)
+    if placeholder_waivers_file is not None:
+        document = load_json_scan_records(
+            placeholder_waivers_file,
+            repo_root,
+            "--placeholder-waivers-file",
+        )
+        waivers = (
+            *waivers,
+            *parse_placeholder_waivers(
+                scan_records_from_json_document(document, "placeholder_waivers"),
+                "placeholder_waivers",
+            ),
+        )
+
+    raw_template_only_delete_paths = getattr(args, "template_only_delete_paths", None) or ()
+    template_only_delete_paths = frozenset(
+        safe_repository_path_pattern(path, "--template-only-delete-path")
+        for path in cast(Sequence[str], raw_template_only_delete_paths)
+    )
+    return ScanClassificationContext(
+        mappings=mappings,
+        included_modules=included_modules,
+        local_overrides=local_overrides,
+        template_only_delete_paths=template_only_delete_paths,
+        waivers=waivers,
+    )
+
+
+def matching_waiver(
+    finding: ScanFinding,
+    classification_context: ScanClassificationContext,
+) -> PlaceholderWaiver | None:
+    """Return the first structured waiver that covers a finding."""
+    for waiver in classification_context.waivers:
+        if waiver.matches(
+            relative_path=finding.path,
+            token_name=finding.token_name,
+            finding_kind=finding.kind,
+        ):
+            return waiver
+    return None
+
+
+def local_override_matches(
+    relative_path: str,
+    local_overrides: tuple[LocalOverride, ...],
+) -> bool:
+    """Return whether any local override covers ``relative_path``."""
+    return any(local_override.matches(relative_path) for local_override in local_overrides)
+
+
+def classify_finding(
+    finding: ScanFinding,
+    classification_context: ScanClassificationContext | None,
+) -> ScanFinding:
+    """Return ``finding`` with manifest relation, context, disposition, and waiver state."""
+    if classification_context is None or not classification_context.is_active:
+        return finding
+
+    relation = selected_relation_for_path(finding.path, classification_context.mappings)
+    manifest_relation = relation.description if relation is not None else None
+    is_template_only_delete = finding.path in classification_context.template_only_delete_paths
+    is_local_override = local_override_matches(
+        finding.path,
+        classification_context.local_overrides,
+    )
+
+    if is_template_only_delete:
+        context = CONTEXT_TEMPLATE_ONLY_DELETE
+        disposition = DISPOSITION_PRUNED_INFORMATIONAL
+    elif is_local_override:
+        context = CONTEXT_LOCAL_OVERRIDE
+        if relation is None:
+            disposition = DISPOSITION_UNKNOWN_OWNER_REVIEW
+        elif relation.is_retained_by(classification_context.included_modules or ()):
+            disposition = DISPOSITION_RETAINED_HARD_FAILURE
+        else:
+            disposition = DISPOSITION_PRUNED_INFORMATIONAL
+    elif relation is None:
+        context = CONTEXT_UNKNOWN_PATH
+        disposition = DISPOSITION_UNKNOWN_OWNER_REVIEW
+    elif relation.is_retained_by(classification_context.included_modules or ()):
+        context = CONTEXT_RETAINED_PATH
+        disposition = DISPOSITION_RETAINED_HARD_FAILURE
+    else:
+        context = CONTEXT_EXCLUDED_MODULE_PATH
+        disposition = DISPOSITION_PRUNED_INFORMATIONAL
+
+    waiver = matching_waiver(finding, classification_context)
+    waiver_state = WAIVER_STATE_NONE
+    if waiver is not None:
+        disposition = DISPOSITION_WAIVED_INFORMATIONAL
+        waiver_state = WAIVER_STATE_APPLIED
+
+    return ScanFinding(
+        kind=finding.kind,
+        path=finding.path,
+        line_number=finding.line_number,
+        matched_text=finding.matched_text,
+        message=finding.message,
+        token_name=finding.token_name,
+        manifest_relation=manifest_relation,
+        failure_disposition=disposition,
+        context=context,
+        waiver_state=waiver_state,
+    )
+
+
+def finding_fails_scan(finding: ScanFinding, scan_mode: str) -> bool:
+    """Return whether one classified finding should fail a scan mode."""
+    if scan_mode == SCAN_MODE_REPORT:
+        return False
+    if finding.failure_disposition == DISPOSITION_WAIVED_INFORMATIONAL:
+        return False
+    if scan_mode == SCAN_MODE_RETAINED_HARD:
+        return finding.failure_disposition in {
+            DISPOSITION_RETAINED_HARD_FAILURE,
+            DISPOSITION_UNKNOWN_OWNER_REVIEW,
+        }
+    return True
+
+
+def scan_has_failures(findings: Iterable[ScanFinding], scan_mode: str) -> bool:
+    """Return whether a scan result should be non-zero."""
+    return any(finding_fails_scan(finding, scan_mode) for finding in findings)
+
+
+def build_unresolved_scan_patterns() -> (
+    tuple[tuple[str, str, str, re.Pattern[str], tuple[str, ...]], ...]
+):
+    """Return unresolved placeholder scan patterns from the replacement allowlist."""
+    patterns: list[tuple[str, str, str, re.Pattern[str], tuple[str, ...]]] = []
+    for token in PLACEHOLDER_TOKEN_SPECS:
+        name = token.name
+        placeholder = token.placeholder
+        pattern = (
+            OWNER_REPO_NON_PATH_SEGMENT_PATTERN
+            if token.replacement_style == TOKEN_STYLE_OWNER_REPO
+            else (
+                re.compile(rf"{re.escape(placeholder)}{URL_BOUNDARY_PATTERN}")
+                if token.replacement_style == TOKEN_STYLE_GITHUB_URL
+                else re.compile(re.escape(placeholder))
+            )
+        )
+        patterns.append((name, token.finding_kind, placeholder, pattern, token.paths))
     return tuple(patterns)
 
 
@@ -2364,10 +3290,13 @@ def iter_regex_matches(text: str, pattern: re.Pattern[str]) -> Iterable[tuple[in
             yield line_number, match.group(0)
 
 
-def scan_unresolved_placeholders(repo_root: Path) -> tuple[ScanFinding, ...]:
+def scan_unresolved_placeholders(
+    repo_root: Path,
+    classification_context: ScanClassificationContext | None = None,
+) -> tuple[ScanFinding, ...]:
     """Scan allowlisted files for unresolved approved placeholders."""
     findings: list[ScanFinding] = []
-    for name, placeholder, pattern, paths in build_unresolved_scan_patterns():
+    for name, finding_kind, _placeholder, pattern, paths in build_unresolved_scan_patterns():
         for relative_path in paths:
             path = resolve_repo_path(repo_root, relative_path)
             if not path.exists():
@@ -2377,12 +3306,16 @@ def scan_unresolved_placeholders(repo_root: Path) -> tuple[ScanFinding, ...]:
             text = read_text(path, relative_path)
             for line_number, matched_text in iter_regex_matches(text, pattern):
                 findings.append(
-                    ScanFinding(
-                        kind="unresolved-placeholder",
-                        path=relative_path,
-                        line_number=line_number,
-                        matched_text=matched_text,
-                        message=f"replace approved placeholder '{name}'",
+                    classify_finding(
+                        ScanFinding(
+                            kind=finding_kind,
+                            path=relative_path,
+                            line_number=line_number,
+                            matched_text=matched_text,
+                            message=f"replace approved placeholder '{name}'",
+                            token_name=name,
+                        ),
+                        classification_context,
                     )
                 )
     return tuple(findings)
@@ -2451,7 +3384,11 @@ def build_corruption_patterns(repository: str) -> tuple[tuple[re.Pattern[str], s
     )
 
 
-def scan_corruption_patterns(repo_root: Path, repository: str | None) -> tuple[ScanFinding, ...]:
+def scan_corruption_patterns(
+    repo_root: Path,
+    repository: str | None,
+    classification_context: ScanClassificationContext | None = None,
+) -> tuple[ScanFinding, ...]:
     """Scan repository text files for common broad-replacement corruption."""
     if repository is None:
         return ()
@@ -2472,22 +3409,36 @@ def scan_corruption_patterns(repo_root: Path, repository: str | None) -> tuple[S
         for pattern, message in patterns:
             for line_number, matched_text in iter_regex_matches(text, pattern):
                 findings.append(
-                    ScanFinding(
-                        kind="possible-corruption",
-                        path=relative_path,
-                        line_number=line_number,
-                        matched_text=matched_text,
-                        message=message,
+                    classify_finding(
+                        ScanFinding(
+                            kind="possible-corruption",
+                            path=relative_path,
+                            line_number=line_number,
+                            matched_text=matched_text,
+                            message=message,
+                        ),
+                        classification_context,
                     )
                 )
     return tuple(findings)
 
 
-def scan_repository(repo_root: Path, repository: str | None = None) -> tuple[ScanFinding, ...]:
+def scan_repository(
+    repo_root: Path,
+    repository: str | None = None,
+    classification_context: ScanClassificationContext | None = None,
+) -> tuple[ScanFinding, ...]:
     """Scan for unresolved placeholders and common substitution corruption."""
     if repository is not None:
         parse_repository(repository)
-    return scan_unresolved_placeholders(repo_root) + scan_corruption_patterns(repo_root, repository)
+    return scan_unresolved_placeholders(
+        repo_root,
+        classification_context,
+    ) + scan_corruption_patterns(
+        repo_root,
+        repository,
+        classification_context,
+    )
 
 
 def add_args_file_options(parser: argparse.ArgumentParser) -> None:
@@ -2502,6 +3453,66 @@ def add_args_file_options(parser: argparse.ArgumentParser) -> None:
         choices=ARGS_FILE_FORMATS,
         default=None,
         help="Explicit args-file format; overrides the file extension.",
+    )
+
+
+def add_scan_classification_options(parser: argparse.ArgumentParser) -> None:
+    """Add classified scan options to a subcommand parser."""
+    parser.add_argument(
+        "--scan-mode",
+        choices=SCAN_MODES,
+        default=SCAN_MODE_DEFAULT,
+        help=(
+            "Scan pass/fail mode. default preserves legacy behavior; report emits "
+            "classified findings without failing; retained-hard fails retained or "
+            "unknown-owner findings while treating pruned findings as informational."
+        ),
+    )
+    parser.add_argument(
+        "--manifest",
+        default=None,
+        help=(
+            "Template-sync manifest path for classified scans. Defaults to "
+            f"{DEFAULT_TEMPLATE_SYNC_MANIFEST_PATH} when classification is requested."
+        ),
+    )
+    parser.add_argument(
+        "--marker",
+        default=None,
+        help=(
+            "Template-sync marker path used to derive retained modules, local overrides, "
+            "and durable placeholder waivers."
+        ),
+    )
+    parser.add_argument(
+        "--retained-module",
+        dest="retained_modules",
+        action="append",
+        default=None,
+        help="Retained template-sync module for classified scans. May be repeated.",
+    )
+    parser.add_argument(
+        "--retained-modules",
+        dest="retained_modules_csv",
+        default=None,
+        help="Comma-separated retained template-sync modules for classified scans.",
+    )
+    parser.add_argument(
+        "--local-overrides-file",
+        default=None,
+        help="JSON file containing marker-shaped local_overrides records for planning scans.",
+    )
+    parser.add_argument(
+        "--placeholder-waivers-file",
+        default=None,
+        help="JSON file containing placeholder_waivers records for planning scans.",
+    )
+    parser.add_argument(
+        "--template-only-delete-path",
+        dest="template_only_delete_paths",
+        action="append",
+        default=None,
+        help="Path scheduled for template-only deletion during a planning scan. May be repeated.",
     )
 
 
@@ -2538,7 +3549,7 @@ def load_json_args_file(path: Path) -> dict[str, Any]:
         raise PlaceholderError(f"--args-file: invalid JSON ({error}).") from error
     if not isinstance(parsed, dict):
         raise PlaceholderError("--args-file must contain a JSON object.")
-    return parsed
+    return cast(StructuredObject, parsed)
 
 
 def load_yaml_args_file(
@@ -2562,7 +3573,7 @@ def load_yaml_args_file(
         raise PlaceholderError(f"--args-file: invalid YAML ({error}).") from error
     if not isinstance(parsed, dict):
         raise PlaceholderError("--args-file must contain a YAML mapping.")
-    return parsed
+    return cast(StructuredObject, parsed)
 
 
 def load_args_file_mapping(
@@ -2583,7 +3594,7 @@ def load_args_file_mapping(
 
 def cli_supplied_fields(
     argv: Sequence[str],
-    flags_by_field: dict[str, tuple[str, ...]],
+    flags_by_field: Mapping[str, Sequence[str]],
 ) -> set[str]:
     """Return argument destinations supplied directly on the command line."""
     supplied: set[str] = set()
@@ -2607,9 +3618,12 @@ def validate_args_file_value(field_name: str, value: Any) -> Any:
             raise PlaceholderError(f"--args-file field {field_name!r} must be a string.")
         return value
     if field_name in LIST_STRING_ARGS_FILE_FIELDS:
-        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-            raise PlaceholderError(f"--args-file field {field_name!r} must be a list of strings.")
-        return tuple(value)
+        return tuple(
+            string_list_value(
+                value,
+                f"--args-file field {field_name!r} must be a list of strings.",
+            )
+        )
     if field_name in BOOLEAN_ARGS_FILE_FIELDS:
         if not isinstance(value, bool):
             raise PlaceholderError(f"--args-file field {field_name!r} must be a boolean.")
@@ -2622,7 +3636,7 @@ def apply_args_file_values(
     *,
     argv: Sequence[str],
     allowed_fields: frozenset[str],
-    flags_by_field: dict[str, tuple[str, ...]],
+    flags_by_field: Mapping[str, Sequence[str]],
 ) -> argparse.Namespace:
     """Merge args-file values into parsed args, with CLI flags taking precedence."""
     if args.args_file is None:
@@ -2650,6 +3664,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     replace_parser = subparsers.add_parser("replace", help="replace approved placeholders")
     add_args_file_options(replace_parser)
     replace_parser.add_argument("--repo-root", default=None, help="repository root")
+    add_scan_classification_options(replace_parser)
     replace_parser.add_argument(
         "--host-provider",
         choices=HOST_PROVIDERS,
@@ -2845,6 +3860,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     scan_parser = subparsers.add_parser("scan", help="scan for unresolved placeholders")
     add_args_file_options(scan_parser)
     scan_parser.add_argument("--repo-root", default=None, help="repository root")
+    add_scan_classification_options(scan_parser)
     scan_parser.add_argument(
         "--repository",
         default=None,
@@ -2934,17 +3950,27 @@ def run_replace(args: argparse.Namespace) -> int:
     if args.dry_run:
         return 0
 
-    findings = scan_repository(repo_root=repo_root, repository=context.repository)
+    classification_context = build_scan_classification_context(args, repo_root)
+    findings = scan_repository(
+        repo_root=repo_root,
+        repository=context.repository,
+        classification_context=classification_context,
+    )
     print_scan_findings(findings)
-    return 1 if findings else 0
+    return 1 if scan_has_failures(findings, args.scan_mode) else 0
 
 
 def run_scan(args: argparse.Namespace) -> int:
     """Run the scan command."""
     repo_root = resolve_repo_root(args.repo_root)
-    findings = scan_repository(repo_root=repo_root, repository=args.repository)
+    classification_context = build_scan_classification_context(args, repo_root)
+    findings = scan_repository(
+        repo_root=repo_root,
+        repository=args.repository,
+        classification_context=classification_context,
+    )
     print_scan_findings(findings)
-    return 1 if findings else 0
+    return 1 if scan_has_failures(findings, args.scan_mode) else 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:

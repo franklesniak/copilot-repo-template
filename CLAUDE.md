@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.6.20260623.0
+**Version:** 1.6.20260629.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-23
+- **Last Updated:** 2026-06-29
 - **Scope:** Agent-specific entry point for Claude Code and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
@@ -47,7 +47,9 @@ During downstream template adoption and stack selection, perform non-protected c
     - `npm run lint:md`
     <!-- template-sync: end markdown-reference-only -->
     <!-- template-sync: begin python-reference-only -->
-    - `pytest tests/ -v --cov --cov-report=term-missing`
+    - `python -m pyright --project pyrightconfig.json`
+    - `pytest tests/ -m "not slow" -v --cov --cov-report=term-missing`
+    - `pytest tests/ -m slow -v --no-cov`
     <!-- template-sync: end python-reference-only -->
     <!-- template-sync: begin schema-reference-only -->
     - `pytest tests/test_schema_examples.py -v` (after any schema or schema-example change)

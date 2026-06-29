@@ -1,6 +1,6 @@
 # Python CI Workflow
 #
-# Purpose: Run Python type checking (mypy) and tests (pytest).
+# Purpose: Run Python type checking (mypy and Pyright) and tests (pytest).
 #
 # Aggregate pre-commit enforcement lives in `.github/workflows/precommit-ci.yml`
 # so downstream repositories that exclude Python project source can still keep
@@ -52,10 +52,10 @@
 #    - pip cache invalidates when dependency specification files change
 #      (e.g., pyproject.toml, requirements.txt, setup.py)
 #
-#    Note: Type checking (mypy) runs only on ubuntu-latest, not in a
-#    cross-platform matrix. mypy performs platform-agnostic static analysis,
-#    so cross-platform type checking would triple CI time for negligible
-#    benefit. Runtime tests already cover cross-platform behavior.
+#    Note: Type checking (mypy and Pyright) runs only on ubuntu-latest, not in a
+#    cross-platform matrix. Both tools perform platform-agnostic static
+#    analysis, so cross-platform type checking would triple CI time for
+#    negligible benefit. Runtime tests already cover cross-platform behavior.
 #
 # Note: This workflow is optional. Remove if your project doesn't use Python.
 
@@ -67,13 +67,19 @@ on:
   pull_request:
     branches: ["**"]
   workflow_dispatch:
+    inputs:
+      run_slow_tests:
+        description: "Run slow template tests in addition to the default non-slow suite."
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
   type-check:
-    name: Type Check (mypy)
+    name: Type Check (mypy + Pyright)
     runs-on: ubuntu-latest
 
     steps:
@@ -114,6 +120,12 @@ jobs:
         # shipped advisory default for repositories created from the template.
         continue-on-error: ${{ github.repository != 'franklesniak/copilot-repo-template' }}
 
+      - name: Run Pyright
+        run: python -m pyright --project pyrightconfig.json
+        # Keep Pyright blocking in the upstream template while preserving the
+        # shipped advisory default for repositories created from the template.
+        continue-on-error: ${{ github.repository != 'franklesniak/copilot-repo-template' }}
+
   test:
     name: Test
     runs-on: ${{ matrix.os }}
@@ -149,8 +161,12 @@ jobs:
           # Adjust this if your project uses a different installation method
           pip install -e ".[dev]"
 
-      - name: Run tests with coverage
-        run: pytest tests/ -v --cov --cov-report=term-missing
+      - name: Run non-slow tests with coverage
+        run: pytest tests/ -m "not slow" -v --cov --cov-report=term-missing
+
+      - name: Run slow template tests
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_slow_tests }}
+        run: pytest tests/ -m slow -v --no-cov
 
       # Codecov Integration (Optional, Commented Out)
       #

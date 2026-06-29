@@ -1,5 +1,12 @@
 {
   "window.title": "Go to .vscode/settings.json and make this the name of the repo",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/.github/scripts",
+    "${workspaceFolder}/.template-sync/scripts",
+    "${workspaceFolder}/src",
+    "${workspaceFolder}/tests",
+    "${workspaceFolder}/templates/python/tests"
+  ],
   "[powershell]": {
     "files.encoding": "utf8"
   },

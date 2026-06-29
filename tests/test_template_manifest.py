@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fnmatch
+import importlib
 import json
 import os
 import posixpath
@@ -11,12 +12,12 @@ import subprocess
 import sys
 from collections import Counter
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Protocol, cast
 from urllib.parse import unquote, urlsplit
 
-import jsonschema
-import pytest
 import yaml  # type: ignore[import-untyped]
+
+from tests._pytest_compat import pytest
 
 pytestmark = pytest.mark.upstream_template_only
 
@@ -396,7 +397,13 @@ ANY_REFERENCE_ONLY_MARKER_MODULES = {
         "azure-pipelines",
         "azure-devops-collaboration",
     ),
-    "data-ci-reference-only": ("json", "yaml", "schema", "template-sync-support"),
+    "data-ci-reference-only": (
+        "baseline",
+        "json",
+        "yaml",
+        "schema",
+        "template-sync-support",
+    ),
 }
 PROTECTED_ENTRY_POINT_REFERENCE_PATHS = (
     ".cursor/rules/repository-instructions.mdc",
@@ -431,7 +438,8 @@ REFERENCE_ONLY_FORBIDDEN_ENTRY_POINT_TOKENS = {
         "powershell.instructions.md",
     ),
     "python-reference-only": (
-        "pytest tests/ -v --cov --cov-report=term-missing",
+        'pytest tests/ -m "not slow" -v --cov --cov-report=term-missing',
+        "python -m pyright --project pyrightconfig.json",
         "python.instructions.md",
     ),
     "terraform-reference-only": (
@@ -558,40 +566,76 @@ CONCRETE_PATTERN_ALLOWLIST = {
 }
 SOURCE_REPO = "https://github.com/franklesniak/copilot-repo-template.git"
 FULL_SHA = "0123456789abcdef0123456789abcdef01234567"
+StructuredObject = dict[str, Any]
+
+
+class JsonSchemaValidator(Protocol):
+    """Minimal validator protocol used by schema assertion helpers."""
+
+    def iter_errors(self, instance: object) -> Iterable["JsonSchemaValidationError"]:
+        """Return validation errors for ``instance``."""
+        ...
+
+
+class JsonSchemaValidationError(Protocol):
+    """Validation error attributes used by manifest schema tests."""
+
+    json_path: str
+    message: str
+
+
+def _as_mapping(value: object, message: str) -> StructuredObject:
+    """Return ``value`` after asserting it is a structured mapping."""
+    assert isinstance(value, dict), message
+    return cast(StructuredObject, value)
+
+
+def _as_list(value: object, message: str) -> list[Any]:
+    """Return ``value`` after asserting it is a list."""
+    assert isinstance(value, list), message
+    return cast(list[Any], value)
+
+
+def _as_string_list(value: object, message: str) -> list[str]:
+    """Return ``value`` after asserting it is a list of strings."""
+    values = _as_list(value, message)
+    assert all(isinstance(item, str) for item in values), message
+    return cast(list[str], values)
 
 
 def _load_manifest() -> dict[str, Any]:
     """Parse the manifest and return its top-level object."""
     with MANIFEST_PATH.open(encoding="utf-8") as manifest_file:
         parsed_manifest = yaml.safe_load(manifest_file)
-    assert isinstance(parsed_manifest, dict), "manifest root must be a mapping"
-    return parsed_manifest
+    return _as_mapping(parsed_manifest, "manifest root must be a mapping")
 
 
 def _template_manifest() -> dict[str, Any]:
     """Return the nested ``template_manifest`` object."""
     template_manifest = _load_manifest().get("template_manifest")
-    assert isinstance(template_manifest, dict), "template_manifest must be a mapping"
-    return template_manifest
+    return _as_mapping(template_manifest, "template_manifest must be a mapping")
 
 
 def _load_manifest_schema() -> dict[str, Any]:
     """Parse the JSON Schema for the manifest."""
     schema = json.loads(MANIFEST_SCHEMA_PATH.read_text(encoding="utf-8"))
-    assert isinstance(schema, dict), "manifest schema root must be a mapping"
-    return schema
+    return _as_mapping(schema, "manifest schema root must be a mapping")
 
 
 def _load_marker_schema() -> dict[str, Any]:
     """Parse the JSON Schema for the downstream sync marker."""
     schema = json.loads(MARKER_SCHEMA_PATH.read_text(encoding="utf-8"))
-    assert isinstance(schema, dict), "marker schema root must be a mapping"
-    return schema
+    return _as_mapping(schema, "marker schema root must be a mapping")
 
 
-def _manifest_validation_errors(manifest: dict[str, Any]) -> list[jsonschema.ValidationError]:
+def _jsonschema_validator_class() -> Any:
+    """Return the Draft 2020-12 validator class from the optional dependency."""
+    return cast(Any, importlib.import_module("jsonschema")).Draft202012Validator
+
+
+def _manifest_validation_errors(manifest: dict[str, Any]) -> list[JsonSchemaValidationError]:
     """Return sorted validation errors for ``manifest`` against the manifest schema."""
-    validator = jsonschema.Draft202012Validator(_load_manifest_schema())
+    validator = cast(JsonSchemaValidator, _jsonschema_validator_class()(_load_manifest_schema()))
     return sorted(
         validator.iter_errors(manifest),
         key=lambda error: error.json_path,
@@ -757,14 +801,13 @@ def _copy_marker_validation_schemas(repo_root: Path) -> None:
 
 def _module_rows_from_manifest() -> list[tuple[str, str]]:
     """Return ``(module_name, description)`` rows from the manifest."""
-    modules = _template_manifest().get("modules")
-    assert isinstance(modules, list), "modules must be a list"
+    modules = _as_list(_template_manifest().get("modules"), "modules must be a list")
 
     rows: list[tuple[str, str]] = []
     for module in modules:
-        assert isinstance(module, dict), "each module must be a mapping"
-        name = module.get("name")
-        description = module.get("description")
+        module_mapping = _as_mapping(module, "each module must be a mapping")
+        name = module_mapping.get("name")
+        description = module_mapping.get("description")
         assert isinstance(name, str), "module name must be a string"
         assert isinstance(description, str), f"module {name} description must be a string"
         rows.append((name, description))
@@ -781,37 +824,38 @@ def _path_mapping_rows_from_manifest_document(
 ) -> list[tuple[str, tuple[str, ...]]]:
     """Return path-mapping rows from a manifest document object."""
     template_manifest = manifest.get("template_manifest")
-    assert isinstance(template_manifest, dict), "template_manifest must be a mapping"
-    return _path_mapping_rows_from_template_manifest(template_manifest)
+    return _path_mapping_rows_from_template_manifest(
+        _as_mapping(template_manifest, "template_manifest must be a mapping")
+    )
 
 
 def _path_mapping_rows_from_template_manifest(
     template_manifest: dict[str, Any],
 ) -> list[tuple[str, tuple[str, ...]]]:
     """Return path-mapping rows from a nested ``template_manifest`` object."""
-    path_mappings = template_manifest.get("path_mappings")
-    assert isinstance(path_mappings, list), "path_mappings must be a list"
+    path_mappings = _as_list(template_manifest.get("path_mappings"), "path_mappings must be a list")
 
     rows: list[tuple[str, tuple[str, ...]]] = []
     for mapping in path_mappings:
-        assert isinstance(mapping, dict), "each path mapping must be a mapping"
-        pattern = mapping.get("pattern")
+        mapping_object = _as_mapping(mapping, "each path mapping must be a mapping")
+        pattern = mapping_object.get("pattern")
         assert isinstance(pattern, str), "path mapping pattern must be a string"
-        rows.append((pattern, _path_mapping_referenced_modules(mapping)))
+        rows.append((pattern, _path_mapping_referenced_modules(mapping_object)))
     return rows
 
 
 def _path_mapping_by_pattern() -> dict[str, dict[str, Any]]:
     """Return path mapping objects keyed by their exact pattern."""
-    path_mappings = _template_manifest().get("path_mappings")
-    assert isinstance(path_mappings, list), "path_mappings must be a list"
+    path_mappings = _as_list(
+        _template_manifest().get("path_mappings"), "path_mappings must be a list"
+    )
 
     rows: dict[str, dict[str, Any]] = {}
     for mapping in path_mappings:
-        assert isinstance(mapping, dict), "each path mapping must be a mapping"
-        pattern = mapping.get("pattern")
+        mapping_object = _as_mapping(mapping, "each path mapping must be a mapping")
+        pattern = mapping_object.get("pattern")
         assert isinstance(pattern, str), "path mapping pattern must be a string"
-        rows[pattern] = mapping
+        rows[pattern] = mapping_object
     return rows
 
 
@@ -822,11 +866,12 @@ def _relation_modules(mapping: dict[str, Any], relation_key: str) -> tuple[str, 
         return ()
 
     modules = mapping.get(relation_key)
-    assert isinstance(modules, list), f"{pattern} {relation_key} must be a list"
-    assert all(
-        isinstance(module, str) for module in modules
-    ), f"{pattern} {relation_key} values must be strings"
-    return tuple(modules)
+    return tuple(
+        _as_string_list(
+            modules,
+            f"{pattern} {relation_key} values must be strings",
+        )
+    )
 
 
 def _path_mapping_referenced_modules(mapping: dict[str, Any]) -> tuple[str, ...]:
@@ -860,16 +905,17 @@ def _path_mapping_matches_modules(
 
 def _path_mapping_relations_from_manifest() -> list[tuple[str, tuple[str, ...], tuple[str, ...]]]:
     """Return ``(pattern, requires_all, requires_any)`` rows from the manifest."""
-    path_mappings = _template_manifest().get("path_mappings")
-    assert isinstance(path_mappings, list), "path_mappings must be a list"
+    path_mappings = _as_list(
+        _template_manifest().get("path_mappings"), "path_mappings must be a list"
+    )
 
     rows: list[tuple[str, tuple[str, ...], tuple[str, ...]]] = []
     for mapping in path_mappings:
-        assert isinstance(mapping, dict), "each path mapping must be a mapping"
-        pattern = mapping.get("pattern")
+        mapping_object = _as_mapping(mapping, "each path mapping must be a mapping")
+        pattern = mapping_object.get("pattern")
         assert isinstance(pattern, str), "path mapping pattern must be a string"
-        requires_all = _relation_modules(mapping, "requires_all")
-        requires_any = _relation_modules(mapping, "requires_any")
+        requires_all = _relation_modules(mapping_object, "requires_all")
+        requires_any = _relation_modules(mapping_object, "requires_any")
         rows.append((pattern, requires_all, requires_any))
     return rows
 
@@ -968,8 +1014,10 @@ def _concrete_pattern_integrity_failures(
             allowlist,
         )
 
-    marker = yaml.safe_load(marker_path.read_text(encoding="utf-8"))
-    assert isinstance(marker, dict), "marker root must be a mapping"
+    marker = _as_mapping(
+        yaml.safe_load(marker_path.read_text(encoding="utf-8")),
+        "marker root must be a mapping",
+    )
     (
         included_modules,
         local_overrides,
@@ -1441,13 +1489,18 @@ def _markdown_files() -> list[Path]:
     return sorted(paths)
 
 
-def _retained_markdown_files() -> list[Path]:
+def _retained_markdown_files(
+    path_mapping_rows: list[tuple[str, tuple[str, ...]]] | None = None,
+) -> list[Path]:
     """Return Markdown files whose manifest ownership is not template-onboarding."""
+    if path_mapping_rows is None:
+        path_mapping_rows = _path_mapping_rows_from_manifest()
+
     retained_paths: list[Path] = []
 
     for path in _markdown_files():
         relative_path = path.relative_to(REPO_ROOT).as_posix()
-        modules = _manifest_modules_for_path(relative_path)
+        modules = _manifest_modules_for_path(relative_path, path_mapping_rows)
         assert modules is not None, f"{relative_path} must have a manifest mapping"
         if "template-onboarding" not in modules:
             retained_paths.append(path)
@@ -1520,13 +1573,12 @@ def _assert_root_within_repo(root: Path, repo_root_resolved: Path) -> None:
 def _module_enum_from_marker_schema() -> list[str]:
     """Return the baked module enum from the marker schema."""
     schema_defs = _load_marker_schema().get("$defs")
-    assert isinstance(schema_defs, dict), "marker schema $defs must be a mapping"
-    module_name = schema_defs.get("moduleName")
-    assert isinstance(module_name, dict), "marker schema moduleName definition must be a mapping"
-    enum = module_name.get("enum")
-    assert isinstance(enum, list), "marker schema moduleName enum must be a list"
-    assert all(isinstance(module, str) for module in enum), "moduleName enum values must be strings"
-    return enum
+    schema_definitions = _as_mapping(schema_defs, "marker schema $defs must be a mapping")
+    module_name = _as_mapping(
+        schema_definitions.get("moduleName"),
+        "marker schema moduleName definition must be a mapping",
+    )
+    return _as_string_list(module_name.get("enum"), "moduleName enum values must be strings")
 
 
 def test_template_manifest_parses_successfully() -> None:
@@ -1648,6 +1700,7 @@ def test_template_manifest_data_ci_mapping_uses_v2_boolean_semantics() -> None:
 
     assert _relation_modules(data_ci_mapping, "requires_all") == ("github-actions",)
     assert _relation_modules(data_ci_mapping, "requires_any") == (
+        "baseline",
         "json",
         "yaml",
         "schema",
@@ -1660,6 +1713,7 @@ def test_template_manifest_data_ci_mapping_uses_v2_boolean_semantics() -> None:
         data_ci_mapping,
         {"github-actions", "template-sync-support"},
     )
+    assert _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "baseline"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"github-actions"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"yaml", "schema"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "terraform"})
@@ -1767,6 +1821,7 @@ def test_template_manifest_maps_azure_pipelines_to_ci_host_and_stack_modules() -
         ".azuredevops/pipelines/terraform-ci.yml": ("terraform", "azure-pipelines"),
         ".azuredevops/pipelines/data-ci.yml": (
             "azure-pipelines",
+            "baseline",
             "json",
             "yaml",
             "schema",
@@ -1785,6 +1840,7 @@ def test_template_manifest_azure_data_pipeline_uses_v2_boolean_semantics() -> No
 
     assert _relation_modules(data_ci_mapping, "requires_all") == ("azure-pipelines",)
     assert _relation_modules(data_ci_mapping, "requires_any") == (
+        "baseline",
         "json",
         "yaml",
         "schema",
@@ -1797,6 +1853,7 @@ def test_template_manifest_azure_data_pipeline_uses_v2_boolean_semantics() -> No
         data_ci_mapping,
         {"azure-pipelines", "template-sync-support"},
     )
+    assert _path_mapping_matches_modules(data_ci_mapping, {"azure-pipelines", "baseline"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"azure-pipelines"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"yaml", "schema"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "yaml"})
@@ -2916,19 +2973,25 @@ def test_partial_reference_stripping_leaves_protected_docs_clean() -> None:
 
 def test_partial_reference_stripping_preserves_retained_instruction_contracts() -> None:
     """Retained instruction-contract anchors must survive module-based inline-block stripping."""
-    contracts_document = yaml.safe_load(INSTRUCTION_CONTRACTS_PATH.read_text(encoding="utf-8"))
-    assert isinstance(contracts_document, dict), "instruction contracts root must be a mapping"
-    contracts = contracts_document.get("instruction_contracts")
-    assert isinstance(contracts, list), "instruction_contracts must be a list"
+    contracts_document = _as_mapping(
+        yaml.safe_load(INSTRUCTION_CONTRACTS_PATH.read_text(encoding="utf-8")),
+        "instruction contracts root must be a mapping",
+    )
+    contracts = _as_list(
+        contracts_document.get("instruction_contracts"),
+        "instruction_contracts must be a list",
+    )
     checked_contracts = 0
 
     for contract in contracts:
-        assert isinstance(contract, dict), "each instruction contract must be a mapping"
-        required_modules = contract.get("requires_modules")
-        assert isinstance(required_modules, list), "requires_modules must be a list"
+        contract_mapping = _as_mapping(contract, "each instruction contract must be a mapping")
+        required_modules = _as_string_list(
+            contract_mapping.get("requires_modules"),
+            "requires_modules must be a list of strings",
+        )
         if not set(required_modules).issubset(ISSUE_694_PARTIAL_PROTECTED_DOC_MODULES):
             continue
-        relative_path = contract.get("path")
+        relative_path = contract_mapping.get("path")
         assert isinstance(relative_path, str), "contract path must be a string"
         stripped_text = _strip_inline_blocks_for_modules(
             relative_path,
@@ -2936,9 +2999,15 @@ def test_partial_reference_stripping_preserves_retained_instruction_contracts() 
         )
         checked_contracts += 1
 
-        for heading in contract.get("required_headings", []):
+        for heading in _as_string_list(
+            contract_mapping.get("required_headings", []),
+            "required_headings must be a list of strings",
+        ):
             assert heading in stripped_text, f"{relative_path}: missing heading {heading}"
-        for phrase in contract.get("required_phrases", []):
+        for phrase in _as_string_list(
+            contract_mapping.get("required_phrases", []),
+            "required_phrases must be a list of strings",
+        ):
             assert phrase in stripped_text, f"{relative_path}: missing phrase {phrase}"
 
     assert checked_contracts > 0, "at least one retained instruction contract must be checked"
@@ -2964,18 +3033,23 @@ def test_repeated_precommit_repos_share_rev() -> None:
     remains pinned to the same revision and surfaces any drift between them.
     """
     precommit_path = REPO_ROOT / ".pre-commit-config.yaml"
-    precommit_config = yaml.safe_load(precommit_path.read_text(encoding="utf-8"))
-    repos = precommit_config.get("repos")
-    assert isinstance(repos, list), ".pre-commit-config.yaml must declare repos as a list"
+    precommit_config = _as_mapping(
+        yaml.safe_load(precommit_path.read_text(encoding="utf-8")),
+        ".pre-commit-config.yaml must be a mapping",
+    )
+    repos = _as_list(
+        precommit_config.get("repos"),
+        ".pre-commit-config.yaml must declare repos as a list",
+    )
 
     revs_by_repo: dict[str, set[str]] = {}
     for repo in repos:
-        assert isinstance(repo, dict), "each pre-commit repo entry must be a mapping"
-        repo_url = repo.get("repo")
+        repo_mapping = _as_mapping(repo, "each pre-commit repo entry must be a mapping")
+        repo_url = repo_mapping.get("repo")
         assert isinstance(repo_url, str), f"each pre-commit repo entry must define repo: {repo!r}"
         if repo_url == "local":
             continue
-        rev = repo.get("rev")
+        rev = repo_mapping.get("rev")
         assert isinstance(rev, str), f"{repo_url}: each non-local repo entry must define rev"
         revs_by_repo.setdefault(repo_url, set()).add(rev)
 
@@ -3008,14 +3082,15 @@ def test_copy_ready_files_do_not_use_onboarding_only_relative_references() -> No
 def test_retained_markdown_files_do_not_link_relatively_to_skippable_files() -> None:
     """Retained Markdown files must not link relatively to skippable files."""
     failures: list[str] = []
+    path_mapping_rows = _path_mapping_rows_from_manifest()
 
-    for path in _retained_markdown_files():
+    for path in _retained_markdown_files(path_mapping_rows):
         source_relative_path = path.relative_to(REPO_ROOT).as_posix()
         for line_number, target in _markdown_link_targets_outside_fences(path):
             resolved_target = _resolve_relative_markdown_target(path, target)
             if resolved_target is None:
                 continue
-            target_modules = _manifest_modules_for_path(resolved_target)
+            target_modules = _manifest_modules_for_path(resolved_target, path_mapping_rows)
             if resolved_target not in SKIPPABLE_OPTIONAL_REFERENCE_PATHS and (
                 target_modules is None or "template-onboarding" not in target_modules
             ):
@@ -3040,12 +3115,18 @@ def test_full_marker_example_lists_every_manifest_module() -> None:
     example_path = (
         REPO_ROOT / "schemas" / "examples" / "template-sync-marker" / "valid" / "full.yml"
     )
-    example = yaml.safe_load(example_path.read_text(encoding="utf-8"))
-    assert isinstance(example, dict), "full marker example root must be a mapping"
-    template_sync = example.get("template_sync")
-    assert isinstance(template_sync, dict), "full marker example must contain template_sync"
-    included_modules = template_sync.get("included_modules")
-    assert isinstance(included_modules, list), "full marker example must list modules"
+    example = _as_mapping(
+        yaml.safe_load(example_path.read_text(encoding="utf-8")),
+        "full marker example root must be a mapping",
+    )
+    template_sync = _as_mapping(
+        example.get("template_sync"),
+        "full marker example must contain template_sync",
+    )
+    included_modules = _as_string_list(
+        template_sync.get("included_modules"),
+        "full marker example must list modules",
+    )
     assert included_modules == [name for name, _description in _module_rows_from_manifest()]
 
 

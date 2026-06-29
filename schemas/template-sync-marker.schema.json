@@ -110,6 +110,13 @@
             "$ref": "#/$defs/instructionContractWaiver"
           }
         },
+        "placeholder_waivers": {
+          "type": "array",
+          "description": "Explicit waivers for unresolved placeholder findings in reviewed paths. Waivers are narrow by path or path_pattern and by token or finding_kind.",
+          "items": {
+            "$ref": "#/$defs/placeholderWaiver"
+          }
+        },
         "issue_label_policy": {
           "$ref": "#/$defs/issueLabelPolicy"
         },
@@ -634,6 +641,72 @@
           "$ref": "#/$defs/nonEmptyString"
         }
       }
+    },
+    "placeholderWaiver": {
+      "type": "object",
+      "required": ["reason", "authorization_basis", "reviewed_scope"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/repositoryFilePath"
+        },
+        "path_pattern": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "token": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "finding_kind": {
+          "type": "string",
+          "enum": [
+            "unresolved-placeholder",
+            "possible-corruption"
+          ]
+        },
+        "reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authorization_basis": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "reviewed_scope": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "allOf": [
+        {
+          "oneOf": [
+            {
+              "required": ["path"],
+              "not": {
+                "required": ["path_pattern"]
+              }
+            },
+            {
+              "required": ["path_pattern"],
+              "not": {
+                "required": ["path"]
+              }
+            }
+          ]
+        },
+        {
+          "oneOf": [
+            {
+              "required": ["token"],
+              "not": {
+                "required": ["finding_kind"]
+              }
+            },
+            {
+              "required": ["finding_kind"],
+              "not": {
+                "required": ["token"]
+              }
+            }
+          ]
+        }
+      ]
     }
   }
 }

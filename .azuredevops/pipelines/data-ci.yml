@@ -7,6 +7,10 @@
 #   - check-json
 #   - check-toml
 #   - check-yaml
+#   - validate-template-placeholders-manifest
+#   - validate-template-placeholders-valid-examples
+#   - validate-template-placeholders-schema
+#   - validate-template-placeholders-invalid-examples
 # template-sync: begin yaml-only
 #   - yamllint
 # template-sync: end yaml-only
@@ -73,6 +77,22 @@ steps:
 
   - bash: pre-commit run check-yaml --all-files
     displayName: "Run check-yaml"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run validate-template-placeholders-manifest --all-files
+    displayName: "Run validate-template-placeholders-manifest"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run validate-template-placeholders-valid-examples --all-files
+    displayName: "Run validate-template-placeholders-valid-examples"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run validate-template-placeholders-schema --all-files
+    displayName: "Run validate-template-placeholders-schema"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run validate-template-placeholders-invalid-examples --all-files
+    displayName: "Run validate-template-placeholders-invalid-examples"
     workingDirectory: "$(Build.SourcesDirectory)"
 
   # template-sync: begin yaml-only

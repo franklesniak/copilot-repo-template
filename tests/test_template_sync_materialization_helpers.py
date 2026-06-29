@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-import pytest
 import yaml  # type: ignore[import-untyped]
+
+from tests._pytest_compat import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_DIR = REPO_ROOT / ".template-sync" / "scripts"
@@ -204,7 +205,7 @@ def test_valid_marker_examples_match_canonical_formatter(example_path: Path) -> 
     marker_document = yaml.safe_load(marker_text)
 
     assert isinstance(marker_document, dict)
-    assert format_marker_yaml(marker_document) == marker_text
+    assert format_marker_yaml(cast(dict[str, Any], marker_document)) == marker_text
 
 
 def test_repository_file_writer_creates_parent_directories(tmp_path: Path) -> None:

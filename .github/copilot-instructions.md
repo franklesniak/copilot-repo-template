@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.6.20260623.0
+**Version:** 1.6.20260629.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-23
+- **Last Updated:** 2026-06-29
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
@@ -497,7 +497,9 @@ This repository includes retained testing infrastructure for the adopted languag
 <!-- template-sync: begin python-reference-only -->
 
 ```bash
-pytest tests/ -v --cov --cov-report=term-missing
+python -m pyright --project pyrightconfig.json
+pytest tests/ -m "not slow" -v --cov --cov-report=term-missing
+pytest tests/ -m slow -v --no-cov
 ```
 
 <!-- template-sync: end python-reference-only -->

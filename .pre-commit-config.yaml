@@ -40,6 +40,56 @@ repos:
       - id: check-toml
       - id: check-added-large-files
 
+  # Baseline placeholder manifest validation:
+  #
+  #   A. Placeholder manifest live-file validation
+  #      Validates `.github/template-placeholders.json`, the source of truth for
+  #      runtime placeholder tokens, replacement sources, scan finding kinds,
+  #      and approved path scopes.
+  #
+  #   B. Placeholder manifest valid examples
+  #      Validates valid fixtures under
+  #      `schemas/examples/template-placeholders/valid/`.
+  #
+  #   C. Placeholder manifest schema self-validation
+  #      Validates the placeholder manifest schema against its declared JSON
+  #      Schema Draft 2020-12 metaschema.
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: "0.37.3"
+    hooks:
+      - id: check-jsonschema
+        alias: validate-template-placeholders-manifest
+        name: Validate template placeholder manifest
+        files: ^\.github/template-placeholders\.json$
+        args:
+          - --schemafile
+          - schemas/template-placeholders.schema.json
+      - id: check-jsonschema
+        alias: validate-template-placeholders-valid-examples
+        name: Validate template placeholder valid examples
+        files: ^schemas/examples/template-placeholders/valid/.*\.json$
+        args:
+          - --schemafile
+          - schemas/template-placeholders.schema.json
+      - id: check-metaschema
+        alias: validate-template-placeholders-schema
+        name: Self-validate template placeholder schema
+        files: ^schemas/template-placeholders\.schema\.json$
+
+  # Invalid placeholder-manifest examples are expected to fail validation, so
+  # they are exercised through an assert-fails helper rather than a normal
+  # check-jsonschema hook over invalid fixtures.
+  - repo: local
+    hooks:
+      - id: validate-template-placeholders-invalid-examples
+        name: Validate template placeholder invalid examples fail
+        entry: python .github/scripts/validate-placeholder-schema-examples.py
+        language: python
+        pass_filenames: false
+        always_run: true
+        additional_dependencies:
+          - jsonschema>=4.18.0
+
   # template-sync: begin yaml-only
   # YAML linting
   - repo: https://github.com/adrienverge/yamllint

@@ -14,7 +14,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import NoReturn, TextIO
+from typing import Any, NoReturn, TextIO, cast
 
 DEFAULT_MAX_COMMAND_LENGTH = 30000 if os.name == "nt" else 100000
 DEFAULT_PROBE_TIMEOUT_SECONDS = 10.0
@@ -417,13 +417,13 @@ def command_succeeds(
     return result.returncode == 0
 
 
-def decode_timeout_stream(value: bytes | str | None) -> str:
+def decode_timeout_stream(value: bytes | bytearray | memoryview[Any] | str | None) -> str:
     """Decode optional timeout output captured by ``subprocess``."""
     if value is None:
         return ""
-    if isinstance(value, bytes):
-        return value.decode("utf-8", errors="replace")
-    return value
+    if isinstance(value, str):
+        return value
+    return bytes(value).decode("utf-8", errors="replace")
 
 
 def execute_probe_command(
@@ -807,15 +807,18 @@ def load_package_scripts(repo_root: Path) -> dict[str, object]:
     if not is_present_regular_file(package_path):
         raise FirstAdoptionCheckError("Expected a regular file: package.json")
     try:
-        package_data = json.loads(package_path.read_text(encoding="utf-8-sig"))
+        package_data: object = json.loads(package_path.read_text(encoding="utf-8-sig"))
     except json.JSONDecodeError as error:
         raise FirstAdoptionCheckError(f"package.json is not valid JSON: {error}") from error
     except OSError as error:
         error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
         raise FirstAdoptionCheckError(f"Unable to read package.json ({error_summary}).") from error
 
-    scripts = package_data.get("scripts") if isinstance(package_data, dict) else None
-    return scripts if isinstance(scripts, dict) else {}
+    if not isinstance(package_data, dict):
+        return {}
+    package_data = cast(dict[str, object], package_data)
+    scripts = package_data.get("scripts")
+    return cast(dict[str, object], scripts) if isinstance(scripts, dict) else {}
 
 
 def included_modules_from_marker_text(marker_text: str) -> frozenset[str]:

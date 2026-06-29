@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import importlib
 import io
 import json
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Any, cast
 
-import pytest
+from tests._pytest_compat import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "first_adoption_quality_reports.py"
@@ -18,7 +20,7 @@ SCRIPT_DIR = SCRIPT_PATH.parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-import first_adoption_quality_reports as quality_reports  # noqa: E402
+quality_reports = cast(Any, importlib.import_module("first_adoption_quality_reports"))
 
 
 def _run_git(repo_root: Path, *args: str) -> str:
@@ -271,11 +273,15 @@ def test_path_reference_suppression_requires_a_selector(tmp_path: Path) -> None:
 
 def test_markdownlint_report_reports_missing_npm_without_silent_skip(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """Missing optional Markdown tooling produces an unavailable state."""
     _write_text(tmp_path, "package.json", '{"scripts":{"lint:md":"markdownlint-cli2 ."}}\n')
-    monkeypatch.setattr(quality_reports.shutil, "which", lambda _name: None)
+
+    def missing_executable(_name: str) -> None:
+        return None
+
+    monkeypatch.setattr(quality_reports.shutil, "which", missing_executable)
 
     report = quality_reports.build_markdownlint_report(tmp_path)
 
@@ -304,7 +310,7 @@ def test_markdownlint_output_parser_records_rule_and_file_counts() -> None:
 
 def test_markdownlint_fixer_reports_changed_files(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """Markdown fixer mode reports files changed after the fixer command."""
     _init_repo(tmp_path)
@@ -336,7 +342,7 @@ def test_markdownlint_fixer_reports_changed_files(
 
 def test_powershell_report_parses_injected_runner_output(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: Any,
 ) -> None:
     """The PowerShell report runs through its injectable runner and parses gate JSON."""
     _init_repo(tmp_path)

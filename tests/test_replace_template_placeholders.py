@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import json
 import shutil
 import sys
 from pathlib import Path
+from typing import Any, cast
 
-import pytest
 import yaml  # type: ignore[import-untyped]
+
+from tests._pytest_compat import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / ".github" / "scripts" / "replace-template-placeholders.py"
@@ -19,6 +22,7 @@ if SCRIPT_SPEC is None or SCRIPT_SPEC.loader is None:
 placeholder_helper = importlib.util.module_from_spec(SCRIPT_SPEC)
 sys.modules[SCRIPT_SPEC.name] = placeholder_helper
 SCRIPT_SPEC.loader.exec_module(placeholder_helper)
+StructuredObject = dict[str, Any]
 
 
 def write_file(path: Path, content: str) -> Path:
@@ -70,6 +74,18 @@ def load_yaml(path: Path) -> object:
     return yaml.safe_load(read_file(path))
 
 
+def as_mapping(value: object, message: str) -> StructuredObject:
+    """Return ``value`` after asserting it is a structured mapping."""
+    assert isinstance(value, dict), message
+    return cast(StructuredObject, value)
+
+
+def as_list(value: object, message: str) -> list[Any]:
+    """Return ``value`` after asserting it is a list."""
+    assert isinstance(value, list), message
+    return cast(list[Any], value)
+
+
 def security_contact_link(config: object) -> dict[str, object]:
     """Return the security contact link from parsed issue-template config."""
     return contact_link_by_name(config, "Security Vulnerabilities")
@@ -77,26 +93,24 @@ def security_contact_link(config: object) -> dict[str, object]:
 
 def contact_link_by_name(config: object, name: str) -> dict[str, object]:
     """Return a named contact link from parsed issue-template config."""
-    assert isinstance(config, dict)
-    contact_links = config["contact_links"]
-    assert isinstance(contact_links, list)
+    config_mapping = as_mapping(config, "issue-template config must be a mapping")
+    contact_links = as_list(config_mapping["contact_links"], "contact_links must be a list")
     for contact_link in contact_links:
-        assert isinstance(contact_link, dict)
-        if contact_link.get("name") == name:
-            return contact_link
+        contact_link_mapping = as_mapping(contact_link, "contact link must be a mapping")
+        if contact_link_mapping.get("name") == name:
+            return contact_link_mapping
     raise AssertionError(f"{name} contact link not found")
 
 
 def assert_issue_form_shape(bug_report: object) -> None:
     """Assert the rendered bug-report issue form has the expected structure."""
-    assert isinstance(bug_report, dict)
-    body = bug_report["body"]
-    assert isinstance(body, list)
+    bug_report_mapping = as_mapping(bug_report, "bug-report form must be a mapping")
+    body = as_list(bug_report_mapping["body"], "bug-report body must be a list")
     assert body
     for item in body:
-        assert isinstance(item, dict)
-        assert isinstance(item.get("type"), str)
-        assert isinstance(item.get("attributes"), dict)
+        item_mapping = as_mapping(item, "bug-report body item must be a mapping")
+        assert isinstance(item_mapping.get("type"), str)
+        assert isinstance(item_mapping.get("attributes"), dict)
 
 
 def test_approved_placeholder_replacement_does_not_mutate_normal_words(tmp_path: Path) -> None:
@@ -587,7 +601,7 @@ def test_helper_defines_expected_allowlist_without_standalone_repo_token() -> No
 
 
 def test_replace_help_documents_security_reporting_modes(
-    capsys: pytest.CaptureFixture[str],
+    capsys: Any,
 ) -> None:
     """The replace help output documents every supported reporting mode."""
     with pytest.raises(SystemExit) as error:
@@ -602,7 +616,7 @@ def test_replace_help_documents_security_reporting_modes(
 
 def test_cli_rejects_missing_security_mode_and_contact(
     tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
+    capsys: Any,
 ) -> None:
     """The helper rejects ambiguous reporting configuration."""
     result = placeholder_helper.main(
@@ -616,7 +630,7 @@ def test_cli_rejects_missing_security_mode_and_contact(
 
 def test_repository_less_security_overrides_without_mode_fail_fast(
     tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
+    capsys: Any,
 ) -> None:
     """Security overrides that cannot render fail fast instead of being silently ignored."""
     # A repository-less section override with no explicit reporting mode is rejected
@@ -852,7 +866,7 @@ def test_yaml_args_file_unavailable_message_is_actionable(tmp_path: Path) -> Non
 
 def test_args_format_override_and_unknown_extension_diagnostics(
     tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
+    capsys: Any,
 ) -> None:
     """Unknown extensions require --args-format, and explicit format wins."""
     write_file(tmp_path / ".github" / "CODEOWNERS", "* @OWNER\n")
@@ -921,7 +935,7 @@ def test_args_format_override_and_unknown_extension_diagnostics(
 )
 def test_args_file_schema_errors_are_actionable(
     tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
+    capsys: Any,
     args_data: dict[str, object],
     expected: str,
 ) -> None:
@@ -937,7 +951,7 @@ def test_args_file_schema_errors_are_actionable(
 
 def test_missing_args_file_is_actionable(
     tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
+    capsys: Any,
 ) -> None:
     """Missing args files report an actionable read failure."""
     result = placeholder_helper.main(["replace", "--args-file", str(tmp_path / "missing.json")])
@@ -1067,6 +1081,111 @@ def test_check_placeholders_workflow_delegates_hard_fail_allowlist_to_helper() -
 
     assert "replace-template-placeholders.py scan" in workflow
     assert "hard-fail allowlist lives" in workflow
+
+
+def test_placeholder_manifest_paths_resolve_through_template_manifest() -> None:
+    """Placeholder manifest path scopes are classified by the template manifest."""
+    _modules, mappings = placeholder_helper.load_template_sync_manifest_context(
+        REPO_ROOT,
+        ".template-sync/manifest.yml",
+    )
+
+    placeholder_helper.validate_placeholder_manifest_path_scopes(
+        placeholder_helper.PLACEHOLDER_MANIFEST,
+        mappings,
+    )
+    schema_relation = placeholder_helper.selected_relation_for_path(
+        "schemas/template-placeholders.schema.json",
+        mappings,
+    )
+    assert schema_relation is not None
+    assert schema_relation.requires_all == frozenset({"baseline"})
+    assert schema_relation.requires_any == frozenset()
+
+    data_ci_relation = placeholder_helper.selected_relation_for_path(
+        ".github/workflows/data-ci.yml",
+        mappings,
+    )
+    assert data_ci_relation is not None
+    assert data_ci_relation.requires_all == frozenset({"github-actions"})
+    assert "baseline" in data_ci_relation.requires_any
+
+
+def test_classified_scan_preserves_all_contexts(tmp_path: Path) -> None:
+    """Classified scans expose retained, pruned, local, delete, and unknown contexts."""
+    write_file(tmp_path / "CONTRIBUTING.md", "See OWNER/REPO.\n")
+    write_file(tmp_path / ".github" / "pull_request_template.md", "See OWNER/REPO.\n")
+    write_file(tmp_path / "SECURITY.md", "See OWNER/REPO.\n")
+    write_file(
+        tmp_path / ".vscode" / "settings.json",
+        '{"window.title": "Go to .vscode/settings.json and make this the name of the repo"}\n',
+    )
+    write_file(tmp_path / "UNKNOWN.md", "A broad replacement made widgetRT.\n")
+    _modules, mappings = placeholder_helper.load_template_sync_manifest_context(
+        REPO_ROOT,
+        ".template-sync/manifest.yml",
+    )
+    classification_context = placeholder_helper.ScanClassificationContext(
+        mappings=mappings,
+        included_modules=frozenset({"baseline"}),
+        local_overrides=(placeholder_helper.LocalOverride(path="SECURITY.md", is_directory=False),),
+        template_only_delete_paths=frozenset({".vscode/settings.json"}),
+    )
+
+    findings = placeholder_helper.scan_repository(
+        tmp_path,
+        repository="octo/widget",
+        classification_context=classification_context,
+    )
+
+    contexts_by_path = {finding.path: finding.context for finding in findings}
+    assert contexts_by_path["CONTRIBUTING.md"] == "retained-path"
+    assert contexts_by_path[".github/pull_request_template.md"] == "excluded-module-path"
+    assert contexts_by_path["SECURITY.md"] == "local-override"
+    assert contexts_by_path[".vscode/settings.json"] == "template-only-delete"
+    assert contexts_by_path["UNKNOWN.md"] == "unknown-path"
+    dispositions_by_path = {finding.path: finding.failure_disposition for finding in findings}
+    assert dispositions_by_path["CONTRIBUTING.md"] == "retained-hard-failure"
+    assert dispositions_by_path[".github/pull_request_template.md"] == "pruned-informational"
+    assert dispositions_by_path["SECURITY.md"] == "retained-hard-failure"
+    assert dispositions_by_path[".vscode/settings.json"] == "pruned-informational"
+    assert dispositions_by_path["UNKNOWN.md"] == "unknown-owner-review"
+    assert placeholder_helper.scan_has_failures(findings, "report") is False
+    assert placeholder_helper.scan_has_failures(findings, "retained-hard") is True
+
+
+def test_placeholder_waiver_matching_is_narrow(tmp_path: Path) -> None:
+    """A structured waiver suppresses only the matching token/path finding."""
+    write_file(tmp_path / "CONTRIBUTING.md", "See OWNER/REPO.\n")
+    write_file(tmp_path / "SECURITY.md", "See OWNER/REPO.\n")
+    _modules, mappings = placeholder_helper.load_template_sync_manifest_context(
+        REPO_ROOT,
+        ".template-sync/manifest.yml",
+    )
+    classification_context = placeholder_helper.ScanClassificationContext(
+        mappings=mappings,
+        included_modules=frozenset({"baseline"}),
+        waivers=(
+            placeholder_helper.PlaceholderWaiver(
+                path_pattern="CONTRIBUTING.md",
+                token_or_kind="owner-repo token",
+                reason="Reviewed placeholder is temporary.",
+                authorization_basis="Owner approved the temporary waiver.",
+                reviewed_scope="CONTRIBUTING.md only.",
+            ),
+        ),
+    )
+
+    findings = placeholder_helper.scan_repository(
+        tmp_path,
+        classification_context=classification_context,
+    )
+
+    findings_by_path = {finding.path: finding for finding in findings}
+    assert findings_by_path["CONTRIBUTING.md"].failure_disposition == "waived-informational"
+    assert findings_by_path["CONTRIBUTING.md"].waiver_state == "applied"
+    assert findings_by_path["SECURITY.md"].failure_disposition == "retained-hard-failure"
+    assert placeholder_helper.scan_has_failures(findings, "retained-hard") is True
 
 
 @pytest.mark.parametrize(
@@ -1202,8 +1321,10 @@ def test_collaboration_policy_renders_labels_and_discussions(
     assert result == 0
     assert placeholder_helper.scan_repository(tmp_path, repository="octo/widget") == ()
 
-    bug_report = load_yaml(tmp_path / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml")
-    assert isinstance(bug_report, dict)
+    bug_report = as_mapping(
+        load_yaml(tmp_path / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml"),
+        "bug-report form must be a mapping",
+    )
     assert bug_report["labels"] == ["bug", "triage"]
     config = load_yaml(tmp_path / ".github" / "ISSUE_TEMPLATE" / "config.yml")
     discussions_link = contact_link_by_name(config, "Questions & Discussions")
@@ -1245,8 +1366,10 @@ def test_collaboration_policy_can_omit_labels_and_disable_discussions(
     )
 
     assert result == 0
-    bug_report = load_yaml(tmp_path / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml")
-    assert isinstance(bug_report, dict)
+    bug_report = as_mapping(
+        load_yaml(tmp_path / ".github" / "ISSUE_TEMPLATE" / "bug_report.yml"),
+        "bug-report form must be a mapping",
+    )
     assert "labels" not in bug_report
     config_text = read_file(tmp_path / ".github" / "ISSUE_TEMPLATE" / "config.yml")
     assert "/discussions" not in config_text
@@ -1372,7 +1495,7 @@ def test_security_reporting_modes_preserve_github_host_override(
 @pytest.mark.upstream_template_only
 def test_github_private_only_requires_conduct_contact_when_code_of_conduct_retained(
     tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
+    capsys: Any,
 ) -> None:
     """A missing security contact is not silently reused for Code of Conduct contact."""
     copy_security_reporting_fixture(tmp_path)
@@ -1412,7 +1535,7 @@ def test_github_private_only_requires_conduct_contact_when_code_of_conduct_retai
 def test_cli_rejects_empty_or_unsafe_values(
     tmp_path: Path,
     argv: list[str],
-    capsys: pytest.CaptureFixture[str],
+    capsys: Any,
 ) -> None:
     """The CLI rejects empty required values and unsafe host overrides."""
     result = placeholder_helper.main([*argv, "--repo-root", str(tmp_path)])

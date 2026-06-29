@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import importlib
 import io
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-import pytest
 import yaml  # type: ignore[import-untyped]
+
+from tests._pytest_compat import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "bootstrap_first_adoption.py"
@@ -22,8 +24,10 @@ SOURCE_REPO = "https://github.com/franklesniak/copilot-repo-template.git"
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-import bootstrap_first_adoption as bootstrap  # noqa: E402
-from template_sync_materialization_helpers import parse_marker_decision_data  # noqa: E402
+bootstrap = cast(Any, importlib.import_module("bootstrap_first_adoption"))
+parse_marker_decision_data = importlib.import_module(
+    "template_sync_materialization_helpers"
+).parse_marker_decision_data
 
 
 def _run_git(repo_root: Path, *args: str) -> str:
@@ -371,7 +375,7 @@ def test_write_draft_marker_validates_and_creates_absent_marker(tmp_path: Path) 
 def test_existing_marker_is_preserved_by_write_draft_marker(tmp_path: Path) -> None:
     """Marker write mode refuses to overwrite existing marker content."""
     _init_fixture_repo(tmp_path)
-    existing_marker = {
+    existing_marker: dict[str, Any] = {
         "template_sync": {
             "source_repo": SOURCE_REPO,
             "included_modules": ["baseline"],

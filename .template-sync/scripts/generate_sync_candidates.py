@@ -10,7 +10,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, NoReturn
+from typing import Any, Callable, NoReturn, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
@@ -127,7 +127,7 @@ TODO_DECISION_SECTIONS = frozenset(
     }
 )
 TODO_LINK_LIMIT = 3
-VALIDATION_COMMANDS_BY_MODULE = {
+VALIDATION_COMMANDS_BY_MODULE: dict[str, tuple[str, ...]] = {
     "agent-instructions": (
         "npm run lint:md",
         "manual protected-file authorization review",
@@ -156,7 +156,9 @@ VALIDATION_COMMANDS_BY_MODULE = {
     ),
     "powershell": ("Invoke-Pester -Path tests/ -Output Detailed",),
     "python": (
-        "pytest tests/ -v --cov --cov-report=term-missing",
+        'pytest tests/ -m "not slow" -v --cov --cov-report=term-missing',
+        "pytest tests/ -m slow -v --no-cov",
+        "python -m pyright --project pyrightconfig.json",
         "pre-commit run check-toml --all-files",
     ),
     "schema": (
@@ -375,6 +377,42 @@ class RepositoryDiscovery:
 
 CommandRunner = Callable[[Path, list[str]], subprocess.CompletedProcess[str]]
 RestClient = Callable[[RestRequest], RestResult]
+
+
+JsonObject = dict[str, object]
+
+
+def json_object(value: object) -> JsonObject | None:
+    """Return ``value`` as a JSON object after runtime validation."""
+    return cast(JsonObject, value) if isinstance(value, dict) else None
+
+
+def json_array(value: object) -> list[object] | None:
+    """Return ``value`` as a JSON array after runtime validation."""
+    return cast(list[object], value) if isinstance(value, list) else None
+
+
+def json_string_field(mapping: JsonObject, field_name: str) -> str | None:
+    """Return one optional string field from a JSON object."""
+    value = mapping.get(field_name)
+    return value if isinstance(value, str) else None
+
+
+def github_label_names(value: object) -> tuple[str, ...] | None:
+    """Return sorted label names from a GitHub label JSON array."""
+    label_records = json_array(value)
+    if label_records is None:
+        return None
+
+    names: list[str] = []
+    for raw_label in label_records:
+        label = json_object(raw_label)
+        if label is None:
+            continue
+        name = json_string_field(label, "name")
+        if name is not None:
+            names.append(name)
+    return tuple(sorted(names))
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -628,8 +666,6 @@ def urllib_error_summary(error: URLError) -> str:
     reason = error.reason
     if isinstance(reason, OSError):
         reason_text = f"{type(reason).__name__}: {reason.strerror or 'I/O error'}"
-    elif reason is None:
-        reason_text = "transport error"
     else:
         reason_text = str(reason)
     return f"{type(error).__name__}: {reason_text}"
@@ -823,6 +859,13 @@ def parse_manifest(manifest: dict[str, Any]) -> tuple[frozenset[str], tuple[Mani
 def describe_relation(relation: PathRelation | None) -> str:
     """Return a human-readable module relation description, or ``unmapped``."""
     return relation.description if relation is not None else "unmapped"
+
+
+def relation_modules(relation: PathRelation | None) -> frozenset[str]:
+    """Return all manifest modules for a relation."""
+    if relation is None:
+        return frozenset()
+    return relation.requires_all | relation.requires_any
 
 
 def relations_match(left: PathRelation | None, right: PathRelation | None) -> bool:
@@ -1564,12 +1607,15 @@ def rest_response_detail(result: RestResult) -> str:
     detail = "non-2xx response"
     if result.body.strip():
         try:
-            payload = json.loads(result.body)
+            payload: object = json.loads(result.body)
         except json.JSONDecodeError:
             detail = result.body.strip().splitlines()[0]
         else:
-            if isinstance(payload, dict) and isinstance(payload.get("message"), str):
-                detail = payload["message"]
+            payload_object = json_object(payload)
+            if payload_object is not None:
+                message = json_string_field(payload_object, "message")
+                if message is not None:
+                    detail = message
     if len(detail) > 160:
         detail = f"{detail[:157]}..."
     return f"HTTP {result.status_code}: {detail}"
@@ -1599,7 +1645,7 @@ def read_github_rest_json(
     label: str,
     rest_client: RestClient,
     query: dict[str, str] | None = None,
-) -> tuple[Any | None, str | None]:
+) -> tuple[object | None, str | None]:
     """Read a GitHub REST endpoint with one GHES version-header retry."""
     request_with_version = github_rest_request(
         api_base,
@@ -1681,7 +1727,7 @@ def discover_github_metadata_with_gh(
         )
 
     try:
-        payload = json.loads(repo_result.stdout)
+        payload: object = json.loads(repo_result.stdout)
     except json.JSONDecodeError as error:
         return GitHubMetadata(
             requested=True,
@@ -1690,7 +1736,8 @@ def discover_github_metadata_with_gh(
             error=f"Unable to parse gh repo view JSON: {error.msg}",
         )
 
-    if not isinstance(payload, dict):
+    payload_object = json_object(payload)
+    if payload_object is None:
         return GitHubMetadata(
             requested=True,
             available=False,
@@ -1698,10 +1745,10 @@ def discover_github_metadata_with_gh(
             error="gh repo view returned a non-object JSON payload.",
         )
 
-    default_branch_ref = payload.get("defaultBranchRef")
     default_branch = None
-    if isinstance(default_branch_ref, dict) and isinstance(default_branch_ref.get("name"), str):
-        default_branch = default_branch_ref["name"]
+    default_branch_ref = json_object(payload_object.get("defaultBranchRef"))
+    if default_branch_ref is not None:
+        default_branch = json_string_field(default_branch_ref, "name")
 
     labels: tuple[str, ...] = ()
     labels_error: str | None = None
@@ -1726,25 +1773,20 @@ def discover_github_metadata_with_gh(
     else:
         if labels_result.returncode == 0:
             try:
-                raw_labels = json.loads(labels_result.stdout)
+                raw_labels: object = json.loads(labels_result.stdout)
             except json.JSONDecodeError as error:
                 labels_error = f"Unable to parse gh label list JSON: {error.msg}"
             else:
-                if isinstance(raw_labels, list):
-                    labels = tuple(
-                        sorted(
-                            label["name"]
-                            for label in raw_labels
-                            if isinstance(label, dict) and isinstance(label.get("name"), str)
-                        )
-                    )
+                label_names = github_label_names(raw_labels)
+                if label_names is not None:
+                    labels = label_names
                     labels_source = "gh"
                 else:
                     labels_error = "gh label list returned a non-list JSON payload."
         else:
             labels_error = command_detail(labels_result)
 
-    discussions_value = payload.get("hasDiscussionsEnabled")
+    discussions_value = payload_object.get("hasDiscussionsEnabled")
     discussions_enabled = None
     if isinstance(discussions_value, bool):
         discussions_enabled = "enabled" if discussions_value else "disabled"
@@ -1752,8 +1794,8 @@ def discover_github_metadata_with_gh(
     metadata_error = (
         f"Label metadata unavailable: {labels_error}" if labels_error is not None else None
     )
-    repository = payload["nameWithOwner"] if isinstance(payload.get("nameWithOwner"), str) else None
-    visibility = payload["visibility"] if isinstance(payload.get("visibility"), str) else None
+    repository = json_string_field(payload_object, "nameWithOwner")
+    visibility = json_string_field(payload_object, "visibility")
     return GitHubMetadata(
         requested=True,
         available=True,
@@ -1809,7 +1851,8 @@ def discover_github_metadata_with_rest(
         )
     if repo_diagnostic is not None:
         diagnostics.append(repo_diagnostic)
-    if not isinstance(repo_payload, dict):
+    repo_payload_object = json_object(repo_payload)
+    if repo_payload_object is None:
         return GitHubMetadata(
             requested=True,
             available=False,
@@ -1820,27 +1863,25 @@ def discover_github_metadata_with_rest(
             ),
         )
 
-    repository_full_name = repo_payload.get("full_name")
-    if isinstance(repository_full_name, str):
+    repository_full_name = json_string_field(repo_payload_object, "full_name")
+    if repository_full_name is not None:
         repository = repository_full_name
         repository_source = "rest"
     else:
         repository = owner_name
         repository_source = "manual"
     visibility = None
-    visibility_value = repo_payload.get("visibility")
-    if isinstance(visibility_value, str):
+    visibility_value = json_string_field(repo_payload_object, "visibility")
+    if visibility_value is not None:
         visibility = visibility_value
-    elif isinstance(repo_payload.get("private"), bool):
-        visibility = "private" if repo_payload["private"] else "public"
+    else:
+        private_value = repo_payload_object.get("private")
+        if isinstance(private_value, bool):
+            visibility = "private" if private_value else "public"
 
-    default_branch = (
-        repo_payload["default_branch"]
-        if isinstance(repo_payload.get("default_branch"), str)
-        else None
-    )
+    default_branch = json_string_field(repo_payload_object, "default_branch")
     discussions_enabled = None
-    discussions_value = repo_payload.get("has_discussions")
+    discussions_value = repo_payload_object.get("has_discussions")
     if isinstance(discussions_value, bool):
         discussions_enabled = "enabled" if discussions_value else "disabled"
 
@@ -1858,19 +1899,15 @@ def discover_github_metadata_with_rest(
             "Label metadata unavailable through rest: "
             f"{labels_diagnostic or 'unknown REST failure'}"
         )
-    elif isinstance(labels_payload, list):
-        labels = tuple(
-            sorted(
-                label["name"]
-                for label in labels_payload
-                if isinstance(label, dict) and isinstance(label.get("name"), str)
-            )
-        )
-        labels_source = "rest"
-        if labels_diagnostic is not None:
-            diagnostics.append(labels_diagnostic)
     else:
-        diagnostics.append("REST labels metadata returned a non-list JSON payload.")
+        label_names = github_label_names(labels_payload)
+        if label_names is None:
+            diagnostics.append("REST labels metadata returned a non-list JSON payload.")
+        else:
+            labels = label_names
+            labels_source = "rest"
+            if labels_diagnostic is not None:
+                diagnostics.append(labels_diagnostic)
 
     return GitHubMetadata(
         requested=True,
@@ -2258,7 +2295,7 @@ def build_unmatched_local_override_row(
     """Build a ledger row for a marker local override not consumed by any manifest mapping row."""
     display_path = local_override.path + ("/" if local_override.is_directory else "")
     relation = selected_relation_for_path(local_override.path, mappings)
-    modules = relation.requires_all | relation.requires_any if relation is not None else frozenset()
+    modules = relation_modules(relation)
     is_protected = is_protected_instruction_path(local_override.path)
     requires_decision = (
         is_protected
@@ -2319,7 +2356,7 @@ def build_local_path_ownership_row(
         # directory prefix. This keeps the ledger's manifest_modules and proximity
         # note consistent with the broad-overlap checks in marker validation.
         relation = directory_prefix_relation(local_path_ownership.path, mappings)
-    modules = relation.requires_all | relation.requires_any if relation is not None else frozenset()
+    modules = relation_modules(relation)
     is_protected = is_protected_instruction_path(local_path_ownership.path)
     reason = f"Marker local path ownership: {local_path_ownership.reason}"
     if local_path_ownership.overlap_exception_reason is not None:
@@ -2365,7 +2402,7 @@ def build_unmatched_protected_decision_row(
 ) -> LedgerRow:
     """Build a ledger row for a protected decision not consumed by a manifest mapping."""
     relation = selected_relation_for_path(protected_decision.path, mappings)
-    modules = relation.requires_all | relation.requires_any if relation is not None else frozenset()
+    modules = relation_modules(relation)
     is_protected = is_protected_instruction_path(protected_decision.path)
     return LedgerRow(
         path=protected_decision.path,

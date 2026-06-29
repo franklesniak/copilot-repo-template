@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-import pytest
 import yaml  # type: ignore[import-untyped]
+
+from tests._pytest_compat import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "generate_sync_candidates.py"
@@ -34,7 +36,7 @@ MODULE_DEFINITIONS = {
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-import generate_sync_candidates as sync_candidates  # noqa: E402
+sync_candidates = cast(Any, importlib.import_module("generate_sync_candidates"))
 
 
 def test_validation_commands_cover_every_manifest_module() -> None:
@@ -856,7 +858,7 @@ def test_summary_reports_clean_adoption_without_unresolved_decisions(tmp_path: P
     )
     assert "No unchecked items in machine-interpretable checklist sections." in result.stdout
     assert "python .template-sync/scripts/run_first_adoption_checks.py" in result.stdout
-    assert "pytest tests/ -v --cov --cov-report=term-missing" not in result.stdout
+    assert 'pytest tests/ -m "not slow" -v --cov --cov-report=term-missing' not in result.stdout
 
 
 def test_summary_reports_deferred_overrides_and_documented_todo_items(
@@ -1768,8 +1770,11 @@ def test_infer_repository_name_anchors_github_host() -> None:
     """Owner/name inference matches the URL authority, not any github substring."""
 
     def infer(url: str) -> str | None:
-        return sync_candidates.infer_repository_name(
-            (sync_candidates.RemoteInfo(name="origin", url=url, purpose="fetch"),)
+        return cast(
+            str | None,
+            sync_candidates.infer_repository_name(
+                (sync_candidates.RemoteInfo(name="origin", url=url, purpose="fetch"),)
+            ),
         )
 
     # Genuine GitHub remotes (scheme, SCP, user-info, and subdomain) resolve.
