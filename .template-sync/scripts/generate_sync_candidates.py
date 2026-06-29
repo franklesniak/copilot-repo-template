@@ -2178,7 +2178,10 @@ def link_header_has_next(headers: tuple[tuple[str, str], ...]) -> bool:
     for key, value in headers:
         if key.casefold() != "link":
             continue
-        parts = [part.strip() for part in value.split(",")]
+        # Link parameters and relation types are case-insensitive (RFC 8288), and
+        # servers/clients may emit `REL="next"` or `rel="Next"`. Casefold each
+        # fragment before matching so pagination is not stopped early.
+        parts = [part.strip().casefold() for part in value.split(",")]
         if any('rel="next"' in part or "rel=next" in part for part in parts):
             return True
     return False
@@ -2384,8 +2387,12 @@ def branch_protection_summary(value: object) -> dict[str, JsonValue] | None:
 
 def ruleset_summaries(
     values: tuple[object, ...],
-) -> tuple[list[JsonValue] | None, tuple[str, ...], tuple[tuple[str, str], ...]]:
-    """Return bounded ruleset summaries plus partial-field diagnostics."""
+) -> tuple[list[JsonValue], tuple[str, ...], tuple[tuple[str, str], ...]]:
+    """Return bounded ruleset summaries plus partial-field diagnostics.
+
+    Always returns a concrete list (possibly empty): malformed items are skipped
+    and recorded as diagnostics rather than collapsing the whole result to ``None``.
+    """
     summaries: list[JsonValue] = []
     partial_fields: set[str] = set()
     diagnostics: list[tuple[str, str]] = []
@@ -2530,16 +2537,9 @@ def collection_observation_from_items(
         )
 
     if setting == "rulesets":
+        # ruleset_summaries always returns a concrete list (malformed items are
+        # skipped and surfaced as diagnostics), so there is no None case to handle.
         summaries, partial_fields, summary_diagnostics = ruleset_summaries(items)
-        if summaries is None:
-            return unobserved_github_observation(
-                setting=setting,
-                basis="malformed-response",
-                source=source,
-                observed_at=observed_at,
-                pagination="unavailable",
-                diagnostics=diagnostics + summary_diagnostics,
-            )
         return github_observation(
             setting=setting,
             value=summaries,

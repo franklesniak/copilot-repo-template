@@ -2241,6 +2241,42 @@ def test_github_metadata_missing_discussions_is_manual_review_not_malformed(
     assert discussions.basis == "manual-review"
 
 
+def test_link_header_has_next_is_case_insensitive() -> None:
+    """rel="next" detection tolerates case variations in Link header parameters."""
+    assert sync_candidates.link_header_has_next(
+        (("Link", '<https://api.github.com/x?page=2>; rel="next"'),)
+    )
+    assert sync_candidates.link_header_has_next(
+        (("Link", '<https://api.github.com/x?page=2>; REL="next"'),)
+    )
+    assert sync_candidates.link_header_has_next(
+        (("link", '<https://api.github.com/x?page=2>; rel="Next"'),)
+    )
+    assert not sync_candidates.link_header_has_next(
+        (("Link", '<https://api.github.com/x?page=1>; rel="prev"'),)
+    )
+
+
+def test_ruleset_summaries_skips_malformed_items_without_collapsing() -> None:
+    """Malformed ruleset items are skipped with a diagnostic; the result stays a list."""
+    summaries, _partial_fields, diagnostics = sync_candidates.ruleset_summaries(
+        (
+            {
+                "id": 1,
+                "name": "default",
+                "target": "branch",
+                "enforcement": "active",
+                "bypass_actors": [],
+            },
+            "not-an-object",
+        )
+    )
+    assert isinstance(summaries, list)
+    assert len(summaries) == 1
+    assert summaries[0]["name"] == "default"
+    assert any("was not an object" in value for _key, value in diagnostics)
+
+
 def test_github_api_base_validation_rejects_credential_bearing_urls() -> None:
     """The API base must not preserve or print credential-bearing URLs."""
     with pytest.raises(sync_candidates.CandidateGenerationError) as exc_info:
