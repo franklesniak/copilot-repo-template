@@ -1,4 +1,4 @@
-# Azure Pipelines Markdown validation.
+# Azure Pipelines Markdown and toolchain validation.
 #
 # Azure Repos pull request validation is configured through branch policy build
 # validation. This YAML intentionally omits a `pr:` trigger.
@@ -57,13 +57,16 @@ steps:
       links_status=$?
       pytest tests/test_materialize_downstream_adoption.py -k passes_nested_markdown_lint -v
       generated_status=$?
+      npm run test:toolchain-eol
+      toolchain_status=$?
 
       if [ "$outer_status" -ne 0 ] ||
         [ "$nested_status" -ne 0 ] ||
         [ "$links_status" -ne 0 ] ||
-        [ "$generated_status" -ne 0 ]; then
-        echo "##vso[task.logissue type=error]Markdown checks failed. Check the logs above for details."
+        [ "$generated_status" -ne 0 ] ||
+        [ "$toolchain_status" -ne 0 ]; then
+        echo "##vso[task.logissue type=error]Markdown and toolchain checks failed. Check the logs above for details."
         exit 1
       fi
-    displayName: "Run Markdown checks"
+    displayName: "Run Markdown and toolchain checks"
     workingDirectory: "$(Build.SourcesDirectory)"

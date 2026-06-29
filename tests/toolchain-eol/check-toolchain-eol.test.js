@@ -8,6 +8,7 @@ const scanner = require('../../.github/scripts/check-toolchain-eol.js');
 
 const FIXTURE_SCHEDULE = require('./fixtures/node-schedule.json');
 
+const EXPECTED_TOOLCHAIN_EOL_TEST_SCRIPT = 'node --test tests/toolchain-eol/check-toolchain-eol.test.js';
 const createdTempRepos = [];
 
 function makeTempRepo() {
@@ -32,6 +33,36 @@ function selectorKey(selector) {
     const referenced = selector.referencedPath ? ` via ${selector.referencedPath}` : '';
     return `${selector.selectorClass}|${selector.sourceType}|${selector.origin}|${selector.rawValue}|${selector.path}${referenced}`;
 }
+
+test('package script uses the explicit toolchain EOL test file target', () => {
+    const packageJsonPath = path.resolve(__dirname, '..', '..', 'package.json');
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+
+    assert.equal(
+        packageJson.scripts['test:toolchain-eol'],
+        EXPECTED_TOOLCHAIN_EOL_TEST_SCRIPT,
+        [
+            'scripts["test:toolchain-eol"] must use the selected explicit-file target',
+            `"${EXPECTED_TOOLCHAIN_EOL_TEST_SCRIPT}" and must not be reverted to the bare-directory`,
+            '"node --test tests/toolchain-eol/" target; directory recursion was documented in Node v20',
+            'and reported as no longer working in Node v21.',
+        ].join(' '),
+    );
+});
+
+test('explicit toolchain EOL npm target covers every test file in this directory', () => {
+    const testFiles = fs.readdirSync(__dirname).filter((name) => name.endsWith('.test.js')).sort();
+
+    assert.deepEqual(
+        testFiles,
+        ['check-toolchain-eol.test.js'],
+        [
+            'The explicit test:toolchain-eol npm target must cover every tests/toolchain-eol/*.test.js file.',
+            'If a new *.test.js file is added, add it to the npm target and this assertion, and review or',
+            'update .template-sync/manifest.yml so the new test file has the correct module ownership.',
+        ].join(' '),
+    );
+});
 
 test('discovers and classifies checked-in Node.js selectors without action-version false positives', () => {
     const repoRoot = makeTempRepo();

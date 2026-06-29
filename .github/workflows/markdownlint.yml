@@ -1,14 +1,15 @@
-# Markdownlint CI Workflow
+# Markdown and toolchain validation workflow.
 #
 # This workflow uses markdownlint by David Anson (@DavidAnson)
 # Licensed under MIT License
 # Source: https://github.com/DavidAnson/markdownlint
 #
-# Purpose: Enforce Markdown formatting, nested Markdown linting, and
-# offline repository-local link validation across the repository
+# Purpose: Enforce Markdown formatting, nested Markdown linting,
+# offline repository-local link validation, and the toolchain-EOL regression
+# test across the repository
 # Runs on: push and pull_request events
 
-name: Markdown Lint
+name: Markdown and Toolchain Checks
 
 on:
   push:
@@ -73,8 +74,18 @@ jobs:
         continue-on-error: true
         run: pytest tests/test_materialize_downstream_adoption.py -k passes_nested_markdown_lint -v
 
-      - name: Check linting results
-        if: steps.lint-outer.outcome == 'failure' || steps.lint-nested.outcome == 'failure' || steps.lint-links.outcome == 'failure' || steps.lint-generated.outcome == 'failure'
+      - name: Run toolchain EOL regression tests
+        id: test-toolchain
+        continue-on-error: true
+        run: npm run test:toolchain-eol
+
+      - name: Check validation results
+        if: >-
+          steps.lint-outer.outcome == 'failure' ||
+          steps.lint-nested.outcome == 'failure' ||
+          steps.lint-links.outcome == 'failure' ||
+          steps.lint-generated.outcome == 'failure' ||
+          steps.test-toolchain.outcome == 'failure'
         run: |
-          echo "::error::Markdown checks failed. Check the logs above for details."
+          echo "::error::Markdown and toolchain checks failed. Check the logs above for details."
           exit 1
