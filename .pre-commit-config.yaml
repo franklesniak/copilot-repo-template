@@ -203,7 +203,7 @@ repos:
       - id: check-jsonschema
         alias: validate-template-sync-instruction-contracts-valid-examples
         name: Validate template sync instruction contract valid examples
-        files: ^schemas/examples/template-sync-instruction-contracts/valid/.*\.yml$
+        files: ^schemas/examples/template-sync-instruction-contracts/valid/.*\.ya?ml$
         args:
           - --schemafile
           - schemas/template-sync-instruction-contracts.schema.json

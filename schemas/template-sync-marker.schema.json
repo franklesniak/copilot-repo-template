@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/franklesniak/copilot-repo-template/HEAD/schemas/template-sync-marker.schema.json",
   "title": "Template Sync Marker",
-  "description": "Schema for .template-sync/marker.yml, the downstream sync marker that records reviewed template commits, adopted modules, local override decisions, protected-file decisions, deferred protected-file candidates, and instruction-contract waivers.",
+  "description": "Schema for .template-sync/marker.yml, the downstream sync marker that records reviewed template commits, adopted modules, local override decisions, protected-file decisions, deferred protected-file candidates, instruction-contract waivers, and protected-guide contract waivers.",
   "type": "object",
   "required": ["template_sync"],
   "additionalProperties": false,
@@ -108,6 +108,13 @@
           "description": "Explicit waivers for missing required instruction-contract anchors in retained protected instruction files.",
           "items": {
             "$ref": "#/$defs/instructionContractWaiver"
+          }
+        },
+        "protected_guide_contract_waivers": {
+          "type": "array",
+          "description": "Explicit waivers for protected-guide section and reference obligations that would otherwise require protected-file edits or visible owner review.",
+          "items": {
+            "$ref": "#/$defs/protectedGuideContractWaiver"
           }
         },
         "placeholder_waivers": {
@@ -342,6 +349,11 @@
     "nonEmptyString": {
       "type": "string",
       "minLength": 1
+    },
+    "contractKey": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "description": "Kebab-case identifier matching a protected-guide obligation key declared in the instruction-contracts schema. Mirrors that schema's contractKey pattern so a malformed waiver key (spaces, uppercase, underscores) is rejected at validation time rather than silently failing to match any obligation."
     },
     "singleLineNonEmptyString": {
       "type": "string",
@@ -641,6 +653,42 @@
           "$ref": "#/$defs/nonEmptyString"
         }
       }
+    },
+    "protectedGuideContractWaiver": {
+      "type": "object",
+      "required": ["path", "contract_key", "reason", "authorization_basis"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/repositoryFilePath"
+        },
+        "contract_key": {
+          "$ref": "#/$defs/contractKey"
+        },
+        "target_path": {
+          "$ref": "#/$defs/repositoryFilePath"
+        },
+        "target_module": {
+          "$ref": "#/$defs/moduleName"
+        },
+        "linked_local_override_path": {
+          "$ref": "#/$defs/repositoryPath"
+        },
+        "reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authorization_basis": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "anyOf": [
+        {
+          "required": ["target_path"]
+        },
+        {
+          "required": ["target_module"]
+        }
+      ]
     },
     "placeholderWaiver": {
       "type": "object",

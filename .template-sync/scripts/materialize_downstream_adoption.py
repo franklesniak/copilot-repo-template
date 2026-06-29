@@ -310,6 +310,7 @@ MARKER_COPY_FIELDS = (
     "protected_file_decisions",
     "deferred_protected_candidates",
     "instruction_contract_waivers",
+    "protected_guide_contract_waivers",
     "issue_label_policy",
     "issue_labels",
     "discussions_policy",
@@ -1534,6 +1535,7 @@ def load_decisions(
         local_path_ownership=(),
         deferred_candidates=(),
         protected_decisions=(),
+        protected_guide_contract_waivers=(),
     )
     validate_protected_file_decisions(
         resolved_marker_data.protected_decisions,
@@ -1639,6 +1641,7 @@ def append_license_preservation_override(
         local_path_ownership=decisions.marker_data.local_path_ownership,
         deferred_candidates=decisions.marker_data.deferred_candidates,
         protected_decisions=decisions.marker_data.protected_decisions,
+        protected_guide_contract_waivers=(decisions.marker_data.protected_guide_contract_waivers),
     )
     validate_protected_file_decisions(
         marker_data.protected_decisions,

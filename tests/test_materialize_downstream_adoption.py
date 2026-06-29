@@ -25,6 +25,9 @@ SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "materialize_downstream
 REPORT_SCRIPT_PATH = (
     REPO_ROOT / ".template-sync" / "scripts" / "report_excluded_module_references.py"
 )
+DOWNSTREAM_ADOPTION_SCRIPT_PATH = (
+    REPO_ROOT / ".template-sync" / "scripts" / "validate_downstream_adoption.py"
+)
 SCRIPT_DIR = SCRIPT_PATH.parent
 NESTED_MARKDOWN_LINT_PATH = REPO_ROOT / ".github" / "scripts" / "lint-nested-markdown.js"
 SOURCE_REPO = "https://github.com/franklesniak/copilot-repo-template.git"
@@ -39,6 +42,7 @@ ISSUE_692_NO_PYTHON_MODULES = (
     "markdown",
     "powershell",
 )
+GITHUB_POWERSHELL_PROFILE_MODULES = ISSUE_692_NO_PYTHON_MODULES
 ISSUE_693_PARTIAL_DOC_MODULES = ISSUE_692_NO_PYTHON_MODULES
 FULL_TEMPLATE_MODULES = (
     "baseline",
@@ -927,6 +931,23 @@ def run_excluded_module_report(
     return run_in_process_cli(command, excluded_reporter.main)
 
 
+def run_downstream_adoption_validator(repo_root: Path) -> subprocess.CompletedProcess[str]:
+    """Run the aggregate downstream adoption validator against a materialized tree."""
+    return subprocess.run(
+        [
+            sys.executable,
+            str(DOWNSTREAM_ADOPTION_SCRIPT_PATH),
+            "--repo-root",
+            str(repo_root),
+            "--require-marker",
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+
 def marker_document(
     included_modules: list[str],
     **template_sync_fields: Any,
@@ -939,6 +960,60 @@ def marker_document(
     }
     template_sync.update(template_sync_fields)
     return {"template_sync": template_sync}
+
+
+def github_powershell_protected_guide_waivers() -> list[dict[str, str]]:
+    """Return protected-guide waivers expected for a GitHub PowerShell profile."""
+    records: list[dict[str, str]] = []
+    for relative_path, key_prefix in (
+        ("AGENTS.md", "agents"),
+        ("CLAUDE.md", "claude"),
+        ("GEMINI.md", "gemini"),
+        (".hermes.md", "hermes"),
+    ):
+        records.append(
+            {
+                "path": relative_path,
+                "contract_key": f"{key_prefix}-azure-devops-pr-review-protocol",
+                "target_module": "azure-devops-collaboration",
+                "reason": (
+                    "GitHub-hosted PowerShell fixture retains the protected Azure "
+                    "review protocol for explicit owner review."
+                ),
+                "authorization_basis": (
+                    "Regression fixture authorizes this protected-guide waiver."
+                ),
+            }
+        )
+        records.append(
+            {
+                "path": relative_path,
+                "contract_key": f"{key_prefix}-azure-devops-support-guide-path",
+                "target_path": "docs/azure-devops-support.md",
+                "reason": (
+                    "GitHub-hosted PowerShell fixture retains the protected Azure "
+                    "guide reference for explicit owner review."
+                ),
+                "authorization_basis": (
+                    "Regression fixture authorizes this protected-guide reference waiver."
+                ),
+            }
+        )
+    records.append(
+        {
+            "path": ".github/copilot-instructions.md",
+            "contract_key": "copilot-instructions-azure-devops-support-guide-path",
+            "target_path": "docs/azure-devops-support.md",
+            "reason": (
+                "GitHub-hosted PowerShell fixture retains the protected Azure guide "
+                "reference for explicit owner review."
+            ),
+            "authorization_basis": (
+                "Regression fixture authorizes this protected-guide reference waiver."
+            ),
+        }
+    )
+    return records
 
 
 def azure_provider_fields_for_modules(included_modules: tuple[str, ...]) -> dict[str, str]:
@@ -2102,6 +2177,70 @@ def test_materialized_template_update_procedure_passes_nested_markdown_lint(
     )
 
     assert lint_result.returncode == 0, lint_result.stdout + lint_result.stderr
+
+
+def test_materialized_github_powershell_profile_records_protected_guide_waivers(
+    tmp_path: Path,
+) -> None:
+    """A GitHub-hosted PowerShell profile validates with explicit protected-guide waivers."""
+    target_root = tmp_path / "github-powershell"
+    target_root.mkdir()
+    write_yaml(
+        target_root / "decisions.yml",
+        marker_document(
+            list(GITHUB_POWERSHELL_PROFILE_MODULES),
+            protected_file_decisions=protected_take_decisions_for_modules(
+                GITHUB_POWERSHELL_PROFILE_MODULES
+            ),
+            protected_guide_contract_waivers=github_powershell_protected_guide_waivers(),
+        ),
+    )
+
+    result = run_materialize(REPO_ROOT, target_root, "--decisions-file", "decisions.yml")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    marker = as_mapping(
+        load_yaml(target_root / ".template-sync" / "marker.yml"),
+        "marker must be a mapping",
+    )
+    template_sync = as_mapping(marker["template_sync"], "template_sync must be a mapping")
+    protected_decisions = as_list(
+        template_sync.get("protected_file_decisions"),
+        "protected decisions must be a list",
+    )
+    protected_guide_waivers = as_list(
+        template_sync.get("protected_guide_contract_waivers"),
+        "protected guide waivers must be a list",
+    )
+    protected_decision_paths = {
+        as_mapping(record, "protected decision must be a mapping")["path"]
+        for record in protected_decisions
+    }
+    protected_guide_waiver_keys = {
+        as_mapping(record, "protected guide waiver must be a mapping")["contract_key"]
+        for record in protected_guide_waivers
+    }
+    assert protected_decision_paths == set(
+        retained_protected_paths_for_modules(GITHUB_POWERSHELL_PROFILE_MODULES)
+    )
+    assert protected_guide_waiver_keys >= {
+        "agents-azure-devops-pr-review-protocol",
+        "agents-azure-devops-support-guide-path",
+        "copilot-instructions-azure-devops-support-guide-path",
+    }
+    assert not (target_root / "docs" / "azure-devops-support.md").exists()
+    subprocess.run(
+        ["git", "init", "-q"],
+        cwd=target_root,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    validation_result = run_downstream_adoption_validator(target_root)
+
+    assert validation_result.returncode == 0, validation_result.stdout + validation_result.stderr
+    assert "Protected guide contract waiver:" in validation_result.stdout
 
 
 @pytest.mark.slow

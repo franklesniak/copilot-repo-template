@@ -133,6 +133,7 @@ def _marker(
     *,
     protected_decisions: list[dict[str, str]] | None = None,
     waivers: list[dict[str, str]] | None = None,
+    protected_guide_waivers: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Build a small schema-valid marker fixture."""
     template_sync: dict[str, Any] = {
@@ -144,6 +145,8 @@ def _marker(
         template_sync["protected_file_decisions"] = protected_decisions
     if waivers is not None:
         template_sync["instruction_contract_waivers"] = waivers
+    if protected_guide_waivers is not None:
+        template_sync["protected_guide_contract_waivers"] = protected_guide_waivers
     return {"template_sync": template_sync}
 
 
@@ -525,6 +528,72 @@ def test_downstream_checks_azure_devops_contract_when_module_retained(
     assert (
         "GEMINI.md: missing required heading: ## Azure DevOps PR Review Protocol" in result.stdout
     )
+
+
+def test_downstream_stale_protected_guide_section_fails_when_module_excluded(
+    tmp_path: Path,
+) -> None:
+    """Protected-guide sections for excluded modules need owner review or a waiver."""
+    contracts = _contracts(required_headings=["## Handling Code Review Comments"])
+    contracts["protected_guide_section_obligations"] = [
+        {
+            "key": "agents-azure-devops-pr-review-protocol",
+            "path": "AGENTS.md",
+            "target_modules": ["azure-devops-collaboration"],
+            "stale_headings": ["## Azure DevOps PR Review Protocol"],
+        }
+    ]
+    _write_common_contract_repo(tmp_path, contracts)
+    _write_yaml(tmp_path, ".template-sync/marker.yml", _marker(["agent-instructions"]))
+    _write_text(tmp_path, "CLAUDE.md", "## Handling Code Review Comments\n")
+    _write_text(tmp_path, "AGENTS.md", "## Azure DevOps PR Review Protocol\n")
+
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+
+    assert result.returncode == 1
+    assert "Stale protected-guide sections requiring owner review:" in result.stdout
+    assert "AGENTS.md: agents-azure-devops-pr-review-protocol: stale heading" in result.stdout
+
+
+def test_downstream_stale_protected_guide_section_waiver_passes_loudly(
+    tmp_path: Path,
+) -> None:
+    """A protected-guide section waiver passes validation but remains visible."""
+    contracts = _contracts(required_headings=["## Handling Code Review Comments"])
+    contracts["protected_guide_section_obligations"] = [
+        {
+            "key": "agents-azure-devops-pr-review-protocol",
+            "path": "AGENTS.md",
+            "target_modules": ["azure-devops-collaboration"],
+            "stale_headings": ["## Azure DevOps PR Review Protocol"],
+        }
+    ]
+    _write_common_contract_repo(tmp_path, contracts)
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["agent-instructions"],
+            protected_guide_waivers=[
+                {
+                    "path": "AGENTS.md",
+                    "contract_key": "agents-azure-devops-pr-review-protocol",
+                    "target_module": "azure-devops-collaboration",
+                    "reason": "GitHub-only fixture retains the protected Azure protocol.",
+                    "authorization_basis": "Owner authorized this protected-guide waiver.",
+                }
+            ],
+        ),
+    )
+    _write_text(tmp_path, "CLAUDE.md", "## Handling Code Review Comments\n")
+    _write_text(tmp_path, "AGENTS.md", "## Azure DevOps PR Review Protocol\n")
+
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+
+    assert result.returncode == 0, result.stderr
+    assert "Instruction-contract validation passed with waivers." in result.stdout
+    assert "Protected guide contract waivers applied:" in result.stdout
+    assert "AGENTS.md: agents-azure-devops-pr-review-protocol" in result.stdout
 
 
 def test_downstream_duplicate_waiver_pairs_fail(tmp_path: Path) -> None:

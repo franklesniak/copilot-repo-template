@@ -157,6 +157,7 @@ def _marker(
     local_path_ownership: list[dict[str, str]] | None = None,
     deferred_candidates: list[dict[str, str]] | None = None,
     protected_decisions: list[dict[str, str]] | None = None,
+    protected_guide_waivers: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Build a small schema-valid marker fixture."""
     template_sync: dict[str, Any] = {
@@ -172,6 +173,8 @@ def _marker(
         template_sync["deferred_protected_candidates"] = deferred_candidates
     if protected_decisions is not None:
         template_sync["protected_file_decisions"] = protected_decisions
+    if protected_guide_waivers is not None:
+        template_sync["protected_guide_contract_waivers"] = protected_guide_waivers
     return {"template_sync": template_sync}
 
 
@@ -188,6 +191,7 @@ def _write_marker(
     local_path_ownership: list[dict[str, str]] | None = None,
     deferred_candidates: list[dict[str, str]] | None = None,
     protected_decisions: list[dict[str, str]] | None = None,
+    protected_guide_waivers: list[dict[str, str]] | None = None,
 ) -> None:
     """Write the marker fixture."""
     _write_yaml(
@@ -199,6 +203,7 @@ def _write_marker(
             local_path_ownership=local_path_ownership,
             deferred_candidates=deferred_candidates,
             protected_decisions=protected_decisions,
+            protected_guide_waivers=protected_guide_waivers,
         ),
     )
 
@@ -931,6 +936,41 @@ def test_protected_file_decisions_and_remove_local_authorizations_are_reported(
     assert "authorization_basis: Owner explicitly authorized removing GEMINI.md." in result.stdout
     assert "authorized_scope: GEMINI.md only." in result.stdout
     assert "reason: Gemini agent not used by this repository." in result.stdout
+
+
+def test_protected_guide_contract_waivers_are_reported(marker_repo: Path) -> None:
+    """Protected-guide waivers are parsed and visible in marker output."""
+    _write_marker(
+        marker_repo,
+        ["baseline", "template-sync-support"],
+        protected_guide_waivers=[
+            {
+                "path": "AGENTS.md",
+                "contract_key": "agents-azure-devops-pr-review-protocol",
+                "target_module": "azure-devops-collaboration",
+                "reason": "GitHub-only fixture keeps the protected guide section visible.",
+                "authorization_basis": "Fixture owner authorized this protected-guide waiver.",
+            },
+            {
+                "path": "AGENTS.md",
+                "contract_key": "agents-azure-devops-support-guide-path",
+                "target_path": "docs/azure-devops-support.md",
+                "linked_local_override_path": "AGENTS.md",
+                "reason": "GitHub-only fixture keeps the protected guide path visible.",
+                "authorization_basis": "Fixture owner authorized this reference waiver.",
+            },
+        ],
+    )
+    _write_text(marker_repo, "README.md")
+
+    result = _run_validator(marker_repo)
+
+    assert result.returncode == 0, result.stderr
+    assert "Protected guide contract waivers:" in result.stdout
+    assert "AGENTS.md: agents-azure-devops-pr-review-protocol" in result.stdout
+    assert "target_module: azure-devops-collaboration" in result.stdout
+    assert "target_path: docs/azure-devops-support.md" in result.stdout
+    assert "linked_local_override_path: AGENTS.md" in result.stdout
 
 
 def test_duplicate_protected_decision_paths_fail(marker_repo: Path) -> None:
