@@ -90,7 +90,7 @@ jobs:
           terraform_version: "1.14.4"
 
       - name: Cache Terraform Providers
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.terraform.d/plugin-cache
           key: terraform-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
@@ -130,7 +130,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Cache TFLint Plugins
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.tflint.d/plugins
           key: tflint-plugins-${{ hashFiles('.tflint.hcl') }}
@@ -163,7 +163,7 @@ jobs:
           terraform_version: "1.14.4"
 
       - name: Cache Terraform Providers
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.terraform.d/plugin-cache
           key: terraform-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
