@@ -8,7 +8,8 @@ import os
 import re
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, NoReturn, cast
 from urllib.error import HTTPError, URLError
@@ -75,6 +76,61 @@ GITHUB_REST_ACCEPT_HEADER = "application/vnd.github+json"
 GITHUB_REST_API_VERSION = "2022-11-28"
 GITHUB_REST_TIMEOUT_SECONDS = 5.0
 GITHUB_REST_USER_AGENT = "copilot-repo-template-preflight/1.0"
+GITHUB_REST_MAX_PAGES = 20
+GITHUB_METADATA_SETTING_ORDER = (
+    "repository",
+    "visibility",
+    "default_branch",
+    "discussions",
+    "labels",
+    "rulesets",
+    "branch_protection",
+    "private_vulnerability_reporting",
+    "security_and_analysis",
+)
+GITHUB_METADATA_SETTING_LABELS = {
+    "repository": "Repository owner/name",
+    "visibility": "Visibility",
+    "default_branch": "Default branch",
+    "discussions": "Discussions",
+    "labels": "Labels",
+    "rulesets": "Repository rulesets",
+    "branch_protection": "Default-branch protection",
+    "private_vulnerability_reporting": "Private vulnerability reporting",
+    "security_and_analysis": "Security and analysis",
+}
+GITHUB_OBSERVATION_BASES = (
+    "gh",
+    "rest",
+    "owner-confirmed",
+    "auth-required",
+    "permission-required",
+    "rate-limited",
+    "not-found-or-not-visible",
+    "unsupported-endpoint",
+    "dependency-unobserved",
+    "transport-error",
+    "malformed-response",
+    "manual-review",
+)
+GITHUB_OBSERVATION_PAGINATION = (
+    "not-applicable",
+    "complete",
+    "partial",
+    "unavailable",
+)
+GITHUB_SECURITY_AND_ANALYSIS_KEYS = frozenset(
+    {
+        "advanced_security",
+        "code_security",
+        "dependabot_security_updates",
+        "secret_scanning",
+        "secret_scanning_ai_detection",
+        "secret_scanning_non_provider_patterns",
+        "secret_scanning_push_protection",
+        "secret_scanning_validity_checks",
+    }
+)
 DISCOVERY_SKIP_DIRS = frozenset(
     {
         ".git",
@@ -333,26 +389,141 @@ class RestResult:
     status_code: int | None
     body: str
     error: str | None = None
+    headers: tuple[tuple[str, str], ...] = ()
+
+
+@dataclass(frozen=True)
+class RestJsonRead:
+    """Parsed REST JSON plus sanitized response evidence."""
+
+    payload: object | None
+    basis: str
+    diagnostics: tuple[tuple[str, str], ...]
+    headers: tuple[tuple[str, str], ...] = ()
+
+
+JsonValue = bool | int | float | str | None | list["JsonValue"] | dict[str, "JsonValue"]
+
+
+@dataclass(frozen=True)
+class GitHubObservation:
+    """One typed GitHub setting observation with common provenance metadata."""
+
+    setting: str
+    value: JsonValue
+    observed: bool
+    basis: str
+    source: str
+    observed_at: str
+    pagination: str = "not-applicable"
+    partial: bool = False
+    partial_fields: tuple[str, ...] = ()
+    diagnostics: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
 class GitHubMetadata:
-    """Optional GitHub metadata discovered only after explicit opt-in."""
+    """Optional GitHub metadata represented as typed setting observations."""
 
     requested: bool
-    available: bool
-    source: str
-    repository: str | None = None
-    visibility: str | None = None
-    default_branch: str | None = None
-    discussions_enabled: str | None = None
-    labels: tuple[str, ...] = ()
-    error: str | None = None
-    repository_source: str = "manual"
-    visibility_source: str = "manual"
-    default_branch_source: str = "manual"
-    discussions_source: str = "manual"
-    labels_source: str = "manual"
+    observations: tuple[GitHubObservation, ...] = ()
+
+    def observation(self, setting: str) -> GitHubObservation | None:
+        """Return one observation by setting key."""
+        for observation in self.observations:
+            if observation.setting == setting:
+                return observation
+        return None
+
+    @property
+    def available(self) -> bool:
+        """Return whether at least one GitHub setting was directly observed."""
+        return any(observation.observed for observation in self.observations)
+
+    @property
+    def source(self) -> str:
+        """Return the primary observation source for compatibility callers."""
+        if not self.requested:
+            return "not requested"
+        for source in ("gh", "rest"):
+            if any(
+                observation.observed and observation.basis == source
+                for observation in self.observations
+            ):
+                return source
+        # Nothing was directly observed via ``gh`` or ``rest``. Preserve the legacy
+        # source vocabulary ("not requested" / "manual" / "gh" / "rest") instead of
+        # leaking a per-observation basis token (e.g. "auth-required") that callers
+        # would misread as a discovery source. The specific basis remains visible
+        # per setting in the ledger and in ``error``.
+        return "manual"
+
+    @property
+    def repository(self) -> str | None:
+        """Return the observed repository owner/name, when available."""
+        return github_observation_string_value(self.observation("repository"))
+
+    @property
+    def visibility(self) -> str | None:
+        """Return the observed repository visibility, when available."""
+        return github_observation_string_value(self.observation("visibility"))
+
+    @property
+    def default_branch(self) -> str | None:
+        """Return the observed default branch, when available."""
+        return github_observation_string_value(self.observation("default_branch"))
+
+    @property
+    def discussions_enabled(self) -> str | None:
+        """Return human-readable Discussions state for compatibility callers."""
+        value = github_observation_boolean_value(self.observation("discussions"))
+        if value is None:
+            return None
+        return "enabled" if value else "disabled"
+
+    @property
+    def labels(self) -> tuple[str, ...]:
+        """Return observed label names, when available."""
+        value = github_observation_list_value(self.observation("labels"))
+        if value is None:
+            return ()
+        labels = [label for label in value if isinstance(label, str)]
+        return tuple(labels)
+
+    @property
+    def error(self) -> str | None:
+        """Return combined observation diagnostics for compatibility callers."""
+        diagnostics: list[str] = []
+        for observation in self.observations:
+            detail = github_observation_diagnostic_text(observation)
+            if detail:
+                diagnostics.append(detail)
+        return combine_metadata_errors(*diagnostics)
+
+    @property
+    def repository_source(self) -> str:
+        """Return legacy source text for the repository observation."""
+        return github_legacy_observation_source(self.observation("repository"))
+
+    @property
+    def visibility_source(self) -> str:
+        """Return legacy source text for the visibility observation."""
+        return github_legacy_observation_source(self.observation("visibility"))
+
+    @property
+    def default_branch_source(self) -> str:
+        """Return legacy source text for the default branch observation."""
+        return github_legacy_observation_source(self.observation("default_branch"))
+
+    @property
+    def discussions_source(self) -> str:
+        """Return legacy source text for the Discussions observation."""
+        return github_legacy_observation_source(self.observation("discussions"))
+
+    @property
+    def labels_source(self) -> str:
+        """Return legacy source text for the labels observation."""
+        return github_legacy_observation_source(self.observation("labels"))
 
 
 @dataclass(frozen=True)
@@ -377,6 +548,7 @@ class RepositoryDiscovery:
 
 CommandRunner = Callable[[Path, list[str]], subprocess.CompletedProcess[str]]
 RestClient = Callable[[RestRequest], RestResult]
+Clock = Callable[[], datetime]
 
 
 JsonObject = dict[str, object]
@@ -396,6 +568,189 @@ def json_string_field(mapping: JsonObject, field_name: str) -> str | None:
     """Return one optional string field from a JSON object."""
     value = mapping.get(field_name)
     return value if isinstance(value, str) else None
+
+
+def utc_now() -> datetime:
+    """Return the current UTC time for observation timestamps."""
+    return datetime.now(timezone.utc)
+
+
+def observed_at_timestamp(clock: Clock) -> str:
+    """Return a full RFC 3339 UTC timestamp with a ``Z`` suffix."""
+    value = clock()
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def bounded_diagnostic_text(value: str, *, limit: int = 160) -> str:
+    """Return a single-line, redacted diagnostic bounded for ledger evidence."""
+    text = redact_url_userinfo(value).replace("\r", " ").replace("\n", " ").strip()
+    text = re.sub(r"\s+", " ", text)
+    if len(text) <= limit:
+        return text
+    return f"{text[: limit - 3]}..."
+
+
+def sanitize_accepted_permissions(value: str) -> str:
+    """Return an allowlisted permissions hint from ``X-Accepted-GitHub-Permissions``."""
+    sanitized = re.sub(r"[^A-Za-z0-9_.,;:=/ -]", "", value)
+    return bounded_diagnostic_text(sanitized, limit=200)
+
+
+def observation_diagnostic_pairs(
+    *pairs: tuple[str, str | None],
+) -> tuple[tuple[str, str], ...]:
+    """Return sanitized non-empty observation diagnostic pairs."""
+    diagnostics: list[tuple[str, str]] = []
+    for key, value in pairs:
+        if value is None:
+            continue
+        sanitized = bounded_diagnostic_text(str(value))
+        if sanitized:
+            diagnostics.append((key, sanitized))
+    return tuple(diagnostics)
+
+
+def validate_observation_envelope(basis: str, pagination: str) -> None:
+    """Validate closed-token observation envelope fields."""
+    if basis not in GITHUB_OBSERVATION_BASES:
+        raise ValueError(f"Unknown GitHub observation basis: {basis!r}")
+    if pagination not in GITHUB_OBSERVATION_PAGINATION:
+        raise ValueError(f"Unknown GitHub observation pagination state: {pagination!r}")
+
+
+def github_observation(
+    *,
+    setting: str,
+    value: JsonValue,
+    observed: bool,
+    basis: str,
+    source: str,
+    observed_at: str,
+    pagination: str = "not-applicable",
+    partial: bool = False,
+    partial_fields: tuple[str, ...] = (),
+    diagnostics: tuple[tuple[str, str], ...] = (),
+) -> GitHubObservation:
+    """Build one validated GitHub observation."""
+    validate_observation_envelope(basis, pagination)
+    return GitHubObservation(
+        setting=setting,
+        value=value,
+        observed=observed,
+        basis=basis,
+        source=source,
+        observed_at=observed_at,
+        pagination=pagination,
+        partial=partial,
+        partial_fields=partial_fields,
+        diagnostics=diagnostics,
+    )
+
+
+def unobserved_github_observation(
+    *,
+    setting: str,
+    basis: str,
+    source: str,
+    observed_at: str,
+    pagination: str = "not-applicable",
+    diagnostics: tuple[tuple[str, str], ...] = (),
+) -> GitHubObservation:
+    """Build one unavailable setting observation with a null value."""
+    return github_observation(
+        setting=setting,
+        value=None,
+        observed=False,
+        basis=basis,
+        source=source,
+        observed_at=observed_at,
+        pagination=pagination,
+        diagnostics=diagnostics,
+    )
+
+
+def unobserved_github_observations(
+    *,
+    basis: str,
+    source: str,
+    observed_at: str,
+    diagnostics: tuple[tuple[str, str], ...] = (),
+) -> tuple[GitHubObservation, ...]:
+    """Build unavailable observations for every supported GitHub setting."""
+    return tuple(
+        unobserved_github_observation(
+            setting=setting,
+            basis=basis,
+            source=source,
+            observed_at=observed_at,
+            pagination=("unavailable" if setting in {"labels", "rulesets"} else "not-applicable"),
+            diagnostics=diagnostics,
+        )
+        for setting in GITHUB_METADATA_SETTING_ORDER
+    )
+
+
+def github_observation_string_value(observation: GitHubObservation | None) -> str | None:
+    """Return an observed string value from one observation."""
+    if observation is None or not observation.observed or not isinstance(observation.value, str):
+        return None
+    return observation.value
+
+
+def github_observation_boolean_value(observation: GitHubObservation | None) -> bool | None:
+    """Return an observed boolean value from one observation."""
+    if observation is None or not observation.observed or not isinstance(observation.value, bool):
+        return None
+    return observation.value
+
+
+def github_observation_list_value(
+    observation: GitHubObservation | None,
+) -> list[JsonValue] | None:
+    """Return an observed list value from one observation."""
+    if observation is None or not observation.observed or not isinstance(observation.value, list):
+        return None
+    return observation.value
+
+
+def github_legacy_observation_source(observation: GitHubObservation | None) -> str:
+    """Return old source vocabulary for compatibility properties."""
+    if observation is None or not observation.observed:
+        return "manual"
+    return observation.basis
+
+
+def github_observation_diagnostic_text(observation: GitHubObservation) -> str | None:
+    """Return compact diagnostics for a metadata observation."""
+    details: list[str] = []
+    if not observation.observed:
+        details.append(
+            f"{GITHUB_METADATA_SETTING_LABELS.get(observation.setting, observation.setting)} "
+            f"unobserved ({observation.basis})"
+        )
+    elif observation.partial:
+        details.append(
+            f"{GITHUB_METADATA_SETTING_LABELS.get(observation.setting, observation.setting)} "
+            "partially observed"
+        )
+    details.extend(f"{key}: {value}" for key, value in observation.diagnostics)
+    if observation.partial_fields:
+        fields = ", ".join(f"`{field}`" for field in observation.partial_fields)
+        details.append(f"partial fields: {fields}")
+    if not details:
+        return None
+    return "; ".join(details)
+
+
+def github_primary_diagnostic(metadata: GitHubMetadata) -> str | None:
+    """Return the first sanitized metadata diagnostic message."""
+    for observation in metadata.observations:
+        for key, value in observation.diagnostics:
+            if key == "message":
+                return value
+    return metadata.error
 
 
 def github_label_names(value: object) -> tuple[str, ...] | None:
@@ -623,10 +978,18 @@ def run_rest_request(request: RestRequest) -> RestResult:
     try:
         with urlopen(urllib_request, timeout=request.timeout) as response:
             body = response.read().decode("utf-8", errors="replace")
-            return RestResult(status_code=response.status, body=body)
+            return RestResult(
+                status_code=response.status,
+                body=body,
+                headers=tuple(response.headers.items()),
+            )
     except HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")
-        return RestResult(status_code=error.code, body=body)
+        return RestResult(
+            status_code=error.code,
+            body=body,
+            headers=tuple(error.headers.items()) if error.headers is not None else (),
+        )
     except URLError as error:
         return RestResult(
             status_code=None,
@@ -1588,13 +1951,56 @@ def github_rest_request(
     )
 
 
-def github_rest_repo_paths(owner_name: str) -> tuple[str, str] | None:
-    """Return encoded repository and labels REST endpoint paths."""
+def github_rest_repo_path(owner_name: str) -> str | None:
+    """Return the encoded repository REST endpoint path."""
     parts = owner_name.split("/")
     if len(parts) != 2 or not all(parts):
         return None
     owner, repository = (quote(part, safe="") for part in parts)
-    return f"/repos/{owner}/{repository}", f"/repos/{owner}/{repository}/labels"
+    return f"/repos/{owner}/{repository}"
+
+
+def github_rest_endpoint_path(owner_name: str, suffix: str) -> str | None:
+    """Return an encoded repository REST endpoint path with a suffix."""
+    repo_path = github_rest_repo_path(owner_name)
+    if repo_path is None:
+        return None
+    return f"{repo_path}/{suffix.lstrip('/')}"
+
+
+def github_rest_branch_protection_path(owner_name: str, branch: str) -> str | None:
+    """Return the encoded branch-protection REST endpoint path."""
+    repo_path = github_rest_repo_path(owner_name)
+    if repo_path is None or not branch:
+        return None
+    return f"{repo_path}/branches/{quote(branch, safe='')}/protection"
+
+
+def rest_header(result: RestResult | RestJsonRead, name: str) -> str | None:
+    """Return one response header value by case-insensitive name."""
+    expected = name.casefold()
+    for key, value in result.headers:
+        if key.casefold() == expected:
+            return value
+    return None
+
+
+def rest_json_message(result: RestResult) -> str | None:
+    """Return a bounded message from a REST response body."""
+    if not result.body.strip():
+        return None
+    try:
+        payload: object = json.loads(result.body)
+    except json.JSONDecodeError:
+        return bounded_diagnostic_text(result.body.strip().splitlines()[0])
+
+    payload_object = json_object(payload)
+    if payload_object is None:
+        return None
+    message = json_string_field(payload_object, "message")
+    if message is None:
+        return None
+    return bounded_diagnostic_text(message)
 
 
 def rest_response_detail(result: RestResult) -> str:
@@ -1604,18 +2010,7 @@ def rest_response_detail(result: RestResult) -> str:
     if result.status_code is None:
         return "transport error"
 
-    detail = "non-2xx response"
-    if result.body.strip():
-        try:
-            payload: object = json.loads(result.body)
-        except json.JSONDecodeError:
-            detail = result.body.strip().splitlines()[0]
-        else:
-            payload_object = json_object(payload)
-            if payload_object is not None:
-                message = json_string_field(payload_object, "message")
-                if message is not None:
-                    detail = message
+    detail = rest_json_message(result) or "non-2xx response"
     if len(detail) > 160:
         detail = f"{detail[:157]}..."
     return f"HTTP {result.status_code}: {detail}"
@@ -1624,6 +2019,68 @@ def rest_response_detail(result: RestResult) -> str:
 def rest_result_is_success(result: RestResult) -> bool:
     """Return whether a REST result has a successful HTTP status."""
     return result.status_code is not None and 200 <= result.status_code < 300
+
+
+def rest_rate_limit_evidence(result: RestResult) -> bool:
+    """Return whether a REST response has primary or secondary rate-limit evidence."""
+    remaining = rest_header(result, "x-ratelimit-remaining")
+    retry_after = rest_header(result, "retry-after")
+    message = (rest_json_message(result) or "").casefold()
+    return (
+        remaining == "0"
+        or retry_after is not None
+        or "rate limit" in message
+        or "secondary rate" in message
+    )
+
+
+def rest_failure_basis(result: RestResult) -> str:
+    """Classify a REST failure into the observation basis vocabulary."""
+    status_code = result.status_code
+    message = (rest_json_message(result) or "").casefold()
+    if status_code is None:
+        return "transport-error"
+    if status_code in {403, 429} and rest_rate_limit_evidence(result):
+        return "rate-limited"
+    if status_code == 401:
+        return "auth-required"
+    if status_code == 403:
+        return "permission-required"
+    if status_code == 404:
+        if "unsupported" in message or "not supported" in message:
+            return "unsupported-endpoint"
+        return "not-found-or-not-visible"
+    if status_code in {410, 415} or "unsupported" in message or "not supported" in message:
+        return "unsupported-endpoint"
+    return "manual-review"
+
+
+def rest_failure_diagnostics(label: str, result: RestResult) -> tuple[tuple[str, str], ...]:
+    """Return sanitized REST failure diagnostics."""
+    diagnostics: list[tuple[str, str]] = [
+        ("message", f"{label} unavailable: {rest_response_detail(result)}")
+    ]
+    if result.status_code is not None:
+        diagnostics.append(("http_status", str(result.status_code)))
+    message = rest_json_message(result)
+    if message is not None:
+        diagnostics.append(("response_message", message))
+    for header_name, diagnostic_key in (
+        ("x-ratelimit-remaining", "rate_limit_remaining"),
+        ("x-ratelimit-reset", "rate_limit_reset"),
+        ("retry-after", "retry_after"),
+    ):
+        value = rest_header(result, header_name)
+        if value is not None:
+            diagnostics.append((diagnostic_key, bounded_diagnostic_text(value, limit=80)))
+    accepted_permissions = rest_header(result, "x-accepted-github-permissions")
+    if accepted_permissions is not None:
+        diagnostics.append(
+            ("accepted_permissions", sanitize_accepted_permissions(accepted_permissions))
+        )
+    if result.error is not None:
+        diagnostics.append(("transport", bounded_diagnostic_text(result.error)))
+    return tuple(diagnostics)
 
 
 def is_version_header_rejection(result: RestResult) -> bool:
@@ -1645,7 +2102,7 @@ def read_github_rest_json(
     label: str,
     rest_client: RestClient,
     query: dict[str, str] | None = None,
-) -> tuple[object | None, str | None]:
+) -> RestJsonRead:
     """Read a GitHub REST endpoint with one GHES version-header retry."""
     request_with_version = github_rest_request(
         api_base,
@@ -1654,7 +2111,7 @@ def read_github_rest_json(
         query=query,
     )
     result = rest_client(request_with_version)
-    warning: str | None = None
+    diagnostics: list[tuple[str, str]] = []
 
     if is_version_header_rejection(result):
         request_without_version = github_rest_request(
@@ -1668,20 +2125,170 @@ def read_github_rest_json(
             f"{label} rejected the GitHub API version header; retried the same "
             "read-only endpoint without it."
         )
+        diagnostics.append(("message", warning))
         if not rest_result_is_success(retry_result):
-            return (
-                None,
-                f"{warning} Retry failed: {rest_response_detail(retry_result)}",
+            diagnostics.extend(
+                rest_failure_diagnostics(
+                    label,
+                    RestResult(
+                        status_code=retry_result.status_code,
+                        body=retry_result.body,
+                        error=retry_result.error,
+                        headers=retry_result.headers,
+                    ),
+                )
+            )
+            diagnostics.append(("message", f"Retry failed: {rest_response_detail(retry_result)}"))
+            return RestJsonRead(
+                payload=None,
+                basis=rest_failure_basis(retry_result),
+                diagnostics=tuple(diagnostics),
+                headers=retry_result.headers,
             )
         result = retry_result
 
     if not rest_result_is_success(result):
-        return None, f"{label} unavailable: {rest_response_detail(result)}"
+        return RestJsonRead(
+            payload=None,
+            basis=rest_failure_basis(result),
+            diagnostics=rest_failure_diagnostics(label, result),
+            headers=result.headers,
+        )
 
     try:
-        return json.loads(result.body), warning
+        return RestJsonRead(
+            payload=json.loads(result.body),
+            basis="rest",
+            diagnostics=tuple(diagnostics),
+            headers=result.headers,
+        )
     except json.JSONDecodeError as error:
-        return None, f"{label} returned malformed JSON: {error.msg}"
+        return RestJsonRead(
+            payload=None,
+            basis="malformed-response",
+            diagnostics=observation_diagnostic_pairs(
+                ("message", f"{label} returned malformed JSON: {error.msg}")
+            ),
+            headers=result.headers,
+        )
+
+
+def link_header_has_next(headers: tuple[tuple[str, str], ...]) -> bool:
+    """Return whether a REST response includes Link evidence for another page."""
+    for key, value in headers:
+        if key.casefold() != "link":
+            continue
+        # Link parameters and relation types are case-insensitive (RFC 8288), and
+        # servers/clients may emit `REL="next"` or `rel="Next"`. Casefold each
+        # fragment before matching so pagination is not stopped early.
+        parts = [part.strip().casefold() for part in value.split(",")]
+        if any('rel="next"' in part or "rel=next" in part for part in parts):
+            return True
+    return False
+
+
+@dataclass(frozen=True)
+class RestCollectionRead:
+    """A paginated REST collection read with completeness metadata."""
+
+    items: tuple[object, ...]
+    observed: bool
+    basis: str
+    pagination: str
+    diagnostics: tuple[tuple[str, str], ...]
+
+
+def read_github_rest_collection(
+    *,
+    api_base: str,
+    endpoint_path: str,
+    label: str,
+    rest_client: RestClient,
+) -> RestCollectionRead:
+    """Read a GitHub REST collection, following Link pagination when possible."""
+    items: list[object] = []
+    diagnostics: list[tuple[str, str]] = []
+    page = 1
+    while True:
+        page_read = read_github_rest_json(
+            api_base=api_base,
+            endpoint_path=endpoint_path,
+            label=label,
+            query={"per_page": "100", "page": str(page)},
+            rest_client=rest_client,
+        )
+        diagnostics.extend(page_read.diagnostics)
+        if page_read.payload is None:
+            if items:
+                diagnostics.append(
+                    ("pagination", f"page {page} unavailable; earlier pages retained")
+                )
+                return RestCollectionRead(
+                    items=tuple(items),
+                    observed=True,
+                    basis="rest",
+                    pagination="partial",
+                    diagnostics=tuple(diagnostics),
+                )
+            return RestCollectionRead(
+                items=(),
+                observed=False,
+                basis=page_read.basis,
+                pagination="unavailable",
+                diagnostics=tuple(diagnostics),
+            )
+
+        page_items = json_array(page_read.payload)
+        if page_items is None:
+            diagnostics.append(("message", f"{label} returned a non-list JSON payload."))
+            if items:
+                return RestCollectionRead(
+                    items=tuple(items),
+                    observed=True,
+                    basis="rest",
+                    pagination="partial",
+                    diagnostics=tuple(diagnostics),
+                )
+            return RestCollectionRead(
+                items=(),
+                observed=False,
+                basis="malformed-response",
+                pagination="unavailable",
+                diagnostics=tuple(diagnostics),
+            )
+
+        items.extend(page_items)
+        has_next = link_header_has_next(page_read.headers)
+        if not has_next:
+            return RestCollectionRead(
+                items=tuple(items),
+                observed=True,
+                basis="rest",
+                pagination="complete",
+                diagnostics=tuple(diagnostics),
+            )
+
+        diagnostics.append(
+            (
+                "pagination",
+                f'{label} Link header included rel="next" after page {page}.',
+            )
+        )
+        page += 1
+        if page > GITHUB_REST_MAX_PAGES:
+            diagnostics.append(
+                (
+                    "pagination",
+                    f'stopped after {GITHUB_REST_MAX_PAGES} pages while rel="next" remained',
+                )
+            )
+            return RestCollectionRead(
+                items=tuple(items),
+                observed=True,
+                basis="rest",
+                pagination="partial",
+                diagnostics=tuple(diagnostics),
+            )
 
 
 def combine_metadata_errors(*errors: str | None) -> str | None:
@@ -1692,126 +2299,734 @@ def combine_metadata_errors(*errors: str | None) -> str | None:
     return "; ".join(present_errors)
 
 
+def github_source_label(kind: str, endpoint_path: str) -> str:
+    """Return a sanitized source label for a GitHub command or endpoint family."""
+    return f"{kind} {endpoint_path}"
+
+
+def github_boolean_observation(
+    *,
+    setting: str,
+    value: object,
+    source: str,
+    observed_at: str,
+    basis: str,
+    diagnostics: tuple[tuple[str, str], ...] = (),
+) -> GitHubObservation:
+    """Return an observed, unobserved, or malformed boolean setting observation."""
+    if isinstance(value, bool):
+        return github_observation(
+            setting=setting,
+            value=value,
+            observed=True,
+            basis=basis,
+            source=source,
+            observed_at=observed_at,
+            diagnostics=diagnostics,
+        )
+    if value is None:
+        # A missing field in an otherwise-successful payload is unobserved, not
+        # malformed (e.g. Discussions on older API versions, or an endpoint object
+        # that omits the expected boolean). Record it as manual-review with whatever
+        # caller diagnostics already explain the absence, consistent with the other
+        # missing-field observations.
+        return unobserved_github_observation(
+            setting=setting,
+            basis="manual-review",
+            source=source,
+            observed_at=observed_at,
+            diagnostics=diagnostics,
+        )
+    return unobserved_github_observation(
+        setting=setting,
+        basis="malformed-response",
+        source=source,
+        observed_at=observed_at,
+        diagnostics=diagnostics
+        + observation_diagnostic_pairs(("message", f"{setting} was not a boolean.")),
+    )
+
+
+def security_and_analysis_summary(value: object) -> dict[str, JsonValue] | None:
+    """Return an allowlisted security-and-analysis summary from repository metadata."""
+    payload = json_object(value)
+    if payload is None:
+        return None
+
+    summary: dict[str, JsonValue] = {}
+    for key in sorted(GITHUB_SECURITY_AND_ANALYSIS_KEYS):
+        raw_setting = json_object(payload.get(key))
+        if raw_setting is None:
+            continue
+        status = json_string_field(raw_setting, "status")
+        if status is not None:
+            summary[key] = {"status": status}
+    return summary
+
+
+def branch_protection_summary(value: object) -> dict[str, JsonValue] | None:
+    """Return a bounded branch-protection summary without raw URLs."""
+    payload = json_object(value)
+    if payload is None:
+        return None
+
+    enforce_admins = json_object(payload.get("enforce_admins"))
+    enforce_admins_enabled = enforce_admins.get("enabled") if enforce_admins is not None else None
+    return {
+        "enabled": True,
+        "required_status_checks": json_object(payload.get("required_status_checks")) is not None,
+        "required_pull_request_reviews": (
+            json_object(payload.get("required_pull_request_reviews")) is not None
+        ),
+        "enforce_admins": (
+            enforce_admins_enabled if isinstance(enforce_admins_enabled, bool) else None
+        ),
+        "restrictions": json_object(payload.get("restrictions")) is not None,
+    }
+
+
+def ruleset_summaries(
+    values: tuple[object, ...],
+) -> tuple[list[JsonValue], tuple[str, ...], tuple[tuple[str, str], ...]]:
+    """Return bounded ruleset summaries plus partial-field diagnostics.
+
+    Always returns a concrete list (possibly empty): malformed items are skipped
+    and recorded as diagnostics rather than collapsing the whole result to ``None``.
+    """
+    summaries: list[JsonValue] = []
+    partial_fields: set[str] = set()
+    diagnostics: list[tuple[str, str]] = []
+
+    for index, raw_ruleset in enumerate(values):
+        ruleset = json_object(raw_ruleset)
+        if ruleset is None:
+            diagnostics.append(("message", f"ruleset item {index + 1} was not an object"))
+            continue
+        summary: dict[str, JsonValue] = {}
+        for field_name in ("id", "name", "target", "enforcement"):
+            field_value = ruleset.get(field_name)
+            if isinstance(field_value, (str, int, float, bool)) or field_value is None:
+                summary[field_name] = field_value
+        bypass_actors = ruleset.get("bypass_actors")
+        if isinstance(bypass_actors, list):
+            summary["bypass_actors_count"] = len(bypass_actors)
+        else:
+            partial_fields.add("rulesets[].bypass_actors")
+        summaries.append(summary)
+
+    return summaries, tuple(sorted(partial_fields)), tuple(diagnostics)
+
+
+@dataclass(frozen=True)
+class GitHubCliJsonRead:
+    """Parsed ``gh api`` JSON plus sanitized diagnostics."""
+
+    payload: object | None
+    basis: str
+    diagnostics: tuple[tuple[str, str], ...]
+
+
+def github_cli_failure_basis(detail: str) -> str:
+    """Classify a ``gh`` failure into the observation basis vocabulary."""
+    normalized = detail.casefold()
+    if "auth" in normalized or "login" in normalized or "credential" in normalized:
+        return "auth-required"
+    if "rate limit" in normalized or "secondary rate" in normalized:
+        return "rate-limited"
+    if "not found" in normalized or "404" in normalized:
+        return "not-found-or-not-visible"
+    if "permission" in normalized or "forbidden" in normalized or "403" in normalized:
+        return "permission-required"
+    if "unsupported" in normalized or "not supported" in normalized:
+        return "unsupported-endpoint"
+    return "manual-review"
+
+
+def read_github_cli_json(
+    *,
+    repo_root: Path,
+    endpoint_path: str,
+    label: str,
+    command_runner: CommandRunner,
+    paginate: bool = False,
+    hostname: str | None = None,
+) -> GitHubCliJsonRead:
+    """Read one GitHub API JSON payload through the GitHub CLI.
+
+    ``hostname`` targets a non-default (e.g. GHES) GitHub host via ``gh api
+    --hostname``; when ``None`` the GitHub CLI uses its configured default host.
+    """
+    command = ["gh", "api"]
+    if hostname is not None:
+        command.extend(["--hostname", hostname])
+    if paginate:
+        command.extend(["--paginate", "--slurp"])
+    command.append(endpoint_path)
+    try:
+        result = command_runner(repo_root, command)
+    except OSError as error:
+        return GitHubCliJsonRead(
+            payload=None,
+            basis="transport-error",
+            diagnostics=observation_diagnostic_pairs(
+                ("message", f"gh unavailable: {os_error_summary(error)}")
+            ),
+        )
+
+    if result.returncode != 0:
+        detail = command_detail(result)
+        return GitHubCliJsonRead(
+            payload=None,
+            basis=github_cli_failure_basis(detail),
+            diagnostics=observation_diagnostic_pairs(("message", f"{label} unavailable: {detail}")),
+        )
+
+    try:
+        payload: object = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        return GitHubCliJsonRead(
+            payload=None,
+            basis="malformed-response",
+            diagnostics=observation_diagnostic_pairs(
+                ("message", f"{label} returned malformed JSON: {error.msg}")
+            ),
+        )
+    return GitHubCliJsonRead(payload=payload, basis="gh", diagnostics=())
+
+
+def gh_paginated_collection_items(payload: object) -> tuple[object, ...] | None:
+    """Return collection items from ``gh api --paginate --slurp`` output."""
+    pages = json_array(payload)
+    if pages is None:
+        return None
+    if all(isinstance(page, list) for page in pages):
+        items: list[object] = []
+        for page in pages:
+            items.extend(cast(list[object], page))
+        return tuple(items)
+    return tuple(pages)
+
+
+def collection_observation_from_items(
+    *,
+    setting: str,
+    source: str,
+    observed_at: str,
+    basis: str,
+    items: tuple[object, ...],
+    pagination: str,
+    diagnostics: tuple[tuple[str, str], ...] = (),
+) -> GitHubObservation:
+    """Build labels or rulesets observations from collection records."""
+    if setting == "labels":
+        label_names = github_label_names(list(items))
+        if label_names is None:
+            return unobserved_github_observation(
+                setting=setting,
+                basis="malformed-response",
+                source=source,
+                observed_at=observed_at,
+                pagination="unavailable",
+                diagnostics=diagnostics
+                + observation_diagnostic_pairs(
+                    ("message", "Label metadata returned a non-list JSON payload.")
+                ),
+            )
+        return github_observation(
+            setting=setting,
+            value=list(label_names),
+            observed=True,
+            basis=basis,
+            source=source,
+            observed_at=observed_at,
+            pagination=pagination,
+            diagnostics=diagnostics,
+        )
+
+    if setting == "rulesets":
+        # ruleset_summaries always returns a concrete list (malformed items are
+        # skipped and surfaced as diagnostics), so there is no None case to handle.
+        summaries, partial_fields, summary_diagnostics = ruleset_summaries(items)
+        return github_observation(
+            setting=setting,
+            value=summaries,
+            observed=True,
+            basis=basis,
+            source=source,
+            observed_at=observed_at,
+            pagination=pagination,
+            partial=bool(partial_fields or pagination == "partial"),
+            partial_fields=partial_fields,
+            diagnostics=diagnostics + summary_diagnostics,
+        )
+
+    raise ValueError(f"Unsupported collection setting: {setting}")
+
+
+def repository_observations_from_payload(
+    *,
+    payload: JsonObject,
+    basis: str,
+    source: str,
+    observed_at: str,
+) -> tuple[GitHubObservation, ...]:
+    """Return core repository observations from a repository metadata payload."""
+    observations: list[GitHubObservation] = []
+
+    repository = json_string_field(payload, "full_name") or json_string_field(
+        payload, "nameWithOwner"
+    )
+    if repository is not None:
+        observations.append(
+            github_observation(
+                setting="repository",
+                value=repository,
+                observed=True,
+                basis=basis,
+                source=source,
+                observed_at=observed_at,
+            )
+        )
+    else:
+        observations.append(
+            unobserved_github_observation(
+                setting="repository",
+                basis="manual-review",
+                source=source,
+                observed_at=observed_at,
+                diagnostics=observation_diagnostic_pairs(
+                    ("message", "repository full_name was not present in the payload")
+                ),
+            )
+        )
+
+    visibility = json_string_field(payload, "visibility")
+    if visibility is None:
+        private = payload.get("private")
+        if isinstance(private, bool):
+            visibility = "private" if private else "public"
+    observations.append(
+        github_observation(
+            setting="visibility",
+            value=visibility,
+            observed=visibility is not None,
+            basis=basis if visibility is not None else "manual-review",
+            source=source,
+            observed_at=observed_at,
+            diagnostics=(
+                ()
+                if visibility is not None
+                else observation_diagnostic_pairs(
+                    ("message", "repository visibility was not present in the payload")
+                )
+            ),
+        )
+        if visibility is not None
+        else unobserved_github_observation(
+            setting="visibility",
+            basis="manual-review",
+            source=source,
+            observed_at=observed_at,
+            diagnostics=observation_diagnostic_pairs(
+                ("message", "repository visibility was not present in the payload")
+            ),
+        )
+    )
+
+    default_branch = json_string_field(payload, "default_branch")
+    default_branch_ref = json_object(payload.get("defaultBranchRef"))
+    if default_branch is None and default_branch_ref is not None:
+        default_branch = json_string_field(default_branch_ref, "name")
+    observations.append(
+        github_observation(
+            setting="default_branch",
+            value=default_branch,
+            observed=True,
+            basis=basis,
+            source=source,
+            observed_at=observed_at,
+        )
+        if default_branch is not None
+        else unobserved_github_observation(
+            setting="default_branch",
+            basis="manual-review",
+            source=source,
+            observed_at=observed_at,
+            diagnostics=observation_diagnostic_pairs(
+                ("message", "default branch was not present in the payload")
+            ),
+        )
+    )
+
+    discussions = payload.get("has_discussions")
+    if not isinstance(discussions, bool):
+        discussions = payload.get("hasDiscussionsEnabled")
+    observations.append(
+        github_boolean_observation(
+            setting="discussions",
+            value=discussions,
+            basis=basis,
+            source=source,
+            observed_at=observed_at,
+            diagnostics=(
+                ()
+                if isinstance(discussions, bool)
+                else observation_diagnostic_pairs(
+                    ("message", "Discussions state was not present in the payload")
+                )
+            ),
+        )
+    )
+
+    security_summary = security_and_analysis_summary(payload.get("security_and_analysis"))
+    if security_summary is None:
+        observations.append(
+            unobserved_github_observation(
+                setting="security_and_analysis",
+                # A missing field in an otherwise-successful repository payload is not
+                # proof of a permission failure: the block is also absent on older API
+                # versions, on GitHub Enterprise Server, and for callers without admin
+                # access. Classify it as manual-review (consistent with the other
+                # missing-field observations above) and keep the permission hint in the
+                # diagnostic instead of asserting it in the basis.
+                basis="manual-review",
+                source=source,
+                observed_at=observed_at,
+                diagnostics=observation_diagnostic_pairs(
+                    (
+                        "message",
+                        "security_and_analysis was not present in the payload; it may require "
+                        "repository admin access or may be unavailable on this API version or "
+                        "GitHub Enterprise Server",
+                    )
+                ),
+            )
+        )
+    else:
+        observations.append(
+            github_observation(
+                setting="security_and_analysis",
+                value=security_summary,
+                observed=True,
+                basis=basis,
+                source=source,
+                observed_at=observed_at,
+                partial=False,
+            )
+        )
+
+    return tuple(observations)
+
+
+def private_vulnerability_reporting_observation(
+    *,
+    payload: object | None,
+    basis: str,
+    source: str,
+    observed_at: str,
+    diagnostics: tuple[tuple[str, str], ...],
+) -> GitHubObservation:
+    """Return a private vulnerability reporting observation from an endpoint payload."""
+    # ``payload is None`` is how the REST/gh reads represent an unavailable endpoint
+    # (404, auth/permission failure, transport error, ...). Treat that as unobserved
+    # while preserving the read's own basis/diagnostics, matching
+    # ``branch_protection_observation``. Only a present-but-non-object payload is a
+    # genuine malformed response.
+    if payload is None:
+        return unobserved_github_observation(
+            setting="private_vulnerability_reporting",
+            basis=basis,
+            source=source,
+            observed_at=observed_at,
+            diagnostics=diagnostics,
+        )
+    payload_object = json_object(payload)
+    if payload_object is None:
+        return unobserved_github_observation(
+            setting="private_vulnerability_reporting",
+            basis="malformed-response",
+            source=source,
+            observed_at=observed_at,
+            diagnostics=diagnostics
+            + observation_diagnostic_pairs(
+                ("message", "private vulnerability reporting payload was not an object")
+            ),
+        )
+    return github_boolean_observation(
+        setting="private_vulnerability_reporting",
+        value=payload_object.get("enabled"),
+        basis=basis,
+        source=source,
+        observed_at=observed_at,
+        diagnostics=diagnostics,
+    )
+
+
+def branch_protection_observation(
+    *,
+    payload: object | None,
+    basis: str,
+    source: str,
+    observed_at: str,
+    diagnostics: tuple[tuple[str, str], ...],
+) -> GitHubObservation:
+    """Return a branch-protection observation from an endpoint payload."""
+    if payload is None:
+        return unobserved_github_observation(
+            setting="branch_protection",
+            basis=basis,
+            source=source,
+            observed_at=observed_at,
+            diagnostics=diagnostics,
+        )
+    summary = branch_protection_summary(payload)
+    if summary is None:
+        return unobserved_github_observation(
+            setting="branch_protection",
+            basis="malformed-response",
+            source=source,
+            observed_at=observed_at,
+            diagnostics=diagnostics
+            + observation_diagnostic_pairs(
+                ("message", "branch protection payload was not an object")
+            ),
+        )
+    return github_observation(
+        setting="branch_protection",
+        value=summary,
+        observed=True,
+        basis=basis,
+        source=source,
+        observed_at=observed_at,
+        diagnostics=diagnostics,
+    )
+
+
+def ordered_github_metadata(
+    *,
+    requested: bool,
+    observations: tuple[GitHubObservation, ...],
+) -> GitHubMetadata:
+    """Return metadata with observations ordered by known setting keys."""
+    by_setting = {observation.setting: observation for observation in observations}
+    ordered = tuple(
+        by_setting[setting] for setting in GITHUB_METADATA_SETTING_ORDER if setting in by_setting
+    )
+    extras = tuple(
+        observation
+        for observation in observations
+        if observation.setting not in GITHUB_METADATA_SETTING_ORDER
+    )
+    return GitHubMetadata(requested=requested, observations=ordered + extras)
+
+
 def discover_github_metadata_with_gh(
     repo_root: Path,
     owner_name: str,
+    *,
+    clock: Clock,
     command_runner: CommandRunner = run_command,
+    api_base_host: str | None = None,
 ) -> GitHubMetadata:
-    """Discover GitHub metadata through explicit read-only ``gh`` calls."""
-    try:
-        repo_result = command_runner(
-            repo_root,
-            [
-                "gh",
-                "repo",
-                "view",
-                owner_name,
-                "--json",
-                "nameWithOwner,visibility,defaultBranchRef,hasDiscussionsEnabled",
-            ],
-        )
-    except OSError as error:
-        return GitHubMetadata(
+    """Discover GitHub metadata through explicit read-only ``gh api`` calls.
+
+    ``api_base_host`` targets a non-default (e.g. GHES) host so authenticated ``gh``
+    reads work against that instance; when ``None`` the CLI uses its default host.
+    """
+    observed_at = observed_at_timestamp(clock)
+    repo_path = github_rest_repo_path(owner_name)
+    if repo_path is None:
+        return ordered_github_metadata(
             requested=True,
-            available=False,
-            source="gh",
-            error=os_error_summary(error),
+            observations=unobserved_github_observations(
+                basis="manual-review",
+                source="gh api",
+                observed_at=observed_at,
+                diagnostics=observation_diagnostic_pairs(
+                    ("message", "Repository owner/name is not in owner/repo form.")
+                ),
+            ),
         )
 
-    if repo_result.returncode != 0:
-        return GitHubMetadata(
+    repo_source = github_source_label("gh api", repo_path)
+    repo_read = read_github_cli_json(
+        repo_root=repo_root,
+        endpoint_path=repo_path,
+        label="gh repo metadata",
+        command_runner=command_runner,
+        hostname=api_base_host,
+    )
+    repo_payload = json_object(repo_read.payload)
+    if repo_payload is None:
+        diagnostics = repo_read.diagnostics or observation_diagnostic_pairs(
+            ("message", "gh repo metadata returned a non-object JSON payload.")
+        )
+        return ordered_github_metadata(
             requested=True,
-            available=False,
-            source="gh",
-            error=command_detail(repo_result),
+            observations=unobserved_github_observations(
+                basis=repo_read.basis,
+                source=repo_source,
+                observed_at=observed_at,
+                diagnostics=diagnostics,
+            ),
         )
 
-    try:
-        payload: object = json.loads(repo_result.stdout)
-    except json.JSONDecodeError as error:
-        return GitHubMetadata(
-            requested=True,
-            available=False,
-            source="gh",
-            error=f"Unable to parse gh repo view JSON: {error.msg}",
+    observations = list(
+        repository_observations_from_payload(
+            payload=repo_payload,
+            basis="gh",
+            source=repo_source,
+            observed_at=observed_at,
         )
+    )
 
-    payload_object = json_object(payload)
-    if payload_object is None:
-        return GitHubMetadata(
-            requested=True,
-            available=False,
-            source="gh",
-            error="gh repo view returned a non-object JSON payload.",
+    labels_path = github_rest_endpoint_path(owner_name, "labels?per_page=100")
+    if labels_path is not None:
+        labels_source = github_source_label("gh api --paginate", labels_path)
+        labels_read = read_github_cli_json(
+            repo_root=repo_root,
+            endpoint_path=labels_path,
+            label="gh labels metadata",
+            command_runner=command_runner,
+            paginate=True,
+            hostname=api_base_host,
         )
-
-    default_branch = None
-    default_branch_ref = json_object(payload_object.get("defaultBranchRef"))
-    if default_branch_ref is not None:
-        default_branch = json_string_field(default_branch_ref, "name")
-
-    labels: tuple[str, ...] = ()
-    labels_error: str | None = None
-    labels_source = "manual"
-    try:
-        labels_result = command_runner(
-            repo_root,
-            [
-                "gh",
-                "label",
-                "list",
-                "--repo",
-                owner_name,
-                "--limit",
-                "100",
-                "--json",
-                "name",
-            ],
-        )
-    except OSError as error:
-        labels_error = os_error_summary(error)
-    else:
-        if labels_result.returncode == 0:
-            try:
-                raw_labels: object = json.loads(labels_result.stdout)
-            except json.JSONDecodeError as error:
-                labels_error = f"Unable to parse gh label list JSON: {error.msg}"
-            else:
-                label_names = github_label_names(raw_labels)
-                if label_names is not None:
-                    labels = label_names
-                    labels_source = "gh"
-                else:
-                    labels_error = "gh label list returned a non-list JSON payload."
+        label_items = gh_paginated_collection_items(labels_read.payload)
+        if label_items is None:
+            observations.append(
+                unobserved_github_observation(
+                    setting="labels",
+                    basis=labels_read.basis,
+                    source=labels_source,
+                    observed_at=observed_at,
+                    pagination="unavailable",
+                    diagnostics=labels_read.diagnostics
+                    or observation_diagnostic_pairs(
+                        ("message", "gh labels metadata returned a non-list JSON payload.")
+                    ),
+                )
+            )
         else:
-            labels_error = command_detail(labels_result)
+            observations.append(
+                collection_observation_from_items(
+                    setting="labels",
+                    source=labels_source,
+                    observed_at=observed_at,
+                    basis="gh",
+                    items=label_items,
+                    pagination="complete",
+                    diagnostics=labels_read.diagnostics,
+                )
+            )
 
-    discussions_value = payload_object.get("hasDiscussionsEnabled")
-    discussions_enabled = None
-    if isinstance(discussions_value, bool):
-        discussions_enabled = "enabled" if discussions_value else "disabled"
+    rulesets_path = github_rest_endpoint_path(owner_name, "rulesets?per_page=100")
+    if rulesets_path is not None:
+        rulesets_source = github_source_label("gh api --paginate", rulesets_path)
+        rulesets_read = read_github_cli_json(
+            repo_root=repo_root,
+            endpoint_path=rulesets_path,
+            label="gh rulesets metadata",
+            command_runner=command_runner,
+            paginate=True,
+            hostname=api_base_host,
+        )
+        ruleset_items = gh_paginated_collection_items(rulesets_read.payload)
+        if ruleset_items is None:
+            observations.append(
+                unobserved_github_observation(
+                    setting="rulesets",
+                    basis=rulesets_read.basis,
+                    source=rulesets_source,
+                    observed_at=observed_at,
+                    pagination="unavailable",
+                    diagnostics=rulesets_read.diagnostics
+                    or observation_diagnostic_pairs(
+                        ("message", "gh rulesets metadata returned a non-list JSON payload.")
+                    ),
+                )
+            )
+        else:
+            observations.append(
+                collection_observation_from_items(
+                    setting="rulesets",
+                    source=rulesets_source,
+                    observed_at=observed_at,
+                    basis="gh",
+                    items=ruleset_items,
+                    pagination="complete",
+                    diagnostics=rulesets_read.diagnostics,
+                )
+            )
 
-    metadata_error = (
-        f"Label metadata unavailable: {labels_error}" if labels_error is not None else None
+    default_branch = github_observation_string_value(
+        next(
+            (
+                observation
+                for observation in observations
+                if observation.setting == "default_branch"
+            ),
+            None,
+        )
     )
-    repository = json_string_field(payload_object, "nameWithOwner")
-    visibility = json_string_field(payload_object, "visibility")
-    return GitHubMetadata(
-        requested=True,
-        available=True,
-        source="gh",
-        repository=repository,
-        visibility=visibility,
-        default_branch=default_branch,
-        discussions_enabled=discussions_enabled,
-        labels=labels,
-        error=metadata_error,
-        repository_source="gh" if repository is not None else "manual",
-        visibility_source="gh" if visibility is not None else "manual",
-        default_branch_source="gh" if default_branch is not None else "manual",
-        discussions_source="gh" if discussions_enabled is not None else "manual",
-        labels_source=labels_source,
+    if default_branch is None:
+        observations.append(
+            unobserved_github_observation(
+                setting="branch_protection",
+                basis="dependency-unobserved",
+                source="gh api branch protection",
+                observed_at=observed_at,
+                diagnostics=observation_diagnostic_pairs(
+                    (
+                        "message",
+                        "default branch was not observed, so branch protection was not queried",
+                    )
+                ),
+            )
+        )
+    else:
+        branch_path = github_rest_branch_protection_path(owner_name, default_branch)
+        assert branch_path is not None
+        branch_source = github_source_label("gh api", branch_path)
+        branch_read = read_github_cli_json(
+            repo_root=repo_root,
+            endpoint_path=branch_path,
+            label="gh branch protection metadata",
+            command_runner=command_runner,
+            hostname=api_base_host,
+        )
+        observations.append(
+            branch_protection_observation(
+                payload=branch_read.payload,
+                basis=branch_read.basis,
+                source=branch_source,
+                observed_at=observed_at,
+                diagnostics=branch_read.diagnostics,
+            )
+        )
+
+    private_vulnerability_path = github_rest_endpoint_path(
+        owner_name, "private-vulnerability-reporting"
     )
+    if private_vulnerability_path is not None:
+        private_vulnerability_source = github_source_label("gh api", private_vulnerability_path)
+        private_vulnerability_read = read_github_cli_json(
+            repo_root=repo_root,
+            endpoint_path=private_vulnerability_path,
+            label="gh private vulnerability reporting metadata",
+            command_runner=command_runner,
+            hostname=api_base_host,
+        )
+        observations.append(
+            private_vulnerability_reporting_observation(
+                payload=private_vulnerability_read.payload,
+                basis=private_vulnerability_read.basis,
+                source=private_vulnerability_source,
+                observed_at=observed_at,
+                diagnostics=private_vulnerability_read.diagnostics,
+            )
+        )
+
+    return ordered_github_metadata(requested=True, observations=tuple(observations))
 
 
 def discover_github_metadata_with_rest(
@@ -1820,111 +3035,214 @@ def discover_github_metadata_with_rest(
     github_api_base: str,
     rest_client: RestClient,
     gh_error: str | None,
+    clock: Clock,
 ) -> GitHubMetadata:
     """Discover public-safe GitHub metadata through unauthenticated REST reads."""
-    endpoint_paths = github_rest_repo_paths(owner_name)
-    if endpoint_paths is None:
-        return GitHubMetadata(
+    observed_at = observed_at_timestamp(clock)
+    repo_path = github_rest_repo_path(owner_name)
+    if repo_path is None:
+        return ordered_github_metadata(
             requested=True,
-            available=False,
-            source="manual",
-            error="Repository owner/name is not in owner/repo form.",
+            observations=unobserved_github_observations(
+                basis="manual-review",
+                source="REST repository metadata",
+                observed_at=observed_at,
+                diagnostics=observation_diagnostic_pairs(
+                    ("message", "Repository owner/name is not in owner/repo form.")
+                ),
+            ),
         )
-    repo_path, labels_path = endpoint_paths
 
     diagnostics: list[str] = []
     if gh_error is not None:
-        diagnostics.append(f"gh unavailable: {gh_error}")
+        # gh diagnostics are already self-describing: the OSError/transport case emits
+        # "gh unavailable: <error>", and command failures emit "gh <label> unavailable:
+        # <detail>" (e.g. an auth/permission/rate-limit condition). Append verbatim
+        # instead of blanket-prefixing "gh unavailable:", which mislabels those
+        # non-transport failures as gh being missing or broken.
+        diagnostics.append(gh_error)
 
-    repo_payload, repo_diagnostic = read_github_rest_json(
+    repo_read = read_github_rest_json(
         api_base=github_api_base,
         endpoint_path=repo_path,
         label="REST repo metadata",
         rest_client=rest_client,
     )
-    if repo_payload is None:
-        return GitHubMetadata(
+    if repo_read.payload is None:
+        return ordered_github_metadata(
             requested=True,
-            available=False,
-            source="rest",
-            error=combine_metadata_errors(*diagnostics, repo_diagnostic),
+            observations=unobserved_github_observations(
+                basis=repo_read.basis,
+                source=github_source_label("REST", repo_path),
+                observed_at=observed_at,
+                diagnostics=observation_diagnostic_pairs(
+                    ("message", combine_metadata_errors(*diagnostics))
+                )
+                + repo_read.diagnostics,
+            ),
         )
-    if repo_diagnostic is not None:
-        diagnostics.append(repo_diagnostic)
-    repo_payload_object = json_object(repo_payload)
+    repo_payload_object = json_object(repo_read.payload)
     if repo_payload_object is None:
-        return GitHubMetadata(
+        return ordered_github_metadata(
             requested=True,
-            available=False,
-            source="rest",
-            error=combine_metadata_errors(
-                *diagnostics,
-                "REST repo metadata returned a non-object JSON payload.",
+            observations=unobserved_github_observations(
+                basis="malformed-response",
+                source=github_source_label("REST", repo_path),
+                observed_at=observed_at,
+                diagnostics=observation_diagnostic_pairs(
+                    ("message", combine_metadata_errors(*diagnostics)),
+                    ("message", "REST repo metadata returned a non-object JSON payload."),
+                ),
             ),
         )
 
-    repository_full_name = json_string_field(repo_payload_object, "full_name")
-    if repository_full_name is not None:
-        repository = repository_full_name
-        repository_source = "rest"
-    else:
-        repository = owner_name
-        repository_source = "manual"
-    visibility = None
-    visibility_value = json_string_field(repo_payload_object, "visibility")
-    if visibility_value is not None:
-        visibility = visibility_value
-    else:
-        private_value = repo_payload_object.get("private")
-        if isinstance(private_value, bool):
-            visibility = "private" if private_value else "public"
-
-    default_branch = json_string_field(repo_payload_object, "default_branch")
-    discussions_enabled = None
-    discussions_value = repo_payload_object.get("has_discussions")
-    if isinstance(discussions_value, bool):
-        discussions_enabled = "enabled" if discussions_value else "disabled"
-
-    labels: tuple[str, ...] = ()
-    labels_source = "manual"
-    labels_payload, labels_diagnostic = read_github_rest_json(
-        api_base=github_api_base,
-        endpoint_path=labels_path,
-        query={"per_page": "100"},
-        label="REST labels metadata",
-        rest_client=rest_client,
+    observation_diagnostics = (
+        observation_diagnostic_pairs(("message", combine_metadata_errors(*diagnostics)))
+        + repo_read.diagnostics
     )
-    if labels_payload is None:
-        diagnostics.append(
-            "Label metadata unavailable through rest: "
-            f"{labels_diagnostic or 'unknown REST failure'}"
+    observations = list(
+        repository_observations_from_payload(
+            payload=repo_payload_object,
+            basis="rest",
+            source=github_source_label("REST", repo_path),
+            observed_at=observed_at,
+        )
+    )
+    if observation_diagnostics:
+        observations[0] = replace(
+            observations[0],
+            diagnostics=observations[0].diagnostics + observation_diagnostics,
+        )
+
+    labels_path = github_rest_endpoint_path(owner_name, "labels")
+    if labels_path is not None:
+        labels_read = read_github_rest_collection(
+            api_base=github_api_base,
+            endpoint_path=labels_path,
+            label="REST labels metadata",
+            rest_client=rest_client,
+        )
+        if labels_read.observed:
+            observations.append(
+                collection_observation_from_items(
+                    setting="labels",
+                    source=github_source_label("REST", labels_path),
+                    observed_at=observed_at,
+                    basis="rest",
+                    items=labels_read.items,
+                    pagination=labels_read.pagination,
+                    diagnostics=labels_read.diagnostics,
+                )
+            )
+        else:
+            observations.append(
+                unobserved_github_observation(
+                    setting="labels",
+                    basis=labels_read.basis,
+                    source=github_source_label("REST", labels_path),
+                    observed_at=observed_at,
+                    pagination=labels_read.pagination,
+                    diagnostics=labels_read.diagnostics,
+                )
+            )
+
+    rulesets_path = github_rest_endpoint_path(owner_name, "rulesets")
+    if rulesets_path is not None:
+        rulesets_read = read_github_rest_collection(
+            api_base=github_api_base,
+            endpoint_path=rulesets_path,
+            label="REST rulesets metadata",
+            rest_client=rest_client,
+        )
+        if rulesets_read.observed:
+            observations.append(
+                collection_observation_from_items(
+                    setting="rulesets",
+                    source=github_source_label("REST", rulesets_path),
+                    observed_at=observed_at,
+                    basis="rest",
+                    items=rulesets_read.items,
+                    pagination=rulesets_read.pagination,
+                    diagnostics=rulesets_read.diagnostics,
+                )
+            )
+        else:
+            observations.append(
+                unobserved_github_observation(
+                    setting="rulesets",
+                    basis=rulesets_read.basis,
+                    source=github_source_label("REST", rulesets_path),
+                    observed_at=observed_at,
+                    pagination=rulesets_read.pagination,
+                    diagnostics=rulesets_read.diagnostics,
+                )
+            )
+
+    default_branch = github_observation_string_value(
+        next(
+            (
+                observation
+                for observation in observations
+                if observation.setting == "default_branch"
+            ),
+            None,
+        )
+    )
+    if default_branch is None:
+        observations.append(
+            unobserved_github_observation(
+                setting="branch_protection",
+                basis="dependency-unobserved",
+                source="REST branch protection",
+                observed_at=observed_at,
+                diagnostics=observation_diagnostic_pairs(
+                    (
+                        "message",
+                        "default branch was not observed, so branch protection was not queried",
+                    )
+                ),
+            )
         )
     else:
-        label_names = github_label_names(labels_payload)
-        if label_names is None:
-            diagnostics.append("REST labels metadata returned a non-list JSON payload.")
-        else:
-            labels = label_names
-            labels_source = "rest"
-            if labels_diagnostic is not None:
-                diagnostics.append(labels_diagnostic)
+        branch_path = github_rest_branch_protection_path(owner_name, default_branch)
+        assert branch_path is not None
+        branch_read = read_github_rest_json(
+            api_base=github_api_base,
+            endpoint_path=branch_path,
+            label="REST branch protection metadata",
+            rest_client=rest_client,
+        )
+        observations.append(
+            branch_protection_observation(
+                payload=branch_read.payload,
+                basis=branch_read.basis,
+                source=github_source_label("REST", branch_path),
+                observed_at=observed_at,
+                diagnostics=branch_read.diagnostics,
+            )
+        )
 
-    return GitHubMetadata(
-        requested=True,
-        available=True,
-        source="rest",
-        repository=repository,
-        visibility=visibility,
-        default_branch=default_branch,
-        discussions_enabled=discussions_enabled,
-        labels=labels,
-        error=combine_metadata_errors(*diagnostics),
-        repository_source=repository_source,
-        visibility_source="rest" if visibility is not None else "manual",
-        default_branch_source="rest" if default_branch is not None else "manual",
-        discussions_source="rest" if discussions_enabled is not None else "manual",
-        labels_source=labels_source,
+    private_vulnerability_path = github_rest_endpoint_path(
+        owner_name, "private-vulnerability-reporting"
     )
+    if private_vulnerability_path is not None:
+        private_vulnerability_read = read_github_rest_json(
+            api_base=github_api_base,
+            endpoint_path=private_vulnerability_path,
+            label="REST private vulnerability reporting metadata",
+            rest_client=rest_client,
+        )
+        observations.append(
+            private_vulnerability_reporting_observation(
+                payload=private_vulnerability_read.payload,
+                basis=private_vulnerability_read.basis,
+                source=github_source_label("REST", private_vulnerability_path),
+                observed_at=observed_at,
+                diagnostics=private_vulnerability_read.diagnostics,
+            )
+        )
+
+    return ordered_github_metadata(requested=True, observations=tuple(observations))
 
 
 def discover_github_metadata(
@@ -1935,28 +3253,47 @@ def discover_github_metadata(
     command_runner: CommandRunner = run_command,
     rest_client: RestClient = run_rest_request,
     github_api_base: str | None = None,
+    clock: Clock = utc_now,
 ) -> GitHubMetadata:
     """Optionally discover GitHub metadata through ``gh`` or public REST reads."""
     if not include_metadata:
         return GitHubMetadata(
             requested=False,
-            available=False,
-            source="not requested",
         )
 
+    observed_at = observed_at_timestamp(clock)
     if owner_name is None:
-        return GitHubMetadata(
+        return ordered_github_metadata(
             requested=True,
-            available=False,
-            source="manual",
-            error="Repository owner/name could not be inferred from local remotes.",
+            observations=unobserved_github_observations(
+                basis="manual-review",
+                source="local remotes",
+                observed_at=observed_at,
+                diagnostics=observation_diagnostic_pairs(
+                    ("message", "Repository owner/name could not be inferred from local remotes.")
+                ),
+            ),
         )
 
     normalized_api_base = normalize_github_api_base(github_api_base)
+    # Always attempt authenticated ``gh`` first, then fall back to public REST. For a
+    # non-default (GHES) API base, target that host via ``gh api --hostname`` instead
+    # of skipping ``gh`` entirely; skipping it drops observable authenticated GHES
+    # metadata down to the unauthenticated REST path and breaks the documented
+    # gh-to-REST fallback. If ``gh`` is unavailable for the host, the REST fallback
+    # below still runs, so this is never worse than the REST-only path.
+    api_base_host = (
+        None
+        if normalized_api_base == DEFAULT_GITHUB_API_BASE
+        else github_api_base_host(github_api_base)
+    )
+
     gh_metadata = discover_github_metadata_with_gh(
         repo_root,
         owner_name,
+        clock=clock,
         command_runner=command_runner,
+        api_base_host=api_base_host,
     )
     if gh_metadata.available:
         return gh_metadata
@@ -1965,7 +3302,8 @@ def discover_github_metadata(
         owner_name,
         github_api_base=normalized_api_base,
         rest_client=rest_client,
-        gh_error=gh_metadata.error,
+        gh_error=github_primary_diagnostic(gh_metadata),
+        clock=clock,
     )
 
 
@@ -2103,6 +3441,7 @@ def discover_repository_state(
     github_api_base: str | None = None,
     command_runner: CommandRunner = run_command,
     rest_client: RestClient = run_rest_request,
+    clock: Clock = utc_now,
 ) -> RepositoryDiscovery:
     """Discover read-only repository state for the preflight report."""
     remotes = parse_git_remotes(repo_root)
@@ -2118,6 +3457,7 @@ def discover_repository_state(
         command_runner=command_runner,
         rest_client=rest_client,
         github_api_base=github_api_base,
+        clock=clock,
     )
     workflows = discover_workflows(repo_root)
     return RepositoryDiscovery(
@@ -3140,8 +4480,101 @@ def format_working_tree(entries: tuple[str, ...]) -> str:
     return f"{len(entries)} changed or untracked path(s): " + "; ".join(visible) + suffix
 
 
+def markdown_code_span(value: str) -> str:
+    """Return ``value`` as a Markdown code span that is safe inside a GFM table cell.
+
+    The fence is chosen one backtick longer than the longest backtick run in
+    ``value`` so embedded backticks cannot terminate the span, and a space pads the
+    span when ``value`` starts or ends with a backtick (per CommonMark). Pipes are
+    escaped because a GFM table row is split on unescaped pipes before inline
+    parsing, even inside code spans, and CR/LF are flattened to spaces so a value
+    cannot break out of its row. Backslashes are left untouched: they are literal
+    inside a code span, so doubling them would corrupt the displayed text.
+    """
+    text = value.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+    text = text.replace("|", "\\|")
+    longest_run = 0
+    current_run = 0
+    for char in text:
+        if char == "`":
+            current_run += 1
+            longest_run = max(longest_run, current_run)
+        else:
+            current_run = 0
+    fence = "`" * (longest_run + 1)
+    pad = " " if text.startswith("`") or text.endswith("`") else ""
+    return f"{fence}{pad}{text}{pad}{fence}"
+
+
+def format_code_span_list(items: tuple[str, ...], empty_text: str, *, limit: int = 8) -> str:
+    """Return a compact, backtick-safe Markdown list of code spans for table cells."""
+    if not items:
+        return empty_text
+    visible = [markdown_code_span(item) for item in items[:limit]]
+    if len(items) > limit:
+        visible.append(f"{len(items) - limit} more")
+    return ", ".join(visible)
+
+
+def format_json_value(value: JsonValue, *, limit: int = 180) -> str:
+    """Return a bounded JSON value rendering for table output."""
+    rendered = json.dumps(value, sort_keys=True)
+    if len(rendered) > limit:
+        rendered = f"{rendered[: limit - 3]}..."
+    return markdown_code_span(rendered)
+
+
+def format_github_observation_value(observation: GitHubObservation) -> str:
+    """Return a human-readable typed observation value."""
+    if not observation.observed:
+        return f"{markdown_code_span('null')} (not observed)"
+    value = observation.value
+    if isinstance(value, bool):
+        state = "enabled" if value else "disabled"
+        return f"{markdown_code_span(str(value).lower())} ({state}, observed)"
+    if isinstance(value, str):
+        return markdown_code_span(value)
+    if isinstance(value, list):
+        if not value:
+            return "observed empty list"
+        if all(isinstance(item, str) for item in value):
+            return format_code_span_list(tuple(cast(list[str], value)), "observed empty list")
+        return format_json_value(value)
+    if isinstance(value, dict):
+        if not value:
+            return "observed empty object"
+        return format_json_value(value)
+    if value is None:
+        return markdown_code_span("null")
+    return format_json_value(value)
+
+
+def format_github_observation_state(observation: GitHubObservation) -> str:
+    """Return the observation state and completeness."""
+    if not observation.observed:
+        return f"unobserved ({markdown_code_span(observation.basis)})"
+    completeness = "partial" if observation.partial else "complete"
+    return f"observed {completeness} ({markdown_code_span(observation.basis)})"
+
+
+def format_github_observation_evidence(observation: GitHubObservation) -> str:
+    """Return compact, sanitized observation evidence."""
+    details = [
+        f"source: {markdown_code_span(observation.source)}",
+        f"observed_at: {markdown_code_span(observation.observed_at)}",
+        f"pagination: {markdown_code_span(observation.pagination)}",
+    ]
+    if observation.partial_fields:
+        details.append(
+            "partial fields: "
+            + ", ".join(markdown_code_span(field) for field in observation.partial_fields)
+        )
+    details.extend(f"{key}: {markdown_code_span(value)}" for key, value in observation.diagnostics)
+    return "; ".join(details)
+
+
 def format_github_metadata(metadata: GitHubMetadata) -> str:
-    """Return a Markdown bullet list for optional GitHub metadata."""
+    """Return a Markdown observation ledger for optional GitHub metadata."""
     manual_settings = ", ".join(GITHUB_METADATA_MANUAL_SETTINGS)
     if not metadata.requested:
         return "\n".join(
@@ -3154,37 +4587,32 @@ def format_github_metadata(metadata: GitHubMetadata) -> str:
                 f"- GitHub-only settings requiring manual review: {manual_settings}.",
             ]
         )
-    if not metadata.available:
-        detail = f" ({metadata.error})" if metadata.error is not None else ""
-        return "\n".join(
-            [
-                f"- GitHub metadata: unavailable through `{metadata.source}`{detail}.",
-                f"- GitHub-only settings requiring manual review: {manual_settings}.",
-            ]
-        )
 
-    labels = format_limited_path_list(metadata.labels, "none returned", limit=12)
     lines = [
         f"- GitHub metadata source: `{metadata.source}`",
-        (
-            f"- GitHub repository: `{metadata.repository or 'unknown'}` "
-            f"(source: `{metadata.repository_source}`)"
-        ),
-        (
-            f"- Visibility: `{metadata.visibility or 'unknown'}` "
-            f"(source: `{metadata.visibility_source}`)"
-        ),
-        (
-            f"- Default branch from GitHub: `{metadata.default_branch or 'unknown'}` "
-            f"(source: `{metadata.default_branch_source}`)"
-        ),
-        (
-            f"- Discussions: `{metadata.discussions_enabled or 'unknown'}` "
-            f"(source: `{metadata.discussions_source}`)"
-        ),
-        f"- Labels returned by GitHub: {labels} (source: `{metadata.labels_source}`)",
         f"- GitHub-only settings requiring manual review: {manual_settings}.",
+        "",
+        "| Setting | Value | Observation | Evidence |",
+        "| --- | --- | --- | --- |",
     ]
+    for observation in metadata.observations:
+        label = GITHUB_METADATA_SETTING_LABELS.get(observation.setting, observation.setting)
+        # The value/state/evidence renderers already emit table-cell-safe content via
+        # markdown_code_span; the label is a controlled constant. So no separate
+        # whole-cell escaping pass is needed (and a backslash-doubling one would
+        # corrupt the code spans built above).
+        lines.append(
+            "| "
+            + " | ".join(
+                (
+                    label,
+                    format_github_observation_value(observation),
+                    format_github_observation_state(observation),
+                    format_github_observation_evidence(observation),
+                )
+            )
+            + " |"
+        )
     if metadata.error is not None:
         lines.append(f"- Partial metadata warning: {metadata.error}")
     return "\n".join(lines)

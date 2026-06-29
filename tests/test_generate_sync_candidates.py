@@ -7,6 +7,7 @@ import json
 import shutil
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
@@ -261,6 +262,7 @@ def _rest_result(
     body: Any = "",
     *,
     error: str | None = None,
+    headers: tuple[tuple[str, str], ...] = (),
 ) -> Any:
     """Build a fake REST result for metadata tests."""
     response_body = body if isinstance(body, str) else json.dumps(body)
@@ -268,7 +270,53 @@ def _rest_result(
         status_code=status_code,
         body=response_body,
         error=error,
+        headers=headers,
     )
+
+
+def _fixed_clock() -> datetime:
+    """Return a deterministic timestamp for metadata ledger tests."""
+    return datetime(2026, 6, 29, 12, 34, 56, tzinfo=timezone.utc)
+
+
+def _observation(metadata: Any, setting: str) -> Any:
+    """Return one metadata observation from a test ledger."""
+    observation = metadata.observation(setting)
+    assert observation is not None
+    return observation
+
+
+def _metadata_rest_success_responses(
+    repo_payload: dict[str, Any],
+    labels_payload: list[dict[str, Any]] | dict[str, Any] | str | None = None,
+    *,
+    rulesets_payload: list[dict[str, Any]] | None = None,
+    branch_protection_payload: dict[str, Any] | None = None,
+    private_vulnerability_payload: dict[str, Any] | None = None,
+) -> list[Any]:
+    """Return the standard REST response sequence for full metadata discovery."""
+    labels = [] if labels_payload is None else labels_payload
+    rulesets = [] if rulesets_payload is None else rulesets_payload
+    branch_protection = (
+        {
+            "required_status_checks": {"contexts": []},
+            "enforce_admins": {"enabled": True},
+        }
+        if branch_protection_payload is None
+        else branch_protection_payload
+    )
+    private_vulnerability = (
+        {"enabled": False}
+        if private_vulnerability_payload is None
+        else private_vulnerability_payload
+    )
+    return [
+        _rest_result(200, repo_payload),
+        _rest_result(200, labels),
+        _rest_result(200, rulesets),
+        _rest_result(200, branch_protection),
+        _rest_result(200, private_vulnerability),
+    ]
 
 
 class FakeRestClient:
@@ -1204,25 +1252,78 @@ def test_github_metadata_provider_reports_visible_values(tmp_path: Path) -> None
 
     def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
         calls.append(command)
-        if command[:3] == ["gh", "repo", "view"]:
+        if command == ["gh", "api", "/repos/example/project"]:
             return subprocess.CompletedProcess(
                 command,
                 0,
                 stdout=json.dumps(
                     {
-                        "nameWithOwner": "example/project",
-                        "visibility": "PUBLIC",
-                        "defaultBranchRef": {"name": "main"},
-                        "hasDiscussionsEnabled": True,
+                        "full_name": "example/project",
+                        "visibility": "public",
+                        "default_branch": "main",
+                        "has_discussions": True,
+                        "security_and_analysis": {
+                            "secret_scanning": {"status": "enabled"},
+                        },
                     }
                 ),
                 stderr="",
             )
-        if command[:3] == ["gh", "label", "list"]:
+        if command == [
+            "gh",
+            "api",
+            "--paginate",
+            "--slurp",
+            "/repos/example/project/labels?per_page=100",
+        ]:
             return subprocess.CompletedProcess(
                 command,
                 0,
-                stdout=json.dumps([{"name": "triage"}, {"name": "bug"}]),
+                stdout=json.dumps([[{"name": "triage"}, {"name": "bug"}]]),
+                stderr="",
+            )
+        if command == [
+            "gh",
+            "api",
+            "--paginate",
+            "--slurp",
+            "/repos/example/project/rulesets?per_page=100",
+        ]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    [
+                        [
+                            {
+                                "id": 1,
+                                "name": "default",
+                                "target": "branch",
+                                "enforcement": "active",
+                                "bypass_actors": [],
+                            }
+                        ]
+                    ]
+                ),
+                stderr="",
+            )
+        if command == ["gh", "api", "/repos/example/project/branches/main/protection"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        "required_status_checks": {"contexts": []},
+                        "enforce_admins": {"enabled": True},
+                    }
+                ),
+                stderr="",
+            )
+        if command == ["gh", "api", "/repos/example/project/private-vulnerability-reporting"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps({"enabled": False}),
                 stderr="",
             )
         raise AssertionError(f"Unexpected command: {command}")
@@ -1232,16 +1333,14 @@ def test_github_metadata_provider_reports_visible_values(tmp_path: Path) -> None
         "example/project",
         include_metadata=True,
         command_runner=runner,
+        clock=_fixed_clock,
     )
 
-    assert [command[:3] for command in calls] == [
-        ["gh", "repo", "view"],
-        ["gh", "label", "list"],
-    ]
+    assert not any(command[:3] == ["gh", "label", "list"] for command in calls)
     assert metadata.requested is True
     assert metadata.available is True
     assert metadata.repository == "example/project"
-    assert metadata.visibility == "PUBLIC"
+    assert metadata.visibility == "public"
     assert metadata.default_branch == "main"
     assert metadata.discussions_enabled == "enabled"
     assert metadata.labels == ("bug", "triage")
@@ -1250,6 +1349,9 @@ def test_github_metadata_provider_reports_visible_values(tmp_path: Path) -> None
     assert metadata.default_branch_source == "gh"
     assert metadata.discussions_source == "gh"
     assert metadata.labels_source == "gh"
+    assert _observation(metadata, "private_vulnerability_reporting").value is False
+    assert _observation(metadata, "rulesets").pagination == "complete"
+    assert _observation(metadata, "repository").observed_at == "2026-06-29T12:34:56Z"
 
 
 def test_github_metadata_rest_fallback_reports_public_values_after_missing_gh(
@@ -1261,18 +1363,18 @@ def test_github_metadata_rest_fallback_reports_public_values_after_missing_gh(
         raise FileNotFoundError(2, "No such file or directory", command[0])
 
     rest_client = FakeRestClient(
-        [
-            _rest_result(
-                200,
-                {
-                    "full_name": "example/project",
-                    "visibility": "public",
-                    "default_branch": "main",
-                    "has_discussions": False,
-                },
-            ),
-            _rest_result(200, [{"name": "triage"}, {"name": "bug"}]),
-        ]
+        _metadata_rest_success_responses(
+            {
+                "full_name": "example/project",
+                "visibility": "public",
+                "default_branch": "main",
+                "has_discussions": False,
+                "security_and_analysis": {"secret_scanning": {"status": "disabled"}},
+            },
+            [{"name": "triage"}, {"name": "bug"}],
+            rulesets_payload=[],
+            private_vulnerability_payload={"enabled": False},
+        )
     )
 
     metadata = sync_candidates.discover_github_metadata(
@@ -1281,6 +1383,7 @@ def test_github_metadata_rest_fallback_reports_public_values_after_missing_gh(
         include_metadata=True,
         command_runner=runner,
         rest_client=rest_client,
+        clock=_fixed_clock,
     )
 
     assert metadata.requested is True
@@ -1291,6 +1394,10 @@ def test_github_metadata_rest_fallback_reports_public_values_after_missing_gh(
     assert metadata.default_branch == "main"
     assert metadata.discussions_enabled == "disabled"
     assert metadata.labels == ("bug", "triage")
+    assert _observation(metadata, "discussions").value is False
+    assert _observation(metadata, "private_vulnerability_reporting").value is False
+    assert _observation(metadata, "rulesets").value == []
+    assert _observation(metadata, "rulesets").pagination == "complete"
     assert metadata.repository_source == "rest"
     assert metadata.visibility_source == "rest"
     assert metadata.default_branch_source == "rest"
@@ -1299,11 +1406,23 @@ def test_github_metadata_rest_fallback_reports_public_values_after_missing_gh(
     assert metadata.error is not None
     assert "gh unavailable: FileNotFoundError: No such file or directory" in metadata.error
 
-    assert [request.method for request in rest_client.requests] == ["GET", "GET"]
+    assert [request.method for request in rest_client.requests] == ["GET"] * 5
     assert rest_client.requests[0].url == "https://api.github.com/repos/example/project"
     assert (
         rest_client.requests[1].url
-        == "https://api.github.com/repos/example/project/labels?per_page=100"
+        == "https://api.github.com/repos/example/project/labels?per_page=100&page=1"
+    )
+    assert (
+        rest_client.requests[2].url
+        == "https://api.github.com/repos/example/project/rulesets?per_page=100&page=1"
+    )
+    assert (
+        rest_client.requests[3].url
+        == "https://api.github.com/repos/example/project/branches/main/protection"
+    )
+    assert (
+        rest_client.requests[4].url
+        == "https://api.github.com/repos/example/project/private-vulnerability-reporting"
     )
     headers = dict(rest_client.requests[0].headers)
     assert headers["Accept"] == "application/vnd.github+json"
@@ -1314,9 +1433,11 @@ def test_github_metadata_rest_fallback_reports_public_values_after_missing_gh(
     assert rest_client.requests[0].timeout == sync_candidates.GITHUB_REST_TIMEOUT_SECONDS
 
     rendered = sync_candidates.format_github_metadata(metadata)
-    assert "GitHub repository: `example/project` (source: `rest`)" in rendered
-    assert "Default branch from GitHub: `main` (source: `rest`)" in rendered
-    assert "Labels returned by GitHub: `bug`, `triage` (source: `rest`)" in rendered
+    assert "Repository owner/name | `example/project` | observed complete (`rest`)" in rendered
+    assert "Default branch | `main` | observed complete (`rest`)" in rendered
+    assert "Labels | `bug`, `triage` | observed complete (`rest`)" in rendered
+    assert "Repository rulesets | observed empty list | observed complete (`rest`)" in rendered
+    assert "Private vulnerability reporting | `false` (disabled, observed)" in rendered
 
 
 def test_github_metadata_rest_fallback_handles_unauthenticated_gh(
@@ -1328,18 +1449,15 @@ def test_github_metadata_rest_fallback_handles_unauthenticated_gh(
         return subprocess.CompletedProcess(command, 1, stdout="", stderr="gh auth required\n")
 
     rest_client = FakeRestClient(
-        [
-            _rest_result(
-                200,
-                {
-                    "full_name": "example/project",
-                    "private": False,
-                    "default_branch": "trunk",
-                    "has_discussions": True,
-                },
-            ),
-            _rest_result(200, []),
-        ]
+        _metadata_rest_success_responses(
+            {
+                "full_name": "example/project",
+                "private": False,
+                "default_branch": "trunk",
+                "has_discussions": True,
+            },
+            [],
+        )
     )
 
     metadata = sync_candidates.discover_github_metadata(
@@ -1348,6 +1466,7 @@ def test_github_metadata_rest_fallback_handles_unauthenticated_gh(
         include_metadata=True,
         command_runner=runner,
         rest_client=rest_client,
+        clock=_fixed_clock,
     )
 
     assert metadata.available is True
@@ -1358,7 +1477,11 @@ def test_github_metadata_rest_fallback_handles_unauthenticated_gh(
     assert metadata.labels == ()
     assert metadata.labels_source == "rest"
     assert metadata.error is not None
-    assert "gh unavailable: gh auth required" in metadata.error
+    assert "gh auth required" in metadata.error
+    # An auth failure must not be relabeled as gh being missing/broken: the
+    # self-describing "gh ... unavailable" message is kept verbatim, not double
+    # prefixed with "gh unavailable:".
+    assert "gh unavailable: gh repo metadata" not in metadata.error
 
 
 def test_github_metadata_rest_fallback_handles_malformed_gh_json(tmp_path: Path) -> None:
@@ -1368,18 +1491,15 @@ def test_github_metadata_rest_fallback_handles_malformed_gh_json(tmp_path: Path)
         return subprocess.CompletedProcess(command, 0, stdout="{", stderr="")
 
     rest_client = FakeRestClient(
-        [
-            _rest_result(
-                200,
-                {
-                    "full_name": "example/project",
-                    "visibility": "public",
-                    "default_branch": "main",
-                    "has_discussions": True,
-                },
-            ),
-            _rest_result(200, []),
-        ]
+        _metadata_rest_success_responses(
+            {
+                "full_name": "example/project",
+                "visibility": "public",
+                "default_branch": "main",
+                "has_discussions": True,
+            },
+            [],
+        )
     )
 
     metadata = sync_candidates.discover_github_metadata(
@@ -1388,26 +1508,28 @@ def test_github_metadata_rest_fallback_handles_malformed_gh_json(tmp_path: Path)
         include_metadata=True,
         command_runner=runner,
         rest_client=rest_client,
+        clock=_fixed_clock,
     )
 
     assert metadata.available is True
     assert metadata.source == "rest"
     assert metadata.error is not None
-    assert "Unable to parse gh repo view JSON" in metadata.error
+    assert "gh repo metadata returned malformed JSON" in metadata.error
 
 
 @pytest.mark.parametrize(
-    ("status_code", "message"),
+    ("status_code", "message", "expected_basis"),
     [
-        (401, "Requires authentication"),
-        (403, "Resource not accessible by integration"),
-        (403, "API rate limit exceeded for 203.0.113.10"),
+        (401, "Requires authentication", "auth-required"),
+        (403, "Resource not accessible by integration", "permission-required"),
+        (403, "API rate limit exceeded for 203.0.113.10", "rate-limited"),
     ],
 )
 def test_github_metadata_rest_auth_permission_and_rate_limit_are_not_version_retries(
     tmp_path: Path,
     status_code: int,
     message: str,
+    expected_basis: str,
 ) -> None:
     """Auth, permission, and rate-limit responses remain distinguishable failures."""
 
@@ -1425,7 +1547,11 @@ def test_github_metadata_rest_auth_permission_and_rate_limit_are_not_version_ret
     )
 
     assert metadata.available is False
-    assert metadata.source == "rest"
+    # The compatibility ``source`` summary must stay in the legacy vocabulary
+    # ("not requested" / "manual" / "gh" / "rest") and not leak a per-observation
+    # basis token such as "auth-required" or "rate-limited".
+    assert metadata.source == "manual"
+    assert _observation(metadata, "repository").basis == expected_basis
     assert metadata.error is not None
     assert f"HTTP {status_code}: {message}" in metadata.error
     assert len(rest_client.requests) == 1
@@ -1498,18 +1624,15 @@ def test_github_metadata_rest_unexpected_payload_types_are_reported(
     assert "REST repo metadata returned a non-object JSON payload" in repo_payload_metadata.error
 
     labels_payload_client = FakeRestClient(
-        [
-            _rest_result(
-                200,
-                {
-                    "full_name": "example/project",
-                    "visibility": "public",
-                    "default_branch": "main",
-                    "has_discussions": True,
-                },
-            ),
-            _rest_result(200, {"name": "not-a-list"}),
-        ]
+        _metadata_rest_success_responses(
+            {
+                "full_name": "example/project",
+                "visibility": "public",
+                "default_branch": "main",
+                "has_discussions": True,
+            },
+            {"name": "not-a-list"},
+        )
     )
     labels_payload_metadata = sync_candidates.discover_github_metadata(
         tmp_path,
@@ -1523,6 +1646,8 @@ def test_github_metadata_rest_unexpected_payload_types_are_reported(
     assert labels_payload_metadata.labels_source == "manual"
     assert labels_payload_metadata.error is not None
     assert "REST labels metadata returned a non-list JSON payload" in labels_payload_metadata.error
+    assert _observation(labels_payload_metadata, "labels").value is None
+    assert _observation(labels_payload_metadata, "labels").basis == "malformed-response"
 
 
 def test_github_metadata_rest_uses_ghes_api_base_override(tmp_path: Path) -> None:
@@ -1534,18 +1659,15 @@ def test_github_metadata_rest_uses_ghes_api_base_override(tmp_path: Path) -> Non
         return subprocess.CompletedProcess(command, 1, stdout="", stderr="gh unavailable\n")
 
     rest_client = FakeRestClient(
-        [
-            _rest_result(
-                200,
-                {
-                    "full_name": "octo/widget",
-                    "visibility": "internal",
-                    "default_branch": "main",
-                    "has_discussions": False,
-                },
-            ),
-            _rest_result(200, []),
-        ]
+        _metadata_rest_success_responses(
+            {
+                "full_name": "octo/widget",
+                "visibility": "internal",
+                "default_branch": "main",
+                "has_discussions": False,
+            },
+            [],
+        )
     )
 
     discovery = sync_candidates.discover_repository_state(
@@ -1556,12 +1678,59 @@ def test_github_metadata_rest_uses_ghes_api_base_override(tmp_path: Path) -> Non
         github_api_base="https://github.company.com/api/v3",
         command_runner=runner,
         rest_client=rest_client,
+        clock=_fixed_clock,
     )
 
     assert discovery.owner_name == "octo/widget"
     assert discovery.github_metadata.available is True
     assert discovery.github_metadata.source == "rest"
     assert rest_client.requests[0].url == "https://github.company.com/api/v3/repos/octo/widget"
+
+
+def test_github_metadata_gh_targets_ghes_host_via_hostname(tmp_path: Path) -> None:
+    """A non-default API base routes authenticated gh reads to that host via --hostname."""
+    commands: list[list[str]] = []
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        commands.append(command)
+        if command[-1] == "/repos/octo/widget":
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    {
+                        "full_name": "octo/widget",
+                        "visibility": "internal",
+                        "default_branch": "main",
+                        "has_discussions": True,
+                    }
+                ),
+                stderr="",
+            )
+        if "--paginate" in command:
+            return subprocess.CompletedProcess(command, 0, stdout="[]", stderr="")
+        return subprocess.CompletedProcess(
+            command, 0, stdout=json.dumps({"enabled": False}), stderr=""
+        )
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "octo/widget",
+        include_metadata=True,
+        command_runner=runner,
+        github_api_base="https://github.company.com/api/v3",
+        clock=_fixed_clock,
+    )
+
+    assert metadata.available is True
+    # gh was attempted first (not skipped) and observed the GHES repo.
+    assert metadata.source == "gh"
+    assert metadata.repository == "octo/widget"
+    # Every gh api call targets the GHES host instead of assuming github.com.
+    gh_calls = [command for command in commands if command[:2] == ["gh", "api"]]
+    assert gh_calls
+    assert all("--hostname" in command for command in gh_calls)
+    assert all("github.company.com" in command for command in gh_calls)
 
 
 def test_github_metadata_rest_retries_ghes_version_header_rejection(
@@ -1585,6 +1754,15 @@ def test_github_metadata_rest_retries_ghes_version_header_rejection(
                 },
             ),
             _rest_result(200, []),
+            _rest_result(200, []),
+            _rest_result(
+                200,
+                {
+                    "required_status_checks": {"contexts": []},
+                    "enforce_admins": {"enabled": True},
+                },
+            ),
+            _rest_result(200, {"enabled": False}),
         ]
     )
 
@@ -1594,6 +1772,7 @@ def test_github_metadata_rest_retries_ghes_version_header_rejection(
         include_metadata=True,
         command_runner=runner,
         rest_client=rest_client,
+        clock=_fixed_clock,
     )
 
     assert metadata.available is True
@@ -1619,17 +1798,14 @@ def test_github_metadata_rest_repository_source_is_manual_without_full_name(
         return subprocess.CompletedProcess(command, 1, stdout="", stderr="gh unavailable\n")
 
     rest_client = FakeRestClient(
-        [
-            _rest_result(
-                200,
-                {
-                    "visibility": "public",
-                    "default_branch": "main",
-                    "has_discussions": True,
-                },
-            ),
-            _rest_result(200, []),
-        ]
+        _metadata_rest_success_responses(
+            {
+                "visibility": "public",
+                "default_branch": "main",
+                "has_discussions": True,
+            },
+            [],
+        )
     )
 
     metadata = sync_candidates.discover_github_metadata(
@@ -1638,14 +1814,17 @@ def test_github_metadata_rest_repository_source_is_manual_without_full_name(
         include_metadata=True,
         command_runner=runner,
         rest_client=rest_client,
+        clock=_fixed_clock,
     )
 
     assert metadata.available is True
     assert metadata.source == "rest"
-    # full_name was absent, so the repository value is the locally inferred owner/name
-    # and its source must be reported as manual rather than rest.
-    assert metadata.repository == "example/project"
+    # full_name was absent, so the GitHub metadata value stays unobserved/null
+    # instead of treating the locally inferred owner/name as a remote observation.
+    assert metadata.repository is None
     assert metadata.repository_source == "manual"
+    assert _observation(metadata, "repository").value is None
+    assert _observation(metadata, "repository").basis == "manual-review"
     # Fields that were present in the REST payload remain sourced from rest.
     assert metadata.visibility == "public"
     assert metadata.visibility_source == "rest"
@@ -1680,6 +1859,472 @@ def test_github_metadata_rest_failed_version_header_retry_is_unavailable(
     assert "retried the same read-only endpoint without it" in metadata.error
     assert "Retry failed: HTTP 404: Not Found" in metadata.error
     assert len(rest_client.requests) == 2
+
+
+def test_github_metadata_rest_paginates_collections_and_marks_rulesets_partial(
+    tmp_path: Path,
+) -> None:
+    """REST collection pagination follows Link evidence and marks partial objects."""
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="gh unavailable\n")
+
+    rest_client = FakeRestClient(
+        [
+            _rest_result(
+                200,
+                {
+                    "full_name": "example/project",
+                    "visibility": "public",
+                    "default_branch": "main",
+                    "has_discussions": True,
+                },
+            ),
+            _rest_result(
+                200,
+                [{"name": "bug"}],
+                headers=(
+                    (
+                        "Link",
+                        '<https://api.github.com/repositories/1/labels?page=2>; rel="next"',
+                    ),
+                ),
+            ),
+            _rest_result(200, [{"name": "triage"}]),
+            _rest_result(
+                200,
+                [
+                    {
+                        "id": 1,
+                        "name": "protect-main",
+                        "target": "branch",
+                        "enforcement": "active",
+                    }
+                ],
+            ),
+            _rest_result(200, {"required_status_checks": {"contexts": []}}),
+            _rest_result(200, {"enabled": False}),
+        ]
+    )
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "example/project",
+        include_metadata=True,
+        command_runner=runner,
+        rest_client=rest_client,
+        clock=_fixed_clock,
+    )
+
+    labels = _observation(metadata, "labels")
+    rulesets = _observation(metadata, "rulesets")
+
+    assert metadata.labels == ("bug", "triage")
+    assert labels.pagination == "complete"
+    assert rest_client.requests[1].url.endswith("/labels?per_page=100&page=1")
+    assert rest_client.requests[2].url.endswith("/labels?per_page=100&page=2")
+    assert rulesets.partial is True
+    assert rulesets.partial_fields == ("rulesets[].bypass_actors",)
+
+
+def test_github_metadata_rest_marks_collection_partial_after_late_page_failure(
+    tmp_path: Path,
+) -> None:
+    """A later page failure keeps earlier collection items but marks the result partial."""
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="gh unavailable\n")
+
+    rest_client = FakeRestClient(
+        [
+            _rest_result(
+                200,
+                {
+                    "full_name": "example/project",
+                    "visibility": "public",
+                    "default_branch": "main",
+                    "has_discussions": True,
+                },
+            ),
+            _rest_result(
+                200,
+                [{"name": "bug"}],
+                headers=(
+                    (
+                        "Link",
+                        '<https://api.github.com/repositories/1/labels?page=2>; rel="next"',
+                    ),
+                ),
+            ),
+            _rest_result(
+                403,
+                {"message": "Resource not accessible by integration"},
+                headers=(
+                    (
+                        "X-Accepted-GitHub-Permissions",
+                        "metadata=read; administration=read",
+                    ),
+                ),
+            ),
+            _rest_result(200, []),
+            _rest_result(200, {"required_status_checks": {"contexts": []}}),
+            _rest_result(200, {"enabled": False}),
+        ]
+    )
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "example/project",
+        include_metadata=True,
+        command_runner=runner,
+        rest_client=rest_client,
+        clock=_fixed_clock,
+    )
+
+    labels = _observation(metadata, "labels")
+
+    assert labels.observed is True
+    assert labels.value == ["bug"]
+    assert labels.pagination == "partial"
+    assert any(key == "accepted_permissions" for key, _value in labels.diagnostics)
+    assert "administration=read" in sync_candidates.github_observation_diagnostic_text(labels)
+
+
+def test_github_metadata_rest_rate_limit_headers_are_classified(tmp_path: Path) -> None:
+    """Rate-limit basis uses status plus headers, not status code alone."""
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="gh unavailable\n")
+
+    rest_client = FakeRestClient(
+        [
+            _rest_result(
+                429,
+                {"message": "You have exceeded a secondary rate limit."},
+                headers=(
+                    ("x-ratelimit-remaining", "0"),
+                    ("x-ratelimit-reset", "1790000000"),
+                    ("retry-after", "60"),
+                ),
+            )
+        ]
+    )
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "example/project",
+        include_metadata=True,
+        command_runner=runner,
+        rest_client=rest_client,
+        clock=_fixed_clock,
+    )
+
+    repository = _observation(metadata, "repository")
+
+    assert metadata.available is False
+    assert repository.value is None
+    assert repository.basis == "rate-limited"
+    assert ("rate_limit_remaining", "0") in repository.diagnostics
+    assert ("retry_after", "60") in repository.diagnostics
+
+
+def test_github_metadata_rest_skips_branch_protection_without_default_branch(
+    tmp_path: Path,
+) -> None:
+    """Branch protection is dependency-unobserved when the branch is unknown."""
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="gh unavailable\n")
+
+    rest_client = FakeRestClient(
+        [
+            _rest_result(
+                200,
+                {
+                    "full_name": "example/project",
+                    "visibility": "public",
+                    "has_discussions": True,
+                },
+            ),
+            _rest_result(200, []),
+            _rest_result(200, []),
+            _rest_result(200, {"enabled": False}),
+        ]
+    )
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "example/project",
+        include_metadata=True,
+        command_runner=runner,
+        rest_client=rest_client,
+        clock=_fixed_clock,
+    )
+
+    branch_protection = _observation(metadata, "branch_protection")
+
+    assert branch_protection.value is None
+    assert branch_protection.basis == "dependency-unobserved"
+    assert not any("/branches/" in request.url for request in rest_client.requests)
+
+
+def test_github_metadata_rest_private_vulnerability_404_is_not_disabled(
+    tmp_path: Path,
+) -> None:
+    """Endpoint-specific 404 leaves private reporting unknown, not disabled."""
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="gh unavailable\n")
+
+    rest_client = FakeRestClient(
+        [
+            *_metadata_rest_success_responses(
+                {
+                    "full_name": "example/project",
+                    "visibility": "public",
+                    "default_branch": "main",
+                    "has_discussions": True,
+                },
+                [],
+            )[:-1],
+            _rest_result(404, {"message": "Not Found"}),
+        ]
+    )
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "example/project",
+        include_metadata=True,
+        command_runner=runner,
+        rest_client=rest_client,
+        clock=_fixed_clock,
+    )
+
+    private_reporting = _observation(metadata, "private_vulnerability_reporting")
+    rendered = sync_candidates.format_github_metadata(metadata)
+
+    assert private_reporting.value is None
+    assert private_reporting.basis == "not-found-or-not-visible"
+    # An unavailable endpoint (payload is None) must keep the read's basis and must
+    # not be described as a malformed object.
+    assert all("was not an object" not in value for _key, value in private_reporting.diagnostics)
+    assert "Private vulnerability reporting | `null` (not observed)" in rendered
+    assert "Private vulnerability reporting | `false`" not in rendered
+
+
+def test_github_metadata_rest_private_vulnerability_non_object_is_malformed(
+    tmp_path: Path,
+) -> None:
+    """A present-but-non-object private-reporting payload is malformed, not unavailable."""
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 1, stdout="", stderr="gh unavailable\n")
+
+    rest_client = FakeRestClient(
+        [
+            *_metadata_rest_success_responses(
+                {
+                    "full_name": "example/project",
+                    "visibility": "public",
+                    "default_branch": "main",
+                    "has_discussions": True,
+                },
+                [],
+            )[:-1],
+            _rest_result(200, ["unexpected"]),
+        ]
+    )
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "example/project",
+        include_metadata=True,
+        command_runner=runner,
+        rest_client=rest_client,
+        clock=_fixed_clock,
+    )
+
+    private_reporting = _observation(metadata, "private_vulnerability_reporting")
+    assert private_reporting.observed is False
+    assert private_reporting.basis == "malformed-response"
+    assert any("was not an object" in value for _key, value in private_reporting.diagnostics)
+
+
+def test_github_metadata_security_and_analysis_missing_is_manual_review(
+    tmp_path: Path,
+) -> None:
+    """A successful payload without security_and_analysis is manual-review, not permission-required."""
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        raise FileNotFoundError(2, "No such file or directory", command[0])
+
+    rest_client = FakeRestClient(
+        _metadata_rest_success_responses(
+            {
+                "full_name": "example/project",
+                "visibility": "public",
+                "default_branch": "main",
+                "has_discussions": True,
+            },
+            [],
+        )
+    )
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "example/project",
+        include_metadata=True,
+        command_runner=runner,
+        rest_client=rest_client,
+        clock=_fixed_clock,
+    )
+
+    security = _observation(metadata, "security_and_analysis")
+    assert security.observed is False
+    # A missing field in an otherwise-successful payload is not proof of a permission
+    # failure (it is also absent on older API versions, GHES, and for non-admin callers).
+    assert security.basis == "manual-review"
+    assert security.value is None
+    message = dict(security.diagnostics).get("message", "")
+    assert "security_and_analysis was not present" in message
+    assert "admin" in message
+
+
+def test_markdown_code_span_is_safe_for_backticks_pipes_and_newlines() -> None:
+    """The code-span helper survives backticks, pipes, CR/LF, and edge backticks."""
+    # No special characters: single-backtick span, no padding.
+    assert sync_candidates.markdown_code_span("plain") == "`plain`"
+    # Embedded backtick runs force a fence one backtick longer than the longest run.
+    assert sync_candidates.markdown_code_span("a`b") == "``a`b``"
+    assert sync_candidates.markdown_code_span("a``b") == "```a``b```"
+    # Leading/trailing backticks require space padding (CommonMark).
+    assert sync_candidates.markdown_code_span("`x`") == "`` `x` ``"
+    # Pipes are escaped so the GFM table parser keeps them inside the cell.
+    assert sync_candidates.markdown_code_span("a|b") == "`a\\|b`"
+    # CR/LF are flattened so a value cannot break out of its table row.
+    assert sync_candidates.markdown_code_span("a\r\nb") == "`a b`"
+    assert sync_candidates.markdown_code_span("a\nb") == "`a b`"
+    # Backslashes are preserved verbatim because they are literal inside a code span.
+    assert sync_candidates.markdown_code_span("C:\\path") == "`C:\\path`"
+
+
+def test_format_github_metadata_renders_backtick_unsafe_values_without_breaking_table() -> None:
+    """Labels containing backticks or pipes stay inside one well-formed table cell."""
+    observation = sync_candidates.GitHubObservation(
+        setting="labels",
+        value=["needs `review`", "area|core"],
+        observed=True,
+        basis="rest",
+        source="REST repos/example/project/labels",
+        observed_at="2026-06-29T12:34:56Z",
+        pagination="complete",
+    )
+    metadata = sync_candidates.GitHubMetadata(requested=True, observations=(observation,))
+
+    rendered = sync_candidates.format_github_metadata(metadata)
+    labels_row = next(line for line in rendered.splitlines() if line.startswith("| Labels "))
+
+    # Backticks/pipes in values must not add table columns: exactly four cells.
+    assert labels_row.count(" | ") == 3
+    # The backtick-containing label is fenced with a longer run and padded.
+    assert "`` needs `review` ``" in labels_row
+    # The pipe is escaped so it stays inside the cell instead of splitting the row.
+    assert "`area\\|core`" in labels_row
+
+
+def test_github_boolean_observation_classifies_missing_vs_malformed() -> None:
+    """Missing boolean fields are manual-review; present non-bools are malformed."""
+    observed = sync_candidates.github_boolean_observation(
+        setting="discussions", value=True, source="REST", observed_at="t", basis="rest"
+    )
+    assert observed.observed is True
+    assert observed.value is True
+    assert observed.basis == "rest"
+
+    missing = sync_candidates.github_boolean_observation(
+        setting="discussions", value=None, source="REST", observed_at="t", basis="rest"
+    )
+    assert missing.observed is False
+    assert missing.value is None
+    assert missing.basis == "manual-review"
+
+    malformed = sync_candidates.github_boolean_observation(
+        setting="discussions", value="yes", source="REST", observed_at="t", basis="rest"
+    )
+    assert malformed.observed is False
+    assert malformed.basis == "malformed-response"
+    assert any("was not a boolean" in value for _key, value in malformed.diagnostics)
+
+
+def test_github_metadata_missing_discussions_is_manual_review_not_malformed(
+    tmp_path: Path,
+) -> None:
+    """A successful payload without a Discussions flag is unobserved manual-review, not malformed."""
+
+    def runner(repo_root: Path, command: list[str]) -> subprocess.CompletedProcess[str]:
+        raise FileNotFoundError(2, "No such file or directory", command[0])
+
+    rest_client = FakeRestClient(
+        _metadata_rest_success_responses(
+            {
+                "full_name": "example/project",
+                "visibility": "public",
+                "default_branch": "main",
+                # has_discussions / hasDiscussionsEnabled intentionally omitted.
+            },
+            [],
+        )
+    )
+
+    metadata = sync_candidates.discover_github_metadata(
+        tmp_path,
+        "example/project",
+        include_metadata=True,
+        command_runner=runner,
+        rest_client=rest_client,
+        clock=_fixed_clock,
+    )
+
+    discussions = _observation(metadata, "discussions")
+    assert discussions.observed is False
+    assert discussions.value is None
+    assert discussions.basis == "manual-review"
+
+
+def test_link_header_has_next_is_case_insensitive() -> None:
+    """rel="next" detection tolerates case variations in Link header parameters."""
+    assert sync_candidates.link_header_has_next(
+        (("Link", '<https://api.github.com/x?page=2>; rel="next"'),)
+    )
+    assert sync_candidates.link_header_has_next(
+        (("Link", '<https://api.github.com/x?page=2>; REL="next"'),)
+    )
+    assert sync_candidates.link_header_has_next(
+        (("link", '<https://api.github.com/x?page=2>; rel="Next"'),)
+    )
+    assert not sync_candidates.link_header_has_next(
+        (("Link", '<https://api.github.com/x?page=1>; rel="prev"'),)
+    )
+
+
+def test_ruleset_summaries_skips_malformed_items_without_collapsing() -> None:
+    """Malformed ruleset items are skipped with a diagnostic; the result stays a list."""
+    summaries, _partial_fields, diagnostics = sync_candidates.ruleset_summaries(
+        (
+            {
+                "id": 1,
+                "name": "default",
+                "target": "branch",
+                "enforcement": "active",
+                "bypass_actors": [],
+            },
+            "not-an-object",
+        )
+    )
+    assert isinstance(summaries, list)
+    assert len(summaries) == 1
+    assert summaries[0]["name"] == "default"
+    assert any("was not an object" in value for _key, value in diagnostics)
 
 
 def test_github_api_base_validation_rejects_credential_bearing_urls() -> None:
@@ -1806,18 +2451,15 @@ def test_github_metadata_handles_non_object_json(tmp_path: Path) -> None:
         return subprocess.CompletedProcess(command, 0, stdout="null", stderr="")
 
     rest_client = FakeRestClient(
-        [
-            _rest_result(
-                200,
-                {
-                    "full_name": "example/project",
-                    "visibility": "public",
-                    "default_branch": "main",
-                    "has_discussions": True,
-                },
-            ),
-            _rest_result(200, []),
-        ]
+        _metadata_rest_success_responses(
+            {
+                "full_name": "example/project",
+                "visibility": "public",
+                "default_branch": "main",
+                "has_discussions": True,
+            },
+            [],
+        )
     )
 
     metadata = sync_candidates.discover_github_metadata(
@@ -1826,6 +2468,7 @@ def test_github_metadata_handles_non_object_json(tmp_path: Path) -> None:
         include_metadata=True,
         command_runner=runner,
         rest_client=rest_client,
+        clock=_fixed_clock,
     )
 
     assert metadata.requested is True
