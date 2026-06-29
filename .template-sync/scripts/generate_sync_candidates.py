@@ -3055,9 +3055,12 @@ def discover_github_metadata_with_rest(
 
     diagnostics: list[str] = []
     if gh_error is not None:
-        diagnostics.append(
-            gh_error if gh_error.startswith("gh unavailable:") else f"gh unavailable: {gh_error}"
-        )
+        # gh diagnostics are already self-describing: the OSError/transport case emits
+        # "gh unavailable: <error>", and command failures emit "gh <label> unavailable:
+        # <detail>" (e.g. an auth/permission/rate-limit condition). Append verbatim
+        # instead of blanket-prefixing "gh unavailable:", which mislabels those
+        # non-transport failures as gh being missing or broken.
+        diagnostics.append(gh_error)
 
     repo_read = read_github_rest_json(
         api_base=github_api_base,

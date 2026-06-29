@@ -1478,6 +1478,10 @@ def test_github_metadata_rest_fallback_handles_unauthenticated_gh(
     assert metadata.labels_source == "rest"
     assert metadata.error is not None
     assert "gh auth required" in metadata.error
+    # An auth failure must not be relabeled as gh being missing/broken: the
+    # self-describing "gh ... unavailable" message is kept verbatim, not double
+    # prefixed with "gh unavailable:".
+    assert "gh unavailable: gh repo metadata" not in metadata.error
 
 
 def test_github_metadata_rest_fallback_handles_malformed_gh_json(tmp_path: Path) -> None:
