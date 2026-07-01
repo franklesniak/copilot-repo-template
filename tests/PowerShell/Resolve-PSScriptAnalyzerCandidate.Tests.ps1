@@ -102,6 +102,44 @@ BeforeAll {
 }
 
 Describe "Resolve-PSScriptAnalyzerCandidate" {
+    It "Selects PS1, PSM1, and PSD1 candidates case-insensitively" {
+        # Arrange
+        $strRoot = Initialize-CandidateTestRepository
+        try {
+            $arrAllowedExtension = @(Get-PSScriptAnalyzerCandidateAllowedExtension)
+            $arrRelativePath = @(
+                'src/Script.PS1'
+                'src/Module.PSM1'
+                'src/Data.PSD1'
+            )
+            foreach ($strRelativePath in $arrRelativePath) {
+                Add-CandidateTestFile -RepositoryRoot $strRoot -RepositoryRelativePath $strRelativePath
+            }
+
+            # Act
+            $arrCandidate = @(
+                foreach ($strRelativePath in $arrRelativePath) {
+                    Resolve-PSScriptAnalyzerCandidate `
+                        -RepositoryRoot $strRoot `
+                        -CandidatePath $strRelativePath `
+                        -RepositoryRelativePath $strRelativePath
+                }
+            )
+
+            # Assert
+            $arrAllowedExtension | Should -Contain '.ps1'
+            $arrAllowedExtension | Should -Contain '.psm1'
+            $arrAllowedExtension | Should -Contain '.psd1'
+            $arrAllowedExtension | Should -HaveCount 3
+            foreach ($objCandidate in $arrCandidate) {
+                $objCandidate.OutcomeCategory | Should -Be 'selected'
+                $objCandidate.ReasonCode | Should -Be 'Selected'
+            }
+        } finally {
+            Remove-Item -LiteralPath $strRoot -Recurse -Force
+        }
+    }
+
     It "Selects bracket-containing paths and escapes analyzer input literally" {
         # Arrange
         $strRoot = Initialize-CandidateTestRepository
@@ -150,6 +188,102 @@ Describe "Resolve-PSScriptAnalyzerCandidate" {
             $objExcludedCandidate.OutcomeCategory | Should -Be 'policy-excluded'
             $objExcludedCandidate.ReasonCode | Should -Be 'NodeModulesSegment'
             $objSelectedCandidate.OutcomeCategory | Should -Be 'selected'
+        } finally {
+            Remove-Item -LiteralPath $strRoot -Recurse -Force
+        }
+    }
+
+    It "Excludes exact .git segments without excluding substrings" {
+        # Arrange
+        $strRoot = Initialize-CandidateTestRepository
+        try {
+            $strExcludedPath = '.git/hooks/pre-commit.ps1'
+            $strSelectedPath = 'tools/git-helper/pre-commit.ps1'
+            Add-CandidateTestFile -RepositoryRoot $strRoot -RepositoryRelativePath $strExcludedPath
+            Add-CandidateTestFile -RepositoryRoot $strRoot -RepositoryRelativePath $strSelectedPath
+
+            # Act
+            $objExcludedCandidate = Resolve-PSScriptAnalyzerCandidate `
+                -RepositoryRoot $strRoot `
+                -CandidatePath $strExcludedPath `
+                -RepositoryRelativePath $strExcludedPath
+            $objSelectedCandidate = Resolve-PSScriptAnalyzerCandidate `
+                -RepositoryRoot $strRoot `
+                -CandidatePath $strSelectedPath `
+                -RepositoryRelativePath $strSelectedPath
+
+            # Assert
+            $objExcludedCandidate.OutcomeCategory | Should -Be 'policy-excluded'
+            $objExcludedCandidate.ReasonCode | Should -Be 'GitDirectorySegment'
+            $objSelectedCandidate.OutcomeCategory | Should -Be 'selected'
+        } finally {
+            Remove-Item -LiteralPath $strRoot -Recurse -Force
+        }
+    }
+
+    It "Excludes only the repository analyzer settings file" {
+        # Arrange
+        $strRoot = Initialize-CandidateTestRepository
+        try {
+            $strSettingsPath = '.github/linting/PSScriptAnalyzerSettings.psd1'
+            $strSameBasenamePath = 'tools/PSScriptAnalyzerSettings.psd1'
+            Add-CandidateTestFile -RepositoryRoot $strRoot -RepositoryRelativePath $strSettingsPath
+            Add-CandidateTestFile -RepositoryRoot $strRoot -RepositoryRelativePath $strSameBasenamePath
+
+            # Act
+            $objSettingsCandidate = Resolve-PSScriptAnalyzerCandidate `
+                -RepositoryRoot $strRoot `
+                -CandidatePath $strSettingsPath `
+                -RepositoryRelativePath $strSettingsPath
+            $objSameBasenameCandidate = Resolve-PSScriptAnalyzerCandidate `
+                -RepositoryRoot $strRoot `
+                -CandidatePath $strSameBasenamePath `
+                -RepositoryRelativePath $strSameBasenamePath
+
+            # Assert
+            $objSettingsCandidate.OutcomeCategory | Should -Be 'policy-excluded'
+            $objSettingsCandidate.ReasonCode | Should -Be 'AnalyzerSettingsFile'
+            $objSameBasenameCandidate.OutcomeCategory | Should -Be 'selected'
+        } finally {
+            Remove-Item -LiteralPath $strRoot -Recurse -Force
+        }
+    }
+
+    It "Uses force-visible discovery while pruning .git and node_modules before descent" {
+        # Arrange
+        $strRoot = Initialize-CandidateTestRepository
+        try {
+            Add-CandidateTestFile -RepositoryRoot $strRoot -RepositoryRelativePath '.hidden/Visible.psm1'
+            Add-CandidateTestFile -RepositoryRoot $strRoot -RepositoryRelativePath 'data/Manifest.psd1'
+            Add-CandidateTestFile -RepositoryRoot $strRoot -RepositoryRelativePath 'src/Build.ps1'
+            Add-CandidateTestFile -RepositoryRoot $strRoot -RepositoryRelativePath 'tools/PSScriptAnalyzerSettings.psd1'
+            Add-CandidateTestFile -RepositoryRoot $strRoot -RepositoryRelativePath '.github/linting/PSScriptAnalyzerSettings.psd1'
+            Add-CandidateTestFile -RepositoryRoot $strRoot -RepositoryRelativePath '.git/objects/aa/ignored.ps1'
+            Add-CandidateTestFile -RepositoryRoot $strRoot -RepositoryRelativePath 'node_modules/.bin/tool.ps1'
+            Add-CandidateTestFile -RepositoryRoot $strRoot -RepositoryRelativePath 'tools/node_modules_helper/Keep.ps1'
+
+            # Act
+            $arrCandidate = @(
+                Get-PSScriptAnalyzerCandidate -RepositoryRoot $strRoot -DirectoryVisibility All
+            )
+            $arrPath = @($arrCandidate | ForEach-Object { $_.RepositoryRelativePath })
+            $objSettingsCandidate = @(
+                $arrCandidate |
+                    Where-Object { $_.RepositoryRelativePath -eq '.github/linting/PSScriptAnalyzerSettings.psd1' }
+            )
+
+            # Assert
+            $arrPath | Should -Contain '.hidden/Visible.psm1'
+            $arrPath | Should -Contain 'data/Manifest.psd1'
+            $arrPath | Should -Contain 'src/Build.ps1'
+            $arrPath | Should -Contain 'tools/PSScriptAnalyzerSettings.psd1'
+            $arrPath | Should -Contain 'tools/node_modules_helper/Keep.ps1'
+            $arrPath | Should -Contain '.github/linting/PSScriptAnalyzerSettings.psd1'
+            $arrPath | Should -Not -Contain '.git/objects/aa/ignored.ps1'
+            $arrPath | Should -Not -Contain 'node_modules/.bin/tool.ps1'
+            $objSettingsCandidate | Should -HaveCount 1
+            $objSettingsCandidate[0].OutcomeCategory | Should -Be 'policy-excluded'
+            $objSettingsCandidate[0].ReasonCode | Should -Be 'AnalyzerSettingsFile'
         } finally {
             Remove-Item -LiteralPath $strRoot -Recurse -Force
         }
@@ -218,6 +352,74 @@ Describe "Resolve-PSScriptAnalyzerCandidate" {
         } finally {
             Remove-Item -LiteralPath $strRoot -Recurse -Force
             Remove-Item -LiteralPath $strExternalRoot -Recurse -Force
+        }
+    }
+
+    It "Classifies leaf reparse candidates that resolve to policy-excluded targets as unsafe" {
+        # Arrange
+        $strRoot = Initialize-CandidateTestRepository
+        try {
+            $strSettingsPath = '.github/linting/PSScriptAnalyzerSettings.psd1'
+            $strNodeModulesTargetPath = 'node_modules/.bin/target.ps1'
+            $strGitTargetPath = '.git/hooks/target.ps1'
+            Add-CandidateTestFile -RepositoryRoot $strRoot -RepositoryRelativePath $strSettingsPath
+            Add-CandidateTestFile -RepositoryRoot $strRoot -RepositoryRelativePath $strNodeModulesTargetPath
+            Add-CandidateTestFile -RepositoryRoot $strRoot -RepositoryRelativePath $strGitTargetPath
+
+            $hashtableLinkTarget = @{
+                'settings-link.ps1' = [System.IO.Path]::Combine($strRoot, $strSettingsPath)
+                'node-link.ps1' = [System.IO.Path]::Combine($strRoot, $strNodeModulesTargetPath)
+                'git-link.ps1' = [System.IO.Path]::Combine($strRoot, $strGitTargetPath)
+            }
+
+            try {
+                foreach ($strLinkPath in $hashtableLinkTarget.Keys) {
+                    $strFullLinkPath = [System.IO.Path]::Combine($strRoot, $strLinkPath)
+                    [void](
+                        New-Item `
+                            -Path $strFullLinkPath `
+                            -ItemType SymbolicLink `
+                            -Target $hashtableLinkTarget[$strLinkPath] `
+                            -ErrorAction Stop
+                    )
+                }
+            } catch {
+                Set-ItResult -Skipped -Because 'Filesystem or current privileges do not allow symlink creation.'
+                return
+            }
+
+            # Act
+            $objSettingsCandidate = Resolve-PSScriptAnalyzerCandidate `
+                -RepositoryRoot $strRoot `
+                -CandidatePath 'settings-link.ps1' `
+                -RepositoryRelativePath 'settings-link.ps1'
+            $objNodeModulesCandidate = Resolve-PSScriptAnalyzerCandidate `
+                -RepositoryRoot $strRoot `
+                -CandidatePath 'node-link.ps1' `
+                -RepositoryRelativePath 'node-link.ps1'
+            $objGitCandidate = Resolve-PSScriptAnalyzerCandidate `
+                -RepositoryRoot $strRoot `
+                -CandidatePath 'git-link.ps1' `
+                -RepositoryRelativePath 'git-link.ps1'
+
+            # Assert
+            $objSettingsCandidate.OutcomeCategory | Should -Be 'unsafe'
+            $objSettingsCandidate.ReasonCode | Should -BeIn @(
+                'TargetAnalyzerSettingsFile',
+                'ReparsePointResolutionUnsupported'
+            )
+            $objNodeModulesCandidate.OutcomeCategory | Should -Be 'unsafe'
+            $objNodeModulesCandidate.ReasonCode | Should -BeIn @(
+                'TargetNodeModulesSegment',
+                'ReparsePointResolutionUnsupported'
+            )
+            $objGitCandidate.OutcomeCategory | Should -Be 'unsafe'
+            $objGitCandidate.ReasonCode | Should -BeIn @(
+                'TargetGitDirectorySegment',
+                'ReparsePointResolutionUnsupported'
+            )
+        } finally {
+            Remove-Item -LiteralPath $strRoot -Recurse -Force
         }
     }
 }

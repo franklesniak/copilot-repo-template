@@ -210,13 +210,13 @@ function Get-PSScriptAnalyzerCandidateAllowedExtension {
     #
     # .DESCRIPTION
     # Returns the extension set used for both candidate selection and resolved
-    # reparse-target validation. The current issue intentionally keeps the
-    # retained analyzer scope at PowerShell script files only.
+    # reparse-target validation. PSScriptAnalyzer supports PowerShell scripts,
+    # modules, and data files.
     #
     # .EXAMPLE
     # Get-PSScriptAnalyzerCandidateAllowedExtension
     #
-    # # Returns .ps1.
+    # # Returns .ps1, .psm1, and .psd1.
     #
     # .INPUTS
     # None. This function does not accept pipeline input.
@@ -238,7 +238,7 @@ function Get-PSScriptAnalyzerCandidateAllowedExtension {
 
     Set-StrictMode -Version Latest
 
-    return [string[]]@('.ps1')
+    return [string[]]@('.ps1', '.psm1', '.psd1')
 }
 
 function Test-PSScriptAnalyzerCandidateExtension {
@@ -285,11 +285,74 @@ function Test-PSScriptAnalyzerCandidateExtension {
     }
 
     $strExtension = [System.IO.Path]::GetExtension([string]$Path)
+    $setAllowedExtension = [System.Collections.Generic.HashSet[string]]::new(
+        [System.StringComparer]::OrdinalIgnoreCase
+    )
     foreach ($strAllowedExtension in Get-PSScriptAnalyzerCandidateAllowedExtension) {
+        [void]($setAllowedExtension.Add($strAllowedExtension))
+    }
+
+    return $setAllowedExtension.Contains($strExtension)
+}
+
+function Test-PSScriptAnalyzerExactPathSegment {
+    # .SYNOPSIS
+    # Tests whether a repository-relative path contains an exact segment.
+    #
+    # .DESCRIPTION
+    # Normalizes path separators to forward slashes, splits the path into
+    # segments, and compares each segment to the requested segment name using an
+    # ordinal case-insensitive comparison. Substring matches are intentionally
+    # not treated as matches.
+    #
+    # .PARAMETER RepositoryRelativePath
+    # The repository-relative path to inspect.
+    #
+    # .PARAMETER SegmentName
+    # The exact segment name to match.
+    #
+    # .EXAMPLE
+    # Test-PSScriptAnalyzerExactPathSegment -RepositoryRelativePath 'node_modules/.bin/tool.ps1' -SegmentName 'node_modules'
+    #
+    # # Returns true.
+    #
+    # .INPUTS
+    # None. This function does not accept pipeline input.
+    #
+    # .OUTPUTS
+    # [bool] True when the exact segment is present; otherwise false.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
+    # Version: 1.0.20260701.0
+    # Positional parameters are not supported.
+    #
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([bool])]
+    param(
+        [AllowNull()]
+        [object]$RepositoryRelativePath,
+
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$SegmentName
+    )
+
+    Set-StrictMode -Version Latest
+
+    if ($null -eq $RepositoryRelativePath) {
+        return $false
+    }
+
+    $arrSegment = ([string]$RepositoryRelativePath).Replace('\', '/').Split([char[]]@('/'))
+    foreach ($strSegment in $arrSegment) {
         if (
             [string]::Equals(
-                $strExtension,
-                $strAllowedExtension,
+                $strSegment,
+                $SegmentName,
                 [System.StringComparison]::OrdinalIgnoreCase
             )
         ) {
@@ -344,20 +407,162 @@ function Test-PSScriptAnalyzerNodeModuleSegment {
         return $false
     }
 
-    $arrSegment = ([string]$RepositoryRelativePath).Replace('\', '/').Split([char[]]@('/'))
-    foreach ($strSegment in $arrSegment) {
-        if (
-            [string]::Equals(
-                $strSegment,
-                'node_modules',
-                [System.StringComparison]::OrdinalIgnoreCase
-            )
-        ) {
-            return $true
-        }
+    return Test-PSScriptAnalyzerExactPathSegment `
+        -RepositoryRelativePath $RepositoryRelativePath `
+        -SegmentName 'node_modules'
+}
+
+function Test-PSScriptAnalyzerGitDirectorySegment {
+    # .SYNOPSIS
+    # Tests whether a repository-relative path contains a .git segment.
+    #
+    # .DESCRIPTION
+    # Compares normalized repository-relative path segments against the exact
+    # Git metadata directory segment. Substring matches such as git-helper are
+    # intentionally not excluded.
+    #
+    # .PARAMETER RepositoryRelativePath
+    # The repository-relative path to inspect.
+    #
+    # .EXAMPLE
+    # Test-PSScriptAnalyzerGitDirectorySegment -RepositoryRelativePath '.git/hooks/pre-commit.ps1'
+    #
+    # # Returns true.
+    #
+    # .INPUTS
+    # None. This function does not accept pipeline input.
+    #
+    # .OUTPUTS
+    # [bool] True when an exact .git path segment is present.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
+    # Version: 1.0.20260701.0
+    # Positional parameters are not supported.
+    #
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([bool])]
+    param(
+        [AllowNull()]
+        [object]$RepositoryRelativePath
+    )
+
+    Set-StrictMode -Version Latest
+
+    return Test-PSScriptAnalyzerExactPathSegment `
+        -RepositoryRelativePath $RepositoryRelativePath `
+        -SegmentName '.git'
+}
+
+function Test-PSScriptAnalyzerSettingsFilePath {
+    # .SYNOPSIS
+    # Tests whether a repository-relative path is the analyzer settings file.
+    #
+    # .DESCRIPTION
+    # Normalizes separators to forward slashes and compares against the retained
+    # analyzer settings file by repository-relative path. Same-basename files in
+    # other directories are intentionally not excluded.
+    #
+    # .PARAMETER RepositoryRelativePath
+    # The repository-relative path to inspect.
+    #
+    # .EXAMPLE
+    # Test-PSScriptAnalyzerSettingsFilePath -RepositoryRelativePath '.github/linting/PSScriptAnalyzerSettings.psd1'
+    #
+    # # Returns true.
+    #
+    # .INPUTS
+    # None. This function does not accept pipeline input.
+    #
+    # .OUTPUTS
+    # [bool] True when the path is the retained analyzer settings file.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
+    # Version: 1.0.20260701.0
+    # Positional parameters are not supported.
+    #
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([bool])]
+    param(
+        [AllowNull()]
+        [object]$RepositoryRelativePath
+    )
+
+    Set-StrictMode -Version Latest
+
+    if ($null -eq $RepositoryRelativePath) {
+        return $false
     }
 
-    return $false
+    $strNormalizedPath = ([string]$RepositoryRelativePath).Replace('\', '/')
+    return [string]::Equals(
+        $strNormalizedPath,
+        '.github/linting/PSScriptAnalyzerSettings.psd1',
+        [System.StringComparison]::OrdinalIgnoreCase
+    )
+}
+
+function Get-PSScriptAnalyzerPolicyExclusionReasonCode {
+    # .SYNOPSIS
+    # Gets the policy-exclusion reason for an analyzer candidate path.
+    #
+    # .DESCRIPTION
+    # Applies repository-relative analyzer input exclusion policy shared by CI
+    # discovery, direct candidate classification, and resolved reparse-target
+    # validation.
+    #
+    # .PARAMETER RepositoryRelativePath
+    # The repository-relative path to classify.
+    #
+    # .EXAMPLE
+    # Get-PSScriptAnalyzerPolicyExclusionReasonCode -RepositoryRelativePath '.github/linting/PSScriptAnalyzerSettings.psd1'
+    #
+    # # Returns AnalyzerSettingsFile.
+    #
+    # .INPUTS
+    # None. This function does not accept pipeline input.
+    #
+    # .OUTPUTS
+    # [string] The policy-exclusion reason code, or an empty string when the path
+    # is not policy-excluded.
+    #
+    # .NOTES
+    # PRIVATE/INTERNAL HELPER - This function is not part of the public
+    # API surface. Parameters, return shape, and positional contract may
+    # change without notice.
+    #
+    # Version: 1.0.20260701.0
+    # Positional parameters are not supported.
+    #
+    [CmdletBinding(PositionalBinding = $false)]
+    [OutputType([string])]
+    param(
+        [AllowNull()]
+        [object]$RepositoryRelativePath
+    )
+
+    Set-StrictMode -Version Latest
+
+    if (Test-PSScriptAnalyzerSettingsFilePath -RepositoryRelativePath $RepositoryRelativePath) {
+        return 'AnalyzerSettingsFile'
+    }
+
+    if (Test-PSScriptAnalyzerNodeModuleSegment -RepositoryRelativePath $RepositoryRelativePath) {
+        return 'NodeModulesSegment'
+    }
+
+    if (Test-PSScriptAnalyzerGitDirectorySegment -RepositoryRelativePath $RepositoryRelativePath) {
+        return 'GitDirectorySegment'
+    }
+
+    return ''
 }
 
 function Get-PSScriptAnalyzerPathComparison {
@@ -719,9 +924,10 @@ function Resolve-PSScriptAnalyzerCandidate {
     #
     # .DESCRIPTION
     # Applies shared analyzer selection policy to one candidate, including exact
-    # node_modules segment exclusion, allowed-extension validation, repository
-    # containment checks, fail-closed leaf reparse-point handling, and wildcard
-    # escaping for selected Invoke-ScriptAnalyzer input.
+    # node_modules and .git segment exclusions, analyzer settings-file
+    # exclusion, allowed-extension validation, repository containment checks,
+    # fail-closed leaf reparse-point handling, and wildcard escaping for
+    # selected Invoke-ScriptAnalyzer input.
     #
     # .PARAMETER RepositoryRoot
     # The repository root used for containment and relative path rendering.
@@ -783,12 +989,14 @@ function Resolve-PSScriptAnalyzerCandidate {
             -Path $strCandidateFullName
     }
 
-    if (Test-PSScriptAnalyzerNodeModuleSegment -RepositoryRelativePath $strRepositoryRelativePath) {
+    $strPolicyExclusionReasonCode = Get-PSScriptAnalyzerPolicyExclusionReasonCode `
+        -RepositoryRelativePath $strRepositoryRelativePath
+    if (-not [string]::IsNullOrEmpty($strPolicyExclusionReasonCode)) {
         return ConvertTo-PSScriptAnalyzerCandidateRecord `
             -CandidateFullName $strCandidateFullName `
             -RepositoryRelativePath $strRepositoryRelativePath `
             -OutcomeCategory 'policy-excluded' `
-            -ReasonCode 'NodeModulesSegment'
+            -ReasonCode $strPolicyExclusionReasonCode
     }
 
     if (-not (Test-PSScriptAnalyzerCandidateExtension -Path $strRepositoryRelativePath)) {
@@ -913,12 +1121,15 @@ function Resolve-PSScriptAnalyzerCandidate {
     $strResolvedTargetRelativePath = ConvertTo-PSScriptAnalyzerRepositoryRelativePath `
         -RepositoryRoot $strRepositoryRoot `
         -Path $strResolvedTargetFullName
-    if (Test-PSScriptAnalyzerNodeModuleSegment -RepositoryRelativePath $strResolvedTargetRelativePath) {
+
+    $strTargetPolicyExclusionReasonCode = Get-PSScriptAnalyzerPolicyExclusionReasonCode `
+        -RepositoryRelativePath $strResolvedTargetRelativePath
+    if (-not [string]::IsNullOrEmpty($strTargetPolicyExclusionReasonCode)) {
         return ConvertTo-PSScriptAnalyzerCandidateRecord `
             -CandidateFullName $strCandidateFullName `
             -RepositoryRelativePath $strRepositoryRelativePath `
             -OutcomeCategory 'unsafe' `
-            -ReasonCode 'TargetPolicyExcluded' `
+            -ReasonCode ('Target{0}' -f $strTargetPolicyExclusionReasonCode) `
             -ResolvedTargetFullName $strResolvedTargetFullName
     }
 
@@ -936,18 +1147,19 @@ function Get-PSScriptAnalyzerCandidate {
     # Finds and classifies PSScriptAnalyzer candidates under a repository root.
     #
     # .DESCRIPTION
-    # Performs the CI directory-walk layer for analyzer candidates. The walk
-    # preserves current PowerShell analyzer visibility by default, prunes exact
-    # node_modules directory segments before descent, does not traverse
-    # directory reparse points, and delegates each leaf to the shared per-path
+    # Performs the CI directory-walk layer for analyzer candidates. The walk can
+    # include hidden directories with Force, prunes exact node_modules and .git
+    # directory segments before descent, does not traverse directory reparse
+    # points, and delegates each selected leaf to the shared per-path
     # classifier.
     #
     # .PARAMETER RepositoryRoot
     # The repository root to scan.
     #
     # .PARAMETER DirectoryVisibility
-    # VisibleOnly preserves the current no-Force enumeration behavior. All adds
-    # Force for future opt-in hidden-directory enumeration.
+    # VisibleOnly enumerates without Force. All enumerates with Force so dot
+    # directories and attribute-hidden directories are visible before policy
+    # pruning.
     #
     # .EXAMPLE
     # Get-PSScriptAnalyzerCandidate -RepositoryRoot '/repo'
@@ -994,7 +1206,6 @@ function Get-PSScriptAnalyzerCandidate {
         }
         $hashtableFileParameter = @{
             LiteralPath = $strDirectoryPath
-            Filter = '*.ps1'
             File = $true
         }
         if ($DirectoryVisibility -eq 'All') {
@@ -1006,7 +1217,12 @@ function Get-PSScriptAnalyzerCandidate {
             $strDirectoryRelativePath = ConvertTo-PSScriptAnalyzerRepositoryRelativePath `
                 -RepositoryRoot $strRepositoryRoot `
                 -Path $objDirectory.FullName
-            if (Test-PSScriptAnalyzerNodeModuleSegment -RepositoryRelativePath $strDirectoryRelativePath) {
+            $strDirectoryPolicyExclusionReasonCode = Get-PSScriptAnalyzerPolicyExclusionReasonCode `
+                -RepositoryRelativePath $strDirectoryRelativePath
+            if (
+                ($strDirectoryPolicyExclusionReasonCode -eq 'NodeModulesSegment') -or
+                ($strDirectoryPolicyExclusionReasonCode -eq 'GitDirectorySegment')
+            ) {
                 continue
             }
 
@@ -1024,6 +1240,10 @@ function Get-PSScriptAnalyzerCandidate {
             $strFileRelativePath = ConvertTo-PSScriptAnalyzerRepositoryRelativePath `
                 -RepositoryRoot $strRepositoryRoot `
                 -Path $objFile.FullName
+            if (-not (Test-PSScriptAnalyzerCandidateExtension -Path $strFileRelativePath)) {
+                continue
+            }
+
             Resolve-PSScriptAnalyzerCandidate `
                 -RepositoryRoot $strRepositoryRoot `
                 -CandidatePath $objFile.FullName `
@@ -1162,6 +1382,14 @@ function ConvertTo-PSScriptAnalyzerCandidateSummaryLine {
     }
 
     if ($intPolicyExcludedCount -gt 0) {
+        $arrReasonCount = @(
+            $CandidateSummary.PolicyExcluded |
+                Group-Object -Property ReasonCode |
+                Sort-Object -Property @{ Expression = 'Count'; Descending = $true }, Name |
+                ForEach-Object { '{0} ({1})' -f $_.Name, $_.Count }
+        )
+        'Policy-excluded reason counts: {0}.' -f ($arrReasonCount -join '; ')
+
         $arrExample = @(
             $CandidateSummary.PolicyExcluded |
                 Select-Object -First 3 |

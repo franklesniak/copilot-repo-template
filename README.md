@@ -148,7 +148,7 @@ Optional module-owned surfaces include:
 ### Language Support
 
 - **Markdown/Docs:** [`.github/instructions/docs.instructions.md`](.github/instructions/docs.instructions.md), `**/*.md`, and `.github/workflows/markdownlint.yml`.
-- **PowerShell:** [`.github/instructions/powershell.instructions.md`](.github/instructions/powershell.instructions.md), `**/*.ps1`, and `.github/workflows/powershell-ci.yml`.
+- **PowerShell:** [`.github/instructions/powershell.instructions.md`](.github/instructions/powershell.instructions.md), `**/*.ps1`, `**/*.psm1`, `**/*.psd1`, and `.github/workflows/powershell-ci.yml`.
 <!-- template-sync: begin json-reference-only -->
 - **JSON/JSONC:** [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md), `**/*.json`, and `**/*.jsonc`.
 <!-- template-sync: end json-reference-only -->

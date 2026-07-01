@@ -1698,7 +1698,7 @@ Review the settings file to understand the rules being enforced. You can customi
 
 #### 2. Add PowerShell Scripts
 
-Add your PowerShell scripts to appropriate locations in your repository. The CI workflow will automatically lint any `.ps1` files.
+Add your PowerShell scripts, modules, and manifests to appropriate locations in your repository. The CI workflow will automatically lint `.ps1`, `.psm1`, and `.psd1` files. Genuine module manifests are intentionally analyzed; the repository's PSScriptAnalyzer settings file remains the `-Settings` source and is excluded from analyzer input by discovery policy.
 
 #### 3. Run PSScriptAnalyzer Locally
 
@@ -1708,15 +1708,17 @@ Add your PowerShell scripts to appropriate locations in your repository. The CI 
 Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
 ```
 
-**Run linting on a script:**
+**Run linting on a PowerShell analyzer input:**
 
 ```powershell
-# Lint a single file
+# Lint a single file (.ps1, .psm1, or .psd1)
 Invoke-ScriptAnalyzer -Path .\your-script.ps1 -Settings .\.github\linting\PSScriptAnalyzerSettings.psd1
 
 # Auto-fix formatting issues
 Invoke-ScriptAnalyzer -Path .\your-script.ps1 -Settings .\.github\linting\PSScriptAnalyzerSettings.psd1 -Fix
 ```
+
+Use discovery exclusion for an unwanted non-manifest `.psd1` data file. `ExcludeRules` in `PSScriptAnalyzerSettings.psd1` disables rules, not files, and scoped suppressions only apply where PSScriptAnalyzer supports them for the affected construct.
 
 #### 4. Run Pester Tests
 
