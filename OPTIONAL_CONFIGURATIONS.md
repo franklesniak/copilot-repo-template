@@ -3151,18 +3151,20 @@ fi
 
 **File:** `.github/workflows/powershell-ci.yml`
 
-The PowerShell CI workflow runs PSScriptAnalyzer linting and Pester tests for PowerShell scripts. It runs automatically on every push and pull request and automatically skips if no PowerShell files are found in the repository.
+The PowerShell CI workflow runs PSScriptAnalyzer linting and Pester tests for PowerShell files. It runs automatically on every push and pull request and automatically skips when no analyzer inputs are selected after policy classification.
 
 ### Understanding the Workflow
 
 The workflow consists of two jobs:
 
-1. **powershell-lint** (display name: "Lint (PSScriptAnalyzer)"): Runs PSScriptAnalyzer on all `.ps1` files (skips if no files found)
+1. **powershell-lint** (display name: "Lint (PSScriptAnalyzer)"): Runs PSScriptAnalyzer on `.ps1`, `.psm1`, and `.psd1` files (skips if no analyzer inputs are selected after policy classification)
 2. **test** (display name: "PowerShell Tests (Pester)"): Runs Pester tests on Windows, macOS, and Linux (skips if no `*.Tests.ps1` files found)
 
 The workflow uses automatic detection, so you don't need to configure anything if you have PowerShell files—it just works.
 
-Before installing or importing PSScriptAnalyzer, the lint job classifies analyzer candidates and fails closed when unsafe candidate paths could escape the repository or bypass analyzer policy.
+Before installing or importing PSScriptAnalyzer, the lint job classifies analyzer candidates and fails closed when unsafe candidate paths could escape the repository or bypass analyzer policy. The repository's PSScriptAnalyzer settings file is excluded from analyzer input by discovery policy but remains the `-Settings` configuration source.
+
+Genuine module manifests are intentionally analyzed as `.psd1` inputs. If a repository has an unwanted non-manifest `.psd1` data file, exclude it through candidate discovery policy or path filtering rather than `PSScriptAnalyzerSettings.psd1`; PSScriptAnalyzer `ExcludeRules` is rule-level, not file-level. Scoped suppressions apply only where PSScriptAnalyzer supports them for the affected construct.
 
 ### Choosing the PSScriptAnalyzer Gate Mode
 
@@ -3238,6 +3240,8 @@ on:
     branches: ["**"]
     paths:
       - "**/*.ps1"
+      - "**/*.psm1"
+      - "**/*.psd1"
       - ".github/workflows/powershell-ci.yml"
       - ".github/linting/PSScriptAnalyzerSettings.psd1"
       - "src/tools/*.ps1"
@@ -3245,6 +3249,8 @@ on:
     branches: ["**"]
     paths:
       - "**/*.ps1"
+      - "**/*.psm1"
+      - "**/*.psd1"
       - ".github/workflows/powershell-ci.yml"
       - ".github/linting/PSScriptAnalyzerSettings.psd1"
       - "src/tools/*.ps1"

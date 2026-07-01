@@ -47,7 +47,9 @@ jobs:
             . $candidateHelperPath
             . $gateHelperPath
 
-            $candidateRecords = @(Get-PSScriptAnalyzerCandidate -RepositoryRoot $repositoryRoot)
+            $candidateRecords = @(
+              Get-PSScriptAnalyzerCandidate -RepositoryRoot $repositoryRoot -DirectoryVisibility All
+            )
             $candidateSummary = Get-PSScriptAnalyzerCandidateSummary -Candidate $candidateRecords
             foreach ($summaryLine in @(ConvertTo-PSScriptAnalyzerCandidateSummaryLine -CandidateSummary $candidateSummary)) {
               Write-Output $summaryLine

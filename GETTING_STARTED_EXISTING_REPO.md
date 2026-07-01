@@ -2291,11 +2291,11 @@ python_functions = ["test_*"]
 
 **Location:** `.github/workflows/powershell-ci.yml`
 
-**Purpose:** Runs PSScriptAnalyzer linting and Pester tests for PowerShell scripts.
+**Purpose:** Runs PSScriptAnalyzer linting and Pester tests for PowerShell files.
 
 **Prerequisites:**
 
-- PowerShell scripts (`.ps1` files)
+- PowerShell scripts, modules, or manifests (`.ps1`, `.psm1`, and `.psd1` files)
 - Pester tests (`.Tests.ps1` files) for the test job
 
 **Steps:**
@@ -2409,10 +2409,17 @@ Invoke-ScriptAnalyzer -Path .\your-script.ps1 -Settings .\.github\linting\PSScri
 **Check all PowerShell files in a directory:**
 
 ```powershell
-Get-ChildItem -Path . -Filter "*.ps1" -Recurse | ForEach-Object {
-    Invoke-ScriptAnalyzer -Path $_.FullName -Settings .\.github\linting\PSScriptAnalyzerSettings.psd1
-}
+$analyzerExtensions = '.ps1', '.psm1', '.psd1'
+Get-ChildItem -Path . -Recurse -File |
+    Where-Object { $_.Extension -in $analyzerExtensions } |
+    ForEach-Object {
+        Invoke-ScriptAnalyzer -Path $_.FullName -Settings .\.github\linting\PSScriptAnalyzerSettings.psd1
+    }
 ```
+
+Genuine module manifests are intentionally analyzed as `.psd1` inputs. Keep
+`.github/linting/PSScriptAnalyzerSettings.psd1` as the `-Settings` source and
+exclude it from analyzer input through candidate discovery policy.
 
 ### Analyzer Debt Triage for Existing Repositories
 

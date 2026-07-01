@@ -76,12 +76,14 @@ def _candidate_summary(
     repo_root: Path,
     *,
     selected: Sequence[Mapping[str, object]] | None = None,
+    policy_excluded: Sequence[Mapping[str, object]] | None = None,
     unsafe: Sequence[Mapping[str, object]] | None = None,
 ) -> dict[str, object]:
     """Build a composite candidate summary payload."""
     selected_records = list(selected or [])
+    policy_excluded_records = list(policy_excluded or [])
     unsafe_records = list(unsafe or [])
-    if selected is None and not unsafe_records:
+    if selected is None and not policy_excluded_records and not unsafe_records:
         selected_records = [
             {
                 "CandidateFullName": str(repo_root / "src" / "sample.ps1"),
@@ -93,11 +95,11 @@ def _candidate_summary(
         ]
     return {
         "Selected": selected_records,
-        "PolicyExcluded": [],
+        "PolicyExcluded": policy_excluded_records,
         "Unsafe": unsafe_records,
         "SummaryCounts": {
             "Selected": len(selected_records),
-            "PolicyExcluded": 0,
+            "PolicyExcluded": len(policy_excluded_records),
             "Unsafe": len(unsafe_records),
         },
     }
@@ -475,6 +477,56 @@ def test_decode_git_nul_paths_rejects_empty_record() -> None:
         quality_reports.decode_git_nul_paths(b"src/a.ps1\0\0src/b.ps1\0")
 
 
+def test_collect_powershell_candidate_paths_uses_analyzer_suffixes_case_insensitively(
+    tmp_path: Path,
+) -> None:
+    """PowerShell report discovery uses the same analyzer input suffix family."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, ".github/linting/PSScriptAnalyzerSettings.psd1")
+    _write_text(tmp_path, "src/Script.PS1")
+    _write_text(tmp_path, "src/Module.PSM1")
+    _write_text(tmp_path, "src/Data.PSD1")
+    _write_text(tmp_path, "src/readme.txt")
+
+    candidates = quality_reports.collect_powershell_candidate_paths(tmp_path)
+
+    assert set(candidates) == {
+        ".github/linting/PSScriptAnalyzerSettings.psd1",
+        "src/Script.PS1",
+        "src/Module.PSM1",
+        "src/Data.PSD1",
+    }
+
+
+def test_report_suffix_policy_matches_shared_helper() -> None:
+    """The Python report and PowerShell helper expose the same analyzer suffix set."""
+    executable = quality_reports.powershell_executable()
+    if not isinstance(executable, str):
+        pytest.skip("PowerShell is not available")
+
+    result = subprocess.run(
+        [
+            executable,
+            "-NoProfile",
+            "-Command",
+            (
+                "$ErrorActionPreference = 'Stop'; "
+                ". './src/tools/Resolve-PSScriptAnalyzerCandidate.ps1'; "
+                "Get-PSScriptAnalyzerCandidateAllowedExtension | ConvertTo-Json -Compress"
+            ),
+        ],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    assert result.returncode == 0, result.stderr
+
+    helper_suffixes = json.loads(result.stdout)
+    assert set(helper_suffixes) == quality_reports.PSSCRIPTANALYZER_CANDIDATE_SUFFIXES
+
+
 def test_candidate_summary_lines_escape_human_facing_crlf() -> None:
     """Candidate summaries preserve structure but render paths on one line."""
     lines = quality_reports.candidate_summary_lines(
@@ -482,11 +534,17 @@ def test_candidate_summary_lines_escape_human_facing_crlf() -> None:
             "Selected": [],
             "PolicyExcluded": [
                 {
+                    "CandidateFullName": "/repo/.github/linting/PSScriptAnalyzerSettings.psd1",
+                    "RepositoryRelativePath": ".github/linting/PSScriptAnalyzerSettings.psd1",
+                    "OutcomeCategory": "policy-excluded",
+                    "ReasonCode": "AnalyzerSettingsFile",
+                },
+                {
                     "CandidateFullName": "/repo/node_modules/.bin/tool.ps1",
                     "RepositoryRelativePath": "node_modules/.bin/tool.ps1",
                     "OutcomeCategory": "policy-excluded",
                     "ReasonCode": "NodeModulesSegment",
-                }
+                },
             ],
             "Unsafe": [
                 {
@@ -498,13 +556,16 @@ def test_candidate_summary_lines_escape_human_facing_crlf() -> None:
             ],
             "SummaryCounts": {
                 "Selected": 0,
-                "PolicyExcluded": 1,
+                "PolicyExcluded": 2,
                 "Unsafe": 1,
             },
         }
     )
 
     assert "node_modules/.bin/tool.ps1" in "\n".join(lines)
+    assert (
+        "Policy-excluded reason counts: AnalyzerSettingsFile (1); NodeModulesSegment (1)." in lines
+    )
     assert "src/line\\r\\nbreak.ps1" in "\n".join(lines)
     assert all("\r" not in line and "\n" not in line for line in lines)
 
@@ -575,6 +636,75 @@ def test_powershell_report_parses_injected_runner_output(
     assert "café" in captured_input
     assert "\\u00e9" not in captured_input
     assert {"RepositoryRelativePath": "src/café.ps1"} in json.loads(captured_input)
+
+
+def test_powershell_report_surfaces_settings_policy_exclusion(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """The report sends the settings file to the helper and renders its exclusion reason."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, "src/module.psm1", "function Get-Sample {}\n")
+    _write_powershell_report_prerequisites(tmp_path)
+    monkeypatch.setattr(quality_reports, "powershell_executable", lambda: "pwsh")
+
+    captured_input = ""
+
+    def fake_runner(
+        command: Sequence[str],
+        repo_root: Path,
+        *,
+        env: Mapping[str, str] | None = None,
+        input: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        nonlocal captured_input
+        del env
+        captured_input = input or ""
+        payload = json.dumps(
+            {
+                "Gate": _gate_payload(),
+                "Candidates": _candidate_summary(
+                    repo_root,
+                    selected=[
+                        {
+                            "CandidateFullName": str(repo_root / "src" / "module.psm1"),
+                            "RepositoryRelativePath": "src/module.psm1",
+                            "EscapedAnalyzerPath": str(repo_root / "src" / "module.psm1"),
+                            "OutcomeCategory": "selected",
+                            "ReasonCode": "Selected",
+                        }
+                    ],
+                    policy_excluded=[
+                        {
+                            "CandidateFullName": str(
+                                repo_root / ".github" / "linting" / "PSScriptAnalyzerSettings.psd1"
+                            ),
+                            "RepositoryRelativePath": (
+                                ".github/linting/PSScriptAnalyzerSettings.psd1"
+                            ),
+                            "OutcomeCategory": "policy-excluded",
+                            "ReasonCode": "AnalyzerSettingsFile",
+                        }
+                    ],
+                ),
+            }
+        )
+        return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
+
+    report = quality_reports.build_powershell_report(tmp_path, runner=fake_runner)
+
+    assert {"RepositoryRelativePath": "src/module.psm1"} in json.loads(captured_input)
+    assert {
+        "RepositoryRelativePath": ".github/linting/PSScriptAnalyzerSettings.psd1"
+    } in json.loads(captured_input)
+    assert report.candidate_summary_lines == (
+        "PSScriptAnalyzer candidates: 1 selected; 1 policy-excluded; 0 unsafe.",
+        "Policy-excluded reason counts: AnalyzerSettingsFile (1).",
+        (
+            "Policy-excluded candidates: 1 (examples: "
+            ".github/linting/PSScriptAnalyzerSettings.psd1)."
+        ),
+    )
 
 
 def test_powershell_report_emits_debt_records_and_opt_in_guidance(
@@ -1093,6 +1223,67 @@ def test_azure_parameter_default_flags_missing_default_in_mapping_form() -> None
         "Azure Pipelines: .azuredevops/pipelines/powershell-ci.yml "
         "`parameters.gateMode.default` has no static default; the value must be supplied "
         "when the pipeline runs, so manual review is required.",
+    )
+
+
+def test_real_powershell_ci_surfaces_retain_gate_mode_and_force_visible_discovery() -> None:
+    """Checked-in PowerShell CI surfaces keep gate-mode and candidate discovery shape."""
+    github_document, github_load_notes = quality_reports.load_ci_yaml_mapping(
+        REPO_ROOT,
+        quality_reports.GITHUB_ACTIONS_POWERSHELL_CI,
+        platform_name="GitHub Actions",
+    )
+    azure_document, azure_load_notes = quality_reports.load_ci_yaml_mapping(
+        REPO_ROOT,
+        quality_reports.AZURE_PIPELINES_POWERSHELL_CI,
+        platform_name="Azure Pipelines",
+    )
+    assert github_load_notes == ()
+    assert azure_load_notes == ()
+    assert github_document is not None
+    assert azure_document is not None
+
+    github_settings, github_gate_notes, github_retained = (
+        quality_reports.github_actions_gate_mode_settings(
+            github_document,
+            path=quality_reports.GITHUB_ACTIONS_POWERSHELL_CI,
+        )
+    )
+    azure_parameter, azure_variables, azure_gate_notes, azure_retained = (
+        quality_reports.azure_pipelines_gate_mode_settings(
+            azure_document,
+            path=quality_reports.AZURE_PIPELINES_POWERSHELL_CI,
+        )
+    )
+
+    assert github_gate_notes == ()
+    assert azure_gate_notes == ()
+    assert github_retained is True
+    assert azure_retained is True
+    assert any(setting.value.recognized_mode == "strict" for setting in github_settings)
+    assert azure_parameter is not None
+    assert azure_parameter.value.recognized_mode == "strict"
+    assert azure_variables[0].effective_value is not None
+    assert azure_variables[0].effective_value.recognized_mode == "strict"
+
+    github_text = (REPO_ROOT / quality_reports.GITHUB_ACTIONS_POWERSHELL_CI).read_text(
+        encoding="utf-8"
+    )
+    azure_text = (REPO_ROOT / quality_reports.AZURE_PIPELINES_POWERSHELL_CI).read_text(
+        encoding="utf-8"
+    )
+    assert (
+        "Get-PSScriptAnalyzerCandidate -RepositoryRoot $env:GITHUB_WORKSPACE "
+        "-DirectoryVisibility All"
+    ) in " ".join(github_text.split())
+    assert (
+        "Get-PSScriptAnalyzerCandidate -RepositoryRoot $repositoryRoot " "-DirectoryVisibility All"
+    ) in " ".join(azure_text.split())
+    assert "Resolve-PSScriptAnalyzerGate ` -Mode $env:PSSCRIPTANALYZER_GATE_MODE" in " ".join(
+        github_text.split()
+    )
+    assert "Resolve-PSScriptAnalyzerGate ` -Mode $env:PSSCRIPTANALYZER_GATE_MODE" in " ".join(
+        azure_text.split()
     )
 
 

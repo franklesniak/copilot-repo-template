@@ -1,10 +1,10 @@
 # PowerShell CI Workflow
 #
-# Purpose: Run PSScriptAnalyzer linting and Pester tests for PowerShell scripts
+# Purpose: Run PSScriptAnalyzer linting and Pester tests for PowerShell files
 # Runs on: push and pull_request events
 #
 # Jobs:
-#   - powershell-lint: Runs PSScriptAnalyzer on all .ps1 files (skips if no files found)
+#   - powershell-lint: Runs PSScriptAnalyzer on .ps1, .psm1, and .psd1 files (skips if no analyzer inputs are selected after policy classification)
 #   - test: Runs Pester tests on Windows, macOS, and Linux (skips if no *.Tests.ps1 files found)
 #
 # Note: This workflow is OPTIONAL and can be removed for non-PowerShell projects.
@@ -75,7 +75,9 @@ jobs:
           . $candidateHelperPath
           . $gateHelperPath
 
-          $candidateRecords = @(Get-PSScriptAnalyzerCandidate -RepositoryRoot $env:GITHUB_WORKSPACE)
+          $candidateRecords = @(
+            Get-PSScriptAnalyzerCandidate -RepositoryRoot $env:GITHUB_WORKSPACE -DirectoryVisibility All
+          )
           $candidateSummary = Get-PSScriptAnalyzerCandidateSummary -Candidate $candidateRecords
           foreach ($summaryLine in @(ConvertTo-PSScriptAnalyzerCandidateSummaryLine -CandidateSummary $candidateSummary)) {
             Write-Output $summaryLine

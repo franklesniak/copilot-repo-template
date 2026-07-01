@@ -96,6 +96,7 @@ PSSCRIPTANALYZER_GATE_MODE_PARAMETER_EXPRESSION = "${{ parameters.gateMode }}"
 PSSCRIPTANALYZER_CANDIDATE_HELPER = "src/tools/Resolve-PSScriptAnalyzerCandidate.ps1"
 PSSCRIPTANALYZER_GATE_HELPER = "src/tools/Resolve-PSScriptAnalyzerGate.ps1"
 PSSCRIPTANALYZER_SETTINGS = ".github/linting/PSScriptAnalyzerSettings.psd1"
+PSSCRIPTANALYZER_CANDIDATE_SUFFIXES = frozenset((".ps1", ".psm1", ".psd1"))
 PSSCRIPTANALYZER_RECOGNIZED_GATE_MODES = frozenset(("strict", "first-adoption"))
 UNSAFE_CANDIDATE_EXIT_CODE = 3
 LINE_ENDING_RISK_STATES = frozenset(("cr", "crlf", "mixed"))
@@ -113,7 +114,8 @@ AZURE_HOST_SETUP_FIELDS = (
 PATH_TOKEN_PATTERN = re.compile(
     r"(?P<literal>(?:[A-Za-z0-9_.-]+[\\/])+[A-Za-z0-9_.%+~#?=&,-]+|"
     r"(?:\./|\../)?[A-Za-z0-9_.-]+\."
-    r"(?:md|mdc|py|ps1|json|jsonc|ya?ml|toml|hcl|tf|tfvars|tftpl|tfbackend|mjs|js|txt))"
+    r"(?:md|mdc|py|ps1|psm1|psd1|json|jsonc|ya?ml|toml|hcl|tf|tfvars|"
+    r"tftpl|tfbackend|mjs|js|txt))"
 )
 MARKDOWN_LINK_TARGET_PATTERN = re.compile(r"!?\[[^\]]*]\((?P<target>[^)\s]+)(?:\s+[^)]*)?\)")
 MARKDOWNLINT_FINDING_PATTERN = re.compile(
@@ -1261,9 +1263,15 @@ def powershell_executable() -> str | None:
     return shutil.which("pwsh") or shutil.which("powershell")
 
 
+def is_powershell_analyzer_candidate_path(path: str) -> bool:
+    """Return whether ``path`` has a PSScriptAnalyzer input suffix."""
+    normalized_path = path.replace("\\", "/")
+    return PurePosixPath(normalized_path).suffix.casefold() in PSSCRIPTANALYZER_CANDIDATE_SUFFIXES
+
+
 def powershell_files(files: Sequence[str]) -> tuple[str, ...]:
-    """Return discovered PowerShell script paths."""
-    return tuple(path for path in files if path.lower().endswith(".ps1"))
+    """Return discovered PowerShell analyzer input paths."""
+    return tuple(path for path in files if is_powershell_analyzer_candidate_path(path))
 
 
 def collect_powershell_candidate_paths(
@@ -1297,7 +1305,7 @@ def collect_powershell_candidate_paths(
             if relative_path in seen_paths:
                 continue
             seen_paths.add(relative_path)
-            if relative_path.lower().endswith(".ps1"):
+            if is_powershell_analyzer_candidate_path(relative_path):
                 candidates.append(relative_path)
 
     return tuple(sorted(candidates))
@@ -1361,6 +1369,17 @@ def candidate_summary_lines(candidates_data: Mapping[str, object]) -> tuple[str,
             f"{len(policy_excluded)} candidate path(s) were excluded by policy."
         )
     if policy_excluded:
+        reason_counts = Counter(
+            str(record.get("ReasonCode", "Unknown")) for record in policy_excluded
+        )
+        reason_summary = "; ".join(
+            f"{single_line_text(reason)} ({count})"
+            for reason, count in sorted(
+                reason_counts.items(),
+                key=lambda item: (-item[1], item[0]),
+            )
+        )
+        lines.append(f"Policy-excluded reason counts: {reason_summary}.")
         examples = "; ".join(_candidate_record_path(record) for record in policy_excluded[:3])
         lines.append(f"Policy-excluded candidates: {len(policy_excluded)} (examples: {examples}).")
     for record in unsafe:
