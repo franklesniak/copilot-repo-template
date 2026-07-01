@@ -2508,9 +2508,7 @@ def format_analyzer_debt_record(record: PowerShellAnalyzerDebtRecord) -> str:
         location = f"{location}:{record.line}"
         if record.column is not None:
             location = f"{location}:{record.column}"
-    return (
-        f"{location} [{record.severity}] {record.rule_name}: " f"{single_line_text(record.message)}"
-    )
+    return f"{location} [{record.severity}] {record.rule_name}: {single_line_text(record.message)}"
 
 
 def print_powershell_report(report: PowerShellAnalyzerReport, *, stdout: TextIO) -> None:
