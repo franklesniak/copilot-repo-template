@@ -1500,6 +1500,10 @@ def load_ci_yaml_mapping(
         return None, (
             f"{platform_name}: {relative_path} is not valid YAML; manual review is required.",
         )
+    except UnicodeDecodeError:
+        return None, (
+            f"{platform_name}: {relative_path} is not valid UTF-8; manual review is required.",
+        )
     except OSError as error:
         error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
         return None, (

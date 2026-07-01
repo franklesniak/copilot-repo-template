@@ -1162,6 +1162,26 @@ def test_load_ci_yaml_mapping_flags_broken_symlink(tmp_path: Path) -> None:
     )
 
 
+def test_load_ci_yaml_mapping_flags_non_utf8_file(tmp_path: Path) -> None:
+    """A present-but-non-UTF-8 CI YAML file degrades to a manual-review note, not a crash."""
+    relative_path = ".github/workflows/example.yml"
+    ci_path = tmp_path / relative_path
+    ci_path.parent.mkdir(parents=True, exist_ok=True)
+    ci_path.write_bytes(b"\xff\xfe not valid utf-8")
+
+    document, notes = quality_reports.load_ci_yaml_mapping(
+        tmp_path,
+        relative_path,
+        platform_name="GitHub Actions",
+    )
+
+    assert document is None
+    assert notes == (
+        "GitHub Actions: .github/workflows/example.yml is not valid UTF-8; "
+        "manual review is required.",
+    )
+
+
 def test_path_reference_cli_can_fail_on_findings(tmp_path: Path) -> None:
     """The CLI offers an explicit non-zero path-reference gate when selected."""
     _init_repo(tmp_path)
