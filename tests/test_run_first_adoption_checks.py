@@ -872,6 +872,37 @@ def test_powershell_quality_report_is_skipped_when_marker_excludes_powershell(
     assert all("powershell" not in command.command for command in plan.commands)
 
 
+def test_unsafe_candidate_exit_code_takes_precedence(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Unsafe PowerShell candidates propagate exit code 3 ahead of other failures."""
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+    _write_text(tmp_path, ".template-sync/scripts/first_adoption_quality_reports.py")
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+
+    def fake_runner(command: Sequence[str], _repo_root: Path) -> int:
+        if command[-1] == "powershell":
+            return cast(int, first_adoption.UNSAFE_CANDIDATE_EXIT_CODE)
+        if command[0] == "pre-commit":
+            return 1
+        return 0
+
+    result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        command_runner=fake_runner,
+        git_status_reader=lambda _repo_root: (),
+        stdout=io.StringIO(),
+    )
+
+    assert result == first_adoption.UNSAFE_CANDIDATE_EXIT_CODE
+
+
 def test_azure_marker_plans_host_setup_quality_report(
     tmp_path: Path,
     monkeypatch: Any,

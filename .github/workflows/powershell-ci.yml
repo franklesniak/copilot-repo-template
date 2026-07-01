@@ -12,6 +12,7 @@
 #   - .github/workflows/powershell-ci.yml (this file)
 #   - .github/instructions/powershell.instructions.md
 #   - .github/linting/PSScriptAnalyzerSettings.psd1
+#   - src/tools/Resolve-PSScriptAnalyzerCandidate.ps1 (PSScriptAnalyzer path helper)
 #   - src/tools/Resolve-PSScriptAnalyzerGate.ps1 (PSScriptAnalyzer gate-mode helper)
 #   - tests/PowerShell/ directory
 #   - templates/powershell/ directory
@@ -56,24 +57,44 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Find PowerShell files
-        id: find-ps1
-        run: |
-          # Find all .ps1 files in the repository
-          ps1_files=$(find . -name "*.ps1" -type f 2>/dev/null | grep -v "node_modules" || true)
-          if [ -z "$ps1_files" ]; then
-            echo "No PowerShell files found in repository"
-            echo "found=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Found PowerShell files:"
-            echo "$ps1_files"
-            echo "found=true" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Install PSScriptAnalyzer
-        if: steps.find-ps1.outputs.found == 'true'
+      - name: Run PSScriptAnalyzer
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+          $settingsPath = Join-Path -Path $env:GITHUB_WORKSPACE -ChildPath ".github/linting/PSScriptAnalyzerSettings.psd1"
+          $candidateHelperPath = Join-Path -Path $env:GITHUB_WORKSPACE -ChildPath "src/tools/Resolve-PSScriptAnalyzerCandidate.ps1"
+          $gateHelperPath = Join-Path -Path $env:GITHUB_WORKSPACE -ChildPath "src/tools/Resolve-PSScriptAnalyzerGate.ps1"
+
+          foreach ($requiredPath in @($settingsPath, $candidateHelperPath, $gateHelperPath)) {
+            if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+              throw ("Required PowerShell lint dependency missing: {0}" -f $requiredPath)
+            }
+          }
+
+          . $candidateHelperPath
+          . $gateHelperPath
+
+          $candidateRecords = @(Get-PSScriptAnalyzerCandidate -RepositoryRoot $env:GITHUB_WORKSPACE)
+          $candidateSummary = Get-PSScriptAnalyzerCandidateSummary -Candidate $candidateRecords
+          foreach ($summaryLine in @(ConvertTo-PSScriptAnalyzerCandidateSummaryLine -CandidateSummary $candidateSummary)) {
+            Write-Output $summaryLine
+          }
+
+          foreach ($unsafeCandidate in @($candidateSummary.Unsafe)) {
+            Write-Output (ConvertTo-PSScriptAnalyzerCandidateGitHubErrorCommand -Candidate $unsafeCandidate)
+          }
+
+          if ($candidateSummary.SummaryCounts.Unsafe -gt 0) {
+            Write-Output "::error::Unsafe PSScriptAnalyzer candidate path(s) found. See annotations and summary above."
+            exit 1
+          }
+
+          if ($candidateSummary.SummaryCounts.Selected -eq 0) {
+            Write-Output "Skipping PSScriptAnalyzer - no selected PowerShell analyzer inputs found."
+            exit 0
+          }
+
           # PSGallery installs intermittently fail with transient errors (for
           # example, "No match was found for the specified search criteria").
           # Retry with exponential backoff so a single flaky response does not
@@ -98,29 +119,20 @@ jobs:
           }
           Import-Module PSScriptAnalyzer
 
-      - name: Run PSScriptAnalyzer
-        if: steps.find-ps1.outputs.found == 'true'
-        shell: pwsh
-        run: |
-          $settingsPath = Join-Path -Path $env:GITHUB_WORKSPACE -ChildPath ".github/linting/PSScriptAnalyzerSettings.psd1"
-          $gateHelperPath = Join-Path -Path $env:GITHUB_WORKSPACE -ChildPath "src/tools/Resolve-PSScriptAnalyzerGate.ps1"
-          . $gateHelperPath
-
-          $ps1Files = Get-ChildItem -LiteralPath $env:GITHUB_WORKSPACE -Filter "*.ps1" -Recurse -File |
-            Where-Object { $_.FullName -notmatch "node_modules" }
-
           $analyzerFindings = [System.Collections.Generic.List[object]]::new()
 
-          foreach ($file in $ps1Files) {
-            Write-Output "Analyzing: $($file.FullName)"
+          foreach ($candidate in @($candidateSummary.Selected)) {
+            $displayPath = ConvertTo-PSScriptAnalyzerCandidateSingleLineText -Value $candidate.RepositoryRelativePath
+            Write-Output ("Analyzing: {0}" -f $displayPath)
             $analyzerFindings.AddRange(@(
-              Invoke-ScriptAnalyzer -Path $file.FullName -Settings $settingsPath
+              Invoke-ScriptAnalyzer -Path $candidate.EscapedAnalyzerPath -Settings $settingsPath
             ))
           }
 
           $gateResult = Resolve-PSScriptAnalyzerGate `
             -Mode $env:PSSCRIPTANALYZER_GATE_MODE `
-            -AnalyzerFinding $analyzerFindings
+            -AnalyzerFinding $analyzerFindings `
+            -RepositoryRoot $env:GITHUB_WORKSPACE
 
           foreach ($annotationCommand in $gateResult.AnnotationCommands) {
             Write-Output $annotationCommand
@@ -145,10 +157,6 @@ jobs:
           }
 
           Write-Output "PowerShell lint gate passed."
-
-      - name: Skip - No PowerShell files
-        if: steps.find-ps1.outputs.found != 'true'
-        run: echo "Skipping PSScriptAnalyzer - no PowerShell files found in repository"
 
   # Pester Test Job
   #

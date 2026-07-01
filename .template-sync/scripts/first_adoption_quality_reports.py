@@ -38,6 +38,31 @@ GIT_IGNORED_FILES_COMMAND = (
     "--ignored",
     "--exclude-standard",
 )
+GIT_VISIBLE_POWERSHELL_CANDIDATES_COMMAND = (
+    "git",
+    "ls-files",
+    "-z",
+    "--full-name",
+    "--cached",
+    "--others",
+    "--exclude-standard",
+)
+GIT_TRACKED_POWERSHELL_CANDIDATES_COMMAND = (
+    "git",
+    "ls-files",
+    "-z",
+    "--full-name",
+    "--cached",
+)
+GIT_IGNORED_POWERSHELL_CANDIDATES_COMMAND = (
+    "git",
+    "ls-files",
+    "-z",
+    "--full-name",
+    "--others",
+    "--ignored",
+    "--exclude-standard",
+)
 PATH_REFERENCE_CATEGORY = "path-reference"
 PATH_REFERENCE_CASE_MISMATCH_RULE = "path-reference.case-mismatch"
 PATH_REFERENCE_MISSING_TARGET_RULE = "path-reference.missing-target"
@@ -57,10 +82,16 @@ CONFIG_SURFACES = frozenset(
     )
 )
 WORKFLOW_SURFACE_PATTERNS = (".github/workflows/*.yml", ".github/workflows/*.yaml")
+# Generic report scan exclusions are intentionally separate from PowerShell
+# analyzer candidate policy, which is enforced by the PowerShell helper.
 IGNORED_SCAN_DIRECTORIES = frozenset(
     (".cache", ".git", ".pytest_cache", ".ruff_cache", "node_modules")
 )
 MARKDOWN_PACKAGE_SCRIPT = "lint:md"
+PSSCRIPTANALYZER_CANDIDATE_HELPER = "src/tools/Resolve-PSScriptAnalyzerCandidate.ps1"
+PSSCRIPTANALYZER_GATE_HELPER = "src/tools/Resolve-PSScriptAnalyzerGate.ps1"
+PSSCRIPTANALYZER_SETTINGS = ".github/linting/PSScriptAnalyzerSettings.psd1"
+UNSAFE_CANDIDATE_EXIT_CODE = 3
 LINE_ENDING_RISK_STATES = frozenset(("cr", "crlf", "mixed"))
 AZURE_DEVOPS_MODULES = frozenset(
     ("azure-devops-platform", "azure-pipelines", "azure-devops-collaboration")
@@ -96,6 +127,7 @@ class CaptureRunner(Protocol):
         repo_root: Path,
         *,
         env: Mapping[str, str] | None = None,
+        input: str | None = None,
     ) -> subprocess.CompletedProcess[str]: ...
 
 
@@ -229,6 +261,8 @@ class PowerShellAnalyzerReport:
 
     available: bool
     message: str
+    candidate_summary_lines: tuple[str, ...]
+    unsafe_candidate_count: int
     summary_lines: tuple[str, ...]
     issue_ready_markdown: tuple[str, ...]
 
@@ -383,6 +417,7 @@ def run_capture(
     repo_root: Path,
     *,
     env: Mapping[str, str] | None = None,
+    input: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run ``command`` in ``repo_root`` and capture text output."""
     try:
@@ -393,7 +428,9 @@ def run_capture(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            encoding="utf-8",
             env=env,
+            input=input,
         )
     except OSError as error:
         error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
@@ -407,6 +444,53 @@ def git_capture(repo_root: Path, args: Sequence[str]) -> str:
         message = result.stderr.strip() or result.stdout.strip() or "git command failed"
         raise FirstAdoptionQualityError(f"Unable to inspect repository with git: {message}")
     return result.stdout
+
+
+def git_capture_bytes(repo_root: Path, args: Sequence[str]) -> bytes:
+    """Run a Git command and return raw stdout bytes, raising on failure."""
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=repo_root,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except OSError as error:
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        raise FirstAdoptionQualityError(f"Unable to run git ({error_summary}).") from error
+    if result.returncode != 0:
+        stderr = result.stderr.decode("utf-8", errors="replace").strip()
+        stdout = result.stdout.decode("utf-8", errors="replace").strip()
+        message = stderr or stdout or "git command failed"
+        raise FirstAdoptionQualityError(f"Unable to inspect repository with git: {message}")
+    return result.stdout
+
+
+def decode_git_nul_paths(output: bytes) -> tuple[str, ...]:
+    """Decode NUL-delimited Git path output as strict UTF-8 records."""
+    if not output:
+        return ()
+    if not output.endswith(b"\0"):
+        raise FirstAdoptionQualityError(
+            "Git file-list output was not NUL-terminated; manual review is required."
+        )
+
+    paths: list[str] = []
+    for raw_record in output[:-1].split(b"\0"):
+        if not raw_record:
+            raise FirstAdoptionQualityError(
+                "Git file-list output contained an empty NUL-delimited path record; "
+                "manual review is required."
+            )
+        try:
+            paths.append(raw_record.decode("utf-8", errors="strict"))
+        except UnicodeDecodeError as error:
+            raise FirstAdoptionQualityError(
+                "Git returned a PowerShell candidate path that is not valid UTF-8; "
+                "manual review is required."
+            ) from error
+    return tuple(paths)
 
 
 def collect_git_files(
@@ -1140,6 +1224,127 @@ def powershell_files(files: Sequence[str]) -> tuple[str, ...]:
     return tuple(path for path in files if path.lower().endswith(".ps1"))
 
 
+def collect_powershell_candidate_paths(
+    repo_root: Path,
+    *,
+    tracked_only: bool = False,
+    include_ignored: bool = False,
+    stdout: TextIO | None = None,
+) -> tuple[str, ...]:
+    """Collect raw Git lexical PowerShell analyzer candidate paths."""
+    commands: list[tuple[str, ...]] = [
+        (
+            GIT_TRACKED_POWERSHELL_CANDIDATES_COMMAND
+            if tracked_only
+            else GIT_VISIBLE_POWERSHELL_CANDIDATES_COMMAND
+        )
+    ]
+    if include_ignored and not tracked_only:
+        commands.append(GIT_IGNORED_POWERSHELL_CANDIDATES_COMMAND)
+
+    # PowerShell analyzer policy is intentionally separate from the generic
+    # first-adoption scan exclusions; the PowerShell helper classifies policy
+    # exclusions such as node_modules dependency shims.
+    candidates: list[str] = []
+    seen_paths: set[str] = set()
+    for command in commands:
+        if stdout is not None:
+            print(f"$ {format_command(command)}", file=stdout, flush=True)
+        output = git_capture_bytes(repo_root, command[1:])
+        for relative_path in decode_git_nul_paths(output):
+            if relative_path in seen_paths:
+                continue
+            seen_paths.add(relative_path)
+            if relative_path.lower().endswith(".ps1"):
+                candidates.append(relative_path)
+
+    return tuple(sorted(candidates))
+
+
+def single_line_text(value: object) -> str:
+    """Return a human-facing single-line representation of ``value``."""
+    return str(value).replace("\r", r"\r").replace("\n", r"\n")
+
+
+def _candidate_record_path(record: Mapping[str, object]) -> str:
+    """Return the candidate path used in human-facing summaries."""
+    path = record.get("RepositoryRelativePath")
+    if path is None:
+        path = record.get("CandidateFullName", "")
+    return single_line_text(path)
+
+
+def _candidate_records(data: Mapping[str, object], key: str) -> tuple[Mapping[str, object], ...]:
+    """Return a validated candidate record array from composite data."""
+    raw_records = data.get(key)
+    if not isinstance(raw_records, list):
+        raise FirstAdoptionQualityError(f"Candidates.{key} must be an array.")
+    records: list[Mapping[str, object]] = []
+    for index, raw_record in enumerate(raw_records, start=1):
+        if not isinstance(raw_record, dict):
+            raise FirstAdoptionQualityError(f"Candidates.{key}[{index}] must be an object.")
+        records.append(cast(Mapping[str, object], raw_record))
+    return tuple(records)
+
+
+def candidate_summary_lines(candidates_data: Mapping[str, object]) -> tuple[str, ...]:
+    """Build compact, escaped candidate summary lines for human output."""
+    selected = _candidate_records(candidates_data, "Selected")
+    policy_excluded = _candidate_records(candidates_data, "PolicyExcluded")
+    unsafe = _candidate_records(candidates_data, "Unsafe")
+    summary_counts = candidates_data.get("SummaryCounts")
+    if not isinstance(summary_counts, dict):
+        raise FirstAdoptionQualityError("Candidates.SummaryCounts must be an object.")
+    expected_counts = {
+        "Selected": len(selected),
+        "PolicyExcluded": len(policy_excluded),
+        "Unsafe": len(unsafe),
+    }
+    for key, expected_count in expected_counts.items():
+        if summary_counts.get(key) != expected_count:
+            raise FirstAdoptionQualityError(
+                f"Candidates.SummaryCounts.{key} does not match the {key} array length."
+            )
+
+    lines = [
+        (
+            "PSScriptAnalyzer candidates: "
+            f"{len(selected)} selected; {len(policy_excluded)} policy-excluded; "
+            f"{len(unsafe)} unsafe."
+        )
+    ]
+    if not selected and policy_excluded and not unsafe:
+        lines.append(
+            "No analyzer inputs were selected; "
+            f"{len(policy_excluded)} candidate path(s) were excluded by policy."
+        )
+    if policy_excluded:
+        examples = "; ".join(_candidate_record_path(record) for record in policy_excluded[:3])
+        lines.append(f"Policy-excluded candidates: {len(policy_excluded)} (examples: {examples}).")
+    for record in unsafe:
+        reason = single_line_text(record.get("ReasonCode", "Unknown"))
+        line = f"Unsafe candidate: {_candidate_record_path(record)}; reason: {reason}"
+        if "ResolvedTargetFullName" in record:
+            line = f"{line}; resolved target: {single_line_text(record['ResolvedTargetFullName'])}"
+        lines.append(line)
+    return tuple(lines)
+
+
+def powershell_candidate_stdin(script_paths: Sequence[str]) -> str:
+    """Serialize PowerShell candidate records for the embedded runner stdin."""
+    records = [{"RepositoryRelativePath": path} for path in script_paths]
+    return json.dumps(records, ensure_ascii=False)
+
+
+def _string_sequence(value: object) -> tuple[str, ...] | None:
+    """Return a tuple of strings when ``value`` is a JSON string array."""
+    if isinstance(value, str):
+        return tuple(value.splitlines())
+    if not isinstance(value, list):
+        return None
+    return tuple(str(item) for item in value)
+
+
 def build_powershell_report(
     repo_root: Path,
     *,
@@ -1148,29 +1353,37 @@ def build_powershell_report(
     runner: CaptureRunner = run_capture,
 ) -> PowerShellAnalyzerReport:
     """Run an optional PSScriptAnalyzer debt report when tooling is available."""
-    collection = collect_git_files(
+    script_paths = collect_powershell_candidate_paths(
         repo_root,
         tracked_only=tracked_only,
         include_ignored=include_ignored,
     )
-    script_paths = powershell_files(collection.files)
     if not script_paths:
         return PowerShellAnalyzerReport(
             available=True,
             message="No PowerShell files were discovered.",
+            candidate_summary_lines=(),
+            unsafe_candidate_count=0,
             summary_lines=("No PowerShell files were discovered.",),
             issue_ready_markdown=(),
         )
 
-    settings_path = repo_root / ".github/linting/PSScriptAnalyzerSettings.psd1"
-    gate_helper_path = repo_root / "src/tools/Resolve-PSScriptAnalyzerGate.ps1"
-    if not is_present_regular_file(settings_path) or not is_present_regular_file(gate_helper_path):
+    settings_path = repo_root / PSSCRIPTANALYZER_SETTINGS
+    candidate_helper_path = repo_root / PSSCRIPTANALYZER_CANDIDATE_HELPER
+    gate_helper_path = repo_root / PSSCRIPTANALYZER_GATE_HELPER
+    if (
+        not is_present_regular_file(settings_path)
+        or not is_present_regular_file(candidate_helper_path)
+        or not is_present_regular_file(gate_helper_path)
+    ):
         return PowerShellAnalyzerReport(
             available=False,
             message=(
                 "PSScriptAnalyzer report unavailable: retained PowerShell settings "
-                "or gate helper files are missing."
+                "or helper files are missing."
             ),
+            candidate_summary_lines=(),
+            unsafe_candidate_count=0,
             summary_lines=(),
             issue_ready_markdown=(),
         )
@@ -1183,61 +1396,249 @@ def build_powershell_report(
                 "PSScriptAnalyzer report unavailable: neither pwsh nor powershell "
                 "was found on PATH."
             ),
+            candidate_summary_lines=(),
+            unsafe_candidate_count=0,
             summary_lines=(),
             issue_ready_markdown=(),
         )
 
     command_script = r"""
 $ErrorActionPreference = 'Stop'
-Import-Module PSScriptAnalyzer -ErrorAction Stop
-. (Join-Path -Path (Get-Location) -ChildPath 'src/tools/Resolve-PSScriptAnalyzerGate.ps1')
-$settingsPath = Join-Path -Path (Get-Location) -ChildPath '.github/linting/PSScriptAnalyzerSettings.psd1'
-$relativeFiles = ConvertFrom-Json -InputObject $env:FIRST_ADOPTION_PS1_FILES_JSON
-$findings = [System.Collections.Generic.List[object]]::new()
-foreach ($relativeFile in $relativeFiles) {
-    $fullPath = Join-Path -Path (Get-Location) -ChildPath $relativeFile
-    $findings.AddRange(@(Invoke-ScriptAnalyzer -Path $fullPath -Settings $settingsPath))
+$utf8NoBomEncoding = [System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = $utf8NoBomEncoding
+
+function Write-CompositeJson {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Composite
+    )
+
+    $json = $Composite | ConvertTo-Json -Depth 12
+    $json = $json -replace "`r`n", "`n"
+    $writer = [System.IO.StreamWriter]::new(
+        [Console]::OpenStandardOutput(),
+        $utf8NoBomEncoding
+    )
+    try {
+        $writer.Write($json)
+    } finally {
+        $writer.Flush()
+        $writer.Dispose()
+    }
 }
-$result = Resolve-PSScriptAnalyzerGate -Mode 'first-adoption' -AnalyzerFinding $findings -RepositoryRoot (Get-Location)
-$result | ConvertTo-Json -Depth 8
+
+function ConvertTo-RunnerSingleLineText {
+    param(
+        [AllowNull()]
+        [object]$Value
+    )
+
+    if ($null -eq $Value) {
+        return ''
+    }
+
+    $text = [string]$Value
+    $text = $text.Replace("`r", '\r')
+    $text = $text.Replace("`n", '\n')
+    return $text
+}
+
+try {
+    $repositoryRoot = (Get-Location).ProviderPath
+    . (Join-Path -Path $repositoryRoot -ChildPath 'src/tools/Resolve-PSScriptAnalyzerCandidate.ps1')
+    . (Join-Path -Path $repositoryRoot -ChildPath 'src/tools/Resolve-PSScriptAnalyzerGate.ps1')
+    $settingsPath = Join-Path -Path $repositoryRoot -ChildPath '.github/linting/PSScriptAnalyzerSettings.psd1'
+
+    $reader = [System.IO.StreamReader]::new(
+        [Console]::OpenStandardInput(),
+        [System.Text.Encoding]::UTF8
+    )
+    try {
+        $stdinPayload = $reader.ReadToEnd()
+    } finally {
+        $reader.Dispose()
+    }
+
+    if ([string]::IsNullOrWhiteSpace($stdinPayload)) {
+        throw 'Candidate JSON stdin is empty.'
+    }
+
+    if (-not $stdinPayload.TrimStart().StartsWith('[')) {
+        throw 'Candidate JSON stdin must be a top-level array.'
+    }
+
+    $rawCandidates = @($stdinPayload | ConvertFrom-Json)
+    $candidateRecords = [System.Collections.Generic.List[object]]::new()
+    foreach ($rawCandidate in $rawCandidates) {
+        if (
+            ($null -eq $rawCandidate) -or
+            ($null -eq $rawCandidate.PSObject.Properties['RepositoryRelativePath']) -or
+            (-not ($rawCandidate.RepositoryRelativePath -is [string])) -or
+            [string]::IsNullOrEmpty($rawCandidate.RepositoryRelativePath)
+        ) {
+            throw 'Candidate JSON contains a malformed candidate record.'
+        }
+
+        $repositoryRelativePath = [string]$rawCandidate.RepositoryRelativePath
+        [void]($candidateRecords.Add(
+                (Resolve-PSScriptAnalyzerCandidate `
+                    -RepositoryRoot $repositoryRoot `
+                    -CandidatePath $repositoryRelativePath `
+                    -RepositoryRelativePath $repositoryRelativePath)
+            ))
+    }
+
+    $candidateSummary = Get-PSScriptAnalyzerCandidateSummary `
+        -Candidate ([object[]]$candidateRecords.ToArray())
+
+    if ($candidateSummary.SummaryCounts.Unsafe -gt 0) {
+        $gate = [pscustomobject]@{
+            Status = 'unavailable'
+            Message = 'Analyzer was not run because unsafe candidates were found.'
+            SummaryLines = [string[]]@()
+            IssueReadyMarkdown = [string[]]@()
+        }
+    } elseif ($candidateSummary.SummaryCounts.Selected -eq 0) {
+        $gate = Resolve-PSScriptAnalyzerGate `
+            -Mode 'first-adoption' `
+            -AnalyzerFinding @() `
+            -RepositoryRoot $repositoryRoot `
+            -AnnotationFormat Plain
+        $gate | Add-Member -NotePropertyName Status -NotePropertyValue 'ok' -Force
+    } else {
+        try {
+            Import-Module PSScriptAnalyzer -ErrorAction Stop
+            $findings = [System.Collections.Generic.List[object]]::new()
+            foreach ($candidate in @($candidateSummary.Selected)) {
+                $findings.AddRange(@(
+                    Invoke-ScriptAnalyzer `
+                        -Path $candidate.EscapedAnalyzerPath `
+                        -Settings $settingsPath
+                ))
+            }
+            $gate = Resolve-PSScriptAnalyzerGate `
+                -Mode 'first-adoption' `
+                -AnalyzerFinding $findings `
+                -RepositoryRoot $repositoryRoot `
+                -AnnotationFormat Plain
+            $gate | Add-Member -NotePropertyName Status -NotePropertyValue 'ok' -Force
+        } catch {
+            $gate = [pscustomobject]@{
+                Status = 'unavailable'
+                Message = (
+                    'PSScriptAnalyzer report unavailable: run ' +
+                    '`Install-Module PSScriptAnalyzer` intentionally if the PowerShell ' +
+                    'module is retained. Diagnostic: ' +
+                    (ConvertTo-PSScriptAnalyzerCandidateSingleLineText -Value $_)
+                )
+                SummaryLines = [string[]]@()
+                IssueReadyMarkdown = [string[]]@()
+            }
+        }
+    }
+
+    $composite = [pscustomobject]@{
+        Gate = $gate
+        Candidates = $candidateSummary
+    }
+    Write-CompositeJson -Composite $composite
+    exit 0
+} catch {
+    Write-Error -Message (ConvertTo-RunnerSingleLineText -Value $_)
+    exit 1
+}
 """
-    environment = os.environ.copy()
-    environment["FIRST_ADOPTION_PS1_FILES_JSON"] = json.dumps(script_paths)
     result = runner(
         (executable, "-NoProfile", "-Command", command_script),
         repo_root,
-        env=environment,
+        input=powershell_candidate_stdin(script_paths),
     )
-
-    if result.returncode != 0:
-        diagnostic = result.stderr.strip() or result.stdout.strip() or "PowerShell command failed"
-        return PowerShellAnalyzerReport(
-            available=False,
-            message=(
-                "PSScriptAnalyzer report unavailable: run "
-                "`Install-Module PSScriptAnalyzer` intentionally if the PowerShell "
-                f"module is retained. Diagnostic: {diagnostic}"
-            ),
-            summary_lines=(),
-            issue_ready_markdown=(),
-        )
 
     try:
         result_data = json.loads(result.stdout)
     except json.JSONDecodeError as error:
+        if result.returncode != 0:
+            diagnostic = (
+                result.stderr.strip() or result.stdout.strip() or "PowerShell command failed"
+            )
+            raise FirstAdoptionQualityError(
+                "PSScriptAnalyzer report runner failed before structured output "
+                f"was available: {single_line_text(diagnostic)}"
+            ) from error
         raise FirstAdoptionQualityError(
             "PSScriptAnalyzer report returned non-JSON output."
         ) from error
 
-    summary_lines = tuple(str(line) for line in result_data.get("SummaryLines", ()))
-    issue_ready = result_data.get("IssueReadyMarkdown", ())
-    if isinstance(issue_ready, str):
-        issue_ready_lines = tuple(issue_ready.splitlines())
-    else:
-        issue_ready_lines = tuple(str(line) for line in issue_ready)
+    if not isinstance(result_data, dict):
+        raise FirstAdoptionQualityError("PSScriptAnalyzer report composite JSON must be an object.")
+    result_data = cast(dict[str, object], result_data)
+    candidates_data = result_data.get("Candidates")
+    if not isinstance(candidates_data, dict):
+        raise FirstAdoptionQualityError("PSScriptAnalyzer report is missing Candidates data.")
+    candidates_data = cast(dict[str, object], candidates_data)
+    rendered_candidate_summary = candidate_summary_lines(candidates_data)
+    unsafe_candidate_count = len(_candidate_records(candidates_data, "Unsafe"))
+
+    gate_data = result_data.get("Gate")
+    if not isinstance(gate_data, dict):
+        return PowerShellAnalyzerReport(
+            available=True,
+            message=(
+                "PSScriptAnalyzer report completed, but the Gate object was malformed; "
+                "manual review is required."
+            ),
+            candidate_summary_lines=rendered_candidate_summary,
+            unsafe_candidate_count=unsafe_candidate_count,
+            summary_lines=("Manual review: PSScriptAnalyzer Gate object was malformed.",),
+            issue_ready_markdown=(),
+        )
+    gate_data = cast(dict[str, object], gate_data)
+
+    gate_status = gate_data.get("Status")
+    if unsafe_candidate_count:
+        return PowerShellAnalyzerReport(
+            available=True,
+            message=(
+                "PSScriptAnalyzer report stopped before analysis because unsafe "
+                "candidate path(s) were found."
+            ),
+            candidate_summary_lines=rendered_candidate_summary,
+            unsafe_candidate_count=unsafe_candidate_count,
+            summary_lines=(),
+            issue_ready_markdown=(),
+        )
+
+    if gate_status == "unavailable":
+        message = gate_data.get("Message")
+        return PowerShellAnalyzerReport(
+            available=False,
+            message=str(message or "PSScriptAnalyzer report unavailable."),
+            candidate_summary_lines=rendered_candidate_summary,
+            unsafe_candidate_count=0,
+            summary_lines=(),
+            issue_ready_markdown=(),
+        )
+
+    summary_lines = _string_sequence(gate_data.get("SummaryLines"))
+    issue_ready_lines = _string_sequence(gate_data.get("IssueReadyMarkdown"))
+    if summary_lines is None or issue_ready_lines is None:
+        return PowerShellAnalyzerReport(
+            available=True,
+            message=(
+                "PSScriptAnalyzer report completed, but required Gate fields were "
+                "missing or malformed; manual review is required."
+            ),
+            candidate_summary_lines=rendered_candidate_summary,
+            unsafe_candidate_count=0,
+            summary_lines=("Manual review: required PSScriptAnalyzer Gate fields were malformed.",),
+            issue_ready_markdown=(),
+        )
+
     return PowerShellAnalyzerReport(
         available=True,
         message="PSScriptAnalyzer report completed.",
+        candidate_summary_lines=rendered_candidate_summary,
+        unsafe_candidate_count=0,
         summary_lines=summary_lines,
         issue_ready_markdown=issue_ready_lines,
     )
@@ -1248,9 +1649,13 @@ def print_powershell_report(report: PowerShellAnalyzerReport, *, stdout: TextIO)
     print("First-adoption PSScriptAnalyzer debt report:", file=stdout)
     if not report.available:
         print(f"  {report.message}", file=stdout)
+        for line in report.candidate_summary_lines:
+            print(f"  {line}", file=stdout)
         print("  This helper never installs optional tools automatically.", file=stdout)
         return
     print(f"  {report.message}", file=stdout)
+    for line in report.candidate_summary_lines:
+        print(f"  {line}", file=stdout)
     for line in report.summary_lines:
         print(f"  {line}", file=stdout)
     if report.issue_ready_markdown:
@@ -1382,6 +1787,8 @@ def run_report(args: argparse.Namespace, *, stdout: TextIO = sys.stdout) -> int:
             include_ignored=args.include_ignored,
         )
         print_powershell_report(powershell_report, stdout=stdout)
+        if powershell_report.unsafe_candidate_count:
+            return UNSAFE_CANDIDATE_EXIT_CODE
         return 0
 
     raise FirstAdoptionQualityError(f"Unsupported report command: {args.command}")

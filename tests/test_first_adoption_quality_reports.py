@@ -340,14 +340,74 @@ def test_markdownlint_fixer_reports_changed_files(
     assert report.changed_files == ("README.md",)
 
 
+def test_decode_git_nul_paths_preserves_crlf_inside_record() -> None:
+    """Raw Git path decoding preserves valid CR/LF bytes inside path records."""
+    output = "src/line\r\nbreak.ps1\0".encode("utf-8")
+
+    paths = quality_reports.decode_git_nul_paths(output)
+
+    assert paths == ("src/line\r\nbreak.ps1",)
+
+
+def test_decode_git_nul_paths_rejects_undecodable_record() -> None:
+    """Undecodable Git path bytes fail with a manual-review diagnostic."""
+    with pytest.raises(quality_reports.FirstAdoptionQualityError, match="not valid UTF-8"):
+        quality_reports.decode_git_nul_paths(b"src/bad-\xff.ps1\0")
+
+
+def test_decode_git_nul_paths_rejects_empty_record() -> None:
+    """Empty NUL-delimited records fail closed instead of being silently skipped."""
+    with pytest.raises(quality_reports.FirstAdoptionQualityError, match="empty NUL-delimited"):
+        quality_reports.decode_git_nul_paths(b"src/a.ps1\0\0src/b.ps1\0")
+
+
+def test_candidate_summary_lines_escape_human_facing_crlf() -> None:
+    """Candidate summaries preserve structure but render paths on one line."""
+    lines = quality_reports.candidate_summary_lines(
+        {
+            "Selected": [],
+            "PolicyExcluded": [
+                {
+                    "CandidateFullName": "/repo/node_modules/.bin/tool.ps1",
+                    "RepositoryRelativePath": "node_modules/.bin/tool.ps1",
+                    "OutcomeCategory": "policy-excluded",
+                    "ReasonCode": "NodeModulesSegment",
+                }
+            ],
+            "Unsafe": [
+                {
+                    "CandidateFullName": "/repo/src/line\r\nbreak.ps1",
+                    "RepositoryRelativePath": "src/line\r\nbreak.ps1",
+                    "OutcomeCategory": "unsafe",
+                    "ReasonCode": "MissingTarget",
+                }
+            ],
+            "SummaryCounts": {
+                "Selected": 0,
+                "PolicyExcluded": 1,
+                "Unsafe": 1,
+            },
+        }
+    )
+
+    assert "node_modules/.bin/tool.ps1" in "\n".join(lines)
+    assert "src/line\\r\\nbreak.ps1" in "\n".join(lines)
+    assert all("\r" not in line and "\n" not in line for line in lines)
+
+
 def test_powershell_report_parses_injected_runner_output(
     tmp_path: Path,
     monkeypatch: Any,
 ) -> None:
-    """The PowerShell report runs through its injectable runner and parses gate JSON."""
+    """The PowerShell report sends stdin candidates and parses composite JSON."""
     _init_repo(tmp_path)
-    _write_text(tmp_path, "src/sample.ps1", "Write-Output 'sample'\n")
+    _write_text(tmp_path, "src/café.ps1", "Write-Output 'sample'\n")
     _write_text(tmp_path, ".github/linting/PSScriptAnalyzerSettings.psd1", "@{}\n")
+    _write_text(
+        tmp_path,
+        "src/tools/Resolve-PSScriptAnalyzerCandidate.ps1",
+        "function Resolve-PSScriptAnalyzerCandidate {}\n",
+    )
     _write_text(
         tmp_path,
         "src/tools/Resolve-PSScriptAnalyzerGate.ps1",
@@ -355,25 +415,49 @@ def test_powershell_report_parses_injected_runner_output(
     )
     monkeypatch.setattr(quality_reports, "powershell_executable", lambda: "pwsh")
 
-    captured_env: dict[str, str] = {}
+    captured_input = ""
 
     def fake_runner(
         command: Sequence[str],
         repo_root: Path,
         *,
         env: Mapping[str, str] | None = None,
+        input: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
-        captured_env.update(env or {})
+        nonlocal captured_input
+        assert env is None
+        captured_input = input or ""
         payload = json.dumps(
             {
-                "SummaryLines": [
-                    "PSScriptAnalyzer gate mode: first-adoption.",
-                    "Result: pass.",
-                ],
-                "IssueReadyMarkdown": [
-                    "## PSScriptAnalyzer First-Adoption Debt Cleanup",
-                    "",
-                ],
+                "Gate": {
+                    "Status": "ok",
+                    "SummaryLines": [
+                        "PSScriptAnalyzer gate mode: first-adoption.",
+                        "Result: pass.",
+                    ],
+                    "IssueReadyMarkdown": [
+                        "## PSScriptAnalyzer First-Adoption Debt Cleanup",
+                        "",
+                    ],
+                },
+                "Candidates": {
+                    "Selected": [
+                        {
+                            "CandidateFullName": str(repo_root / "src" / "café.ps1"),
+                            "RepositoryRelativePath": "src/café.ps1",
+                            "EscapedAnalyzerPath": str(repo_root / "src" / "café.ps1"),
+                            "OutcomeCategory": "selected",
+                            "ReasonCode": "Selected",
+                        }
+                    ],
+                    "PolicyExcluded": [],
+                    "Unsafe": [],
+                    "SummaryCounts": {
+                        "Selected": 1,
+                        "PolicyExcluded": 0,
+                        "Unsafe": 0,
+                    },
+                },
             }
         )
         return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
@@ -389,7 +473,43 @@ def test_powershell_report_parses_injected_runner_output(
         "## PSScriptAnalyzer First-Adoption Debt Cleanup",
         "",
     )
-    assert "FIRST_ADOPTION_PS1_FILES_JSON" in captured_env
+    assert report.candidate_summary_lines == (
+        "PSScriptAnalyzer candidates: 1 selected; 0 policy-excluded; 0 unsafe.",
+    )
+    assert "café" in captured_input
+    assert "\\u00e9" not in captured_input
+    assert {"RepositoryRelativePath": "src/café.ps1"} in json.loads(captured_input)
+
+
+def test_powershell_report_unsafe_candidates_use_reserved_exit_code(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Unsafe analyzer candidates propagate the reserved report exit code."""
+    report = quality_reports.PowerShellAnalyzerReport(
+        available=True,
+        message="Unsafe candidate path(s) were found.",
+        candidate_summary_lines=(
+            "Unsafe candidate: src/link.ps1; reason: TargetOutsideRepository",
+        ),
+        unsafe_candidate_count=1,
+        summary_lines=(),
+        issue_ready_markdown=(),
+    )
+    monkeypatch.setattr(quality_reports, "build_powershell_report", lambda *args, **kwargs: report)
+    stdout = io.StringIO()
+    args = quality_reports.parse_args(
+        [
+            "--repo-root",
+            str(tmp_path),
+            "powershell",
+        ]
+    )
+
+    result = quality_reports.run_report(args, stdout=stdout)
+
+    assert result == quality_reports.UNSAFE_CANDIDATE_EXIT_CODE
+    assert "Unsafe candidate" in stdout.getvalue()
 
 
 def test_host_setup_report_distinguishes_azure_service_tasks(tmp_path: Path) -> None:
