@@ -3162,6 +3162,8 @@ The workflow consists of two jobs:
 
 The workflow uses automatic detection, so you don't need to configure anything if you have PowerShell files—it just works.
 
+Before installing or importing PSScriptAnalyzer, the lint job classifies analyzer candidates and fails closed when unsafe candidate paths could escape the repository or bypass analyzer policy.
+
 ### Choosing the PSScriptAnalyzer Gate Mode
 
 The lint job reads `PSSCRIPTANALYZER_GATE_MODE` before deciding whether analyzer findings fail CI. Supported values are:

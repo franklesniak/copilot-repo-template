@@ -26,17 +26,6 @@ jobs:
       - checkout: self
 
       - task: PowerShell@2
-        displayName: "Install PSScriptAnalyzer"
-        inputs:
-          pwsh: true
-          targetType: "inline"
-          script: |
-            if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
-              Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser -ErrorAction Stop
-            }
-            Import-Module PSScriptAnalyzer
-
-      - task: PowerShell@2
         displayName: "Run PSScriptAnalyzer"
         inputs:
           pwsh: true
@@ -44,22 +33,42 @@ jobs:
           script: |
             $repositoryRoot = "$(Build.SourcesDirectory)"
             $settingsPath = Join-Path -Path $repositoryRoot -ChildPath ".github/linting/PSScriptAnalyzerSettings.psd1"
+            $candidateHelperPath = Join-Path -Path $repositoryRoot -ChildPath "src/tools/Resolve-PSScriptAnalyzerCandidate.ps1"
             $gateHelperPath = Join-Path -Path $repositoryRoot -ChildPath "src/tools/Resolve-PSScriptAnalyzerGate.ps1"
+            . $candidateHelperPath
             . $gateHelperPath
 
-            $ps1Files = Get-ChildItem -LiteralPath $repositoryRoot -Filter "*.ps1" -Recurse -File |
-              Where-Object { $_.FullName -notmatch "node_modules" }
+            $candidateRecords = @(Get-PSScriptAnalyzerCandidate -RepositoryRoot $repositoryRoot)
+            $candidateSummary = Get-PSScriptAnalyzerCandidateSummary -Candidate $candidateRecords
+            foreach ($summaryLine in @(ConvertTo-PSScriptAnalyzerCandidateSummaryLine -CandidateSummary $candidateSummary)) {
+              Write-Output $summaryLine
+            }
 
-            if ($ps1Files.Count -eq 0) {
-              Write-Output "Skipping PSScriptAnalyzer - no PowerShell files found."
+            foreach ($unsafeCandidate in @($candidateSummary.Unsafe)) {
+              Write-Output (ConvertTo-PSScriptAnalyzerCandidateAzurePipelinesErrorCommand -Candidate $unsafeCandidate)
+            }
+
+            if ($candidateSummary.SummaryCounts.Unsafe -gt 0) {
+              Write-Error "Unsafe PSScriptAnalyzer candidate path(s) found. See diagnostics and summary above."
+              exit 1
+            }
+
+            if ($candidateSummary.SummaryCounts.Selected -eq 0) {
+              Write-Output "Skipping PSScriptAnalyzer - no selected PowerShell analyzer inputs found."
               return
             }
 
+            if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
+              Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser -ErrorAction Stop
+            }
+            Import-Module PSScriptAnalyzer
+
             $analyzerFindings = [System.Collections.Generic.List[object]]::new()
-            foreach ($file in $ps1Files) {
-              Write-Output "Analyzing: $($file.FullName)"
+            foreach ($candidate in @($candidateSummary.Selected)) {
+              $displayPath = ConvertTo-PSScriptAnalyzerCandidateSingleLineText -Value $candidate.RepositoryRelativePath
+              Write-Output ("Analyzing: {0}" -f $displayPath)
               $analyzerFindings.AddRange(@(
-                Invoke-ScriptAnalyzer -Path $file.FullName -Settings $settingsPath
+                Invoke-ScriptAnalyzer -Path $candidate.EscapedAnalyzerPath -Settings $settingsPath
               ))
             }
 

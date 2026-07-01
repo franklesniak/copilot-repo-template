@@ -77,6 +77,7 @@ PYTEST_MARKER_EXPRESSION = "not upstream_template_only"
 DOWNSTREAM_PYTEST_CANDIDATE_PATTERNS = ("tests/test_*.py",)
 UPSTREAM_ONLY_PYTEST_FILE_PATTERNS = ("tests/test_template_manifest.py",)
 CHANGED_FILES_EXIT_CODE = 2
+UNSAFE_CANDIDATE_EXIT_CODE = 3
 PROBE_AVAILABLE = "available"
 PROBE_UNAVAILABLE = "unavailable"
 PROBE_FAILED = "failed"
@@ -2012,6 +2013,7 @@ def run_first_adoption_checks(
         return CHANGED_FILES_EXIT_CODE if status_changed and run_mode == CHECK_MODE else 0
 
     failures: list[str] = []
+    unsafe_candidate_failure = False
     total_commands = len(plan.commands)
     cold_start_guidance_printed = False
     for index, planned_command in enumerate(plan.commands, start=1):
@@ -2034,6 +2036,11 @@ def run_first_adoption_checks(
             stdout=stdout,
         )
         if return_code != 0:
+            if (
+                planned_command.group_label == QUALITY_REPORT_GROUP
+                and return_code == UNSAFE_CANDIDATE_EXIT_CODE
+            ):
+                unsafe_candidate_failure = True
             failures.append(
                 f"{planned_command.group_label}: "
                 f"{format_command(planned_command.command)} exited with {return_code}"
@@ -2051,6 +2058,8 @@ def run_first_adoption_checks(
         for failure in failures:
             print(f"  - {failure}", file=stdout, flush=True)
         print_total_elapsed_time(run_started_at, time_source(), stdout=stdout)
+        if unsafe_candidate_failure:
+            return UNSAFE_CANDIDATE_EXIT_CODE
         return 1
 
     if status_changed and run_mode == CHECK_MODE:
