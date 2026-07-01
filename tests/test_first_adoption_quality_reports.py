@@ -57,6 +57,120 @@ def _init_repo(repo_root: Path) -> None:
     _run_git(repo_root, "config", "user.name", "Test User")
 
 
+def _write_powershell_report_prerequisites(repo_root: Path) -> None:
+    """Write the helper files required before the report invokes the runner."""
+    _write_text(repo_root, ".github/linting/PSScriptAnalyzerSettings.psd1", "@{}\n")
+    _write_text(
+        repo_root,
+        "src/tools/Resolve-PSScriptAnalyzerCandidate.ps1",
+        "function Resolve-PSScriptAnalyzerCandidate {}\n",
+    )
+    _write_text(
+        repo_root,
+        "src/tools/Resolve-PSScriptAnalyzerGate.ps1",
+        "function Resolve-PSScriptAnalyzerGate {}\n",
+    )
+
+
+def _candidate_summary(
+    repo_root: Path,
+    *,
+    selected: Sequence[Mapping[str, object]] | None = None,
+    unsafe: Sequence[Mapping[str, object]] | None = None,
+) -> dict[str, object]:
+    """Build a composite candidate summary payload."""
+    selected_records = list(selected or [])
+    unsafe_records = list(unsafe or [])
+    if selected is None and not unsafe_records:
+        selected_records = [
+            {
+                "CandidateFullName": str(repo_root / "src" / "sample.ps1"),
+                "RepositoryRelativePath": "src/sample.ps1",
+                "EscapedAnalyzerPath": str(repo_root / "src" / "sample.ps1"),
+                "OutcomeCategory": "selected",
+                "ReasonCode": "Selected",
+            }
+        ]
+    return {
+        "Selected": selected_records,
+        "PolicyExcluded": [],
+        "Unsafe": unsafe_records,
+        "SummaryCounts": {
+            "Selected": len(selected_records),
+            "PolicyExcluded": 0,
+            "Unsafe": len(unsafe_records),
+        },
+    }
+
+
+def _gate_payload(
+    *,
+    findings: Sequence[Mapping[str, object]] = (),
+    should_fail: bool = False,
+    recommended_mode: str = "strict",
+) -> dict[str, object]:
+    """Build a valid structured Gate payload."""
+    return {
+        "Status": "ok",
+        "Mode": "first-adoption",
+        "ShouldFail": should_fail,
+        "RecommendedMode": recommended_mode,
+        "SummaryLines": [
+            "PSScriptAnalyzer gate mode: first-adoption.",
+            "Result: pass.",
+        ],
+        "IssueReadyMarkdown": [
+            "## PSScriptAnalyzer First-Adoption Debt Cleanup",
+            "",
+        ],
+        "Findings": list(findings),
+    }
+
+
+def _write_retained_powershell_ci_surfaces(repo_root: Path) -> tuple[str, str]:
+    """Write retained GitHub Actions and Azure Pipelines analyzer surfaces."""
+    github_workflow = (
+        "name: PowerShell CI\n"
+        "on:\n"
+        "  push:\n"
+        "permissions:\n"
+        "  contents: read\n"
+        "jobs:\n"
+        "  powershell-lint:\n"
+        "    runs-on: ubuntu-latest\n"
+        "    env:\n"
+        "      PSSCRIPTANALYZER_GATE_MODE: strict\n"
+        "    steps:\n"
+        "      - name: Run PSScriptAnalyzer\n"
+        "        shell: pwsh\n"
+        "        run: |\n"
+        "          $gateResult = Resolve-PSScriptAnalyzerGate `\n"
+        "            -Mode $env:PSSCRIPTANALYZER_GATE_MODE `\n"
+        "            -AnalyzerFinding @()\n"
+    )
+    azure_pipeline = (
+        "parameters:\n"
+        "  - name: gateMode\n"
+        "    type: string\n"
+        '    default: "strict"\n'
+        "jobs:\n"
+        "  - job: lint\n"
+        "    variables:\n"
+        '      PSSCRIPTANALYZER_GATE_MODE: "${{ parameters.gateMode }}"\n'
+        "    steps:\n"
+        "      - task: PowerShell@2\n"
+        "        inputs:\n"
+        '          targetType: "inline"\n'
+        "          script: |\n"
+        "            $gateResult = Resolve-PSScriptAnalyzerGate `\n"
+        "              -Mode $env:PSSCRIPTANALYZER_GATE_MODE `\n"
+        "              -AnalyzerFinding @()\n"
+    )
+    _write_text(repo_root, ".github/workflows/powershell-ci.yml", github_workflow)
+    _write_text(repo_root, ".azuredevops/pipelines/powershell-ci.yml", azure_pipeline)
+    return github_workflow, azure_pipeline
+
+
 def test_quality_file_discovery_supports_tracked_only_and_ignored_controls(
     tmp_path: Path,
 ) -> None:
@@ -402,17 +516,7 @@ def test_powershell_report_parses_injected_runner_output(
     """The PowerShell report sends stdin candidates and parses composite JSON."""
     _init_repo(tmp_path)
     _write_text(tmp_path, "src/café.ps1", "Write-Output 'sample'\n")
-    _write_text(tmp_path, ".github/linting/PSScriptAnalyzerSettings.psd1", "@{}\n")
-    _write_text(
-        tmp_path,
-        "src/tools/Resolve-PSScriptAnalyzerCandidate.ps1",
-        "function Resolve-PSScriptAnalyzerCandidate {}\n",
-    )
-    _write_text(
-        tmp_path,
-        "src/tools/Resolve-PSScriptAnalyzerGate.ps1",
-        "function Resolve-PSScriptAnalyzerGate {}\n",
-    )
+    _write_powershell_report_prerequisites(tmp_path)
     monkeypatch.setattr(quality_reports, "powershell_executable", lambda: "pwsh")
 
     captured_input = ""
@@ -429,17 +533,7 @@ def test_powershell_report_parses_injected_runner_output(
         captured_input = input or ""
         payload = json.dumps(
             {
-                "Gate": {
-                    "Status": "ok",
-                    "SummaryLines": [
-                        "PSScriptAnalyzer gate mode: first-adoption.",
-                        "Result: pass.",
-                    ],
-                    "IssueReadyMarkdown": [
-                        "## PSScriptAnalyzer First-Adoption Debt Cleanup",
-                        "",
-                    ],
-                },
+                "Gate": _gate_payload(),
                 "Candidates": {
                     "Selected": [
                         {
@@ -476,9 +570,530 @@ def test_powershell_report_parses_injected_runner_output(
     assert report.candidate_summary_lines == (
         "PSScriptAnalyzer candidates: 1 selected; 0 policy-excluded; 0 unsafe.",
     )
+    assert report.analyzer_debt_records == ()
+    assert report.opt_in_guidance_lines == ()
     assert "café" in captured_input
     assert "\\u00e9" not in captured_input
     assert {"RepositoryRelativePath": "src/café.ps1"} in json.loads(captured_input)
+
+
+def test_powershell_report_emits_debt_records_and_opt_in_guidance(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Warning-only first adoption findings produce debt records and manual guidance."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, "src/sample.ps1", "Write-Output 'sample'\n")
+    _write_powershell_report_prerequisites(tmp_path)
+    github_workflow, azure_pipeline = _write_retained_powershell_ci_surfaces(tmp_path)
+    monkeypatch.setattr(quality_reports, "powershell_executable", lambda: "pwsh")
+
+    finding = {
+        "Severity": "Warning",
+        "RuleName": "PSAvoidUsingWriteHost",
+        "Message": "Avoid Write-Host.",
+        "ScriptPath": "src/sample.ps1",
+        "Line": 7,
+        "Column": 5,
+        "TrackedDebt": True,
+    }
+
+    def fake_runner(
+        command: Sequence[str],
+        repo_root: Path,
+        *,
+        env: Mapping[str, str] | None = None,
+        input: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        del env, input
+        payload = json.dumps(
+            {
+                "Gate": _gate_payload(
+                    findings=[finding],
+                    recommended_mode="first-adoption",
+                ),
+                "Candidates": _candidate_summary(repo_root),
+            }
+        )
+        return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
+
+    report = quality_reports.build_powershell_report(tmp_path, runner=fake_runner)
+    stdout = io.StringIO()
+    quality_reports.print_powershell_report(report, stdout=stdout)
+
+    output = stdout.getvalue()
+    assert report.analyzer_debt_records == (
+        quality_reports.PowerShellAnalyzerDebtRecord(
+            rule_name="PSAvoidUsingWriteHost",
+            severity="Warning",
+            normalized_path="src/sample.ps1",
+            line=7,
+            column=5,
+            message="Avoid Write-Host.",
+        ),
+    )
+    assert "Analyzer debt records for manual tracking" in output
+    assert "Owner: <owner>; expected removal date: <YYYY-MM-DD>" in output
+    assert "src/sample.ps1:7:5 [Warning] PSAvoidUsingWriteHost" in output
+    assert "Non-mutating first-adoption opt-in guidance" in output
+    assert ".github/workflows/powershell-ci.yml `jobs.powershell-lint.env" in output
+    assert ".azuredevops/pipelines/powershell-ci.yml `parameters[gateMode].default`" in output
+    assert "manually set .github/workflows/powershell-ci.yml" in output
+    assert "manually set .azuredevops/pipelines/powershell-ci.yml" in output
+    assert "runtime overrides" in output
+    assert "queued-run parameters" in output
+    assert "Resolve-PSScriptAnalyzerGate -Mode $env:PSSCRIPTANALYZER_GATE_MODE" in output
+    assert (tmp_path / ".github/workflows/powershell-ci.yml").read_text(
+        encoding="utf-8"
+    ) == github_workflow
+    assert (tmp_path / ".azuredevops/pipelines/powershell-ci.yml").read_text(
+        encoding="utf-8"
+    ) == azure_pipeline
+
+
+def test_powershell_report_keeps_debt_records_separate_from_blocking_errors(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Error findings remain blocking while tracked Warning debt is still recorded."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, "src/sample.ps1", "Write-Output 'sample'\n")
+    _write_powershell_report_prerequisites(tmp_path)
+    _write_retained_powershell_ci_surfaces(tmp_path)
+    monkeypatch.setattr(quality_reports, "powershell_executable", lambda: "pwsh")
+
+    findings = [
+        {
+            "Severity": "Error",
+            "RuleName": "PSParserError",
+            "Message": "A parser error remains blocking.",
+            "ScriptPath": "src/sample.ps1",
+            "Line": 1,
+            "Column": 1,
+            "TrackedDebt": False,
+        },
+        {
+            "Severity": "Warning",
+            "RuleName": "PSAvoidUsingWriteHost",
+            "Message": "Avoid Write-Host.",
+            "ScriptPath": "src/sample.ps1",
+            "Line": 8,
+            "Column": 3,
+            "TrackedDebt": True,
+        },
+    ]
+
+    def fake_runner(
+        command: Sequence[str],
+        repo_root: Path,
+        *,
+        env: Mapping[str, str] | None = None,
+        input: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        del env, input
+        payload = json.dumps(
+            {
+                "Gate": _gate_payload(
+                    findings=findings,
+                    should_fail=True,
+                    recommended_mode="strict",
+                ),
+                "Candidates": _candidate_summary(repo_root),
+            }
+        )
+        return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
+
+    report = quality_reports.build_powershell_report(tmp_path, runner=fake_runner)
+
+    assert [record.rule_name for record in report.analyzer_debt_records] == [
+        "PSAvoidUsingWriteHost"
+    ]
+    assert "PSParserError" not in "\n".join(
+        quality_reports.format_analyzer_debt_record(record)
+        for record in report.analyzer_debt_records
+    )
+    assert any("blocking findings are present" in line for line in report.opt_in_guidance_lines)
+
+
+def test_powershell_report_unavailable_gate_preserves_candidate_summary(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Unavailable analyzer state emits manual-review output without debt records."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, "src/sample.ps1", "Write-Output 'sample'\n")
+    _write_powershell_report_prerequisites(tmp_path)
+    monkeypatch.setattr(quality_reports, "powershell_executable", lambda: "pwsh")
+
+    def fake_runner(
+        command: Sequence[str],
+        repo_root: Path,
+        *,
+        env: Mapping[str, str] | None = None,
+        input: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        del env, input
+        payload = json.dumps(
+            {
+                "Gate": {
+                    "Status": "unavailable",
+                    "Message": "PSScriptAnalyzer report unavailable.",
+                    "SummaryLines": [],
+                    "IssueReadyMarkdown": [],
+                },
+                "Candidates": _candidate_summary(repo_root),
+            }
+        )
+        return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
+
+    report = quality_reports.build_powershell_report(tmp_path, runner=fake_runner)
+
+    assert report.available is False
+    assert report.candidate_summary_lines == (
+        "PSScriptAnalyzer candidates: 1 selected; 0 policy-excluded; 0 unsafe.",
+    )
+    assert report.analyzer_debt_records == ()
+    assert report.opt_in_guidance_lines == ()
+
+
+def test_powershell_report_malformed_gate_status_is_manual_review(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Missing Gate.Status is non-fatal and emits no debt or opt-in instructions."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, "src/sample.ps1", "Write-Output 'sample'\n")
+    _write_powershell_report_prerequisites(tmp_path)
+    monkeypatch.setattr(quality_reports, "powershell_executable", lambda: "pwsh")
+
+    def fake_runner(
+        command: Sequence[str],
+        repo_root: Path,
+        *,
+        env: Mapping[str, str] | None = None,
+        input: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        del env, input
+        payload = json.dumps(
+            {
+                "Gate": {
+                    "SummaryLines": ["PSScriptAnalyzer gate mode: first-adoption."],
+                    "IssueReadyMarkdown": [],
+                    "Findings": [],
+                },
+                "Candidates": _candidate_summary(repo_root),
+            }
+        )
+        return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
+
+    report = quality_reports.build_powershell_report(tmp_path, runner=fake_runner)
+
+    assert report.available is False
+    assert "Gate.Status" in report.message
+    assert "manual review" in "\n".join(report.summary_lines).lower()
+    assert report.analyzer_debt_records == ()
+    assert report.opt_in_guidance_lines == ()
+
+
+def test_powershell_report_malformed_gate_findings_are_manual_review(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Malformed structured findings avoid debt output instead of scraping text."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, "src/sample.ps1", "Write-Output 'sample'\n")
+    _write_powershell_report_prerequisites(tmp_path)
+    monkeypatch.setattr(quality_reports, "powershell_executable", lambda: "pwsh")
+
+    def fake_runner(
+        command: Sequence[str],
+        repo_root: Path,
+        *,
+        env: Mapping[str, str] | None = None,
+        input: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        del env, input
+        payload = json.dumps(
+            {
+                "Gate": _gate_payload(
+                    findings=[
+                        {
+                            "Severity": "Warning",
+                            "RuleName": "PSRule",
+                            "Message": "Malformed tracked flag.",
+                            "ScriptPath": "src/sample.ps1",
+                            "Line": 1,
+                            "Column": 1,
+                            "TrackedDebt": "true",
+                        }
+                    ],
+                    recommended_mode="first-adoption",
+                ),
+                "Candidates": _candidate_summary(repo_root),
+            }
+        )
+        return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
+
+    report = quality_reports.build_powershell_report(tmp_path, runner=fake_runner)
+
+    assert "required Gate fields" in report.message
+    assert report.analyzer_debt_records == ()
+    assert report.opt_in_guidance_lines == ()
+
+
+def test_powershell_report_unsafe_candidates_take_precedence_over_unavailable_gate(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Unsafe candidates keep their reserved exit precedence with valid JSON."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, "src/sample.ps1", "Write-Output 'sample'\n")
+    _write_powershell_report_prerequisites(tmp_path)
+    monkeypatch.setattr(quality_reports, "powershell_executable", lambda: "pwsh")
+
+    unsafe_candidate = {
+        "CandidateFullName": str(tmp_path / "src" / "sample.ps1"),
+        "RepositoryRelativePath": "src/sample.ps1",
+        "OutcomeCategory": "unsafe",
+        "ReasonCode": "TargetOutsideRepository",
+    }
+
+    def fake_runner(
+        command: Sequence[str],
+        repo_root: Path,
+        *,
+        env: Mapping[str, str] | None = None,
+        input: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        del env, input
+        payload = json.dumps(
+            {
+                "Gate": {
+                    "Status": "unavailable",
+                    "Message": "Analyzer was not run because unsafe candidates were found.",
+                },
+                "Candidates": _candidate_summary(
+                    repo_root,
+                    selected=[],
+                    unsafe=[unsafe_candidate],
+                ),
+            }
+        )
+        return subprocess.CompletedProcess(command, 0, stdout=payload, stderr="")
+
+    report = quality_reports.build_powershell_report(tmp_path, runner=fake_runner)
+    stdout = io.StringIO()
+    monkeypatch.setattr(quality_reports, "build_powershell_report", lambda *args, **kwargs: report)
+    args = quality_reports.parse_args(["--repo-root", str(tmp_path), "powershell"])
+
+    result = quality_reports.run_report(args, stdout=stdout)
+
+    assert result == quality_reports.UNSAFE_CANDIDATE_EXIT_CODE
+    assert report.unsafe_candidate_count == 1
+    assert "Unsafe candidate: src/sample.ps1" in stdout.getvalue()
+
+
+def test_powershell_report_non_json_stdout_is_fatal(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Non-JSON runner stdout keeps the existing fatal report error."""
+    _init_repo(tmp_path)
+    _write_text(tmp_path, "src/sample.ps1", "Write-Output 'sample'\n")
+    _write_powershell_report_prerequisites(tmp_path)
+    monkeypatch.setattr(quality_reports, "powershell_executable", lambda: "pwsh")
+
+    def fake_runner(
+        command: Sequence[str],
+        repo_root: Path,
+        *,
+        env: Mapping[str, str] | None = None,
+        input: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        del env, input, repo_root
+        return subprocess.CompletedProcess(command, 0, stdout="not json", stderr="")
+
+    with pytest.raises(quality_reports.FirstAdoptionQualityError, match="non-JSON"):
+        quality_reports.build_powershell_report(tmp_path, runner=fake_runner)
+
+
+def test_gate_mode_static_value_reports_yaml_boolean_scalars_as_manual_review() -> None:
+    """PyYAML 1.1 truthy scalars are not treated as gate-mode strings."""
+    for scalar in ("on", "off", "yes", "no", "true", "false", "True", "False"):
+        loaded = quality_reports.yaml.safe_load(f"value: {scalar}\n")["value"]
+
+        normalized = quality_reports.normalize_gate_mode_static_value(loaded)
+
+        assert isinstance(loaded, bool)
+        assert normalized.manual_review is True
+        assert normalized.recognized_mode is None
+        assert "YAML boolean" in normalized.display_value
+
+
+def test_github_actions_gate_mode_detection_covers_env_specificity() -> None:
+    """Workflow, job, and step env values are detected with specificity labels."""
+    document = quality_reports.yaml.safe_load(
+        (
+            "env:\n"
+            "  PSSCRIPTANALYZER_GATE_MODE: strict\n"
+            "jobs:\n"
+            "  powershell-lint:\n"
+            "    env:\n"
+            "      PSSCRIPTANALYZER_GATE_MODE: first-adoption\n"
+            "    steps:\n"
+            "      - name: Run PSScriptAnalyzer\n"
+            "        env:\n"
+            "          PSSCRIPTANALYZER_GATE_MODE: on\n"
+            "        run: |\n"
+            "          Resolve-PSScriptAnalyzerGate `\n"
+            "            -Mode $env:PSSCRIPTANALYZER_GATE_MODE\n"
+        )
+    )
+
+    settings, notes, retained = quality_reports.github_actions_gate_mode_settings(
+        document,
+        path=".github/workflows/powershell-ci.yml",
+    )
+
+    assert notes == ()
+    assert retained is True
+    assert [setting.specificity for setting in settings] == [
+        "workflow env",
+        "job env",
+        "step env",
+    ]
+    assert settings[2].value.manual_review is True
+
+
+def test_github_actions_gate_mode_settings_preserves_notes_when_jobs_missing() -> None:
+    """A workflow-level env note survives the missing/non-mapping ``jobs`` early return."""
+    document = quality_reports.yaml.safe_load(
+        (
+            "env: malformed-workflow-env\n"
+            "jobs: |\n"
+            "  Resolve-PSScriptAnalyzerGate `\n"
+            "    -Mode $env:PSSCRIPTANALYZER_GATE_MODE\n"
+        )
+    )
+
+    settings, notes, retained = quality_reports.github_actions_gate_mode_settings(
+        document,
+        path=".github/workflows/powershell-ci.yml",
+    )
+
+    assert retained is True
+    assert settings == ()
+    assert notes == (
+        "GitHub Actions: .github/workflows/powershell-ci.yml `env` env is not a mapping; "
+        "manual review is required.",
+        "GitHub Actions: jobs is missing or not a mapping; manual review is required.",
+    )
+
+
+def test_azure_pipelines_gate_mode_detection_resolves_mapping_variables() -> None:
+    """Azure mapping variables resolve the parameter expression to its default."""
+    document = quality_reports.yaml.safe_load(
+        (
+            "parameters:\n"
+            "  - name: gateMode\n"
+            "    type: string\n"
+            '    default: "strict"\n'
+            "jobs:\n"
+            "  - job: lint\n"
+            "    variables:\n"
+            '      PSSCRIPTANALYZER_GATE_MODE: "${{ parameters.gateMode }}"\n'
+            "    steps:\n"
+            "      - task: PowerShell@2\n"
+            "        inputs:\n"
+            "          script: |\n"
+            "            Resolve-PSScriptAnalyzerGate `\n"
+            "              -Mode $env:PSSCRIPTANALYZER_GATE_MODE\n"
+        )
+    )
+
+    parameter, variables, notes, retained = quality_reports.azure_pipelines_gate_mode_settings(
+        document,
+        path=".azuredevops/pipelines/powershell-ci.yml",
+    )
+
+    assert notes == ()
+    assert retained is True
+    assert parameter is not None
+    assert parameter.value.recognized_mode == "strict"
+    assert variables[0].value.display_value == "${{ parameters.gateMode }}"
+    assert variables[0].effective_value is not None
+    assert variables[0].effective_value.recognized_mode == "strict"
+
+
+def test_azure_pipelines_gate_mode_detection_supports_sequence_variables() -> None:
+    """Azure sequence variables are detected for the gate-mode variable."""
+    document = quality_reports.yaml.safe_load(
+        (
+            "parameters:\n"
+            "  gateMode:\n"
+            '    default: "first-adoption"\n'
+            "jobs:\n"
+            "  lint:\n"
+            "    variables:\n"
+            "      - name: PSSCRIPTANALYZER_GATE_MODE\n"
+            '        value: "${{ parameters.gateMode }}"\n'
+            "    steps:\n"
+            "      - powershell: |\n"
+            "          Resolve-PSScriptAnalyzerGate `\n"
+            "            -Mode $env:PSSCRIPTANALYZER_GATE_MODE\n"
+        )
+    )
+
+    parameter, variables, notes, retained = quality_reports.azure_pipelines_gate_mode_settings(
+        document,
+        path=".azuredevops/pipelines/powershell-ci.yml",
+    )
+
+    assert notes == ()
+    assert retained is True
+    assert parameter is not None
+    assert parameter.value.recognized_mode == "first-adoption"
+    assert variables[0].location == "jobs[lint].variables[PSSCRIPTANALYZER_GATE_MODE].value"
+    assert variables[0].effective_value is not None
+    assert variables[0].effective_value.recognized_mode == "first-adoption"
+
+
+def test_azure_parameter_default_flags_missing_default_in_sequence_form() -> None:
+    """A sequence-form gateMode parameter without a default requires manual review."""
+    document = quality_reports.yaml.safe_load(
+        ("parameters:\n" "  - name: gateMode\n" "    type: string\n")
+    )
+
+    setting, notes = quality_reports.azure_parameter_default_setting(
+        document,
+        path=".azuredevops/pipelines/powershell-ci.yml",
+    )
+
+    assert setting is None
+    assert notes == (
+        "Azure Pipelines: .azuredevops/pipelines/powershell-ci.yml "
+        "`parameters[gateMode].default` has no static default; the value must be supplied "
+        "when the pipeline runs, so manual review is required.",
+    )
+
+
+def test_azure_parameter_default_flags_missing_default_in_mapping_form() -> None:
+    """A mapping-form gateMode parameter without a default requires manual review."""
+    document = quality_reports.yaml.safe_load(
+        ("parameters:\n" "  gateMode:\n" "    type: string\n")
+    )
+
+    setting, notes = quality_reports.azure_parameter_default_setting(
+        document,
+        path=".azuredevops/pipelines/powershell-ci.yml",
+    )
+
+    assert setting is None
+    assert notes == (
+        "Azure Pipelines: .azuredevops/pipelines/powershell-ci.yml "
+        "`parameters.gateMode.default` has no static default; the value must be supplied "
+        "when the pipeline runs, so manual review is required.",
+    )
 
 
 def test_powershell_report_unsafe_candidates_use_reserved_exit_code(
@@ -495,6 +1110,8 @@ def test_powershell_report_unsafe_candidates_use_reserved_exit_code(
         unsafe_candidate_count=1,
         summary_lines=(),
         issue_ready_markdown=(),
+        analyzer_debt_records=(),
+        opt_in_guidance_lines=(),
     )
     monkeypatch.setattr(quality_reports, "build_powershell_report", lambda *args, **kwargs: report)
     stdout = io.StringIO()
@@ -558,6 +1175,49 @@ def test_load_marker_rejects_symlinked_marker(tmp_path: Path) -> None:
 
     with pytest.raises(quality_reports.FirstAdoptionQualityError, match="Expected a regular file"):
         quality_reports.load_marker_template_sync(tmp_path)
+
+
+def test_load_ci_yaml_mapping_flags_broken_symlink(tmp_path: Path) -> None:
+    """A broken symlink at a CI YAML path is flagged for manual review, not ignored."""
+    relative_path = ".github/workflows/example.yml"
+    ci_path = tmp_path / relative_path
+    ci_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        ci_path.symlink_to(tmp_path / "nonexistent-target.yml")
+    except (OSError, NotImplementedError):
+        pytest.skip("Filesystem does not support symlink creation")
+
+    document, notes = quality_reports.load_ci_yaml_mapping(
+        tmp_path,
+        relative_path,
+        platform_name="GitHub Actions",
+    )
+
+    assert document is None
+    assert notes == (
+        "GitHub Actions: .github/workflows/example.yml is not a regular YAML file; "
+        "manual review is required.",
+    )
+
+
+def test_load_ci_yaml_mapping_flags_non_utf8_file(tmp_path: Path) -> None:
+    """A present-but-non-UTF-8 CI YAML file degrades to a manual-review note, not a crash."""
+    relative_path = ".github/workflows/example.yml"
+    ci_path = tmp_path / relative_path
+    ci_path.parent.mkdir(parents=True, exist_ok=True)
+    ci_path.write_bytes(b"\xff\xfe not valid utf-8")
+
+    document, notes = quality_reports.load_ci_yaml_mapping(
+        tmp_path,
+        relative_path,
+        platform_name="GitHub Actions",
+    )
+
+    assert document is None
+    assert notes == (
+        "GitHub Actions: .github/workflows/example.yml is not valid UTF-8; "
+        "manual review is required.",
+    )
 
 
 def test_path_reference_cli_can_fail_on_findings(tmp_path: Path) -> None:

@@ -88,9 +88,15 @@ IGNORED_SCAN_DIRECTORIES = frozenset(
     (".cache", ".git", ".pytest_cache", ".ruff_cache", "node_modules")
 )
 MARKDOWN_PACKAGE_SCRIPT = "lint:md"
+GITHUB_ACTIONS_POWERSHELL_CI = ".github/workflows/powershell-ci.yml"
+AZURE_PIPELINES_POWERSHELL_CI = ".azuredevops/pipelines/powershell-ci.yml"
+PSSCRIPTANALYZER_GATE_MODE_VARIABLE = "PSSCRIPTANALYZER_GATE_MODE"
+PSSCRIPTANALYZER_GATE_MODE_PARAMETER = "gateMode"
+PSSCRIPTANALYZER_GATE_MODE_PARAMETER_EXPRESSION = "${{ parameters.gateMode }}"
 PSSCRIPTANALYZER_CANDIDATE_HELPER = "src/tools/Resolve-PSScriptAnalyzerCandidate.ps1"
 PSSCRIPTANALYZER_GATE_HELPER = "src/tools/Resolve-PSScriptAnalyzerGate.ps1"
 PSSCRIPTANALYZER_SETTINGS = ".github/linting/PSScriptAnalyzerSettings.psd1"
+PSSCRIPTANALYZER_RECOGNIZED_GATE_MODES = frozenset(("strict", "first-adoption"))
 UNSAFE_CANDIDATE_EXIT_CODE = 3
 LINE_ENDING_RISK_STATES = frozenset(("cr", "crlf", "mixed"))
 AZURE_DEVOPS_MODULES = frozenset(
@@ -256,6 +262,40 @@ class MarkdownlintReport:
 
 
 @dataclass(frozen=True)
+class GateModeStaticValue:
+    """One normalized static PSScriptAnalyzer gate-mode value."""
+
+    raw_value: object
+    display_value: str
+    recognized_mode: str | None
+    note: str
+    manual_review: bool
+
+
+@dataclass(frozen=True)
+class GateModeSetting:
+    """One committed static gate-mode setting found in CI YAML."""
+
+    path: str
+    location: str
+    specificity: str
+    value: GateModeStaticValue
+    effective_value: GateModeStaticValue | None = None
+
+
+@dataclass(frozen=True)
+class PowerShellAnalyzerDebtRecord:
+    """One structured PSScriptAnalyzer first-adoption debt record."""
+
+    rule_name: str
+    severity: str
+    normalized_path: str
+    line: int | None
+    column: int | None
+    message: str
+
+
+@dataclass(frozen=True)
 class PowerShellAnalyzerReport:
     """PowerShell analyzer report result."""
 
@@ -265,6 +305,8 @@ class PowerShellAnalyzerReport:
     unsafe_candidate_count: int
     summary_lines: tuple[str, ...]
     issue_ready_markdown: tuple[str, ...]
+    analyzer_debt_records: tuple[PowerShellAnalyzerDebtRecord, ...]
+    opt_in_guidance_lines: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -1342,7 +1384,813 @@ def _string_sequence(value: object) -> tuple[str, ...] | None:
         return tuple(value.splitlines())
     if not isinstance(value, list):
         return None
+    if not all(isinstance(item, str) for item in value):
+        return None
     return tuple(str(item) for item in value)
+
+
+def manual_review_powershell_report(
+    *,
+    message: str,
+    candidate_summary_lines: Sequence[str],
+    unsafe_candidate_count: int,
+    summary_lines: Sequence[str],
+    available: bool = False,
+) -> PowerShellAnalyzerReport:
+    """Return a PowerShell report that requires manual analyzer review."""
+    return PowerShellAnalyzerReport(
+        available=available,
+        message=message,
+        candidate_summary_lines=tuple(candidate_summary_lines),
+        unsafe_candidate_count=unsafe_candidate_count,
+        summary_lines=tuple(summary_lines),
+        issue_ready_markdown=(),
+        analyzer_debt_records=(),
+        opt_in_guidance_lines=(),
+    )
+
+
+def normalize_gate_mode_static_value(value: object) -> GateModeStaticValue:
+    """Normalize a committed static PSScriptAnalyzer gate-mode value."""
+    if value is None:
+        return GateModeStaticValue(
+            raw_value=value,
+            display_value="unset",
+            recognized_mode=None,
+            note="missing or empty values resolve to strict at runtime",
+            manual_review=False,
+        )
+    if isinstance(value, bool):
+        bool_text = "true" if value else "false"
+        return GateModeStaticValue(
+            raw_value=value,
+            display_value=f"manual-review YAML boolean {bool_text}",
+            recognized_mode=None,
+            note=(
+                "YAML parsed this value as a boolean; quote the intended mode "
+                "string before treating it as a gate mode"
+            ),
+            manual_review=True,
+        )
+    if not isinstance(value, str):
+        return GateModeStaticValue(
+            raw_value=value,
+            display_value=f"manual-review {type(value).__name__}",
+            recognized_mode=None,
+            note="non-string values require manual review before gate-mode advice",
+            manual_review=True,
+        )
+
+    trimmed_value = value.strip()
+    if not trimmed_value:
+        return GateModeStaticValue(
+            raw_value=value,
+            display_value="unset",
+            recognized_mode=None,
+            note="missing or empty values resolve to strict at runtime",
+            manual_review=False,
+        )
+
+    normalized_mode = trimmed_value.lower()
+    if normalized_mode in PSSCRIPTANALYZER_RECOGNIZED_GATE_MODES:
+        return GateModeStaticValue(
+            raw_value=value,
+            display_value=trimmed_value,
+            recognized_mode=normalized_mode,
+            note="recognized static gate mode",
+            manual_review=False,
+        )
+
+    return GateModeStaticValue(
+        raw_value=value,
+        display_value=trimmed_value,
+        recognized_mode=None,
+        note="unrecognized strings resolve to strict at runtime",
+        manual_review=False,
+    )
+
+
+def format_gate_mode_value(value: GateModeStaticValue) -> str:
+    """Return a concise human-facing static gate-mode value description."""
+    return f"`{single_line_text(value.display_value)}` ({value.note})"
+
+
+def load_ci_yaml_mapping(
+    repo_root: Path,
+    relative_path: str,
+    *,
+    platform_name: str,
+) -> tuple[Mapping[str, object] | None, tuple[str, ...]]:
+    """Safely load a CI YAML surface as a mapping for non-mutating guidance."""
+    path = repo_root / relative_path
+    # Mirror load_marker_template_sync(): a broken symlink has ``exists()`` False
+    # (it follows the link to a missing target), so guard on ``is_symlink()`` too.
+    # Otherwise a symlink placed at the CI YAML path would be silently ignored
+    # instead of falling through to the not-a-regular-file manual-review note.
+    if not path.exists() and not path.is_symlink():
+        return None, ()
+    if not is_present_regular_file(path):
+        return None, (
+            f"{platform_name}: {relative_path} is not a regular YAML file; "
+            "manual review is required.",
+        )
+    try:
+        document = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
+    except yaml.YAMLError:
+        return None, (
+            f"{platform_name}: {relative_path} is not valid YAML; manual review is required.",
+        )
+    except UnicodeDecodeError:
+        return None, (
+            f"{platform_name}: {relative_path} is not valid UTF-8; manual review is required.",
+        )
+    except OSError as error:
+        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        return None, (
+            f"{platform_name}: unable to read {relative_path} ({error_summary}); "
+            "manual review is required.",
+        )
+
+    if not isinstance(document, dict):
+        return None, (
+            f"{platform_name}: {relative_path} must contain a YAML mapping; "
+            "manual review is required.",
+        )
+    return cast(Mapping[str, object], document), ()
+
+
+def yaml_contains_gate_mode_consumption(value: object) -> bool:
+    """Return whether parsed YAML preserves the analyzer gate-mode call shape."""
+    if isinstance(value, str):
+        return (
+            "Resolve-PSScriptAnalyzerGate" in value
+            and f"-Mode $env:{PSSCRIPTANALYZER_GATE_MODE_VARIABLE}" in value
+        )
+    if isinstance(value, dict):
+        return any(yaml_contains_gate_mode_consumption(item) for item in value.values())
+    if isinstance(value, list):
+        return any(yaml_contains_gate_mode_consumption(item) for item in value)
+    return False
+
+
+def gate_mode_setting_from_env(
+    env_data: object,
+    *,
+    path: str,
+    location: str,
+    specificity: str,
+) -> tuple[GateModeSetting | None, str | None]:
+    """Return a gate-mode setting from an ``env`` mapping, if present."""
+    if env_data is None:
+        return None, None
+    if not isinstance(env_data, dict):
+        return (
+            None,
+            f"{path} `{location}` env is not a mapping; manual review is required.",
+        )
+    env_mapping = cast(Mapping[object, object], env_data)
+    if PSSCRIPTANALYZER_GATE_MODE_VARIABLE not in env_mapping:
+        return None, None
+    return (
+        GateModeSetting(
+            path=path,
+            location=f"{location}.{PSSCRIPTANALYZER_GATE_MODE_VARIABLE}",
+            specificity=specificity,
+            value=normalize_gate_mode_static_value(
+                env_mapping[PSSCRIPTANALYZER_GATE_MODE_VARIABLE]
+            ),
+        ),
+        None,
+    )
+
+
+def github_step_location(job_id: str, step: Mapping[str, object], index: int) -> str:
+    """Return a stable display location for a GitHub Actions step."""
+    step_name = step.get("name")
+    if isinstance(step_name, str) and step_name.strip():
+        step_label = single_line_text(step_name.strip())
+    else:
+        step_label = str(index)
+    return f"jobs.{job_id}.steps[{step_label}].env"
+
+
+def github_actions_gate_mode_settings(
+    document: Mapping[str, object],
+    *,
+    path: str,
+) -> tuple[tuple[GateModeSetting, ...], tuple[str, ...], bool]:
+    """Return GitHub Actions static gate-mode settings and manual-review notes."""
+    notes: list[str] = []
+    retained = yaml_contains_gate_mode_consumption(document)
+    if not retained:
+        return (), (), False
+
+    settings: list[GateModeSetting] = []
+    workflow_setting, note = gate_mode_setting_from_env(
+        document.get("env"),
+        path=path,
+        location="env",
+        specificity="workflow env",
+    )
+    if note is not None:
+        notes.append(f"GitHub Actions: {note}")
+    if workflow_setting is not None:
+        settings.append(workflow_setting)
+
+    jobs = document.get("jobs")
+    if not isinstance(jobs, dict):
+        notes.append("GitHub Actions: jobs is missing or not a mapping; manual review is required.")
+        return tuple(settings), tuple(notes), retained
+
+    for raw_job_id, raw_job in cast(Mapping[object, object], jobs).items():
+        if not isinstance(raw_job_id, str) or not isinstance(raw_job, dict):
+            continue
+        job = cast(Mapping[str, object], raw_job)
+        if not yaml_contains_gate_mode_consumption(job):
+            continue
+        job_setting, note = gate_mode_setting_from_env(
+            job.get("env"),
+            path=path,
+            location=f"jobs.{raw_job_id}.env",
+            specificity="job env",
+        )
+        if note is not None:
+            notes.append(f"GitHub Actions: {note}")
+        if job_setting is not None:
+            settings.append(job_setting)
+
+        steps = job.get("steps")
+        if not isinstance(steps, list):
+            notes.append(
+                f"GitHub Actions: {path} `jobs.{raw_job_id}.steps` is not a list; "
+                "manual review is required."
+            )
+            continue
+        for index, raw_step in enumerate(steps, start=1):
+            if not isinstance(raw_step, dict):
+                continue
+            step = cast(Mapping[str, object], raw_step)
+            if not yaml_contains_gate_mode_consumption(step):
+                continue
+            step_setting, note = gate_mode_setting_from_env(
+                step.get("env"),
+                path=path,
+                location=github_step_location(raw_job_id, step, index),
+                specificity="step env",
+            )
+            if note is not None:
+                notes.append(f"GitHub Actions: {note}")
+            if step_setting is not None:
+                settings.append(step_setting)
+
+    return tuple(settings), tuple(notes), retained
+
+
+def azure_parameter_default_result(
+    *,
+    path: str,
+    location: str,
+    raw_default: object,
+) -> tuple[GateModeSetting | None, tuple[str, ...]]:
+    """Return a parameter-default setting, or a manual-review note when no default exists.
+
+    An Azure Pipelines ``parameters`` entry declared without a ``default`` (or with a
+    null default) must be supplied when the pipeline runs, so its value is unknown at
+    static-analysis time. Reporting it as ``unset`` (which for env vars means "resolves
+    to strict at runtime") would be misleading, so surface it for manual review instead.
+    """
+    if raw_default is None:
+        return None, (
+            f"Azure Pipelines: {path} `{location}` has no static default; the value must "
+            "be supplied when the pipeline runs, so manual review is required.",
+        )
+    return (
+        GateModeSetting(
+            path=path,
+            location=location,
+            specificity="pipeline parameter default",
+            value=normalize_gate_mode_static_value(raw_default),
+        ),
+        (),
+    )
+
+
+def azure_parameter_default_setting(
+    document: Mapping[str, object],
+    *,
+    path: str,
+) -> tuple[GateModeSetting | None, tuple[str, ...]]:
+    """Return the Azure Pipelines ``gateMode`` parameter default, if present."""
+    parameters = document.get("parameters")
+    if parameters is None:
+        return None, ()
+    if isinstance(parameters, list):
+        for raw_parameter in parameters:
+            if not isinstance(raw_parameter, dict):
+                continue
+            parameter = cast(Mapping[object, object], raw_parameter)
+            if parameter.get("name") != PSSCRIPTANALYZER_GATE_MODE_PARAMETER:
+                continue
+            return azure_parameter_default_result(
+                path=path,
+                location=f"parameters[{PSSCRIPTANALYZER_GATE_MODE_PARAMETER}].default",
+                raw_default=parameter.get("default"),
+            )
+        return None, ()
+    if isinstance(parameters, dict):
+        parameters_mapping = cast(Mapping[object, object], parameters)
+        if PSSCRIPTANALYZER_GATE_MODE_PARAMETER not in parameters_mapping:
+            return None, ()
+        parameter_value = parameters_mapping.get(PSSCRIPTANALYZER_GATE_MODE_PARAMETER)
+        if isinstance(parameter_value, dict):
+            raw_default = cast(Mapping[object, object], parameter_value).get("default")
+        else:
+            raw_default = parameter_value
+        return azure_parameter_default_result(
+            path=path,
+            location=f"parameters.{PSSCRIPTANALYZER_GATE_MODE_PARAMETER}.default",
+            raw_default=raw_default,
+        )
+    return None, (
+        f"Azure Pipelines: {path} `parameters` is not a mapping or sequence; "
+        "manual review is required.",
+    )
+
+
+def azure_variable_settings_from_variables(
+    variables: object,
+    *,
+    path: str,
+    location: str,
+) -> tuple[tuple[GateModeSetting, ...], tuple[str, ...]]:
+    """Return Azure variable settings from mapping or sequence variable syntax."""
+    location_prefix = f"{location}." if location else ""
+    if variables is None:
+        return (), ()
+    if isinstance(variables, dict):
+        variable_mapping = cast(Mapping[object, object], variables)
+        if PSSCRIPTANALYZER_GATE_MODE_VARIABLE not in variable_mapping:
+            return (), ()
+        return (
+            (
+                GateModeSetting(
+                    path=path,
+                    location=(f"{location_prefix}variables.{PSSCRIPTANALYZER_GATE_MODE_VARIABLE}"),
+                    specificity="pipeline variable",
+                    value=normalize_gate_mode_static_value(
+                        variable_mapping[PSSCRIPTANALYZER_GATE_MODE_VARIABLE]
+                    ),
+                ),
+            ),
+            (),
+        )
+    if isinstance(variables, list):
+        settings: list[GateModeSetting] = []
+        for raw_variable in variables:
+            if not isinstance(raw_variable, dict):
+                continue
+            variable = cast(Mapping[object, object], raw_variable)
+            if variable.get("name") != PSSCRIPTANALYZER_GATE_MODE_VARIABLE:
+                continue
+            settings.append(
+                GateModeSetting(
+                    path=path,
+                    location=(
+                        f"{location_prefix}variables"
+                        f"[{PSSCRIPTANALYZER_GATE_MODE_VARIABLE}].value"
+                    ),
+                    specificity="pipeline variable",
+                    value=normalize_gate_mode_static_value(variable.get("value")),
+                )
+            )
+        return tuple(settings), ()
+    return (), (
+        f"Azure Pipelines: {path} `{location_prefix}variables` is not a mapping or sequence; "
+        "manual review is required.",
+    )
+
+
+def iter_azure_mapping_children(
+    document: Mapping[str, object],
+    *,
+    location: str,
+) -> tuple[tuple[str, Mapping[str, object]], ...]:
+    """Return nested Azure Pipelines mappings that may contain variables."""
+    children: list[tuple[str, Mapping[str, object]]] = []
+    for collection_key in ("stages", "jobs"):
+        raw_collection = document.get(collection_key)
+        location_prefix = f"{location}." if location else ""
+        if isinstance(raw_collection, dict):
+            for raw_name, raw_child in cast(Mapping[object, object], raw_collection).items():
+                if isinstance(raw_name, str) and isinstance(raw_child, dict):
+                    children.append(
+                        (
+                            f"{location_prefix}{collection_key}[{raw_name}]",
+                            cast(Mapping[str, object], raw_child),
+                        )
+                    )
+        elif isinstance(raw_collection, list):
+            for index, raw_child in enumerate(raw_collection, start=1):
+                if not isinstance(raw_child, dict):
+                    continue
+                child = cast(Mapping[str, object], raw_child)
+                raw_name = child.get("stage") if collection_key == "stages" else child.get("job")
+                child_name = single_line_text(raw_name) if isinstance(raw_name, str) else str(index)
+                children.append((f"{location_prefix}{collection_key}[{child_name}]", child))
+    return tuple(children)
+
+
+def azure_variable_settings(
+    document: Mapping[str, object],
+    *,
+    path: str,
+) -> tuple[tuple[GateModeSetting, ...], tuple[str, ...]]:
+    """Return Azure Pipelines gate-mode variable settings across nested scopes."""
+    settings: list[GateModeSetting] = []
+    notes: list[str] = []
+    stack: list[tuple[str, Mapping[str, object]]] = [("", document)]
+    while stack:
+        location, current = stack.pop()
+        scope_settings, scope_notes = azure_variable_settings_from_variables(
+            current.get("variables"),
+            path=path,
+            location=location,
+        )
+        settings.extend(scope_settings)
+        notes.extend(scope_notes)
+        stack.extend(reversed(iter_azure_mapping_children(current, location=location)))
+    return tuple(settings), tuple(notes)
+
+
+def resolve_azure_variable_effective_value(
+    setting: GateModeSetting,
+    parameter_setting: GateModeSetting | None,
+) -> GateModeSetting:
+    """Resolve Azure variable expressions that point at the gate-mode parameter."""
+    if (
+        isinstance(setting.value.raw_value, str)
+        and setting.value.raw_value.strip() == PSSCRIPTANALYZER_GATE_MODE_PARAMETER_EXPRESSION
+        and parameter_setting is not None
+    ):
+        return GateModeSetting(
+            path=setting.path,
+            location=setting.location,
+            specificity=setting.specificity,
+            value=setting.value,
+            effective_value=parameter_setting.value,
+        )
+    return setting
+
+
+def azure_pipelines_gate_mode_settings(
+    document: Mapping[str, object],
+    *,
+    path: str,
+) -> tuple[GateModeSetting | None, tuple[GateModeSetting, ...], tuple[str, ...], bool]:
+    """Return Azure Pipelines static gate-mode settings and manual-review notes."""
+    retained = yaml_contains_gate_mode_consumption(document)
+    if not retained:
+        return None, (), (), False
+
+    parameter_setting, parameter_notes = azure_parameter_default_setting(document, path=path)
+    variable_settings, variable_notes = azure_variable_settings(document, path=path)
+    resolved_variable_settings = tuple(
+        resolve_azure_variable_effective_value(setting, parameter_setting)
+        for setting in variable_settings
+    )
+    return (
+        parameter_setting,
+        resolved_variable_settings,
+        (*parameter_notes, *variable_notes),
+        retained,
+    )
+
+
+def setting_effective_value(setting: GateModeSetting) -> GateModeStaticValue:
+    """Return the value that controls a setting after static indirection."""
+    return setting.effective_value or setting.value
+
+
+def format_static_setting_line(platform_name: str, setting: GateModeSetting) -> str:
+    """Format one static gate-mode setting for report output."""
+    line = (
+        f"{platform_name}: {setting.path} `{setting.location}` "
+        f"({setting.specificity}) is {format_gate_mode_value(setting.value)}."
+    )
+    if setting.effective_value is not None:
+        line = (
+            f"{line} Effective static default is "
+            f"{format_gate_mode_value(setting.effective_value)}."
+        )
+    return line
+
+
+def recommended_setting_location(
+    settings: Sequence[GateModeSetting],
+) -> GateModeSetting | None:
+    """Return the most specific setting whose value should be changed."""
+    if not settings:
+        return None
+    for setting in reversed(settings):
+        effective_value = setting_effective_value(setting)
+        if not effective_value.manual_review:
+            return setting
+    return settings[-1]
+
+
+def github_actions_opt_in_guidance(
+    repo_root: Path,
+    *,
+    recommend_first_adoption: bool,
+    has_blocking_findings: bool,
+) -> tuple[str, ...]:
+    """Build GitHub Actions first-adoption opt-in guidance lines."""
+    document, notes = load_ci_yaml_mapping(
+        repo_root,
+        GITHUB_ACTIONS_POWERSHELL_CI,
+        platform_name="GitHub Actions",
+    )
+    if document is None:
+        return notes
+
+    settings, setting_notes, retained = github_actions_gate_mode_settings(
+        document,
+        path=GITHUB_ACTIONS_POWERSHELL_CI,
+    )
+    if not retained:
+        return ()
+
+    lines = [*notes, *setting_notes]
+    lines.extend(format_static_setting_line("GitHub Actions", setting) for setting in settings)
+    if not settings:
+        lines.append(
+            "GitHub Actions: retained analyzer step found, but no static "
+            f"`{PSSCRIPTANALYZER_GATE_MODE_VARIABLE}` workflow/job/step env entry "
+            "was found; missing values resolve to strict at runtime."
+        )
+
+    if recommend_first_adoption:
+        target_setting = recommended_setting_location(settings)
+        if target_setting is None:
+            lines.append(
+                "GitHub Actions recommendation: manually add a retained static "
+                f"`{PSSCRIPTANALYZER_GATE_MODE_VARIABLE}: first-adoption` env value "
+                f"in {GITHUB_ACTIONS_POWERSHELL_CI} for the analyzer job in a later PR."
+            )
+        elif setting_effective_value(target_setting).manual_review:
+            lines.append(
+                "GitHub Actions recommendation: no opt-in edit is suggested until "
+                f"`{target_setting.location}` is reviewed because its committed value "
+                "was not a plain mode string."
+            )
+        elif setting_effective_value(target_setting).recognized_mode == "first-adoption":
+            lines.append(
+                "GitHub Actions recommendation: the retained static gate-mode value "
+                "already resolves to `first-adoption`; no opt-in edit is suggested."
+            )
+        else:
+            lines.append(
+                "GitHub Actions recommendation: manually set "
+                f"{GITHUB_ACTIONS_POWERSHELL_CI} `{target_setting.location}` to "
+                "`first-adoption` in a later implementation PR."
+            )
+    elif has_blocking_findings:
+        lines.append(
+            "GitHub Actions note: blocking Error or unknown-severity findings remain "
+            "blocking in first-adoption mode; resolve them before expecting CI to pass."
+        )
+
+    lines.append(
+        "GitHub Actions runtime overrides, including step-written environment changes, "
+        "can still change effective behavior; preserve "
+        "`Resolve-PSScriptAnalyzerGate -Mode $env:PSSCRIPTANALYZER_GATE_MODE`."
+    )
+    return tuple(lines)
+
+
+def azure_pipelines_opt_in_guidance(
+    repo_root: Path,
+    *,
+    recommend_first_adoption: bool,
+    has_blocking_findings: bool,
+) -> tuple[str, ...]:
+    """Build Azure Pipelines first-adoption opt-in guidance lines."""
+    document, notes = load_ci_yaml_mapping(
+        repo_root,
+        AZURE_PIPELINES_POWERSHELL_CI,
+        platform_name="Azure Pipelines",
+    )
+    if document is None:
+        return notes
+
+    parameter_setting, variable_settings, setting_notes, retained = (
+        azure_pipelines_gate_mode_settings(
+            document,
+            path=AZURE_PIPELINES_POWERSHELL_CI,
+        )
+    )
+    if not retained:
+        return ()
+
+    lines = [*notes, *setting_notes]
+    if parameter_setting is not None:
+        lines.append(format_static_setting_line("Azure Pipelines", parameter_setting))
+    else:
+        lines.append(
+            "Azure Pipelines: retained analyzer step found, but no static "
+            "`gateMode` parameter default was found; manual review is required."
+        )
+
+    if variable_settings:
+        lines.extend(
+            format_static_setting_line("Azure Pipelines", setting) for setting in variable_settings
+        )
+    else:
+        lines.append(
+            "Azure Pipelines: retained analyzer step found, but no static "
+            f"`{PSSCRIPTANALYZER_GATE_MODE_VARIABLE}` variables entry was found; "
+            "manual review is required."
+        )
+
+    recommendation_target = parameter_setting
+    if recommend_first_adoption:
+        if recommendation_target is not None and not recommendation_target.value.manual_review:
+            if recommendation_target.value.recognized_mode == "first-adoption":
+                lines.append(
+                    "Azure Pipelines recommendation: the retained static parameter "
+                    "default already resolves to `first-adoption`; no opt-in edit is suggested."
+                )
+            else:
+                lines.append(
+                    "Azure Pipelines recommendation: manually set "
+                    f"{AZURE_PIPELINES_POWERSHELL_CI} `{recommendation_target.location}` "
+                    "to `first-adoption` in a later implementation PR."
+                )
+        else:
+            lines.append(
+                "Azure Pipelines recommendation: no opt-in edit is suggested until "
+                "the committed `gateMode` parameter default is manually reviewed."
+            )
+    elif has_blocking_findings:
+        lines.append(
+            "Azure Pipelines note: blocking Error or unknown-severity findings remain "
+            "blocking in first-adoption mode; resolve them before expecting CI to pass."
+        )
+
+    lines.append(
+        "Azure Pipelines auto-exports non-secret variables as environment variables "
+        "with names uppercased and periods changed to underscores, so the analyzer "
+        "task can read `$env:PSSCRIPTANALYZER_GATE_MODE` without a task `env` block."
+    )
+    lines.append(
+        "Azure Pipelines queued-run parameters, runtime variables, and branch-policy "
+        "build validation can still change effective behavior; preserve "
+        "`Resolve-PSScriptAnalyzerGate -Mode $env:PSSCRIPTANALYZER_GATE_MODE`."
+    )
+    return tuple(lines)
+
+
+def gate_bool_field(gate_data: Mapping[str, object], key: str) -> bool | None:
+    """Return a required Boolean gate field or ``None`` when malformed."""
+    value = gate_data.get(key)
+    return value if isinstance(value, bool) else None
+
+
+def gate_string_field(gate_data: Mapping[str, object], key: str) -> str | None:
+    """Return a required non-empty string gate field or ``None`` when malformed."""
+    value = gate_data.get(key)
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip()
+
+
+def positive_integer_from_gate_field(value: object) -> int | None:
+    """Return a positive integer gate field value or ``None`` when absent/zero."""
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError("line and column values must be integers when present.")
+    return value if value > 0 else None
+
+
+def required_finding_string(
+    finding: Mapping[str, object],
+    *,
+    key: str,
+    index: int,
+) -> str:
+    """Return a required normalized string field from one gate finding."""
+    value = finding.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"Gate.Findings[{index}].{key} must be a non-empty string.")
+    return single_line_text(value.strip())
+
+
+def analyzer_debt_records_from_gate_findings(
+    raw_findings: object,
+) -> tuple[PowerShellAnalyzerDebtRecord, ...] | None:
+    """Build analyzer-debt records from structured gate findings."""
+    if not isinstance(raw_findings, list):
+        return None
+
+    records: list[PowerShellAnalyzerDebtRecord] = []
+    try:
+        for index, raw_finding in enumerate(raw_findings, start=1):
+            if not isinstance(raw_finding, dict):
+                raise ValueError(f"Gate.Findings[{index}] must be an object.")
+            finding = cast(Mapping[str, object], raw_finding)
+            tracked_debt = finding.get("TrackedDebt")
+            if not isinstance(tracked_debt, bool):
+                raise ValueError(f"Gate.Findings[{index}].TrackedDebt must be a Boolean.")
+            if not tracked_debt:
+                continue
+
+            severity = required_finding_string(finding, key="Severity", index=index)
+            if severity not in ("Warning", "Information"):
+                raise ValueError(f"Gate.Findings[{index}].TrackedDebt used unsupported severity.")
+
+            records.append(
+                PowerShellAnalyzerDebtRecord(
+                    rule_name=required_finding_string(finding, key="RuleName", index=index),
+                    severity=severity,
+                    normalized_path=required_finding_string(
+                        finding,
+                        key="ScriptPath",
+                        index=index,
+                    ),
+                    line=positive_integer_from_gate_field(finding.get("Line")),
+                    column=positive_integer_from_gate_field(finding.get("Column")),
+                    message=required_finding_string(finding, key="Message", index=index),
+                )
+            )
+    except ValueError:
+        return None
+
+    return tuple(records)
+
+
+def analyzer_debt_summary_lines(
+    records: Sequence[PowerShellAnalyzerDebtRecord],
+) -> tuple[str, ...]:
+    """Return per-run debt summary lines aligned with documented placeholders."""
+    if not records:
+        return ()
+
+    severity_counts = Counter(record.severity for record in records)
+    rule_counts = Counter(record.rule_name for record in records)
+    affected_rules = "; ".join(f"{rule} ({count})" for rule, count in sorted(rule_counts.items()))
+    return (
+        (
+            "Debt recording summary: "
+            f"{len(records)} tracked finding(s); "
+            f"Warning={severity_counts['Warning']}; "
+            f"Information={severity_counts['Information']}."
+        ),
+        f"Affected rules: {affected_rules}.",
+        "Owner: <owner>; expected removal date: <YYYY-MM-DD>.",
+        "Temporary first-adoption mode is a bridge; restore strict mode after cleanup.",
+    )
+
+
+def build_powershell_opt_in_guidance(
+    repo_root: Path,
+    *,
+    analyzer_debt_records: Sequence[PowerShellAnalyzerDebtRecord],
+    recommended_mode: str,
+    should_fail: bool,
+) -> tuple[str, ...]:
+    """Build non-mutating first-adoption CI opt-in guidance."""
+    if not analyzer_debt_records and recommended_mode != "first-adoption":
+        return ()
+
+    recommend_first_adoption = recommended_mode == "first-adoption"
+    lines = [
+        (
+            "These are recommendations to apply manually or in a later implementation PR; "
+            "this report did not mutate repository files."
+        )
+    ]
+    if analyzer_debt_records and not recommend_first_adoption and should_fail:
+        lines.append(
+            "Tracked Warning/Information debt was found, but the gate helper did not "
+            "recommend first-adoption for this run because blocking findings are present."
+        )
+
+    lines.extend(
+        github_actions_opt_in_guidance(
+            repo_root,
+            recommend_first_adoption=recommend_first_adoption,
+            has_blocking_findings=should_fail,
+        )
+    )
+    lines.extend(
+        azure_pipelines_opt_in_guidance(
+            repo_root,
+            recommend_first_adoption=recommend_first_adoption,
+            has_blocking_findings=should_fail,
+        )
+    )
+    return tuple(lines) if len(lines) > 1 else ()
 
 
 def build_powershell_report(
@@ -1366,6 +2214,8 @@ def build_powershell_report(
             unsafe_candidate_count=0,
             summary_lines=("No PowerShell files were discovered.",),
             issue_ready_markdown=(),
+            analyzer_debt_records=(),
+            opt_in_guidance_lines=(),
         )
 
     settings_path = repo_root / PSSCRIPTANALYZER_SETTINGS
@@ -1386,6 +2236,8 @@ def build_powershell_report(
             unsafe_candidate_count=0,
             summary_lines=(),
             issue_ready_markdown=(),
+            analyzer_debt_records=(),
+            opt_in_guidance_lines=(),
         )
 
     executable = powershell_executable()
@@ -1400,6 +2252,8 @@ def build_powershell_report(
             unsafe_candidate_count=0,
             summary_lines=(),
             issue_ready_markdown=(),
+            analyzer_debt_records=(),
+            opt_in_guidance_lines=(),
         )
 
     command_script = r"""
@@ -1529,7 +2383,7 @@ try {
                     'PSScriptAnalyzer report unavailable: run ' +
                     '`Install-Module PSScriptAnalyzer` intentionally if the PowerShell ' +
                     'module is retained. Diagnostic: ' +
-                    (ConvertTo-PSScriptAnalyzerCandidateSingleLineText -Value $_)
+                    (ConvertTo-RunnerSingleLineText -Value $_)
                 )
                 SummaryLines = [string[]]@()
                 IssueReadyMarkdown = [string[]]@()
@@ -1578,23 +2432,6 @@ try {
     candidates_data = cast(dict[str, object], candidates_data)
     rendered_candidate_summary = candidate_summary_lines(candidates_data)
     unsafe_candidate_count = len(_candidate_records(candidates_data, "Unsafe"))
-
-    gate_data = result_data.get("Gate")
-    if not isinstance(gate_data, dict):
-        return PowerShellAnalyzerReport(
-            available=True,
-            message=(
-                "PSScriptAnalyzer report completed, but the Gate object was malformed; "
-                "manual review is required."
-            ),
-            candidate_summary_lines=rendered_candidate_summary,
-            unsafe_candidate_count=unsafe_candidate_count,
-            summary_lines=("Manual review: PSScriptAnalyzer Gate object was malformed.",),
-            issue_ready_markdown=(),
-        )
-    gate_data = cast(dict[str, object], gate_data)
-
-    gate_status = gate_data.get("Status")
     if unsafe_candidate_count:
         return PowerShellAnalyzerReport(
             available=True,
@@ -1606,6 +2443,33 @@ try {
             unsafe_candidate_count=unsafe_candidate_count,
             summary_lines=(),
             issue_ready_markdown=(),
+            analyzer_debt_records=(),
+            opt_in_guidance_lines=(),
+        )
+
+    gate_data = result_data.get("Gate")
+    if not isinstance(gate_data, dict):
+        return manual_review_powershell_report(
+            message=(
+                "PSScriptAnalyzer report completed, but the Gate object was malformed; "
+                "manual review is required."
+            ),
+            candidate_summary_lines=rendered_candidate_summary,
+            unsafe_candidate_count=unsafe_candidate_count,
+            summary_lines=("Manual review: PSScriptAnalyzer Gate object was malformed.",),
+        )
+    gate_data = cast(dict[str, object], gate_data)
+
+    gate_status = gate_data.get("Status")
+    if gate_status != "ok" and gate_status != "unavailable":
+        return manual_review_powershell_report(
+            message=(
+                "PSScriptAnalyzer report completed, but Gate.Status was missing or "
+                "malformed; manual review is required."
+            ),
+            candidate_summary_lines=rendered_candidate_summary,
+            unsafe_candidate_count=0,
+            summary_lines=("Manual review: PSScriptAnalyzer Gate.Status was malformed.",),
         )
 
     if gate_status == "unavailable":
@@ -1617,13 +2481,25 @@ try {
             unsafe_candidate_count=0,
             summary_lines=(),
             issue_ready_markdown=(),
+            analyzer_debt_records=(),
+            opt_in_guidance_lines=(),
         )
 
     summary_lines = _string_sequence(gate_data.get("SummaryLines"))
     issue_ready_lines = _string_sequence(gate_data.get("IssueReadyMarkdown"))
-    if summary_lines is None or issue_ready_lines is None:
-        return PowerShellAnalyzerReport(
-            available=True,
+    findings = analyzer_debt_records_from_gate_findings(gate_data.get("Findings"))
+    recommended_mode = gate_string_field(gate_data, "RecommendedMode")
+    resolved_mode = gate_string_field(gate_data, "Mode")
+    should_fail = gate_bool_field(gate_data, "ShouldFail")
+    if (
+        summary_lines is None
+        or issue_ready_lines is None
+        or findings is None
+        or recommended_mode not in PSSCRIPTANALYZER_RECOGNIZED_GATE_MODES
+        or resolved_mode not in PSSCRIPTANALYZER_RECOGNIZED_GATE_MODES
+        or should_fail is None
+    ):
+        return manual_review_powershell_report(
             message=(
                 "PSScriptAnalyzer report completed, but required Gate fields were "
                 "missing or malformed; manual review is required."
@@ -1631,8 +2507,14 @@ try {
             candidate_summary_lines=rendered_candidate_summary,
             unsafe_candidate_count=0,
             summary_lines=("Manual review: required PSScriptAnalyzer Gate fields were malformed.",),
-            issue_ready_markdown=(),
         )
+
+    opt_in_guidance_lines = build_powershell_opt_in_guidance(
+        repo_root,
+        analyzer_debt_records=findings,
+        recommended_mode=recommended_mode,
+        should_fail=should_fail,
+    )
 
     return PowerShellAnalyzerReport(
         available=True,
@@ -1641,7 +2523,19 @@ try {
         unsafe_candidate_count=0,
         summary_lines=summary_lines,
         issue_ready_markdown=issue_ready_lines,
+        analyzer_debt_records=findings,
+        opt_in_guidance_lines=opt_in_guidance_lines,
     )
+
+
+def format_analyzer_debt_record(record: PowerShellAnalyzerDebtRecord) -> str:
+    """Return one single-line analyzer-debt record."""
+    location = record.normalized_path
+    if record.line is not None:
+        location = f"{location}:{record.line}"
+        if record.column is not None:
+            location = f"{location}:{record.column}"
+    return f"{location} [{record.severity}] {record.rule_name}: {single_line_text(record.message)}"
 
 
 def print_powershell_report(report: PowerShellAnalyzerReport, *, stdout: TextIO) -> None:
@@ -1651,13 +2545,27 @@ def print_powershell_report(report: PowerShellAnalyzerReport, *, stdout: TextIO)
         print(f"  {report.message}", file=stdout)
         for line in report.candidate_summary_lines:
             print(f"  {line}", file=stdout)
-        print("  This helper never installs optional tools automatically.", file=stdout)
+        for line in report.summary_lines:
+            print(f"  {line}", file=stdout)
+        if not report.summary_lines:
+            print("  This helper never installs optional tools automatically.", file=stdout)
         return
     print(f"  {report.message}", file=stdout)
     for line in report.candidate_summary_lines:
         print(f"  {line}", file=stdout)
     for line in report.summary_lines:
         print(f"  {line}", file=stdout)
+    if report.analyzer_debt_records:
+        print("  Analyzer debt records for manual tracking:", file=stdout)
+        for line in analyzer_debt_summary_lines(report.analyzer_debt_records):
+            print(f"    - {line}", file=stdout)
+        print("    Findings:", file=stdout)
+        for record in report.analyzer_debt_records:
+            print(f"      - {format_analyzer_debt_record(record)}", file=stdout)
+    if report.opt_in_guidance_lines:
+        print("  Non-mutating first-adoption opt-in guidance:", file=stdout)
+        for line in report.opt_in_guidance_lines:
+            print(f"    - {line}", file=stdout)
     if report.issue_ready_markdown:
         print("  Issue-ready Markdown:", file=stdout)
         for line in report.issue_ready_markdown:
