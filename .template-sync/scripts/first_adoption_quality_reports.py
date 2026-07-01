@@ -2360,7 +2360,7 @@ try {
                     'PSScriptAnalyzer report unavailable: run ' +
                     '`Install-Module PSScriptAnalyzer` intentionally if the PowerShell ' +
                     'module is retained. Diagnostic: ' +
-                    (ConvertTo-PSScriptAnalyzerCandidateSingleLineText -Value $_)
+                    (ConvertTo-RunnerSingleLineText -Value $_)
                 )
                 SummaryLines = [string[]]@()
                 IssueReadyMarkdown = [string[]]@()
