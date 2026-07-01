@@ -131,6 +131,7 @@ Describe "Resolve-PSScriptAnalyzerCandidate" {
             $arrAllowedExtension | Should -Contain '.psm1'
             $arrAllowedExtension | Should -Contain '.psd1'
             $arrAllowedExtension | Should -HaveCount 3
+            $arrCandidate | Should -HaveCount 3
             foreach ($objCandidate in $arrCandidate) {
                 $objCandidate.OutcomeCategory | Should -Be 'selected'
                 $objCandidate.ReasonCode | Should -Be 'Selected'

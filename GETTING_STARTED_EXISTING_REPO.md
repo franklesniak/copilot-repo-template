@@ -1457,7 +1457,7 @@ This file serves as the "constitution" for all Copilot suggestions in your repos
    | Git attributes | `.github/instructions/gitattributes.instructions.md` | `**/.gitattributes` |
    | Markdown/Docs | `.github/instructions/docs.instructions.md` | `**/*.md` |
    | Python | `.github/instructions/python.instructions.md` | `**/*.py` |
-   | PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1`, `**/*.psm1`, `**/*.psd1` |
+   | PowerShell | `.github/instructions/powershell.instructions.md` | `**/*.ps1` |
    ```
 
 4. **Review and modify:**
@@ -2413,8 +2413,8 @@ $analyzerExtensions = '.ps1', '.psm1', '.psd1'
 Get-ChildItem -Path . -Recurse -File |
     Where-Object { $_.Extension -in $analyzerExtensions } |
     ForEach-Object {
-    Invoke-ScriptAnalyzer -Path $_.FullName -Settings .\.github\linting\PSScriptAnalyzerSettings.psd1
-}
+        Invoke-ScriptAnalyzer -Path $_.FullName -Settings .\.github\linting\PSScriptAnalyzerSettings.psd1
+    }
 ```
 
 Genuine module manifests are intentionally analyzed as `.psd1` inputs. Keep
