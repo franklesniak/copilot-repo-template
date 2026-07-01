@@ -965,6 +965,31 @@ def test_github_actions_gate_mode_detection_covers_env_specificity() -> None:
     assert settings[2].value.manual_review is True
 
 
+def test_github_actions_gate_mode_settings_preserves_notes_when_jobs_missing() -> None:
+    """A workflow-level env note survives the missing/non-mapping ``jobs`` early return."""
+    document = quality_reports.yaml.safe_load(
+        (
+            "env: malformed-workflow-env\n"
+            "jobs: |\n"
+            "  Resolve-PSScriptAnalyzerGate `\n"
+            "    -Mode $env:PSSCRIPTANALYZER_GATE_MODE\n"
+        )
+    )
+
+    settings, notes, retained = quality_reports.github_actions_gate_mode_settings(
+        document,
+        path=".github/workflows/powershell-ci.yml",
+    )
+
+    assert retained is True
+    assert settings == ()
+    assert notes == (
+        "GitHub Actions: .github/workflows/powershell-ci.yml `env` env is not a mapping; "
+        "manual review is required.",
+        "GitHub Actions: jobs is missing or not a mapping; manual review is required.",
+    )
+
+
 def test_azure_pipelines_gate_mode_detection_resolves_mapping_variables() -> None:
     """Azure mapping variables resolve the parameter expression to its default."""
     document = quality_reports.yaml.safe_load(

@@ -1595,11 +1595,8 @@ def github_actions_gate_mode_settings(
 
     jobs = document.get("jobs")
     if not isinstance(jobs, dict):
-        return (
-            tuple(settings),
-            ("GitHub Actions: jobs is missing or not a mapping; manual review is required.",),
-            retained,
-        )
+        notes.append("GitHub Actions: jobs is missing or not a mapping; manual review is required.")
+        return tuple(settings), tuple(notes), retained
 
     for raw_job_id, raw_job in cast(Mapping[object, object], jobs).items():
         if not isinstance(raw_job_id, str) or not isinstance(raw_job, dict):
