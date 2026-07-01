@@ -3151,13 +3151,13 @@ fi
 
 **File:** `.github/workflows/powershell-ci.yml`
 
-The PowerShell CI workflow runs PSScriptAnalyzer linting and Pester tests for PowerShell files. It runs automatically on every push and pull request and automatically skips when no analyzer input files are found in the repository.
+The PowerShell CI workflow runs PSScriptAnalyzer linting and Pester tests for PowerShell files. It runs automatically on every push and pull request and automatically skips when no analyzer inputs are selected after policy classification.
 
 ### Understanding the Workflow
 
 The workflow consists of two jobs:
 
-1. **powershell-lint** (display name: "Lint (PSScriptAnalyzer)"): Runs PSScriptAnalyzer on `.ps1`, `.psm1`, and `.psd1` files (skips if no analyzer input files are found)
+1. **powershell-lint** (display name: "Lint (PSScriptAnalyzer)"): Runs PSScriptAnalyzer on `.ps1`, `.psm1`, and `.psd1` files (skips if no analyzer inputs are selected after policy classification)
 2. **test** (display name: "PowerShell Tests (Pester)"): Runs Pester tests on Windows, macOS, and Linux (skips if no `*.Tests.ps1` files found)
 
 The workflow uses automatic detection, so you don't need to configure anything if you have PowerShell files—it just works.

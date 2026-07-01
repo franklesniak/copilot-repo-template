@@ -4,7 +4,7 @@
 # Runs on: push and pull_request events
 #
 # Jobs:
-#   - powershell-lint: Runs PSScriptAnalyzer on .ps1, .psm1, and .psd1 files (skips if no files found)
+#   - powershell-lint: Runs PSScriptAnalyzer on .ps1, .psm1, and .psd1 files (skips if no analyzer inputs are selected after policy classification)
 #   - test: Runs Pester tests on Windows, macOS, and Linux (skips if no *.Tests.ps1 files found)
 #
 # Note: This workflow is OPTIONAL and can be removed for non-PowerShell projects.
