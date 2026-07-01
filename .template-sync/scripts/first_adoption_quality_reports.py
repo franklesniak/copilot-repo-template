@@ -1646,6 +1646,35 @@ def github_actions_gate_mode_settings(
     return tuple(settings), tuple(notes), retained
 
 
+def azure_parameter_default_result(
+    *,
+    path: str,
+    location: str,
+    raw_default: object,
+) -> tuple[GateModeSetting | None, tuple[str, ...]]:
+    """Return a parameter-default setting, or a manual-review note when no default exists.
+
+    An Azure Pipelines ``parameters`` entry declared without a ``default`` (or with a
+    null default) must be supplied when the pipeline runs, so its value is unknown at
+    static-analysis time. Reporting it as ``unset`` (which for env vars means "resolves
+    to strict at runtime") would be misleading, so surface it for manual review instead.
+    """
+    if raw_default is None:
+        return None, (
+            f"Azure Pipelines: {path} `{location}` has no static default; the value must "
+            "be supplied when the pipeline runs, so manual review is required.",
+        )
+    return (
+        GateModeSetting(
+            path=path,
+            location=location,
+            specificity="pipeline parameter default",
+            value=normalize_gate_mode_static_value(raw_default),
+        ),
+        (),
+    )
+
+
 def azure_parameter_default_setting(
     document: Mapping[str, object],
     *,
@@ -1662,32 +1691,25 @@ def azure_parameter_default_setting(
             parameter = cast(Mapping[object, object], raw_parameter)
             if parameter.get("name") != PSSCRIPTANALYZER_GATE_MODE_PARAMETER:
                 continue
-            return (
-                GateModeSetting(
-                    path=path,
-                    location=f"parameters[{PSSCRIPTANALYZER_GATE_MODE_PARAMETER}].default",
-                    specificity="pipeline parameter default",
-                    value=normalize_gate_mode_static_value(parameter.get("default")),
-                ),
-                (),
+            return azure_parameter_default_result(
+                path=path,
+                location=f"parameters[{PSSCRIPTANALYZER_GATE_MODE_PARAMETER}].default",
+                raw_default=parameter.get("default"),
             )
         return None, ()
     if isinstance(parameters, dict):
-        parameter_value = cast(Mapping[object, object], parameters).get(
-            PSSCRIPTANALYZER_GATE_MODE_PARAMETER
-        )
+        parameters_mapping = cast(Mapping[object, object], parameters)
+        if PSSCRIPTANALYZER_GATE_MODE_PARAMETER not in parameters_mapping:
+            return None, ()
+        parameter_value = parameters_mapping.get(PSSCRIPTANALYZER_GATE_MODE_PARAMETER)
         if isinstance(parameter_value, dict):
             raw_default = cast(Mapping[object, object], parameter_value).get("default")
         else:
             raw_default = parameter_value
-        return (
-            GateModeSetting(
-                path=path,
-                location=f"parameters.{PSSCRIPTANALYZER_GATE_MODE_PARAMETER}.default",
-                specificity="pipeline parameter default",
-                value=normalize_gate_mode_static_value(raw_default),
-            ),
-            (),
+        return azure_parameter_default_result(
+            path=path,
+            location=f"parameters.{PSSCRIPTANALYZER_GATE_MODE_PARAMETER}.default",
+            raw_default=raw_default,
         )
     return None, (
         f"Azure Pipelines: {path} `parameters` is not a mapping or sequence; "

@@ -1058,6 +1058,44 @@ def test_azure_pipelines_gate_mode_detection_supports_sequence_variables() -> No
     assert variables[0].effective_value.recognized_mode == "first-adoption"
 
 
+def test_azure_parameter_default_flags_missing_default_in_sequence_form() -> None:
+    """A sequence-form gateMode parameter without a default requires manual review."""
+    document = quality_reports.yaml.safe_load(
+        ("parameters:\n" "  - name: gateMode\n" "    type: string\n")
+    )
+
+    setting, notes = quality_reports.azure_parameter_default_setting(
+        document,
+        path=".azuredevops/pipelines/powershell-ci.yml",
+    )
+
+    assert setting is None
+    assert notes == (
+        "Azure Pipelines: .azuredevops/pipelines/powershell-ci.yml "
+        "`parameters[gateMode].default` has no static default; the value must be supplied "
+        "when the pipeline runs, so manual review is required.",
+    )
+
+
+def test_azure_parameter_default_flags_missing_default_in_mapping_form() -> None:
+    """A mapping-form gateMode parameter without a default requires manual review."""
+    document = quality_reports.yaml.safe_load(
+        ("parameters:\n" "  gateMode:\n" "    type: string\n")
+    )
+
+    setting, notes = quality_reports.azure_parameter_default_setting(
+        document,
+        path=".azuredevops/pipelines/powershell-ci.yml",
+    )
+
+    assert setting is None
+    assert notes == (
+        "Azure Pipelines: .azuredevops/pipelines/powershell-ci.yml "
+        "`parameters.gateMode.default` has no static default; the value must be supplied "
+        "when the pipeline runs, so manual review is required.",
+    )
+
+
 def test_powershell_report_unsafe_candidates_use_reserved_exit_code(
     tmp_path: Path,
     monkeypatch: Any,
