@@ -355,6 +355,12 @@ def test_decode_git_nul_paths_rejects_undecodable_record() -> None:
         quality_reports.decode_git_nul_paths(b"src/bad-\xff.ps1\0")
 
 
+def test_decode_git_nul_paths_rejects_empty_record() -> None:
+    """Empty NUL-delimited records fail closed instead of being silently skipped."""
+    with pytest.raises(quality_reports.FirstAdoptionQualityError, match="empty NUL-delimited"):
+        quality_reports.decode_git_nul_paths(b"src/a.ps1\0\0src/b.ps1\0")
+
+
 def test_candidate_summary_lines_escape_human_facing_crlf() -> None:
     """Candidate summaries preserve structure but render paths on one line."""
     lines = quality_reports.candidate_summary_lines(

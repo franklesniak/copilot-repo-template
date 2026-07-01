@@ -479,7 +479,10 @@ def decode_git_nul_paths(output: bytes) -> tuple[str, ...]:
     paths: list[str] = []
     for raw_record in output[:-1].split(b"\0"):
         if not raw_record:
-            continue
+            raise FirstAdoptionQualityError(
+                "Git file-list output contained an empty NUL-delimited path record; "
+                "manual review is required."
+            )
         try:
             paths.append(raw_record.decode("utf-8", errors="strict"))
         except UnicodeDecodeError as error:
