@@ -31,10 +31,19 @@ jobs:
           pwsh: true
           targetType: "inline"
           script: |
+            $ErrorActionPreference = 'Stop'
+            Set-StrictMode -Version Latest
             $repositoryRoot = "$(Build.SourcesDirectory)"
             $settingsPath = Join-Path -Path $repositoryRoot -ChildPath ".github/linting/PSScriptAnalyzerSettings.psd1"
             $candidateHelperPath = Join-Path -Path $repositoryRoot -ChildPath "src/tools/Resolve-PSScriptAnalyzerCandidate.ps1"
             $gateHelperPath = Join-Path -Path $repositoryRoot -ChildPath "src/tools/Resolve-PSScriptAnalyzerGate.ps1"
+
+            foreach ($requiredPath in @($settingsPath, $candidateHelperPath, $gateHelperPath)) {
+              if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+                throw ("Required PowerShell lint dependency missing: {0}" -f $requiredPath)
+              }
+            }
+
             . $candidateHelperPath
             . $gateHelperPath
 

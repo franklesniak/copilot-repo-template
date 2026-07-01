@@ -178,6 +178,15 @@ Describe "Resolve-PSScriptAnalyzerCandidate" {
         }
     }
 
+    It "Fails closed when a candidate has an unexpected OutcomeCategory" {
+        # Arrange
+        $objCandidate = [pscustomobject]@{ OutcomeCategory = 'unexpected-category' }
+
+        # Act / Assert
+        { Get-PSScriptAnalyzerCandidateSummary -Candidate @($objCandidate) } |
+            Should -Throw -ExpectedMessage '*Unexpected PSScriptAnalyzer candidate OutcomeCategory*'
+    }
+
     It "Classifies leaf reparse candidates that escape the repository as unsafe" {
         # Arrange
         $strRoot = Initialize-CandidateTestRepository

@@ -60,9 +60,18 @@ jobs:
       - name: Run PSScriptAnalyzer
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
           $settingsPath = Join-Path -Path $env:GITHUB_WORKSPACE -ChildPath ".github/linting/PSScriptAnalyzerSettings.psd1"
           $candidateHelperPath = Join-Path -Path $env:GITHUB_WORKSPACE -ChildPath "src/tools/Resolve-PSScriptAnalyzerCandidate.ps1"
           $gateHelperPath = Join-Path -Path $env:GITHUB_WORKSPACE -ChildPath "src/tools/Resolve-PSScriptAnalyzerGate.ps1"
+
+          foreach ($requiredPath in @($settingsPath, $candidateHelperPath, $gateHelperPath)) {
+            if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+              throw ("Required PowerShell lint dependency missing: {0}" -f $requiredPath)
+            }
+          }
+
           . $candidateHelperPath
           . $gateHelperPath
 

@@ -1087,6 +1087,8 @@ function Get-PSScriptAnalyzerCandidateSummary {
             [void]($listPolicyExcluded.Add($objCandidate))
         } elseif ($objCandidate.OutcomeCategory -eq 'unsafe') {
             [void]($listUnsafe.Add($objCandidate))
+        } else {
+            throw ("Unexpected PSScriptAnalyzer candidate OutcomeCategory: {0}" -f $objCandidate.OutcomeCategory)
         }
     }
 
