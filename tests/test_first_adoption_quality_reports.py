@@ -1114,6 +1114,29 @@ def test_load_marker_rejects_symlinked_marker(tmp_path: Path) -> None:
         quality_reports.load_marker_template_sync(tmp_path)
 
 
+def test_load_ci_yaml_mapping_flags_broken_symlink(tmp_path: Path) -> None:
+    """A broken symlink at a CI YAML path is flagged for manual review, not ignored."""
+    relative_path = ".github/workflows/example.yml"
+    ci_path = tmp_path / relative_path
+    ci_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        ci_path.symlink_to(tmp_path / "nonexistent-target.yml")
+    except (OSError, NotImplementedError):
+        pytest.skip("Filesystem does not support symlink creation")
+
+    document, notes = quality_reports.load_ci_yaml_mapping(
+        tmp_path,
+        relative_path,
+        platform_name="GitHub Actions",
+    )
+
+    assert document is None
+    assert notes == (
+        "GitHub Actions: .github/workflows/example.yml is not a regular YAML file; "
+        "manual review is required.",
+    )
+
+
 def test_path_reference_cli_can_fail_on_findings(tmp_path: Path) -> None:
     """The CLI offers an explicit non-zero path-reference gate when selected."""
     _init_repo(tmp_path)

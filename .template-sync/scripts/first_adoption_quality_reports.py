@@ -1483,7 +1483,11 @@ def load_ci_yaml_mapping(
 ) -> tuple[Mapping[str, object] | None, tuple[str, ...]]:
     """Safely load a CI YAML surface as a mapping for non-mutating guidance."""
     path = repo_root / relative_path
-    if not path.exists():
+    # Mirror load_marker_template_sync(): a broken symlink has ``exists()`` False
+    # (it follows the link to a missing target), so guard on ``is_symlink()`` too.
+    # Otherwise a symlink placed at the CI YAML path would be silently ignored
+    # instead of falling through to the not-a-regular-file manual-review note.
+    if not path.exists() and not path.is_symlink():
         return None, ()
     if not is_present_regular_file(path):
         return None, (
