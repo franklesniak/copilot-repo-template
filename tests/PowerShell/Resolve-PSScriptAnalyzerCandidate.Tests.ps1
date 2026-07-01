@@ -93,7 +93,9 @@ BeforeAll {
 
         $strFullPath = [System.IO.Path]::Combine($RepositoryRoot, $RepositoryRelativePath)
         $strParentDirectory = [System.IO.Path]::GetDirectoryName($strFullPath)
-        [void]([System.IO.Directory]::CreateDirectory($strParentDirectory))
+        if (-not [string]::IsNullOrEmpty($strParentDirectory)) {
+            [void]([System.IO.Directory]::CreateDirectory($strParentDirectory))
+        }
         $objEncoding = [System.Text.UTF8Encoding]::new($false)
         [System.IO.File]::WriteAllText($strFullPath, "Write-Output 'test'`n", $objEncoding)
     }

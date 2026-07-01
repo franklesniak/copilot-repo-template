@@ -1322,9 +1322,7 @@ def candidate_summary_lines(candidates_data: Mapping[str, object]) -> tuple[str,
         reason = single_line_text(record.get("ReasonCode", "Unknown"))
         line = f"Unsafe candidate: {_candidate_record_path(record)}; reason: {reason}"
         if "ResolvedTargetFullName" in record:
-            line = (
-                f"{line}; resolved target: " f"{single_line_text(record['ResolvedTargetFullName'])}"
-            )
+            line = f"{line}; resolved target: {single_line_text(record['ResolvedTargetFullName'])}"
         lines.append(line)
     return tuple(lines)
 
