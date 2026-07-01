@@ -888,7 +888,7 @@ def test_unsafe_candidate_exit_code_takes_precedence(
 
     def fake_runner(command: Sequence[str], _repo_root: Path) -> int:
         if command[-1] == "powershell":
-            return first_adoption.UNSAFE_CANDIDATE_EXIT_CODE
+            return cast(int, first_adoption.UNSAFE_CANDIDATE_EXIT_CODE)
         if command[0] == "pre-commit":
             return 1
         return 0
