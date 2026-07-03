@@ -944,6 +944,17 @@ def isolate_git_config(monkeypatch: Any, tmp_path: Path) -> Path:
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "true")
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
     monkeypatch.setenv("GIT_CONFIG_SYSTEM", str(system_config))
+    # Command-scope config outranks the isolated global/system files installed
+    # above, so any ambient command-scope injection would leak into the
+    # effective-config fixtures and defeat the intended precedence. Neutralize
+    # both entry points: GIT_CONFIG_PARAMETERS and the GIT_CONFIG_COUNT-bounded
+    # GIT_CONFIG_KEY_<n> / GIT_CONFIG_VALUE_<n> pairs. Tests that exercise
+    # command-scope config re-set these explicitly afterwards.
+    for name in list(os.environ):
+        if name.startswith("GIT_CONFIG_KEY_") or name.startswith("GIT_CONFIG_VALUE_"):
+            monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("GIT_CONFIG_COUNT", raising=False)
+    monkeypatch.delenv("GIT_CONFIG_PARAMETERS", raising=False)
     return global_config
 
 
