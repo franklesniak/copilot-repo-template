@@ -1345,26 +1345,32 @@ def verify_source_worktree_stampable(
     git_version: GitVersion | None,
     *,
     fatal: bool,
-) -> str | None:
-    """Validate source completeness and cleanliness, returning a trusted SHA if allowed."""
+) -> bool:
+    """Return whether ``source_worktree`` passes the source stampability gates.
+
+    Runs the partial/promisor, tracked-content completeness, and clean-status gates in
+    order. Returns ``True`` only when every gate passes. When a gate fails, raises
+    ``MaterializationError`` if ``fatal`` is true, otherwise returns ``False``. This
+    validates stampability only; it does not resolve or return a source commit SHA.
+    """
     partial_reason = partial_promisor_guard_reason(source_worktree, git_version)
     if partial_reason is not None:
         if fatal:
             raise MaterializationError(partial_reason)
-        return None
+        return False
 
     completeness_reason = source_completeness_reason(source_worktree)
     if completeness_reason is not None:
         if fatal:
             raise MaterializationError(completeness_reason)
-        return None
+        return False
 
     status_reason = status_probe_not_stampable_reason(source_worktree, git_version)
     if status_reason is not None:
         if fatal:
             raise MaterializationError(status_reason)
-        return None
-    return "stampable"
+        return False
+    return True
 
 
 def detect_local_template_source(

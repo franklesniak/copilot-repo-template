@@ -1995,7 +1995,7 @@ def test_temporary_source_checkout_disables_sparse_checkout_before_worktree_add(
     monkeypatch.setattr(
         materializer,
         "verify_source_worktree_stampable",
-        lambda *_args, **_kwargs: "stampable",
+        lambda *_args, **_kwargs: True,
     )
 
     source_checkout = materializer.create_temporary_source_checkout(
