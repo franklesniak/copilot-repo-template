@@ -889,6 +889,76 @@ def summary_value(output: str, label: str) -> str:
     raise AssertionError(f"summary label not found: {label}")
 
 
+def summary_values(output: str, label: str) -> list[str]:
+    """Return all source-summary values for ``label``."""
+    prefix = f"  - {label}: "
+    return [line.removeprefix(prefix) for line in output.splitlines() if line.startswith(prefix)]
+
+
+def summary_section_lines(output: str, heading: str) -> list[str]:
+    """Return raw lines rendered under a top-level summary section heading."""
+    section_lines: list[str] = []
+    in_section = False
+    for line in output.splitlines():
+        if line and not line.startswith(" ") and line.endswith(":"):
+            if in_section:
+                break
+            in_section = line == f"{heading}:"
+            continue
+        if in_section:
+            section_lines.append(line)
+    return section_lines
+
+
+def assert_single_physical_line(value: str) -> None:
+    """Assert a user-facing diagnostic fits on one physical output line."""
+    assert "\n" not in value
+    assert "\r" not in value
+
+
+def require_git_at_least(major: int, minor: int) -> Any:
+    """Skip the current test unless local Git satisfies a capability gate."""
+    git_version = materializer.detect_git_version()
+    if not materializer.git_version_at_least(git_version, major, minor):
+        detected = (
+            "unparseable" if git_version is None else f"{git_version.major}.{git_version.minor}"
+        )
+        pytest.skip(f"Git >= {major}.{minor} is required; detected {detected}")
+    assert git_version is not None
+    return git_version
+
+
+def isolate_git_config(monkeypatch: Any, tmp_path: Path) -> Path:
+    """Install test-scoped Git config files so effective-config tests are isolated."""
+    require_git_at_least(2, 32)
+    config_home = tmp_path / "git-config-home"
+    xdg_config_home = tmp_path / "xdg-config-home"
+    global_config = tmp_path / "global.gitconfig"
+    system_config = tmp_path / "system.gitconfig"
+    config_home.mkdir()
+    xdg_config_home.mkdir()
+    global_config.write_text("", encoding="utf-8")
+    system_config.write_text("", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(config_home))
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg_config_home))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "true")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(global_config))
+    monkeypatch.setenv("GIT_CONFIG_SYSTEM", str(system_config))
+    return global_config
+
+
+def write_git_config_file(config_path: Path, key: str, value: str) -> None:
+    """Write one key to an isolated Git config file."""
+    result = subprocess.run(
+        ["git", "config", "--file", str(config_path), key, value],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def run_excluded_module_report(
     repo_root: Path,
     included_modules: tuple[str, ...],
@@ -1781,6 +1851,58 @@ def test_git_version_parser_handles_supported_git_version_shapes() -> None:
     assert materializer.parse_git_version("git something unexpected") is None
 
 
+def test_sha256_template_root_is_reported_not_stampable_when_git_supports_it(
+    tmp_path: Path,
+) -> None:
+    """Real SHA-256 repositories are rejected by the current SHA-1 marker contract."""
+    template_root = tmp_path / "template"
+    template_root.mkdir()
+    init_result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(template_root),
+            "init",
+            "--object-format=sha256",
+            "-q",
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if init_result.returncode != 0:
+        pytest.skip(f"Git SHA-256 repositories are unavailable: {init_result.stderr}")
+    prepare_template(template_root, [{"pattern": "README.md", "requires_all": ["baseline"]}])
+    write_file(template_root / "README.md", "template readme\n")
+    run_git(template_root, "add", ".")
+    run_git(
+        template_root,
+        "-c",
+        "user.name=Template Tester",
+        "-c",
+        "user.email=template@example.com",
+        "commit",
+        "-q",
+        "-m",
+        "Initial SHA-256 fixture",
+    )
+    resolved_sha = run_git(template_root, "rev-parse", "HEAD").stdout.strip()
+    assert len(resolved_sha) == 64
+
+    detection = materializer.detect_local_template_source(
+        template_root,
+        materializer.detect_git_version(),
+    )
+
+    assert detection.observed_source_sha == resolved_sha
+    assert detection.stampable_sha is None
+    assert "SHA-256 repositories are not stampable" in cast(
+        str,
+        detection.not_stampable_reason,
+    )
+
+
 def test_source_git_commands_receive_no_fetch_no_optional_locks_overlay(
     tmp_path: Path,
     monkeypatch: Any,
@@ -1818,6 +1940,148 @@ def test_source_git_commands_receive_no_fetch_no_optional_locks_overlay(
     assert "--no-optional-locks" not in command
 
 
+def test_template_root_detection_displays_native_windows_worktree_path(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Windows path comparison may casefold, but display keeps the native path."""
+    if os.name != "nt":
+        pytest.skip("Windows path-display normalization is platform-specific")
+
+    template_root = tmp_path / "MiXeDCaseTemplate"
+    template_root.mkdir()
+    native_root = str(template_root.resolve(strict=False))
+    posix_root = template_root.resolve(strict=False).as_posix()
+
+    def fake_run_source_git(
+        _repo_root: Path,
+        args: list[str],
+        *,
+        text: bool = True,
+    ) -> subprocess.CompletedProcess[Any]:
+        if args == ["rev-parse", "--is-inside-work-tree"]:
+            return subprocess.CompletedProcess(args, 0, "true\n", "")
+        if args == ["rev-parse", "--show-toplevel"]:
+            return subprocess.CompletedProcess(args, 0, f"{posix_root}\n", "")
+        if args == ["config", "--local", "--get", "extensions.partialClone"]:
+            return subprocess.CompletedProcess(args, 1, "", "")
+        if args[:3] == ["config", "--name-only", "--get-regexp"]:
+            return subprocess.CompletedProcess(args, 1, "", "")
+        if args == ["rev-parse", "--verify", "--end-of-options", "HEAD^{commit}"]:
+            return subprocess.CompletedProcess(args, 0, f"{FULL_SHA}\n", "")
+        if args == ["ls-files", "-z", "-v", "--full-name"]:
+            assert text is False
+            return subprocess.CompletedProcess(args, 0, b"H README.md\0", b"")
+        if args == ["ls-files", "-z", "--stage", "--full-name"]:
+            assert text is False
+            stdout = f"100644 {FULL_SHA} 0\tREADME.md".encode("utf-8") + b"\0"
+            return subprocess.CompletedProcess(args, 0, stdout, b"")
+        if args[-4:] == [
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+            "--ignore-submodules=none",
+        ]:
+            return subprocess.CompletedProcess(args, 0, "", "")
+        raise AssertionError(f"unexpected Git args: {args!r}")
+
+    monkeypatch.setattr(materializer, "run_source_git", fake_run_source_git)
+
+    detection = materializer.detect_local_template_source(
+        template_root,
+        materializer.GitVersion(2, 45),
+    )
+
+    assert detection.stampable_sha == FULL_SHA
+    assert detection.source_worktree_root == native_root
+    assert detection.source_worktree_root != native_root.casefold()
+
+
+def test_template_root_top_level_failure_omits_worktree_root_from_summary(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """When top-level discovery fails, the source-root summary line is omitted."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(template_root, [{"pattern": "README.md", "requires_all": ["baseline"]}])
+    write_file(template_root / "README.md", "template readme\n")
+
+    monkeypatch.setattr(
+        materializer,
+        "detect_local_template_source",
+        lambda *_args: materializer.LocalSourceDetection(
+            not_stampable_reason="unable to identify source worktree root: simulated failure"
+        ),
+    )
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_values(result.stdout, "source worktree root") == []
+    source_commit = summary_value(result.stdout, "source commit")
+    assert source_commit.startswith("not stampable (unable to identify source worktree root")
+    assert_single_physical_line(source_commit)
+
+
+def test_local_source_diagnostics_keep_multiline_git_stderr_single_line(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Different Git failures surface one physical diagnostic line."""
+    template_root = tmp_path / "template"
+    template_root.mkdir()
+
+    def fake_top_level_failure(
+        _repo_root: Path,
+        args: list[str],
+        *,
+        text: bool = True,
+    ) -> subprocess.CompletedProcess[str]:
+        assert text is True
+        if args == ["rev-parse", "--is-inside-work-tree"]:
+            return subprocess.CompletedProcess(args, 0, "true\n", "")
+        if args == ["rev-parse", "--show-toplevel"]:
+            return subprocess.CompletedProcess(args, 128, "", "first line\nsecond line\n")
+        raise AssertionError(f"unexpected Git args: {args!r}")
+
+    monkeypatch.setattr(materializer, "run_source_git", fake_top_level_failure)
+    detection = materializer.detect_local_template_source(
+        template_root,
+        materializer.GitVersion(2, 45),
+    )
+
+    top_level_reason = cast(str, detection.not_stampable_reason)
+    assert "first line" in top_level_reason
+    assert "second line" not in top_level_reason
+    assert_single_physical_line(top_level_reason)
+
+    def fake_completeness_failure(
+        _repo_root: Path,
+        args: list[str],
+        *,
+        text: bool = True,
+    ) -> subprocess.CompletedProcess[bytes]:
+        assert args == ["ls-files", "-z", "-v", "--full-name"]
+        assert text is False
+        return subprocess.CompletedProcess(args, 128, b"", b"alpha\nbeta\n")
+
+    monkeypatch.setattr(materializer, "run_source_git", fake_completeness_failure)
+    completeness_reason = cast(str, materializer.source_completeness_reason(template_root))
+
+    assert "alpha" in completeness_reason
+    assert "beta" not in completeness_reason
+    assert_single_physical_line(completeness_reason)
+
+
 def test_template_root_default_reports_observed_source_without_stamping(
     tmp_path: Path,
 ) -> None:
@@ -1843,11 +2107,20 @@ def test_template_root_default_reports_observed_source_without_stamping(
     )
 
     assert result.returncode == 0, result.stderr
+    assert summary_values(result.stdout, "source commit") == [
+        f"observed {resolved_sha}; not accepted as reviewed state"
+    ]
     assert summary_value(result.stdout, "source commit") == (
         f"observed {resolved_sha}; not accepted as reviewed state"
     )
-    assert summary_value(result.stdout, "source worktree root") == str(template_root.resolve())
+    source_root = summary_value(result.stdout, "source worktree root")
+    assert source_root == str(template_root.resolve())
+    assert_single_physical_line(source_root)
     assert "resolved source SHA: (not resolved)" not in result.stdout
+    assert summary_value(
+        result.stdout,
+        "accepted reviewed commit for computed marker",
+    ).startswith("(none; complete review")
     marker = as_mapping(
         load_yaml(target_root / ".template-sync" / "marker.yml"),
         "marker must be a mapping",
@@ -1882,12 +2155,19 @@ def test_stamp_resolved_template_root_source_persists_reviewed_commit(
     )
 
     assert result.returncode == 0, result.stderr
+    assert summary_values(result.stdout, "source commit") == [
+        f"observed {resolved_sha}; accepted for reviewed-state assertion"
+    ]
     assert summary_value(result.stdout, "source commit") == (
         f"observed {resolved_sha}; accepted for reviewed-state assertion"
     )
     assert summary_value(result.stdout, "accepted reviewed commit for computed marker") == (
         f"{resolved_sha} (--stamp-resolved-source-as-reviewed)"
     )
+    source_section = "\n".join(summary_section_lines(result.stdout, "Source"))
+    assert "persist" not in source_section.lower()
+    assert "written" not in source_section.lower()
+    assert "Marker:" in result.stdout
     marker = as_mapping(
         load_yaml(target_root / ".template-sync" / "marker.yml"),
         "marker must be a mapping",
@@ -2020,6 +2300,114 @@ def test_temporary_source_checkout_disables_sparse_checkout_before_worktree_add(
     assert worktree_add_args[6] == FULL_SHA
 
 
+def test_temporary_source_checkout_is_verified_after_worktree_add(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """The detached checkout is verified before the materializer trusts its files."""
+    template_repo = tmp_path / "template-repo"
+    target_root = tmp_path / "target"
+    temp_root = tmp_path / "temp"
+    template_repo.mkdir()
+    target_root.mkdir()
+    temp_root.mkdir()
+    calls: list[str] = []
+
+    def fake_run_source_git(
+        _repo_root: Path,
+        args: list[str],
+        *,
+        text: bool = True,
+    ) -> subprocess.CompletedProcess[str]:
+        assert text is True
+        if args[:5] == [
+            "-c",
+            "core.sparseCheckout=false",
+            "worktree",
+            "add",
+            "--detach",
+        ]:
+            calls.append("worktree-add")
+            return subprocess.CompletedProcess(args, 0, "", "")
+        raise AssertionError(f"unexpected Git args: {args!r}")
+
+    def fake_verify(_source_worktree: Path, _git_version: Any, *, fatal: bool) -> bool:
+        assert fatal is True
+        calls.append("verify")
+        return True
+
+    monkeypatch.setattr(materializer, "run_source_git", fake_run_source_git)
+    monkeypatch.setattr(materializer, "partial_promisor_guard_reason", lambda *_args: None)
+    monkeypatch.setattr(materializer, "verify_source_worktree_stampable", fake_verify)
+
+    materializer.create_temporary_source_checkout(
+        template_repo=template_repo,
+        target_root=target_root,
+        source_mode="template-ref",
+        source_value="template-main",
+        resolved_source_sha=FULL_SHA,
+        temp_root=temp_root,
+        git_version=materializer.GitVersion(2, 45),
+    )
+
+    assert calls == ["worktree-add", "verify"]
+
+
+def test_template_ref_materializes_full_checkout_from_sparse_backing_worktree(
+    tmp_path: Path,
+) -> None:
+    """Sparse backing worktrees still produce complete temporary source checkouts."""
+    template_repo = tmp_path / "template-repo"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    resolved_sha = prepare_git_template(
+        template_repo,
+        [
+            {"pattern": "README.md", "requires_all": ["baseline"]},
+            {"pattern": "docs/template.md", "requires_all": ["baseline"]},
+        ],
+        {
+            "README.md": "template readme\n",
+            "docs/template.md": "full checkout content\n",
+        },
+    )
+    sparse_result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(template_repo),
+            "sparse-checkout",
+            "init",
+            "--cone",
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if sparse_result.returncode != 0:
+        pytest.skip(f"Git sparse-checkout is unavailable: {sparse_result.stderr}")
+    run_git(template_repo, "sparse-checkout", "set", ".template-sync", "schemas")
+    assert not (template_repo / "docs" / "template.md").exists()
+    run_git(template_repo, "branch", "template-main", resolved_sha)
+
+    result = run_materialize_without_template_root(
+        target_root,
+        "--template-ref",
+        "template-main",
+        "--template-repo",
+        str(template_repo),
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert read_file(target_root / "docs" / "template.md") == "full checkout content\n"
+    assert summary_value(result.stdout, "resolved source SHA") == resolved_sha
+
+
 def test_stamp_reviewed_helper_aligns_top_level_and_marker_decisions() -> None:
     """Source stamping updates both frozen decision records."""
     decisions = materializer.Decisions(
@@ -2072,6 +2460,9 @@ def test_template_root_stamp_fails_when_source_is_not_stampable(
         f"observed {resolved_sha}; not stampable "
         "(the template source has dirty tracked files or untracked non-ignored files)"
     )
+    assert summary_value(default_result.stdout, "source worktree root") == str(
+        template_root.resolve()
+    )
 
     stamped_result = run_materialize(
         template_root,
@@ -2088,6 +2479,46 @@ def test_template_root_stamp_fails_when_source_is_not_stampable(
         stamped_result.stderr
     )
     assert "dirty tracked files or untracked non-ignored files" in stamped_result.stderr
+
+
+def test_ignored_untracked_files_do_not_block_template_root_stampability(
+    tmp_path: Path,
+) -> None:
+    """Ignored untracked files are outside the local source stampability gate."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    resolved_sha = prepare_git_template(
+        template_root,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {
+            ".gitignore": "ignored-output/\n",
+            "README.md": "template readme\n",
+        },
+    )
+    write_file(template_root / "ignored-output" / "cache.tmp", "ignored\n")
+
+    detection = materializer.detect_local_template_source(
+        template_root,
+        materializer.detect_git_version(),
+    )
+
+    assert detection.stampable_sha == resolved_sha
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--stamp-resolved-source-as-reviewed",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "source commit") == (
+        f"observed {resolved_sha}; accepted for reviewed-state assertion"
+    )
 
 
 def test_template_root_explicit_reviewed_commit_stands_when_source_not_stampable(
@@ -2149,6 +2580,7 @@ def test_template_root_subdirectory_is_not_silently_promoted(tmp_path: Path) -> 
     assert detection.source_worktree_root == str(template_root.resolve())
     assert resolved_sha
     assert "not the Git worktree top level" in cast(str, detection.not_stampable_reason)
+    assert_single_physical_line(cast(str, detection.not_stampable_reason))
 
 
 def test_non_git_template_root_is_not_stampable(tmp_path: Path) -> None:
@@ -2182,6 +2614,53 @@ def test_unborn_template_root_head_has_generic_unresolvable_reason(tmp_path: Pat
     assert detection.not_stampable_reason == ("template source HEAD is not resolvable to a commit")
 
 
+def test_sparse_checkout_hidden_tracked_files_are_not_stampable(tmp_path: Path) -> None:
+    """Sparse checkout can hide tracked files from status but not from ls-files -v."""
+    template_root = tmp_path / "template"
+    prepare_git_template(
+        template_root,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {
+            "README.md": "template readme\n",
+            "docs/omitted.md": "omitted tracked content\n",
+        },
+    )
+    sparse_result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(template_root),
+            "sparse-checkout",
+            "init",
+            "--cone",
+        ],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if sparse_result.returncode != 0:
+        pytest.skip(f"Git sparse-checkout is unavailable: {sparse_result.stderr}")
+    run_git(template_root, "sparse-checkout", "set", ".template-sync", "schemas")
+
+    status_result = run_git(
+        template_root,
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
+        "--ignore-submodules=none",
+    )
+    assert status_result.stdout == ""
+
+    detection = materializer.detect_local_template_source(
+        template_root,
+        materializer.detect_git_version(),
+    )
+
+    assert detection.stampable_sha is None
+    assert "skip-worktree" in cast(str, detection.not_stampable_reason)
+
+
 @pytest.mark.parametrize(
     ("index_flag", "expected_reason"),
     [
@@ -2202,6 +2681,19 @@ def test_source_completeness_rejects_hidden_tracked_file_states(
         {"README.md": "template readme\n"},
     )
     run_git(template_root, "update-index", index_flag, "README.md")
+    if index_flag == "--skip-worktree":
+        (template_root / "README.md").unlink()
+    else:
+        write_file(template_root / "README.md", "hidden local change\n")
+
+    status_result = run_git(
+        template_root,
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
+        "--ignore-submodules=none",
+    )
+    assert status_result.stdout == ""
 
     detection = materializer.detect_local_template_source(
         template_root,
@@ -2210,6 +2702,47 @@ def test_source_completeness_rejects_hidden_tracked_file_states(
 
     assert detection.stampable_sha is None
     assert expected_reason in cast(str, detection.not_stampable_reason)
+
+
+def test_source_completeness_probe_uses_binary_v_records_without_f(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Completeness parsing uses NUL-delimited binary -v output, never -f tags."""
+    calls: list[tuple[list[str], bool]] = []
+    non_ascii_path = "café file.txt"
+
+    def fake_run_source_git(
+        _repo_root: Path,
+        args: list[str],
+        *,
+        text: bool = True,
+    ) -> subprocess.CompletedProcess[bytes]:
+        calls.append((args, text))
+        if args == ["ls-files", "-z", "-v", "--full-name"]:
+            assert text is False
+            return subprocess.CompletedProcess(
+                args,
+                0,
+                f"H {non_ascii_path}".encode("utf-8") + b"\0",
+                b"",
+            )
+        if args == ["ls-files", "-z", "--stage", "--full-name"]:
+            assert text is False
+            return subprocess.CompletedProcess(
+                args,
+                0,
+                f"100644 {FULL_SHA} 0\t{non_ascii_path}".encode("utf-8") + b"\0",
+                b"",
+            )
+        raise AssertionError(f"unexpected Git args: {args!r}")
+
+    monkeypatch.setattr(materializer, "run_source_git", fake_run_source_git)
+
+    assert materializer.source_completeness_reason(tmp_path) is None
+    assert (["ls-files", "-z", "-v", "--full-name"], False) in calls
+    for args, _text in calls:
+        assert "-f" not in args
 
 
 def test_source_completeness_rejects_gitlinks(tmp_path: Path) -> None:
@@ -2225,7 +2758,7 @@ def test_source_completeness_rejects_gitlinks(tmp_path: Path) -> None:
         "update-index",
         "--add",
         "--cacheinfo",
-        f"160000,{FULL_SHA},vendor/submodule",
+        f"160000,{FULL_SHA},sub modules/template lib",
     )
     run_git(
         template_root,
@@ -2238,6 +2771,15 @@ def test_source_completeness_rejects_gitlinks(tmp_path: Path) -> None:
         "-m",
         "Add gitlink",
     )
+    (template_root / "sub modules" / "template lib").mkdir(parents=True)
+    status_result = run_git(
+        template_root,
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
+        "--ignore-submodules=none",
+    )
+    assert status_result.stdout == ""
 
     detection = materializer.detect_local_template_source(
         template_root,
@@ -2246,6 +2788,138 @@ def test_source_completeness_rejects_gitlinks(tmp_path: Path) -> None:
 
     assert detection.stampable_sha is None
     assert "submodule gitlinks" in cast(str, detection.not_stampable_reason)
+
+
+def test_template_ref_rejects_commit_that_records_gitlink(tmp_path: Path) -> None:
+    """A selected ref whose tree records a gitlink is fatal for temporary checkouts."""
+    template_repo = tmp_path / "template-repo"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    resolved_sha = prepare_git_template(
+        template_repo,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+    run_git(
+        template_repo,
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        f"160000,{resolved_sha},sub modules/template lib",
+    )
+    run_git(
+        template_repo,
+        "-c",
+        "user.name=Template Tester",
+        "-c",
+        "user.email=template@example.com",
+        "commit",
+        "-q",
+        "-m",
+        "Add gitlink",
+    )
+    gitlink_sha = run_git(template_repo, "rev-parse", "HEAD").stdout.strip()
+    run_git(template_repo, "branch", "template-main", gitlink_sha)
+
+    result = run_materialize_without_template_root(
+        target_root,
+        "--template-ref",
+        "template-main",
+        "--template-repo",
+        str(template_repo),
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+    )
+
+    assert result.returncode == 1
+    assert "submodule gitlinks" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("stage_stdout", "expected_reason"),
+    [
+        pytest.param(
+            b"100644 abcdef 0 path-without-tab\0",
+            "unable to parse source index metadata",
+            id="missing-tab",
+        ),
+        pytest.param(
+            b"100644\tREADME.md\0",
+            "unable to parse source index metadata",
+            id="short-metadata",
+        ),
+        pytest.param(
+            b"not-a-mode abcdef 0\tREADME.md\0",
+            "unable to parse source index mode",
+            id="unreadable-mode",
+        ),
+    ],
+)
+def test_source_gitlink_stage_parser_treats_malformed_records_as_indeterminate(
+    tmp_path: Path,
+    monkeypatch: Any,
+    stage_stdout: bytes,
+    expected_reason: str,
+) -> None:
+    """Malformed NUL-delimited stage records are indeterminate, not silently clean."""
+
+    def fake_run_source_git(
+        _repo_root: Path,
+        args: list[str],
+        *,
+        text: bool = True,
+    ) -> subprocess.CompletedProcess[bytes]:
+        if args == ["ls-files", "-z", "-v", "--full-name"]:
+            assert text is False
+            return subprocess.CompletedProcess(args, 0, b"H README.md\0", b"")
+        if args == ["ls-files", "-z", "--stage", "--full-name"]:
+            assert text is False
+            return subprocess.CompletedProcess(args, 0, stage_stdout, b"")
+        raise AssertionError(f"unexpected Git args: {args!r}")
+
+    monkeypatch.setattr(materializer, "run_source_git", fake_run_source_git)
+
+    reason = cast(str, materializer.source_completeness_reason(tmp_path))
+
+    assert expected_reason in reason
+    assert_single_physical_line(reason)
+
+
+def test_stampability_backstop_runs_before_status_probe(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Completeness and gitlink backstops are evaluated before ordinary status."""
+    calls: list[str] = []
+
+    def fake_partial_guard(_repo_root: Path, _git_version: Any) -> None:
+        calls.append("partial")
+        return None
+
+    def fake_completeness(_source_worktree: Path) -> str:
+        calls.append("completeness")
+        return "the template source records submodule gitlinks, which are not supported"
+
+    def fake_status(_repo_root: Path, _git_version: Any) -> str | None:
+        calls.append("status")
+        return "ordinary status should not decide this fixture"
+
+    monkeypatch.setattr(materializer, "partial_promisor_guard_reason", fake_partial_guard)
+    monkeypatch.setattr(materializer, "source_completeness_reason", fake_completeness)
+    monkeypatch.setattr(materializer, "status_probe_not_stampable_reason", fake_status)
+
+    assert (
+        materializer.verify_source_worktree_stampable(
+            tmp_path,
+            materializer.GitVersion(2, 45),
+            fatal=False,
+        )
+        is False
+    )
+
+    assert calls == ["partial", "completeness"]
 
 
 def test_old_git_with_configured_fsmonitor_is_not_stampable(tmp_path: Path) -> None:
@@ -2269,8 +2943,43 @@ def test_old_git_with_configured_fsmonitor_is_not_stampable(tmp_path: Path) -> N
     assert "--last-reviewed-template-commit FULL_SHA" in reason
 
 
-def test_partial_promisor_guard_uses_effective_remote_config(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "git_version",
+    [
+        pytest.param(materializer.GitVersion(2, 35), id="old-git"),
+        pytest.param(None, id="unparseable-git"),
+    ],
+)
+def test_old_or_unparseable_git_reads_effective_global_fsmonitor(
+    tmp_path: Path,
+    monkeypatch: Any,
+    git_version: Any,
+) -> None:
+    """The fsmonitor safety check reads effective config, including global config."""
+    global_config = isolate_git_config(monkeypatch, tmp_path)
+    write_git_config_file(global_config, "core.fsmonitor", "true")
+    template_root = tmp_path / "template"
+    prepare_git_template(
+        template_root,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+
+    detection = materializer.detect_local_template_source(template_root, git_version)
+
+    assert detection.stampable_sha is None
+    reason = cast(str, detection.not_stampable_reason)
+    assert "Git to be detected as >=2.36" in reason
+    assert "--last-reviewed-template-commit FULL_SHA" in reason
+    assert_single_physical_line(reason)
+
+
+def test_partial_promisor_guard_uses_effective_remote_config(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
     """The partial/promisor guard follows final effective remote config values."""
+    isolate_git_config(monkeypatch, tmp_path)
     template_root = tmp_path / "template"
     prepare_git_template(
         template_root,
@@ -2297,6 +3006,169 @@ def test_partial_promisor_guard_uses_effective_remote_config(tmp_path: Path) -> 
     assert "remote.origin.partialclonefilter" in filter_reason.lower()
     run_git(template_root, "config", "--add", "remote.origin.partialCloneFilter", "")
     assert materializer.partial_promisor_guard_reason(template_root, old_git) is None
+
+
+def test_partial_promisor_guard_honors_isolated_config_precedence(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Higher-priority effective config overrides lower promisor/filter config."""
+    global_config = isolate_git_config(monkeypatch, tmp_path)
+    template_root = tmp_path / "template"
+    prepare_git_template(
+        template_root,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+    old_git = materializer.GitVersion(2, 44)
+
+    write_git_config_file(global_config, "remote.origin.promisor", "true")
+    assert "remote.origin.promisor=true" in cast(
+        str,
+        materializer.partial_promisor_guard_reason(template_root, old_git),
+    )
+    run_git(template_root, "config", "remote.origin.promisor", "false")
+    assert materializer.partial_promisor_guard_reason(template_root, old_git) is None
+
+    write_git_config_file(global_config, "remote.blobs.partialCloneFilter", "blob:none")
+    assert (
+        "remote.blobs.partialclonefilter"
+        in cast(
+            str,
+            materializer.partial_promisor_guard_reason(template_root, old_git),
+        ).lower()
+    )
+    run_git(template_root, "config", "remote.blobs.partialCloneFilter", "")
+    assert materializer.partial_promisor_guard_reason(template_root, old_git) is None
+
+    run_git(template_root, "config", "remote.bad.promisor", "not-a-bool")
+    malformed_reason = cast(
+        str,
+        materializer.partial_promisor_guard_reason(template_root, old_git),
+    )
+    assert "unable to determine promisor remote state from remote.bad.promisor" in (
+        malformed_reason
+    )
+    assert_single_physical_line(malformed_reason)
+
+
+def test_partial_promisor_guard_reads_command_scope_config(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """GIT_CONFIG_COUNT command-scope values are visible and highest priority."""
+    global_config = isolate_git_config(monkeypatch, tmp_path)
+    template_root = tmp_path / "template"
+    prepare_git_template(
+        template_root,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+    old_git = materializer.GitVersion(2, 44)
+
+    write_git_config_file(global_config, "remote.origin.promisor", "true")
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "remote.origin.promisor")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "false")
+    assert materializer.partial_promisor_guard_reason(template_root, old_git) is None
+
+    run_git(template_root, "config", "remote.command.promisor", "false")
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "2")
+    monkeypatch.setenv("GIT_CONFIG_KEY_1", "remote.command.promisor")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_1", "true")
+    command_reason = cast(
+        str,
+        materializer.partial_promisor_guard_reason(template_root, old_git),
+    )
+    assert "remote.command.promisor=true" in command_reason
+
+    monkeypatch.setenv("GIT_CONFIG_KEY_1", "remote.command.partialCloneFilter")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_1", "blob:none")
+    filter_reason = cast(
+        str,
+        materializer.partial_promisor_guard_reason(template_root, old_git),
+    )
+    assert "remote.command.partialclonefilter" in filter_reason.lower()
+
+
+def test_partial_promisor_guard_rejects_local_partial_clone_extension(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Repository-local extensions.partialClone independently triggers the guard."""
+    isolate_git_config(monkeypatch, tmp_path)
+    template_root = tmp_path / "template"
+    prepare_git_template(
+        template_root,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+    run_git(template_root, "config", "extensions.partialClone", "origin")
+
+    reason = cast(
+        str,
+        materializer.partial_promisor_guard_reason(
+            template_root,
+            materializer.GitVersion(2, 44),
+        ),
+    )
+
+    assert "extensions.partialClone" in reason
+    assert_single_physical_line(reason)
+
+
+def test_backing_template_repository_partial_guard_runs_before_ref_resolution(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Backing repositories are guarded before selected-ref lookup or worktree add."""
+    template_repo = tmp_path / "template-repo"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_git_template(
+        template_repo,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+    calls: list[str] = []
+
+    def fake_partial_guard(_repo_root: Path, _git_version: Any) -> str:
+        calls.append("partial")
+        return "the template source has remote.origin.promisor=true"
+
+    def fail_resolve(*_args: Any, **_kwargs: Any) -> str:
+        calls.append("resolve")
+        raise AssertionError("ref resolution must not run after partial guard failure")
+
+    def fail_checkout(*_args: Any, **_kwargs: Any) -> Any:
+        calls.append("checkout")
+        raise AssertionError("worktree add must not run after partial guard failure")
+
+    monkeypatch.setattr(materializer, "detect_git_version", lambda: materializer.GitVersion(2, 44))
+    monkeypatch.setattr(materializer, "partial_promisor_guard_reason", fake_partial_guard)
+    monkeypatch.setattr(materializer, "resolve_template_commit", fail_resolve)
+    monkeypatch.setattr(materializer, "create_temporary_source_checkout", fail_checkout)
+
+    args = materializer.parse_args(
+        [
+            "--target-root",
+            str(target_root),
+            "--template-ref",
+            "template-main",
+            "--template-repo",
+            str(template_repo),
+            "--source-repo",
+            SOURCE_REPO,
+            "--included-module",
+            "baseline",
+        ]
+    )
+
+    with pytest.raises(materializer.MaterializationError) as error:
+        materializer.resolve_template_source(args, target_root)
+
+    assert "remote.origin.promisor=true" in str(error.value)
+    assert calls == ["partial"]
 
 
 def test_args_file_stamp_true_can_be_overridden_by_cli_no(tmp_path: Path) -> None:

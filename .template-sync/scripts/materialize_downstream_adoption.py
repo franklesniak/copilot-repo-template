@@ -1296,9 +1296,13 @@ def source_completeness_reason(source_worktree: Path) -> str | None:
         if separator != b"\t":
             return "unable to parse source index metadata while checking for gitlinks"
         fields = metadata.split()
-        if not fields:
+        if len(fields) < 3:
+            return "unable to parse source index metadata while checking for gitlinks"
+        try:
+            mode = int(fields[0], 8)
+        except ValueError:
             return "unable to parse source index mode while checking for gitlinks"
-        if fields[0] == b"160000":
+        if mode == 0o160000:
             return (
                 "the template source records submodule gitlinks, which are not "
                 "supported for stampability"
