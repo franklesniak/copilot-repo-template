@@ -13,7 +13,7 @@ import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Collection, Iterable, Sequence, cast
+from typing import Any, Callable, Collection, Iterable, Mapping, Sequence, cast
 
 import yaml  # type: ignore[import-untyped]
 
@@ -66,6 +66,11 @@ ADOPTION_MODES = ("minimal-preservation", "tailored")
 TEMPLATE_TAKE_DECISION = "TAKE"
 TEMPLATE_SKIP_DECISION = "SKIP"
 FULL_LOWERCASE_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+GIT_VERSION_RE = re.compile(r"^git version (?P<major>[0-9]+)\.(?P<minor>[0-9]+)")
+SOURCE_GIT_ENV_OVERLAY = {
+    "GIT_NO_LAZY_FETCH": "1",
+    "GIT_OPTIONAL_LOCKS": "0",
+}
 PLACEHOLDER_DESTS = (
     "host_provider",
     "repository",
@@ -165,6 +170,7 @@ ARGS_FILE_FIELDS = frozenset(
         "included_modules_csv",
         "source_repo",
         "last_reviewed_template_commit",
+        "stamp_resolved_source_as_reviewed",
         "default_adoption_mode",
         "host_provider",
         "repository",
@@ -252,7 +258,13 @@ STRING_ARGS_FILE_FIELDS = frozenset(
     }
 )
 LIST_STRING_ARGS_FILE_FIELDS = frozenset({"included_modules", "issue_labels", "package_keywords"})
-BOOLEAN_ARGS_FILE_FIELDS = frozenset({"preserve_existing_license", "allow_conflicts"})
+BOOLEAN_ARGS_FILE_FIELDS = frozenset(
+    {
+        "stamp_resolved_source_as_reviewed",
+        "preserve_existing_license",
+        "allow_conflicts",
+    }
+)
 CLI_FLAGS: dict[str, tuple[str, ...]] = {
     "template_root": ("--template-root",),
     "template_ref": ("--template-ref",),
@@ -265,6 +277,10 @@ CLI_FLAGS: dict[str, tuple[str, ...]] = {
     "included_modules_csv": ("--included-modules",),
     "source_repo": ("--source-repo",),
     "last_reviewed_template_commit": ("--last-reviewed-template-commit",),
+    "stamp_resolved_source_as_reviewed": (
+        "--stamp-resolved-source-as-reviewed",
+        "--no-stamp-resolved-source-as-reviewed",
+    ),
     "default_adoption_mode": ("--default-adoption-mode",),
     "host_provider": ("--host-provider",),
     "repository": ("--repository",),
@@ -352,6 +368,24 @@ class MaterializationError(RuntimeError):
     """Raised when first-adoption materialization cannot proceed safely."""
 
 
+@dataclass(frozen=True)
+class GitVersion:
+    """Parsed Git major/minor version used for capability gates."""
+
+    major: int
+    minor: int
+
+
+@dataclass(frozen=True)
+class LocalSourceDetection:
+    """Best-effort stampability result for a local template source worktree."""
+
+    observed_source_sha: str | None = None
+    source_worktree_root: str | None = None
+    stampable_sha: str | None = None
+    not_stampable_reason: str | None = None
+
+
 @dataclass
 class SourceSummary:
     """Template source identity and cleanup information for one run."""
@@ -361,6 +395,12 @@ class SourceSummary:
     source_mode: str
     source_value: str | None = None
     resolved_source_sha: str | None = None
+    observed_source_sha: str | None = None
+    source_worktree_root: str | None = None
+    source_not_stampable_reason: str | None = None
+    accepted_reviewed_commit: str | None = None
+    reviewed_commit_source: str | None = None
+    source_cross_check_note: str | None = None
     source_repository: str | None = None
     temporary_checkout_path: str | None = None
     cleanup_status: str = "not required"
@@ -776,6 +816,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Full lowercase reviewed upstream template commit SHA.",
     )
     parser.add_argument(
+        "--stamp-resolved-source-as-reviewed",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Assert that review of the resolved template source commit is complete "
+            "and that the source is the intended upstream lineage; this does not "
+            "select the materialization source."
+        ),
+    )
+    parser.add_argument(
         "--default-adoption-mode",
         choices=ADOPTION_MODES,
         default="minimal-preservation",
@@ -1033,9 +1083,17 @@ def filesystem_compare_key(path: Path) -> str:
     return resolved
 
 
-def command_detail(result: subprocess.CompletedProcess[str]) -> str:
+def command_output_text(value: str | bytes) -> str:
+    """Return subprocess output as displayable text for one-line diagnostics."""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
+def command_detail(result: subprocess.CompletedProcess[Any]) -> str:
     """Return the first useful diagnostic line from a completed command."""
-    for stream_text in (result.stderr, result.stdout):
+    for stream_value in (result.stderr, result.stdout):
+        stream_text = command_output_text(stream_value)
         for line in stream_text.splitlines():
             if line.strip():
                 return line.strip()
@@ -1043,25 +1101,376 @@ def command_detail(result: subprocess.CompletedProcess[str]) -> str:
 
 
 def run_git(
-    repo_root: Path,
+    repo_root: Path | None,
     args: Sequence[str],
-) -> subprocess.CompletedProcess[str]:
+    *,
+    env_overlay: Mapping[str, str] | None = None,
+    text: bool = True,
+) -> subprocess.CompletedProcess[Any]:
     """Run a local Git command without invoking a shell."""
+    command = ["git"]
+    if repo_root is not None:
+        command.extend(("-C", str(repo_root)))
+    command.extend(args)
+    env = None if env_overlay is None else {**os.environ, **env_overlay}
     try:
         return subprocess.run(
-            ["git", "-C", str(repo_root), *args],
+            command,
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
+            text=text,
+            env=env,
         )
     except OSError as error:
         raise MaterializationError(f"Unable to run git: {os_error_summary(error)}") from error
 
 
+def run_git_with_options(
+    repo_root: Path | None,
+    args: Sequence[str],
+    *,
+    env_overlay: Mapping[str, str] | None = None,
+    text: bool = True,
+) -> subprocess.CompletedProcess[Any]:
+    """Run Git with optional child-process environment overlay and output mode."""
+    return run_git(repo_root, args, env_overlay=env_overlay, text=text)
+
+
+def run_source_git(
+    repo_root: Path,
+    args: Sequence[str],
+    *,
+    text: bool = True,
+) -> subprocess.CompletedProcess[Any]:
+    """Run a source-inspection Git command without lazy fetches or optional locks."""
+    return run_git_with_options(
+        repo_root,
+        args,
+        env_overlay=SOURCE_GIT_ENV_OVERLAY,
+        text=text,
+    )
+
+
+def parse_git_version(value: str) -> GitVersion | None:
+    """Parse the leading major/minor Git version, if present."""
+    match = GIT_VERSION_RE.match(value.strip())
+    if match is None:
+        return None
+    return GitVersion(
+        major=int(match.group("major")),
+        minor=int(match.group("minor")),
+    )
+
+
+def detect_git_version() -> GitVersion | None:
+    """Return the locally available Git version without requiring a repository."""
+    try:
+        result = run_git_with_options(None, ["--version"])
+    except MaterializationError:
+        return None
+    if result.returncode != 0:
+        return None
+    return parse_git_version(command_output_text(result.stdout))
+
+
+def git_version_at_least(version: GitVersion | None, major: int, minor: int) -> bool:
+    """Return whether a parsed Git version is at least ``major.minor``."""
+    if version is None:
+        return False
+    return (version.major, version.minor) >= (major, minor)
+
+
+def effective_git_config_value(repo_root: Path, key: str) -> subprocess.CompletedProcess[Any]:
+    """Read a single effective Git config value for ``key``."""
+    return run_source_git(repo_root, ["config", "--get", key])
+
+
+def local_git_config_value(repo_root: Path, key: str) -> subprocess.CompletedProcess[Any]:
+    """Read a single repository-local Git config value for ``key``."""
+    return run_source_git(repo_root, ["config", "--local", "--get", key])
+
+
+def git_config_key_names(repo_root: Path, pattern: str) -> tuple[str, ...] | str:
+    """Return effective Git config key names matching ``pattern`` or an error reason."""
+    result = run_source_git(repo_root, ["config", "--name-only", "--get-regexp", pattern])
+    if result.returncode == 1:
+        return ()
+    if result.returncode != 0:
+        return f"unable to inspect Git config keys matching {pattern!r}: {command_detail(result)}"
+    names = tuple(
+        line.strip() for line in command_output_text(result.stdout).splitlines() if line.strip()
+    )
+    return names
+
+
+def partial_promisor_guard_reason(repo_root: Path, git_version: GitVersion | None) -> str | None:
+    """Return a blocking partial/promisor reason for Git versions without safe no-fetch."""
+    if git_version_at_least(git_version, 2, 45):
+        return None
+
+    partial_result = local_git_config_value(repo_root, "extensions.partialClone")
+    if partial_result.returncode == 0:
+        return (
+            "the template source is a partial clone via extensions.partialClone; "
+            "use Git detected as >=2.45 so GIT_NO_LAZY_FETCH is honored, or use a "
+            "complete local template source"
+        )
+    if partial_result.returncode != 1:
+        return (
+            "unable to determine partial-clone state from extensions.partialClone: "
+            f"{command_detail(partial_result)}"
+        )
+
+    promisor_names = git_config_key_names(repo_root, r"^remote\..*\.promisor$")
+    if isinstance(promisor_names, str):
+        return promisor_names
+    for key_name in promisor_names:
+        result = run_source_git(repo_root, ["config", "--type=bool", "--get", key_name])
+        if result.returncode == 1:
+            continue
+        if result.returncode != 0:
+            return (
+                f"unable to determine promisor remote state from {key_name}: "
+                f"{command_detail(result)}"
+            )
+        if command_output_text(result.stdout).strip() == "true":
+            return (
+                f"the template source has {key_name}=true; use Git detected as "
+                ">=2.45 so GIT_NO_LAZY_FETCH is honored, or use a complete local "
+                "template source"
+            )
+
+    filter_names = git_config_key_names(repo_root, r"^remote\..*\.partialCloneFilter$")
+    if isinstance(filter_names, str):
+        return filter_names
+    for key_name in filter_names:
+        result = effective_git_config_value(repo_root, key_name)
+        if result.returncode == 1:
+            continue
+        if result.returncode != 0:
+            return (
+                f"unable to determine partial-clone filter state from {key_name}: "
+                f"{command_detail(result)}"
+            )
+        if command_output_text(result.stdout).strip():
+            return (
+                f"the template source has non-empty {key_name}; use Git detected as "
+                ">=2.45 so GIT_NO_LAZY_FETCH is honored, or use a complete local "
+                "template source"
+            )
+    return None
+
+
+def source_completeness_reason(source_worktree: Path) -> str | None:
+    """Return a reason when tracked source content may be incomplete."""
+    result = run_source_git(
+        source_worktree,
+        ["ls-files", "-z", "-v", "--full-name"],
+        text=False,
+    )
+    if result.returncode != 0:
+        return f"unable to inspect tracked source completeness: {command_detail(result)}"
+    assert isinstance(result.stdout, bytes)
+    for record in result.stdout.split(b"\0"):
+        if not record:
+            continue
+        status_byte = record[:1]
+        if status_byte == b"S":
+            return "the template source has tracked files marked skip-worktree"
+        if status_byte and 97 <= status_byte[0] <= 122:
+            return "the template source has tracked files marked assume-unchanged"
+
+    stage_result = run_source_git(
+        source_worktree,
+        ["ls-files", "-z", "--stage", "--full-name"],
+        text=False,
+    )
+    if stage_result.returncode != 0:
+        return f"unable to inspect source gitlinks: {command_detail(stage_result)}"
+    assert isinstance(stage_result.stdout, bytes)
+    for record in stage_result.stdout.split(b"\0"):
+        if not record:
+            continue
+        metadata, separator, _path = record.partition(b"\t")
+        if separator != b"\t":
+            return "unable to parse source index metadata while checking for gitlinks"
+        fields = metadata.split()
+        if not fields:
+            return "unable to parse source index mode while checking for gitlinks"
+        if fields[0] == b"160000":
+            return (
+                "the template source records submodule gitlinks, which are not "
+                "supported for stampability"
+            )
+    return None
+
+
+def status_probe_not_stampable_reason(
+    repo_root: Path,
+    git_version: GitVersion | None,
+) -> str | None:
+    """Return a not-stampable reason from the clean-status gate."""
+    status_args = [
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
+        "--ignore-submodules=none",
+    ]
+    if git_version_at_least(git_version, 2, 36):
+        result = run_source_git(repo_root, ["-c", "core.fsmonitor=false", *status_args])
+    else:
+        fsmonitor_result = effective_git_config_value(repo_root, "core.fsmonitor")
+        if fsmonitor_result.returncode == 0:
+            return (
+                "core.fsmonitor is configured; stamping this source requires Git to "
+                "be detected as >=2.36 so the status probe can force-disable "
+                "fsmonitor, or an explicit --last-reviewed-template-commit FULL_SHA"
+            )
+        if fsmonitor_result.returncode != 1:
+            return (
+                "unable to determine core.fsmonitor state before status: "
+                f"{command_detail(fsmonitor_result)}"
+            )
+        result = run_source_git(repo_root, status_args)
+    if result.returncode != 0:
+        return f"unable to inspect source status: {command_detail(result)}"
+    if command_output_text(result.stdout):
+        return "the template source has dirty tracked files or untracked non-ignored files"
+    return None
+
+
+def verify_source_worktree_stampable(
+    source_worktree: Path,
+    git_version: GitVersion | None,
+    *,
+    fatal: bool,
+) -> str | None:
+    """Validate source completeness and cleanliness, returning a trusted SHA if allowed."""
+    partial_reason = partial_promisor_guard_reason(source_worktree, git_version)
+    if partial_reason is not None:
+        if fatal:
+            raise MaterializationError(partial_reason)
+        return None
+
+    completeness_reason = source_completeness_reason(source_worktree)
+    if completeness_reason is not None:
+        if fatal:
+            raise MaterializationError(completeness_reason)
+        return None
+
+    status_reason = status_probe_not_stampable_reason(source_worktree, git_version)
+    if status_reason is not None:
+        if fatal:
+            raise MaterializationError(status_reason)
+        return None
+    return "stampable"
+
+
+def detect_local_template_source(
+    template_root: Path,
+    git_version: GitVersion | None,
+) -> LocalSourceDetection:
+    """Discover whether a local template root is a complete, clean Git checkout."""
+    try:
+        inside_result = run_source_git(
+            template_root,
+            ["rev-parse", "--is-inside-work-tree"],
+        )
+        if (
+            inside_result.returncode != 0
+            or command_output_text(inside_result.stdout).strip() != "true"
+        ):
+            return LocalSourceDetection(
+                not_stampable_reason="the template root is not a Git worktree"
+            )
+
+        top_level_result = run_source_git(template_root, ["rev-parse", "--show-toplevel"])
+        if top_level_result.returncode != 0:
+            return LocalSourceDetection(
+                not_stampable_reason=(
+                    "unable to identify source worktree root: "
+                    f"{command_detail(top_level_result)}"
+                )
+            )
+        top_level_text = command_output_text(top_level_result.stdout).strip()
+        if not top_level_text:
+            return LocalSourceDetection(
+                not_stampable_reason="Git did not report a source worktree root"
+            )
+        source_worktree_root_path = Path(top_level_text).resolve(strict=False)
+        source_worktree_root = str(source_worktree_root_path)
+        if filesystem_compare_key(template_root) != filesystem_compare_key(
+            source_worktree_root_path
+        ):
+            return LocalSourceDetection(
+                source_worktree_root=source_worktree_root,
+                not_stampable_reason=(
+                    "--template-root is not the Git worktree top level; pass the "
+                    "full template worktree root instead"
+                ),
+            )
+
+        partial_reason = partial_promisor_guard_reason(template_root, git_version)
+        if partial_reason is not None:
+            return LocalSourceDetection(
+                source_worktree_root=source_worktree_root,
+                not_stampable_reason=partial_reason,
+            )
+
+        head_result = run_source_git(
+            template_root,
+            ["rev-parse", "--verify", "--end-of-options", "HEAD^{commit}"],
+        )
+        if head_result.returncode != 0:
+            return LocalSourceDetection(
+                source_worktree_root=source_worktree_root,
+                not_stampable_reason="template source HEAD is not resolvable to a commit",
+            )
+        head_lines = command_output_text(head_result.stdout).strip().splitlines()
+        if not head_lines:
+            return LocalSourceDetection(
+                source_worktree_root=source_worktree_root,
+                not_stampable_reason="template source HEAD is not resolvable to a commit",
+            )
+        observed_source_sha = head_lines[0].strip()
+        if not FULL_LOWERCASE_SHA_RE.fullmatch(observed_source_sha):
+            return LocalSourceDetection(
+                observed_source_sha=observed_source_sha,
+                source_worktree_root=source_worktree_root,
+                not_stampable_reason=(
+                    "the resolved template source commit is not a 40-character "
+                    "lowercase SHA-1 value; SHA-256 repositories are not stampable"
+                ),
+            )
+
+        completeness_reason = source_completeness_reason(template_root)
+        if completeness_reason is not None:
+            return LocalSourceDetection(
+                observed_source_sha=observed_source_sha,
+                source_worktree_root=source_worktree_root,
+                not_stampable_reason=completeness_reason,
+            )
+
+        status_reason = status_probe_not_stampable_reason(template_root, git_version)
+        if status_reason is not None:
+            return LocalSourceDetection(
+                observed_source_sha=observed_source_sha,
+                source_worktree_root=source_worktree_root,
+                not_stampable_reason=status_reason,
+            )
+        return LocalSourceDetection(
+            observed_source_sha=observed_source_sha,
+            source_worktree_root=source_worktree_root,
+            stampable_sha=observed_source_sha,
+        )
+    except MaterializationError as error:
+        return LocalSourceDetection(not_stampable_reason=str(error).replace("\n", " "))
+
+
 def resolve_template_commit(template_repo: Path, raw_ref: str, *, label: str) -> str:
     """Resolve a locally available ref or SHA to a commit SHA without fetching."""
-    result = run_git(
+    result = run_source_git(
         template_repo,
         ["rev-parse", "--verify", "--end-of-options", f"{raw_ref}^{{commit}}"],
     )
@@ -1070,7 +1479,7 @@ def resolve_template_commit(template_repo: Path, raw_ref: str, *, label: str) ->
             f"Unable to resolve {label} {raw_ref!r} to a local commit without fetching: "
             f"{command_detail(result)}"
         )
-    resolved_sha = result.stdout.strip().splitlines()[0]
+    resolved_sha = command_output_text(result.stdout).strip().splitlines()[0]
     if not FULL_LOWERCASE_SHA_RE.fullmatch(resolved_sha):
         raise MaterializationError(
             f"Git resolved {label} {raw_ref!r} to an unexpected commit value."
@@ -1132,13 +1541,13 @@ def manual_cleanup_command(template_repo: Path, temporary_checkout_path: Path) -
 
 def worktree_list_contains_path(template_repo: Path, worktree_path: Path) -> bool:
     """Return whether ``git worktree list --porcelain`` still lists a path."""
-    result = run_git(template_repo, ["worktree", "list", "--porcelain"])
+    result = run_source_git(template_repo, ["worktree", "list", "--porcelain"])
     if result.returncode != 0:
         raise MaterializationError(
             f"Unable to verify temporary worktree cleanup: {command_detail(result)}"
         )
     expected_key = filesystem_compare_key(worktree_path)
-    for line in result.stdout.splitlines():
+    for line in command_output_text(result.stdout).splitlines():
         if not line.startswith("worktree "):
             continue
         listed_path = Path(line.removeprefix("worktree "))
@@ -1155,6 +1564,7 @@ def create_temporary_source_checkout(
     source_value: str,
     resolved_source_sha: str,
     temp_root: Path,
+    git_version: GitVersion | None,
 ) -> SourceCheckout:
     """Create a detached temporary worktree for a resolved upstream source commit."""
     try:
@@ -1174,9 +1584,16 @@ def create_temporary_source_checkout(
             "pass --template-temp-root outside the target repository."
         )
 
-    result = run_git(
+    partial_reason = partial_promisor_guard_reason(template_repo, git_version)
+    if partial_reason is not None:
+        shutil.rmtree(temporary_parent, ignore_errors=True)
+        raise MaterializationError(partial_reason)
+
+    result = run_source_git(
         template_repo,
         [
+            "-c",
+            "core.sparseCheckout=false",
             "worktree",
             "add",
             "--detach",
@@ -1189,6 +1606,17 @@ def create_temporary_source_checkout(
         raise MaterializationError(
             f"Unable to create temporary source checkout: {command_detail(result)}"
         )
+
+    try:
+        verify_source_worktree_stampable(
+            temporary_checkout_path,
+            git_version,
+            fatal=True,
+        )
+    except MaterializationError:
+        run_git(template_repo, ["worktree", "remove", "--force", str(temporary_checkout_path)])
+        shutil.rmtree(temporary_parent, ignore_errors=True)
+        raise
 
     command = manual_cleanup_command(template_repo, temporary_checkout_path)
     return SourceCheckout(
@@ -1212,6 +1640,7 @@ def create_temporary_source_checkout(
 
 def resolve_template_source(args: argparse.Namespace, target_root: Path) -> SourceCheckout:
     """Resolve the template source root, creating a private worktree when requested."""
+    git_version = detect_git_version()
     if args.template_revision is not None and not FULL_LOWERCASE_SHA_RE.fullmatch(
         args.template_revision
     ):
@@ -1223,6 +1652,10 @@ def resolve_template_source(args: argparse.Namespace, target_root: Path) -> Sour
             default=default_template_root(),
             name="--template-root",
         )
+        detection = detect_local_template_source(template_root, git_version)
+        resolved_source_sha = (
+            detection.stampable_sha if args.stamp_resolved_source_as_reviewed else None
+        )
         return SourceCheckout(
             template_root=template_root,
             summary=SourceSummary(
@@ -1230,6 +1663,10 @@ def resolve_template_source(args: argparse.Namespace, target_root: Path) -> Sour
                 template_root=str(template_root),
                 source_mode="template-root",
                 source_value=str(template_root),
+                resolved_source_sha=resolved_source_sha,
+                observed_source_sha=detection.observed_source_sha,
+                source_worktree_root=detection.source_worktree_root,
+                source_not_stampable_reason=detection.not_stampable_reason,
             ),
         )
 
@@ -1243,6 +1680,9 @@ def resolve_template_source(args: argparse.Namespace, target_root: Path) -> Sour
         default=target_root,
         name="--template-repo",
     )
+    partial_reason = partial_promisor_guard_reason(template_repo, git_version)
+    if partial_reason is not None:
+        raise MaterializationError(partial_reason)
     label = "--template-ref" if args.template_ref is not None else "--template-revision"
     resolved_source_sha = resolve_template_commit(template_repo, raw_source_value, label=label)
     temp_root = resolve_template_temp_root(args.template_temp_root, target_root)
@@ -1253,6 +1693,7 @@ def resolve_template_source(args: argparse.Namespace, target_root: Path) -> Sour
         source_value=raw_source_value,
         resolved_source_sha=resolved_source_sha,
         temp_root=temp_root,
+        git_version=git_version,
     )
 
 
@@ -1353,6 +1794,72 @@ def validate_reviewed_commit_matches_source(
         f"({resolved_source_sha}). Omit the reviewed value until review is complete "
         "or supply the matching SHA."
     )
+
+
+def decisions_with_reviewed_commit(decisions: Decisions, reviewed_commit: str) -> Decisions:
+    """Return decisions with top-level and marker-shaped reviewed state aligned."""
+    marker_data = MarkerDecisionData(
+        last_reviewed_template_commit=reviewed_commit,
+        included_modules=decisions.marker_data.included_modules,
+        local_overrides=decisions.marker_data.local_overrides,
+        local_path_ownership=decisions.marker_data.local_path_ownership,
+        deferred_candidates=decisions.marker_data.deferred_candidates,
+        protected_decisions=decisions.marker_data.protected_decisions,
+        protected_guide_contract_waivers=(decisions.marker_data.protected_guide_contract_waivers),
+    )
+    return Decisions(
+        source_repo=decisions.source_repo,
+        last_reviewed_template_commit=reviewed_commit,
+        included_modules=decisions.included_modules,
+        marker_data=marker_data,
+        raw_marker_fields=decisions.raw_marker_fields,
+    )
+
+
+def apply_reviewed_source_assertion(
+    args: argparse.Namespace,
+    decisions: Decisions,
+    source_checkout: SourceCheckout,
+) -> Decisions:
+    """Apply the explicit source-as-reviewed assertion to decision state."""
+    summary = source_checkout.summary
+    had_explicit_reviewed_commit = decisions.last_reviewed_template_commit is not None
+    if args.stamp_resolved_source_as_reviewed and not had_explicit_reviewed_commit:
+        trusted_source_sha = summary.resolved_source_sha
+        if trusted_source_sha is None:
+            reason = summary.source_not_stampable_reason or "no trusted source SHA is available"
+            raise MaterializationError(
+                f"--stamp-resolved-source-as-reviewed requires a trusted source SHA; {reason}."
+            )
+        decisions = decisions_with_reviewed_commit(decisions, trusted_source_sha)
+        summary.reviewed_commit_source = "--stamp-resolved-source-as-reviewed"
+    elif decisions.last_reviewed_template_commit is not None:
+        summary.reviewed_commit_source = "explicit reviewed commit"
+
+    summary.accepted_reviewed_commit = decisions.last_reviewed_template_commit
+    if summary.source_mode != "template-root":
+        return decisions
+
+    reviewed_commit = decisions.last_reviewed_template_commit
+    if reviewed_commit is None:
+        return decisions
+    if summary.resolved_source_sha is not None:
+        return decisions
+    if summary.source_not_stampable_reason is not None:
+        summary.source_cross_check_note = (
+            f"source HEAD could not be cross-checked: {summary.source_not_stampable_reason}"
+        )
+    elif (
+        not args.stamp_resolved_source_as_reviewed
+        and summary.observed_source_sha is not None
+        and reviewed_commit != summary.observed_source_sha
+    ):
+        summary.source_cross_check_note = (
+            "explicit reviewed commit differs from the observed source HEAD; "
+            "rerun with --stamp-resolved-source-as-reviewed after review only when "
+            "the local source commit is the intended upstream lineage"
+        )
+    return decisions
 
 
 def resolve_target_decisions_file(target_root: Path, raw_path: str) -> Path:
@@ -2449,7 +2956,48 @@ def print_source_summary(source: SourceSummary | None) -> None:
         print(f"  - source revision: {source.source_value}")
     else:
         print(f"  - source value: {source.source_value}")
-    print(f"  - resolved source SHA: {source.resolved_source_sha or '(not resolved)'}")
+    if source.source_mode == "template-root":
+        if source.source_worktree_root is not None:
+            print(f"  - source worktree root: {source.source_worktree_root}")
+        if source.observed_source_sha is not None:
+            if source.resolved_source_sha is not None:
+                print(
+                    "  - source commit: "
+                    f"observed {source.observed_source_sha}; accepted for reviewed-state "
+                    "assertion"
+                )
+            elif source.source_not_stampable_reason is not None:
+                print(
+                    "  - source commit: "
+                    f"observed {source.observed_source_sha}; not stampable "
+                    f"({source.source_not_stampable_reason})"
+                )
+            else:
+                print(
+                    "  - source commit: "
+                    f"observed {source.observed_source_sha}; not accepted as "
+                    "reviewed state"
+                )
+        else:
+            reason = source.source_not_stampable_reason or "not discovered"
+            print(f"  - source commit: not stampable ({reason})")
+    else:
+        print(f"  - resolved source SHA: {source.resolved_source_sha or '(not resolved)'}")
+    if source.accepted_reviewed_commit is None:
+        print(
+            "  - accepted reviewed commit for computed marker: "
+            "(none; complete review, then rerun with "
+            "--stamp-resolved-source-as-reviewed or supply "
+            "--last-reviewed-template-commit FULL_SHA)"
+        )
+    else:
+        reviewed_source = source.reviewed_commit_source or "computed marker input"
+        print(
+            "  - accepted reviewed commit for computed marker: "
+            f"{source.accepted_reviewed_commit} ({reviewed_source})"
+        )
+    if source.source_cross_check_note is not None:
+        print(f"  - source cross-check note: {source.source_cross_check_note}")
     print(f"  - source repository: {source.source_repository or '(not used)'}")
     print(f"  - temporary checkout path: {source.temporary_checkout_path or '(not used)'}")
     print(f"  - cleanup status: {source.cleanup_status}")
@@ -2520,6 +3068,7 @@ def materialize(args: argparse.Namespace) -> Summary:
         license_preservation = resolve_license_preservation(args, target_root=target_root)
         if license_preservation is not None:
             decisions = append_license_preservation_override(decisions, license_preservation)
+        decisions = apply_reviewed_source_assertion(args, decisions, source_checkout)
         validate_reviewed_commit_matches_source(decisions, source_checkout)
 
         marker_document = computed_marker_document(
