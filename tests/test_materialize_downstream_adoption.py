@@ -1514,7 +1514,8 @@ def test_materialized_optional_pruning_retained_tests_have_no_stale_markers(
     assert report_result.returncode == 0, report_result.stderr
     assert "State source: marker (.template-sync/marker.yml)" in report_result.stdout
 
-    excluded_modules = set(FULL_TEMPLATE_MODULES) - set(included_modules)
+    all_template_modules: set[str] = set(FULL_TEMPLATE_MODULES)
+    excluded_modules = all_template_modules - set(included_modules)
     for module_name, relative_paths in OPTIONAL_STACK_OWNED_PATHS.items():
         if module_name not in excluded_modules:
             continue
@@ -1765,6 +1766,563 @@ def test_materializer_materializes_from_full_template_revision(tmp_path: Path) -
     assert "cleanup status: removed" in result.stdout
 
 
+def test_git_version_parser_handles_supported_git_version_shapes() -> None:
+    """Git capability parsing accepts common platform-specific version strings."""
+    assert materializer.parse_git_version("git version 2.43.0") == materializer.GitVersion(
+        2,
+        43,
+    )
+    assert materializer.parse_git_version(
+        "git version 2.55.0.windows.1"
+    ) == materializer.GitVersion(2, 55)
+    assert materializer.parse_git_version(
+        "git version 2.39.5 (Apple Git-154)"
+    ) == materializer.GitVersion(2, 39)
+    assert materializer.parse_git_version("git something unexpected") is None
+
+
+def test_source_git_commands_receive_no_fetch_no_optional_locks_overlay(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Source Git helper calls inherit the environment plus source-safety overrides."""
+    captured: dict[str, Any] = {}
+
+    def fake_run(
+        command: list[str],
+        *,
+        check: bool,
+        stdout: int,
+        stderr: int,
+        text: bool,
+        env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        captured["command"] = command
+        captured["env"] = env
+        assert check is False
+        assert stdout == subprocess.PIPE
+        assert stderr == subprocess.PIPE
+        assert text is True
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(materializer.subprocess, "run", fake_run)
+
+    materializer.run_source_git(tmp_path, ["status"])
+
+    command = cast(list[str], captured["command"])
+    env = cast(dict[str, str], captured["env"])
+    assert env["GIT_NO_LAZY_FETCH"] == "1"
+    assert env["GIT_OPTIONAL_LOCKS"] == "0"
+    assert "PATH" in env
+    assert "--no-lazy-fetch" not in command
+    assert "--no-optional-locks" not in command
+
+
+def test_template_root_default_reports_observed_source_without_stamping(
+    tmp_path: Path,
+) -> None:
+    """A clean local template root reports HEAD but does not infer reviewed state."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    resolved_sha = prepare_git_template(
+        template_root,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--included-module",
+        "template-sync-support",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "source commit") == (
+        f"observed {resolved_sha}; not accepted as reviewed state"
+    )
+    assert summary_value(result.stdout, "source worktree root") == str(template_root.resolve())
+    assert "resolved source SHA: (not resolved)" not in result.stdout
+    marker = as_mapping(
+        load_yaml(target_root / ".template-sync" / "marker.yml"),
+        "marker must be a mapping",
+    )
+    template_sync = as_mapping(marker["template_sync"], "template_sync must be a mapping")
+    assert "last_reviewed_template_commit" not in template_sync
+
+
+def test_stamp_resolved_template_root_source_persists_reviewed_commit(
+    tmp_path: Path,
+) -> None:
+    """The explicit assertion stamps a clean local source into the written marker."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    resolved_sha = prepare_git_template(
+        template_root,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--included-module",
+        "template-sync-support",
+        "--stamp-resolved-source-as-reviewed",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "source commit") == (
+        f"observed {resolved_sha}; accepted for reviewed-state assertion"
+    )
+    assert summary_value(result.stdout, "accepted reviewed commit for computed marker") == (
+        f"{resolved_sha} (--stamp-resolved-source-as-reviewed)"
+    )
+    marker = as_mapping(
+        load_yaml(target_root / ".template-sync" / "marker.yml"),
+        "marker must be a mapping",
+    )
+    template_sync = as_mapping(marker["template_sync"], "template_sync must be a mapping")
+    assert template_sync["last_reviewed_template_commit"] == resolved_sha
+
+
+def test_stamp_resolved_template_root_source_appears_in_preview_without_support(
+    tmp_path: Path,
+) -> None:
+    """Stamping still affects the computed-marker preview when support is excluded."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    resolved_sha = prepare_git_template(
+        template_root,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--stamp-resolved-source-as-reviewed",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert not (target_root / ".template-sync" / "marker.yml").exists()
+    assert "preview-only: template-sync-support is not included" in result.stdout
+    assert f"last_reviewed_template_commit: {resolved_sha}" in result.stdout
+
+
+def test_stamp_resolved_template_ref_source_persists_reviewed_commit(
+    tmp_path: Path,
+) -> None:
+    """Ref materialization can opt in to stamping its resolved source SHA."""
+    template_repo = tmp_path / "template-repo"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    resolved_sha = prepare_git_template(
+        template_repo,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+    run_git(template_repo, "branch", "template-main", resolved_sha)
+
+    result = run_materialize_without_template_root(
+        target_root,
+        "--template-ref",
+        "template-main",
+        "--template-repo",
+        str(template_repo),
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--included-module",
+        "template-sync-support",
+        "--stamp-resolved-source-as-reviewed",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "resolved source SHA") == resolved_sha
+    assert summary_value(result.stdout, "accepted reviewed commit for computed marker") == (
+        f"{resolved_sha} (--stamp-resolved-source-as-reviewed)"
+    )
+    marker = as_mapping(
+        load_yaml(target_root / ".template-sync" / "marker.yml"),
+        "marker must be a mapping",
+    )
+    template_sync = as_mapping(marker["template_sync"], "template_sync must be a mapping")
+    assert template_sync["last_reviewed_template_commit"] == resolved_sha
+
+
+def test_temporary_source_checkout_disables_sparse_checkout_before_worktree_add(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Temporary source checkout creation uses the required top-level -c shape."""
+    template_repo = tmp_path / "template-repo"
+    target_root = tmp_path / "target"
+    temp_root = tmp_path / "temp"
+    template_repo.mkdir()
+    target_root.mkdir()
+    temp_root.mkdir()
+    calls: list[list[str]] = []
+
+    def fake_run_source_git(
+        _repo_root: Path,
+        args: list[str],
+        *,
+        text: bool = True,
+    ) -> subprocess.CompletedProcess[str]:
+        assert text is True
+        calls.append(args)
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(materializer, "run_source_git", fake_run_source_git)
+    monkeypatch.setattr(materializer, "partial_promisor_guard_reason", lambda *_args: None)
+    monkeypatch.setattr(
+        materializer,
+        "verify_source_worktree_stampable",
+        lambda *_args, **_kwargs: True,
+    )
+
+    source_checkout = materializer.create_temporary_source_checkout(
+        template_repo=template_repo,
+        target_root=target_root,
+        source_mode="template-ref",
+        source_value="template-main",
+        resolved_source_sha=FULL_SHA,
+        temp_root=temp_root,
+        git_version=materializer.GitVersion(2, 45),
+    )
+
+    worktree_add_args = next(args for args in calls if "worktree" in args)
+    assert worktree_add_args[:5] == [
+        "-c",
+        "core.sparseCheckout=false",
+        "worktree",
+        "add",
+        "--detach",
+    ]
+    assert worktree_add_args[5] == str(source_checkout.temporary_checkout_path)
+    assert worktree_add_args[6] == FULL_SHA
+
+
+def test_stamp_reviewed_helper_aligns_top_level_and_marker_decisions() -> None:
+    """Source stamping updates both frozen decision records."""
+    decisions = materializer.Decisions(
+        source_repo=SOURCE_REPO,
+        last_reviewed_template_commit=None,
+        included_modules=frozenset({"baseline"}),
+        marker_data=materializer.MarkerDecisionData(
+            last_reviewed_template_commit=None,
+            included_modules=frozenset({"baseline"}),
+            local_overrides=(),
+            local_path_ownership=(),
+            deferred_candidates=(),
+            protected_decisions=(),
+            protected_guide_contract_waivers=(),
+        ),
+        raw_marker_fields={},
+    )
+
+    stamped = materializer.decisions_with_reviewed_commit(decisions, FULL_SHA)
+
+    assert stamped.last_reviewed_template_commit == FULL_SHA
+    assert stamped.marker_data.last_reviewed_template_commit == FULL_SHA
+
+
+def test_template_root_stamp_fails_when_source_is_not_stampable(
+    tmp_path: Path,
+) -> None:
+    """The opt-in assertion is fatal when no explicit reviewed commit can stand."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    resolved_sha = prepare_git_template(
+        template_root,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+    write_file(template_root / "UNTRACKED.txt", "not ignored\n")
+
+    default_result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+    )
+
+    assert default_result.returncode == 0, default_result.stderr
+    assert summary_value(default_result.stdout, "source commit") == (
+        f"observed {resolved_sha}; not stampable "
+        "(the template source has dirty tracked files or untracked non-ignored files)"
+    )
+
+    stamped_result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+        "--stamp-resolved-source-as-reviewed",
+    )
+
+    assert stamped_result.returncode == 1
+    assert "--stamp-resolved-source-as-reviewed requires a trusted source SHA" in (
+        stamped_result.stderr
+    )
+    assert "dirty tracked files or untracked non-ignored files" in stamped_result.stderr
+
+
+def test_template_root_explicit_reviewed_commit_stands_when_source_not_stampable(
+    tmp_path: Path,
+) -> None:
+    """An explicit reviewed commit can stand when a local root cannot be cross-checked."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_git_template(
+        template_root,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+    write_file(template_root / "UNTRACKED.txt", "not ignored\n")
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--last-reviewed-template-commit",
+        FULL_SHA,
+        "--included-module",
+        "baseline",
+        "--included-module",
+        "template-sync-support",
+        "--stamp-resolved-source-as-reviewed",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "accepted reviewed commit for computed marker") == (
+        f"{FULL_SHA} (explicit reviewed commit)"
+    )
+    assert "source HEAD could not be cross-checked" in result.stdout
+    marker = as_mapping(
+        load_yaml(target_root / ".template-sync" / "marker.yml"),
+        "marker must be a mapping",
+    )
+    template_sync = as_mapping(marker["template_sync"], "template_sync must be a mapping")
+    assert template_sync["last_reviewed_template_commit"] == FULL_SHA
+
+
+def test_template_root_subdirectory_is_not_silently_promoted(tmp_path: Path) -> None:
+    """A subdirectory inside a Git worktree is outside local source stampability."""
+    template_root = tmp_path / "template"
+    resolved_sha = prepare_git_template(
+        template_root,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n", "nested/README.md": "nested\n"},
+    )
+    detection = materializer.detect_local_template_source(
+        template_root / "nested",
+        materializer.detect_git_version(),
+    )
+
+    assert detection.observed_source_sha is None
+    assert detection.stampable_sha is None
+    assert detection.source_worktree_root == str(template_root.resolve())
+    assert resolved_sha
+    assert "not the Git worktree top level" in cast(str, detection.not_stampable_reason)
+
+
+def test_non_git_template_root_is_not_stampable(tmp_path: Path) -> None:
+    """Non-Git roots are classified by Git exit code, not stdout text."""
+    template_root = tmp_path / "template"
+    template_root.mkdir()
+
+    detection = materializer.detect_local_template_source(
+        template_root,
+        materializer.detect_git_version(),
+    )
+
+    assert detection.observed_source_sha is None
+    assert detection.stampable_sha is None
+    assert detection.not_stampable_reason == "the template root is not a Git worktree"
+
+
+def test_unborn_template_root_head_has_generic_unresolvable_reason(tmp_path: Path) -> None:
+    """An unborn HEAD is reported generically without matching Git stderr text."""
+    template_root = tmp_path / "template"
+    template_root.mkdir()
+    run_git(template_root, "init", "-q")
+
+    detection = materializer.detect_local_template_source(
+        template_root,
+        materializer.detect_git_version(),
+    )
+
+    assert detection.observed_source_sha is None
+    assert detection.stampable_sha is None
+    assert detection.not_stampable_reason == ("template source HEAD is not resolvable to a commit")
+
+
+@pytest.mark.parametrize(
+    ("index_flag", "expected_reason"),
+    [
+        pytest.param("--skip-worktree", "skip-worktree", id="skip-worktree"),
+        pytest.param("--assume-unchanged", "assume-unchanged", id="assume-unchanged"),
+    ],
+)
+def test_source_completeness_rejects_hidden_tracked_file_states(
+    tmp_path: Path,
+    index_flag: str,
+    expected_reason: str,
+) -> None:
+    """Skip-worktree and assume-unchanged entries are not stampable."""
+    template_root = tmp_path / "template"
+    prepare_git_template(
+        template_root,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+    run_git(template_root, "update-index", index_flag, "README.md")
+
+    detection = materializer.detect_local_template_source(
+        template_root,
+        materializer.detect_git_version(),
+    )
+
+    assert detection.stampable_sha is None
+    assert expected_reason in cast(str, detection.not_stampable_reason)
+
+
+def test_source_completeness_rejects_gitlinks(tmp_path: Path) -> None:
+    """A source index that records submodule gitlinks is outside stampability."""
+    template_root = tmp_path / "template"
+    prepare_git_template(
+        template_root,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+    run_git(
+        template_root,
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        f"160000,{FULL_SHA},vendor/submodule",
+    )
+    run_git(
+        template_root,
+        "-c",
+        "user.name=Template Tester",
+        "-c",
+        "user.email=template@example.com",
+        "commit",
+        "-q",
+        "-m",
+        "Add gitlink",
+    )
+
+    detection = materializer.detect_local_template_source(
+        template_root,
+        materializer.detect_git_version(),
+    )
+
+    assert detection.stampable_sha is None
+    assert "submodule gitlinks" in cast(str, detection.not_stampable_reason)
+
+
+def test_old_git_with_configured_fsmonitor_is_not_stampable(tmp_path: Path) -> None:
+    """Configured fsmonitor is not trusted when Git cannot be parsed as >=2.36."""
+    template_root = tmp_path / "template"
+    prepare_git_template(
+        template_root,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+    run_git(template_root, "config", "core.fsmonitor", "true")
+
+    detection = materializer.detect_local_template_source(
+        template_root,
+        materializer.GitVersion(2, 35),
+    )
+
+    assert detection.stampable_sha is None
+    reason = cast(str, detection.not_stampable_reason)
+    assert "Git to be detected as >=2.36" in reason
+    assert "--last-reviewed-template-commit FULL_SHA" in reason
+
+
+def test_partial_promisor_guard_uses_effective_remote_config(tmp_path: Path) -> None:
+    """The partial/promisor guard follows final effective remote config values."""
+    template_root = tmp_path / "template"
+    prepare_git_template(
+        template_root,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+    old_git = materializer.GitVersion(2, 44)
+
+    assert materializer.partial_promisor_guard_reason(template_root, old_git) is None
+
+    run_git(template_root, "config", "--add", "remote.origin.promisor", "true")
+    assert "remote.origin.promisor=true" in cast(
+        str,
+        materializer.partial_promisor_guard_reason(template_root, old_git),
+    )
+    run_git(template_root, "config", "--add", "remote.origin.promisor", "false")
+    assert materializer.partial_promisor_guard_reason(template_root, old_git) is None
+
+    run_git(template_root, "config", "--add", "remote.origin.partialCloneFilter", "blob:none")
+    filter_reason = cast(
+        str,
+        materializer.partial_promisor_guard_reason(template_root, old_git),
+    )
+    assert "remote.origin.partialclonefilter" in filter_reason.lower()
+    run_git(template_root, "config", "--add", "remote.origin.partialCloneFilter", "")
+    assert materializer.partial_promisor_guard_reason(template_root, old_git) is None
+
+
+def test_args_file_stamp_true_can_be_overridden_by_cli_no(tmp_path: Path) -> None:
+    """The BooleanOptionalAction false form wins over an args-file true value."""
+    args_file = tmp_path / "materialize.args.json"
+    write_json(
+        args_file,
+        {
+            "target_root": str(tmp_path / "target"),
+            "source_repo": SOURCE_REPO,
+            "included_modules": ["baseline"],
+            "stamp_resolved_source_as_reviewed": True,
+        },
+    )
+
+    args = materializer.parse_args(
+        [
+            "--args-file",
+            str(args_file),
+            "--no-stamp-resolved-source-as-reviewed",
+        ]
+    )
+
+    assert args.stamp_resolved_source_as_reviewed is False
+
+
 def test_materializer_rejects_invalid_template_ref(tmp_path: Path) -> None:
     """The materializer resolves refs locally and fails without fetching."""
     template_repo = tmp_path / "template-repo"
@@ -1942,6 +2500,7 @@ def test_cleanup_retries_once_and_verifies_worktree_absence(
     def fake_run_git(
         _repo_root: Path,
         args: list[str],
+        **_kwargs: object,
     ) -> subprocess.CompletedProcess[str]:
         nonlocal remove_calls
         if args[:3] == ["worktree", "remove", "--force"]:
