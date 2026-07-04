@@ -149,6 +149,70 @@ def _queued_status_reader(*snapshots: tuple[str, ...]) -> Callable[[Path], tuple
     return read_status
 
 
+class _ExactStatusReader:
+    """Git status reader that fails on over-consumption and exposes leftovers."""
+
+    def __init__(self, *snapshots: tuple[str, ...]) -> None:
+        self.remaining_snapshots = list(snapshots)
+        self.read_count = 0
+
+    def __call__(self, _repo_root: Path) -> tuple[str, ...]:
+        assert self.remaining_snapshots, "No queued Git status snapshot remains."
+        self.read_count += 1
+        return self.remaining_snapshots.pop(0)
+
+    def assert_consumed(self) -> None:
+        """Assert that the runner consumed every queued status snapshot."""
+        assert self.remaining_snapshots == []
+
+
+def _failing_status_reader(
+    *actions: tuple[str, ...] | BaseException,
+) -> Callable[[Path], tuple[str, ...]]:
+    """Return a status reader that returns snapshots or raises queued exceptions."""
+    remaining_actions = list(actions)
+
+    def read_status(_repo_root: Path) -> tuple[str, ...]:
+        assert remaining_actions, "No queued Git status action remains."
+        action = remaining_actions.pop(0)
+        if isinstance(action, BaseException):
+            raise action
+        return action
+
+    return read_status
+
+
+def _output_section(output: str, header: str, stop_headers: Sequence[str]) -> str:
+    """Return a named output section bounded by the next known header."""
+    start = output.index(header)
+    search_start = start + len(header)
+    end_candidates = [
+        output.index(stop_header, search_start)
+        for stop_header in stop_headers
+        if stop_header in output[search_start:]
+    ]
+    end = min(end_candidates) if end_candidates else len(output)
+    return output[start:end]
+
+
+def _transition_section(output: str) -> str:
+    """Return the command-boundary transition section from runner output."""
+    return _output_section(
+        output,
+        "Command-boundary status transitions:",
+        ("Changed-file follow-up:", "First-adoption checks failed:", "Total elapsed time:"),
+    )
+
+
+def _changed_file_follow_up(output: str) -> str:
+    """Return the changed-file follow-up block from runner output."""
+    return _output_section(
+        output,
+        "Changed-file follow-up:",
+        ("First-adoption checks failed:", "Total elapsed time:", "First-adoption checks passed."),
+    )
+
+
 def _utc_time(second: int) -> datetime:
     """Return a deterministic UTC timestamp for timing assertions."""
     return datetime(2026, 6, 3, 12, 0, second, tzinfo=timezone.utc)
@@ -229,6 +293,32 @@ def test_fix_mode_is_explicit() -> None:
     args = first_adoption.parse_args(["--fix"])
 
     assert args.run_mode == first_adoption.FIX_MODE
+
+
+def test_check_help_text_matches_changed_file_exit_contract(capsys: Any) -> None:
+    """Check-mode help distinguishes final status changes from transient transitions."""
+    with pytest.raises(SystemExit) as excinfo:
+        first_adoption.parse_args(["--help"])
+
+    assert excinfo.value.code == 0
+    help_text = " ".join(capsys.readouterr().out.split())
+    assert "final aggregate Git status change exits with the changed-file code" in help_text
+    assert "Transient command-boundary status transitions are reported" in help_text
+    assert "Any Git status change during the invocation exits nonzero" not in help_text
+
+
+def test_fix_help_text_matches_fixer_and_failure_contract(capsys: Any) -> None:
+    """Fix-mode help permits fixer arguments without swallowing command failures."""
+    with pytest.raises(SystemExit) as excinfo:
+        first_adoption.parse_args(["--help"])
+
+    assert excinfo.value.code == 0
+    help_text = " ".join(capsys.readouterr().out.split())
+    assert "same validation surface" in help_text
+    assert "intentional fixer behavior" in help_text
+    assert "any planned command that exits nonzero still fails the run" in help_text
+    assert "same validation commands run as in check mode" not in help_text
+    assert "update files without failing the run" not in help_text
 
 
 def test_doctor_mode_is_explicit() -> None:
@@ -1205,7 +1295,7 @@ def test_changed_git_status_exits_distinctly_after_validation(
     tmp_path: Path,
     monkeypatch: Any,
 ) -> None:
-    """A command-induced Git status change is reported and exits distinctly."""
+    """A command-boundary Git status change is reported and exits distinctly."""
     monkeypatch.setattr(
         first_adoption,
         "default_pre_commit_prefix",
@@ -1224,6 +1314,8 @@ def test_changed_git_status_exits_distinctly_after_validation(
     )
 
     output = stdout.getvalue()
+    transition_section = _transition_section(output)
+    follow_up = _changed_file_follow_up(output)
     assert result == first_adoption.CHANGED_FILES_EXIT_CODE
     assert commands == [("pre-commit", "run", "--files", "README.md")]
     assert "Git changed-file summary:" in output
@@ -1232,8 +1324,17 @@ def test_changed_git_status_exits_distinctly_after_validation(
     assert "  After invocation:" in output
     assert "    -  M README.md" in output
     assert "    - ?? generated.txt" in output
-    assert "Inspect the changes" in output
-    assert "rerun with --fix" in output
+    assert "Command 1/1 [pre-commit] pre-commit run --files README.md" in transition_section
+    assert "  added status entries:" in transition_section
+    assert "    -  M README.md" in transition_section
+    assert "    - ?? generated.txt" in transition_section
+    assert "  removed status entries:" in transition_section
+    assert "    - <none>" in transition_section
+    assert "Final Git status changed during this invocation" in follow_up
+    assert "git status for changed-path inventory" in follow_up
+    assert "git diff --cached" in follow_up
+    assert "python .template-sync/scripts/run_first_adoption_checks.py --check" in follow_up
+    assert "python .template-sync/scripts/run_first_adoption_checks.py --fix" in follow_up
 
 
 def test_fix_mode_tolerates_mutations_without_failing(
@@ -1260,13 +1361,20 @@ def test_fix_mode_tolerates_mutations_without_failing(
     )
 
     output = stdout.getvalue()
+    transition_section = _transition_section(output)
+    follow_up = _changed_file_follow_up(output)
     assert result == 0
     assert commands == [("pre-commit", "run", "--files", "README.md")]
     assert "Run mode: fix" in output
     assert "Git changed-file summary:" in output
     assert "    -  M README.md" in output
-    assert "as intended by fix mode" in output
-    assert "rerun with --check" in output
+    assert "Command 1/1 [pre-commit] pre-commit run --files README.md" in transition_section
+    assert "    -  M README.md" in transition_section
+    assert "Fix mode observed final Git status changes" in follow_up
+    assert "does not fail solely because files were modified" in follow_up
+    assert "any planned command that exits nonzero still fails the run" in follow_up
+    assert "python .template-sync/scripts/run_first_adoption_checks.py --check" in follow_up
+    assert "Command failures are reported separately" not in follow_up
 
 
 def test_check_mode_reports_command_failure_before_changed_files(
@@ -1295,11 +1403,442 @@ def test_check_mode_reports_command_failure_before_changed_files(
     )
 
     output = stdout.getvalue()
+    follow_up = _changed_file_follow_up(output)
     assert result == 1
     assert "Git changed-file summary:" in output
     assert "    -  M README.md" in output
+    assert "Command failures are reported separately" in follow_up
+    assert "does not resolve a failed command" in follow_up
     assert "First-adoption checks failed:" in output
     assert "exited with 1" in output
+
+
+def test_multi_command_status_transitions_report_status_entries_by_boundary(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Multiple command boundaries report only entries changed at each boundary."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+    _write_marker(tmp_path, "template_sync:\n  included_modules:\n  - baseline\n")
+    _write_text(tmp_path, ".template-sync/scripts/validate_marker.py")
+    commands: list[tuple[str, ...]] = []
+    stdout = io.StringIO()
+
+    result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        command_runner=_recording_runner(commands),
+        git_status_reader=_queued_status_reader(
+            (" M existing.md",),
+            (" M existing.md", " M status.txt", "?? generated.txt"),
+            (" M existing.md", "A  status.txt"),
+        ),
+        stdout=stdout,
+    )
+
+    output = stdout.getvalue()
+    transition_section = _transition_section(output)
+    assert result == first_adoption.CHANGED_FILES_EXIT_CODE
+    assert len(commands) == 2
+    assert "Command 1/2 [pre-commit]" in transition_section
+    assert "Command 2/2 [marker-validation]" in transition_section
+    first_boundary = _output_section(
+        transition_section,
+        "Command 1/2 [pre-commit]",
+        ("Command 2/2 [marker-validation]",),
+    )
+    second_boundary = _output_section(
+        transition_section,
+        "Command 2/2 [marker-validation]",
+        (),
+    )
+    assert "    -  M status.txt" in first_boundary
+    assert "    - ?? generated.txt" in first_boundary
+    assert "  removed status entries:\n    - <none>" in first_boundary
+    assert "    - A  status.txt" in second_boundary
+    assert "  removed status entries:" in second_boundary
+    assert "    -  M status.txt" in second_boundary
+    assert "    - ?? generated.txt" in second_boundary
+    assert "existing.md" not in transition_section
+
+
+def test_repeated_status_entry_transitions_are_reported_each_time(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """The same opaque status entry can be added, removed, and added again."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+    _write_text(tmp_path, ".github/scripts/replace-template-placeholders.py")
+    _write_marker(tmp_path, "template_sync:\n  included_modules:\n  - baseline\n")
+    _write_text(tmp_path, ".template-sync/scripts/validate_marker.py")
+    commands: list[tuple[str, ...]] = []
+    stdout = io.StringIO()
+
+    result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        command_runner=_recording_runner(commands),
+        git_status_reader=_queued_status_reader(
+            (),
+            ("?? generated.txt",),
+            (),
+            ("?? generated.txt",),
+        ),
+        stdout=stdout,
+    )
+
+    transition_section = _transition_section(stdout.getvalue())
+    assert result == first_adoption.CHANGED_FILES_EXIT_CODE
+    assert len(commands) == 3
+    assert transition_section.count("    - ?? generated.txt") == 3
+    assert "Command 1/3 [pre-commit]" in transition_section
+    assert "Command 2/3 [placeholder-scan]" in transition_section
+    assert "Command 3/3 [marker-validation]" in transition_section
+
+
+def test_transient_status_transitions_report_state_b_without_exit_code(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Transient command-boundary transitions are reported without changing exit code."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+    _write_marker(tmp_path, "template_sync:\n  included_modules:\n  - baseline\n")
+    _write_text(tmp_path, ".template-sync/scripts/validate_marker.py")
+    commands: list[tuple[str, ...]] = []
+    stdout = io.StringIO()
+
+    result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        command_runner=_recording_runner(commands),
+        git_status_reader=_queued_status_reader((), ("?? transient.txt",), ()),
+        stdout=stdout,
+    )
+
+    output = stdout.getvalue()
+    transition_section = _transition_section(output)
+    follow_up = _changed_file_follow_up(output)
+    assert result == 0
+    assert len(commands) == 2
+    assert "Net Git status is unchanged at the final snapshot" in output
+    assert "No Git status changes were detected during this invocation" not in output
+    assert "Command 1/2 [pre-commit]" in transition_section
+    assert "Command 2/2 [marker-validation]" in transition_section
+    assert "    - ?? transient.txt" in transition_section
+    assert "No net Git status changes remain at the final snapshot" in follow_up
+    assert "keep or revert" not in follow_up
+    assert "python .template-sync/scripts/run_first_adoption_checks.py --check" in follow_up
+    assert "python .template-sync/scripts/run_first_adoption_checks.py --fix" in follow_up
+
+
+def test_no_command_status_change_is_reported_without_attribution(
+    tmp_path: Path,
+) -> None:
+    """Aggregate status changes without planned commands are reported as unattributed."""
+    _run_git(tmp_path, "init")
+    status_reader = _ExactStatusReader((), ("?? generated.txt",))
+    commands: list[tuple[str, ...]] = []
+    stdout = io.StringIO()
+
+    result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        command_runner=_recording_runner(commands),
+        git_status_reader=status_reader,
+        stdout=stdout,
+    )
+
+    output = stdout.getvalue()
+    transition_section = _transition_section(output)
+    assert result == first_adoption.CHANGED_FILES_EXIT_CODE
+    assert commands == []
+    assert status_reader.read_count == 2
+    status_reader.assert_consumed()
+    assert "  Before invocation:" in output
+    assert "  After invocation:" in output
+    assert "No validation commands were planned" in transition_section
+    assert "Command 1/" not in transition_section
+
+
+def test_plan_only_status_change_is_reported_without_executed_boundary(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Plan-only can print commands but cannot attribute status changes to execution."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+    status_reader = _ExactStatusReader((), ("?? generated.txt",))
+    commands: list[tuple[str, ...]] = []
+    stdout = io.StringIO()
+
+    result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        plan_only=True,
+        command_runner=_recording_runner(commands),
+        git_status_reader=status_reader,
+        stdout=stdout,
+    )
+
+    output = stdout.getvalue()
+    transition_section = _transition_section(output)
+    assert result == first_adoption.CHANGED_FILES_EXIT_CODE
+    assert commands == []
+    assert status_reader.read_count == 2
+    status_reader.assert_consumed()
+    assert "Planned validation commands (1):" in output
+    assert "Plan-only mode: validation commands were not run." in output
+    assert "Plan-only mode printed planned validation commands" in transition_section
+    assert "Command 1/1 [pre-commit] start time" not in output
+
+
+def test_fix_mode_command_failure_still_fails_with_status_transition_summary(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Fix mode tolerates zero-exit mutations, not nonzero planned commands."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+    stdout = io.StringIO()
+
+    def failing_runner(command: Sequence[str], _repo_root: Path) -> int:
+        del command
+        return 1
+
+    result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        run_mode=first_adoption.FIX_MODE,
+        command_runner=failing_runner,
+        git_status_reader=_queued_status_reader((), (" M README.md",)),
+        stdout=stdout,
+    )
+
+    output = stdout.getvalue()
+    transition_section = _transition_section(output)
+    follow_up = _changed_file_follow_up(output)
+    assert result == 1
+    assert "Command 1/1 [pre-commit]" in transition_section
+    assert "    -  M README.md" in transition_section
+    assert "Fix mode observed final Git status changes" in follow_up
+    assert "any planned command that exits nonzero still fails the run" in follow_up
+    assert "Command failures are reported separately" in follow_up
+    assert "First-adoption checks failed:" in output
+
+
+def test_no_failure_status_change_omits_command_failure_status_scope(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """The command-failure status-scoping sentence appears only for failures."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+    stdout = io.StringIO()
+
+    result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        command_runner=_recording_runner([]),
+        git_status_reader=_queued_status_reader((), (" M README.md",)),
+        stdout=stdout,
+    )
+
+    assert result == first_adoption.CHANGED_FILES_EXIT_CODE
+    assert "Command failures are reported separately" not in _changed_file_follow_up(
+        stdout.getvalue()
+    )
+
+
+def test_normal_loop_consumes_one_status_snapshot_per_executed_boundary(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Normal execution reads one initial snapshot plus one per planned command."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+    _write_marker(tmp_path, "template_sync:\n  included_modules:\n  - baseline\n")
+    _write_text(tmp_path, ".template-sync/scripts/validate_marker.py")
+    status_reader = _ExactStatusReader((), ("?? one.txt",), ())
+    commands: list[tuple[str, ...]] = []
+
+    result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        command_runner=_recording_runner(commands),
+        git_status_reader=status_reader,
+        stdout=io.StringIO(),
+    )
+
+    assert result == 0
+    assert len(commands) == 2
+    assert status_reader.read_count == 3
+    status_reader.assert_consumed()
+
+
+def test_no_command_and_plan_only_paths_consume_two_status_snapshots(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Non-executing branches keep their before/after status snapshot pair."""
+    _run_git(tmp_path, "init")
+    no_command_reader = _ExactStatusReader((), ())
+
+    no_command_result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        git_status_reader=no_command_reader,
+        stdout=io.StringIO(),
+    )
+
+    assert no_command_result == 0
+    assert no_command_reader.read_count == 2
+    no_command_reader.assert_consumed()
+
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _write_text(tmp_path, "README.md")
+    plan_only_reader = _ExactStatusReader((), ())
+
+    plan_only_result = first_adoption.run_first_adoption_checks(
+        tmp_path,
+        plan_only=True,
+        git_status_reader=plan_only_reader,
+        stdout=io.StringIO(),
+    )
+
+    assert plan_only_result == 0
+    assert plan_only_reader.read_count == 2
+    plan_only_reader.assert_consumed()
+
+
+def test_initial_snapshot_failure_propagates_before_commands(
+    tmp_path: Path,
+) -> None:
+    """An initial status snapshot failure aborts through FirstAdoptionCheckError."""
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+    commands: list[tuple[str, ...]] = []
+    stdout = io.StringIO()
+
+    with pytest.raises(first_adoption.FirstAdoptionCheckError):
+        first_adoption.run_first_adoption_checks(
+            tmp_path,
+            command_runner=_recording_runner(commands),
+            git_status_reader=_failing_status_reader(
+                first_adoption.FirstAdoptionCheckError("status failed")
+            ),
+            stdout=stdout,
+        )
+
+    assert commands == []
+    assert "Git changed-file summary:" not in stdout.getvalue()
+
+
+def test_mid_loop_snapshot_failure_aborts_without_partial_transition_summary(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """A mid-loop status snapshot failure aborts before rendering partial attribution."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+    _write_marker(tmp_path, "template_sync:\n  included_modules:\n  - baseline\n")
+    _write_text(tmp_path, ".template-sync/scripts/validate_marker.py")
+    commands: list[tuple[str, ...]] = []
+    stdout = io.StringIO()
+
+    with pytest.raises(first_adoption.FirstAdoptionCheckError):
+        first_adoption.run_first_adoption_checks(
+            tmp_path,
+            command_runner=_recording_runner(commands),
+            git_status_reader=_failing_status_reader(
+                (),
+                first_adoption.FirstAdoptionCheckError("status failed"),
+            ),
+            stdout=stdout,
+        )
+
+    output = stdout.getvalue()
+    assert len(commands) == 1
+    assert "Command 1/2 [pre-commit] completed with exit code 0" in output
+    assert "Command-boundary status transitions:" not in output
+
+
+def test_status_summary_output_is_deterministic_for_identical_inputs(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """Identical commands and injected snapshots render identical sorted output."""
+    monkeypatch.setattr(
+        first_adoption,
+        "default_pre_commit_prefix",
+        lambda: ("pre-commit", "run", "--files"),
+    )
+    _run_git(tmp_path, "init")
+    _write_text(tmp_path, "README.md")
+
+    def run_once() -> str:
+        stdout = io.StringIO()
+        result = first_adoption.run_first_adoption_checks(
+            tmp_path,
+            command_runner=_recording_runner([]),
+            git_status_reader=_queued_status_reader(
+                ("",),
+                ("?? z.txt", " M a.txt", ""),
+            ),
+            time_source=_queued_time_source(
+                _utc_time(0),
+                _utc_time(1),
+                _utc_time(2),
+                _utc_time(3),
+            ),
+            stdout=stdout,
+        )
+        assert result == first_adoption.CHANGED_FILES_EXIT_CODE
+        return stdout.getvalue()
+
+    first_output = run_once()
+    second_output = run_once()
+
+    assert first_output == second_output
+    transition_section = _transition_section(first_output)
+    assert transition_section.index("    -  M a.txt") < transition_section.index("    - ?? z.txt")
 
 
 def test_git_status_lines_reports_oserror_as_check_error(
