@@ -7,13 +7,13 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.9.20260623.0
+**Version:** 1.10.20260704.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-23
+- **Last Updated:** 2026-07-04
 - **Scope:** Defines Python coding standards for all Python files in this repository, including modules, scripts, tests, and tooling. Covers style, structure, error handling, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -502,6 +502,17 @@ result = _run_tool(...)
 assert result.returncode == 0, result.stderr
 assert "python" in result.stdout  # Does not prove "python" is under "Excluded modules".
 ```
+
+### External Tool Configuration Isolation
+
+When a test or test helper isolates an external tool's configuration by setting or overriding environment variables, it **SHOULD** neutralize every ambient, non-fixture-owned, higher-priority, or command- or operation-specific override channel that can affect the fixture, not only the configuration files or file scopes the fixture redirects. This prevents ambient configuration from CI setup, automation or bots, wrapper tooling, or a developer shell from leaking into the fixture and making the test non-deterministic.
+
+- Deliberate fixture-owned configuration remains allowed. For example, a test **MAY** create local repository config inside a temporary Git repository it owns. This rule targets ambient, non-fixture-owned channels, not configuration the fixture deliberately establishes.
+- Git illustrates command-scope configuration: isolating global and system file inputs with `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`, and `GIT_CONFIG_NOSYSTEM` is not sufficient by itself, because Git command-scope configuration from `GIT_CONFIG_PARAMETERS` and the `GIT_CONFIG_COUNT`-bounded `GIT_CONFIG_KEY_<n>` / `GIT_CONFIG_VALUE_<n>` pairs overrides configuration files.
+- A Git isolation helper **SHOULD** clear `GIT_CONFIG_PARAMETERS` and `GIT_CONFIG_COUNT`, for example with `monkeypatch.delenv(name, raising=False)`. Clearing `GIT_CONFIG_COUNT` disables the count-bounded `GIT_CONFIG_KEY_<n>` / `GIT_CONFIG_VALUE_<n>` pairs; deleting individual pairs is only a defensive extra.
+- The Git variables above illustrate command-scope configuration, not an exhaustive inventory of every Git-related environment variable. Helpers **SHOULD** also account for command-specific environment variables for the Git commands they invoke; for example, helpers that invoke `git config` should account for `GIT_CONFIG` when no `--file` is provided, because Git documents that variable as affecting `git config` even though it does not affect other Git commands.
+- Helpers that cannot use the function-scoped `monkeypatch` fixture **MAY** instead run Git with a sanitized `env=` mapping that includes only variables required for execution plus deliberate fixture configuration. Typical required variables include `PATH`, needed home-directory variables, platform-required variables such as `SystemRoot` on Windows, and deliberate Git isolation variables such as `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`, and/or `GIT_CONFIG_NOSYSTEM`. A default-deny `env=` mapping also avoids inheriting future, unrelated, or command- or operation-specific tool environment overrides.
+- Tests that intentionally exercise Git command scope **MAY** set the command-scope environment variables or pass `git -c` / `--config-env` deliberately after cleanup.
 
 ## Performance and Safety
 
