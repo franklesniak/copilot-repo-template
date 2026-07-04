@@ -139,6 +139,18 @@ class PlannedCommand:
 
 
 @dataclass(frozen=True)
+class StatusTransition:
+    """Git status entries observed as changed after one planned command boundary."""
+
+    index: int
+    total: int
+    group_label: str
+    command: tuple[str, ...]
+    added_entries: tuple[str, ...]
+    removed_entries: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class ManifestPathMapping:
     """One path-to-module relation read from the template sync manifest."""
 
@@ -239,8 +251,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         const=CHECK_MODE,
         default=CHECK_MODE,
         help=(
-            "Run validation in explicit check mode (default). Any Git status "
-            "change during the invocation exits nonzero and must be inspected."
+            "Run validation in explicit check mode (default). A planned command "
+            "that exits nonzero fails the run. If planned commands otherwise pass, "
+            "a final aggregate Git status change exits with the changed-file code. "
+            "Transient command-boundary status transitions are reported but do not "
+            "change the exit code by themselves."
         ),
     )
     mode_group.add_argument(
@@ -249,10 +264,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_const",
         const=FIX_MODE,
         help=(
-            "Run validation in explicit fix mode so mutating hooks or fixers may "
-            "update files without failing the run. The same validation commands "
-            "run as in check mode; inspect the changed-file summary, keep or "
-            "discard the edits intentionally, then rerun with --check."
+            "Run the same validation surface while allowing commands with "
+            "intentional fixer behavior to use fixer arguments or fixer group "
+            "labels, such as the Markdown quality-report command becoming a "
+            "Markdown fixer command with --fix. Fix mode does not fail solely "
+            "because files were modified by a command that exits 0, but any "
+            "planned command that exits nonzero still fails the run."
         ),
     )
     mode_group.add_argument(
@@ -1815,11 +1832,159 @@ def print_doctor_recommendations(
 
 def print_status_entries(status_lines: Sequence[str], *, stdout: TextIO) -> None:
     """Print one Git status snapshot as a deterministic bullet list."""
-    if not status_lines:
+    normalized_status = normalize_status_entries(status_lines)
+    if not normalized_status:
         print("    - <none>", file=stdout, flush=True)
         return
-    for status_line in status_lines:
+    for status_line in normalized_status:
         print(f"    - {status_line}", file=stdout, flush=True)
+
+
+def normalize_status_entries(status_lines: Sequence[str]) -> tuple[str, ...]:
+    """Return sorted nonblank Git status entries from an injected status snapshot."""
+    return tuple(sorted(line for line in status_lines if line.strip()))
+
+
+def read_normalized_git_status(
+    repo_root: Path,
+    git_status_reader: GitStatusReader,
+) -> tuple[str, ...]:
+    """Read one Git status snapshot through the injected seam and normalize it."""
+    return normalize_status_entries(git_status_reader(repo_root))
+
+
+def status_transition_after_command(
+    planned_command: PlannedCommand,
+    *,
+    index: int,
+    total: int,
+    before_status: Sequence[str],
+    after_status: Sequence[str],
+) -> StatusTransition | None:
+    """Return status entries added or removed after one executed command boundary."""
+    before_entries = set(normalize_status_entries(before_status))
+    after_entries = set(normalize_status_entries(after_status))
+    added_entries = tuple(sorted(after_entries - before_entries))
+    removed_entries = tuple(sorted(before_entries - after_entries))
+    if not added_entries and not removed_entries:
+        return None
+    return StatusTransition(
+        index=index,
+        total=total,
+        group_label=planned_command.group_label,
+        command=planned_command.command,
+        added_entries=added_entries,
+        removed_entries=removed_entries,
+    )
+
+
+def print_status_transitions(
+    transitions: Sequence[StatusTransition],
+    *,
+    stdout: TextIO,
+) -> None:
+    """Print command-boundary Git status transitions in plan order."""
+    print("Command-boundary status transitions:", file=stdout, flush=True)
+    for transition in transitions:
+        print(
+            f"  Command {transition.index}/{transition.total} "
+            f"[{transition.group_label}] {format_command(transition.command)}",
+            file=stdout,
+            flush=True,
+        )
+        print("  added status entries:", file=stdout, flush=True)
+        print_status_entries(transition.added_entries, stdout=stdout)
+        print("  removed status entries:", file=stdout, flush=True)
+        print_status_entries(transition.removed_entries, stdout=stdout)
+
+
+def print_unattributed_status_change_note(note: str, *, stdout: TextIO) -> None:
+    """Print an unattributed aggregate status-change note."""
+    print("Command-boundary status transitions:", file=stdout, flush=True)
+    print(f"  {note}", file=stdout, flush=True)
+
+
+def print_changed_file_next_steps(
+    *,
+    run_mode: str,
+    final_status_changed: bool,
+    has_failures: bool,
+    stdout: TextIO,
+) -> None:
+    """Print the consolidated changed-file follow-up block."""
+    check_command = "python .template-sync/scripts/run_first_adoption_checks.py --check"
+    fix_command = "python .template-sync/scripts/run_first_adoption_checks.py --fix"
+    print("Changed-file follow-up:", file=stdout, flush=True)
+    if final_status_changed and run_mode == FIX_MODE:
+        print(
+            "  Fix mode observed final Git status changes. Fix mode does not fail "
+            "solely because files were modified by a planned command that exits 0, "
+            "but any planned command that exits nonzero still fails the run.",
+            file=stdout,
+            flush=True,
+        )
+    elif final_status_changed:
+        print(
+            "  Final Git status changed during this invocation. Inspect the status "
+            "and tracked-content diffs, then intentionally keep or revert the changes.",
+            file=stdout,
+            flush=True,
+        )
+    elif run_mode == FIX_MODE:
+        print(
+            "  Fix mode observed transient Git status transitions, but no net Git "
+            "status changes remain at the final snapshot. Fix mode does not fail "
+            "solely because files were modified by a planned command that exits 0, "
+            "but any planned command that exits nonzero still fails the run.",
+            file=stdout,
+            flush=True,
+        )
+    else:
+        print(
+            "  No net Git status changes remain at the final snapshot. Rerun check "
+            "mode to confirm.",
+            file=stdout,
+            flush=True,
+        )
+    print(
+        "  Use git status for changed-path inventory, and use git diff plus "
+        "git diff --cached for tracked content.",
+        file=stdout,
+        flush=True,
+    )
+    if final_status_changed:
+        print(f"  Rerun check mode: {check_command}", file=stdout, flush=True)
+        print(
+            f"  Optional intentional fix-mode rerun before checking: {fix_command}",
+            file=stdout,
+            flush=True,
+        )
+    else:
+        print(f"  Rerun check mode to confirm: {check_command}", file=stdout, flush=True)
+        print(
+            f"  Optional intentional mutating validation rerun: {fix_command}",
+            file=stdout,
+            flush=True,
+        )
+    if not has_failures:
+        return
+    if final_status_changed:
+        print(
+            "  Command failures are reported separately by the final failure block "
+            "below and must be resolved separately; inspecting Git status, keeping "
+            "or reverting files, or rerunning check mode does not resolve a failed "
+            "command.",
+            file=stdout,
+            flush=True,
+        )
+    else:
+        print(
+            "  Command failures are reported separately by the final failure block "
+            "below and must be resolved separately; confirming Git status or rerunning "
+            "check mode does not resolve a failed command.",
+            file=stdout,
+            flush=True,
+        )
 
 
 def print_changed_file_summary(
@@ -1827,11 +1992,31 @@ def print_changed_file_summary(
     after_status: Sequence[str],
     *,
     run_mode: str = CHECK_MODE,
+    transitions: Sequence[StatusTransition] = (),
+    unattributed_status_change_note: str | None = None,
+    has_failures: bool = False,
     stdout: TextIO,
 ) -> bool:
-    """Print changed-file status before/after the invocation and return if it changed."""
+    """Print changed-file status state and return whether final status changed."""
+    before_entries = normalize_status_entries(before_status)
+    after_entries = normalize_status_entries(after_status)
+    final_status_changed = before_entries != after_entries
+    has_transitions = bool(transitions)
+
     print("Git changed-file summary:", file=stdout, flush=True)
-    if tuple(before_status) == tuple(after_status):
+    if final_status_changed:
+        print("  Before invocation:", file=stdout, flush=True)
+        print_status_entries(before_entries, stdout=stdout)
+        print("  After invocation:", file=stdout, flush=True)
+        print_status_entries(after_entries, stdout=stdout)
+    elif has_transitions:
+        print(
+            "  Net Git status is unchanged at the final snapshot, but transient "
+            "command-boundary status transitions were observed.",
+            file=stdout,
+            flush=True,
+        )
+    else:
         print(
             "  No Git status changes were detected during this invocation.",
             file=stdout,
@@ -1839,26 +2024,21 @@ def print_changed_file_summary(
         )
         return False
 
-    print("  Before invocation:", file=stdout, flush=True)
-    print_status_entries(before_status, stdout=stdout)
-    print("  After invocation:", file=stdout, flush=True)
-    print_status_entries(after_status, stdout=stdout)
-    if run_mode == FIX_MODE:
-        print(
-            "Files changed during this invocation as intended by fix mode. Inspect "
-            "the changes, keep or discard them intentionally, then rerun with --check.",
-            file=stdout,
-            flush=True,
+    if has_transitions:
+        print_status_transitions(transitions, stdout=stdout)
+    elif final_status_changed and unattributed_status_change_note is not None:
+        print_unattributed_status_change_note(
+            unattributed_status_change_note,
+            stdout=stdout,
         )
-    else:
-        print(
-            "Files changed during this invocation. Inspect the changes and keep or "
-            "discard them intentionally. To intentionally allow mutating hooks or "
-            "fixers to apply these edits, rerun with --fix, then rerun with --check.",
-            file=stdout,
-            flush=True,
-        )
-    return True
+
+    print_changed_file_next_steps(
+        run_mode=run_mode,
+        final_status_changed=final_status_changed,
+        has_failures=has_failures,
+        stdout=stdout,
+    )
+    return final_status_changed
 
 
 def run_planned_command(
@@ -1967,7 +2147,7 @@ def run_first_adoption_checks(
 
     run_started_at = time_source()
     print(f"Run mode: {run_mode}", file=stdout, flush=True)
-    before_status = git_status_reader(repo_root)
+    before_status = read_normalized_git_status(repo_root, git_status_reader)
     collection = collect_present_regular_files(repo_root, stdout=stdout)
     print_file_collection(collection, stdout=stdout, include_files=plan_only)
 
@@ -1990,11 +2170,15 @@ def run_first_adoption_checks(
 
     if not plan.commands:
         print("No first-adoption checks were available to run.", file=stdout, flush=True)
-        after_status = git_status_reader(repo_root)
+        after_status = read_normalized_git_status(repo_root, git_status_reader)
         status_changed = print_changed_file_summary(
             before_status,
             after_status,
             run_mode=run_mode,
+            unattributed_status_change_note=(
+                "No validation commands were planned, so no executed "
+                "validation-command boundary exists for this aggregate status change."
+            ),
             stdout=stdout,
         )
         print_total_elapsed_time(run_started_at, time_source(), stdout=stdout)
@@ -2002,11 +2186,16 @@ def run_first_adoption_checks(
 
     if plan_only:
         print("Plan-only mode: validation commands were not run.", file=stdout, flush=True)
-        after_status = git_status_reader(repo_root)
+        after_status = read_normalized_git_status(repo_root, git_status_reader)
         status_changed = print_changed_file_summary(
             before_status,
             after_status,
             run_mode=run_mode,
+            unattributed_status_change_note=(
+                "Plan-only mode printed planned validation commands but did not "
+                "execute them, so no executed validation-command boundary exists "
+                "for this aggregate status change."
+            ),
             stdout=stdout,
         )
         print_total_elapsed_time(run_started_at, time_source(), stdout=stdout)
@@ -2016,6 +2205,8 @@ def run_first_adoption_checks(
     unsafe_candidate_failure = False
     total_commands = len(plan.commands)
     cold_start_guidance_printed = False
+    previous_status = before_status
+    transitions: list[StatusTransition] = []
     for index, planned_command in enumerate(plan.commands, start=1):
         if planned_command.group_label == PRE_COMMIT_GROUP and not cold_start_guidance_printed:
             print(
@@ -2035,6 +2226,17 @@ def run_first_adoption_checks(
             time_source=time_source,
             stdout=stdout,
         )
+        current_status = read_normalized_git_status(repo_root, git_status_reader)
+        transition = status_transition_after_command(
+            planned_command,
+            index=index,
+            total=total_commands,
+            before_status=previous_status,
+            after_status=current_status,
+        )
+        if transition is not None:
+            transitions.append(transition)
+        previous_status = current_status
         if return_code != 0:
             if (
                 planned_command.group_label == QUALITY_REPORT_GROUP
@@ -2046,11 +2248,13 @@ def run_first_adoption_checks(
                 f"{format_command(planned_command.command)} exited with {return_code}"
             )
 
-    after_status = git_status_reader(repo_root)
+    after_status = previous_status
     status_changed = print_changed_file_summary(
         before_status,
         after_status,
         run_mode=run_mode,
+        transitions=transitions,
+        has_failures=bool(failures),
         stdout=stdout,
     )
     if failures:
