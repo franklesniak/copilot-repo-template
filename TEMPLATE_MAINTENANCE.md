@@ -1,10 +1,12 @@
+<!-- markdownlint-disable MD013 -->
+
 # Template Maintenance Guide
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-26
+- **Last Updated:** 2026-07-05
 - **Scope:** Periodic maintenance procedures for the `franklesniak/copilot-repo-template` repository, including dependency review cadence, pre-commit hook upkeep, Terraform/TFLint version reviews, schema and worked-example reviews, template sync taxonomy upkeep, and validation steps for template-only changes. Does not cover repositories created FROM this template; consumers of the template should follow [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md#ongoing-maintenance) instead.
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [Contributing](CONTRIBUTING.md)
 
@@ -98,6 +100,24 @@ The following pre-commit hooks and npm-based documentation tools are configured 
 | actionlint | <https://github.com/rhysd/actionlint> | GitHub Actions workflow linting |
 | check-jsonschema | <https://github.com/python-jsonschema/check-jsonschema> | JSON Schema validation (worked-example schema and any downstream-added schema-backed file families); also provides the `check-metaschema` hook |
 
+### npm Advisory and Deprecation Signals
+
+npm audit advisories and npm package deprecation warnings are different signals. Audit findings name an affected range and should be resolved through an intentional dependency refresh, documented owner-approved override, or recorded owner-reviewed debt. Deprecation warnings can remain visible even when the installed version is outside every published advisory range.
+
+When a tool is pinned in both `package.json` / `package-lock.json` and `.pre-commit-config.yaml`, align both pins in the same change. Dependabot updates the npm and pre-commit ecosystems through separate pull requests, so a manual remediation may need to bridge the two surfaces.
+
+`markdownlint-cli2` is a Node-language pre-commit hook. Hook-level `language_version: "lts"` provisions the latest LTS Node line through nodeenv instead of relying on ambient runner Node. That covers local and downstream aggregate pre-commit runs, but it can require network access or a populated pre-commit cache on first use and can change the exact Node line used by aggregate pre-commit CI as Node LTS advances.
+
+Current accepted deprecated-transitive debt: `npm ls glob --all` shows the direct `glob@13.0.6` plus three deprecated transitive `glob@10.5.0` copies:
+
+- `remark-validate-links -> unified-engine@11 -> glob@10.5.0`
+- `remark-validate-links -> unified-engine@11 -> load-plugin -> @npmcli/config -> @npmcli/map-workspaces -> glob@10.5.0`
+- `remark-validate-links -> unified-engine@11 -> load-plugin -> @npmcli/config -> @npmcli/package-json -> glob@10.5.0`
+
+Attempted remediation checked the current `remark-validate-links` and `unified-engine` release lines; no upstream release currently removes these deprecated transitive paths.
+
+`GHSA-5j98-mcp5-4vw2` / `CVE-2025-64756` is patched in `glob@10.5.0`, and `npm audit` reports no `glob` finding for the installed direct or transitive versions. A broad root `glob` override is not applied by default because it forces transitive consumers that declare `glob ^10` onto a newer major line. The owner decision needed for any override is explicit acceptance of that compatibility risk after validation in a temporary branch or throwaway working tree.
+
 ### Files Requiring Manual Updates
 
 After running `pre-commit autoupdate`, manually update version references in documentation files. The `pre-commit autoupdate` command only updates `.pre-commit-config.yaml`—version references in documentation examples require manual updates.
@@ -129,7 +149,10 @@ After running `pre-commit autoupdate`, manually update version references in doc
 The following hooks are only referenced in `.pre-commit-config.yaml` and do not require manual documentation updates:
 
 - pre-commit-hooks
-- markdownlint-cli2
+
+#### Dual-Pinned Tools (npm + pre-commit)
+
+`markdownlint-cli2` is version-pinned in both `package.json` / `package-lock.json` and `.pre-commit-config.yaml`. Dependabot updates these pins through separate ecosystem pull requests. A manual bump of one pin MUST align the other in the same change. This is a configuration-pin alignment note, not a prose-documentation mirror, and `pre-commit autoupdate` does not edit `package.json`.
 
 ### Verification
 
@@ -160,6 +183,8 @@ When updating to new major versions, check the release notes for breaking change
 - **Black:** Major releases may introduce style changes that reformat existing code differently. Review [Black changelog](https://github.com/psf/black/blob/main/CHANGES.md). Consider running `black --check` on a representative codebase before upgrading.
 
 - **Ruff:** Frequently adds new rules that may flag previously-passing code. Review [Ruff changelog](https://github.com/astral-sh/ruff/blob/main/CHANGELOG.md). New rules are typically disabled by default, but rule behavior changes can affect existing configurations.
+
+- **markdownlint-cli2:** Major bumps may raise the hook's Node.js engine floor and change the bundled `markdownlint` engine used by the outer `npm run lint:md` script. The `0.22.1` to `0.23.0` refresh raised the hook's Node.js floor from `>=20` to `>=22`, required hook-level `language_version: "lts"`, and cleared the `js-yaml` and `markdown-it` advisories carried by bundled dependencies. Because the bundled `markdownlint` engine can change rule behavior, review the changelog and run the validation described in [Maintenance Cadence](#maintenance-cadence).
 
 - **Repo-local Terraform hooks:** Changes to `.github/scripts/terraform_hooks.py` may change hook IDs, command arguments, file scopes, or required external tools. Keep wrapper tests, `.pre-commit-config.yaml`, aggregate pre-commit workflows, and contributor documentation aligned.
 

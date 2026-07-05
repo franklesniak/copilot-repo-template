@@ -4,7 +4,7 @@
   "description": "Template repository with Copilot instructions and code quality tooling",
   "private": true,
   "scripts": {
-    "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.pytest_cache\"",
+    "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.venv\" \"#.pytest_cache\" \"#**/.pytest_cache\"",
     "lint:md:links": "remark . --quiet --frail --ignore-path .remarkignore",
     "lint:md:nested": "node .github/scripts/lint-nested-markdown.js",
     "test:toolchain-eol": "node --test tests/toolchain-eol/check-toolchain-eol.test.js"
@@ -24,7 +24,7 @@
     "jsonc-parser": "^3.3.1",
     "markdown-it": "^14.2.0",
     "markdownlint": "^0.41.0",
-    "markdownlint-cli2": "^0.22.1",
+    "markdownlint-cli2": "^0.23.0",
     "remark-cli": "^12.0.1",
     "remark-validate-links": "^13.1.0",
     "semver": "^7.8.5",

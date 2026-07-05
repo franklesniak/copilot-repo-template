@@ -380,9 +380,10 @@ repos:
 
   # Markdown linting
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.22.1
+    rev: v0.23.0
     hooks:
       - id: markdownlint-cli2
+        language_version: "lts"
   # template-sync: end markdown-only
 
   # template-sync: begin terraform-only

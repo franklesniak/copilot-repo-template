@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD013 -->
+
 # Project Name
 
 > **Note:** This repository was created from [`franklesniak/copilot-repo-template`](https://github.com/franklesniak/copilot-repo-template).
@@ -180,7 +182,7 @@ Link-check configuration: `.remarkrc.mjs` and `.remarkignore`
 ```bash
 npm run lint:md
 npm run lint:md:links
-npx markdownlint-cli2 "**/*.md" "#node_modules" "#.pytest_cache" --fix
+npx markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#.pytest_cache" "#**/.pytest_cache" --fix
 ```
 
 `npm run lint:md:links` validates repository-local file links and Markdown heading fragments without checking external URLs, keeping the default command deterministic for CI.
@@ -302,14 +304,7 @@ Findings are informational and do not make the command fail. The command exits n
 <!-- template-sync: begin python-reference-only -->
 #### Python Tests
 
-Python tests use pytest with coverage reporting. The default local gate excludes
-tests marked `slow`; run those explicitly when validating template-only
-end-to-end behavior. In CI, GitHub Actions exposes the `run_slow_tests` manual
-workflow input, and Azure Pipelines exposes the `runSlowTests` runtime
-parameter, both defaulting to `false`. The committed VS Code settings include
-the repository's script search paths so a fresh checkout can be opened without
-creating a repo-local virtual environment first. Install the dev extras in your
-selected Python environment before running the validation commands.
+Python tests use pytest with coverage reporting. The default local gate excludes tests marked `slow`; run those explicitly when validating template-only end-to-end behavior. In CI, GitHub Actions exposes the `run_slow_tests` manual workflow input, and Azure Pipelines exposes the `runSlowTests` runtime parameter, both defaulting to `false`. The committed VS Code settings include the repository's script search paths so a fresh checkout can be opened without creating a repo-local virtual environment first. Install the dev extras in your selected Python environment before running the validation commands.
 
 ```bash
 pip install -e ".[dev]"

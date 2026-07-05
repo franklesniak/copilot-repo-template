@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD013 -->
+
 # Optional Configurations
 
 This guide covers optional customizations you can make after completing the initial setup from either of the two getting started guides:
@@ -1844,7 +1846,7 @@ If you decide you don't need nested markdown linting, you can remove this option
    ```json
    {
      "scripts": {
-       "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.pytest_cache\"",
+       "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.venv\" \"#.pytest_cache\" \"#**/.pytest_cache\"",
        "lint:md:nested": "node .github/scripts/lint-nested-markdown.js",  ← Delete this line
        ...
      }
@@ -1980,6 +1982,8 @@ The workflow uses Node.js 24 by default:
 ```
 
 > **Note:** Ensure the Node.js version you choose is compatible with your project's dependencies. Check the markdownlint-cli2 and remark documentation for supported Node.js versions.
+>
+> **Markdown tooling floor:** The retained Markdown tooling currently requires Node.js `>=22`. Before lowering workflow Node.js versions below that line, replace or downgrade incompatible Markdown tooling and validate the resulting `package-lock.json`, Markdown lint scripts, and pre-commit hook behavior.
 
 ### Disabling Nested Markdown Linting in CI
 
@@ -4015,6 +4019,22 @@ git commit -m "chore: update pre-commit hooks"
 ```
 
 **Frequency:** Monthly or when security advisories are published for hook dependencies (Black, Ruff, etc.).
+
+### Handling npm Advisories and Package Deprecations
+
+Treat npm audit findings and npm package deprecation warnings as related but distinct maintenance signals. Do not run `npm audit fix --force` during adoption as an incidental shortcut unless the repository owner has reviewed and accepted the proposed top-level dependency change. Prefer an intentional dependency refresh, a Dependabot pull request, or a dedicated maintenance issue that records the selected version, lockfile regeneration, changelog review, and validation.
+
+Package deprecations may have a different terminal state from an audit finding. When no upstream release removes a deprecated transitive dependency and no owner-approved override is available, record the deprecation as accepted deprecated-transitive maintenance debt and re-check it during routine dependency review. For pre-commit hook version updates, follow [Updating Pre-commit Hooks](#updating-pre-commit-hooks) rather than duplicating that process here.
+
+Current accepted debt example: this template retains deprecated transitive `glob@10.5.0` through these `remark-validate-links -> unified-engine` paths:
+
+- `remark-validate-links -> unified-engine@11 -> glob@10.5.0`
+- `remark-validate-links -> unified-engine@11 -> load-plugin -> @npmcli/config -> @npmcli/map-workspaces -> glob@10.5.0`
+- `remark-validate-links -> unified-engine@11 -> load-plugin -> @npmcli/config -> @npmcli/package-json -> glob@10.5.0`
+
+Attempted remediation checked the current `remark-validate-links` and `unified-engine` release lines; no upstream release currently removes these deprecated transitive `glob@10.5.0` paths.
+
+The one published `glob` advisory currently tracked for this decision, `GHSA-5j98-mcp5-4vw2` / `CVE-2025-64756`, is patched in `glob@10.5.0`, so the installed deprecated transitive copies are not npm audit findings. Check the installed version against a named advisory's affected range instead of assuming a deprecation warning is a security finding. A broad root override such as forcing every transitive `glob` consumer to the direct `glob` major is not applied by default because it can move packages that declare `glob ^10` onto a newer major line. The owner decision needed is whether to accept that transitive-major override risk after a throwaway-branch validation pass, or to keep the documented deprecation debt until upstream packages remove it.
 
 ### Reviewing Python Version Requirements
 
