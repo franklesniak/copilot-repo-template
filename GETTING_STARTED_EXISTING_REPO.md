@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD013 -->
+
 # Getting Started: Adding Template Features to an Existing Repository
 
 This guide walks you through adopting features from `franklesniak/copilot-repo-template` into your **existing repository**. Unlike creating a new repository from a template, integrating template features into an existing project requires careful planning to avoid conflicts with your current configuration.
@@ -1004,17 +1006,9 @@ Dependabot automatically creates pull requests to update retained dependency and
 
 **Location:** `.github/dependabot.yml`
 
-`.github/dependabot.yml` itself is owned by the `github-platform` module in
-[`.template-sync/manifest.yml`](.template-sync/manifest.yml). The ecosystem
-entries inside it scan files owned by other modules. Use the manifest as the
-source of truth for file/module ownership, then keep each ecosystem only when
-the scanned manifest, lock file, configuration file, or workflow surface remains
-in your adopted repository. Remove any ecosystem whose scanned surface was not
-retained.
+`.github/dependabot.yml` itself is owned by the `github-platform` module in [`.template-sync/manifest.yml`](.template-sync/manifest.yml). The ecosystem entries inside it scan files owned by other modules. Use the manifest as the source of truth for file/module ownership, then keep each ecosystem only when the scanned manifest, lock file, configuration file, or workflow surface remains in your adopted repository. Remove any ecosystem whose scanned surface was not retained.
 
-The [Stack Selection Cleanup Checklist](#stack-selection-cleanup-checklist)
-calls out stack-level cleanup for the `pip` ecosystem and any downstream
-Terraform ecosystem. Use this matrix for the per-ecosystem keep/remove decision:
+The [Stack Selection Cleanup Checklist](#stack-selection-cleanup-checklist) calls out stack-level cleanup for the `pip` ecosystem and any downstream Terraform ecosystem. Use this matrix for the per-ecosystem keep/remove decision:
 
 | Dependabot ecosystem | Scanned file or surface | Target surface module | Keep by default |
 | --- | --- | --- | --- |
@@ -1029,20 +1023,16 @@ Terraform ecosystem. Use this matrix for the per-ecosystem keep/remove decision:
 1. **If you don't have a dependabot.yml file:**
    - Copy `.github/dependabot.yml` from the template
    - Remove ecosystem entries for scanned surfaces you did not retain
-   - Keep the template's grouping strategy for any ecosystem you retain unless
-     your repository already has a different update grouping policy
+   - Keep the template's grouping strategy for any ecosystem you retain unless your repository already has a different update grouping policy
 
 2. **If you already have a dependabot.yml file:**
    - Review the template's grouping strategy (groups minor/patch updates)
    - Consider adopting the commit message prefix convention (`chore(deps)`)
    - Merge only the ecosystem entries whose scanned surfaces you retained
 
-**Example: recommended tailored config for a non-Python repository that retains
-Markdown tooling, GitHub Actions workflows, and pre-commit:**
+**Example: recommended tailored config for a non-Python repository that retains Markdown tooling, GitHub Actions workflows, and pre-commit:**
 
-This example removes `pip` because no Python dependency manifest is retained,
-keeps `npm` for Markdown tooling, and keeps `pre-commit` because
-`.pre-commit-config.yaml` remains present.
+This example removes `pip` because no Python dependency manifest is retained, keeps `npm` for Markdown tooling, and keeps `pre-commit` because `.pre-commit-config.yaml` remains present.
 
 ```yaml
 version: 2
@@ -1611,24 +1601,15 @@ If your project already has a `package.json`:
    ```json
    {
      "scripts": {
-       "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.pytest_cache\"",
+       "lint:md": "markdownlint-cli2 \"**/*.md\" \"#node_modules\" \"#.venv\" \"#.pytest_cache\" \"#**/.pytest_cache\"",
        "lint:md:nested": "node .github/scripts/lint-nested-markdown.js"
      }
    }
    ```
 
-2. **Merge devDependencies** — Add these packages (check template for current versions):
+2. **Merge devDependencies** — Add the Markdown tooling packages used by the retained scripts. Use the repository's `package.json` as the source of truth for exact current versions so adopted dependency pins do not drift from the template.
 
-   ```json
-   {
-     "devDependencies": {
-       "markdownlint": "^0.40.0",
-       "markdownlint-cli2": "^0.22.1"
-     }
-   }
-   ```
-
-   > **Note:** If adopting the nested markdown linting script, also add `glob`, `jsonc-parser`, and `markdown-it`.
+   > **Note:** If adopting the nested markdown linting script, also add the package entries it uses, such as `glob`, `jsonc-parser`, and `markdown-it`.
 
 3. Run `npm install` to install the new dependencies
 
@@ -1664,7 +1645,7 @@ If many errors appear, you have three options:
 1. **Fix the files** — Run with `--fix` to auto-correct:
 
    ```bash
-   npx markdownlint-cli2 "**/*.md" "#node_modules" "#.pytest_cache" --fix
+   npx markdownlint-cli2 "**/*.md" "#node_modules" "#.venv" "#.pytest_cache" "#**/.pytest_cache" --fix
    ```
 
 2. **Adjust rules** — Modify `.markdownlint.jsonc` to match your project's existing style
@@ -2423,9 +2404,7 @@ Get-ChildItem -Path . -Recurse -File |
     }
 ```
 
-Genuine module manifests are intentionally analyzed as `.psd1` inputs. Keep
-`.github/linting/PSScriptAnalyzerSettings.psd1` as the `-Settings` source and
-exclude it from analyzer input through candidate discovery policy.
+Genuine module manifests are intentionally analyzed as `.psd1` inputs. Keep `.github/linting/PSScriptAnalyzerSettings.psd1` as the `-Settings` source and exclude it from analyzer input through candidate discovery policy.
 
 ### Analyzer Debt Triage for Existing Repositories
 
