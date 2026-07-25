@@ -251,9 +251,63 @@ These terms apply to the review-comment workflow below and defer to the canonica
     - **Outside an active automated review loop:** Cross-branch integration onto the PR head is a manual owner action. The agent **MUST NOT** push directly to the PR head branch. Instead, the agent **MUST** state in its step-6 reply which branch the commit will be pushed to and whether a merge or cherry-pick will be required to make it visible on the PR.
     - **During an active automated review loop:** The documented Automated Review Loop provides loop-scoped authorization for the agent to push fix commits directly onto the PR head branch when all of the preconditions in the "Direct PR-head placement during an active review loop" paragraph in Automated Review Loop step 7 are satisfied. See that paragraph for the full set of required conditions, safety constraints, fallback behavior, and how the loop-scoped authorization interacts with generic session-level or harness-injected branch-scoping instructions.
 
-8. **Evaluate style guide impact.** Determine whether the relevant language instruction file(s) under `.github/instructions/` should be updated to prevent the same issue in the future. **Read the full applicable style guide(s) before answering** — the recommendation must account for what the guide already covers to avoid duplicating or contradicting existing rules. The protected-file authorization checkpoint in step 7 governs selected fixes that would directly change any protected instruction file, including a style guide under `.github/instructions/`. This step governs secondary style-guide recommendations. If such a secondary update is warranted, write a prompt in a Markdown code fence (suitable for sending to GitHub Copilot's coding agent) that describes the style guide change. Post the prompt as a reply in the same review comment thread. In this secondary-recommendation case, do **not** modify the style guide directly; if the maintainer later authorizes that change, handle it through the step-7 protected-file authorization checkpoint.
+8. **Evaluate style guide impact.** Determine whether the relevant language instruction file(s) under `.github/instructions/` should be updated to prevent the same issue in the future. **Read the full applicable style guide(s) before answering** — the recommendation must account for what the guide already covers to avoid duplicating or contradicting existing rules. The protected-file authorization checkpoint in step 7 governs selected fixes that would directly change any protected instruction file, including a style guide under `.github/instructions/`. This step governs secondary style-guide recommendations. If such a secondary update is warranted, draft it as a **ready-to-file GitHub issue** following **Style-guide update issues** below, and post that issue inside a fenced `text` block as a reply in the same review comment thread so the maintainer can file it verbatim. In this secondary-recommendation case, do **not** modify the style guide directly; if the maintainer later authorizes that change, handle it through the step-7 protected-file authorization checkpoint.
 
-9. **Resolve or leave open.** If **no** style guide update was recommended in step 8, resolve the review comment thread using the `resolve_review_thread` tool (or equivalent). If a style guide update **was** recommended, leave the thread **open** so the owner can see and act on the prompt before it is dismissed. **Known limitation:** The `resolve_review_thread` tool requires a GraphQL thread node ID (`PRRT_...`), but the `get_review_comments` response currently omits thread-level node IDs. Until the MCP server includes them, this step cannot be performed automatically. Skip it and note the limitation if the tool call fails.
+9. **Resolve or leave open.** If **no** style guide update was recommended in step 8, resolve the review comment thread using the `resolve_review_thread` tool (or equivalent). If a style guide update **was** recommended, leave the thread **open** so the owner can see and act on the issue before it is dismissed. **Known limitation:** The `resolve_review_thread` tool requires a GraphQL thread node ID (`PRRT_...`), which some tooling versions omit from the `get_review_comments` response. When the thread node ID is available, perform this step; when it is not, skip it and note the limitation if the tool call fails.
+
+### Style-guide update issues
+
+This subsection defines the deliverable for a step-8 secondary style-guide recommendation. The deliverable is a **ready-to-file GitHub issue**, not a loose prompt: post it inside a fenced `text` block — the title line, then the body — so the maintainer can copy it into a new issue without rewriting it. The agent still **MUST NOT** edit the style guide itself; the issue is the hand-off.
+
+The format below is the repository owner's issue style, recorded here so the agent can produce a conforming issue without another source. If this repository later adopts its own canonical issue style guide, that file governs and this subsection defers to it.
+
+**Guiding properties.** The issue **MUST** be:
+
+- **Self-contained** — an implementer can act on it without the pull request, the review thread, or this file. Name the artifact, the change, and the verification inside the issue.
+- **Normative** — RFC 2119 keywords (**MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, **MAY**) used deliberately, with the level stated where it is not obvious and justified where the choice matters.
+- **Rationale-bearing** — say why, not only what.
+- **Anti-drift** — instruct the implementer to re-verify file paths and version baselines at implementation time, keep scope narrow, and stop and report rather than widen scope.
+- **Cited** — back external claims with authoritative references, each annotated with a one-line reason.
+
+**Title.** A descriptive noun phrase of roughly 8 to 16 words naming both the artifact and the change, led by a verb such as Document, Clarify, Extend, or Add, in Title Case, with code identifiers in backticks. State the intended outcome, not a bare problem.
+
+**Body sections.** Use `##` headings in this order, omitting a section only when its condition does not apply:
+
+| Order | Section | When to include |
+| ---: | --- | --- |
+| 1 | `## Summary` | Always: what to change, in which named file, with any scoping caveat |
+| 2 | `## Authorization` | When a protected instruction file is touched — always true for a style guide under `.github/instructions/` |
+| 3 | `## Background and motivation` | Always; may fold into Summary for a small change |
+| 4 | `## Requested change` | Always |
+| 5 | `## Decisions and rationale` | When a non-obvious trade-off was chosen |
+| 6 | `## Scope and non-goals` | Always |
+| 7 | `## Metadata bump` | When the target file carries `Version` or `Last Updated` |
+| 8 | `## Acceptance criteria` | Always |
+| 9 | `## References` | When any external claim is made |
+
+**Formatting.**
+
+- `##` for top-level sections; `####` when the issue specifies a heading to add to the target document.
+- Open bullets with a bold lead-in term naming the concept.
+- Inline code for every file path, identifier, placeholder, command, marker, and version string. Keep angle-bracket placeholders such as `<name>` inside backticks so markdownlint does not read them as inline HTML.
+- Numbered lists for ordered normative requirements; `-` bullets for everything else, including acceptance criteria — never task-list checkboxes.
+- Fenced examples with a language tag, pairing and labelling compliant and non-compliant cases where they help.
+- Bold the section name for cross-references inside the issue rather than linking.
+- Stay ASCII: write a before-and-after change as "old to new" rather than using an arrow glyph. Avoid tables except for genuine comparisons.
+
+**Requested change.** A numbered list of discrete, individually checkable **MUST**/**SHOULD** requirements. Name the exact target file, the heading the new rule belongs under, and the rule's own normative level.
+
+**Scope and non-goals.** State what is in scope and what is not, and instruct the implementer to stop and report rather than widen scope if tooling proposes edits outside it.
+
+**Metadata bump.** Give the snapshot `Version` and `Last Updated` values, and instruct the implementer to re-read the current values at implementation time and bump them per the target file's own convention.
+
+**Acceptance criteria.** Objectively checkable end states as plain `-` bullets, one per requirement so the two lists check against each other, including the validation commands that must pass (for example, `npm run lint:md` and `pre-commit run --all-files`).
+
+**References.** An annotated list using descriptive link text, each entry carrying a one-sentence reason. Where a source justifies a specific decision, prefix that reason with a bold **Tie:** naming the decision. No raw URLs in prose.
+
+**Length.** Expect roughly 600 to 1800 words of body. Favor completeness, explicit scope boundaries, and annotated citations over brevity.
+
+**Self-consistency.** The issue text **MUST** obey the rules it documents and the repository documentation standard.
 
 ## Automated Review Loop
 
@@ -319,7 +373,7 @@ When a pull request is created or when the owner posts a PR comment containing `
     **Sweep for other reviewers each round.** Step 2 detection remains keyed to `copilot-pull-request-reviewer[bot]`, because that is the review this loop requested; other reviewers arrive asynchronously and are never waited on. Therefore, each time a round is processed, the agent **MUST** sweep the PR for unprocessed review comments from other reviewers — using `get_review_comments` (or equivalent) under the **Pagination completeness for poll observations** rules in step 2 — and process every one found through the same protocol. This picks up asynchronous reviews without changing the request-and-wait machinery.
 
     If a comment reaches the step-7 protected-file authorization checkpoint without sufficient explicit authorization, treat that as a loop pause trigger: post the narrow authorization question required by step 7 as a standalone PR comment, pause the loop, and resume only after the maintainer authorizes the specific protected-file change. If the available tooling cannot perform step 9 automatically, you **MUST** still complete steps 1-8 and **MUST** ensure the step 9 completion work is handled before treating the comment as fully processed: remove any temporary `:eyes:` reaction per the protocol and resolve the review thread manually when appropriate.
-6. **Check for style guide recommendations.** If **any** comment processed in this round produced a style guide update prompt (step 8), **PAUSE** and post a PR comment. This checkpoint covers every comment the round processed, wherever it was found: comments in the detected Copilot review, comments picked up by the step-4 clean-review sweep, and comments picked up by the step-5 sweep of other reviewers all feed the same check.
+6. **Check for style guide recommendations.** If **any** comment processed in this round produced a style-guide update issue (step 8), **PAUSE** and post a PR comment. This checkpoint covers every comment the round processed, wherever it was found: comments in the detected Copilot review, comments picked up by the step-4 clean-review sweep, and comments picked up by the step-5 sweep of other reviewers all feed the same check.
     `Review loop paused: style guide update(s) recommended — see review thread(s) above. Apply the style guide changes, then post "@claude resume review loop" to continue.`
 7. **Re-request review.** Before re-requesting, the agent **MUST** verify that the final fix commit(s) for the current round that are intended to land on the PR head are reachable from the PR's head ref. The agent **MUST** record those PR-head fix commit SHA(s) after any merge, rebase, or cherry-pick that changes commit IDs; intermediate authored commit SHA(s) that were superseded by equivalent PR-head commit SHA(s) **MUST NOT** block re-requesting review on their own.
 
@@ -378,7 +432,7 @@ For **each** failing check, follow this ordered procedure:
 
 **Protected-file authorization applies to both paths.** The step-7 **protected-file authorization checkpoint** governs every commit produced under this subsection, instrumentation under (d) exactly as much as a confirmed-root-cause fix under (e). Listing steps 3 through 5 for the instrumentation path selects *how the approach is chosen*; it does **not** exempt the resulting edit from the authorization rules. Before creating, editing, deleting, or renaming any protected instruction file — including adding diagnostic output to one — the agent **MUST** run that checkpoint and **MUST NOT** treat an active CI-failure investigation, a failing check, or the loop itself as authorization. When the required explicit authorization is absent, raise the narrow authorization question through the loop's pause-and-post mechanism per Loop procedure step 5, pause, and resume only after the maintainer authorizes that specific protected-file change; diagnose the failure by other means in the meantime.
 
-**Venue: standalone PR comments.** A CI failure has no review-comment thread, so thread-scoped mechanics are skipped: the step-1 `:eyes:` reaction and the step-9 thread resolution do **not** apply. Each evaluation — both an instrumentation selection under (d) and a confirmed finding under (e) — **MUST** be posted as a **standalone PR comment** that serves as the step-6 equivalent, carrying the same five ordered elements step 6 requires, plus the annotated references list when research materially informed the outcome. Any step-8 style-guide prompt for that finding is posted in the **same** standalone comment rather than as a thread reply, and a step-8 recommendation still triggers the Loop procedure step 6 pause. The step-6 rule that one finding's processing finishes before the next begins applies unchanged.
+**Venue: standalone PR comments.** A CI failure has no review-comment thread, so thread-scoped mechanics are skipped: the step-1 `:eyes:` reaction and the step-9 thread resolution do **not** apply. Each evaluation — both an instrumentation selection under (d) and a confirmed finding under (e) — **MUST** be posted as a **standalone PR comment** that serves as the step-6 equivalent, carrying the same five ordered elements step 6 requires, plus the annotated references list when research materially informed the outcome. Any step-8 style-guide update issue for that finding is posted in the **same** standalone comment rather than as a thread reply, and a step-8 recommendation still triggers the Loop procedure step 6 pause. The step-6 rule that one finding's processing finishes before the next begins applies unchanged.
 
 #### CI-wait polling
 
