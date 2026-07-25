@@ -301,9 +301,9 @@ The format below is the repository owner's issue style, recorded here so the age
 
 **Metadata bump.** Give the snapshot `Version` and `Last Updated` values, and instruct the implementer to re-read the current values at implementation time and bump them per the target file's own convention.
 
-**Acceptance criteria.** Objectively checkable end states as plain `-` bullets, one per requirement so the two lists check against each other, including the validation commands that must pass (for example, `npm run lint:md` and `pre-commit run --all-files`).
+**Acceptance criteria.** Objectively checkable end states as plain `-` bullets, one per requirement so the two lists check against each other, including the validation commands that must pass (for example, `pre-commit run --all-files` plus the repository's documentation lint command).
 
-**References.** An annotated list using descriptive link text, each entry carrying a one-sentence reason. Where a source justifies a specific decision, prefix that reason with a bold **Tie:** naming the decision. No raw URLs in prose.
+**References.** An annotated list using descriptive link text, each entry carrying a one-sentence reason. Where a source justifies a specific decision, prefix that reason with a bold **Tie:** naming the decision. No raw URLs in prose. Because an issue body renders at the issue's own URL, repo-internal links **MUST** use absolute repository URLs in the `blob/HEAD` form rather than repo-relative paths, which resolve against the issue URL and 404 — the same failure mode the documentation standard documents for issue templates.
 
 **Length.** Expect roughly 600 to 1800 words of body. Favor completeness, explicit scope boundaries, and annotated citations over brevity.
 
