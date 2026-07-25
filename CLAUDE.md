@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.6.20260629.0
+**Version:** 1.7.20260725.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-29
+- **Last Updated:** 2026-07-25
 - **Scope:** Agent-specific entry point for Claude Code and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
@@ -138,13 +138,17 @@ For broader Azure DevOps Services module setup, validation, security scanning, d
 
 ## Ignoring Commands Addressed to Other Agents
 
-PR comments and review comments that begin with `@copilot` are commands addressed to GitHub Copilot's coding agent, **not** to Claude Code. **Ignore** these entirely — do not process them, do not reply to them, and do not treat them as review feedback.
+PR comments and review comments that begin with a mention addressed to another coding agent — for example `@copilot` (GitHub Copilot's coding agent) or `@codex` (OpenAI Codex) — are commands addressed to that agent, **not** to Claude Code. **Ignore** these entirely — do not process them, do not reply to them, and do not treat them as review feedback.
+
+This rule covers **only** comments that are themselves commands addressed to another agent. It **never** exempts those platforms' review comments from processing. Review comments authored by GitHub Copilot (`copilot-pull-request-reviewer[bot]`), OpenAI Codex (`chatgpt-codex-connector[bot]`), any other AI reviewer, or a human reviewer are processed through the **Handling Code Review Comments** protocol identically regardless of author, per **Automated Review Loop** step 5.
 
 ## Handling Code Review Comments
 
 This section is retained as Claude platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Claude review-comment protocol for the retained Claude entry point.
 
 When a code review comment is received from GitHub Copilot, a human reviewer, or any other code reviewer on a pull request, follow this process for **each** comment:
+
+**Where this protocol applies.** This is the repository's single adjudication discipline, and it applies wherever the protocol is invoked — not only to review comments. In particular, the confirmed root causes and instrumentation decisions adjudicated under **CI failure processing** in the **Automated Review Loop** section run through these same steps, substituting the venue and thread mechanics that subsection defines. Throughout the steps below, **finding** means the unit being adjudicated: a single review comment, a single confirmed CI root cause, or a single instrumentation decision.
 
 ### Protected-file authorization terms
 
@@ -161,16 +165,27 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
 2. **Validate the concern.** Determine whether the reviewer's feedback identifies a genuine gap, bug, style violation, or improvement opportunity. If the concern is not valid, explain why in a reply, skip steps 3-8, and continue to step 9 to complete any required thread resolution and cleanup.
 
-3. **List options.** Address each reviewer concern **one at a time**. For each concern, think hard about possible ways to resolve the problem or address the feedback and enumerate all **materially distinct reasonable options**. Where appropriate, consult vendor or official documentation (for example, language, framework, cloud-provider, API, or tooling docs) so the option set reflects current authoritative guidance, not just generalized prior knowledge. If documentation materially informs the option set or scoring, name or cite the source in the evaluation reply. Where it would materially change the outcome, consider permutations and combinations of base options (for example, "Option A plus a narrowed part of Option C") rather than treating only mutually exclusive base options. Take the time needed to reach a defensibly complete list before scoring, while collapsing duplicate or materially equivalent options.
+3. **List options.** Address each reviewer concern **one at a time**. For each concern, think hard about possible ways to resolve the problem or address the feedback and enumerate all **materially distinct reasonable options**.
+
+    **Multi-perspective enumeration.** The agent **MUST** enumerate options from multiple perspectives rather than from a single vantage point, asking what each of the following roles would propose for this concern: a senior software engineer, a new developer, a DevOps expert, a documentation expert, a project manager, a cybersecurity executive, a cybersecurity technical expert, a business stakeholder, and any other role relevant to the concern (for example, a data-privacy specialist for a PII concern, or an accessibility specialist for a user-interface concern). The enumeration **MUST** be exhaustive across this roster: every listed perspective, plus every additional relevant role, **MUST** be considered rather than skipped, though a perspective that yields no materially distinct option adds nothing to the list.
+
+    **Primary-source research.** Where appropriate, consult vendor or official documentation (for example, language, framework, cloud-provider, API, or tooling docs) so the option set reflects current authoritative guidance, not just generalized prior knowledge; more broadly, the agent **SHOULD** perform primary-source research — vendor documentation, standards, or other authoritative sources — wherever it would bolster the quality of the option set or confirm the correctness of an option. This is **SHOULD** rather than **MUST** because some sessions run under restricted network policies that block outbound research; the obligation is scoped to the session's available network access. Whenever research materially informs the option set or the scoring, the step-6 reply **MUST** cite the sources in a references list that uses descriptive link text, with each entry carrying a brief note of how that source informed the outcome.
+
+    Where it would materially change the outcome, consider permutations and combinations of base options (for example, "Option A plus a narrowed part of Option C") rather than treating only mutually exclusive base options. Take the time needed to reach a defensibly complete list before scoring, while collapsing duplicate or materially equivalent options.
 
 4. **Build an evaluation rubric.** Define 4-6 scoring criteria relevant to the concern (for example, style-guide compliance, correctness, security, performance, maintainability, code simplicity, PII safety, PS 5.1 compatibility, test reliability, user impact, backward compatibility, or long-term clarity). Score each criterion on a 1-5 scale. Take the time needed to ensure the rubric is **comprehensive and defensible**: each criterion should be one a reasonable maintainer would accept as relevant, and the criteria collectively should cover the substantive technical considerations of the concern, not just surface-level ones.
 
-    **Criterion-weighting guidance.** When the rubric includes either of the following criteria, weight them **less than** substantive technical criteria such as correctness, security, maintainability, style-guide compliance, compatibility, test reliability, and long-term clarity, unless the reviewer's concern is itself primarily about that criterion:
+    **A fresh rubric for every finding.** Build a **new** rubric for each finding. A rubric **MUST NOT** be reused across findings, because criteria and weights chosen for one finding anchor the next one to considerations that may not apply to it. This generalizes the step-5 negative case "Each comment gets its own rubric" from review comments to every finding the protocol adjudicates, including CI-failure findings and instrumentation decisions under **CI failure processing**.
 
-    - **Difficulty to implement** (effort required, churn introduced, complexity of the change)
+    **Multi-perspective rubric construction.** When choosing criteria and weights, the agent **MUST** consider what each perspective in the step-3 roster would treat as decisive — for example, the cybersecurity technical expert's threat exposure, the DevOps expert's operability, the documentation expert's long-term clarity, the new developer's discoverability, and the business stakeholder's user impact — and carry the relevant ones into the rubric. This selection happens **within** the single rubric build required by **Rubric-construction discipline** in step 5; it is not a second pass over an already-applied rubric.
+
+    **Criterion-weighting guidance.** When the rubric includes any of the following criteria, weight them **less than** substantive technical criteria such as correctness, security, maintainability, style-guide compliance, compatibility, test reliability, and long-term clarity, unless the reviewer's concern is itself primarily about that criterion:
+
+    - **Difficulty to implement** (effort required, complexity of the change)
+    - **Amount of churn introduced** (how much existing code or content the change rewrites, moves, or disturbs)
     - **Tightness of PR scope** (how narrowly the change stays within the PR's stated boundary)
 
-    These two criteria are legitimate considerations but tend to bias rubrics toward minimal, status-quo-preserving options even when a substantively better option exists. Implement this de-weighting by assigning these criteria a lower weight multiplier, such as `0.5` compared with `1.0` for substantive technical criteria. Keep all criteria scored on the same 1-5 scale, and show the weights in the posted rubric so the computation is auditable.
+    These three criteria are legitimate considerations but tend to bias rubrics toward minimal, status-quo-preserving options even when a substantively better option exists. Implement this de-weighting by assigning these criteria a lower weight multiplier, such as `0.5` compared with `1.0` for substantive technical criteria. Keep all criteria scored on the same 1-5 scale, and show the weights in the posted rubric so the computation is auditable.
 
     The PR-scope explicit-boundary escalation under condition (d) of the **Operationalized escalation gate** in step 5 is unchanged: an explicit scope sentence in the PR description that the selected fix would directly violate still triggers escalation regardless of weighting.
 
@@ -210,7 +225,17 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
     **Rubric-construction discipline.** Build the rubric **once** with a fixed set of criteria, then apply it **once**. Do not re-score with revised criteria mid-deliberation unless a **new external information source arrives**, such as a reviewer follow-up, CI failure, or newly discovered repository constraint. If, after rubric application, the agent wants to add or remove criteria in order to produce a different winner, treat that as analysis paralysis: commit to the rubric output and proceed unless one of the escalation conditions above applies.
 
-6. **Post the evaluation.** Reply to the review comment thread with the options table, the scoring table, the selected option, and either a note that implementation will follow in step 7 or, if the fix was already applied, the commit SHA that implements it.
+6. **Post the evaluation.** Reply to the review comment thread with a **single** evaluation reply containing the following five elements, authored and presented in this order:
+
+    1. **The options list** — every option enumerated in step 3.
+    2. **The rubric** — each criterion, its weight, and a brief rationale for why that criterion belongs in this rubric at that weight.
+    3. **The scoring table** — every option scored against every criterion, with weighted totals shown so the computation is auditable.
+    4. **The selected option** — described in enough detail that a reader with no prior context can implement it without consulting the thread.
+    5. **The implementation note** — either a note that implementation will follow in step 7 or, if the fix was already applied, the commit SHA that implements it.
+
+    Each element **MUST** be complete before the next is authored; do not draft the selected option before the scoring table that selects it exists. When research materially informed the option set or the scoring (step 3), the reply **MUST** additionally carry the annotated references list required by that step, placed after element 5, using descriptive link text with a brief note on each entry describing how that source informed the outcome.
+
+    A finding's processing **MUST** finish before the next finding's begins. The only exception is the existing step-5 escalation allowance: when escalation pauses one finding, processing of other independent review comments continues in the meantime. A protected-file authorization question raised during an active automated review loop still pauses the whole loop, per step 7 and **Automated Review Loop** step 5.
 
 7. **Implement the fix.** Apply the selected option, commit, and push.
 
@@ -238,7 +263,13 @@ When a pull request is created or when the owner posts a PR comment containing `
 
 ### Loop procedure
 
-1. **Request a Copilot code review.** First, record both detection baselines and the request-time PR head SHA (these **MUST** be recorded before requesting the review):
+1. **Check CI, then request a Copilot code review.**
+
+    **CI precheck.** Before requesting the review, the agent **MUST** check the CI status of the current PR head using authenticated structured tooling (for example, `pull_request_read` with `method=get_check_runs` or `method=get_status`, `actions_list`, `get_check_run`, or equivalents). If any check has **already failed** for the current head, the agent **MUST** process those failures per **CI failure processing** below before requesting the review, because a review of code that must change anyway wastes a review round.
+
+    Queued or in-progress CI runs **MUST NOT** delay the request. The agent **MUST NOT** wait for CI completion before requesting a review; a pending run is not actionable, and waiting on it would serialize the loop on CI latency. A failure that surfaces after the request is handled as a new CI-failure event.
+
+    **Baselines.** After the CI precheck, record both detection baselines and the request-time PR head SHA (these **MUST** be recorded before requesting the review, and after any CI-fix commits placed by the precheck, so the recorded head is the one being reviewed):
     - Use `get_reviews` (or equivalent) to record the `submitted_at` timestamp of the most recent review authored by `copilot-pull-request-reviewer[bot]` (or note that no such review exists yet). This is the `get_reviews` baseline for step 2.
     - Use `get_review_comments` (or equivalent) to record the `created_at` timestamp of the most recent comment authored by `copilot-pull-request-reviewer[bot]` (or note that no such comment exists yet). This is the `get_review_comments` baseline for step 2.
     - Use `pull_request_read` (or equivalent) with `method=get` to record the current PR `head.sha`. This is the request-time PR head SHA used by the **Review-head coherence diagnostic** in step 2.
@@ -264,14 +295,29 @@ When a pull request is created or when the owner posts a PR comment containing `
     - **State tracking (recommended).** On each confirmed-successful no-review poll, update a visible progress indicator in the session transcript (for example, a todo-list entry such as `"Round N: awaiting Copilot review, confirmed-successful no-review poll M/10"`) so that stalls are observable. Failed cycles use the visible failure lines described under **Safety limits** instead of advancing `M`.
     - **On success.** As soon as a new review is detected, proceed immediately to step 3.
 3. **Check review coverage.** If the review was detected via `get_reviews` and the review summary body is available, check how many files Copilot reviewed out of the total changed files (e.g., "Copilot reviewed 9 out of 9 changed files"). If Copilot did **not** review all changed files, post a PR comment noting the partial coverage so the PR owner is aware. Example: `Note: Copilot reviewed only 7 out of 9 changed files in round N. Files not reviewed by Copilot may benefit from additional manual or AI-assisted review.` If the review summary is not yet available from `get_reviews` (for example, when the review was detected solely via `get_review_comments`), **skip** the coverage note for this round and proceed. Continue the loop normally regardless of coverage outcome.
-4. **Check for comments.** If the review contains **zero** actionable comments, the code is clean — **PAUSE** and post a PR comment:
+4. **Check for comments (clean-review checkpoint).** If the review contains **zero** actionable comments, the detected review is clean — but a clean review is not by itself grounds to pause. Before pausing, the agent **MUST**:
+    - **Sweep other reviewers.** Check the PR for new, unprocessed, actionable review comments from any other reviewer (per step 5) and process each one through the **Handling Code Review Comments** protocol.
+    - **Check CI.** Check the CI status of the current PR head using authenticated structured tooling, and process every failed check attributable to the PR's changes per **CI failure processing** below. Failures that reproduce on the base branch are handled per that subsection and do not block the pause.
+
+    Once the resulting fixes are reachable from the PR head (using the same reachability check as step 7), the agent **MUST** return to step 1 to request a fresh review rather than pausing, because a clean review of superseded code is stale.
+
+    **PAUSE** and post the PR comment below **only** when all three of the following hold: the detected review is clean, no unprocessed review comments remain from any reviewer, and no known CI failures attributable to the PR's changes exist.
+
     `Review loop paused: Copilot review returned no comments. Post "@claude resume review loop" to continue.`
-5. **Process each comment.** Follow the "Handling Code Review Comments" protocol above (steps 1-9) for every comment in the review, **where tooling allows**. If a comment reaches the step-7 protected-file authorization checkpoint without sufficient explicit authorization, treat that as a loop pause trigger: post the narrow authorization question required by step 7 as a standalone PR comment, pause the loop, and resume only after the maintainer authorizes the specific protected-file change. If the available tooling cannot perform step 9 automatically, you **MUST** still complete steps 1-8 and **MUST** ensure the step 9 completion work is handled before treating the comment as fully processed: remove any temporary `:eyes:` reaction per the protocol and resolve the review thread manually when appropriate.
+
+    Queued or in-progress CI runs **MUST NOT** block this pause. A failure that surfaces later is handled as a new CI-failure event, and any CI-driven code change again requires a fresh review request per step 1.
+5. **Process each comment, from every reviewer.** Follow the "Handling Code Review Comments" protocol above (steps 1-9) for every comment in the review, **where tooling allows**.
+
+    **Reviewer-agnostic processing.** Every new, unprocessed, actionable review comment on the pull request is processed through that protocol in the **exact same manner regardless of author**: GitHub Copilot (`copilot-pull-request-reviewer[bot]`), OpenAI Codex (`chatgpt-codex-connector[bot]`), any other AI reviewer, and human reviewers alike. Author identity changes nothing about validation, option enumeration, rubric construction, selection, implementation, or thread handling. Duplicate detection is by comment ID **across all reviewers** (see **Safety limits**), so a comment addressed in a prior round is skipped no matter who wrote it. A comment that is itself a command addressed to another coding agent is not a review comment and is ignored per **Ignoring Commands Addressed to Other Agents**.
+
+    **Sweep for other reviewers each round.** Step 2 detection remains keyed to `copilot-pull-request-reviewer[bot]`, because that is the review this loop requested; other reviewers arrive asynchronously and are never waited on. Therefore, each time a round is processed, the agent **MUST** sweep the PR for unprocessed review comments from other reviewers — using `get_review_comments` (or equivalent) under the **Pagination completeness for poll observations** rules in step 2 — and process every one found through the same protocol. This picks up asynchronous reviews without changing the request-and-wait machinery.
+
+    If a comment reaches the step-7 protected-file authorization checkpoint without sufficient explicit authorization, treat that as a loop pause trigger: post the narrow authorization question required by step 7 as a standalone PR comment, pause the loop, and resume only after the maintainer authorizes the specific protected-file change. If the available tooling cannot perform step 9 automatically, you **MUST** still complete steps 1-8 and **MUST** ensure the step 9 completion work is handled before treating the comment as fully processed: remove any temporary `:eyes:` reaction per the protocol and resolve the review thread manually when appropriate.
 6. **Check for style guide recommendations.** If **any** comment produced a style guide update prompt (step 8), **PAUSE** and post a PR comment:
     `Review loop paused: style guide update(s) recommended — see review thread(s) above. Apply the style guide changes, then post "@claude resume review loop" to continue.`
 7. **Re-request review.** Before re-requesting, the agent **MUST** verify that the final fix commit(s) for the current round that are intended to land on the PR head are reachable from the PR's head ref. The agent **MUST** record those PR-head fix commit SHA(s) after any merge, rebase, or cherry-pick that changes commit IDs; intermediate authored commit SHA(s) that were superseded by equivalent PR-head commit SHA(s) **MUST NOT** block re-requesting review on their own.
 
-    **Direct PR-head placement during an active review loop.** When the agent's working branch differs from the PR head branch and **all** of the following preconditions are satisfied, the agent **MAY** push the current round's fix commit(s) directly to the PR head branch instead of pausing for manual integration:
+    **Direct PR-head placement during an active review loop.** When the agent's working branch differs from the PR head branch and **all** of the following preconditions are satisfied, the agent **MAY** push the current round's fix commit(s) directly to the PR head branch instead of pausing for manual integration. This authorization — the five preconditions below, the **Push mechanism** with its GitHub MCP/API fallback, and the audit-trail requirements — extends unchanged to the instrumentation commits and CI-fix commits produced under **CI failure processing** below, except that their audit trail is recorded in that subsection's standalone PR comment rather than in a review-thread reply:
 
     1. The review loop is actively running (not paused and not in an out-of-loop context).
     2. The PR head branch is in the **same repository** as the agent's working branch (cross-fork PRs are excluded).
@@ -304,6 +350,61 @@ When a pull request is created or when the owner posts a PR comment containing `
 
     If all recorded PR-head fix commits are reachable (or no code changes were made in this round), and no style guide updates were recommended, go to step 1. This applies regardless of whether code changes were made — even if all comments were addressed without code changes (e.g., concern noted but no action taken), re-requesting a review allows Copilot to find different issues on a fresh pass.
 
+### CI failure processing
+
+This subsection is retained as Claude platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Claude CI-failure processing protocol for the retained Claude entry point.
+
+This subsection is GitHub-hosted-repository protocol and does not extend the **Azure DevOps PR Review Protocol** section. It is entered from two places: Loop procedure step 1, when a check has already failed for the current PR head, and Loop procedure step 4, when the clean-review checkpoint finds a failed check attributable to the PR's changes.
+
+#### Diagnosis procedure
+
+For **each** failing check, follow this ordered procedure:
+
+(a) **Review the logs.** Retrieve and review the failing logs using authenticated structured tooling — for example `get_job_logs` with failed-only filtering, `get_check_run`, `actions_list` with `method=list_workflow_jobs`, or equivalents. Diagnosing from a check name, a status summary, or a guess about what "usually" breaks is not sufficient.
+
+(b) **Hypothesize the root cause.** State a specific, testable root-cause hypothesis for the failure.
+
+(c) **Determine whether the evidence confirms it.** Explicitly decide, and record, whether the available evidence confirms the hypothesized root cause or whether additional instrumentation or logging is needed to confirm it. Silently treating an unconfirmed hypothesis as confirmed is not acceptable; the determination is a required, visible step.
+
+(d) **Instrument, if needed.** When instrumentation is needed, enumerate and select the instrumentation approach through comment-protocol steps 3 through 5 — multi-perspective option enumeration, a fresh rubric for this decision, and scoring and selection under the **Operationalized escalation gate** — then implement it, push it to the PR's source (head) branch so CI re-runs, wait for that run per **CI-wait polling** below, examine the new logs, and repeat (b) through (d) until the root cause is confirmed. Instrumentation cycles are bounded per **Safety bounds and pre-existing failures** below.
+
+(e) **Fix the confirmed root cause.** Once the root cause is confirmed, treat it as a **finding** and process it through comment-protocol steps 3 through 8 — including the fresh rubric each finding requires — then push the fix to the PR's source (head) branch. Do **not** wait for CI to confirm the fix; see **CI-wait polling** below.
+
+**Venue: standalone PR comments.** A CI failure has no review-comment thread, so thread-scoped mechanics are skipped: the step-1 `:eyes:` reaction and the step-9 thread resolution do **not** apply. Each evaluation — both an instrumentation selection under (d) and a confirmed finding under (e) — **MUST** be posted as a **standalone PR comment** that serves as the step-6 equivalent, carrying the same five ordered elements step 6 requires, plus the annotated references list when research materially informed the outcome. Any step-8 style-guide prompt for that finding is posted in the **same** standalone comment rather than as a thread reply, and a step-8 recommendation still triggers the Loop procedure step 6 pause. The step-6 rule that one finding's processing finishes before the next begins applies unchanged.
+
+#### CI-wait polling
+
+Waiting for CI results after an instrumentation push **MUST** follow the review-wait active-polling contract defined in Loop procedure step 2 and **Safety limits**, applied to check-run state instead of review state: at least 60 seconds between poll cycles; authenticated structured tooling for detection (for example, `pull_request_read` with `method=get_check_runs` or `method=get_status`, `actions_list`, `get_check_run`, or equivalents), with the **Ad-hoc HTTP fallback contract** available only when authenticated structured tooling is genuinely unavailable; the same **Poller liveness** rule, so a cycle that cannot determine check state is surfaced as a visible, self-describing failure rather than read as "not finished yet"; and the same failed-cycle semantics, so failed cycles neither advance nor reset the timeout counter and the bounded **Retry or pause on polling failure** recovery applies.
+
+The review-wait 10-poll bound is replaced by a CI-sized bound, because real CI runs routinely exceed 10 minutes: **30 confirmed-successful no-completion polls** (at least 30 minutes wall-clock; longer when failed cycles trigger recovery work that does not consume timeout attempts). A **confirmed-successful no-completion poll** is a cycle in which the check state for the instrumentation commit was successfully observed and the run has not yet completed. On reaching the bound, **PAUSE** the loop and post a PR comment:
+
+`Review loop paused: CI for instrumentation commit <SHA> did not complete after 30 confirmed-successful no-completion polls (≥30 min). Post "@claude resume review loop" to continue.`
+
+**No CI wait after a fix push.** After a confirmed-root-cause fix push under (e), the agent **MUST NOT** wait for CI completion. The loop proceeds per Loop procedure step 1 or step 4, whichever it entered from, and a fix that fails again simply arrives as a new CI-failure event. Waiting for CI to confirm the fix would reintroduce exactly the gating that the never-wait-on-running-CI rule removes.
+
+#### PR-head placement for instrumentation and CI-fix commits
+
+Instrumentation commits under (d) and CI-fix commits under (e) are placed on the PR head under the **Direct PR-head placement during an active review loop** authorization in Loop procedure step 7: the same five preconditions, the same **Push mechanism** (direct `git push` first, then the available GitHub MCP/API file-write path before treating placement as failed, with **Operational complexity is not failure or unavailability** applying unchanged), and the same **Fallback** behavior when placement genuinely fails. The audit trail — the development-branch SHA(s) when they differ, the resulting PR-head SHA(s), and, when the MCP/API path was used, a one-line note on the underlying `git push` failure — is recorded in the standalone PR comment for that finding instead of a review-thread reply.
+
+**Red-head reconciliation.** The **Essential Repository Summary** rule "do not push code when pre-commit or required validation checks are failing" is satisfied at the level of the commit being pushed, not the pre-existing state of the branch. Instrumentation and CI-fix commits **MAY** be pushed while the diagnosed check is still red, provided `pre-commit run --all-files` and the applicable local validation commands pass on the commit itself. Without this reading, a red check could never be diagnosed or repaired, because every remedial push would be blocked by the very failure it exists to resolve. Placement precondition 4 is read the same way: it requires the push to **comply with** branch protections, required status checks as configured, signing requirements, and repository policy — not that CI be green at push time. No safety boundary changes: force-pushes, branch-protection bypass, required-signing bypass, restricted-push bypass, and direct PR-head placement outside an active automated review loop remain prohibited.
+
+#### Instrumentation hygiene
+
+**Instrumentation** in this subsection means local logging or diagnostic output added to code, tests, or CI configuration in order to confirm a root cause — for example an added log line, a dumped variable, a verbosity flag on a test runner, or a temporary CI step that prints environment state.
+
+Instrumentation added **solely** for diagnosis **SHOULD** be removed as part of the confirmed-root-cause fix, or explicitly justified and retained in that fix's standalone PR comment. The remove-or-justify decision point itself is **mandatory**: the agent **MUST** make and record that decision for every diagnostic addition. Removal is **SHOULD** rather than **MUST** because a diagnostic addition can be legitimately worth keeping, such as a log line that would shorten diagnosis of the next failure of the same class; leaving it behind silently is what the rule forbids.
+
+The **Do not** rule against adding telemetry or external logging services without explicit approval is unchanged. Instrumentation under this subsection is local diagnostic output only, and it never authorizes sending data to an external service.
+
+#### Safety bounds and pre-existing failures
+
+- **Instrumentation cycle bound.** At most **5 instrumentation cycles per failing check per loop invocation**, where one cycle is a single instrument-push-observe pass through (b) through (d). This bound does **not** reset between rounds. It exists because an instrument-push-observe loop can run away on a flaky or environment-dependent failure. On reaching the bound, **PAUSE** the loop and post a PR comment:
+
+  `Review loop paused: reached the maximum of 5 instrumentation cycles for failing check <check-name> without confirming a root cause. Post "@claude resume review loop" to continue.`
+- **Rounds.** A CI-driven return to Loop procedure step 1 counts as a review round against the **Maximum rounds** limit of 8 in **Safety limits**.
+- **Wall clock.** Time spent on CI-failure processing, including CI-wait polling, counts against the 6-hour **Wall-clock timeout** in **Safety limits**.
+- **Pre-existing base-branch failures.** A failure that also reproduces on the PR's base branch predates the PR's changes. Such a failure **SHOULD** be reported once in the PR thread, excluded from the instrument-and-fix cycle, and treated as not blocking the clean-review pause in Loop procedure step 4, because instrumenting the PR against a failure it did not cause churns indefinitely. "Reported once" means a single standalone PR comment naming the check and the evidence that it reproduces on the base branch; do not re-report the same failure each round. Attribute a failure to the base branch on **evidence**, such as the same check failing on the base branch's own runs, not on assumption; when the evidence is absent, treat the failure as attributable to the PR and process it normally.
+
 ### Safety limits
 
 - **Maximum rounds:** 8 review iterations per loop invocation. After the eighth round, **PAUSE** regardless of outcome and post:
@@ -312,7 +413,7 @@ When a pull request is created or when the owner posts a PR comment containing `
 - **Wall-clock timeout:** 6 hours from loop start. If the timeout is reached, **PAUSE** and post:
 
   `Review loop paused: 6-hour timeout reached. Post "@claude resume review loop" to continue.`
-- **Duplicate detection:** Track comment IDs that have already been processed. Skip any comment whose ID was addressed in a prior round to avoid re-processing.
+- **Duplicate detection:** Track comment IDs that have already been processed, across **all** reviewers rather than per reviewer. Skip any comment whose ID was addressed in a prior round to avoid re-processing, regardless of author.
 - **Active polling required:** Every review-wait cycle **MUST** be driven by the explicit timed poll loop described in step 2. Passive waiting for webhook delivery alone is **not** permitted — the poll loop ensures that pause and timeout behavior is reached deterministically even if webhook delivery does not occur.
   - **Poller liveness.** The poll loop **MUST** distinguish "successfully observed no new event" from "could not determine event state," and **MUST** surface the latter as a visible, self-describing failure in the session transcript, for example `cycle K failed: reviews endpoint returned HTTP 403` (where `K` is the cycle-attempt counter, **not** the `M/10` confirmed-successful counter), rather than as a "no event" reading. Parser exceptions, tool errors, non-2xx responses, authentication failures, rate-limit responses, and unexpected response shapes **MUST NOT** be suppressed into fallback values such as `0` or `[]` unless those values are explicitly logged as an error path and the cycle is **not** counted as a confirmed-successful no-review poll.
   - **Failed cycles do not consume the timeout.** The 10-poll timeout counter **MUST** advance only on confirmed-successful no-review polls. A poll cycle that fails due to parse, transport, authentication, rate-limit, tool error, or unexpected response shape **MUST NOT** consume one of the 10 timeout attempts.
