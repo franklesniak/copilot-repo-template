@@ -1209,7 +1209,7 @@ git commit --no-verify -m "Emergency commit"
 
 > **Warning:** Bypassing hooks should be reserved for emergencies. CI will still enforce these checks.
 
-Bypassing a hook locally does not authorize landing unchecked work. The canonical [Pre-commit Discipline (CRITICAL)](../../.github/copilot-instructions.md#pre-commit-discipline-critical) section states that "Pre-commit hooks are NOT optional" and that "CI is a safety net, not a substitute for local checks", so a skipped check still has to be run and its failures fixed before the change is pushed. This subsection is an interpretation of that canonical section and creates no exception to it.
+Bypassing a hook locally does not authorize landing unchecked work. The canonical [Pre-commit Discipline (CRITICAL)](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/copilot-instructions.md#pre-commit-discipline-critical) section states that "Pre-commit hooks are NOT optional" and that "CI is a safety net, not a substitute for local checks", so a skipped check still has to be run and its failures fixed before the change is pushed. This subsection is an interpretation of that canonical section and creates no exception to it.
 
 ---
 
