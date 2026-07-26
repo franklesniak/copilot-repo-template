@@ -2839,6 +2839,8 @@ The template includes agent instruction files at the repository root and under p
 
 Delete agent files for platforms you do not use. For example, if your team does not use Cursor Agent, delete `.cursor/rules/repository-instructions.mdc`. If your team does not use Hermes Agent, delete `.hermes.md`. If your team does not use Claude Code, delete `CLAUDE.md`. If your team does not use OpenAI Codex CLI, delete `AGENTS.md`. Removing unused files reduces maintenance burden without affecting other platforms.
 
+Every file named above is a protected instruction file. The canonical **Agent Instruction Files** section in [`.github/copilot-instructions.md`](.github/copilot-instructions.md) lists "Remove agent files for platforms you do not use" as a supported customization, but the canonical **Protected Instruction Files** rule still requires that "the repository owner or maintainer has directly and explicitly authorized the specific instruction-file change in the current task" before an agent deletes one, and the canonical **Template Adoption and Stack Selection** subsection directs the agent to "Obtain explicit maintainer authorization for the protected-file edits." A maintainer deleting the file themselves needs no such step. This subsection is an interpretation of those canonical rules and creates no exception to them.
+
 ### Keeping Minimal Summaries Aligned
 
 When high-priority shared guidance changes in `.github/copilot-instructions.md`, update the minimal summaries in any remaining agent files as needed. Common changes that require alignment include:

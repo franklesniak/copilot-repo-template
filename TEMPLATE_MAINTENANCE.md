@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-07-05
+- **Last Updated:** 2026-07-26
 - **Scope:** Periodic maintenance procedures for the `franklesniak/copilot-repo-template` repository, including dependency review cadence, pre-commit hook upkeep, Terraform/TFLint version reviews, schema and worked-example reviews, template sync taxonomy upkeep, and validation steps for template-only changes. Does not cover repositories created FROM this template; consumers of the template should follow [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md#ongoing-maintenance) instead.
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [Contributing](CONTRIBUTING.md)
 
@@ -373,7 +373,7 @@ The instruction files in `.github/instructions/` include version numbers in the 
 
 ## Reviewing Agent Instruction Files
 
-Agent instruction files (`.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are thin entry points that **MUST** stay aligned with `.github/copilot-instructions.md`. The canonical file holds the full shared rule set; the agent files keep only a minimal inline summary of the highest-priority shared rules plus any platform-specific guidance.
+Agent instruction files (`.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are thin entry points that **MUST** stay aligned with `.github/copilot-instructions.md`. The canonical file holds the full shared rule set; the agent files keep only a minimal inline summary of the highest-priority shared rules plus any platform-specific guidance. The canonical **Agent Instruction Files** section states that the agent files "may add platform-specific guidance that does not conflict with this file" and directs authors to "update the minimal summaries in any remaining agent files as needed"; the **MUST** above states that alignment obligation for the maintenance review this section governs, and is an interpretation of that canonical section creating no exception to it.
 
 **What to check during review:**
 

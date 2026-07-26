@@ -748,6 +748,8 @@ Template adoption is complete. Baseline validation is in place, so this issue co
 
 Use this checklist when adopting only part of the template's language/tooling stack. Remove files as a set so CI, pre-commit hooks, Dependabot, and agent instructions do not keep pointing at deleted tools.
 
+Some entries below name protected instruction files — files under `.github/instructions/`, `.github/copilot-instructions.md`, and the root agent entry points. Deleting one, or editing it to drop references to a removed stack, is a protected instruction-file change: the canonical **Protected Instruction Files** rule in [`.github/copilot-instructions.md`](.github/copilot-instructions.md) states that agents "**MUST NOT** create, edit, delete, rename, or otherwise change protected instruction files unless the repository owner or maintainer has directly and explicitly authorized the specific instruction-file change in the current task", and the canonical **Template Adoption and Stack Selection** subsection sequences that work as non-protected cleanup first, then "Obtain explicit maintainer authorization for the protected-file edits." Where this checklist states how those canonical rules apply during stack selection, it is an interpretation of them and creates no exception to them.
+
 #### Python Project/Source Stack
 
 Keep these only when the repository has Python project source, Python tests, or Python packaging metadata:

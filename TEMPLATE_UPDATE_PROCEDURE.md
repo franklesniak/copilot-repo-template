@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.2.20260704.0
+**Version:** 1.2.20260726.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-07-04
+- **Last Updated:** 2026-07-26
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the first-adoption bootstrap command, the read-only first-adoption preflight/questionnaire mode, raw first-adoption state reporting, first-adoption quality-debt reports and suppressions, the adoption difficulties journal, one-shot first-adoption materialization, shell-safe first-adoption args files, package identity and collaboration-policy materialization, first-adoption structural convention assessment, first-adoption working-tree validation and doctor diagnostics, downstream local path ownership records, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -1254,7 +1254,7 @@ git diff --cached --name-status
 
 If the downstream workflow does not stage changes during review, use an equivalent reviewable pass that shows which tracked files changed because of `.gitattributes`. Record the command or method in the sync working notes.
 
-The repository-wide commit-hygiene rule in [`.github/copilot-instructions.md`](.github/copilot-instructions.md) still forbids routine standalone formatting-only or lint-only commits. A separate normalization commit is allowed in this procedure when `.gitattributes` adoption causes broad mechanical line-ending churn and separating that churn materially improves reviewability. That commit MUST contain only the reviewed normalization effects caused by the `.gitattributes` change, MUST stay adjacent to the related sync change, and MUST be recorded in the sync summary. If the normalization is small, include it in the same substantive sync commit instead.
+The repository-wide commit-hygiene rule in [`.github/copilot-instructions.md`](.github/copilot-instructions.md) still forbids routine standalone formatting-only or lint-only commits. That rule, under **What Not to Do**, reads "Do not create separate \"fix formatting\" or \"fix linting\" commits—include all auto-fixes in the same commit as your changes," and **Pre-commit Discipline (CRITICAL)** step 3 directs the agent to amend or fold in fixes "rather than landing a standalone formatting-only or lint-only commit". Both target auto-fixes produced alongside a substantive change; a `.gitattributes` re-normalization pass is a reviewed content change caused by a configuration change, not an auto-fix accompanying one. The narrower disposition below rests on that scope reading; it is an interpretation of those canonical rules and creates no exception to them. A separate normalization commit is allowed in this procedure when `.gitattributes` adoption causes broad mechanical line-ending churn and separating that churn materially improves reviewability. That commit MUST contain only the reviewed normalization effects caused by the `.gitattributes` change, MUST stay adjacent to the related sync change, and MUST be recorded in the sync summary. If the normalization is small, include it in the same substantive sync commit instead.
 
 ## Step 9: Handle Protected Files
 
@@ -1502,6 +1502,8 @@ Run `pre-commit run --all-files` before committing when the downstream repositor
 ### Validation Triage
 
 For each validation failure, record the validator, path, failing condition, whether the upstream range changed that path, and one classification in the sync working notes:
+
+The `deferred follow-up` disposition below applies only to pre-existing downstream debt that the sync did not introduce. It rests on the scope of the canonical prohibition, which under **For GitHub Copilot Coding Agent (Automated PRs)** reads "**NEVER** push code that will fail pre-commit CI" — the code being pushed — and which in the same section directs the agent that "If pre-commit fails, fix issues and re-run until all checks pass" for its own changes. A failure the sync causes is never deferrable under this table. This subsection is an interpretation of those canonical rules and creates no exception to them.
 
 | Classification | Use when | Required disposition |
 | --- | --- | --- |
