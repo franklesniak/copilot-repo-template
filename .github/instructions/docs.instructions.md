@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.6.20260623.0
+**Version:** 1.6.20260726.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-23
+- **Last Updated:** 2026-07-26
 - **Scope:** Defines documentation standards for Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) files in this repository, including specs, design docs, runbooks, ADRs, instruction files, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -181,6 +181,23 @@ This file preserves the AI review prompt used while preparing ADR-0003. The pres
 - Label assumptions explicitly as **Assumption:** and keep them testable.
 - **Scope conditional obligations.** When a normative keyword constrains an action that is itself optional, explicitly scope the obligation to when that action occurs, for example, "When a document cites sources, it MUST cite only inspectable sources." This prevents readers from misreading the requirement as mandating the optional action.
 - **Cross-instruction-file normative-level alignment.** When a document restates a normative requirement that is also defined in an applicable file under `.github/instructions/*`, the document's requirement level (`MUST`, `SHOULD`, `MAY`, and their negations) MUST match the level used in the instruction file when the scope and context are the same, unless the document explicitly justifies a stricter or weaker level in prose immediately adjacent to the restatement. If the scope or context differs from the instruction file, the document SHOULD note that scope/context difference at the restatement. Implicit divergence (silently using a different level when the scope and context are the same as in the instruction file, with no adjacent justification) MUST NOT occur.
+- **Restating canonical repository rules.** This rule applies when a document restates or interprets a normative requirement defined in `.github/copilot-instructions.md`, the repo-wide canonical source of truth; the root agent entry points (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, and `.hermes.md`) and Cursor project rules under `.cursor/rules/` routinely do so. Such a restatement MUST NOT change the canonical requirement's level (`MUST`, `SHOULD`, `MAY`, and their negations), and MUST NOT narrow, broaden, or attach conditions to the canonical requirement, unless it cites, immediately adjacent to the restatement, the canonical wording that supports the reading. A document that explains how a canonical rule applies to a specific situation MUST identify the canonical section or wording it relies on, and MUST state explicitly that the explanation is an interpretation that creates no exception. A document classified as a thin entry point MUST NOT be where an exception to a canonical rule is first created; an actual exception belongs in `.github/copilot-instructions.md` and requires explicit maintainer authorization.
+
+  Examples:
+
+  ```text
+  Non-compliant (scope narrowed, no canonical basis cited):
+    The rule against pushing while checks fail applies to the commit being
+    pushed, not to the branch state.
+
+  Compliant (interpretation, canonical basis cited, explicit no-exception
+  statement):
+    The canonical rule scopes the prohibition to the code being pushed
+    ("NEVER push code that will fail pre-commit CI"), and its remediation
+    workflow directs the agent to fix and push again. This is an
+    interpretation of that rule and creates no exception to it.
+  ```
+
 - **Intra-document normative-level consistency.** Within a single document, the normative requirement level for the same keyword, field, rule, and scope MUST be consistent across sections. If two sections appear to attach different levels to the same item, reconcile the wording or explicitly explain why the scopes differ.
 
 ### Status and Tense Consistency
