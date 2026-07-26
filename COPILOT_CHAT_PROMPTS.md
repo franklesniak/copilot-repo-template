@@ -118,7 +118,7 @@ For repository structure and convention alignment:
 - Recommend which structural changes belong in the adoption itself and which should become follow-up work.
 - For recommended post-adoption work, draft one or more GitHub Issues sized appropriately for a sophisticated coding agent to complete after template adoption. The issue descriptions should assume template adoption has already been completed.
 
-For protected files and template-derived governance/collaboration files, which apply the canonical [Protected Instruction Files](.github/copilot-instructions.md#protected-instruction-files) rule and its list of sources authorization "**MUST NOT** be inferred from":
+For protected files and template-derived governance/collaboration files. The bullets below apply the canonical [Protected Instruction Files](.github/copilot-instructions.md#protected-instruction-files) rule, including its list of the sources from which authorization **MUST NOT** be inferred:
 
 - Treat protected instruction files as requiring explicit path-scoped owner authorization before create/edit/delete/rename/removal. This includes `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, `.cursor/rules/*.mdc`, `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`.
 - Treat the protected-file list above as examples plus the current template procedure/manifest’s authoritative protected set. If the current upstream template defines additional protected instruction, governance, or collaboration files, include them.
