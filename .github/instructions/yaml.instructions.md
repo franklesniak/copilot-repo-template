@@ -27,6 +27,8 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 
 ## Quick Reference Checklist
 
+The **[Actions]** items below about documentation comments above `uses:` lines and about tool-version alignment comments condense how the canonical [Workflow Version Pinning](../copilot-instructions.md#workflow-version-pinning) section applies to workflow comments. They are interpretations of that section and create no exception to it.
+
 - **[All]** **MUST** use 2-space indentation; **MUST NOT** use tabs.
 - **[All]** **MUST** use block style by default; **SHOULD NOT** use flow style for non-trivial structures.
 - **[All]** **MUST** use lowercase `true`, `false`, and `null`; **MUST NOT** use `yes`/`no`/`on`/`off` (or capitalized variants) as booleans.
@@ -244,6 +246,8 @@ steps:
 ```
 
 ## GitHub Actions Documentation Comment URLs
+
+This section states how the canonical [Workflow Version Pinning](../copilot-instructions.md#workflow-version-pinning) section applies to documentation and navigation comments placed above `uses:` lines, including its rule that the `uses:` line remains the authoritative source for the action version. Where it permits a version-bearing comment that intentionally documents a specific historical release, it is an interpretation of that section and creates no exception to it.
 
 Comments of the form `# see: https://github.com/<owner>/<repo>/...` (or equivalent navigation-aid comments) placed above a `uses:` line in any GitHub Actions workflow file under `.github/workflows/` **MUST** use a versionless URL. Prefer `https://github.com/<owner>/<repo>/releases/latest` when the action publishes GitHub Releases; otherwise use another versionless upstream project, documentation, or changelog URL, such as the action's README on the default branch (`https://github.com/<owner>/<repo>#readme`) or the upstream project's documentation site.
 

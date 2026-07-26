@@ -73,6 +73,8 @@ This repository recognizes two JSON dialects: strict JSON and JSONC. Other diale
 
 ## Key Ordering
 
+The ordering rules below state how the canonical [Determinism and Correctness Rules](../copilot-instructions.md#determinism-and-correctness-rules) directive to "Preserve formatting, indentation, and ordering when processing structured content" applies to JSON key order. They are interpretations of that rule and create no exception to it.
+
 JSON does not assign semantic meaning to key order, but tools, humans, and diffs do. Treat key order as part of the file's contract.
 
 - Most formatters, including Prettier, do not sort JSON keys by default. Do not assume any formatter will reorder keys for you.
@@ -162,7 +164,7 @@ The requirements below state how the canonical [Determinism and Correctness Rule
 
 ## Definition of Done for JSON Changes
 
-Several conditions below restate the JSON-specific application of the canonical [Non-negotiable Safety and Security Rules](../copilot-instructions.md#non-negotiable-safety-and-security-rules), [Data-File Validation](../copilot-instructions.md#data-file-validation), and [How to Work (Definition of Done)](../copilot-instructions.md#how-to-work-definition-of-done) sections. They are interpretations of those rules and create no exception to them.
+Several conditions below restate the JSON-specific application of the canonical [Non-negotiable Safety and Security Rules](../copilot-instructions.md#non-negotiable-safety-and-security-rules), [Data-File Validation](../copilot-instructions.md#data-file-validation), [Determinism and Correctness Rules](../copilot-instructions.md#determinism-and-correctness-rules), and [How to Work (Definition of Done)](../copilot-instructions.md#how-to-work-definition-of-done) sections. They are interpretations of those rules and create no exception to them.
 
 A JSON change is considered done when **all** of the following hold:
 
