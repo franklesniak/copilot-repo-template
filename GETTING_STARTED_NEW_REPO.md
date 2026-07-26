@@ -2117,7 +2117,7 @@ The `.github/copilot-instructions.md` file contains repository-wide coding stand
 
 ### Protected-File Adoption Step
 
-The template protects `.github/copilot-instructions.md`, files under `.github/instructions/`, `.cursor/rules/`, and root agent files such as `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`. Stack selection usually requires legitimate updates to those files, but make those updates deliberately:
+The template protects `.github/copilot-instructions.md`, files under `.github/instructions/`, `.cursor/rules/`, and root agent files such as `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`. This step applies the canonical **Protected Instruction Files** rule and its **Template Adoption and Stack Selection** subsection in [`.github/copilot-instructions.md`](.github/copilot-instructions.md), which require that "the repository owner or maintainer has directly and explicitly authorized the specific instruction-file change in the current task", state that "Implied consent is insufficient", and bar inferring authorization from "Pre-commit, formatting, linting, validation, or other cleanup work." Stack selection usually requires legitimate updates to those files, but make those updates deliberately:
 
 1. Perform non-protected cleanup first, such as deleting unused workflows, templates, source files, and lint configuration.
 2. Record the adoption mode for the protected files that remain. Use `minimal-preservation` by default; choose `tailored` only when the maintainer explicitly approves broader rewriting for named files.
