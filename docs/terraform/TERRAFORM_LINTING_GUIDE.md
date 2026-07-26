@@ -1201,7 +1201,7 @@ Skip the single hook that is blocking you rather than all of them. [pre-commit's
 
 ```bash
 # Skip one named hook
-SKIP=terraform_fmt git commit -m "Emergency commit"
+SKIP=terraform-fmt git commit -m "Emergency commit"
 
 # Skip all hooks — last resort, when the hook framework itself will not run
 git commit --no-verify -m "Emergency commit"
