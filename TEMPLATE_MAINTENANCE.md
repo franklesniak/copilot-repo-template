@@ -235,7 +235,7 @@ When module relations, glob patterns, or marker fields change, maintainers **MUS
 
 ### Checking a cross-module Markdown link
 
-[Documentation Writing Style](.github/instructions/docs.instructions.md) prohibits an unguarded repo-relative Markdown link from a retained template-managed file to a target owned by a module that can be excluded independently of the linking file. Downstream, that link dangles and fails retained-Markdown validation. No pre-commit hook or CI workflow currently detects it, so this check is manual. Maintainers **MUST** run it in both of these cases:
+[The documentation writing style guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/instructions/docs.instructions.md) prohibits an unguarded repo-relative Markdown link from a retained template-managed file to a target owned by a module that can be excluded independently of the linking file. Downstream, that link dangles and fails retained-Markdown validation. No pre-commit hook or CI workflow currently detects it, so this check is manual. Maintainers **MUST** run it in both of these cases:
 
 - a change adds or edits a repo-relative Markdown link whose target sits in a different module; and
 - a change to `.template-sync/manifest.yml` moves either endpoint of an existing link to a different module, or alters a `requires_all` / `requires_any` relation affecting one. A previously safe link can become independently excludable with no edit to the Markdown line itself, so ordinary taxonomy maintenance reaches links that a link-text-only trigger would miss.
