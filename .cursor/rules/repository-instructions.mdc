@@ -7,13 +7,13 @@ alwaysApply: true
 
 # Agent Instructions for Cursor Agent
 
-**Version:** 1.1.20260629.0
+**Version:** 1.1.20260726.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-29
+- **Last Updated:** 2026-07-26
 - **Scope:** Agent-specific project rule for Cursor Agent and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md), [Documentation Writing Style](../../.github/instructions/docs.instructions.md)
@@ -27,9 +27,11 @@ The authoritative source of truth for all repository rules is **`.github/copilot
 
 This file intentionally keeps only a minimal inline summary of the highest-priority shared rules so that Cursor receives critical guidance immediately. The full shared rule set remains in the canonical file above.
 
-**Thin entry point classification:** A thin entry point keeps shared repository rules brief; it does not mean platform-specific or required protocol sections may be discarded. Sections explicitly labeled as platform protocol or required protocol must be preserved unless the repository owner explicitly waives that protocol for the retained agent platform.
+**Thin entry point classification:** A thin entry point keeps shared repository rules brief; it does not mean platform-specific or required protocol sections may be discarded. Sections explicitly labeled as platform protocol or required protocol must be preserved unless the repository owner explicitly waives that protocol for the retained agent platform. This restates the canonical **Agent Instruction Files** section, which states that "Sections classified in an agent file as platform protocol or required protocol MUST be preserved during downstream stack pruning unless the repository owner explicitly waives that protocol for the retained agent platform." It is an interpretation of that section and creates no exception to it.
 
 ## Protected Instruction Files
+
+This section summarizes the canonical **Protected Instruction Files** rule and its **Template Adoption and Stack Selection** subsection in [`.github/copilot-instructions.md`](../../.github/copilot-instructions.md). Where it states how those canonical rules apply to a particular case, it is an interpretation of them and creates no exception to them.
 
 Instruction files and style guides are protected governance files. Do not create, edit, delete, rename, or otherwise change `.github/copilot-instructions.md`, files under `.github/instructions/`, files under `.cursor/rules/`, or root agent instruction files (`.hermes.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`) unless the repository owner or maintainer has directly and explicitly authorized that specific instruction-file change in the current task. Implied consent is not enough; do not infer authorization from a plan you generated, review feedback, a general request to update docs, cleanup/validation work, or a "keep files in sync" instruction.
 
@@ -127,7 +129,7 @@ During downstream template adoption and stack selection, perform non-protected c
 
 ## Azure DevOps PR Review Protocol
 
-This section is retained as Cursor host-specific protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Azure DevOps PR review protocol for the retained Cursor entry point.
+This section is retained as Cursor host-specific protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Azure DevOps PR review protocol for the retained Cursor entry point. That preservation requirement is an interpretation of the canonical **Agent Instruction Files** section, and the GitHub-protocol primacy stated below is an interpretation of the canonical **Host-Specific PR Review Protocols** section, which states that "agents MUST NOT rename, weaken, or replace the GitHub protocol when documenting or operating against Azure Repos." Where this section states how those canonical rules apply to Azure DevOps Services, it creates no exception to them.
 
 Use this protocol only for Azure DevOps Services pull requests hosted in Azure Repos. GitHub-hosted repositories continue to use the repository's GitHub-specific protocol and tooling.
 

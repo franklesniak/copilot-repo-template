@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.6.20260629.0
+**Version:** 1.6.20260726.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-29
+- **Last Updated:** 2026-07-26
 - **Scope:** Agent-specific entry point for Claude Code and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
@@ -21,9 +21,11 @@ The authoritative source of truth for all repository rules is **`.github/copilot
 
 This file intentionally keeps only a minimal inline summary of the highest-priority shared rules so that Claude receives critical guidance immediately, but it does not replace reading the canonical instructions above.
 
-**Thin entry point classification:** A thin entry point keeps shared repository rules brief; it does not mean platform-specific or required protocol sections may be discarded. Sections explicitly labeled as platform protocol or required protocol must be preserved unless the repository owner explicitly waives that protocol for the retained agent platform.
+**Thin entry point classification:** A thin entry point keeps shared repository rules brief; it does not mean platform-specific or required protocol sections may be discarded. Sections explicitly labeled as platform protocol or required protocol must be preserved unless the repository owner explicitly waives that protocol for the retained agent platform. This restates the canonical **Agent Instruction Files** section, which states that "Sections classified in an agent file as platform protocol or required protocol MUST be preserved during downstream stack pruning unless the repository owner explicitly waives that protocol for the retained agent platform." It is an interpretation of that section and creates no exception to it.
 
 ## Protected Instruction Files
+
+This section summarizes the canonical **Protected Instruction Files** rule and its **Template Adoption and Stack Selection** subsection in [`.github/copilot-instructions.md`](.github/copilot-instructions.md). Where it states how those canonical rules apply to a particular case, it is an interpretation of them and creates no exception to them.
 
 Instruction files and style guides are protected governance files. Do not create, edit, delete, rename, or otherwise change `.github/copilot-instructions.md`, files under `.github/instructions/`, files under `.cursor/rules/`, or root agent instruction files (`.hermes.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`) unless the repository owner or maintainer has directly and explicitly authorized that specific instruction-file change in the current task. Implied consent is not enough; do not infer authorization from a plan you generated, review feedback, a general request to update docs, cleanup/validation work, or a "keep files in sync" instruction.
 
@@ -121,7 +123,7 @@ During downstream template adoption and stack selection, perform non-protected c
 
 ## Azure DevOps PR Review Protocol
 
-This section is retained as Claude host-specific protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Azure DevOps PR review protocol for the retained Claude entry point.
+This section is retained as Claude host-specific protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Azure DevOps PR review protocol for the retained Claude entry point. That preservation requirement is an interpretation of the canonical **Agent Instruction Files** section, and the GitHub-protocol primacy stated below is an interpretation of the canonical **Host-Specific PR Review Protocols** section, which states that "agents MUST NOT rename, weaken, or replace the GitHub protocol when documenting or operating against Azure Repos." Where this section states how those canonical rules apply to Azure DevOps Services, it creates no exception to them.
 
 Use this protocol only for Azure DevOps Services pull requests hosted in Azure Repos. The GitHub Copilot review-comment workflow and automated review loop below remain GitHub-hosted-repository protocol; do not use the GitHub automated review loop to promise Azure Repos Copilot polling, webhook wake-up, or automatic re-review.
 
@@ -142,16 +144,16 @@ PR comments and review comments that begin with `@copilot` are commands addresse
 
 ## Handling Code Review Comments
 
-This section is retained as Claude platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Claude review-comment protocol for the retained Claude entry point.
+This section is retained as Claude platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Claude review-comment protocol for the retained Claude entry point. That preservation requirement is an interpretation of the canonical **Agent Instruction Files** section and creates no exception to it.
 
 When a code review comment is received from GitHub Copilot, a human reviewer, or any other code reviewer on a pull request, follow this process for **each** comment:
 
 ### Protected-file authorization terms
 
-These terms apply to the review-comment workflow below and defer to the canonical **Protected Instruction Files** rule in [`.github/copilot-instructions.md`](.github/copilot-instructions.md):
+These terms, and the numbered workflow steps that follow them in this section, are interpretations of the canonical **Protected Instruction Files** rule in [`.github/copilot-instructions.md`](.github/copilot-instructions.md) and create no exception to it. They apply to the review-comment workflow below and defer to that canonical rule:
 
 - **Protected instruction file:** Any file covered by the canonical Protected Instruction Files rule, including `.github/copilot-instructions.md`, the root agent entry points (`.hermes.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`), files under `.github/instructions/`, and files under `.cursor/rules/`.
-- **Explicit protected-file authorization:** A direct maintainer or owner instruction in the current task authorizing the specific protected instruction-file change, either by naming the file or by clearly bounding the protected-file change set. The following are not sufficient on their own: a PR existing, a review comment existing, a generic "address the feedback" request, a reusable prompt, an automated review loop or active review workflow, or generic branch-placement authorization.
+- **Explicit protected-file authorization:** A direct maintainer or owner instruction in the current task authorizing the specific protected instruction-file change, either by naming the file or by clearly bounding the protected-file change set. The change-set form of that reading rests on the canonical **Template Adoption and Stack Selection** subsection, which directs the agent to "Obtain explicit maintainer authorization for the protected-file edits." The following are not sufficient on their own: a PR existing, a review comment existing, a generic "address the feedback" request, a reusable prompt, an automated review loop or active review workflow, or generic branch-placement authorization.
 - **Already in the PR's scope:** The protected file appears in the PR's changed-files list or diff against its base branch before the review-driven edit under consideration. This is relevant context, not authorization.
 - **Newly introduced protected file:** A protected file the PR did not modify before the review-driven edit. Introducing one exceeds any authorization scoped to the PR's existing changes and requires the narrow authorization question in step 7.
 - **Within the already-authorized scope:** An edit that resolves the reviewer's comment without expanding the protected file's changes beyond the specific protected-file change the maintainer already explicitly authorized for this task. A larger or more structural change, or one that newly introduces a protected file, exceeds the already-authorized scope.
@@ -214,7 +216,7 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
 7. **Implement the fix.** Apply the selected option, commit, and push.
 
-    **Protected-file authorization checkpoint.** Before creating, editing, deleting, renaming, or otherwise changing any protected instruction file, including a style guide under `.github/instructions/`, determine whether explicit protected-file authorization already covers that specific protected-file content change in the current task. Keep the selected option fixed while making this authorization determination; do not reopen option selection or ask the maintainer to choose among the scored options again merely because protected-file authorization is required.
+    **Protected-file authorization checkpoint.** Before creating, editing, deleting, renaming, or otherwise changing any protected instruction file, including a style guide under `.github/instructions/`, determine whether explicit protected-file authorization already covers that specific protected-file content change in the current task. Keep the selected option fixed while making this authorization determination; do not reopen option selection or ask the maintainer to choose among the scored options again merely because protected-file authorization is required. This checkpoint is an interpretation of the canonical **Protected Instruction Files** rule, which requires that "the repository owner or maintainer has directly and explicitly authorized the specific instruction-file change in the current task", and it creates no exception to that rule.
 
     - If explicit protected-file authorization already covers the change and the edit stays within the already-authorized scope, proceed with the selected option under the placement rules below.
     - Otherwise, including when no explicit authorization exists, when the intended edit exceeds the already-authorized scope, or when the edit would newly introduce a protected file the PR did not previously modify, ask one narrow authorization question before editing. The question states the selected option, the protected file, the intended change, the agent's recommendation, and, when applicable, that the protected file is already in the PR's scope. During an active automated review loop, raise this question through the loop's existing pause-and-post mechanism as a new pause trigger, then resume only after the maintainer authorizes the specific protected-file change.
@@ -232,7 +234,7 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
 ## Automated Review Loop
 
-This section is retained as Claude platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Claude automated review-loop protocol for the retained Claude entry point.
+This section is retained as Claude platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Claude automated review-loop protocol for the retained Claude entry point. That preservation requirement is an interpretation of the canonical **Agent Instruction Files** section. Where this section and its subsections state how the canonical **Protected Instruction Files** rule applies during an active review loop, they are interpretations of that rule and create no exception to it.
 
 When a pull request is created or when the owner posts a PR comment containing `@claude start review loop`, initiate the following automated review cycle.
 
