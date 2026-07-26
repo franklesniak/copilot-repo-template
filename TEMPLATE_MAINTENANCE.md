@@ -233,6 +233,26 @@ For each affected path, maintainers **MUST** update `.template-sync/manifest.yml
 
 When module relations, glob patterns, or marker fields change, maintainers **MUST** review `.template-sync/scripts/validate_marker.py`, `.template-sync/scripts/generate_sync_candidates.py`, `tests/test_validate_marker.py`, and `tests/test_generate_sync_candidates.py` so the downstream retained-state helper and candidate table generator still match the manifest contract. These helpers should continue to use the existing schema validation stack (`PyYAML`, `jsonschema`, and the checked-in schemas) instead of introducing a separate validator dependency.
 
+### Checking a cross-module Markdown link
+
+[Documentation Writing Style](.github/instructions/docs.instructions.md) prohibits an unguarded repo-relative Markdown link from a retained template-managed file to a target owned by a module that can be excluded independently of the linking file. Downstream, that link dangles and fails retained-Markdown validation. No pre-commit hook or CI workflow currently detects it, so this check is manual and maintainers **MUST** run it whenever a change adds or edits a repo-relative Markdown link whose target sits in a different module.
+
+Look up both modules in `.template-sync/manifest.yml`, then run the reporter with a module set that keeps the linking file but drops the target's module. For a link from `docs/terraform/**` (requires `terraform`) to `.github/TEMPLATE_DESIGN_DECISIONS.md` (requires `template-onboarding`):
+
+```bash
+python .template-sync/scripts/report_excluded_module_references.py \
+  --included-module baseline --included-module terraform --included-module markdown
+```
+
+Find the linking file in the output and read the classification on that line:
+
+- `markdown-link.excluded-target | required_cleanup` — **the link is a defect.** Replace it with the absolute upstream-template URL under neutral link text, or wrap it in an appropriate registered `*-reference-only` block.
+- `markdown-link.upstream-reference | likely_false_positive_documented_reference` — the reference is durable; nothing to do.
+
+Two limitations to know before trusting the raw output. The reporter's pre-marker `--included-module` mode does not simulate `*-reference-only` block stripping, so a correctly guarded link inside such a block is still listed under `required_cleanup`; judge those by whether the block is present and its family matches the target's module. And because no module is mandatory, ordinary `Related:` metadata links are also listed. Read the report for the line you changed rather than treating a non-empty `required_cleanup` count as failure.
+
+The reporter needs `jsonschema`; run it inside the environment that provides the repository's validator dependencies.
+
 When reviewing a taxonomy change, include `pytest tests/test_template_manifest.py tests/test_validate_marker.py tests/test_generate_sync_candidates.py -v` so the manifest schema, semantic checks, rendered-table drift checks, retained-state helper behavior, and candidate table generation behavior run together. Also include at least one validation pass with `npm run lint:md`, `npm run lint:md:links`, and `npm run lint:md:nested` (the latter catches lint failures in nested Markdown code fences inside files such as `TEMPLATE_UPDATE_PROCEDURE.md`). If the change also updates schema, YAML, GitHub Actions, Python, PowerShell, or Terraform files, run the validation commands for those modules as well.
 
 ---
