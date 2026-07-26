@@ -241,6 +241,23 @@ The PR template reference to `.github/instructions/` assumes the directory struc
 
 This allows the generic reference to work across all downstream repos without requiring customization. If you need to reorganize this directory, update this reference in the PR template accordingly.
 
+### Design Decision: Upstream-Sourced Instruction Files
+
+Two files under `.github/instructions/` are not authored in this repository. They are generated in upstream style-guide projects and vendored here:
+
+| File | Upstream source |
+| --- | --- |
+| `.github/instructions/powershell.instructions.md` | `franklesniak/PSStyleGuide` |
+| `.github/instructions/terraform.instructions.md` | `franklesniak/TerraformStyleGuide` |
+
+**Decision:** these copies are not edited in this repository. Wording changes are filed as issues against the upstream project, which regenerates its artifacts; this repository re-vendors the result.
+
+**Rationale:** each upstream guide is written to be usable standalone as well as vendored, so it cannot carry citations, links, or provenance mappings that depend on this repository's layout. Editing the downstream copy would also be futile, because these files are generated artifacts that upstream regeneration overwrites.
+
+**Consequence for repository-wide rules:** an upstream guide's requirements are maintained on that project's own authority. Overlapping subject matter with a rule in `.github/copilot-instructions.md` does not make the upstream requirement an interpretation of the canonical rule, and the **Restating canonical repository rules** bullet in [Documentation Writing Style](instructions/docs.instructions.md) does not reach these files for that reason. Repository-specific mappings belong in this repository's integration guidance rather than in the vendored artifact.
+
+This decision is keyed to provenance, not to a fixed file list. If a guide currently authored here later moves to an upstream standalone project, add it to the table above and the same treatment applies from that point.
+
 ### Design Decision: Python Version Policy Reference Pattern
 
 CONTRIBUTING.md uses policy-based language ("Python version currently receiving bugfixes") rather than hardcoded version numbers throughout the document for consistency and maintainability.

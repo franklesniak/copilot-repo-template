@@ -279,6 +279,8 @@ This repository includes coding standards for retained languages and data file f
 
 These standards apply to all contributions in the retained file families and are enforced by the repository's pre-commit hooks and CI workflows.
 
+**Two of these files are not edited here.** `powershell.instructions.md` is generated in `franklesniak/PSStyleGuide` and `terraform.instructions.md` in `franklesniak/TerraformStyleGuide`, then vendored into this repository. Do not edit those two copies: they are generated artifacts, so upstream regeneration overwrites local changes. To change their wording, open an issue against the upstream project. See the **Upstream-Sourced Instruction Files** decision in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md) for the full rationale.
+
 ### Template Taxonomy Updates
 
 When a change adds, removes, renames, moves, or changes the primary purpose of a template-managed file, update the downstream sync path mapping in `TEMPLATE_UPDATE_PROCEDURE.md` as part of the same change. See [Reviewing the Template Sync Module Taxonomy](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/TEMPLATE_MAINTENANCE.md#reviewing-the-template-sync-module-taxonomy) for the maintainer checklist.
