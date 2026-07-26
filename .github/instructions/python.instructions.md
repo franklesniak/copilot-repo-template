@@ -7,7 +7,7 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.10.20260726.1
+**Version:** 1.10.20260726.0
 
 ## Metadata
 
