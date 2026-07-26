@@ -335,7 +335,7 @@ The Terraform instructions file uses the newest stable major versions in provide
 
 **How to update:**
 
-When updating provider versions in terraform.instructions.md, search for the version constraint patterns:
+`.github/instructions/terraform.instructions.md` is generated in `franklesniak/TerraformStyleGuide` and vendored here, so do not edit it locally — the next upstream regeneration would overwrite the change. File the version-constraint update against that repository, then re-vendor the regenerated artifact. See the **Upstream-Sourced Instruction Files** decision in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md). The searches below are still the right way to find the occurrences that need changing upstream:
 
 ```bash
 # Search for AWS provider version references

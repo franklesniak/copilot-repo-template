@@ -1,12 +1,12 @@
 # Terraform Unit Testing Implementation Guide
 
-**Version:** 1.0.20260510.0
+**Version:** 1.0.20260726.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-10
+- **Last Updated:** 2026-07-26
 - **Scope:** This document provides comprehensive guidance for implementing Terraform unit testing in CI for the `franklesniak/copilot-repo-template` repository. It serves two purposes: (1) CI/Infrastructure Implementation Guide for setting up Terraform testing in GitHub Actions, and (2) Content Specification for what testing guidance should be embedded in `terraform.instructions.md`. This is a **guidance-only** document—it does not modify workflows or configurations directly.
 - **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md), [Terraform Instructions](../../.github/instructions/terraform.instructions.md), [Terraform Linting Guide](./TERRAFORM_LINTING_GUIDE.md)
 
@@ -1810,6 +1810,8 @@ This section lists Terraform features and behaviors that **SHOULD** be verified 
 5. **Configure caching:** Verify provider caching is configured for test jobs
 
 ### terraform.instructions.md Content
+
+> **Upstream-owned file.** `.github/instructions/terraform.instructions.md` is generated in `franklesniak/TerraformStyleGuide` and vendored into this repository, so the recommendations in this subsection are changes to propose upstream rather than to apply locally; a local edit would be overwritten by the next regeneration. See the **Upstream-Sourced Instruction Files** decision in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](../../.github/TEMPLATE_DESIGN_DECISIONS.md).
 
 1. **Verify existing section:** The "Testing with Terraform Test" section exists and covers most requirements
 2. **Review Quick Reference Checklist:** Ensure all testing checklist items are present (currently they are)
