@@ -321,9 +321,9 @@ The Terraform instructions file uses the newest stable major versions in provide
 
    > **Note:** Terraform Registry navigation links — including the provider links above — **MUST** use the `latest` path segment, not a pinned provider or module version. See the **Terraform Registry Reference URLs Use /latest/** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md) for the scope (Terraform-file comments and instructional Markdown), rationale, and authoritative version sources; the canonical, agent-loadable rule for Terraform-file comments lives in [`.github/instructions/terraform.instructions.md`](.github/instructions/terraform.instructions.md).
 2. Identify current stable major versions for each provider
-3. If a new major version is now the recommended stable release, update the following files:
-   - `.github/instructions/terraform.instructions.md` (version constraint examples throughout)
-   - `.github/TEMPLATE_DESIGN_DECISIONS.md` (current versions table in "Current Provider Versions in Terraform Examples" section)
+3. If a new major version is now the recommended stable release, route the change by where each file is maintained:
+   - `.github/instructions/terraform.instructions.md` (version constraint examples throughout) is generated in `franklesniak/TerraformStyleGuide` and vendored here, so it is **not** edited in this repository. File the constraint change as an issue against that project, then re-vendor the regenerated guide. See the **Upstream-Sourced Instruction Files** decision in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md).
+   - `.github/TEMPLATE_DESIGN_DECISIONS.md` (current versions table in "Current Provider Versions in Terraform Examples" section) is maintained in this repository and is updated directly.
 
 **Current versions (as of last update):**
 
@@ -348,7 +348,7 @@ grep -nE "~> 3\.0|~> 4\.0" .github/instructions/terraform.instructions.md
 grep -nE "~> 6\.0|~> 7\.0" .github/instructions/terraform.instructions.md
 ```
 
-Update all occurrences to the new major version constraint (e.g., `~> 6.0` to `~> 7.0`).
+Every occurrence needs to move to the new major version constraint (e.g., `~> 6.0` to `~> 7.0`). Report the full list upstream; the regenerated guide is what lands here.
 
 ---
 

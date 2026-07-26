@@ -1811,11 +1811,11 @@ This section lists Terraform features and behaviors that **SHOULD** be verified 
 
 ### terraform.instructions.md Content
 
-> **Upstream-owned file.** `.github/instructions/terraform.instructions.md` is generated in `franklesniak/TerraformStyleGuide` and vendored into this repository, so the recommendations in this subsection are changes to propose upstream rather than to apply locally; a local edit would be overwritten by the next regeneration. See the **Upstream-Sourced Instruction Files** decision in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](../../.github/TEMPLATE_DESIGN_DECISIONS.md).
+> **Upstream-owned file.** `.github/instructions/terraform.instructions.md` is generated in `franklesniak/TerraformStyleGuide` and vendored into this repository, so the recommendations in this subsection are changes to propose upstream rather than to apply locally; a local edit would be overwritten by the next regeneration. See the **Upstream-Sourced Instruction Files** decision in [the template's design-decision record](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md).
 
 1. **Verify existing section:** The "Testing with Terraform Test" section exists and covers most requirements
 2. **Review Quick Reference Checklist:** Ensure all testing checklist items are present (currently they are)
-3. **Add module test guidance:** Consider adding a checklist item for module testing
+3. **Add module test guidance:** Consider raising a checklist item for module testing upstream
 4. **Verify examples are complete:** Ensure all code examples are current and correct
 
 ### Template File Creation
@@ -1835,7 +1835,7 @@ This section lists Terraform features and behaviors that **SHOULD** be verified 
 
 1. **Update README.md:** Add testing section with commands
 2. **Verify `.github/copilot-instructions.md`:** Terraform is already in the Testing Tools table
-3. **Cross-reference guides:** Link this guide from terraform.instructions.md if desired
+3. **Cross-reference guides:** A link to this guide from terraform.instructions.md would need to be raised upstream, since that file is vendored
 
 ### Validation Steps
 
