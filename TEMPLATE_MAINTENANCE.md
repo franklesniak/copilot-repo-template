@@ -249,11 +249,11 @@ python .template-sync/scripts/report_excluded_module_references.py \
 
 Find the linking file in the output and read the classification on that line:
 
-- `markdown-link.excluded-target | required_cleanup` — **the link is a defect.** Replace it with the absolute upstream-template URL under neutral link text, or wrap it in an appropriate registered `*-reference-only` block.
+- `markdown-link.excluded-target | required_cleanup` — **the link is a defect.** Replace the target with the absolute upstream-template URL under neutral link text, or drop the link and use neutral wording. Adding a registered `*-reference-only` block is **not** sufficient on its own: the documentation style guide states that such a block is a materialization boundary and "not a Markdown-link safe harbor," and that a link inside one must still avoid a repo-relative excludable target.
 - `markdown-link.excluded-target | protected_file_authorization_needed` — **the link is the same defect**, but it lives in a protected instruction file, so the reporter reclassifies it rather than listing it under `required_cleanup`. Do not read the absence of `required_cleanup` as a pass. Remediate it the same way, and route the edit through the protected-file authorization flow first.
 - `markdown-link.upstream-reference | likely_false_positive_documented_reference` — the reference is durable; nothing to do.
 
-Two limitations to know before trusting the raw output. The reporter's pre-marker `--included-module` mode does not simulate `*-reference-only` block stripping, so a correctly guarded link inside such a block is still listed under `required_cleanup`; judge those by whether the block is present and its family matches the target's module. And because no module is mandatory, ordinary `Related:` metadata links are also listed. Read the report for the line you changed rather than treating a non-empty `required_cleanup` count as failure.
+Two limitations to know before trusting the raw output. The reporter's pre-marker `--included-module` mode does not simulate `*-reference-only` block stripping, so a link inside such a block is still listed under `required_cleanup`. A matching block is not by itself a pass: confirm that the link inside it also uses an upstream URL or neutral wording, because the block bounds materialization without making a repo-relative excludable target acceptable. And because no module is mandatory, ordinary `Related:` metadata links are also listed. Read the report for the line you changed rather than treating a non-empty `required_cleanup` count as failure.
 
 The reporter needs `jsonschema`; run it inside the environment that provides the repository's validator dependencies.
 
