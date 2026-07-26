@@ -597,7 +597,7 @@ The `actionlint` pre-commit hook builds the `actionlint` binary from source on f
 
 - Pro: Coverage spans strict syntax, style, and Actions-specific semantics with widely-used, well-maintained hooks.
 - Pro: Each hook is independent — downstream repos can disable any one without disturbing the rest.
-- Con: First-run network requirements for `actionlint` can confuse new contributors; mitigated by inline comments and CI as the source of truth.
+- Con: First-run network requirements for `actionlint` can confuse new contributors; mitigated by the non-Go install routes documented in `CONTRIBUTING.md`, which remains the source of truth for the contributor-facing instructions, with CI as the backstop rather than the enforcement point.
 
 **Alternatives considered:**
 
