@@ -7,18 +7,22 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 2.5.20260623.0
+**Version:** 2.6.20260726.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-23
+- **Last Updated:** 2026-07-26
 - **Scope:** Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in this repository — style, formatting, naming, file organization, variable and output design, resource configuration, module design, state management, cross-stack data sharing, provider management, security, testing, and documentation.
 
 ## Keywords
 
 The key words **MUST**, **MUST NOT**, **REQUIRED**, **SHALL**, **SHALL NOT**, **SHOULD**, **SHOULD NOT**, **RECOMMENDED**, **MAY**, and **OPTIONAL** are defined in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119). Requirements apply when their scope is present (e.g., module rules apply only when modules exist).
+
+## Applicability and Precedence
+
+This guide is self-contained and applies within its stated Terraform scope whether or not an adopting repository defines broader repository-wide requirements. When broader repository-wide requirements are defined and applicable, they remain in force; nothing in this guide, including a recorded deviation, authorizes an exception to them.
 
 ## Quick Reference Checklist
 
@@ -4106,4 +4110,14 @@ A Terraform change is considered complete when:
 
 ## Scope Exceptions & Deviations from Standards
 
-Document justified deviations from these standards. No deviations are currently recorded.
+Deviations recorded in this section **MUST** apply only to requirements defined by this guide. A deviation **MUST NOT** waive or weaken an applicable repository-wide requirement. A proposal that would affect a repository-wide requirement **MUST** follow the adopting repository's own governance and authorization process.
+
+Each deviation **MUST** record:
+
+- **Guide Requirement Affected:** The specific requirement defined by this guide
+- **Justification:** The business, technical, or organizational reason
+- **Affected Scope:** The files, modules, configurations, or environments covered
+- **Approver and Approval Date:** The approving person or team and the date in `YYYY-MM-DD` format
+- **Repository-wide Requirements Confirmation:** Confirmation that no applicable repository-wide requirement is waived or weakened, or `N/A` when no such requirement is defined or applicable
+
+No deviations are currently recorded.
