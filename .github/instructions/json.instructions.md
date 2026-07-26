@@ -7,13 +7,13 @@ description: "JSON authoring standards: strict-by-default, schema-backed, determ
 
 # JSON Writing Style
 
-**Version:** 1.4.20260629.0
+**Version:** 1.4.20260726.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-29
+- **Last Updated:** 2026-07-26
 - **Scope:** Defines authoring standards for JSON and JSONC files in this repository, including configuration, schemas, fixtures, generated metadata, and machine-readable contracts. Covers dialect policy, formatting, key ordering, naming, data modeling, schema usage, comments, security, and generated output.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [YAML Writing Style](./yaml.instructions.md) (companion guide, if present)
 
@@ -29,6 +29,8 @@ Line-ending pinning, BOM behavior, end-of-file newline, and trailing whitespace 
 
 ## Quick Reference Checklist
 
+Items below marked as applying repository-wide condense the JSON-specific sections that follow, several of which state how the canonical [Non-negotiable Safety and Security Rules](../copilot-instructions.md#non-negotiable-safety-and-security-rules), [Data-File Validation](../copilot-instructions.md#data-file-validation), and [Determinism and Correctness Rules](../copilot-instructions.md#determinism-and-correctness-rules) apply to JSON. Those items are interpretations of the canonical rules and create no exception to them.
+
 - **[All]** `.json` files **MUST** be strict JSON; `.jsonc` **MAY** be used only when the consuming tool explicitly supports JSONC.
 - **[All]** **MUST** use 2-space indentation; **MUST NOT** use tabs.
 - **[All]** **MUST NOT** include trailing commas in strict JSON.
@@ -41,6 +43,8 @@ Line-ending pinning, BOM behavior, end-of-file newline, and trailing whitespace 
 - **[All]** Generated JSON **MUST** be reproducible and **SHOULD** identify its source or generation command.
 
 ## Dialect Policy
+
+The dialect rules below state how the canonical [Data-File Validation](../copilot-instructions.md#data-file-validation) subsection applies to this repository's JSON files. That subsection allows JSONC only "when supported by the consuming tool"; where the rules below add conditions on top of that allowance, they are interpretations of it and create no exception to it.
 
 This repository recognizes two JSON dialects: strict JSON and JSONC. Other dialects are out of scope by default.
 
@@ -131,11 +135,15 @@ Validation tooling:
 
 ## Comments and Documentation
 
+The comment rules below apply the same canonical [Data-File Validation](../copilot-instructions.md#data-file-validation) allowance — JSONC "is allowed only when supported by the consuming tool" — to comments specifically. They are interpretations of that subsection and create no exception to it.
+
 - Strict JSON **MUST NOT** contain comments of any kind, including `//` line comments, `/* ... */` block comments, dummy `"_comment"` keys used as a comment workaround, or trailing-string hacks. JSONC **MAY** contain comments only when the consuming tool documents support for them.
 - Documentation about a JSON file's shape and meaning **SHOULD** live in the schema's `description` and `title` fields and in a sibling `README.md`, not in the JSON file itself.
 - Inline rationale for individual fields **SHOULD** be expressed in the schema's `description` for that property, so it is discoverable by anyone who reads the schema or uses a schema-aware editor.
 
 ## Security
+
+The requirements below state how the canonical [Non-negotiable Safety and Security Rules](../copilot-instructions.md#non-negotiable-safety-and-security-rules) apply to JSON: item 1 "No secrets in code or repo", and item 2 "Treat all external input as untrusted", which requires "Validate and sanitize all inputs at boundaries" and "Never execute untrusted outputs or commands." They are interpretations of those rules and create no exception to them.
 
 - Secrets (API keys, tokens, connection strings, passwords, signing keys) **MUST NOT** be committed in any JSON file, including examples, fixtures, and tests.
 - Example values **MUST** be obviously fake (for example, `"REPLACE_ME"`, `"example-token-not-real"`, `"example-api-key-not-real"`). Fake values **SHOULD NOT** resemble real credentials closely enough to trigger secret scanners or to mislead a reader into thinking they are real.
@@ -145,12 +153,16 @@ Validation tooling:
 
 ## Generated JSON
 
+The requirements below state how the canonical [Determinism and Correctness Rules](../copilot-instructions.md#determinism-and-correctness-rules) apply to generated JSON. Where they define determinism as byte-identical output, or permit a generator to impose its own stable ordering in place of the canonical "Preserve formatting, indentation, and ordering when processing structured content" directive where ordering is non-semantic, they are interpretations of those rules and create no exception to them.
+
 - Generation **MUST** be reproducible: re-running the generator on the same inputs **MUST** produce byte-identical output. This is what makes diffs meaningful and what allows generated JSON to be safely committed.
 - Generated files **MUST** use stable formatting (consistent indentation, consistent quoting, consistent line endings). The producer **SHOULD** write files with LF line endings explicitly to interoperate with the repository's `.gitattributes` policy.
 - Where ordering is non-semantic (for example, the order of keys in an object), the generator **MUST** apply a stable, documented ordering (for example, sorted by key, or grouped in a documented order). Where ordering **is** semantic (for example, an array of pipeline steps), the generator **MUST** preserve input order.
 - Generated files **SHOULD** identify their source or generation command, either via a sibling `README.md` that names the generator, a top-level `"$generatedBy"` or similar property when the schema permits it, or a comment in the generator's own README. The identification **MUST NOT** violate the strict-JSON-no-comments rule: if the file is `.json`, use a property allowed by the schema or a sibling document, not an inline comment.
 
 ## Definition of Done for JSON Changes
+
+Several conditions below restate the JSON-specific application of the canonical [Non-negotiable Safety and Security Rules](../copilot-instructions.md#non-negotiable-safety-and-security-rules), [Data-File Validation](../copilot-instructions.md#data-file-validation), and [How to Work (Definition of Done)](../copilot-instructions.md#how-to-work-definition-of-done) sections. They are interpretations of those rules and create no exception to them.
 
 A JSON change is considered done when **all** of the following hold:
 

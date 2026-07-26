@@ -7,13 +7,13 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.6.20260623.0
+**Version:** 1.6.20260726.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-23
+- **Last Updated:** 2026-07-26
 - **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, Azure Pipelines YAML, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by the companion JSON guide, if present) or generated YAML artifacts that are owned by another tool's serializer.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md) (companion guide, if present)
 
@@ -284,6 +284,8 @@ Pinned documentation URLs go stale because Dependabot updates `uses:` references
 <!-- RATIONALE: github-actions-documentation-comment-urls -->
 
 ## GitHub Actions Tool-Version Alignment Comments
+
+This section states how the canonical [Workflow Version Pinning](../copilot-instructions.md#workflow-version-pinning) section applies to comments in workflow files, including its distinction between action versions in `uses:` references and tool versions passed as action inputs. It is an interpretation of that section and creates no exception to it.
 
 Prefer a single source of truth for repeated tool-version values where GitHub Actions supports one, such as a workflow-level `env:` value for versions used by multiple steps in one workflow. This guidance covers the residual cross-file case where a GitHub Actions `with:` tool-version input is still pinned in more than one place; it does not endorse duplicating tool versions unnecessarily.
 
