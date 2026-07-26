@@ -61,6 +61,8 @@ This baseline is not dogma.  When external constraints require modern Python (e.
 
 ### Types, Testing, and Tooling
 
+Where the `[This repo]` bullets below state which local command is the authoritative gate, they apply the canonical [Pre-commit Discipline (CRITICAL)](../copilot-instructions.md#pre-commit-discipline-critical) section to Python work; they are interpretations of that section and create no exception to it.
+
 - **[Baseline]** **MAY** use type hints opportunistically for public APIs and complex structures.
 - **[Modern]** Type hints are expected broadly; **MUST** run static checking (e.g., mypy/pyright) in CI.
 - **[All]** Tests **MUST** exist for non-trivial logic; **SHOULD** use `pytest` unless repo standard differs.
@@ -271,6 +273,8 @@ def format_command(command: Sequence[str]) -> str:
 ```
 
 ### Secrets in User-Facing Output
+
+The bullets below state how the canonical [Non-negotiable Safety and Security Rules](../copilot-instructions.md#non-negotiable-safety-and-security-rules), item 1 "No secrets in code or repo", applies to Python output surfaces. That rule requires "Never print secrets to stdout/stderr or logs"; where the bullets scope a requirement to the URL user-info component, or permit leaving an SCP-style remote intact, they are interpretations of that rule and create no exception to it.
 
 - When rendering Git remote URLs, URL-form connection strings, or other `scheme://userinfo@host/path` (or scheme-relative `//userinfo@host/path`) values into user-facing output, using the same surfaces described for the `OSError` guidance above (CLI output written to stdout/stderr, generated reports, warnings emitted to a user-visible terminal, or text intended to be copied, pasted, shared, or quoted), code **MUST** redact the entire URL user-info component before display. The user-info component can be `user`, `user:password`, or a bare token. Replace `userinfo@` with a redaction marker such as `***@` while preserving the scheme, host, port, path, query string, and fragment unless those other components are independently known to contain secrets. For example, `https://maintainer:token@github.com/org/repo.git` should render as `https://***@github.com/org/repo.git`.
 - If a value cannot be parsed safely (for example, a malformed IPv6 authority that raises `ValueError`), prefer fail-safe redaction over returning the raw value — redact the user-info even when that drops non-secret components such as the scheme.
