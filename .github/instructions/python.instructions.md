@@ -841,6 +841,8 @@ This pattern **MUST NOT** be used. Once the version is bumped in one file but mi
 
 ## "Done" Definition for Python Changes
 
+This section states what the canonical [Pre-commit Discipline (CRITICAL)](../copilot-instructions.md#pre-commit-discipline-critical) and [How to Work (Definition of Done)](../copilot-instructions.md#how-to-work-definition-of-done) sections require of a completed Python change. Where it selects `pre-commit run --all-files` as the required command, which canonical offers as one example alongside `npm run lint:md`, or fixes the checkpoint at a particular moment, it is an interpretation of those sections and creates no exception to them.
+
 A PR/commit is considered complete when:
 
 - **All pre-commit hooks MUST pass** (Black formatting, Ruff linting, trailing whitespace, etc.).
