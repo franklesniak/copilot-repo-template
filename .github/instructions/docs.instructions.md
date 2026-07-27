@@ -180,19 +180,20 @@ This file preserves the AI review prompt used while preparing ADR-0003. The pres
 - Use **CAN** only for capability, not obligation.
 - Label assumptions explicitly as **Assumption:** and keep them testable.
 - **Scope conditional obligations.** When a normative keyword constrains an action that is itself optional, explicitly scope the obligation to when that action occurs, for example, "When a document cites sources, it MUST cite only inspectable sources." This prevents readers from misreading the requirement as mandating the optional action.
-- **Name the evaluation state.** When a normative condition depends on something the governed action may change (for example, a check result, build status, or file contents), the document MUST explicitly identify the state against which the condition is evaluated (for example, the pre-action state or the action's resulting state). Tense or result-oriented wording alone does not satisfy this requirement when more than one reading is plausible. If the prose contrasts candidate evaluation states, it MUST name each one and identify which one governs.
+- **Name the evaluation state.** When a normative condition depends on something the governed action may change (for example, a check result, build status, or file contents) and more than one reading of the evaluation point is plausible, the document MUST explicitly identify the state against which the condition is evaluated (for example, the pre-action state or the action's resulting state). Tense or result-oriented wording alone does not satisfy this requirement. If the prose contrasts candidate evaluation states, it MUST name each one and identify which one governs.
 
   Examples:
 
   ```text
   Non-compliant (evaluation state ambiguous):
-    An editor MUST NOT save a change that leaves the document invalid.
+    When an editor saves a change, the change MUST NOT leave the
+    document invalid.
 
   Compliant (evaluation state named):
-    The condition is evaluated against the saved result: an editor
-    MUST NOT save a change that would leave the document invalid
-    after the save. An invalid pre-edit document does not prohibit
-    saving a change that makes it valid.
+    When an editor saves a change, the change MUST NOT leave the
+    document invalid after the save. The condition is evaluated
+    against the saved result, so an invalid pre-save document does
+    not prohibit a save that makes it valid.
   ```
 
 - **Cross-instruction-file normative-level alignment.** When a document restates a normative requirement that is also defined in an applicable file under `.github/instructions/*`, the document's requirement level (`MUST`, `SHOULD`, `MAY`, and their negations) MUST match the level used in the instruction file when the scope and context are the same, unless the document explicitly justifies a stricter or weaker level in prose immediately adjacent to the restatement. If the scope or context differs from the instruction file, the document SHOULD note that scope/context difference at the restatement. Implicit divergence (silently using a different level when the scope and context are the same as in the instruction file, with no adjacent justification) MUST NOT occur.
