@@ -791,7 +791,7 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `tests/test_run_first_adoption_checks.*`, `tests/test_first_adoption_quality_reports.*` | `template-sync-support` |
 | `tests/test_template_manifest.py`, `tests/test_template_sync_materialization_helpers.py`, `tests/test_validate_marker.py`, `tests/test_validate_downstream_adoption.py`, `tests/test_validate_instruction_contracts.py` | `template-sync-support` |
 | `.github/scripts/terraform_hooks.py`, `tests/test_terraform_hooks.py` | `terraform` |
-| `templates/python/**`, `pyproject.toml`, `pyrightconfig.json`, `src/copilot_repo_template/**`, `tests/*.py`, `tests/**/*.py` | `python` |
+| `templates/python/**`, `pyproject.toml`, `pyrightconfig.json`, `src/copilot_repo_template/**`, `tests/*.py`, `tests/**/*.py`, `docs/python/**` | `python` |
 | `templates/terraform/**`, `docs/terraform/**`, `modules/**`, `tests/**/*.tftest.hcl`, `.tflint.hcl`, `*.tf`, `*.tfvars`, `*.tftpl`, `*.tfbackend` | `terraform` |
 | `README.md` | `baseline` |
 | `TEMPLATE_UPDATE_PROCEDURE.md` | `template-sync-support` |
