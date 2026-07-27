@@ -1,12 +1,12 @@
 # Terraform Linting Implementation Guide
 
-**Version:** 1.0.20260726.0
+**Version:** 1.0.20260727.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-07-26
+- **Last Updated:** 2026-07-27
 - **Scope:** This document provides comprehensive guidance for implementing Terraform linting in CI for the `franklesniak/copilot-repo-template` repository. It covers tool selection, workflow design, configuration, pre-commit integration, and best practices. This is a **guidance-only** document—it does not modify workflows or configurations directly.
 - **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md), [Terraform Instructions](../../.github/instructions/terraform.instructions.md)
 
@@ -1207,7 +1207,7 @@ SKIP=terraform-fmt git commit -m "Emergency commit"
 git commit --no-verify -m "Emergency commit"
 ```
 
-> **Warning:** Bypassing hooks should be reserved for emergencies. CI will still enforce these checks.
+> **Warning:** Bypassing hooks should be reserved for emergencies.
 
 Bypassing a hook locally does not authorize landing unchecked work. The canonical [Pre-commit Discipline (CRITICAL)](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/copilot-instructions.md#pre-commit-discipline-critical) section states that "Pre-commit hooks are NOT optional" and that "CI is a safety net, not a substitute for local checks", so a skipped check still has to be run and its failures fixed before the change is pushed. This subsection is an interpretation of that canonical section and creates no exception to it.
 
