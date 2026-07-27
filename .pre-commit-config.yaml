@@ -101,10 +101,9 @@ repos:
 
   # template-sync: begin github-actions-only
   # GitHub Actions workflow linting
-  # Note: First-run hook environment setup may fail on restricted networks
-  # (actionlint downloads a Go toolchain to build the binary). CI is the
-  # shared enforcement environment, so contributors who hit a network
-  # restriction locally can rely on CI to enforce this hook.
+  # Note: First-run hook setup may fail on restricted networks (actionlint
+  # builds from Go source). Install actionlint by a non-Go route and use
+  # SKIP=actionlint; see CONTRIBUTING.md, which is the source of truth here.
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12
     hooks:

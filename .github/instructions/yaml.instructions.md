@@ -7,13 +7,13 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.6.20260623.0
+**Version:** 1.6.20260726.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-23
+- **Last Updated:** 2026-07-26
 - **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, Azure Pipelines YAML, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by the companion JSON guide, if present) or generated YAML artifacts that are owned by another tool's serializer.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md) (companion guide, if present)
 
@@ -26,6 +26,8 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 > **Note:** This document uses [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) keywords (**MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, **MAY**) to indicate requirement levels.
 
 ## Quick Reference Checklist
+
+The **[Actions]** items below about documentation comments above `uses:` lines and about tool-version alignment comments condense how the canonical [Workflow Version Pinning](../copilot-instructions.md#workflow-version-pinning) section applies to workflow comments. They are interpretations of that section and create no exception to it.
 
 - **[All]** **MUST** use 2-space indentation; **MUST NOT** use tabs.
 - **[All]** **MUST** use block style by default; **SHOULD NOT** use flow style for non-trivial structures.
@@ -245,6 +247,8 @@ steps:
 
 ## GitHub Actions Documentation Comment URLs
 
+This section states how the canonical [Workflow Version Pinning](../copilot-instructions.md#workflow-version-pinning) section applies to documentation and navigation comments placed above `uses:` lines, including its rule that the `uses:` line remains the authoritative source for the action version. Where it permits a version-bearing comment that intentionally documents a specific historical release, it is an interpretation of that section and creates no exception to it.
+
 Comments of the form `# see: https://github.com/<owner>/<repo>/...` (or equivalent navigation-aid comments) placed above a `uses:` line in any GitHub Actions workflow file under `.github/workflows/` **MUST** use a versionless URL. Prefer `https://github.com/<owner>/<repo>/releases/latest` when the action publishes GitHub Releases; otherwise use another versionless upstream project, documentation, or changelog URL, such as the action's README on the default branch (`https://github.com/<owner>/<repo>#readme`) or the upstream project's documentation site.
 
 These comment URLs **MUST NOT** embed a specific tag, version branch, or version such as `/releases/tag/v6.0.2`, `/tree/v3`, or `/blob/v1.2.3/...`, unless the comment is intentionally documenting a specific historical release.
@@ -284,6 +288,8 @@ Pinned documentation URLs go stale because Dependabot updates `uses:` references
 <!-- RATIONALE: github-actions-documentation-comment-urls -->
 
 ## GitHub Actions Tool-Version Alignment Comments
+
+This section states how the canonical [Workflow Version Pinning](../copilot-instructions.md#workflow-version-pinning) section applies to comments in workflow files, including its distinction between action versions in `uses:` references and tool versions passed as action inputs. It is an interpretation of that section and creates no exception to it.
 
 Prefer a single source of truth for repeated tool-version values where GitHub Actions supports one, such as a workflow-level `env:` value for versions used by multiple steps in one workflow. This guidance covers the residual cross-file case where a GitHub Actions `with:` tool-version input is still pinned in more than one place; it does not endorse duplicating tool versions unnecessarily.
 

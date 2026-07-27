@@ -136,17 +136,21 @@ See [`.github/instructions/json.instructions.md`](.github/instructions/json.inst
 See [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md) for YAML authoring standards.
 <!-- template-sync: end yaml-reference-only -->
 
-**`actionlint` first-run-on-restricted-networks caveat.** The `actionlint` pre-commit hook builds the `actionlint` binary from source on first install, which downloads a Go toolchain. On networks that block Go module downloads, the first-run install can fail. CI is the shared enforcement environment, so contributors who hit a network restriction locally can rely on CI to enforce this hook. The same caveat is documented inline in `.pre-commit-config.yaml` and in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md).
+**`actionlint` first-run-on-restricted-networks caveat.** The `actionlint` pre-commit hook builds the `actionlint` binary from source on first install: pre-commit runs `go install`, which downloads the tool's Go module dependencies, and also downloads a Go toolchain when one is not already present. On networks that block those downloads, the first-run install can fail. That blocks one install route, not the check itself: [actionlint's install guide](https://github.com/rhysd/actionlint/blob/main/docs/install.md) also offers prebuilt binaries, a `download-actionlint.bash` script, and Homebrew, Scoop, Winget, pacman, and Nix packages, none of which need a Go toolchain, and upstream publishes an `actionlint-system` hook id that runs an already-installed binary. Install actionlint at the **exact version pinned for the `actionlint` hook in `.pre-commit-config.yaml`** — a prebuilt binary or package-manager build at a different version can pass locally while the pinned hook fails in CI — then run it against **every** workflow file, matching the repository's `--all-files` gate rather than only the workflows you changed. The hook's environment still cannot install, so the mandatory `pre-commit run --all-files` gate would fail on that one hook even after a successful manual run — invoke it as `SKIP=actionlint pre-commit run --all-files` so every other configured hook still executes, and keep `SKIP=actionlint` for the commit where hooks are installed. Skipping the hook that way is not a substitute for the manual exact-version run above; it is what makes that run the enforcement rather than a formality. Upstream also publishes an `actionlint-system` hook id that runs an already-installed binary rather than building one. It is **not** wired into this repository — `.pre-commit-config.yaml` configures `id: actionlint` only — so adopting it is a maintainer change to that file, not something a contributor can switch on locally. It also runs whatever binary is on `PATH`, so it does not carry the hook's `rev` pin: under it the exact-version discipline above becomes the adopter's responsibility instead of the hook's. CI remains the shared enforcement environment and will still catch what you miss, but the canonical [Pre-commit Discipline (CRITICAL)](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/copilot-instructions.md#pre-commit-discipline-critical) section states that "CI is a safety net, not a substitute for local checks", so treat CI as the backstop rather than as the place this hook gets enforced. This caveat is an interpretation of that canonical section and creates no exception to it. This section is the source of truth for it: `.pre-commit-config.yaml` carries only a short pointer here, and [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md) records the rationale rather than restating the instructions.
 
 <!-- template-sync: begin terraform-reference-only -->
 **Terraform tool prerequisite.** Terraform hooks require HashiCorp Terraform (`terraform`) when Terraform format or validation targets are present, and TFLint (`tflint`) when Terraform lint targets are present. Install Terraform from [HashiCorp's official install guide](https://developer.hashicorp.com/terraform/install) and TFLint from the [TFLint installation guide](https://github.com/terraform-linters/tflint#installation), then restart your shell so both executables are on PATH.
 <!-- template-sync: end terraform-reference-only -->
 
-If you need to bypass hooks temporarily, which is not recommended:
+If a single hook is broken or cannot run locally, skip that one hook rather than all of them. [pre-commit's documentation](https://pre-commit.com/) provides a `SKIP` environment variable for this, noting that it "allows you to skip a single hook instead of `--no-verify`ing the entire commit":
 
 ```bash
-git commit --no-verify -m "your message"
+SKIP=actionlint git commit -m "your message"
 ```
+
+Reserve `git commit --no-verify -m "your message"`, which skips every hook, for the case where the hook framework itself will not run.
+
+Neither form authorizes landing unchecked work. The canonical [Pre-commit Discipline (CRITICAL)](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/copilot-instructions.md#pre-commit-discipline-critical) section states that "Pre-commit hooks are NOT optional" and that "CI is a safety net, not a substitute for local checks", so a skipped check still has to be run and its failures fixed before the change is pushed. This guidance is an interpretation of that canonical section and creates no exception to it.
 
 ## Manual Validation
 
@@ -274,6 +278,8 @@ This repository includes coding standards for retained languages and data file f
 <!-- template-sync: end yaml-reference-only -->
 
 These standards apply to all contributions in the retained file families and are enforced by the repository's pre-commit hooks and CI workflows.
+
+**Two of these files are not edited here.** `powershell.instructions.md` is generated in `franklesniak/PSStyleGuide` and `terraform.instructions.md` in `franklesniak/TerraformStyleGuide`, then vendored into this repository. Do not edit those two copies: they are generated artifacts, so upstream regeneration overwrites local changes. To change their wording, open an issue against the upstream project. See the **Upstream-Sourced Instruction Files** decision in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md) for the full rationale.
 
 ### Template Taxonomy Updates
 

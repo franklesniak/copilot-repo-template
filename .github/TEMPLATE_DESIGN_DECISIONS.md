@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-21
+- **Last Updated:** 2026-07-26
 - **Scope:** Durable design-decision record for this repository template, including rationale for GitHub configuration, instruction files, validation policy, template structure, maintenance conventions, and the documentation-tier inventory below.
 - **Related:** [Repository Copilot Instructions](copilot-instructions.md), [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -240,6 +240,23 @@ The PR template reference to `.github/instructions/` assumes the directory struc
 2. NOT reorganize the directory to a different location.
 
 This allows the generic reference to work across all downstream repos without requiring customization. If you need to reorganize this directory, update this reference in the PR template accordingly.
+
+### Design Decision: Upstream-Sourced Instruction Files
+
+Two files under `.github/instructions/` are not authored in this repository. They are generated in upstream style-guide projects and vendored here:
+
+| File | Upstream source |
+| --- | --- |
+| `.github/instructions/powershell.instructions.md` | `franklesniak/PSStyleGuide` |
+| `.github/instructions/terraform.instructions.md` | `franklesniak/TerraformStyleGuide` |
+
+**Decision:** these copies are not edited in this repository. Wording changes are filed as issues against the upstream project, which regenerates its artifacts; this repository re-vendors the result.
+
+**Rationale:** each upstream guide is written to be usable standalone as well as vendored, so it cannot carry citations, links, or provenance mappings that depend on this repository's layout. Editing the downstream copy would also be futile, because these files are generated artifacts that upstream regeneration overwrites.
+
+**Consequence for repository-wide rules:** an upstream guide's requirements are maintained on that project's own authority. Overlapping subject matter with a rule in `.github/copilot-instructions.md` does not make the upstream requirement an interpretation of the canonical rule, and the **Restating canonical repository rules** bullet in [the documentation writing style guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/instructions/docs.instructions.md) does not reach these files for that reason. Repository-specific mappings belong in this repository's integration guidance rather than in the vendored artifact.
+
+This decision is keyed to provenance, not to a fixed file list. If a guide currently authored here later moves to an upstream standalone project, add it to the table above and the same treatment applies from that point.
 
 ### Design Decision: Python Version Policy Reference Pattern
 
@@ -574,13 +591,13 @@ The default pre-commit stack for JSON and YAML uses `check-json`, `check-yaml`, 
 
 **`actionlint` first-run-on-restricted-networks caveat:**
 
-The `actionlint` pre-commit hook builds the `actionlint` binary from source on first install. On networks that block Go module downloads (corporate proxies, air-gapped environments), the first-run install can fail. CI is the shared enforcement environment, so contributors who hit a network restriction locally can rely on CI to enforce the hook. The same caveat is surfaced in `.pre-commit-config.yaml` (inline comment on the `actionlint` repo block) and `CONTRIBUTING.md` so contributors encounter it where they look first. Keep these cross-references in sync if the hook is repinned, replaced, or removed.
+The `actionlint` pre-commit hook builds the `actionlint` binary from source on first install. On networks that block Go module downloads (corporate proxies, air-gapped environments), the first-run install can fail. That blocks one install route, not the check itself: [actionlint's install guide](https://github.com/rhysd/actionlint/blob/main/docs/install.md) also offers prebuilt binaries, a `download-actionlint.bash` script, and Homebrew, Scoop, Winget, pacman, and Nix packages, none of which need a Go toolchain, and upstream publishes an `actionlint-system` hook id that runs an already-installed binary. This repository wires `id: actionlint` only; `actionlint-system` would trade the hook's `rev` pin for adopter-managed versioning, which is why it is recorded here as available rather than adopted. CI remains the shared enforcement environment and still catches what a contributor misses, but the canonical [Pre-commit Discipline (CRITICAL)](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/copilot-instructions.md#pre-commit-discipline-critical) section states that "CI is a safety net, not a substitute for local checks", so CI is the backstop here rather than the enforcement point for this hook. This caveat is an interpretation of that canonical section and creates no exception to it. `CONTRIBUTING.md` is the source of truth for the contributor-facing instructions; `.pre-commit-config.yaml` carries only a short pointer to it on the `actionlint` repo block, so a contributor encounters the pointer where they look first without a third copy of the guidance to keep aligned. This record holds the rationale and deliberately does not restate those instructions. Earlier revisions duplicated the full caveat across all three files and drifted apart; keeping one authoritative copy is what prevents that recurrence.
 
 **Trade-offs:**
 
 - Pro: Coverage spans strict syntax, style, and Actions-specific semantics with widely-used, well-maintained hooks.
 - Pro: Each hook is independent — downstream repos can disable any one without disturbing the rest.
-- Con: First-run network requirements for `actionlint` can confuse new contributors; mitigated by inline comments and CI as the source of truth.
+- Con: First-run network requirements for `actionlint` can confuse new contributors; mitigated by the non-Go install routes documented in `CONTRIBUTING.md`, which remains the source of truth for the contributor-facing instructions, with CI as the backstop rather than the enforcement point.
 
 **Alternatives considered:**
 
