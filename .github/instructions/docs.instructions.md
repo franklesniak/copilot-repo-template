@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.6.20260726.1
+**Version:** 1.6.20260727.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-07-26
+- **Last Updated:** 2026-07-27
 - **Scope:** Defines documentation standards for Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) files in this repository, including specs, design docs, runbooks, ADRs, instruction files, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -180,6 +180,22 @@ This file preserves the AI review prompt used while preparing ADR-0003. The pres
 - Use **CAN** only for capability, not obligation.
 - Label assumptions explicitly as **Assumption:** and keep them testable.
 - **Scope conditional obligations.** When a normative keyword constrains an action that is itself optional, explicitly scope the obligation to when that action occurs, for example, "When a document cites sources, it MUST cite only inspectable sources." This prevents readers from misreading the requirement as mandating the optional action.
+- **Name the evaluation state.** When a normative condition depends on something the governed action may change (for example, a check result, build status, or file contents) and more than one reading of the evaluation point is plausible, the document MUST explicitly identify the state against which the condition is evaluated (for example, the pre-action state or the action's resulting state). Tense or result-oriented wording alone does not satisfy this requirement. If the prose contrasts candidate evaluation states, it MUST name each one and identify which one governs.
+
+  Examples:
+
+  ```text
+  Non-compliant (evaluation state ambiguous):
+    When an editor saves a change, the change MUST NOT leave the
+    document invalid.
+
+  Compliant (evaluation state named):
+    When an editor saves a change, the change MUST NOT leave the
+    document invalid after the save. The condition is evaluated
+    against the saved result, so an invalid pre-save document does
+    not prohibit a save that makes it valid.
+  ```
+
 - **Cross-instruction-file normative-level alignment.** When a document restates a normative requirement that is also defined in an applicable file under `.github/instructions/*`, the document's requirement level (`MUST`, `SHOULD`, `MAY`, and their negations) MUST match the level used in the instruction file when the scope and context are the same, unless the document explicitly justifies a stricter or weaker level in prose immediately adjacent to the restatement. If the scope or context differs from the instruction file, the document SHOULD note that scope/context difference at the restatement. Implicit divergence (silently using a different level when the scope and context are the same as in the instruction file, with no adjacent justification) MUST NOT occur.
 - **Restating canonical repository rules.** This rule applies when a document restates or interprets a normative requirement defined in `.github/copilot-instructions.md`, the repo-wide canonical source of truth; the root agent entry points (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, and `.hermes.md`) and Cursor project rules under `.cursor/rules/` routinely do so. A document **interprets** a canonical rule when it states what that rule requires, permits, or prohibits in a particular case, going beyond a restatement of the canonical wording. This bullet is itself an interpretation of the canonical rules it cites, and creates no exception to any of them.
   - **Vendored upstream content.** This rule does not reach a file whose content is maintained in an upstream project and vendored into this repository, even where its requirements overlap a canonical rule. Overlapping subject matter does not make an independently maintained requirement an interpretation of the canonical rule, and such a file cannot carry repository-specific citations without breaking the standalone use it is written for. These files are governed by their upstream project; record the provenance in [the template's design-decision record](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md), or in the adopting repository's equivalent, and raise wording changes upstream. This carve-out is keyed to provenance rather than to a fixed file list, so it follows a guide that later moves upstream. It bounds which documents this rule applies to; it does not relieve any document it does reach.
