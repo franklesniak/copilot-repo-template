@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-07-05
+- **Last Updated:** 2026-07-26
 - **Scope:** Periodic maintenance procedures for the `franklesniak/copilot-repo-template` repository, including dependency review cadence, pre-commit hook upkeep, Terraform/TFLint version reviews, schema and worked-example reviews, template sync taxonomy upkeep, and validation steps for template-only changes. Does not cover repositories created FROM this template; consumers of the template should follow [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md#ongoing-maintenance) instead.
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [Contributing](CONTRIBUTING.md)
 
@@ -233,6 +233,30 @@ For each affected path, maintainers **MUST** update `.template-sync/manifest.yml
 
 When module relations, glob patterns, or marker fields change, maintainers **MUST** review `.template-sync/scripts/validate_marker.py`, `.template-sync/scripts/generate_sync_candidates.py`, `tests/test_validate_marker.py`, and `tests/test_generate_sync_candidates.py` so the downstream retained-state helper and candidate table generator still match the manifest contract. These helpers should continue to use the existing schema validation stack (`PyYAML`, `jsonschema`, and the checked-in schemas) instead of introducing a separate validator dependency.
 
+### Checking a cross-module Markdown link
+
+[The documentation writing style guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/instructions/docs.instructions.md) prohibits an unguarded repo-relative Markdown link from a retained template-managed file to a target owned by a module that can be excluded independently of the linking file. Downstream, that link dangles and fails retained-Markdown validation. No pre-commit hook or CI workflow currently detects it, so this check is manual. Maintainers **MUST** run it in both of these cases:
+
+- a change adds or edits a repo-relative Markdown link whose target sits in a different module; and
+- a change to `.template-sync/manifest.yml` moves either endpoint of an existing link to a different module, or alters a `requires_all` / `requires_any` relation affecting one. A previously safe link can become independently excludable with no edit to the Markdown line itself, so ordinary taxonomy maintenance reaches links that a link-text-only trigger would miss.
+
+Look up both modules in `.template-sync/manifest.yml`, then run the reporter with a module set that keeps the linking file but drops the target's module. For a link from `docs/terraform/**` (requires `terraform`) to `.github/TEMPLATE_DESIGN_DECISIONS.md` (requires `template-onboarding`):
+
+```bash
+python .template-sync/scripts/report_excluded_module_references.py \
+  --included-module baseline --included-module terraform --included-module markdown
+```
+
+Find the linking file in the output and read the classification on that line:
+
+- `markdown-link.excluded-target | required_cleanup` — **the link is a defect.** Replace the target with the absolute upstream-template URL under neutral link text, or drop the link and use neutral wording. Adding a registered `*-reference-only` block is **not** sufficient on its own: the documentation style guide states that such a block is a materialization boundary and "not a Markdown-link safe harbor," and that a link inside one must still avoid a repo-relative excludable target.
+- `markdown-link.excluded-target | protected_file_authorization_needed` — **the link is the same defect**, but it lives in a protected instruction file, so the reporter reclassifies it rather than listing it under `required_cleanup`. Do not read the absence of `required_cleanup` as a pass. Remediate it the same way, and route the edit through the protected-file authorization flow first.
+- `markdown-link.upstream-reference | likely_false_positive_documented_reference` — the reference is durable; nothing to do.
+
+Two limitations to know before trusting the raw output. The reporter's pre-marker `--included-module` mode does not simulate `*-reference-only` block stripping, so a link inside such a block is still listed under `required_cleanup`. A matching block is not by itself a pass: confirm that the link inside it also uses an upstream URL or neutral wording, because the block bounds materialization without making a repo-relative excludable target acceptable. And because no module is mandatory, ordinary `Related:` metadata links are also listed. Read the report for the line you changed rather than treating a non-empty `required_cleanup` count as failure.
+
+The reporter needs `jsonschema`; run it inside the environment that provides the repository's validator dependencies.
+
 When reviewing a taxonomy change, include `pytest tests/test_template_manifest.py tests/test_validate_marker.py tests/test_generate_sync_candidates.py -v` so the manifest schema, semantic checks, rendered-table drift checks, retained-state helper behavior, and candidate table generation behavior run together. Also include at least one validation pass with `npm run lint:md`, `npm run lint:md:links`, and `npm run lint:md:nested` (the latter catches lint failures in nested Markdown code fences inside files such as `TEMPLATE_UPDATE_PROCEDURE.md`). If the change also updates schema, YAML, GitHub Actions, Python, PowerShell, or Terraform files, run the validation commands for those modules as well.
 
 ---
@@ -321,9 +345,9 @@ The Terraform instructions file uses the newest stable major versions in provide
 
    > **Note:** Terraform Registry navigation links — including the provider links above — **MUST** use the `latest` path segment, not a pinned provider or module version. See the **Terraform Registry Reference URLs Use /latest/** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md) for the scope (Terraform-file comments and instructional Markdown), rationale, and authoritative version sources; the canonical, agent-loadable rule for Terraform-file comments lives in [`.github/instructions/terraform.instructions.md`](.github/instructions/terraform.instructions.md).
 2. Identify current stable major versions for each provider
-3. If a new major version is now the recommended stable release, update the following files:
-   - `.github/instructions/terraform.instructions.md` (version constraint examples throughout)
-   - `.github/TEMPLATE_DESIGN_DECISIONS.md` (current versions table in "Current Provider Versions in Terraform Examples" section)
+3. If a new major version is now the recommended stable release, route the change by where each file is maintained:
+   - `.github/instructions/terraform.instructions.md` (version constraint examples throughout) is generated in `franklesniak/TerraformStyleGuide` and vendored here, so it is **not** edited in this repository. File the constraint change as an issue against that project, then re-vendor the regenerated guide. See the **Upstream-Sourced Instruction Files** decision in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md).
+   - `.github/TEMPLATE_DESIGN_DECISIONS.md` (current versions table in "Current Provider Versions in Terraform Examples" section) is maintained in this repository and is updated directly.
 
 **Current versions (as of last update):**
 
@@ -335,7 +359,7 @@ The Terraform instructions file uses the newest stable major versions in provide
 
 **How to update:**
 
-When updating provider versions in terraform.instructions.md, search for the version constraint patterns:
+`.github/instructions/terraform.instructions.md` is generated in `franklesniak/TerraformStyleGuide` and vendored here, so do not edit it locally — the next upstream regeneration would overwrite the change. File the version-constraint update against that repository, then re-vendor the regenerated artifact. See the **Upstream-Sourced Instruction Files** decision in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md). The searches below are still the right way to find the occurrences that need changing upstream:
 
 ```bash
 # Search for AWS provider version references
@@ -348,7 +372,7 @@ grep -nE "~> 3\.0|~> 4\.0" .github/instructions/terraform.instructions.md
 grep -nE "~> 6\.0|~> 7\.0" .github/instructions/terraform.instructions.md
 ```
 
-Update all occurrences to the new major version constraint (e.g., `~> 6.0` to `~> 7.0`).
+Every occurrence needs to move to the new major version constraint (e.g., `~> 6.0` to `~> 7.0`). Report the full list upstream; the regenerated guide is what lands here.
 
 ---
 
@@ -373,7 +397,7 @@ The instruction files in `.github/instructions/` include version numbers in the 
 
 ## Reviewing Agent Instruction Files
 
-Agent instruction files (`.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are thin entry points that **MUST** stay aligned with `.github/copilot-instructions.md`. The canonical file holds the full shared rule set; the agent files keep only a minimal inline summary of the highest-priority shared rules plus any platform-specific guidance.
+Agent instruction files (`.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are thin entry points that **MUST** stay aligned with `.github/copilot-instructions.md`. The canonical file holds the full shared rule set; the agent files keep only a minimal inline summary of the highest-priority shared rules plus any platform-specific guidance. The canonical **Agent Instruction Files** section states that the agent files "may add platform-specific guidance that does not conflict with this file" and directs authors to "update the minimal summaries in any remaining agent files as needed"; the **MUST** above states that alignment obligation for the maintenance review this section governs, and is an interpretation of that canonical section creating no exception to it.
 
 **What to check during review:**
 

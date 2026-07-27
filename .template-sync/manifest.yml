@@ -618,6 +618,9 @@ template_manifest:
     - pattern: 'tests/**/*.py'
       requires_all:
         - python
+    - pattern: 'docs/python/**'
+      requires_all:
+        - python
     - pattern: 'templates/terraform/**'
       requires_all:
         - terraform
