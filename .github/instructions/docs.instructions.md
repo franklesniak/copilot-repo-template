@@ -51,7 +51,7 @@ For this template's host modules, documentation **MUST** keep GitHub as the prim
 
 - **Contract-first:** State behavior precisely.  Prefer normative language:  `MUST`, `SHOULD`, `MAY`, `MUST NOT`, `SHOULD NOT`.
 - **Deterministic and explicit:** Avoid vague words like "simple," "fast," "robust," "soon," "etc." Replace with measurable claims or concrete boundaries.
-- **Traceable:** Requirements, design decisions, and implementation details MUST connect via stable identifiers and links.
+- **Traceable:** Requirements, design decisions, and implementation details SHOULD connect via stable identifiers and links.
 - **Drift-resistant:** Docs evolve with code; no "document later" in canonical docs.
 - **Explain "why," not just "what":** Capture rationale and trade-offs so future changes can be made safely.
 
