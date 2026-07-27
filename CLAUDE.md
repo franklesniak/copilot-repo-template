@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.6.20260726.0
+**Version:** 1.6.20260727.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-07-26
+- **Last Updated:** 2026-07-27
 - **Scope:** Agent-specific entry point for Claude Code and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
@@ -268,7 +268,7 @@ When a pull request is created or when the owner posts a PR comment containing `
 3. **Check review coverage.** If the review was detected via `get_reviews` and the review summary body is available, check how many files Copilot reviewed out of the total changed files (e.g., "Copilot reviewed 9 out of 9 changed files"). If Copilot did **not** review all changed files, post a PR comment noting the partial coverage so the PR owner is aware. Example: `Note: Copilot reviewed only 7 out of 9 changed files in round N. Files not reviewed by Copilot may benefit from additional manual or AI-assisted review.` If the review summary is not yet available from `get_reviews` (for example, when the review was detected solely via `get_review_comments`), **skip** the coverage note for this round and proceed. Continue the loop normally regardless of coverage outcome.
 4. **Check for comments.** If the review contains **zero** actionable comments, the code is clean — **PAUSE** and post a PR comment:
     `Review loop paused: Copilot review returned no comments. Post "@claude resume review loop" to continue.`
-5. **Process each comment.** Follow the "Handling Code Review Comments" protocol above (steps 1-9) for every comment in the review, **where tooling allows**. If a comment reaches the step-7 protected-file authorization checkpoint without sufficient explicit authorization, treat that as a loop pause trigger: post the narrow authorization question required by step 7 as a standalone PR comment, pause the loop, and resume only after the maintainer authorizes the specific protected-file change. Applying the canonical **Protected Instruction Files** rule to an active review loop this way is an interpretation of that rule and creates no exception to it. If the available tooling cannot perform step 9 automatically, you **MUST** still complete steps 1-8 and **MUST** ensure the step 9 completion work is handled before treating the comment as fully processed: remove any temporary `:eyes:` reaction per the protocol and resolve the review thread manually when appropriate.
+5. **Process each comment.** Follow the "Handling Code Review Comments" protocol above (steps 1-9) for every comment in the review, **where tooling allows**. If a comment reaches the step-7 protected-file authorization checkpoint without sufficient explicit authorization, treat that as a loop pause trigger: post the narrow authorization question required by step 7 as a standalone PR comment, pause the loop, and resume only after the maintainer authorizes the specific protected-file change. Applying the canonical **Protected Instruction Files** rule to an active review loop this way is an interpretation of that rule and creates no exception to it. If the available tooling cannot perform step 9 automatically, you **MUST** still complete steps 1-8 and **MUST** ensure the step 9 completion work is handled before treating the comment as fully processed: remove any temporary `:eyes:` reaction per the protocol and resolve the review thread when a resolution capability is available; when none is, recording in the reply that the thread needs manual owner resolution is itself the completion work — exactly as step 9 specifies — and the loop continues rather than stalling.
 6. **Check for style guide recommendations.** If **any** comment produced a style guide update prompt (step 8), **PAUSE** and post a PR comment:
     `Review loop paused: style guide update(s) recommended — see review thread(s) above. Apply the style guide changes, then post "@claude resume review loop" to continue.`
 7. **Re-request review.** Before re-requesting, the agent **MUST** verify that the final fix commit(s) for the current round that are intended to land on the PR head are reachable from the PR's head ref. The agent **MUST** record those PR-head fix commit SHA(s) after any merge, rebase, or cherry-pick that changes commit IDs; intermediate authored commit SHA(s) that were superseded by equivalent PR-head commit SHA(s) **MUST NOT** block re-requesting review on their own.
