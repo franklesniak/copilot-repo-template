@@ -7,7 +7,7 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.6.20260727.0
+**Version:** 1.6.20260727.1
 
 ## Metadata
 
@@ -16,6 +16,14 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 - **Last Updated:** 2026-07-27
 - **Scope:** Defines documentation standards for Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) files in this repository, including specs, design docs, runbooks, ADRs, instruction files, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
+
+> **Note:** The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in [BCP 14](https://www.rfc-editor.org/info/bcp14/) ([RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) and [RFC 8174](https://www.rfc-editor.org/rfc/rfc8174)) when, and only when, they appear in all capitals, as shown here. As a local application of the rule in `### Examples`, an all-capitals requirement-keyword string displayed within an exemplar in this file illustrates the wording under discussion and does not state a requirement of this document.
+
+In the 2021 ninth edition, Clause 25 of [ISO/IEC Directives, Part 2](https://www.iso.org/sites/directives/current/part2/index.xhtml) treats examples as illustrative material without which the document remains usable and generally excludes requirements and other indispensable provisions from examples. Section 25.5 supplies a directly analogous case by permitting an example to cite requirement-bearing text for illustration; that cited-text provision does not directly govern every constructed or inline exemplar in this repository.
+
+The [W3C Manual of Style](https://www.w3.org/guide/manual-of-style/#normative) directly treats examples as informative and permits authors to explain when displayed requirement words are not being used in the RFC sense. The [OASIS Keyword Guidelines](https://www.oasis-open.org/policies-guidelines/keyword-guidelines/) distinguish informative text from operative keyword use. Treating a declared literal mention as non-operative is this repository's application of that distinction, not wording supplied by OASIS.
+
+This file's treatment of requirement-keyword strings displayed inside exemplars is consistent with those cited principles. This limited conclusion does not claim that this guide as a whole conforms to every drafting rule published by ISO, W3C, or OASIS.
 
 ## Purpose and Scope
 
@@ -41,9 +49,9 @@ For this template's host modules, documentation **MUST** keep GitHub as the prim
 
 ## Core Principles
 
-- **Contract-first:** State behavior precisely.  Prefer normative language:  **MUST**, **SHOULD**, **MAY**, **MUST NOT**, **SHOULD NOT**.
+- **Contract-first:** State behavior precisely.  Prefer normative language:  `MUST`, `SHOULD`, `MAY`, `MUST NOT`, `SHOULD NOT`.
 - **Deterministic and explicit:** Avoid vague words like "simple," "fast," "robust," "soon," "etc." Replace with measurable claims or concrete boundaries.
-- **Traceable:** Requirements, design decisions, and implementation details must connect via stable identifiers and links.
+- **Traceable:** Requirements, design decisions, and implementation details SHOULD connect via stable identifiers and links.
 - **Drift-resistant:** Docs evolve with code; no "document later" in canonical docs.
 - **Explain "why," not just "what":** Capture rationale and trade-offs so future changes can be made safely.
 
@@ -92,18 +100,18 @@ The Tier 1 metadata header block consists of these fields:
 
 ### Tier 2 — Not Required
 
-The metadata header block is **NOT REQUIRED** for documents whose primary purpose is end-user onboarding, customization, community health, or shipping starter content for downstream consumers. Tier 2 documents SHOULD NOT add the metadata header block without a concrete consumer for the metadata. Tier 2 covers, for example:
+The metadata header block is not required for documents whose primary purpose is end-user onboarding, customization, community health, or shipping starter content for downstream consumers. Tier 2 documents SHOULD NOT add the metadata header block without a concrete consumer for the metadata. Tier 2 covers, for example:
 
 - Top-level community-health files such as `README.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and `SECURITY.md`.
 - End-user onboarding, configuration, customization, and prompt/cookbook guides intended for repository consumers, whether downstream of a template or direct users of this repository.
 - PR and issue templates such as `.github/pull_request_template.md` and files under `.github/ISSUE_TEMPLATE/`.
 - Starter-content READMEs intended for downstream copy/paste, such as those matching `templates/**/README.md`, unless the README's content itself meets the Tier 1 content criteria above.
 
-> **Precedence: Tier 1 wins on content.** Content classification is primary; file location and filename are secondary. A file is Tier 1 when its content is governance, specification, instruction, ADR-style, runbook, or process documentation, even when it lives under `docs/**`, `templates/**`, or is named `README.md`. Conversely, location alone does not promote a file to Tier 1 if the content is purely end-user-oriented. When location and content disagree, the audit must record the chosen tier and rationale in prose.
+> **Precedence: Tier 1 wins on content.** Content classification is primary; file location and filename are secondary. A file is Tier 1 when its content is governance, specification, instruction, ADR-style, runbook, or process documentation, even when it lives under `docs/**`, `templates/**`, or is named `README.md`. Conversely, location alone does not promote a file to Tier 1 if the content is purely end-user-oriented. When location and content disagree, the audit MUST record the chosen tier and rationale in prose.
 >
 > Subdirectory READMEs that document files shipped for downstream copy/paste, for example `templates/**/README.md`, are Tier 2 by default; promote to Tier 1 only when the README's content itself meets the Tier 1 content criteria above, not by virtue of file length or being a long-lived document.
 >
-> Audits must cover both `.md` and `.mdc` files and must traverse hidden directories such as `.github/` and `.cursor/`. Use a command such as `find . -type d \( -name node_modules -o -name .venv -o -name .git \) -prune -o -type f \( -name '*.md' -o -name '*.mdc' \) -print` so Tier 1 files are not skipped without flooding the output with generated-directory noise (extend the `-prune` list with other generated directories such as `dist/`, `build/`, or `__pycache__/` if your working tree contains them).
+> Audits MUST cover both `.md` and `.mdc` files and MUST traverse hidden directories such as `.github/` and `.cursor/`. Use a command such as `find . -type d \( -name node_modules -o -name .venv -o -name .git \) -prune -o -type f \( -name '*.md' -o -name '*.mdc' \) -print` so Tier 1 files are not skipped without flooding the output with generated-directory noise (extend the `-prune` list with other generated directories such as `dist/`, `build/`, or `__pycache__/` if your working tree contains them).
 
 Length and durability MAY inform classification when a new document does not obviously fit either tier, but length alone does not require the metadata header block. A long Tier 2 onboarding guide remains Tier 2; a short ADR remains Tier 1.
 
@@ -147,7 +155,7 @@ For this subsection:
 
 A non-normative historical artifact is a Markdown file committed to preserve provenance, such as a verbatim AI-assistant prompt, transcript excerpt, quoted source excerpt, or similar historical material used to produce or review another artifact. For these files, "preserved" means content-level fidelity; repository hooks can still normalize trailing whitespace and final newlines. Where the bullets below state how canonical repository rules apply to these files, they are interpretations of those rules and create no exception to them.
 
-- **Classification.** Treat a non-normative historical artifact as Tier 2, so the metadata header block is **NOT REQUIRED**, unless its current, non-quoted framing independently meets the Tier 1 criteria. Copied prompts, requirements language, review text, or source excerpts inside preserved historical content do not promote the file to Tier 1. Classify the file by its current purpose and framing, not by copied historical text.
+- **Classification.** Treat a non-normative historical artifact as Tier 2, so the metadata header block is not required, unless its current, non-quoted framing independently meets the Tier 1 criteria. Copied prompts, requirements language, review text, or source excerpts inside preserved historical content do not promote the file to Tier 1. Classify the file by its current purpose and framing, not by copied historical text.
 - **Top-of-document label.** The file MUST carry a clear top-of-document label identifying it as a non-normative historical artifact that defines no repository requirements. The H1 itself MUST include the non-normative marker; an explanatory note alone is insufficient because a `**Version:**` line or metadata header block can separate the note from the H1. When a label format shows a placeholder such as `<topic>`, the placeholder MUST stay inside a code span or fenced block so it is not parsed as raw inline HTML.
 - **Note placement.** The explanatory note MUST appear immediately after the H1, or, when the file intentionally carries the metadata header block, immediately after that block. This follows the placement model above. Markdown files SHOULD still include the repository-standard `<!-- markdownlint-disable MD013 -->` portability directive described in **Markdown Conventions**.
 - **Optional metadata.** The file SHOULD NOT carry the metadata header block without a concrete consumer for that metadata, and SHOULD NOT carry a standalone `**Version:**` line unless a concrete consumer and synchronization convention are documented. When the metadata header block is intentionally present, authors MUST follow the placement and synchronization rules above, which govern any `**Version:**` line carried alongside it. A `**Version:**` line carried without the metadata header block has no `Last Updated` field to synchronize against and instead follows the documented synchronization convention recorded for that standalone line. Authors MUST NOT invent new metadata `Status` values such as `Historical`; use only the values allowed by the Tier 1 metadata policy.
@@ -172,11 +180,11 @@ This file preserves the AI review prompt used while preparing ADR-0003. The pres
 - Use informative headings that allow skimming.
 - Prefer short paragraphs and bullet lists.
 - Use tables only when they increase clarity (avoid tables for "pretty formatting").
-- Every list of "things" should be complete or explicitly labeled as partial.
+- Every list of "things" SHOULD be complete or explicitly labeled as partial.
 
 ### Normative Language
 
-- Use **MUST/SHOULD/MAY** for requirements and guarantees.
+- Use `MUST`/`SHOULD`/`MAY` for requirements and guarantees.
 - Use **CAN** only for capability, not obligation.
 - Label assumptions explicitly as **Assumption:** and keep them testable.
 - **Scope conditional obligations.** When a normative keyword constrains an action that is itself optional, explicitly scope the obligation to when that action occurs, for example, "When a document cites sources, it MUST cite only inspectable sources." This prevents readers from misreading the requirement as mandating the optional action.
@@ -202,13 +210,14 @@ This file preserves the AI review prompt used while preparing ADR-0003. The pres
   - **Restatements.** A restatement MUST NOT change the canonical requirement's level (`MUST`, `SHOULD`, `MAY`, and their negations), and MUST NOT narrow, broaden, or attach conditions to the canonical requirement, unless it cites, immediately adjacent to the restatement, the canonical wording that supports the reading. Where a requirement is defined both in `.github/copilot-instructions.md` and in an applicable file under `.github/instructions/*`, this rule and **Cross-instruction-file normative-level alignment** above apply cumulatively, and this rule is the stricter of the two: an adjacent prose justification that does not cite the canonical wording satisfies that rule but not this one, and is therefore insufficient.
   - **Interpretations are informative.** An interpretation creates no exception to the canonical rule, whether or not it says so. This holds even when the obligations below are unmet, so a document that fails them still cannot confer an exception.
   - **Citation.** An interpretation MUST identify the canonical section or wording it relies on.
-  - **Explicit no-exception statement.** In a protected instruction file, as defined by the canonical **Protected Instruction Files** rule, every interpretation MUST be covered by an explicit statement that it is an interpretation creating no exception. A single statement MAY cover several interpretations rather than each instance, but it MUST appear at the start of the smallest section that encloses them, or immediately adjacent to the interpretation it covers. For this rule, a section is any structural container that encloses the interpretation — the content under a heading, or a list item together with its nested content — and the smallest enclosing section is the innermost such container that encloses every interpretation the statement covers. A statement placed only at document level, or placed in a later or sibling section from an interpretation it purports to cover, does NOT satisfy this requirement, because a reader or agent can load a section without the surrounding context. A statement in the same paragraph as the interpretation counts as immediately adjacent whether it precedes or follows it. In any other document, that statement is required only when the interpretation states or implies a limit, condition, or permission that the canonical wording does not itself state, so that it could be read as granting relief from the canonical rule. No fixed phrase is required: any wording that conveys both elements — that the passage is an interpretation, and that it creates no exception — satisfies this requirement. Authors SHOULD nonetheless use a recognizable form of words so the statement is easy to locate, for example "This is an interpretation of that rule and creates no exception to it," or "This is the `<scope>`-specific application of the `<rule name>` rule; it creates no exception to that rule."
+  - **Explicit no-exception statement.** In a protected instruction file, as defined by the canonical **Protected Instruction Files** rule, every interpretation MUST be covered by an explicit statement that it is an interpretation creating no exception. A single statement MAY cover several interpretations rather than each instance, but it MUST appear at the start of the smallest section that encloses them, or immediately adjacent to the interpretation it covers. For this rule, a section is any structural container that encloses the interpretation — the content under a heading, or a list item together with its nested content — and the smallest enclosing section is the innermost such container that encloses every interpretation the statement covers. A statement placed only at document level, or placed in a later or sibling section from an interpretation it purports to cover, does NOT satisfy this requirement, because a reader or agent can load a section without the surrounding context. A statement in the same paragraph as the interpretation counts as immediately adjacent whether it precedes or follows it. In any other document, that statement MUST be included when the interpretation states or implies a limit, condition, or permission that the canonical wording does not itself state, so that it could be read as granting relief from the canonical rule. No fixed phrase is required: any wording that conveys both elements — that the passage is an interpretation, and that it creates no exception — satisfies this requirement. Authors SHOULD nonetheless use a recognizable form of words so the statement is easy to locate, for example "This is an interpretation of that rule and creates no exception to it," or "This is the `<scope>`-specific application of the `<rule name>` rule; it creates no exception to that rule."
   - **Exceptions.** A document classified as a thin entry point MUST NOT be where an exception to a canonical rule is first created; an actual exception belongs in `.github/copilot-instructions.md`. Both points rest on the canonical **Agent Instruction Files** section, which states that "`.github/copilot-instructions.md` remains the **canonical source of truth** for all repository rules" and that an agent instruction file "may add platform-specific guidance that does not conflict with this file". Creating the exception there additionally requires, per the canonical **Protected Instruction Files** rule, that the repository owner or maintainer have "directly and explicitly authorized the specific instruction-file change in the current task". That rule also states: "Implied consent is insufficient."
 
   Examples:
 
   ```text
-  Non-compliant (scope narrowed, no canonical basis cited):
+  Non-compliant (scope narrowed, no canonical basis cited, and no explicit
+  no-exception statement):
     The rule against pushing while checks fail applies to the commit being
     pushed, not to the branch state.
 
@@ -241,6 +250,34 @@ Compliant (explicitly scoped pre-change reference):
 ```
 
 ### Examples
+
+An **exemplar** is content that a document presents as an example. This includes content presented as a compliant example, a canonical example, a pattern to copy, a prohibited pattern, or a non-compliant example.
+
+Exemplar status follows the role the content is represented as playing. Labels, fences, comments such as `GOOD:` or `BAD:`, and surrounding prose can each establish that role, but exemplar status does not depend on file location, a fixed label vocabulary, or the presence of a code fence by itself. The role-based clauses below assign additional obligations to particular subsets without redefining the umbrella term. Other exemplars remain subject to existing applicable rules but acquire no additional role-specific obligation from these clauses.
+
+The self-consistency, disclosure, and isolation obligations below apply to every exemplar in every Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) document governed by this file. For purposes of interpreting `.github/instructions/docs.instructions.md` itself, exemplars in this file are informative. Requirement-keyword text appearing within such an exemplar illustrates the wording under discussion and states no requirement of this file. This target-file-local classification neither classifies exemplars in another governed document as informative or normative nor alters the meaning of requirement-keyword text in another document. The repository-wide obligations apply independently of how another document classifies its exemplars.
+
+An exemplar presented as compliant, canonical, or as a pattern to copy MUST satisfy every applicable normative rule governing the exemplar's own content. Applicable rules may be defined in the file containing the exemplar, in this guide, or in a higher-priority applicable instruction source. The repository's existing canonical source-of-truth hierarchy determines precedence when multiple sources govern the same content; these obligations do not alter that hierarchy.
+
+Rules governing the form, wording, or content of an individual exemplar are potentially applicable. When their trigger conditions are present, this category includes the `### Normative Language` requirements for requirement-keyword usage, conditional-obligation scoping, and evaluation-state naming; the `### Status and Tense Consistency` requirements; Markdown, shell-portability, and other content-specific requirements; and the existing example-only symbol-labeling requirement for code examples containing example-only helpers, methods, types, modules, or similarly non-obvious symbols.
+
+Requirements governing aggregate document coverage are not per-exemplar applicability requirements. The input/output/explanation requirement and the failure-or-ambiguous-input example requirement are instances of that category rather than an exhaustive list, so an individual wording exemplar does not need to provide either one. Aggregate requirements remain independently applicable to documents and exemplar sets when their own trigger conditions are present.
+
+When a rule's applicability is genuinely uncertain, apply this two-stage test:
+
+1. Determine whether the rule governs the form, wording, or content of the exemplar itself rather than aggregate document coverage or unrelated surrounding material.
+2. If it does, determine whether the rule's trigger conditions would be engaged when the exemplar is used as represented in its stated or reasonably implied context.
+
+A rule is applicable to the exemplar only when both conditions are satisfied. Determine applicability independently of whether the exemplar currently satisfies the rule, and assess compliance only after applicability is established. Clear applicability decisions do not require a separately recorded analysis.
+
+For an exemplar presented as non-compliant or as a prohibited pattern:
+
+- The exemplar MUST identify the rule, teaching axis, or explicitly named set of axes it intentionally violates.
+- The exemplar SHOULD otherwise satisfy every applicable rule.
+- When the exemplar also violates another applicable rule, its accompanying explanation MUST identify and explain that additional violation.
+- Paired non-compliant and compliant exemplars SHOULD isolate the identified teaching distinction so the contrast turns on the behavior being taught rather than incidental differences.
+
+These obligations add constraints on exemplar content without replacing or weakening the existing requirements in this section. The input/output/explanation and failure-or-ambiguous-input requirements continue to govern aggregate document coverage, and the example-only symbol-labeling requirement continues to govern each individual code example that triggers it.
 
 - When documenting behavior, include at least one example that shows:
   - Input
@@ -286,25 +323,25 @@ When no continuation prose follows the fence before the next sibling bullet or s
 MUST-compliant example:
 
 ````markdown
-- Generate the local report.
+- Print the local report status.
 
   ```bash
-  ./scripts/write-report.sh
+  printf '%s\n' 'report generated'
   ```
 
-  The command prints the report path after it completes.
+  The command prints the report status after it completes.
 ````
 
 MUST NOT example:
 
 ````markdown
-- Generate the local report.
+- Print the local report status.
 
 ```bash
-./scripts/write-report.sh
+printf '%s\n' 'report generated'
 ```
 
-  The command prints the report path after it completes.
+  The command prints the report status after it completes.
 ````
 
 Note: A renderer can end the list item at the unindented fence and render the continuation as a separate paragraph.
@@ -314,7 +351,7 @@ Note: A renderer can end the list item at the unindented fence and render the co
 - **Scope.** Applies to fenced `bash`/`sh` shell-command examples in this repository's Markdown documentation that a reader is expected to copy and run on a Unix-like target environment (Linux, macOS, FreeBSD, WSL, or Git Bash on Windows). Applies to fenced `text` examples only when the surrounding prose clearly presents the block as copyable shell commands or a shell session, not when the block is command output, logs, diagnostics, or plain text. Applies to inline-prose backtick references only when the surrounding prose clearly presents the inline content as a copyable shell command, not when it is command output, a diagnostic fragment, or a tool-name mention. Native PowerShell examples are out of scope and SHOULD use a `powershell` fence. Examples that surrounding prose explicitly labels as GNU-only, BSD-only, Bash-only, PowerShell-only, or otherwise platform-specific are allowed.
 - **Rules.**
   - For alternation in `grep`, MUST use extended regex (`grep -E "P1|P2|P3"`) or multiple `-e` patterns (`grep -e P1 -e P2 -e P3`). MUST NOT use basic-regex `\|` alternation, which is a GNU extension and is not reliably supported in BSD `grep` (the macOS default).
-  - For in-place edits with `sed`, prefer the attached non-empty backup-suffix form (for example, `sed -i.bak 'SCRIPT' FILE`), which works on both GNU and BSD `sed` and produces a `.bak` backup file that surrounding prose SHOULD note so readers know to keep, delete, or `.gitignore` it. Alternatives are to pipe `sed` output to a temporary file and rename it over the original (which can drop file permissions, ownership, or extended attributes), or to explicitly state in surrounding prose that the example uses GNU `sed -i` semantics (where the suffix is optional and, when supplied, must be attached with no space) or BSD `sed -i ''` semantics (where an empty suffix is supplied as a separate argument so no backup is written; GNU `sed` would misparse the `''` as the script). The bare `sed -i` form (no suffix) and the separate-argument `sed -i ''` form are not portable across both.
+  - For in-place edits with `sed`, prefer the attached non-empty backup-suffix form (for example, `sed -i.bak 'SCRIPT' FILE`), which works on both GNU and BSD `sed` and produces a `.bak` backup file that surrounding prose SHOULD note so readers know to keep, delete, or `.gitignore` it. Alternatives are to pipe `sed` output to a temporary file and rename it over the original (which can drop file permissions, ownership, or extended attributes), or to explicitly state in surrounding prose that the example uses GNU `sed -i` semantics (where the suffix is optional and, when supplied, MUST be attached with no space) or BSD `sed -i ''` semantics (where an empty suffix is supplied as a separate argument so no backup is written; GNU `sed` would misparse the `''` as the script). The bare `sed -i` form (no suffix) and the separate-argument `sed -i ''` form are not portable across both.
   - Avoid Bash-specific syntax (`[[ ... ]]`, `(( ... ))`, `<<<` here-strings, `mapfile`/`readarray`, process substitution `<(...)`) in examples that should also run under `sh`, `dash`, or other POSIX-style shells. When Bash-specific syntax is required, the code fence MUST be `bash` (not `sh`) and surrounding prose MUST note the Bash dependency.
   - When a command is intentionally GNU-only, BSD-only, Bash-only, PowerShell-only, or otherwise platform-specific, surrounding prose MUST explicitly label it so readers know which `grep`/`sed`/shell variant is required.
   - When a shell-command example depends on a third-party CLI tool that is not part of standard installations on the target environments listed in the **Scope.** paragraph (for example, `rg`/ripgrep, `fd`/`fdfind`, `jq`, `yq`, `eza`/`exa`, `bat`, `delta`, or similar), the example MUST either document a portable fallback that uses tools available without extra installs (for example, `grep -E -R`, `find`, `awk`, `sort`, or `uniq`) or tools already established as prerequisites in the surrounding document (for example, `git grep -E` when `git` is already a documented prerequisite, since `git` itself is not a default install on every target environment listed in the **Scope.** paragraph), or explicitly label the tool dependency in surrounding prose so readers know to install it before running the example. Examples in setup, optional-configuration, template-update, onboarding, or other adopter-facing guides SHOULD prefer the portable form by default because readers may be on any platform without prior tool installation.
@@ -351,11 +388,11 @@ Determine this condition from [the template-sync manifest](https://github.com/fr
 
 When this exception applies, authors **SHOULD** choose one of these remedies based on the reference's intent:
 
-- **Existing `*-reference-only` inline block** — preferred when the reference is module-specific and should disappear with the target module. Enclose the sentence, paragraph, bullet, or table row in an appropriate existing reference-only inline block. Use only an existing registered marker family; if none fits the target module, use one of the other remedies or open a separate issue to add marker support and tests. Use `azure-devops-guide-reference-only` for links to the durable Azure DevOps Services support guide that should be retained when any Azure DevOps host module is retained and stripped only when all Azure DevOps host modules are excluded. A reference-only block is a materialization/removal boundary, not a Markdown-link safe harbor: any Markdown link inside the block must still avoid repo-relative targets that can be excluded independently of the linking file. Use an upstream-template URL or neutral wording inside the block when a link or path mention would otherwise point to an excludable target. Marker examples, when needed, must stay inline within prose or inline code; authors **MUST NOT** place registered marker begin/end lines on their own lines, even inside fenced code blocks, because the template-sync scanners treat those lines as real content-stripping boundaries without code-fence awareness.
+- **Existing `*-reference-only` inline block** — preferred when the reference is module-specific and should disappear with the target module. Enclose the sentence, paragraph, bullet, or table row in an appropriate existing reference-only inline block. Use only an existing registered marker family; if none fits the target module, use one of the other remedies or open a separate issue to add marker support and tests. Use `azure-devops-guide-reference-only` for links to the durable Azure DevOps Services support guide that should be retained when any Azure DevOps host module is retained and stripped only when all Azure DevOps host modules are excluded. A reference-only block is a materialization/removal boundary, not a Markdown-link safe harbor: any Markdown link inside the block MUST still avoid repo-relative targets that can be excluded independently of the linking file. Use an upstream-template URL or neutral wording inside the block when a link or path mention would otherwise point to an excludable target. Marker examples, when needed, MUST stay inline within prose or inline code; authors **MUST NOT** place registered marker begin/end lines on their own lines, even inside fenced code blocks, because the template-sync scanners treat those lines as real content-stripping boundaries without code-fence awareness.
 - **Literal absolute upstream-template URL** — preferred when a durable pointer should survive downstream exclusion. Use a Markdown link with descriptive text whose target is `https://github.com/franklesniak/copilot-repo-template/blob/HEAD/<path>`. This follows the repository's upstream-template URL convention. GitHub file URLs accept identifiers that resolve to commits, including branch names, tags, and commit SHAs. Use the literal upstream-template URL, **not** `https://github.com/OWNER/REPO/blob/HEAD/<path>`: `OWNER/REPO` is substituted to the adopter's repository during adoption, so an `OWNER/REPO` link to an excluded-module file can dangle exactly like a relative link. Write the reference as `[descriptive text](URL)` rather than a bare URL.
 - **Neutral wording** — preferred when retained prose does not need a hard link. Keep the prose and describe the target generically, such as "a different module's instruction file," instead of linking a file that may be absent downstream.
 
-An unguarded repo-relative Markdown link from a retained template-managed file to an independently excludable module-owned target is downstream required cleanup and a downstream validation failure, and authors **MUST** avoid it. The downstream adoption validator fails retained Markdown relative links to excluded-module targets; the excluded-module cleanup reporter reports those links as `markdown-link.excluded-target` in the `required_cleanup` category and reports literal upstream-template URLs as `markdown-link.upstream-reference` in the `likely_false_positive_documented_reference` category. The validator and reporter are maintained with the template-sync support tooling, so this style guide should cite them with upstream-template links, neutral wording, or an appropriate existing reference-only block rather than repo-relative links.
+An unguarded repo-relative Markdown link from a retained template-managed file to an independently excludable module-owned target is downstream required cleanup and a downstream validation failure, and authors **MUST** avoid it. The downstream adoption validator fails retained Markdown relative links to excluded-module targets; the excluded-module cleanup reporter reports those links as `markdown-link.excluded-target` in the `required_cleanup` category and reports literal upstream-template URLs as `markdown-link.upstream-reference` in the `likely_false_positive_documented_reference` category. The validator and reporter are maintained with the template-sync support tooling, so this style guide SHOULD cite them with upstream-template links, neutral wording, or an appropriate existing reference-only block rather than repo-relative links.
 
 The existing template update procedure includes a narrower instance of this rule for one onboarding surface; this subsection generalizes that pattern for template-managed Markdown. If authors need a navigable source for that narrower procedure, cite [the template update procedure](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/TEMPLATE_UPDATE_PROCEDURE.md) with an upstream-template link.
 
@@ -367,7 +404,7 @@ This convention applies most visibly in template scaffolding files that ship wit
 
 Repositories that have adopted a template **SHOULD** replace unresolved repository placeholders with their real owner/repository name, or remove the placeholder-bearing content if it no longer applies. Non-template repositories **SHOULD** use real URLs rather than unresolved template placeholders. This is a template-placeholder convention, not a requirement that ordinary downstream or independent documentation keep `OWNER/REPO` placeholders in its finished docs.
 
-This is a placeholder-convention rule only. It does not require converting normal tree-rendered Markdown links to absolute GitHub URLs; repo-internal links in tree-rendered Markdown should continue to prefer relative links unless an existing carve-out (such as the **Issue and PR templates** subsection above), the concrete template-materialization requirement in **Cross-module links in template-managed repositories**, or a concrete rendering requirement makes an absolute URL necessary.
+This is a placeholder-convention rule only. It does not require converting normal tree-rendered Markdown links to absolute GitHub URLs; repo-internal links in tree-rendered Markdown SHOULD continue to prefer relative links unless an existing carve-out (such as the **Issue and PR templates** subsection above), the concrete template-materialization requirement in **Cross-module links in template-managed repositories**, or a concrete rendering requirement makes an absolute URL necessary.
 
 **Scope clarifications:**
 
@@ -472,7 +509,7 @@ Runbooks MUST optimize for "2 a.m. usability."
 - **Escalation:** when to stop and who to contact
 - **Postmortem Notes:** what to capture for later analysis
 
-All commands in runbooks MUST be copy/paste safe and must not destroy data without an explicit warning.
+All commands in runbooks MUST be copy/paste safe and MUST NOT destroy data without an explicit warning.
 
 Placeholder text embedded **inside a fenced shell example** MUST NOT contain shell metacharacters that the target shell would interpret. In fenced `bash` examples, runbook authors MUST NOT embed backticks or `$()` command-substitution syntax inside placeholder text, including inside double-quoted strings, because a user who pastes the command before substituting the placeholder may cause the shell to attempt command substitution instead of producing a clean unresolved-placeholder error. When a placeholder needs to refer to a command name, command output, or another identifier that benefits from monospace formatting, the inline-code reference MUST be kept in the surrounding prose, not inside the placeholder string in the code fence. When practical, runbook authors SHOULD validate shell examples in a safe context with the placeholder still present and confirm they fail as literal unresolved-placeholder errors rather than attempting unintended substitution, expansion, redirection, or command execution.
 
