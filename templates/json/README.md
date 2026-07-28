@@ -64,10 +64,12 @@ Invalid fixtures should be exercised by a test that asserts validation fails. Th
 
 You can verify any single fixture from the command line at any time without pre-commit:
 
+Replace every `<your-name>` occurrence in the command below before running it.
+
 ```bash
 check-jsonschema \
-  --schemafile schemas/<your-name>.schema.json \
-  schemas/examples/<your-name>/valid/minimal.json
+  --schemafile 'schemas/<your-name>.schema.json' \
+  'schemas/examples/<your-name>/valid/minimal.json'
 ```
 
 A valid fixture must exit with code `0`; an invalid fixture must exit with a non-zero code.
