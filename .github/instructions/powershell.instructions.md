@@ -7,13 +7,13 @@ description: "PowerShell coding standards"
 
 # PowerShell Writing Style
 
-**Version:** 2.23.20260728.0
+**Version:** 2.23.20260726.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-07-28
+- **Last Updated:** 2026-07-26
 - **Scope:** PowerShell coding standards for all `.ps1` files in this repository — style, formatting, naming, error handling, documentation, and compatibility patterns for both legacy (v1.0) and modern (v2.0+) codebases.
 
 ## Applicability and Portability
@@ -268,12 +268,12 @@ Blank lines **SHOULD** be used sparingly but effectively: two **SHOULD** surroun
 ```powershell
 {
     Invoke-SomeCmdlet
-····
+
     Invoke-AnotherCmdlet
 }
 ```
 
-In the non-compliant example, each `·` on line 3 visibly represents one literal space on the otherwise blank line. The dots are explanatory substitute characters and **MUST NOT** be copied into PowerShell code; a real compliant blank line contains no characters. The four represented spaces are not allowed.
+In the non-compliant example, the blank line (line 3) contains spaces, which is not allowed.
 
 ### Trailing Whitespace
 
