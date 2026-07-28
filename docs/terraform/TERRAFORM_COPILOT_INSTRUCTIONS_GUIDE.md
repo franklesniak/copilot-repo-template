@@ -1,12 +1,12 @@
 # Guide: Writing Terraform Copilot Instructions
 
-**Version:** 1.0.20260124.0
+**Version:** 1.0.20260728.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-01-24
+- **Last Updated:** 2026-07-28
 - **Scope:** This document provides comprehensive guidance for creating a `.github/instructions/terraform.instructions.md` file that matches the depth, structure, and quality of the PowerShell instructions file (~143KB). It covers best practices, recommendations, rationale, and implementation guidance for Terraform-specific Copilot instructions.
 - **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md)
 
@@ -185,10 +185,12 @@ This section details what **MUST** be included in each major section of the inst
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-01-24
+- **Last Updated:** YYYY-MM-DD
 - **Scope:** Defines Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, and related files in this repository. Covers style, formatting, naming conventions, module design, security, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 ```
+
+When creating the destination file, replace `YYYY-MM-DD` with the current UTC date.
 
 ### 3. Table of Contents
 

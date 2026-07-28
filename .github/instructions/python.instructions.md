@@ -7,13 +7,13 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.10.20260727.0
+**Version:** 1.10.20260728.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-07-27
+- **Last Updated:** 2026-07-28
 - **Scope:** Defines Python coding standards for all Python files in this repository, including modules, scripts, tests, and tooling. Covers style, structure, error handling, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -156,13 +156,13 @@ When a string exceeds the 100-character line target or readability requires spli
 Compliant example:
 
 ```python
-message = f"Collected {n} items found."
+message = f"Collected {item_count} items found."
 ```
 
 Non-compliant counter-example:
 
 ```python
-message = f"Collected {n} items " "found."
+message = f"Collected {item_count} items " "found."
 ```
 
 ## Naming Conventions
@@ -335,6 +335,8 @@ Such a flag **SHOULD** additionally surface its retained-for-compatibility behav
 
 This rule applies regardless of parser library. Examples **MAY** use `argparse` because it is the standard-library parser and matches this guide's stdlib-first default. Tests for non-trivial CLI behavior **SHOULD** follow the mode-coverage guidance in [Tests](#tests).
 
+In the following pair, `parser` is an illustrative, preconfigured `argparse.ArgumentParser`; `paths` is the collection of input paths being checked; `run_checks(paths)` is an illustrative helper that returns the detected problems; and `apply_fixes(problems)` is an illustrative helper that applies the corresponding rewrites.
+
 Compliant example:
 
 ```python
@@ -464,6 +466,8 @@ def load_args_file(path: Path) -> dict[str, object]:
 - Production call sites **SHOULD** use the default behavior of that seam unless an override is intentionally required.
 - When a test invokes an external command, subprocess, child process, or generator and then both asserts the command's success and reads derived artifacts the command or generator was supposed to produce, the test **SHOULD** assert success plus any expected `stdout` / `stderr` contents before reading the derived artifacts. Reading the derived artifact first can cause a regression in the command under test to surface as an unrelated `FileNotFoundError` or similar I/O error on the read, hiding the more informative `result.stderr` message that the success assertion is designed to surface. This rule does not apply when the test intentionally verifies that an artifact is absent or unreadable. In those cases, still assert the external command, subprocess, child process, or generator outcome and diagnostic output before checking artifact absence whenever that ordering gives clearer failure messages.
 
+In the following pair, `_run_generator(...)` is an illustrative test helper that returns a `subprocess.CompletedProcess`, and `tmp_path` is pytest's standard per-test `pathlib.Path` fixture.
+
 Compliant example:
 
 ```python
@@ -485,6 +489,8 @@ assert "expected output content" in output
 ```
 
 - When a test asserts that a token, entry, path, module name, or similar value appears in a specific labeled section of multi-section or otherwise structured command/CLI output, the test **MUST** assert against the parsed or isolated target section, or use an equivalent assertion that disambiguates placement. A bare whole-output substring check, such as `assert "python" in result.stdout`, does not establish that the value appears in the intended section, so it is insufficient to prove section membership: the value may legitimately appear in another section. Whole-output substring checks remain acceptable when the asserted contract is global output presence rather than placement within a specific section.
+
+In the following pair, `_run_tool(...)` is an illustrative test helper that returns a `subprocess.CompletedProcess`.
 
 Compliant example:
 

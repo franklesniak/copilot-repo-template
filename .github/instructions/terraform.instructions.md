@@ -7,13 +7,13 @@ description: "Terraform coding standards: secure, modular, and well-documented i
 
 # Terraform Writing Style
 
-**Version:** 2.6.20260726.0
+**Version:** 2.6.20260728.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-07-26
+- **Last Updated:** 2026-07-28
 - **Scope:** Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, `.tf.json`, `.tftpl`, and `.tfbackend` files in this repository — style, formatting, naming, file organization, variable and output design, resource configuration, module design, state management, cross-stack data sharing, provider management, security, testing, and documentation.
 
 ## Keywords
@@ -2375,19 +2375,23 @@ resource "aws_s3_bucket_lifecycle_configuration" "terraform_state" {
 }
 ```
 
-To recover a previous state version from S3:
+The following S3 commands require the AWS CLI to be installed and configured with credentials. Those credentials require permission to list object versions, including `s3:ListBucketVersions`, and permission to retrieve the selected version, including `s3:GetObjectVersion`.
+
+First, list the available versions:
 
 ```bash
-# List available versions
 aws s3api list-object-versions \
   --bucket acme-corp-terraform-state \
   --prefix environments/prod/terraform.tfstate
+```
 
-# Download a specific version
+Inspect the `list-object-versions` output, deliberately choose the intended `VersionId`, and set the Bash variable `VERSION_ID` to that exact value in the shell that will run the recovery command. Do not automatically select the first or latest result; state recovery requires a deliberate human choice. The recovery command is Bash-specific because its guarded parameter expansion rejects an unset or empty `VERSION_ID` and prevents the AWS command from executing, including in an interactive shell:
+
+```bash
 aws s3api get-object \
   --bucket acme-corp-terraform-state \
   --key environments/prod/terraform.tfstate \
-  --version-id <VERSION_ID> \
+  --version-id "${VERSION_ID:?Set VERSION_ID to the exact S3 VersionId selected for recovery.}" \
   terraform.tfstate.recovered
 ```
 

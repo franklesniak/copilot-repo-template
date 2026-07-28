@@ -1,12 +1,12 @@
 # Terraform Unit Testing Implementation Guide
 
-**Version:** 1.0.20260726.0
+**Version:** 1.0.20260728.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-07-26
+- **Last Updated:** 2026-07-28
 - **Scope:** This document provides comprehensive guidance for implementing Terraform unit testing in CI for the `franklesniak/copilot-repo-template` repository. It serves two purposes: (1) CI/Infrastructure Implementation Guide for setting up Terraform testing in GitHub Actions, and (2) Content Specification for what testing guidance should be embedded in `terraform.instructions.md`. This is a **guidance-only** document—it does not modify workflows or configurations directly.
 - **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md), [Terraform Instructions](../../.github/instructions/terraform.instructions.md), [Terraform Linting Guide](./TERRAFORM_LINTING_GUIDE.md)
 
@@ -1123,22 +1123,46 @@ steps:
 
 Tests **MUST** be isolated and idempotent:
 
+Declare the inputs in the module configuration, for example in `variables.tf`:
+
 ```hcl
-# Good: Uses unique names via variables or locals
+variable "name_prefix" {
+  description = "Prefix used for test resource names."
+  type        = string
+}
+
+variable "run_id" {
+  description = "Non-secret, name-safe identifier for this execution attempt."
+  type        = string
+}
+```
+
+In a `.tftest.hcl` test file, use a file-level `variables` block to derive the resource-name prefix from the globally supplied execution identifier:
+
+```hcl
 variables {
-  name_prefix = "test"
+  name_prefix = "ci-test-${var.run_id}"
 }
 
 run "creates_unique_resources" {
-  variables {
-    # Note: Using timestamp() can affect test reproducibility.
-    # For CI, consider using a static prefix or run-specific identifier.
-    name_prefix = "ci-test-unique"
-  }
-
   # ...
 }
 ```
+
+CI **MUST** supply `run_id` as a global variable through a supported input mechanism, such as the `TF_VAR_run_id` environment variable, a `-var` flag, or a `.tfvars` file. This is required for validity because file-level `variables` blocks in Terraform test files can reference only global variables; a non-global `run_id` would make the `var.run_id` reference invalid. Local `terraform test` runs **MUST** supply the same variable through one of those mechanisms.
+
+Although this example calls the input `run_id`, its supplied value represents the complete host-neutral execution namespace needed to prevent resource-name collisions; it need not be a platform's raw run-ID field.
+
+- The value **MUST** be non-secret and normalized to the target resources' length and character constraints.
+- The final normalized value **MUST** preserve the required uniqueness. A composite execution namespace **MUST NOT** be blindly truncated when doing so could remove or merge its distinguishing information.
+- When shortening is necessary, retain a useful readable prefix when space permits and append a deterministic digest derived from the complete pre-normalized execution namespace. Choose a digest length appropriate to the expected number of potentially coexisting executions and the target resource's available name budget.
+- The value **MUST** remain constant within one execution attempt.
+- The value **MUST** be unique across every execution attempt whose resources may coexist, including retries or reruns begun after an earlier attempt failed to complete cleanup.
+- If the CI platform reuses its main run identifier for reruns, the supplied value **MUST** also incorporate an attempt discriminator.
+- If parallel jobs or matrix entries can create the same resource names, the supplied value **MUST** also incorporate a job or matrix discriminator.
+- Global uniqueness is not required after all resources from earlier executions are known to have been removed.
+
+Do not use `timestamp()` to construct the identifier because doing so undermines test reproducibility.
 
 **Principles:**
 
