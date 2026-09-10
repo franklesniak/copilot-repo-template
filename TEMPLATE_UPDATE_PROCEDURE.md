@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.2.20260704.0
+**Version:** 1.2.20260910.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-07-04
+- **Last Updated:** 2026-09-10
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the first-adoption bootstrap command, the read-only first-adoption preflight/questionnaire mode, raw first-adoption state reporting, first-adoption quality-debt reports and suppressions, the adoption difficulties journal, one-shot first-adoption materialization, shell-safe first-adoption args files, package identity and collaboration-policy materialization, first-adoption structural convention assessment, first-adoption working-tree validation and doctor diagnostics, downstream local path ownership records, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -663,7 +663,7 @@ Path overlap with `local_overrides` is allowed only when the two records are com
 
 ### Downstream adoption: Dependabot schema regression surface
 
-Downstream repositories that adopt both `github-platform` and `schema` SHOULD adopt [`tests/test_dependabot_schema.py`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/tests/test_dependabot_schema.py), [`tests/fixtures/dependabot/auto-assignment.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/tests/fixtures/dependabot/auto-assignment.yml), and the related Dependabot validation hook or configuration when their live `.github/dependabot.yml` stays within the pinned `vendor.dependabot` schema surface. This keeps the documented Dependabot auto-assignment guidance and the pytest-to-pre-commit `check-jsonschema` pin alignment under test.
+Downstream repositories that adopt both `github-platform` and `schema` SHOULD adopt [`tests/test_dependabot_schema.py`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/tests/test_dependabot_schema.py), [`tests/fixtures/dependabot/auto-assignment.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/tests/fixtures/dependabot/auto-assignment.yml), and the related Dependabot validation hooks (`validate-dependabot-config` and `validate-dependabot-config-valid-examples`) when their live `.github/dependabot.yml` stays within the pinned `vendor.dependabot` schema surface. This keeps the documented Dependabot auto-assignment guidance under test at the hook's pinned `check-jsonschema` `rev` and under pytest; the pytest `check-jsonschema` dev dependency and the hook `rev` are not required to match.
 
 A downstream repository MAY skip this regression surface when its live `.github/dependabot.yml` intentionally uses GitHub-supported fields rejected by the pinned built-in `vendor.dependabot` schema, or when the repository does not adopt Dependabot platform configuration. Record that skip explicitly: prefer path-scoped `local_overrides` entries in `.template-sync/marker.yml` for the fixture, test, and related Dependabot validation paths, each with the skip rationale; alternatively, record an explicit validation-policy decision in the sync summary that names the skipped paths and explains why the repository chose not to retain the pinned vendor-schema regression surface.
 
@@ -1484,7 +1484,7 @@ Before module-specific validators, verify structural consistency for retained mo
 | --- | --- |
 | `baseline` | `pre-commit run --all-files` |
 | `agent-instructions` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, `pre-commit run check-json --all-files`, `pre-commit run check-toml --all-files`, shell-script syntax check for any session hooks (e.g., `if [ -d .claude/hooks ]; then find .claude/hooks -type f -name '*.sh' -exec bash -n {} \;; fi` — POSIX-portable; the `if [ -d ... ]` guard makes the check a clean no-op for downstream repos without `.claude/hooks/`, and `find` returns exit 0 when no `*.sh` files match), and any repo-specific instruction checks |
-| `github-platform` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run validate-dependabot-config --all-files` where configured, and repository-settings review |
+| `github-platform` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run validate-dependabot-config --all-files` and `pre-commit run validate-dependabot-config-valid-examples --all-files` where configured, and repository-settings review |
 | `github-actions` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `pre-commit run actionlint --all-files` |
 | `github-templates` | `pre-commit run check-yaml --all-files`, `pre-commit run yamllint --all-files`, `npm run lint:md`, `npm run lint:md:links`, and issue or PR template rendering review |
 | `template-onboarding` | `npm run lint:md`, `npm run lint:md:links`, `npm run lint:md:nested`, and walkthrough review for kept onboarding paths |

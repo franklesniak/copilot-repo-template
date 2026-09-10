@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-21
+- **Last Updated:** 2026-09-10
 - **Scope:** Durable design-decision record for this repository template, including rationale for GitHub configuration, instruction files, validation policy, template structure, maintenance conventions, and the documentation-tier inventory below.
 - **Related:** [Repository Copilot Instructions](copilot-instructions.md), [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -715,9 +715,11 @@ This template wires `check-jsonschema --builtin-schema ...` validation for selec
 
 | File | Built-in schema identifier | Hook in `.pre-commit-config.yaml` | Regression coverage |
 | --- | --- | --- | --- |
-| `.github/dependabot.yml` | `vendor.dependabot` | `validate-dependabot-config` alias on the `check-jsonschema` hook | [`tests/test_dependabot_schema.py`](../tests/test_dependabot_schema.py) validates the documented auto-assignment fixture |
+| `.github/dependabot.yml` | `vendor.dependabot` | `validate-dependabot-config` alias on the `check-jsonschema` hook | The `validate-dependabot-config-valid-examples` alias validates the documented auto-assignment fixture under `tests/fixtures/dependabot/` at the same pinned `rev`; [`tests/test_dependabot_schema.py`](../tests/test_dependabot_schema.py) re-validates it under pytest |
 
-The currently pinned `check-jsonschema` 0.37.2 `vendor.dependabot` schema has been verified against the documented Dependabot auto-assignment snippet in [`OPTIONAL_CONFIGURATIONS.md`](../OPTIONAL_CONFIGURATIONS.md): it accepts `assignees` and rejects `reviewers` as an additional property. The template therefore keeps `validate-dependabot-config` default-wired, limits the documented auto-assignment guidance to the accepted `assignees` field, and regression-tests that fixture in [`tests/test_dependabot_schema.py`](../tests/test_dependabot_schema.py).
+The pinned `vendor.dependabot` schema has been verified against the documented Dependabot auto-assignment snippet in [`OPTIONAL_CONFIGURATIONS.md`](../OPTIONAL_CONFIGURATIONS.md): it accepts `assignees` and rejects `reviewers` as an additional property. The template therefore keeps `validate-dependabot-config` default-wired, limits the documented auto-assignment guidance to the accepted `assignees` field, validates the matching fixture with the `validate-dependabot-config-valid-examples` hook at the same pinned `rev`, and re-validates it under pytest in [`tests/test_dependabot_schema.py`](../tests/test_dependabot_schema.py).
+
+The pytest `check-jsonschema` dev dependency in [`pyproject.toml`](../pyproject.toml) and the pre-commit hook `rev` are updated by separate Dependabot ecosystems (`pip` and `pre-commit`) and are intentionally **not** required to match. An equality guard between the two pins cannot be satisfied by either ecosystem's pull request on its own, so each `check-jsonschema` release produced two failing pull requests that could only be merged together. Validating the fixture inside the hook keeps the vendored-schema contract enforced at the hook's pinned `rev` without coupling the pip pin to it.
 
 **Evaluated but deferred:**
 

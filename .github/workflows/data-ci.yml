@@ -84,8 +84,13 @@
 # template-sync: begin github-platform-only
 #   - validate-dependabot-config
 #                         — JSON Schema validation for `.github/dependabot.yml`
-#                           against `vendor.dependabot`; documented optional
-#                           auto-assignment fields are regression-tested in
+#                           against `vendor.dependabot`.
+#   - validate-dependabot-config-valid-examples
+#                         — JSON Schema validation for the documented
+#                           Dependabot optional-field fixtures under
+#                           `tests/fixtures/dependabot/` against the same
+#                           pinned `vendor.dependabot` schema; the fixture is
+#                           also re-validated under pytest in
 #                           `tests/test_dependabot_schema.py`.
 # template-sync: end github-platform-only
 #
@@ -250,4 +255,7 @@ jobs:
       # template-sync: begin github-platform-only
       - name: Run validate-dependabot-config
         run: pre-commit run validate-dependabot-config --all-files
+
+      - name: Run validate-dependabot-config-valid-examples
+        run: pre-commit run validate-dependabot-config-valid-examples --all-files
       # template-sync: end github-platform-only

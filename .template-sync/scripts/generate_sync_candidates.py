@@ -200,6 +200,7 @@ VALIDATION_COMMANDS_BY_MODULE: dict[str, tuple[str, ...]] = {
     "github-actions": ("pre-commit run actionlint --all-files",),
     "github-platform": (
         "pre-commit run validate-dependabot-config --all-files",
+        "pre-commit run validate-dependabot-config-valid-examples --all-files",
         "pytest tests/test_dependabot_schema.py -v",
     ),
     "github-templates": ("manual GitHub template rendering review",),
