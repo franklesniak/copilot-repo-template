@@ -15,7 +15,7 @@ repositories that select the `azure-pipelines` module.
 | `powershell-ci.yml` | PSScriptAnalyzer and Pester checks | `powershell`, `azure-pipelines` |
 | `python-ci.yml` | mypy and pytest checks | `python`, `azure-pipelines` |
 | `terraform-ci.yml` | Terraform fmt, validate, TFLint, and test checks | `terraform`, `azure-pipelines` |
-| `data-ci.yml` | JSON, YAML, schema, and template-sync validation hooks | `azure-pipelines` plus one retained data or template-sync module |
+| `data-ci.yml` | JSON, YAML, schema, template-sync, and (when `github-platform` is retained) Dependabot configuration validation hooks | `azure-pipelines` plus one retained data or template-sync module |
 
 ## Pull Request Validation
 

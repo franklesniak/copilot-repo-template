@@ -57,6 +57,15 @@
 #    analysis, so cross-platform type checking would triple CI time for
 #    negligible benefit. Runtime tests already cover cross-platform behavior.
 #
+# 5. Upstream-Only Test Selection:
+#    Tests marked `upstream_template_only` rely on the complete upstream
+#    module set (for example, checked-in optional CI surfaces). The
+#    workflow-level `env:` block below selects `not slow` in the upstream
+#    template and `not slow and not upstream_template_only` in every other
+#    repository, keyed on `github.repository`, so repositories created from
+#    this template get the official downstream gate semantics without editing
+#    this file. The slow-test step applies the same rule.
+#
 # Note: This workflow is optional. Remove if your project doesn't use Python.
 
 name: Python CI
@@ -76,6 +85,23 @@ on:
 
 permissions:
   contents: read
+
+env:
+  # Marker expressions for the pytest steps in the `test` job. Tests marked
+  # `upstream_template_only` rely on the complete upstream module set, so
+  # repositories created from this template deselect them, matching the
+  # official downstream gate (`pytest -m "not upstream_template_only"`,
+  # see README.md). The upstream template keeps running them. The
+  # `github.repository` test is the same upstream/downstream discriminator the
+  # type-check job and check-placeholders.yml already use.
+  PYTEST_DEFAULT_MARKER_EXPRESSION: >-
+    ${{ github.repository == 'franklesniak/copilot-repo-template'
+    && 'not slow'
+    || 'not slow and not upstream_template_only' }}
+  PYTEST_SLOW_MARKER_EXPRESSION: >-
+    ${{ github.repository == 'franklesniak/copilot-repo-template'
+    && 'slow'
+    || 'slow and not upstream_template_only' }}
 
 jobs:
   type-check:
@@ -161,12 +187,17 @@ jobs:
           # Adjust this if your project uses a different installation method
           pip install -e ".[dev]"
 
+      # The marker expressions come from the workflow-level `env:` block; bash
+      # keeps the quoted variable expansion identical on Linux, macOS, and
+      # Windows runners.
       - name: Run non-slow tests with coverage
-        run: pytest tests/ -m "not slow" -v --cov --cov-report=term-missing
+        shell: bash
+        run: pytest tests/ -m "$PYTEST_DEFAULT_MARKER_EXPRESSION" -v --cov --cov-report=term-missing
 
       - name: Run slow template tests
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_slow_tests }}
-        run: pytest tests/ -m slow -v --no-cov
+        shell: bash
+        run: pytest tests/ -m "$PYTEST_SLOW_MARKER_EXPRESSION" -v --no-cov
 
       # Codecov Integration (Optional, Commented Out)
       #

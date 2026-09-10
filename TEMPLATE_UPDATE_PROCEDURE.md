@@ -1026,8 +1026,9 @@ The current `template-sync-support-only` inline blocks live in:
 
 The current `github-platform-only` inline blocks live in:
 
-- `.pre-commit-config.yaml` for the `validate-dependabot-config` hook.
-- `.github/workflows/data-ci.yml` for Dependabot validation hook-list documentation and the dedicated `Run validate-dependabot-config` step.
+- `.pre-commit-config.yaml` for the `validate-dependabot-config` and `validate-dependabot-config-valid-examples` hooks.
+- `.github/workflows/data-ci.yml` for Dependabot validation hook-list documentation and the dedicated `Run validate-dependabot-config` and `Run validate-dependabot-config-valid-examples` steps.
+- `.azuredevops/pipelines/data-ci.yml` for Dependabot validation hook-list documentation and the dedicated `Run validate-dependabot-config` and `Run validate-dependabot-config-valid-examples` steps.
 
 The current `github-actions-only` inline block lives in:
 
@@ -1430,7 +1431,7 @@ Downstream repositories that retain pytest-based template support SHOULD run the
 python -m pytest -m "not upstream_template_only"
 ```
 
-The committed pytest configuration registers the `upstream_template_only`, `downstream_template_support`, and `slow` markers and enables strict marker validation, so marker typos fail during collection. The downstream gate intentionally excludes only tests marked `upstream_template_only`; a newly added unmarked test remains included by default.
+The committed pytest configuration registers the `upstream_template_only`, `downstream_template_support`, and `slow` markers and enables strict marker validation, so marker typos fail during collection. The downstream gate intentionally excludes only tests marked `upstream_template_only`; a newly added unmarked test remains included by default. The shipped Python CI surfaces apply the same negative selection automatically: `.github/workflows/python-ci.yml` deselects `upstream_template_only` tests in every repository except the upstream template (keyed on `github.repository`), and `.azuredevops/pipelines/python-ci.yml` always deselects them because Azure Pipelines never run for the upstream template.
 
 Retained downstream tests MUST derive optional-module expectations from `.template-sync/manifest.yml` and the materialized `.template-sync/marker.yml`. After modules such as `terraform` or `powershell` are excluded, retained tests may still assert absence, cleanup reporting, or documented exclusion behavior, but they MUST NOT require excluded module-owned files, commands, inline blocks, pytest markers, or validation surfaces to exist. Tests that genuinely require the complete upstream template module set MUST be marked `upstream_template_only` so the downstream gate does not select them.
 

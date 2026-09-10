@@ -338,7 +338,7 @@ template_manifest:
         marker, and instruction-contract validation documentation and
         alias-based CI steps. Contains a
         github-platform-only inline block for Dependabot validation
-        documentation and the dedicated Dependabot validation step. Remove the
+        documentation and the dedicated Dependabot validation steps. Remove the
         delimited YAML blocks when the yaml module is excluded, remove the
         delimited Schema-only inline blocks when the schema module is excluded,
         and remove the delimited Template-sync-support-only inline blocks when
@@ -416,11 +416,15 @@ template_manifest:
         Template-sync-support-only inline blocks for template sync schema
         example validation, runtime schema self-validation, manifest, marker,
         and instruction-contract validation documentation and alias-based CI
+        steps. Contains a github-platform-only inline block for Dependabot
+        validation documentation and the dedicated Dependabot validation
         steps. Remove the delimited YAML blocks when the yaml module is
         excluded, remove the delimited Schema-only inline blocks when the
-        schema module is excluded, and remove the delimited
+        schema module is excluded, remove the delimited
         Template-sync-support-only inline blocks when the template-sync-support
-        module is excluded. Retain this pipeline only when azure-pipelines is
+        module is excluded, and remove the delimited github-platform-only
+        inline block when the github-platform module is excluded. Retain this
+        pipeline only when azure-pipelines is
         adopted and baseline placeholder validation or at least one data-file
         or template-sync-support module is adopted. Azure Pipelines
         service-schema validation remains
