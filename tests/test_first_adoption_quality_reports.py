@@ -1226,8 +1226,18 @@ def test_azure_parameter_default_flags_missing_default_in_mapping_form() -> None
     )
 
 
+@pytest.mark.upstream_template_only
 def test_real_powershell_ci_surfaces_retain_gate_mode_and_force_visible_discovery() -> None:
-    """Checked-in PowerShell CI surfaces keep gate-mode and candidate discovery shape."""
+    """Checked-in PowerShell CI surfaces keep gate-mode and candidate discovery shape.
+
+    This test reads the upstream template's PowerShell CI surfaces for both
+    hosts (``.github/workflows/powershell-ci.yml`` and
+    ``.azuredevops/pipelines/powershell-ci.yml``) and asserts their
+    template-authored content. Downstream materializations that exclude the
+    ``powershell``, ``github-actions``, or ``azure-pipelines`` module do not
+    retain those files, so the downstream pytest gate
+    (``-m "not upstream_template_only"``) must not select this test.
+    """
     github_document, github_load_notes = quality_reports.load_ci_yaml_mapping(
         REPO_ROOT,
         quality_reports.GITHUB_ACTIONS_POWERSHELL_CI,
