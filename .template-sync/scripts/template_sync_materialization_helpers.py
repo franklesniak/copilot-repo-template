@@ -8,9 +8,10 @@ import json
 import os
 import re
 import subprocess
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Collection, Iterable, TypeGuard, cast
+from typing import Any, TypeGuard, cast
 
 import yaml  # type: ignore[import-untyped]
 
@@ -314,9 +315,9 @@ class PathRelation:
         included_module_set = set(included_modules)
         if not self.requires_all.issubset(included_module_set):
             return False
-        if self.requires_any and not self.requires_any.intersection(included_module_set):
-            return False
-        return True
+        if not self.requires_any:
+            return True
+        return not self.requires_any.isdisjoint(included_module_set)
 
 
 @dataclass(frozen=True)
@@ -1665,8 +1666,7 @@ def git_visible_paths(repo_root: Path) -> tuple[str, ...]:
         ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
         cwd=repo_root,
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
     if result.returncode != 0:
@@ -1770,7 +1770,7 @@ def is_protected_manifest_pattern(pattern: str) -> bool:
         return is_protected_instruction_path(pattern)
     if pattern in PROTECTED_GLOB_PATTERNS:
         return True
-    if pattern.startswith(".github/instructions/") or pattern.startswith(".cursor/rules/"):
+    if pattern.startswith((".github/instructions/", ".cursor/rules/")):
         return True
     return any(fnmatch.fnmatchcase(path, pattern) for path in PROTECTED_EXACT_PATHS)
 

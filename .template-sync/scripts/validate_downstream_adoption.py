@@ -6,16 +6,17 @@ import argparse
 import posixpath
 import re
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, NoReturn
+from typing import NoReturn
 from urllib.parse import unquote, urlsplit
 
 import validate_instruction_contracts
 import validate_marker
 from template_sync_materialization_helpers import (
-    MARKDOWN_FENCE_CONTEXT,
     INLINE_BLOCK_ANY_MODULES,
+    MARKDOWN_FENCE_CONTEXT,
     InlineBlockError,
     ManifestMapping,
     PathRelation,

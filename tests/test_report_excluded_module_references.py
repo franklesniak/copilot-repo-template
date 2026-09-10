@@ -72,8 +72,7 @@ def _run_git(repo_root: Path, *args: str) -> None:
         ["git", *args],
         cwd=repo_root,
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
@@ -99,8 +98,7 @@ def test_reporter_script_entrypoint_help_smoke() -> None:
     result = subprocess.run(
         [sys.executable, str(SCRIPT_PATH), "--help"],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 

@@ -1796,17 +1796,21 @@ If your project doesn't have a `.pre-commit-config.yaml`:
    ```yaml
    # Remove this section if not using Python
    - repo: https://github.com/psf/black
-     rev: 26.1.0
+     rev: 26.5.1
      hooks:
        - id: black
          args: [--line-length=100]
 
    # Remove this section if not using Python
    - repo: https://github.com/astral-sh/ruff-pre-commit
-     rev: v0.14.14
+     rev: v0.16.6
      hooks:
        - id: ruff-check
-         args: [--fix, --line-length=100]
+         args:
+           - --fix
+           - --line-length=100
+           - --extend-select=E4,E7,E9,F
+           - --ignore=FLY002
    ```
 
 4. Install the hooks:
@@ -1911,7 +1915,7 @@ If your project already uses pre-commit:
 
 ```yaml
 - repo: https://github.com/psf/black
-  rev: 26.1.0
+  rev: 26.5.1
   hooks:
     - id: black
       args: [--line-length=88]  # Change from 100 to 88 (Black's default)

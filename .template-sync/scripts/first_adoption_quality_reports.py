@@ -223,9 +223,9 @@ class PathReferenceSuppression:
             return False
         if self.literal is not None and self.literal != finding.literal:
             return False
-        if self.literal_pattern is not None and not self.literal_pattern.search(finding.literal):
-            return False
-        return True
+        if self.literal_pattern is None:
+            return True
+        return self.literal_pattern.search(finding.literal) is not None
 
 
 @dataclass(frozen=True)
@@ -469,8 +469,7 @@ def run_capture(
             list(command),
             cwd=repo_root,
             check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             encoding="utf-8",
             env=env,
@@ -497,8 +496,7 @@ def git_capture_bytes(repo_root: Path, args: Sequence[str]) -> bytes:
             ["git", *args],
             cwd=repo_root,
             check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
         )
     except OSError as error:
         error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
@@ -785,7 +783,7 @@ def normalize_reference_literal(
         return "", False
     if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", cleaned) or cleaned.startswith("//"):
         return "", False
-    if cleaned.startswith("#") or cleaned.startswith("mailto:"):
+    if cleaned.startswith(("#", "mailto:")):
         return "", False
     if "@" in cleaned or "$" in cleaned or "*" in cleaned:
         return "", False
@@ -801,7 +799,7 @@ def normalize_reference_literal(
 
     source_parent = PurePosixPath(source_path).parent
     try:
-        if path_part.startswith("./") or path_part.startswith("../"):
+        if path_part.startswith(("./", "../")):
             parts: list[str] = []
             for part in (source_parent / path_part).parts:
                 if part in ("", "."):
@@ -1510,8 +1508,10 @@ def load_ci_yaml_mapping(
         return None, ()
     if not is_present_regular_file(path):
         return None, (
-            f"{platform_name}: {relative_path} is not a regular YAML file; "
-            "manual review is required.",
+            (
+                f"{platform_name}: {relative_path} is not a regular YAML file; "
+                "manual review is required."
+            ),
         )
     try:
         document = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
@@ -1526,14 +1526,18 @@ def load_ci_yaml_mapping(
     except OSError as error:
         error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
         return None, (
-            f"{platform_name}: unable to read {relative_path} ({error_summary}); "
-            "manual review is required.",
+            (
+                f"{platform_name}: unable to read {relative_path} ({error_summary}); "
+                "manual review is required."
+            ),
         )
 
     if not isinstance(document, dict):
         return None, (
-            f"{platform_name}: {relative_path} must contain a YAML mapping; "
-            "manual review is required.",
+            (
+                f"{platform_name}: {relative_path} must contain a YAML mapping; "
+                "manual review is required."
+            ),
         )
     return cast(Mapping[str, object], document), ()
 
@@ -1680,8 +1684,10 @@ def azure_parameter_default_result(
     """
     if raw_default is None:
         return None, (
-            f"Azure Pipelines: {path} `{location}` has no static default; the value must "
-            "be supplied when the pipeline runs, so manual review is required.",
+            (
+                f"Azure Pipelines: {path} `{location}` has no static default; the value must "
+                "be supplied when the pipeline runs, so manual review is required."
+            ),
         )
     return (
         GateModeSetting(
@@ -1731,8 +1737,10 @@ def azure_parameter_default_setting(
             raw_default=raw_default,
         )
     return None, (
-        f"Azure Pipelines: {path} `parameters` is not a mapping or sequence; "
-        "manual review is required.",
+        (
+            f"Azure Pipelines: {path} `parameters` is not a mapping or sequence; "
+            "manual review is required."
+        ),
     )
 
 
@@ -1784,8 +1792,10 @@ def azure_variable_settings_from_variables(
             )
         return tuple(settings), ()
     return (), (
-        f"Azure Pipelines: {path} `{location_prefix}variables` is not a mapping or sequence; "
-        "manual review is required.",
+        (
+            f"Azure Pipelines: {path} `{location_prefix}variables` is not a mapping or sequence; "
+            "manual review is required."
+        ),
     )
 
 
@@ -2088,7 +2098,7 @@ def positive_integer_from_gate_field(value: object) -> int | None:
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, int):
-        raise ValueError("line and column values must be integers when present.")
+        raise TypeError("line and column values must be integers when present.")
     return value if value > 0 else None
 
 
@@ -2116,11 +2126,11 @@ def analyzer_debt_records_from_gate_findings(
     try:
         for index, raw_finding in enumerate(raw_findings, start=1):
             if not isinstance(raw_finding, dict):
-                raise ValueError(f"Gate.Findings[{index}] must be an object.")
+                raise TypeError(f"Gate.Findings[{index}] must be an object.")
             finding = cast(Mapping[str, object], raw_finding)
             tracked_debt = finding.get("TrackedDebt")
             if not isinstance(tracked_debt, bool):
-                raise ValueError(f"Gate.Findings[{index}].TrackedDebt must be a Boolean.")
+                raise TypeError(f"Gate.Findings[{index}].TrackedDebt must be a Boolean.")
             if not tracked_debt:
                 continue
 
@@ -2142,7 +2152,7 @@ def analyzer_debt_records_from_gate_findings(
                     message=required_finding_string(finding, key="Message", index=index),
                 )
             )
-    except ValueError:
+    except (TypeError, ValueError):
         return None
 
     return tuple(records)

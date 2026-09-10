@@ -36,10 +36,11 @@ def greet(name: str) -> str:
     return f"Hello, {name}!"
 
 
-def add_numbers(a: int | float, b: int | float) -> int | float:
+def add_numbers(a: float, b: float) -> float:
     """Add two numbers together.
 
-    This is another example function demonstrating type hints with union types.
+    This is another example function demonstrating numeric type hints. Per the
+    PEP 484 numeric tower, a ``float`` annotation also accepts ``int`` values.
     Replace this with your actual project functionality.
 
     Args:

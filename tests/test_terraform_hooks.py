@@ -42,7 +42,7 @@ def fake_binary(name: str) -> str:
 
 def missing_binary(_name: str) -> None:
     """Pretend a requested executable is unavailable."""
-    return None
+    return
 
 
 def test_terraform_format_uses_ci_command(tmp_path: Path) -> None:

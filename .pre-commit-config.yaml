@@ -124,7 +124,16 @@ repos:
     rev: v0.16.6
     hooks:
       - id: ruff-check
-        args: [--fix, --line-length=100]
+        # Ruff 0.16 enlarged its default rule set and removed the E4 and E7
+        # pycodestyle rules and some pyflakes F rules from it. Re-select the
+        # full pre-0.16 default set (E4, E7, E9, F) so no previously enforced
+        # rule is lost, and skip FLY002 because the Python style guide allows
+        # "".join(...) for readable multi-line string construction.
+        args:
+          - --fix
+          - --line-length=100
+          - --extend-select=E4,E7,E9,F
+          - --ignore=FLY002
   # template-sync: end python-only
 
   # JSON Schema validation is split by module ownership so downstream

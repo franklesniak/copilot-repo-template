@@ -1666,16 +1666,20 @@ Edit `.pre-commit-config.yaml` to remove Python-specific hooks. Delete or commen
 ```yaml
 # Remove or comment out these sections:
 #  - repo: https://github.com/psf/black
-#    rev: 26.3.1
+#    rev: 26.5.1
 #    hooks:
 #      - id: black
 #        args: [--line-length=100]
 #
 #  - repo: https://github.com/astral-sh/ruff-pre-commit
-#    rev: v0.15.12
+#    rev: v0.16.6
 #    hooks:
 #      - id: ruff-check
-#        args: [--fix, --line-length=100]
+#        args:
+#          - --fix
+#          - --line-length=100
+#          - --extend-select=E4,E7,E9,F
+#          - --ignore=FLY002
 ```
 
 #### Update Issue Templates

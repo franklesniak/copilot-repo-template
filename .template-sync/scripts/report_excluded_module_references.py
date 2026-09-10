@@ -8,10 +8,10 @@ import posixpath
 import re
 import sys
 from collections import Counter, defaultdict
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, NoReturn, cast
+from typing import NoReturn, cast
 from urllib.parse import unquote, urlsplit
 
 import yaml  # type: ignore[import-untyped]
@@ -26,8 +26,8 @@ from template_sync_materialization_helpers import (  # noqa: E402
     DEFAULT_MARKER_PATH,
     DEFAULT_MARKER_SCHEMA_PATH,
     INLINE_BLOCK_ANY_MODULES,
-    InlineBlockError,
     DeferredProtectedCandidate,
+    InlineBlockError,
     LocalOverride,
     ManifestMapping,
     PathRelation,
@@ -649,13 +649,16 @@ def inline_block_findings(repo_root: Path, state: ReportState) -> tuple[Finding,
                     )
                 )
                 continue
-            if block.marker_name in INLINE_BLOCK_ANY_MODULES:
-                # OR-retention: the block is materialized whenever *any* named
-                # module is included, so it is only stale when *every* named
-                # module is excluded. Skip it while at least one is retained to
-                # avoid flagging a correctly retained block for cleanup.
-                if not required_modules.isdisjoint(state.included_modules):
-                    continue
+            # OR-retention: the block is materialized whenever *any* named
+            # module is included, so it is only stale when *every* named
+            # module is excluded. Skip it while at least one is retained to
+            # avoid flagging a correctly retained block for cleanup.
+            is_retained_by_any_module = (
+                block.marker_name in INLINE_BLOCK_ANY_MODULES
+                and not required_modules.isdisjoint(state.included_modules)
+            )
+            if is_retained_by_any_module:
+                continue
             missing_modules = tuple(sorted(required_modules - state.included_modules))
             if not missing_modules:
                 continue

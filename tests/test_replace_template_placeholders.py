@@ -446,12 +446,18 @@ def test_azure_pr_template_materializes_service_links_and_policy_guidance(
                 "- Azure Boards intake policy: `AZURE_BOARDS_INTAKE_POLICY`.",
                 "- Branch policy reviewer guidance: `AZURE_BRANCH_POLICY_REVIEWER_GUIDANCE`.",
                 "- Pull request template policy: `AZURE_REPOS_PR_TEMPLATE_POLICY`.",
-                "- Reviewer requirements are enforced by Azure Repos branch policies, "
-                "not by this Markdown template.",
-                "- Security-sensitive reports are handled through private security intake, "
-                "not public Azure Boards work items or PR comments.",
-                "- Security-sensitive findings use the private intake policy: "
-                "`AZURE_SECURITY_INTAKE_POLICY`.",
+                (
+                    "- Reviewer requirements are enforced by Azure Repos branch policies, "
+                    "not by this Markdown template."
+                ),
+                (
+                    "- Security-sensitive reports are handled through private security intake, "
+                    "not public Azure Boards work items or PR comments."
+                ),
+                (
+                    "- Security-sensitive findings use the private intake policy: "
+                    "`AZURE_SECURITY_INTAKE_POLICY`."
+                ),
             ]
         )
         + "\n",
@@ -685,16 +691,20 @@ def test_json_args_file_supplies_shell_sensitive_identity_and_package_metadata(
                 "",
                 "**Please do NOT report security vulnerabilities through public GitHub issues.**",
                 "",
-                "If you discover a security vulnerability in this project, report it privately "
-                "using the contact method below.",
+                (
+                    "If you discover a security vulnerability in this project, report it privately "
+                    "using the contact method below."
+                ),
                 "",
                 "### Security Contact",
                 "",
                 "Contact the maintainers directly at:",
                 "",
                 "<!-- TODO: Replace with your security contact email -->",
-                "<!-- Do not use a users.noreply.github.com address as a security "
-                "intake channel. -->",
+                (
+                    "<!-- Do not use a users.noreply.github.com address as a security "
+                    "intake channel. -->"
+                ),
                 "- Contact: [security contact email]",
                 "",
                 "### What to Include",

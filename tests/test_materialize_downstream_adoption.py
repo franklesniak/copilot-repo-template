@@ -333,8 +333,7 @@ def test_materializer_script_entrypoint_help_smoke() -> None:
     result = subprocess.run(
         [sys.executable, str(SCRIPT_PATH), "--help"],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
@@ -406,8 +405,7 @@ def assert_yamllint_clean(*paths: Path) -> None:
             *(str(path) for path in paths),
         ],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -581,8 +579,7 @@ def validate_dependabot_vendor_schema(path: Path) -> None:
             str(path),
         ],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
@@ -725,8 +722,7 @@ def git_check_attributes_in_repo(
             *paths,
         ],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
         env=env,
     )
@@ -800,8 +796,7 @@ def run_downstream_pytest_gate(
         ],
         cwd=target_root,
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
         env=env,
     )
@@ -821,8 +816,7 @@ def run_materialize_without_template_root(
             *args,
         ],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
@@ -832,8 +826,7 @@ def run_git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(
         ["git", "-C", str(repo_root), *args],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -951,7 +944,7 @@ def isolate_git_config(monkeypatch: Any, tmp_path: Path) -> Path:
     # GIT_CONFIG_KEY_<n> / GIT_CONFIG_VALUE_<n> pairs. Tests that exercise
     # command-scope config re-set these explicitly afterwards.
     for name in list(os.environ):
-        if name.startswith("GIT_CONFIG_KEY_") or name.startswith("GIT_CONFIG_VALUE_"):
+        if name.startswith(("GIT_CONFIG_KEY_", "GIT_CONFIG_VALUE_")):
             monkeypatch.delenv(name, raising=False)
     monkeypatch.delenv("GIT_CONFIG_COUNT", raising=False)
     monkeypatch.delenv("GIT_CONFIG_PARAMETERS", raising=False)
@@ -963,8 +956,7 @@ def write_git_config_file(config_path: Path, key: str, value: str) -> None:
     result = subprocess.run(
         ["git", "config", "--file", str(config_path), key, value],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -1023,8 +1015,7 @@ def run_downstream_adoption_validator(repo_root: Path) -> subprocess.CompletedPr
             "--require-marker",
         ],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
@@ -1697,8 +1688,7 @@ def test_materialized_template_sync_support_only_first_adoption_plan_omits_power
         ],
         cwd=target_root,
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
@@ -1878,8 +1868,7 @@ def test_sha256_template_root_is_reported_not_stampable_when_git_supports_it(
             "-q",
         ],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
     if init_result.returncode != 0:
@@ -1925,16 +1914,14 @@ def test_source_git_commands_receive_no_fetch_no_optional_locks_overlay(
         command: list[str],
         *,
         check: bool,
-        stdout: int,
-        stderr: int,
+        capture_output: bool,
         text: bool,
         env: dict[str, str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
         captured["command"] = command
         captured["env"] = env
         assert check is False
-        assert stdout == subprocess.PIPE
-        assert stderr == subprocess.PIPE
+        assert capture_output is True
         assert text is True
         return subprocess.CompletedProcess(command, 0, "", "")
 
@@ -1985,7 +1972,7 @@ def test_template_root_detection_displays_native_windows_worktree_path(
             return subprocess.CompletedProcess(args, 0, b"H README.md\0", b"")
         if args == ["ls-files", "-z", "--stage", "--full-name"]:
             assert text is False
-            stdout = f"100644 {FULL_SHA} 0\tREADME.md".encode("utf-8") + b"\0"
+            stdout = f"100644 {FULL_SHA} 0\tREADME.md".encode() + b"\0"
             return subprocess.CompletedProcess(args, 0, stdout, b"")
         if args[-4:] == [
             "status",
@@ -2392,8 +2379,7 @@ def test_template_ref_materializes_full_checkout_from_sparse_backing_worktree(
             "--cone",
         ],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
     if sparse_result.returncode != 0:
@@ -2646,8 +2632,7 @@ def test_sparse_checkout_hidden_tracked_files_are_not_stampable(tmp_path: Path) 
             "--cone",
         ],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
     if sparse_result.returncode != 0:
@@ -2735,7 +2720,7 @@ def test_source_completeness_probe_uses_binary_v_records_without_f(
             return subprocess.CompletedProcess(
                 args,
                 0,
-                f"H {non_ascii_path}".encode("utf-8") + b"\0",
+                f"H {non_ascii_path}".encode() + b"\0",
                 b"",
             )
         if args == ["ls-files", "-z", "--stage", "--full-name"]:
@@ -2743,7 +2728,7 @@ def test_source_completeness_probe_uses_binary_v_records_without_f(
             return subprocess.CompletedProcess(
                 args,
                 0,
-                f"100644 {FULL_SHA} 0\t{non_ascii_path}".encode("utf-8") + b"\0",
+                f"100644 {FULL_SHA} 0\t{non_ascii_path}".encode() + b"\0",
                 b"",
             )
         raise AssertionError(f"unexpected Git args: {args!r}")
@@ -2907,7 +2892,6 @@ def test_stampability_backstop_runs_before_status_probe(
 
     def fake_partial_guard(_repo_root: Path, _git_version: Any) -> None:
         calls.append("partial")
-        return None
 
     def fake_completeness(_source_worktree: Path) -> str:
         calls.append("completeness")
@@ -3613,8 +3597,7 @@ def test_materialized_template_update_procedure_passes_nested_markdown_lint(
         ["node", str(NESTED_MARKDOWN_LINT_PATH), str(generated_procedure)],
         cwd=REPO_ROOT,
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
@@ -3676,8 +3659,7 @@ def test_materialized_github_powershell_profile_records_protected_guide_waivers(
         ["git", "init", "-q"],
         cwd=target_root,
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
     validation_result = run_downstream_adoption_validator(target_root)
@@ -3730,8 +3712,7 @@ def test_materialized_partial_adoption_strips_shared_baseline_doc_stale_referenc
         ["git", "init", "-q"],
         cwd=target_root,
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
     report_result = run_excluded_module_report(target_root, ISSUE_693_PARTIAL_DOC_MODULES)
@@ -3932,8 +3913,7 @@ def test_excluded_module_report_retains_or_group_block_without_cleanup(
         ["git", "init", "-q"],
         cwd=target_root,
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
     report_result = run_excluded_module_report(target_root, included_modules)
@@ -4116,8 +4096,7 @@ def test_materialized_no_python_adoption_prunes_dependabot_pip_ecosystem(
         ["git", "init"],
         cwd=target_root,
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
     report_result = run_excluded_module_report(target_root, ISSUE_692_NO_PYTHON_MODULES)
@@ -4423,8 +4402,7 @@ def test_materializer_json_args_file_supplies_package_metadata(
             str(args_file),
         ],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
@@ -4553,8 +4531,7 @@ def test_materializer_args_file_decisions_path_traversal_is_rejected(
             str(args_file),
         ],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 

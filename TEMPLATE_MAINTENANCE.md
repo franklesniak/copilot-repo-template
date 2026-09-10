@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-07-05
+- **Last Updated:** 2026-09-10
 - **Scope:** Periodic maintenance procedures for the `franklesniak/copilot-repo-template` repository, including dependency review cadence, pre-commit hook upkeep, Terraform/TFLint version reviews, schema and worked-example reviews, template sync taxonomy upkeep, and validation steps for template-only changes. Does not cover repositories created FROM this template; consumers of the template should follow [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md#ongoing-maintenance) instead.
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [Contributing](CONTRIBUTING.md)
 
@@ -182,7 +182,7 @@ When updating to new major versions, check the release notes for breaking change
 
 - **Black:** Major releases may introduce style changes that reformat existing code differently. Review [Black changelog](https://github.com/psf/black/blob/main/CHANGES.md). Consider running `black --check` on a representative codebase before upgrading.
 
-- **Ruff:** Frequently adds new rules that may flag previously-passing code. Review [Ruff changelog](https://github.com/astral-sh/ruff/blob/main/CHANGELOG.md). New rules are typically disabled by default, but rule behavior changes can affect existing configurations.
+- **Ruff:** Frequently adds new rules that may flag previously-passing code. Review [Ruff changelog](https://github.com/astral-sh/ruff/blob/main/CHANGELOG.md) and the [Ruff default rules](https://docs.astral.sh/ruff/default-rules/) page. Ruff 0.16.0 changed the default rule set: it enabled many more rules by default and removed the `E4` and `E7` pycodestyle rules plus some pyflakes (`F`) rules from the defaults. Because this repository has no root `[tool.ruff]` table, the `ruff-check` hook in `.pre-commit-config.yaml` carries the rule policy in its `args`: `--extend-select=E4,E7,E9,F` re-selects the full pre-0.16 default set so every previously enforced rule stays enforced, and `--ignore=FLY002` keeps `"".join(...)` allowed as documented in the Python instructions. When a Ruff bump changes the default set again, re-run `pre-commit run ruff-check --all-files`, review the new findings, and adjust those `args` or the code rather than adding a root `[tool.ruff]` table without maintainer authorization.
 
 - **markdownlint-cli2:** Major bumps may raise the hook's Node.js engine floor and change the bundled `markdownlint` engine used by the outer `npm run lint:md` script. The `0.22.1` to `0.23.0` refresh raised the hook's Node.js floor from `>=20` to `>=22`, required hook-level `language_version: "lts"`, and cleared the `js-yaml` and `markdown-it` advisories carried by bundled dependencies. Because the bundled `markdownlint` engine can change rule behavior, review the changelog and run the validation described in [Maintenance Cadence](#maintenance-cadence).
 
