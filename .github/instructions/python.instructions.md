@@ -7,13 +7,13 @@ description: "Python coding standards:  portability-first by default, modern-adv
 
 # Python Writing Style
 
-**Version:** 1.10.20260704.0
+**Version:** 1.10.20260910.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-07-04
+- **Last Updated:** 2026-09-10
 - **Scope:** Defines Python coding standards for all Python files in this repository, including modules, scripts, tests, and tooling. Covers style, structure, error handling, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -149,6 +149,8 @@ from myproject.core.models import Requirement
 
 Code **SHOULD** prefer a single f-string or plain string literal when readable. Same-line adjacency that can hide a likely missing comma **SHOULD NOT** be used, including adjacent f-string and plain-literal fragments on the same line.
 
+Code **SHOULD NOT** rely on line breaks alone to keep adjacent literals apart. Formatters re-join wrapped fragments whenever the fragments fit together within the line length: Black lays the fragments out on one line and keeps them as separate literals, and Ruff's formatter merges them into one literal. Code **SHOULD** therefore use one literal when the text fits on one line and **SHOULD** reserve one-fragment-per-line concatenation for text that does not fit.
+
 When a string exceeds the 100-character line target or readability requires splitting, code **MAY** wrap intentional implicit concatenation in explicit parentheses with each fragment on its own line and clearly delimited. When interpolation is involved, keep wrapped fragments homogeneous, such as all f-strings. Code **MAY** also use explicit construction such as `"".join(...)` when that is clearer. Intentional, clearly delimited multi-line implicit concatenation purely for line length is acceptable; wrapping is an option, not a requirement, and long strings **MAY** remain on one line when readability wins.
 
 Compliant example:
@@ -162,6 +164,29 @@ Non-compliant counter-example:
 ```python
 message = f"Collected {n} items " "found."
 ```
+
+Formatter interaction example. The input below wraps two short fragments that fit together on one line:
+
+```python
+document = yaml.safe_load(
+    "parameters:\n"
+    "  gateMode:\n"
+)
+```
+
+Black output, which is the non-compliant same-line adjacency:
+
+```python
+document = yaml.safe_load("parameters:\n" "  gateMode:\n")
+```
+
+Compliant form, which Black leaves unchanged:
+
+```python
+document = yaml.safe_load("parameters:\n  gateMode:\n")
+```
+
+Explanation: the fragments are separate tokens, so Black changes only their layout and cannot merge them, while one literal removes the missing-comma hazard and is stable under the formatter. Fragments that cannot fit together on one line stay one per line, because the formatter cannot join them.
 
 ## Naming Conventions
 
