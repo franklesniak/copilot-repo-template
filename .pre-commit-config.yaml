@@ -55,7 +55,7 @@ repos:
   #      Validates the placeholder manifest schema against its declared JSON
   #      Schema Draft 2020-12 metaschema.
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: "0.37.4"
+    rev: "0.38.0"
     hooks:
       - id: check-jsonschema
         alias: validate-template-placeholders-manifest
@@ -151,7 +151,7 @@ repos:
   #      Validates the worked-example schema against its declared JSON Schema
   #      Draft 2020-12 metaschema.
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: "0.37.4"
+    rev: "0.38.0"
     hooks:
       - id: check-jsonschema
         alias: validate-example-config-valid-examples
@@ -191,7 +191,7 @@ repos:
   #      Validates the schemas loaded by `.template-sync/scripts/` at runtime
   #      against their declared JSON Schema Draft 2020-12 metaschema.
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: "0.37.4"
+    rev: "0.38.0"
     hooks:
       - id: check-jsonschema
         alias: validate-template-sync-marker-valid-examples
@@ -255,7 +255,7 @@ repos:
   #      when a downstream repository creates it. The upstream template does
   #      not ship that downstream-owned suppression file.
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: "0.37.4"
+    rev: "0.38.0"
     hooks:
       - id: check-jsonschema
         alias: validate-template-sync-manifest
@@ -323,11 +323,19 @@ repos:
   #
   #      Currently wired:
   #        - `.github/dependabot.yml` against `vendor.dependabot`.
+  #        - `tests/fixtures/dependabot/*.yml` (documented optional-field
+  #          fixtures) against `vendor.dependabot`.
   #
   #      The documented Dependabot auto-assignment guidance is intentionally
-  #      limited to fields accepted by the pinned `vendor.dependabot` schema;
-  #      `tests/test_dependabot_schema.py` validates that fixture so future
-  #      schema regressions fail in CI.
+  #      limited to fields accepted by the pinned `vendor.dependabot` schema.
+  #      The live `.github/dependabot.yml` does not use those optional fields,
+  #      so the `validate-dependabot-config-valid-examples` hook validates the
+  #      documented fixture at this same pinned `rev`; a vendored-schema
+  #      regression therefore fails in CI. `tests/test_dependabot_schema.py`
+  #      re-validates the fixture under pytest with the `check-jsonschema`
+  #      dev dependency from `pyproject.toml`. That pip pin and this `rev`
+  #      are updated by separate Dependabot ecosystems (pip and pre-commit)
+  #      and do not need to match.
   #
   #      Evaluated but NOT currently wired (no verified built-in schema
   #      available in the pinned `check-jsonschema` version below; the
@@ -356,12 +364,19 @@ repos:
   #      `files:` pattern at that time. Do not vendor third-party
   #      schemas into this repository to fill the gap.
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: "0.37.4"
+    rev: "0.38.0"
     hooks:
       - id: check-jsonschema
         alias: validate-dependabot-config
         name: Validate Dependabot configuration
         files: ^\.github/dependabot\.yml$
+        args:
+          - --builtin-schema
+          - vendor.dependabot
+      - id: check-jsonschema
+        alias: validate-dependabot-config-valid-examples
+        name: Validate Dependabot configuration valid examples
+        files: ^tests/fixtures/dependabot/.*\.yml$
         args:
           - --builtin-schema
           - vendor.dependabot

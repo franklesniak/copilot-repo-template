@@ -236,6 +236,7 @@ TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS = {
 GITHUB_PLATFORM_INLINE_BLOCK_COUNTS = {
     ".pre-commit-config.yaml": 1,
     ".github/workflows/data-ci.yml": 2,
+    ".azuredevops/pipelines/data-ci.yml": 2,
 }
 GITHUB_PLATFORM_INLINE_MARKER_BEGIN = "# template-sync: begin github-platform-only"
 GITHUB_PLATFORM_INLINE_MARKER_END = "# template-sync: end github-platform-only"
@@ -244,13 +245,38 @@ GITHUB_PLATFORM_SHARED_SURFACE_TOKENS = {
         "validate-dependabot-config",
         "Validate Dependabot configuration",
         r"files: ^\.github/dependabot\.yml$",
+        "validate-dependabot-config-valid-examples",
+        r"files: ^tests/fixtures/dependabot/.*\.yml$",
         "vendor.dependabot",
     ),
     ".github/workflows/data-ci.yml": (
         "validate-dependabot-config",
         "pre-commit run validate-dependabot-config --all-files",
+        "pre-commit run validate-dependabot-config-valid-examples --all-files",
         ".github/dependabot.yml",
         "vendor.dependabot",
+    ),
+    ".azuredevops/pipelines/data-ci.yml": (
+        "validate-dependabot-config",
+        "pre-commit run validate-dependabot-config --all-files",
+        "pre-commit run validate-dependabot-config-valid-examples --all-files",
+    ),
+}
+# Shipped Python CI surfaces must deselect `upstream_template_only` tests in
+# repositories created from the template while the upstream template keeps
+# running them. GitHub Actions discriminates by `github.repository`; Azure
+# Pipelines never run for the upstream template, so they always deselect.
+PYTHON_CI_DOWNSTREAM_SELECTOR_TOKENS = {
+    ".github/workflows/python-ci.yml": (
+        "github.repository == 'franklesniak/copilot-repo-template'",
+        "'not slow and not upstream_template_only'",
+        "'slow and not upstream_template_only'",
+        '-m "$PYTEST_DEFAULT_MARKER_EXPRESSION"',
+        '-m "$PYTEST_SLOW_MARKER_EXPRESSION"',
+    ),
+    ".azuredevops/pipelines/python-ci.yml": (
+        '-m "not slow and not upstream_template_only"',
+        '-m "slow and not upstream_template_only"',
     ),
 }
 GIT_LFS_INLINE_BLOCK_COUNTS = {
@@ -2713,6 +2739,14 @@ def test_non_github_platform_sync_leaves_shared_surfaces_as_valid_yaml() -> None
 def test_github_platform_sync_retains_dependabot_tooling_in_shared_surfaces() -> None:
     """A sync that includes GitHub platform must keep Dependabot validation."""
     for relative_path, required_tokens in GITHUB_PLATFORM_SHARED_SURFACE_TOKENS.items():
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        for required_token in required_tokens:
+            assert required_token in text, f"{relative_path}: {required_token}"
+
+
+def test_shipped_python_ci_deselects_upstream_only_tests_downstream() -> None:
+    """Shipped Python CI must not select upstream-only tests in downstream repositories."""
+    for relative_path, required_tokens in PYTHON_CI_DOWNSTREAM_SELECTOR_TOKENS.items():
         text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
         for required_token in required_tokens:
             assert required_token in text, f"{relative_path}: {required_token}"

@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-22
+- **Last Updated:** 2026-09-10
 - **Scope:** Durable adoption guidance for optional Azure DevOps Services host modules in this template. Covers Azure Repos, Azure Pipelines, Azure Boards, Azure DevOps security scanning, dependency-update choices, Copilot code review constraints, and local versus service-backed validation boundaries. Azure DevOps Server is out of scope unless a future change verifies and documents server-specific behavior.
 - **Related:** [Issue #758](https://github.com/franklesniak/copilot-repo-template/issues/758), [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Template Update Procedure](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/TEMPLATE_UPDATE_PROCEDURE.md)
 
@@ -101,7 +101,7 @@ When adopting Azure DevOps security guidance:
 
 ## Dependency Updates
 
-GitHub Dependabot configuration in `.github/dependabot.yml` is a GitHub platform surface. Azure DevOps-only adoptions do not retain that file, the `validate-dependabot-config` hook, or the Dependabot schema regression fixture.
+GitHub Dependabot configuration in `.github/dependabot.yml` is a GitHub platform surface. Azure DevOps-only adoptions do not retain that file, the `validate-dependabot-config` hook, or the Dependabot schema regression fixture. Mixed-host adoptions that retain `github-platform` together with `azure-pipelines` keep those surfaces, and `.azuredevops/pipelines/data-ci.yml` runs the `validate-dependabot-config` and `validate-dependabot-config-valid-examples` hooks inside a `github-platform-only` inline block so an Azure Repos branch policy that requires the dedicated data pipeline enforces them.
 
 Azure DevOps dependency scanning alerts and routine dependency version update PRs are different capabilities:
 

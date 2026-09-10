@@ -92,11 +92,16 @@ jobs:
         displayName: "Install dependencies"
         workingDirectory: "$(Build.SourcesDirectory)"
 
-      - script: pytest tests/ -m "not slow" -v --cov --cov-report=term-missing
+      # Azure Pipelines run only in repositories created from this template,
+      # never in the upstream template itself, so tests marked
+      # `upstream_template_only` (they rely on the complete upstream module
+      # set) are always deselected here. This matches the official downstream
+      # gate, `pytest -m "not upstream_template_only"`; see README.md.
+      - script: pytest tests/ -m "not slow and not upstream_template_only" -v --cov --cov-report=term-missing
         displayName: "Run non-slow tests with coverage"
         workingDirectory: "$(Build.SourcesDirectory)"
 
       - ${{ if eq(parameters.runSlowTests, true) }}:
-          - script: pytest tests/ -m slow -v --no-cov
+          - script: pytest tests/ -m "slow and not upstream_template_only" -v --no-cov
             displayName: "Run slow template tests"
             workingDirectory: "$(Build.SourcesDirectory)"

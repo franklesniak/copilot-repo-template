@@ -284,7 +284,7 @@ Downstream repositories that retain pytest-based template support SHOULD use the
 python -m pytest -m "not upstream_template_only"
 ```
 
-The gate excludes only tests marked `upstream_template_only`, so new unmarked tests remain included by default. The committed pytest configuration uses strict marker validation.
+The gate excludes only tests marked `upstream_template_only`, so new unmarked tests remain included by default. The committed pytest configuration uses strict marker validation. The shipped Python CI workflow and pipeline apply the same exclusion automatically in every repository other than the upstream template, so adopters do not need to edit their pytest selectors.
 
 For cleanup planning, generate a read-only excluded-module report:
 

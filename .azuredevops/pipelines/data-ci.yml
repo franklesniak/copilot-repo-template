@@ -33,6 +33,10 @@
 #   - validate-instruction-contracts-upstream
 #   - validate-instruction-contracts-downstream
 # template-sync: end template-sync-support-only
+# template-sync: begin github-platform-only
+#   - validate-dependabot-config
+#   - validate-dependabot-config-valid-examples
+# template-sync: end github-platform-only
 #
 # Azure Pipelines service-schema validation is service-backed. This pipeline
 # runs local YAML parse/style checks, not Azure DevOps task schema validation.
@@ -164,3 +168,13 @@ steps:
     displayName: "Run validate-instruction-contracts-downstream"
     workingDirectory: "$(Build.SourcesDirectory)"
   # template-sync: end template-sync-support-only
+
+  # template-sync: begin github-platform-only
+  - bash: pre-commit run validate-dependabot-config --all-files
+    displayName: "Run validate-dependabot-config"
+    workingDirectory: "$(Build.SourcesDirectory)"
+
+  - bash: pre-commit run validate-dependabot-config-valid-examples --all-files
+    displayName: "Run validate-dependabot-config-valid-examples"
+    workingDirectory: "$(Build.SourcesDirectory)"
+  # template-sync: end github-platform-only
