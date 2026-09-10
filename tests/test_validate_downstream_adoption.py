@@ -254,7 +254,7 @@ def _write_common_downstream_repo(
     readme_text: str = "# Downstream\n",
     precommit_text: str = "repos: []\n",
     agents_text: str = (
-        "# Agent Instructions\n\n" "## Protected Instruction Files\n\n" "## GitHub Plugin Usage\n"
+        "# Agent Instructions\n\n## Protected Instruction Files\n\n## GitHub Plugin Usage\n"
     ),
 ) -> None:
     """Write the common retained partial-adoption fixture files."""

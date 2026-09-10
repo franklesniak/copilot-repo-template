@@ -1281,7 +1281,7 @@ def test_real_powershell_ci_surfaces_retain_gate_mode_and_force_visible_discover
         "-DirectoryVisibility All"
     ) in " ".join(github_text.split())
     assert (
-        "Get-PSScriptAnalyzerCandidate -RepositoryRoot $repositoryRoot " "-DirectoryVisibility All"
+        "Get-PSScriptAnalyzerCandidate -RepositoryRoot $repositoryRoot -DirectoryVisibility All"
     ) in " ".join(azure_text.split())
     assert "Resolve-PSScriptAnalyzerGate ` -Mode $env:PSSCRIPTANALYZER_GATE_MODE" in " ".join(
         github_text.split()

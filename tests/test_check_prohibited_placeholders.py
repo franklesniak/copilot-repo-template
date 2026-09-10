@@ -482,7 +482,7 @@ def test_main_reports_actionable_failure_message(
     assert result == 1
     assert captured.err == ""
     assert (
-        "docs/spec/example.md:2: prohibited placeholder " '"(default duration to be determined)"'
+        'docs/spec/example.md:2: prohibited placeholder "(default duration to be determined)"'
     ) in captured.out
     assert "replace with a measurable value" in captured.out
     assert "<!-- ALLOW-TBD: <reason> -->" in captured.out

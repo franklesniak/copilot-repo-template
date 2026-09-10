@@ -1809,8 +1809,9 @@ If your project doesn't have a `.pre-commit-config.yaml`:
          args:
            - --fix
            - --line-length=100
-           - --extend-select=E4,E7,E9,F
+           - --extend-select=E4,E7,E9,F,ISC001
            - --ignore=FLY002
+           - --unfixable=ISC001
    ```
 
 4. Install the hooks:

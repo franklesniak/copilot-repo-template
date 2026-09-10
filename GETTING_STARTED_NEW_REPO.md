@@ -1678,8 +1678,9 @@ Edit `.pre-commit-config.yaml` to remove Python-specific hooks. Delete or commen
 #        args:
 #          - --fix
 #          - --line-length=100
-#          - --extend-select=E4,E7,E9,F
+#          - --extend-select=E4,E7,E9,F,ISC001
 #          - --ignore=FLY002
+#          - --unfixable=ISC001
 ```
 
 #### Update Issue Templates

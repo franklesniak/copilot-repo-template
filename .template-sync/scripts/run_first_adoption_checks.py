@@ -1757,7 +1757,7 @@ def doctor_recommendations(results: Sequence[DoctorProbeResult]) -> tuple[str, .
     )
     if pre_commit_console is not None and pre_commit_console.command[0] == "pre-commit":
         recommendations.append(
-            "Use pre-commit validation prefix: " f"{format_command(PRE_COMMIT_EXECUTABLE_PREFIX)}"
+            f"Use pre-commit validation prefix: {format_command(PRE_COMMIT_EXECUTABLE_PREFIX)}"
         )
     else:
         pre_commit_module = first_available_result(
@@ -1807,7 +1807,7 @@ def doctor_recommendations(results: Sequence[DoctorProbeResult]) -> tuple[str, .
             )
         else:
             recommendations.append(
-                "Use yamllint invocation: " f"{format_command((*yamllint_module.command[:-1],))}"
+                f"Use yamllint invocation: {format_command((*yamllint_module.command[:-1],))}"
             )
 
     pssa_result = first_available_result(results, "PSScriptAnalyzer")

@@ -3988,7 +3988,7 @@ def format_protected_decision_records(marker_data: MarkerData) -> str | None:
                 lines.append(f"  - local_overrides: {local_override_summary(local_override)}")
             for candidate in overlap.deferred_candidates:
                 lines.append(
-                    "  - deferred_protected_candidates: " f"{deferred_candidate_summary(candidate)}"
+                    f"  - deferred_protected_candidates: {deferred_candidate_summary(candidate)}"
                 )
     return "\n".join(lines)
 
@@ -5194,9 +5194,7 @@ def print_ledger_only_report(
 ) -> None:
     """Print the adoption-ledger-only report."""
     if write_ledger_path is not None:
-        print(
-            "Saved adoption ledger: " f"`{repository_relative_path(write_ledger_path, repo_root)}`"
-        )
+        print(f"Saved adoption ledger: `{repository_relative_path(write_ledger_path, repo_root)}`")
         print()
     print(ledger_document)
 

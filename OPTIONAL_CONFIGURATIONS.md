@@ -1103,8 +1103,9 @@ The default line length is 100 characters for both Black and Ruff. In `.pre-comm
       args:
         - --fix
         - --line-length=100
-        - --extend-select=E4,E7,E9,F
+        - --extend-select=E4,E7,E9,F,ISC001
         - --ignore=FLY002
+        - --unfixable=ISC001
 # template-sync: end python-only
 ```
 
@@ -2279,8 +2280,9 @@ This setting should be consistent with your formatting tools in `.pre-commit-con
       args:
         - --fix
         - --line-length=100
-        - --extend-select=E4,E7,E9,F
+        - --extend-select=E4,E7,E9,F,ISC001
         - --ignore=FLY002
+        - --unfixable=ISC001
 ```
 
 **To use Black's default of 88 characters:**

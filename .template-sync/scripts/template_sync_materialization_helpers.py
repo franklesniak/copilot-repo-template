@@ -1316,7 +1316,7 @@ def protected_decision_summary(protected_decision: ProtectedFileDecision) -> str
         parts.append(f"authorized_scope={protected_decision.authorized_scope}")
     if protected_decision.tailored_authorization_basis is not None:
         parts.append(
-            "tailored_authorization_basis=" f"{protected_decision.tailored_authorization_basis}"
+            f"tailored_authorization_basis={protected_decision.tailored_authorization_basis}"
         )
     if protected_decision.reason is not None:
         parts.append(f"reason={protected_decision.reason}")
@@ -1388,9 +1388,7 @@ def format_overlap_block(overlap: MarkerPathOverlap) -> str:
     for local_override in overlap.local_overrides:
         lines.append(f"    local_overrides: {local_override_summary(local_override)}")
     for candidate in overlap.deferred_candidates:
-        lines.append(
-            "    deferred_protected_candidates: " f"{deferred_candidate_summary(candidate)}"
-        )
+        lines.append(f"    deferred_protected_candidates: {deferred_candidate_summary(candidate)}")
     return "\n".join(lines)
 
 
