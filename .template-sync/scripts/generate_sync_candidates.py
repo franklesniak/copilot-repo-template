@@ -40,6 +40,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     ManifestMapping,
     PathRelation,
     ProtectedFileDecision,
+    TemplateSyncMaterializationError,
     deferred_candidate_summary,
     directory_prefix_relation,
     has_wildcard,
@@ -60,9 +61,6 @@ from template_sync_materialization_helpers import (  # noqa: E402
     selected_relation_for_path,
     validate_protected_file_decisions,
     validate_schema,
-)
-from template_sync_materialization_helpers import (  # noqa: E402
-    TemplateSyncMaterializationError as MarkerValidationError,
 )
 
 DEFAULT_RANGE_HEAD_REF = "template/main"
@@ -5424,7 +5422,7 @@ def main(argv: list[str] | None = None) -> int:
             if ledger_document is None:
                 raise CandidateGenerationError("Unable to generate adoption ledger.")
             write_adoption_ledger(repo_root, write_ledger_path, ledger_document)
-    except (CandidateGenerationError, MarkerValidationError) as error:
+    except (CandidateGenerationError, TemplateSyncMaterializationError) as error:
         fail(str(error))
 
     print_report(

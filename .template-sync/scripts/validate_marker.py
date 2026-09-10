@@ -27,6 +27,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     PathRelation,
     ProtectedFileDecision,
     ProtectedGuideContractWaiver,
+    TemplateSyncMaterializationError,
     format_overlap_block,
     git_present_paths,
     is_locally_overridden,
@@ -49,9 +50,10 @@ from template_sync_materialization_helpers import (  # noqa: E402
     validate_protected_file_decisions,
     validate_schema,
 )
-from template_sync_materialization_helpers import (  # noqa: E402
-    TemplateSyncMaterializationError as MarkerValidationError,
-)
+
+# Public alias kept for callers such as validate_downstream_adoption and
+# validate_instruction_contracts, which catch ``validate_marker.MarkerValidationError``.
+MarkerValidationError = TemplateSyncMaterializationError
 
 LOCAL_PATH_SUGGESTION_LIMIT = 10
 LOCAL_PATH_SUGGESTION_COVERED_LIMIT = 3

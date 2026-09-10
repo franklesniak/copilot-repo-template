@@ -113,6 +113,22 @@ def assert_issue_form_shape(bug_report: object) -> None:
         assert isinstance(item_mapping.get("attributes"), dict)
 
 
+def test_owner_repo_token_paths_requires_the_owner_repo_token() -> None:
+    """The renderer fails with an actionable error when the manifest lacks OWNER/REPO."""
+    token = placeholder_helper.PlaceholderTokenSpec(
+        name="repository",
+        placeholder="OWNER/REPO",
+        replacement_source="repository",
+        replacement_style="literal",
+        finding_kind="placeholder",
+        paths=("README.md", "CONTRIBUTING.md"),
+    )
+
+    assert placeholder_helper.owner_repo_token_paths((token,)) == ("README.md", "CONTRIBUTING.md")
+    with pytest.raises(placeholder_helper.PlaceholderError, match="OWNER/REPO"):
+        placeholder_helper.owner_repo_token_paths(())
+
+
 def test_approved_placeholder_replacement_does_not_mutate_normal_words(tmp_path: Path) -> None:
     """Exact placeholder replacement leaves REPORT, REPOSITORY, and REPOSITORIES unchanged."""
     write_file(
