@@ -8,10 +8,11 @@ import os
 import re
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, NoReturn, cast
+from typing import Any, NoReturn, cast
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
@@ -31,23 +32,23 @@ from template_sync_materialization_helpers import (  # noqa: E402
     DEFAULT_MANIFEST_SCHEMA_PATH,
     DEFAULT_MARKER_PATH,
     DEFAULT_MARKER_SCHEMA_PATH,
+    PROTECTED_EXACT_PATHS,
     REMOVAL_DECISION,
     DeferredProtectedCandidate,
-    ManifestMapping,
-    LocalPathOwnership,
     LocalOverride,
+    LocalPathOwnership,
+    ManifestMapping,
     PathRelation,
-    PROTECTED_EXACT_PATHS,
     ProtectedFileDecision,
-    TemplateSyncMaterializationError as MarkerValidationError,
+    TemplateSyncMaterializationError,
     deferred_candidate_summary,
     directory_prefix_relation,
     has_wildcard,
     is_protected_instruction_path,
     is_protected_manifest_pattern,
-    local_override_summary,
     load_json_mapping,
     load_yaml_mapping,
+    local_override_summary,
     manifest_pattern_matches_path,
     parse_manifest_mappings,
     parse_marker_decision_data,
@@ -58,8 +59,8 @@ from template_sync_materialization_helpers import (  # noqa: E402
     resolve_repo_path,
     resolve_repo_root,
     selected_relation_for_path,
-    validate_schema,
     validate_protected_file_decisions,
+    validate_schema,
 )
 
 DEFAULT_RANGE_HEAD_REF = "template/main"
@@ -573,15 +574,15 @@ def json_string_field(mapping: JsonObject, field_name: str) -> str | None:
 
 def utc_now() -> datetime:
     """Return the current UTC time for observation timestamps."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def observed_at_timestamp(clock: Clock) -> str:
     """Return a full RFC 3339 UTC timestamp with a ``Z`` suffix."""
     value = clock()
     if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+        value = value.replace(tzinfo=UTC)
+    return value.astimezone(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def bounded_diagnostic_text(value: str, *, limit: int = 160) -> str:
@@ -2696,9 +2697,11 @@ def repository_observations_from_payload(
                 diagnostics=observation_diagnostic_pairs(
                     (
                         "message",
-                        "security_and_analysis was not present in the payload; it may require "
-                        "repository admin access or may be unavailable on this API version or "
-                        "GitHub Enterprise Server",
+                        (
+                            "security_and_analysis was not present in the payload; it may require "
+                            "repository admin access or may be unavailable on this API version or "
+                            "GitHub Enterprise Server"
+                        ),
                     )
                 ),
             )
@@ -3404,14 +3407,14 @@ def discover_tooling_stacks(repo_root: Path, workflows: tuple[str, ...]) -> tupl
             stacks.append(name)
 
     add_stack("GitHub Actions", bool(workflows))
-    add_stack("Markdown", any(path.endswith(".md") or path.endswith(".mdc") for path in files))
+    add_stack("Markdown", any(path.endswith((".md", ".mdc")) for path in files))
     add_stack("Node/npm", "package.json" in files or "package-lock.json" in files)
     add_stack(
         "Python",
         any(path.endswith(".py") for path in files)
         or any(path in files for path in ("pyproject.toml", "requirements.txt", "setup.py")),
     )
-    add_stack("PowerShell", any(path.endswith(".ps1") or path.endswith(".psd1") for path in files))
+    add_stack("PowerShell", any(path.endswith((".ps1", ".psd1")) for path in files))
     add_stack(
         "Terraform",
         any(
@@ -3985,7 +3988,7 @@ def format_protected_decision_records(marker_data: MarkerData) -> str | None:
                 lines.append(f"  - local_overrides: {local_override_summary(local_override)}")
             for candidate in overlap.deferred_candidates:
                 lines.append(
-                    "  - deferred_protected_candidates: " f"{deferred_candidate_summary(candidate)}"
+                    f"  - deferred_protected_candidates: {deferred_candidate_summary(candidate)}"
                 )
     return "\n".join(lines)
 
@@ -4308,8 +4311,10 @@ def format_summary_unresolved_decisions(
     if unresolved:
         return "\n".join(
             [
-                "- Unresolved maintainer decisions remain in available "
-                "machine-readable state: Yes.",
+                (
+                    "- Unresolved maintainer decisions remain in available "
+                    "machine-readable state: Yes."
+                ),
                 *(f"- {item}" for item in unresolved),
             ]
         )
@@ -4745,17 +4750,23 @@ def format_maintainer_questionnaire(discovery: RepositoryDiscovery) -> str:
             "- [ ] Which CODEOWNERS owner or team should be used?",
             "- [ ] Should template issue labels be used, remapped, or removed?",
             "- [ ] Should GitHub Discussions be enabled or left disabled?",
-            "- [ ] Should private vulnerability reporting be enabled, left disabled, or marked "
-            "not available?",
+            (
+                "- [ ] Should private vulnerability reporting be enabled, left disabled, or marked "
+                "not available?"
+            ),
             f"- [ ] Should the default branch remain `{default_branch}`, be renamed, or be deferred?",
-            "- [ ] Should the default branch use a ruleset, classic branch protection, or no "
-            "new protection?",
+            (
+                "- [ ] Should the default branch use a ruleset, classic branch protection, or no "
+                "new protection?"
+            ),
             "- [ ] Is there a GHES host override, or should `github.com` remain the expected host?",
             "- [ ] Are protected instruction-file edits authorized, deferred, or out of scope?",
             "- [ ] Are any protected instruction-file removals authorized?",
             "- [ ] Are any template-derived files explicitly approved for `tailored` adoption mode?",
-            "- [ ] Which structural findings are required for adoption and which become "
-            "post-adoption issues?",
+            (
+                "- [ ] Which structural findings are required for adoption and which become "
+                "post-adoption issues?"
+            ),
         ]
     )
 
@@ -4790,8 +4801,10 @@ def format_todo_starter(
             f"- [ ] Repository owner/name recorded: `{owner_name}`",
             f"- [ ] Repository visibility recorded: `{visibility}`",
             f"- [ ] Repository default branch recorded: `{default_branch}`",
-            "- [ ] Existing governance, security, CODEOWNERS, issue-template, PR-template, "
-            "and Dependabot files reviewed before replacement.",
+            (
+                "- [ ] Existing governance, security, CODEOWNERS, issue-template, PR-template, "
+                "and Dependabot files reviewed before replacement."
+            ),
             (
                 "- [ ] Existing `.template-sync/marker.yml`, `_TODO-repo-init.md`, or "
                 "equivalent adoption note checked before asking repeated questions "
@@ -4888,8 +4901,10 @@ def format_issue_draft_skeletons() -> str:
             "",
             "### Context",
             "",
-            "Template adoption is complete. This issue handles one deferred structural "
-            "follow-up in this repository only.",
+            (
+                "Template adoption is complete. This issue handles one deferred structural "
+                "follow-up in this repository only."
+            ),
             "",
             "### Scope",
             "",
@@ -4914,8 +4929,10 @@ def format_issue_draft_skeletons() -> str:
             "",
             "### Context",
             "",
-            "A first-adoption policy decision was deferred and must be resolved before the "
-            "dependent file is final.",
+            (
+                "A first-adoption policy decision was deferred and must be resolved before the "
+                "dependent file is final."
+            ),
             "",
             "### Scope",
             "",
@@ -4924,8 +4941,10 @@ def format_issue_draft_skeletons() -> str:
             "",
             "### Acceptance Criteria",
             "",
-            "- The decision is recorded in `_TODO-repo-init.md`, `.template-sync/marker.yml`, "
-            "or an equivalent committed adoption note.",
+            (
+                "- The decision is recorded in `_TODO-repo-init.md`, `.template-sync/marker.yml`, "
+                "or an equivalent committed adoption note."
+            ),
             "- Dependent files no longer contain unresolved placeholders or misleading defaults.",
             "",
             "### Validation",
@@ -5175,9 +5194,7 @@ def print_ledger_only_report(
 ) -> None:
     """Print the adoption-ledger-only report."""
     if write_ledger_path is not None:
-        print(
-            "Saved adoption ledger: " f"`{repository_relative_path(write_ledger_path, repo_root)}`"
-        )
+        print(f"Saved adoption ledger: `{repository_relative_path(write_ledger_path, repo_root)}`")
         print()
     print(ledger_document)
 
@@ -5403,7 +5420,7 @@ def main(argv: list[str] | None = None) -> int:
             if ledger_document is None:
                 raise CandidateGenerationError("Unable to generate adoption ledger.")
             write_adoption_ledger(repo_root, write_ledger_path, ledger_document)
-    except (CandidateGenerationError, MarkerValidationError) as error:
+    except (CandidateGenerationError, TemplateSyncMaterializationError) as error:
         fail(str(error))
 
     print_report(

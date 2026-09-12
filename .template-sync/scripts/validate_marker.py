@@ -20,28 +20,27 @@ from template_sync_materialization_helpers import (  # noqa: E402
     DEFAULT_REMOVE_LOCAL_AUTHORIZATION_TOKENS,
     REMOVAL_DECISION,
     DeferredProtectedCandidate,
-    LocalPathOwnership,
     LocalOverride,
+    LocalPathOwnership,
     ManifestMapping,
     MarkerPathOverlap,
     PathRelation,
     ProtectedFileDecision,
     ProtectedGuideContractWaiver,
-    TemplateSyncMaterializationError as MarkerValidationError,
+    TemplateSyncMaterializationError,
     format_overlap_block,
     git_present_paths,
-    iter_safe_repository_files,
     is_locally_overridden,
     is_locally_owned_path,
+    iter_safe_repository_files,
     load_json_mapping,
     load_yaml_mapping,
     local_path_ownership_summary,
     manifest_covers_directory,
-    path_has_symlink_component,
-    normalize_repository_path as normalize_repository_path,
     parse_manifest_compatibility_groups,
     parse_manifest_mappings,
     parse_marker_decision_data,
+    path_has_symlink_component,
     repository_relative_path,
     resolve_repo_path,
     resolve_repo_root,
@@ -51,6 +50,10 @@ from template_sync_materialization_helpers import (  # noqa: E402
     validate_protected_file_decisions,
     validate_schema,
 )
+
+# Public alias kept for callers such as validate_downstream_adoption and
+# validate_instruction_contracts, which catch ``validate_marker.MarkerValidationError``.
+MarkerValidationError = TemplateSyncMaterializationError
 
 LOCAL_PATH_SUGGESTION_LIMIT = 10
 LOCAL_PATH_SUGGESTION_COVERED_LIMIT = 3

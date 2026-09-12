@@ -100,9 +100,9 @@ class PathRelation:
         included_module_set = set(included_modules)
         if not self.requires_all.issubset(included_module_set):
             return False
-        if self.requires_any and not self.requires_any.intersection(included_module_set):
-            return False
-        return True
+        if not self.requires_any:
+            return True
+        return not self.requires_any.isdisjoint(included_module_set)
 
 
 @dataclass(frozen=True)
@@ -395,6 +395,30 @@ def replacement_source_attribute(manifest: dict[str, Any], source_name: str) -> 
     return source_kind, attribute
 
 
+def owner_repo_token_paths(
+    token_specs: tuple[PlaceholderTokenSpec, ...],
+) -> tuple[str, ...]:
+    """Return the path scope of the ``OWNER/REPO`` token that the renderer requires.
+
+    Args:
+        token_specs: Normalized manifest tokens.
+
+    Returns:
+        The path patterns declared for the token whose placeholder is ``OWNER/REPO``.
+
+    Raises:
+        PlaceholderError: If the placeholder manifest declares no such token, so the
+            failure names the manifest contract instead of surfacing as a bare
+            ``StopIteration`` or ``IndexError`` at import time.
+    """
+    for token in token_specs:
+        if token.placeholder == "OWNER/REPO":
+            return token.paths
+    raise PlaceholderError(
+        "Placeholder manifest must declare a token whose placeholder is OWNER/REPO."
+    )
+
+
 PLACEHOLDER_MANIFEST = load_placeholder_manifest()
 PLACEHOLDER_TOKEN_SPECS = normalized_manifest_tokens(PLACEHOLDER_MANIFEST)
 PLACEHOLDER_RENDERER_PATHS = renderer_path_group_paths(PLACEHOLDER_MANIFEST)
@@ -410,9 +434,7 @@ APPROVED_GITHUB_URL_SUFFIXES = tuple(
         GITHUB_URL_TOKEN_SPECS, key=lambda item: len(item.placeholder), reverse=True
     )
 )
-OWNER_REPO_TOKEN_PATHS = tuple(
-    token.paths[0:] for token in PLACEHOLDER_TOKEN_SPECS if token.placeholder == "OWNER/REPO"
-)[0]
+OWNER_REPO_TOKEN_PATHS = owner_repo_token_paths(PLACEHOLDER_TOKEN_SPECS)
 AZURE_DEVOPS_TOKEN_REPLACEMENT_SPECS = tuple(
     (
         token.name,
@@ -1610,17 +1632,19 @@ def build_replacement_context(
         require_security_decision=require_security_decision,
     )
     if not require_security_decision and security_reporting_mode is None:
-        if validated_security_contact is not None or validated_security_contact_section is not None:
-            if azure_context is None:
-                raise PlaceholderError(
-                    "--security-contact and --security-contact-section configure the "
-                    "SECURITY.md reporting section, which is only rendered when a "
-                    "reporting mode is selected. Supply --repository, or set "
-                    "--security-reporting-mode explicitly (for example, "
-                    "--security-reporting-mode contact-only), so the override is "
-                    "applied instead of silently ignored; use --conduct-contact to set "
-                    "the Code of Conduct contact independently."
-                )
+        has_security_contact_override = (
+            validated_security_contact is not None or validated_security_contact_section is not None
+        )
+        if has_security_contact_override and azure_context is None:
+            raise PlaceholderError(
+                "--security-contact and --security-contact-section configure the "
+                "SECURITY.md reporting section, which is only rendered when a "
+                "reporting mode is selected. Supply --repository, or set "
+                "--security-reporting-mode explicitly (for example, "
+                "--security-reporting-mode contact-only), so the override is "
+                "applied instead of silently ignored; use --conduct-contact to set "
+                "the Code of Conduct contact independently."
+            )
         resolved_security_reporting_mode = None
     if (
         resolved_security_reporting_mode in SECURITY_CONTACT_REQUIRED_MODES
@@ -2615,7 +2639,7 @@ def build_replacement_rules(context: ReplacementContext) -> tuple[ReplacementRul
         if raw_replacement is None:
             continue
         if not isinstance(raw_replacement, str):
-            raise AssertionError(f"Unexpected non-string replacement for {attribute_name}.")
+            raise TypeError(f"Unexpected non-string replacement for {attribute_name}.")
         replacement = raw_replacement
         replace = (
             replace_owner_repo_token(replacement)

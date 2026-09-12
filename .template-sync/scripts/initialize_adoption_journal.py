@@ -14,12 +14,16 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from first_adoption_state import DEFAULT_ADOPTION_JOURNAL_PATH  # noqa: E402
 from template_sync_materialization_helpers import (  # noqa: E402
-    TemplateSyncMaterializationError as AdoptionJournalError,
+    TemplateSyncMaterializationError,
     os_error_summary,
     repository_relative_path,
     resolve_repo_path,
     resolve_repo_root,
 )
+
+# Public alias kept for callers such as bootstrap_first_adoption and the tests,
+# which catch ``initialize_adoption_journal.AdoptionJournalError``.
+AdoptionJournalError = TemplateSyncMaterializationError
 
 DEFAULT_JOURNAL_TEMPLATE_PATH = "templates/adoption/_TEMPLATE-ADOPTION-DIFFICULTIES.md"
 

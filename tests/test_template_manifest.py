@@ -11,8 +11,9 @@ import re
 import subprocess
 import sys
 from collections import Counter
+from collections.abc import Iterable, Mapping
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Protocol, cast
+from typing import Any, Protocol, cast
 from urllib.parse import unquote, urlsplit
 
 import yaml  # type: ignore[import-untyped]
@@ -47,6 +48,8 @@ COPY_READY_REFERENCE_FILES = (
 if str(TEMPLATE_SYNC_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(TEMPLATE_SYNC_SCRIPT_DIR))
 
+import report_excluded_module_references as EXCLUDED_MODULE_REPORTER  # noqa: E402
+import validate_marker as VALIDATE_MARKER  # noqa: E402
 from template_sync_materialization_helpers import (  # noqa: E402
     INLINE_BLOCK_ANY_MODULES,
     INLINE_BLOCK_MARKER_RE,
@@ -62,8 +65,6 @@ from template_sync_materialization_helpers import (  # noqa: E402
     remove_inline_blocks_for_modules,
     validate_module_compatibility,
 )
-import report_excluded_module_references as EXCLUDED_MODULE_REPORTER  # noqa: E402
-import validate_marker as VALIDATE_MARKER  # noqa: E402
 
 TERRAFORM_INLINE_BLOCK_PATHS = (
     ".pre-commit-config.yaml",
@@ -598,7 +599,7 @@ StructuredObject = dict[str, Any]
 class JsonSchemaValidator(Protocol):
     """Minimal validator protocol used by schema assertion helpers."""
 
-    def iter_errors(self, instance: object) -> Iterable["JsonSchemaValidationError"]:
+    def iter_errors(self, instance: object) -> Iterable[JsonSchemaValidationError]:
         """Return validation errors for ``instance``."""
         ...
 
@@ -924,9 +925,9 @@ def _path_mapping_matches_modules(
 
     if not requires_all.issubset(included_modules):
         return False
-    if requires_any and not requires_any.intersection(included_modules):
-        return False
-    return True
+    if not requires_any:
+        return True
+    return not requires_any.isdisjoint(included_modules)
 
 
 def _path_mapping_relations_from_manifest() -> list[tuple[str, tuple[str, ...], tuple[str, ...]]]:
@@ -992,8 +993,7 @@ def _git_tracked_paths(repo_root: Path) -> tuple[str, ...]:
         ["git", "ls-files"],
         cwd=repo_root,
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
     return tuple(path for path in result.stdout.splitlines() if path)
@@ -1071,8 +1071,7 @@ def _run_marker_validator(repo_root: Path) -> subprocess.CompletedProcess[str]:
             "--require-marker",
         ],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
@@ -1095,8 +1094,7 @@ def _run_git(repo_root: Path, *args: str) -> None:
         ["git", *args],
         cwd=repo_root,
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 

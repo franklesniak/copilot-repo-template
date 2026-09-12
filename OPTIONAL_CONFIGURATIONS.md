@@ -1091,24 +1091,25 @@ The default line length is 100 characters for both Black and Ruff. In `.pre-comm
 ```yaml
 # template-sync: begin python-only
 - repo: https://github.com/psf/black
-  rev: 26.3.1
+  rev: 26.5.1
   hooks:
     - id: black
       args: [--line-length=100]
 
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.15.12
+  rev: v0.16.6
   hooks:
     - id: ruff-check
-      args: [--fix, --line-length=100]
+      args:
+        - --fix
+        - --line-length=100
+        - --extend-select=E4,E7,E9,F,ISC001
+        - --ignore=FLY002
+        - --unfixable=ISC001
 # template-sync: end python-only
 ```
 
-**To use Black's default (88 characters):**
-
-```yaml
-args: [--line-length=88]
-```
+**To use Black's default (88 characters):** replace `--line-length=100` with `--line-length=88` in both hook entries above.
 
 > **Note:** Ensure both Black and Ruff use the same line length to avoid conflicts.
 
@@ -2276,7 +2277,12 @@ This setting should be consistent with your formatting tools in `.pre-commit-con
 - repo: https://github.com/astral-sh/ruff-pre-commit
   hooks:
     - id: ruff-check
-      args: [--fix, --line-length=100]
+      args:
+        - --fix
+        - --line-length=100
+        - --extend-select=E4,E7,E9,F,ISC001
+        - --ignore=FLY002
+        - --unfixable=ISC001
 ```
 
 **To use Black's default of 88 characters:**

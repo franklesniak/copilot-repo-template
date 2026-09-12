@@ -7,7 +7,7 @@ import json
 import shutil
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
@@ -276,7 +276,7 @@ def _rest_result(
 
 def _fixed_clock() -> datetime:
     """Return a deterministic timestamp for metadata ledger tests."""
-    return datetime(2026, 6, 29, 12, 34, 56, tzinfo=timezone.utc)
+    return datetime(2026, 6, 29, 12, 34, 56, tzinfo=UTC)
 
 
 def _observation(metadata: Any, setting: str) -> Any:

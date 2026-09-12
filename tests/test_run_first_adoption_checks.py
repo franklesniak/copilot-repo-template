@@ -8,7 +8,7 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 
@@ -215,7 +215,7 @@ def _changed_file_follow_up(output: str) -> str:
 
 def _utc_time(second: int) -> datetime:
     """Return a deterministic UTC timestamp for timing assertions."""
-    return datetime(2026, 6, 3, 12, 0, second, tzinfo=timezone.utc)
+    return datetime(2026, 6, 3, 12, 0, second, tzinfo=UTC)
 
 
 def _queued_time_source(*timestamps: datetime) -> Callable[[], datetime]:
@@ -2282,8 +2282,7 @@ def test_downstream_pytest_selection_includes_unmarked_and_excludes_upstream_onl
         ],
         cwd=pytest_root,
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
@@ -2320,8 +2319,7 @@ def test_unregistered_pytest_marker_fails_collection(tmp_path: Path) -> None:
         ],
         cwd=pytest_root,
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 

@@ -7,13 +7,13 @@ import fnmatch
 import json
 import os
 import re
-import shutil
 import shlex
+import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NoReturn, TextIO, cast
 
@@ -126,7 +126,7 @@ class FileCollection:
 class CheckPlan:
     """Commands and notes for a first-adoption validation run."""
 
-    commands: tuple["PlannedCommand", ...]
+    commands: tuple[PlannedCommand, ...]
     notes: tuple[str, ...]
 
 
@@ -172,9 +172,9 @@ class ManifestPathRelation:
         included_module_set = frozenset(included_modules)
         if not self.requires_all.issubset(included_module_set):
             return False
-        if self.requires_any and not self.requires_any.intersection(included_module_set):
-            return False
-        return True
+        if not self.requires_any:
+            return True
+        return not self.requires_any.isdisjoint(included_module_set)
 
 
 @dataclass(frozen=True)
@@ -378,14 +378,14 @@ def format_command(command: Sequence[str]) -> str:
 
 def default_time_source() -> datetime:
     """Return the current UTC wall-clock time."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def normalize_utc(timestamp: datetime) -> datetime:
     """Return ``timestamp`` as a timezone-aware UTC datetime."""
     if timestamp.tzinfo is None:
-        timestamp = timestamp.replace(tzinfo=timezone.utc)
-    return timestamp.astimezone(timezone.utc)
+        timestamp = timestamp.replace(tzinfo=UTC)
+    return timestamp.astimezone(UTC)
 
 
 def format_utc_timestamp(timestamp: datetime) -> str:
@@ -515,8 +515,7 @@ def execute_probe_command(
         list(command),
         cwd=repo_root,
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
         encoding="utf-8",
         errors="replace",
@@ -651,8 +650,7 @@ def git_status_lines(repo_root: Path) -> tuple[str, ...]:
             list(GIT_STATUS_COMMAND),
             cwd=repo_root,
             check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
         )
     except OSError as error:
@@ -680,8 +678,7 @@ def collect_present_regular_files(
             list(GIT_FILE_LIST_COMMAND),
             cwd=repo_root,
             check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
         )
     except OSError as error:
@@ -1191,8 +1188,10 @@ def pytest_gate_plan(
         return CheckPlan(
             commands=(),
             notes=(
-                f"Pytest gate skipped: pytest configuration pruned ({PYTEST_CONFIG_PATH} "
-                "is not retained by the current module state or is not present).",
+                (
+                    f"Pytest gate skipped: pytest configuration pruned ({PYTEST_CONFIG_PATH} "
+                    "is not retained by the current module state or is not present)."
+                ),
             ),
         )
 
@@ -1205,8 +1204,10 @@ def pytest_gate_plan(
         return CheckPlan(
             commands=(),
             notes=(
-                "Pytest gate skipped: pytest configuration retained, but no downstream "
-                "pytest candidate paths are retained.",
+                (
+                    "Pytest gate skipped: pytest configuration retained, but no downstream "
+                    "pytest candidate paths are retained."
+                ),
             ),
         )
 
@@ -1461,8 +1462,10 @@ def markdown_commands_and_notes(repo_root: Path) -> CheckPlan:
         return CheckPlan(
             commands=(),
             notes=(
-                "Markdown module appears retained, but no supported Markdown npm "
-                "scripts were found in package.json.",
+                (
+                    "Markdown module appears retained, but no supported Markdown npm "
+                    "scripts were found in package.json."
+                ),
             ),
         )
     return CheckPlan(commands=(), notes=())
@@ -1754,7 +1757,7 @@ def doctor_recommendations(results: Sequence[DoctorProbeResult]) -> tuple[str, .
     )
     if pre_commit_console is not None and pre_commit_console.command[0] == "pre-commit":
         recommendations.append(
-            "Use pre-commit validation prefix: " f"{format_command(PRE_COMMIT_EXECUTABLE_PREFIX)}"
+            f"Use pre-commit validation prefix: {format_command(PRE_COMMIT_EXECUTABLE_PREFIX)}"
         )
     else:
         pre_commit_module = first_available_result(
@@ -1804,7 +1807,7 @@ def doctor_recommendations(results: Sequence[DoctorProbeResult]) -> tuple[str, .
             )
         else:
             recommendations.append(
-                "Use yamllint invocation: " f"{format_command((*yamllint_module.command[:-1],))}"
+                f"Use yamllint invocation: {format_command((*yamllint_module.command[:-1],))}"
             )
 
     pssa_result = first_available_result(results, "PSScriptAnalyzer")

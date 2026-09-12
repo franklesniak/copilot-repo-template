@@ -6,16 +6,17 @@ import argparse
 import posixpath
 import re
 import sys
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, NoReturn
+from typing import NoReturn
 from urllib.parse import unquote, urlsplit
 
 import validate_instruction_contracts
 import validate_marker
 from template_sync_materialization_helpers import (
-    MARKDOWN_FENCE_CONTEXT,
     INLINE_BLOCK_ANY_MODULES,
+    MARKDOWN_FENCE_CONTEXT,
     InlineBlockError,
     ManifestMapping,
     PathRelation,
@@ -270,16 +271,14 @@ def marker_report_failures(report: validate_marker.MarkerValidationReport) -> tu
     """Return human-readable failures from marker-aware validation."""
     failures: list[str] = []
     for relative_path in report.unsafe_managed_paths:
-        failures.append(
-            "Template-managed path is a symlink or resolves unsafely: " f"{relative_path}"
-        )
+        failures.append(f"Template-managed path is a symlink or resolves unsafely: {relative_path}")
     for relative_path, relation in report.leftover_files:
         failures.append(
-            "Excluded-module leftover is present: " f"{relative_path} ({relation.description})"
+            f"Excluded-module leftover is present: {relative_path} ({relation.description})"
         )
     for relative_path, relation in report.missing_expected_files:
         failures.append(
-            "Retained concrete mapped file is missing: " f"{relative_path} ({relation.description})"
+            f"Retained concrete mapped file is missing: {relative_path} ({relation.description})"
         )
     return tuple(failures)
 

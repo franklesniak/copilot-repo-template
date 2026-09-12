@@ -12,6 +12,7 @@ import validate_marker
 from template_sync_materialization_helpers import (
     MARKDOWN_FENCE_CONTEXT,
     lines_outside_markdown_fences,
+    normalize_repository_path,
 )
 
 DEFAULT_CONTRACTS_PATH = ".template-sync/instruction-contracts.yml"
@@ -305,7 +306,7 @@ def parse_contracts(
         raw_path = raw_contract.get("path")
         if not isinstance(raw_path, str):
             raise InstructionContractValidationError("Each instruction contract must define path.")
-        path, is_directory = validate_marker.normalize_repository_path(
+        path, is_directory = normalize_repository_path(
             raw_path,
             "instruction_contracts[].path",
         )
@@ -372,7 +373,7 @@ def parse_protected_guide_section_obligations(
             raise InstructionContractValidationError(
                 "Each protected guide section obligation must define key and path."
             )
-        path, is_directory = validate_marker.normalize_repository_path(
+        path, is_directory = normalize_repository_path(
             raw_path,
             "protected_guide_section_obligations[].path",
         )
@@ -457,7 +458,7 @@ def parse_protected_guide_reference_obligations(
                 "Each protected guide reference obligation must define key, path, "
                 "and reference_kind."
             )
-        path, is_directory = validate_marker.normalize_repository_path(
+        path, is_directory = normalize_repository_path(
             raw_path,
             "protected_guide_reference_obligations[].path",
         )
@@ -490,7 +491,7 @@ def parse_protected_guide_reference_obligations(
                     f"{path} protected guide reference obligation {key} target_path "
                     "must be a string."
                 )
-            target_path, target_is_directory = validate_marker.normalize_repository_path(
+            target_path, target_is_directory = normalize_repository_path(
                 raw_target_path,
                 "protected_guide_reference_obligations[].target_path",
             )
@@ -580,7 +581,7 @@ def parse_instruction_contract_waivers(
                 "Each instruction contract waiver must define string path, anchor, "
                 "reason, and authorization_basis."
             )
-        path, is_directory = validate_marker.normalize_repository_path(
+        path, is_directory = normalize_repository_path(
             raw_path,
             "template_sync.instruction_contract_waivers[].path",
         )
@@ -1039,9 +1040,11 @@ def main(argv: list[str] | None = None) -> int:
                     )
                     return 0
                 warnings = (
-                    "--mode upstream-template was invoked while "
-                    f"{marker_relative_path} is present; use --mode downstream for "
-                    "marker-gated downstream validation.",
+                    (
+                        "--mode upstream-template was invoked while "
+                        f"{marker_relative_path} is present; use --mode downstream for "
+                        "marker-gated downstream validation."
+                    ),
                 )
             report = validate_contracts(
                 mode=args.mode,

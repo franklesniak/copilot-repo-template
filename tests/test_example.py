@@ -41,19 +41,22 @@ class TestAddNumbers:
     """Tests for the add_numbers function."""
 
     def test_add_integers(self) -> None:
-        """Test adding two integers."""
+        """Test adding two integers returns an integer."""
         result = add_numbers(2, 3)
         assert result == 5
+        assert isinstance(result, int)
 
     def test_add_floats(self) -> None:
-        """Test adding two floats."""
+        """Test adding two floats returns a float."""
         result = add_numbers(2.5, 3.5)
         assert result == 6.0
+        assert isinstance(result, float)
 
     def test_add_mixed_types(self) -> None:
-        """Test adding an integer and a float."""
+        """Test adding an integer and a float returns a float."""
         result = add_numbers(2, 3.5)
         assert result == 5.5
+        assert isinstance(result, float)
 
     def test_add_negative_numbers(self) -> None:
         """Test adding negative numbers."""

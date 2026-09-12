@@ -839,10 +839,12 @@ def test_embedded_fence_context_recognizes_list_contained_fences() -> None:
             UnclosedInlineBlockError,
         ),
         (
-            "# template-sync: begin python-only\n"
-            "# template-sync: begin terraform-only\n"
-            "# template-sync: end terraform-only\n"
-            "# template-sync: end python-only\n",
+            (
+                "# template-sync: begin python-only\n"
+                "# template-sync: begin terraform-only\n"
+                "# template-sync: end terraform-only\n"
+                "# template-sync: end python-only\n"
+            ),
             NestedInlineBlockError,
         ),
         (

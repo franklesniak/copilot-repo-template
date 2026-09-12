@@ -11,9 +11,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Collection, Iterable, Mapping, Sequence, cast
+from typing import Any, cast
 
 import yaml  # type: ignore[import-untyped]
 
@@ -37,9 +38,9 @@ from template_sync_materialization_helpers import (  # noqa: E402
     classify_repository_file,
     ensure_regular_repository_file_target,
     format_marker_yaml,
+    inline_block_families_to_prune,
     is_protected_instruction_path,
     is_string_list,
-    inline_block_families_to_prune,
     iter_safe_repository_files,
     load_json_mapping,
     load_yaml_mapping,
@@ -1117,8 +1118,7 @@ def run_git(
         return subprocess.run(
             command,
             check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=text,
             env=env,
         )
@@ -2562,8 +2562,7 @@ def run_placeholder_helper(
                 command,
                 cwd=template_root,
                 check=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                capture_output=True,
                 text=True,
             )
         except OSError as error:
@@ -2652,7 +2651,12 @@ def most_specific_local_override(
     matches = [override for override in local_overrides if override.matches(relative_path)]
     if not matches:
         return None
-    return sorted(matches, key=lambda override: (len(override.path), not override.is_directory))[-1]
+    # Scan from the end so the last-listed override wins when specificity keys
+    # tie, preserving the behavior of the earlier ``sorted(...)[-1]`` selection.
+    return max(
+        reversed(matches),
+        key=lambda override: (len(override.path), not override.is_directory),
+    )
 
 
 def protected_decision_for_path(
@@ -3137,7 +3141,10 @@ def materialize(args: argparse.Namespace) -> Summary:
             summary=summary,
             computed_marker_text=computed_marker_text,
         )
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001
+        # Catch every failure so the temporary source checkout below is always
+        # cleaned up before the original error is re-raised, with any cleanup
+        # failure attached to it.
         primary_error = error
 
     cleanup_failure = (

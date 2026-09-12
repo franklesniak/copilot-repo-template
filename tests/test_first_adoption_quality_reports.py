@@ -458,7 +458,7 @@ def test_markdownlint_fixer_reports_changed_files(
 
 def test_decode_git_nul_paths_preserves_crlf_inside_record() -> None:
     """Raw Git path decoding preserves valid CR/LF bytes inside path records."""
-    output = "src/line\r\nbreak.ps1\0".encode("utf-8")
+    output = b"src/line\r\nbreak.ps1\0"
 
     paths = quality_reports.decode_git_nul_paths(output)
 
@@ -1063,21 +1063,19 @@ def test_gate_mode_static_value_reports_yaml_boolean_scalars_as_manual_review() 
 def test_github_actions_gate_mode_detection_covers_env_specificity() -> None:
     """Workflow, job, and step env values are detected with specificity labels."""
     document = quality_reports.yaml.safe_load(
-        (
-            "env:\n"
-            "  PSSCRIPTANALYZER_GATE_MODE: strict\n"
-            "jobs:\n"
-            "  powershell-lint:\n"
-            "    env:\n"
-            "      PSSCRIPTANALYZER_GATE_MODE: first-adoption\n"
-            "    steps:\n"
-            "      - name: Run PSScriptAnalyzer\n"
-            "        env:\n"
-            "          PSSCRIPTANALYZER_GATE_MODE: on\n"
-            "        run: |\n"
-            "          Resolve-PSScriptAnalyzerGate `\n"
-            "            -Mode $env:PSSCRIPTANALYZER_GATE_MODE\n"
-        )
+        "env:\n"
+        "  PSSCRIPTANALYZER_GATE_MODE: strict\n"
+        "jobs:\n"
+        "  powershell-lint:\n"
+        "    env:\n"
+        "      PSSCRIPTANALYZER_GATE_MODE: first-adoption\n"
+        "    steps:\n"
+        "      - name: Run PSScriptAnalyzer\n"
+        "        env:\n"
+        "          PSSCRIPTANALYZER_GATE_MODE: on\n"
+        "        run: |\n"
+        "          Resolve-PSScriptAnalyzerGate `\n"
+        "            -Mode $env:PSSCRIPTANALYZER_GATE_MODE\n"
     )
 
     settings, notes, retained = quality_reports.github_actions_gate_mode_settings(
@@ -1098,12 +1096,10 @@ def test_github_actions_gate_mode_detection_covers_env_specificity() -> None:
 def test_github_actions_gate_mode_settings_preserves_notes_when_jobs_missing() -> None:
     """A workflow-level env note survives the missing/non-mapping ``jobs`` early return."""
     document = quality_reports.yaml.safe_load(
-        (
-            "env: malformed-workflow-env\n"
-            "jobs: |\n"
-            "  Resolve-PSScriptAnalyzerGate `\n"
-            "    -Mode $env:PSSCRIPTANALYZER_GATE_MODE\n"
-        )
+        "env: malformed-workflow-env\n"
+        "jobs: |\n"
+        "  Resolve-PSScriptAnalyzerGate `\n"
+        "    -Mode $env:PSSCRIPTANALYZER_GATE_MODE\n"
     )
 
     settings, notes, retained = quality_reports.github_actions_gate_mode_settings(
@@ -1114,8 +1110,10 @@ def test_github_actions_gate_mode_settings_preserves_notes_when_jobs_missing() -
     assert retained is True
     assert settings == ()
     assert notes == (
-        "GitHub Actions: .github/workflows/powershell-ci.yml `env` env is not a mapping; "
-        "manual review is required.",
+        (
+            "GitHub Actions: .github/workflows/powershell-ci.yml `env` env is not a mapping; "
+            "manual review is required."
+        ),
         "GitHub Actions: jobs is missing or not a mapping; manual review is required.",
     )
 
@@ -1123,22 +1121,20 @@ def test_github_actions_gate_mode_settings_preserves_notes_when_jobs_missing() -
 def test_azure_pipelines_gate_mode_detection_resolves_mapping_variables() -> None:
     """Azure mapping variables resolve the parameter expression to its default."""
     document = quality_reports.yaml.safe_load(
-        (
-            "parameters:\n"
-            "  - name: gateMode\n"
-            "    type: string\n"
-            '    default: "strict"\n'
-            "jobs:\n"
-            "  - job: lint\n"
-            "    variables:\n"
-            '      PSSCRIPTANALYZER_GATE_MODE: "${{ parameters.gateMode }}"\n'
-            "    steps:\n"
-            "      - task: PowerShell@2\n"
-            "        inputs:\n"
-            "          script: |\n"
-            "            Resolve-PSScriptAnalyzerGate `\n"
-            "              -Mode $env:PSSCRIPTANALYZER_GATE_MODE\n"
-        )
+        "parameters:\n"
+        "  - name: gateMode\n"
+        "    type: string\n"
+        '    default: "strict"\n'
+        "jobs:\n"
+        "  - job: lint\n"
+        "    variables:\n"
+        '      PSSCRIPTANALYZER_GATE_MODE: "${{ parameters.gateMode }}"\n'
+        "    steps:\n"
+        "      - task: PowerShell@2\n"
+        "        inputs:\n"
+        "          script: |\n"
+        "            Resolve-PSScriptAnalyzerGate `\n"
+        "              -Mode $env:PSSCRIPTANALYZER_GATE_MODE\n"
     )
 
     parameter, variables, notes, retained = quality_reports.azure_pipelines_gate_mode_settings(
@@ -1158,20 +1154,18 @@ def test_azure_pipelines_gate_mode_detection_resolves_mapping_variables() -> Non
 def test_azure_pipelines_gate_mode_detection_supports_sequence_variables() -> None:
     """Azure sequence variables are detected for the gate-mode variable."""
     document = quality_reports.yaml.safe_load(
-        (
-            "parameters:\n"
-            "  gateMode:\n"
-            '    default: "first-adoption"\n'
-            "jobs:\n"
-            "  lint:\n"
-            "    variables:\n"
-            "      - name: PSSCRIPTANALYZER_GATE_MODE\n"
-            '        value: "${{ parameters.gateMode }}"\n'
-            "    steps:\n"
-            "      - powershell: |\n"
-            "          Resolve-PSScriptAnalyzerGate `\n"
-            "            -Mode $env:PSSCRIPTANALYZER_GATE_MODE\n"
-        )
+        "parameters:\n"
+        "  gateMode:\n"
+        '    default: "first-adoption"\n'
+        "jobs:\n"
+        "  lint:\n"
+        "    variables:\n"
+        "      - name: PSSCRIPTANALYZER_GATE_MODE\n"
+        '        value: "${{ parameters.gateMode }}"\n'
+        "    steps:\n"
+        "      - powershell: |\n"
+        "          Resolve-PSScriptAnalyzerGate `\n"
+        "            -Mode $env:PSSCRIPTANALYZER_GATE_MODE\n"
     )
 
     parameter, variables, notes, retained = quality_reports.azure_pipelines_gate_mode_settings(
@@ -1190,9 +1184,7 @@ def test_azure_pipelines_gate_mode_detection_supports_sequence_variables() -> No
 
 def test_azure_parameter_default_flags_missing_default_in_sequence_form() -> None:
     """A sequence-form gateMode parameter without a default requires manual review."""
-    document = quality_reports.yaml.safe_load(
-        ("parameters:\n" "  - name: gateMode\n" "    type: string\n")
-    )
+    document = quality_reports.yaml.safe_load("parameters:\n  - name: gateMode\n    type: string\n")
 
     setting, notes = quality_reports.azure_parameter_default_setting(
         document,
@@ -1201,17 +1193,17 @@ def test_azure_parameter_default_flags_missing_default_in_sequence_form() -> Non
 
     assert setting is None
     assert notes == (
-        "Azure Pipelines: .azuredevops/pipelines/powershell-ci.yml "
-        "`parameters[gateMode].default` has no static default; the value must be supplied "
-        "when the pipeline runs, so manual review is required.",
+        (
+            "Azure Pipelines: .azuredevops/pipelines/powershell-ci.yml "
+            "`parameters[gateMode].default` has no static default; the value must be supplied "
+            "when the pipeline runs, so manual review is required."
+        ),
     )
 
 
 def test_azure_parameter_default_flags_missing_default_in_mapping_form() -> None:
     """A mapping-form gateMode parameter without a default requires manual review."""
-    document = quality_reports.yaml.safe_load(
-        ("parameters:\n" "  gateMode:\n" "    type: string\n")
-    )
+    document = quality_reports.yaml.safe_load("parameters:\n  gateMode:\n    type: string\n")
 
     setting, notes = quality_reports.azure_parameter_default_setting(
         document,
@@ -1220,9 +1212,11 @@ def test_azure_parameter_default_flags_missing_default_in_mapping_form() -> None
 
     assert setting is None
     assert notes == (
-        "Azure Pipelines: .azuredevops/pipelines/powershell-ci.yml "
-        "`parameters.gateMode.default` has no static default; the value must be supplied "
-        "when the pipeline runs, so manual review is required.",
+        (
+            "Azure Pipelines: .azuredevops/pipelines/powershell-ci.yml "
+            "`parameters.gateMode.default` has no static default; the value must be supplied "
+            "when the pipeline runs, so manual review is required."
+        ),
     )
 
 
@@ -1287,7 +1281,7 @@ def test_real_powershell_ci_surfaces_retain_gate_mode_and_force_visible_discover
         "-DirectoryVisibility All"
     ) in " ".join(github_text.split())
     assert (
-        "Get-PSScriptAnalyzerCandidate -RepositoryRoot $repositoryRoot " "-DirectoryVisibility All"
+        "Get-PSScriptAnalyzerCandidate -RepositoryRoot $repositoryRoot -DirectoryVisibility All"
     ) in " ".join(azure_text.split())
     assert "Resolve-PSScriptAnalyzerGate ` -Mode $env:PSSCRIPTANALYZER_GATE_MODE" in " ".join(
         github_text.split()
@@ -1396,8 +1390,10 @@ def test_load_ci_yaml_mapping_flags_broken_symlink(tmp_path: Path) -> None:
 
     assert document is None
     assert notes == (
-        "GitHub Actions: .github/workflows/example.yml is not a regular YAML file; "
-        "manual review is required.",
+        (
+            "GitHub Actions: .github/workflows/example.yml is not a regular YAML file; "
+            "manual review is required."
+        ),
     )
 
 
@@ -1416,8 +1412,10 @@ def test_load_ci_yaml_mapping_flags_non_utf8_file(tmp_path: Path) -> None:
 
     assert document is None
     assert notes == (
-        "GitHub Actions: .github/workflows/example.yml is not valid UTF-8; "
-        "manual review is required.",
+        (
+            "GitHub Actions: .github/workflows/example.yml is not valid UTF-8; "
+            "manual review is required."
+        ),
     )
 
 

@@ -72,8 +72,7 @@ def _run_git(repo_root: Path, *args: str) -> None:
         ["git", *args],
         cwd=repo_root,
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
@@ -99,8 +98,7 @@ def test_reporter_script_entrypoint_help_smoke() -> None:
     result = subprocess.run(
         [sys.executable, str(SCRIPT_PATH), "--help"],
         check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
     )
 
@@ -390,13 +388,13 @@ def test_marker_excluding_optional_modules_reports_cleanup_scope(tmp_path: Path)
 
     assert any(
         line.startswith(
-            "manifest-owned-path | required_cleanup | json | " "templates/json/example.json |"
+            "manifest-owned-path | required_cleanup | json | templates/json/example.json |"
         )
         for line in findings
     )
     assert any(
         line.startswith(
-            "inline-block.stale | required_cleanup | python | " ".pre-commit-config.yaml:6 |"
+            "inline-block.stale | required_cleanup | python | .pre-commit-config.yaml:6 |"
         )
         for line in findings
     )
@@ -587,7 +585,7 @@ def test_local_overrides_and_deferred_decisions_are_report_categories(
     )
     assert not any(
         line.startswith(
-            "manifest-owned-path | required_cleanup | json | " "templates/json/example.json |"
+            "manifest-owned-path | required_cleanup | json | templates/json/example.json |"
         )
         for line in findings
     )

@@ -36,10 +36,16 @@ def greet(name: str) -> str:
     return f"Hello, {name}!"
 
 
-def add_numbers(a: int | float, b: int | float) -> int | float:
+def add_numbers(a: float, b: float) -> int | float:
     """Add two numbers together.
 
-    This is another example function demonstrating type hints with union types.
+    This is another example function demonstrating numeric type hints. The
+    parameters are annotated as ``float`` because the typing specification's
+    numeric tower shortcut lets a ``float`` parameter accept ``int`` arguments,
+    so ``int | float`` is redundant there. The return annotation keeps
+    ``int | float`` because that shortcut applies only to arguments: the result
+    is an ``int`` when both arguments are ``int`` and a ``float`` otherwise,
+    and the union keeps that difference visible to callers and type checkers.
     Replace this with your actual project functionality.
 
     Args:
@@ -47,7 +53,8 @@ def add_numbers(a: int | float, b: int | float) -> int | float:
         b: The second number.
 
     Returns:
-        The sum of a and b.
+        The sum of a and b: an ``int`` when both arguments are ``int``,
+        otherwise a ``float``.
 
     Examples:
         >>> add_numbers(2, 3)
