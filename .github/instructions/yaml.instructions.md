@@ -7,13 +7,13 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.6.20260623.0
+**Version:** 1.7.20260916.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-23
+- **Last Updated:** 2026-09-16
 - **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, Azure Pipelines YAML, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by the companion JSON guide, if present) or generated YAML artifacts that are owned by another tool's serializer.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md) (companion guide, if present)
 
@@ -105,6 +105,53 @@ rules:
 ```
 
 This configuration preserves the idiomatic GitHub Actions `on:` key while still flagging YAML 1.1 truthy hazards in **values**. Authors **MAY** alternatively quote the key as `"on":` to satisfy a stricter `truthy.check-keys: true` configuration, but this form is **non-idiomatic** in the GitHub Actions ecosystem and **SHOULD NOT** be adopted unless a repository policy requires it.
+
+## GitHub Actions Push Ref and Path Scope
+
+GitHub does not evaluate `on.push.paths` or `on.push.paths-ignore` for tag
+pushes. A `push` workflow that uses a path filter **MUST** define its branch
+and tag intent explicitly. Do not assume that a path filter restricts tag
+events. See [GitHub's workflow syntax for path filters](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore).
+
+When a workflow defines only `branches` or `branches-ignore`, GitHub does not
+run it for tag pushes. If a workflow must run for tags, define `tags` or
+`tags-ignore` deliberately and design tag behavior as a separate event
+contract. A tag-enabled workflow **MUST NOT** rely on `paths` or `paths-ignore`
+to select tag events.
+
+## GitHub Actions Privileged-Workflow Trust Roots
+
+GitHub runs `pull_request_target` in the base repository's default-branch
+context. This context can have privileges that an ordinary pull-request
+workflow does not have. A `pull_request_target` workflow **MUST NOT** check out
+or execute untrusted pull-request code. See [GitHub's event reference](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request_target)
+and [secure-use guidance](https://docs.github.com/en/actions/reference/security/secure-use#mitigating-the-risks-of-untrusted-code-checkout).
+
+The executable trust root includes every checked-in file that can select or
+alter executable bytes in the privileged job. The inventory **MUST** include
+applicable workflow YAML and local actions; scripts, helpers, interpreters, and
+runtime selectors; manifests, lockfiles, and shrinkwrap files; package-manager
+configuration; and container, build, and generated-executable inputs. Path
+filters **MUST** cover every supported file in this inventory. A proposed
+change **MUST NOT** bypass validation because a changed selector is absent from
+`on.pull_request_target.paths`.
+
+A proposed trust-root change **MUST** be rejected through the authorized
+trusted-revision process or validated as inert data with trusted code. Inert
+validation **MUST** read the exact proposed Git object without replacing
+trusted workspace files and validate object type, byte limit, encoding, syntax,
+required semantic identity, and every error or indeterminate state. Do not
+interpolate untrusted values into generated shell source.
+
+Privileged fetches **MUST NOT** use a leading `+` refspec or `--force`. Resolve
+the fetched commit and compare it with the expected event commit before reading
+proposed objects. A privileged job **MUST NOT** install, import, source, or
+execute proposed dependency bytes. A trusted parser **MUST** preserve its exact
+identity and resolved runtime dependency closure, or reject the proposal as a
+trust-root change. Mutation tests **SHOULD** cover dependency deletion,
+manifest/lock drift, integrity and transitive-closure drift, malformed or
+oversized input, non-blob objects, lockfile precedence, and configuration
+additions.
 
 ## GitHub Actions Setup Version Pins
 
