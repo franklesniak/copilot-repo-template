@@ -143,10 +143,12 @@ file evaluation window.
 A proposed trust-root change **MUST** be rejected through the authorized
 trusted-revision process or validated as inert data with trusted code. Inert
 validation **MUST** read the exact proposed Git object without replacing
-trusted workspace files and validate object type, tree entry mode, byte limit,
-encoding, syntax, required semantic identity, and every error or indeterminate
-state. Each trust-root path **MUST** have an explicit allowlist of expected
-regular-file modes. Reject symlinks, gitlinks, and an unexpected executable-bit
+trusted workspace files and validate object type, Git tree entry mode, byte
+limit, encoding, syntax, required semantic identity, and every error or
+indeterminate state. Each trust-root path **MUST** have an explicit allowlist
+of expected Git regular-file modes, such as `100644` or `100755`, and the
+check **MUST** use Git object metadata rather than filesystem permission bits.
+Reject `120000` symlinks, `160000` gitlinks, and an unexpected executable-bit
 change before parsing. Do not interpolate untrusted values into generated
 shell source.
 

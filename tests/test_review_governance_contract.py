@@ -53,7 +53,9 @@ REQUIREMENTS = {
         "inert data",
         "MUST NOT",
         "unconditional or required companion gate",
-        "tree entry mode",
+        "Git tree entry mode",
+        "100644",
+        "100755",
         "symlinks",
         "gitlinks",
         "unexpected executable-bit",
@@ -109,6 +111,11 @@ def test_missing_semantic_marker_fails(
             ".github/instructions/yaml.instructions.md",
             "unconditional or required companion gate",
             "optional companion gate",
+        ),
+        (
+            ".github/instructions/yaml.instructions.md",
+            "Git tree entry mode",
+            "filesystem mode",
         ),
     ],
 )
