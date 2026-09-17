@@ -1,14 +1,40 @@
 instruction_contracts:
+  - path: AGENTS.md
+    requires_modules:
+      - agent-instructions
+    required_headings:
+      - '## Codex Execution Model and Interfaces'
+      - '## PR Review Workflow (Codex-adapted)'
+      - '## CI Failure Processing'
+      - '## Deferring Work'
+      - '## GitHub Copilot pull-request reviews'
+      - '## Automated Review Loop (User-Initiated)'
+    required_phrases:
+      - 'reviewThreads'
+      - 'review:<review-id>:<section-label>:<ordinal>'
+      - 'Balanced'
+      - '@codex review'
+      - 'Failed cycles do not consume'
   - path: CLAUDE.md
     requires_modules:
       - agent-instructions
     required_headings:
+      - '## Execution Continuity'
+      - '## Structured Decision Framework'
       - '## Handling Code Review Comments'
+      - '## CI Failure Processing'
+      - '## Deferring Work'
+      - '## GitHub Copilot pull-request reviews'
       - '## Automated Review Loop'
       - '### Safety limits'
       - '### Resuming a paused loop'
     required_phrases:
       - 'Protected-file authorization checkpoint'
+      - 'reviewThreads'
+      - 'review:<review-id>:<section-label>:<ordinal>'
+      - 'Balanced'
+      - '@codex review'
+      - 'Failed cycles do not consume'
 protected_guide_section_obligations:
   - key: agents-azure-devops-pr-review-protocol
     path: AGENTS.md

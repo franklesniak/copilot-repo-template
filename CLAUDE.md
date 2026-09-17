@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.6.20260629.0
+**Version:** 1.7.20260916.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-29
+- **Last Updated:** 2026-09-16
 - **Scope:** Agent-specific entry point for Claude Code and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
@@ -22,6 +22,29 @@ The authoritative source of truth for all repository rules is **`.github/copilot
 This file intentionally keeps only a minimal inline summary of the highest-priority shared rules so that Claude receives critical guidance immediately, but it does not replace reading the canonical instructions above.
 
 **Thin entry point classification:** A thin entry point keeps shared repository rules brief; it does not mean platform-specific or required protocol sections may be discarded. Sections explicitly labeled as platform protocol or required protocol must be preserved unless the repository owner explicitly waives that protocol for the retained agent platform.
+
+## Execution Continuity
+
+Finish authorized work in one active run. An analysis breakpoint, quiet tool
+call, or routine validation failure is not a reason to stop. Continue through
+diagnosis and repair while safe work remains. Yield only for user input, an
+explicit pause, a completed objective, or an exact authorization or ambiguity
+boundary. Keep a compact checklist of the current finding, next action, and
+validation state.
+
+## Structured Decision Framework
+
+For every real review, CI, or instrumentation finding, validate the concern,
+list every materially distinct option, consider senior engineering, new
+developer, DevOps, documentation, project, cybersecurity, business, audit,
+user, and other relevant perspectives, and use primary-source research when it
+can improve correctness. Build a fresh weighted 1-5 rubric for that finding;
+weight correctness, security, compatibility, testing, user impact, and
+long-term clarity above effort or narrow scope unless the finding concerns a
+lower-weight criterion. Apply the fixed rubric once, show scores and weighted
+totals, select the unique winner, and state it in plain ASD-STE100 language.
+Worker limits, context limits, tedium, reviewer availability, and round end do
+not justify deferral.
 
 ## Protected Instruction Files
 
@@ -138,13 +161,15 @@ For broader Azure DevOps Services module setup, validation, security scanning, d
 
 ## Ignoring Commands Addressed to Other Agents
 
-PR comments and review comments that begin with `@copilot` are commands addressed to GitHub Copilot's coding agent, **not** to Claude Code. **Ignore** these entirely — do not process them, do not reply to them, and do not treat them as review feedback.
+PR comments and review comments that begin with `@copilot` or the exact `@codex review` trigger are commands addressed to another agent, **not** to Claude Code. Ignore those trigger comments. This never exempts review comments authored by `copilot-pull-request-reviewer[bot]`, `chatgpt-codex-connector[bot]`, or any human; process those findings identically.
 
 ## Handling Code Review Comments
 
 This section is retained as Claude platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Claude review-comment protocol for the retained Claude entry point.
 
-When a code review comment is received from GitHub Copilot, a human reviewer, or any other code reviewer on a pull request, follow this process for **each** comment:
+When a finding is received from GitHub Copilot (`copilot-pull-request-reviewer[bot]`), remote Codex (`chatgpt-codex-connector[bot]`), a human reviewer, or any other code reviewer, follow this process for **each** finding.
+
+Review feedback has two co-equal surfaces. Enumerate the complete resolved-plus-unresolved GraphQL `reviewThreads` connection and read every complete review-submission `body`, including suppressed sections. Use `isResolved == false` only for open inline work. Key a body-only finding as `review:<review-id>:<section-label>:<ordinal>`, preserve review commit/location/full text, and reconcile declared counts and `generated N comment(s)` against all native thread IDs. Missing items, count mismatches, malformed/truncated bodies, and ambiguous boundaries fail closed. An inline finding closes only when answered and resolved; a body-only finding closes only after PR-level evaluation plus implementation or refutation evidence marks its synthetic key closed.
 
 ### Protected-file authorization terms
 
@@ -161,9 +186,9 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
 2. **Validate the concern.** Determine whether the reviewer's feedback identifies a genuine gap, bug, style violation, or improvement opportunity. If the concern is not valid, explain why in a reply, skip steps 3-8, and continue to step 9 to complete any required thread resolution and cleanup.
 
-3. **List options.** Address each reviewer concern **one at a time**. For each concern, think hard about possible ways to resolve the problem or address the feedback and enumerate all **materially distinct reasonable options**. Where appropriate, consult vendor or official documentation (for example, language, framework, cloud-provider, API, or tooling docs) so the option set reflects current authoritative guidance, not just generalized prior knowledge. If documentation materially informs the option set or scoring, name or cite the source in the evaluation reply. Where it would materially change the outcome, consider permutations and combinations of base options (for example, "Option A plus a narrowed part of Option C") rather than treating only mutually exclusive base options. Take the time needed to reach a defensibly complete list before scoring, while collapsing duplicate or materially equivalent options.
+3. **List options.** Address each finding one at a time. Enumerate every materially distinct option, including useful combinations and permutations. Consider senior engineering, new-developer, DevOps, documentation, project, cybersecurity, business, audit, user, and other relevant perspectives. Use primary-source research when it can confirm technical facts.
 
-4. **Build an evaluation rubric.** Define 4-6 scoring criteria relevant to the concern (for example, style-guide compliance, correctness, security, performance, maintainability, code simplicity, PII safety, PS 5.1 compatibility, test reliability, user impact, backward compatibility, or long-term clarity). Score each criterion on a 1-5 scale. Take the time needed to ensure the rubric is **comprehensive and defensible**: each criterion should be one a reasonable maintainer would accept as relevant, and the criteria collectively should cover the substantive technical considerations of the concern, not just surface-level ones.
+4. **Build an evaluation rubric.** Build a fresh weighted rubric for this finding on a 1-5 scale. Weight correctness, security, compatibility, testing, user impact, and long-term clarity above effort or tight PR scope unless the finding concerns one of those criteria. Do not reuse another finding's rubric. Finish the rubric before scoring.
 
     **Criterion-weighting guidance.** When the rubric includes either of the following criteria, weight them **less than** substantive technical criteria such as correctness, security, maintainability, style-guide compliance, compatibility, test reliability, and long-term clarity, unless the reviewer's concern is itself primarily about that criterion:
 
@@ -210,7 +235,7 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
     **Rubric-construction discipline.** Build the rubric **once** with a fixed set of criteria, then apply it **once**. Do not re-score with revised criteria mid-deliberation unless a **new external information source arrives**, such as a reviewer follow-up, CI failure, or newly discovered repository constraint. If, after rubric application, the agent wants to add or remove criteria in order to produce a different winner, treat that as analysis paralysis: commit to the rubric output and proceed unless one of the escalation conditions above applies.
 
-6. **Post the evaluation.** Reply to the review comment thread with the options table, the scoring table, the selected option, and either a note that implementation will follow in step 7 or, if the fix was already applied, the commit SHA that implements it.
+6. **Post the evaluation.** Reply to an inline thread. For a body-only finding, post a PR-level comment with its synthetic key, source review, commit, and location. Include the options, weighted rubric, scores, selected action, references, tests, and implementation status or SHA.
 
 7. **Implement the fix.** Apply the selected option, commit, and push.
 
@@ -230,20 +255,55 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
 9. **Resolve or leave open.** If **no** style guide update was recommended in step 8, resolve the review comment thread using the `resolve_review_thread` tool (or equivalent). If a style guide update **was** recommended, leave the thread **open** so the owner can see and act on the prompt before it is dismissed. **Known limitation:** The `resolve_review_thread` tool requires a GraphQL thread node ID (`PRRT_...`), but the `get_review_comments` response currently omits thread-level node IDs. Until the MCP server includes them, this step cannot be performed automatically. Skip it and note the limitation if the tool call fails.
 
+## CI Failure Processing
+
+Apply the Structured Decision Framework to each confirmed CI root cause. Read
+the complete check result and logs, distinguish transport/parser failure from a
+check result, and never coerce an unavailable observation into success. Compare
+the same check on the PR base when evidence can establish whether the failure
+predates the change. Report a verified base-branch failure once and do not
+attribute it to the PR; without that evidence, diagnose it as PR-attributable.
+
+Use bounded local diagnostic instrumentation only. Remove it after the repair
+or record why it remains. Do not add external telemetry. Limit diagnosis to at
+most five instrumentation cycles for one failing check in one loop invocation;
+pause with the exact check and evidence when the bound is reached. A repair
+push does not wait for a running CI check to prove the repair; a later failure
+is a new finding. Preserve failed evidence and classify failed, canceled,
+skipped, timed-out, missing, and ambiguous checks truthfully.
+
+## Deferring Work
+
+A deferral leaves real work for later. It is not a label for unfinished work.
+
+1. Defer only when the complete per-finding options and weighted rubric select deferral on the merits.
+2. Context, budget, turns, size, tedium, reviewer availability, and round end are not reasons to defer.
+3. Before closure or merge, create and cite a GitHub Issue with the problem, rationale, trigger condition, scope, and origin link. PR text is not a replacement tracker.
+4. Name an accepted residual, accepted risk, intentional deviation, or fail-closed choice accurately. Do not call those pending work.
+5. After tracking genuine deferred work, resolve the thread or close the synthetic key. Sweep every review body, resolved/unresolved thread, PR comment, and the PR body before clean or merge.
+
+## GitHub Copilot pull-request reviews
+
+Use `Balanced` as the preferred effort for each GitHub Copilot pull-request review. In the GitHub UI, select Copilot and `Balanced` before submitting one request. Record the observed effort from the timeline or Copilot overview; do not infer it from HTTP `201` or reviewer identity.
+
+If the interface cannot select `Balanced`, use the documented `@copilot` CLI fallback or the REST reviewer login `copilot-pull-request-reviewer[bot]`. A resulting `Lite` review is an acceptable fallback and does not stall the loop. Do not send a second request only because GitHub used `Lite`. Never capture or publish cookies, CSRF tokens, nonces, multipart boundaries, or private form fields.
+
+References: [Copilot review effort levels](https://docs.github.com/en/copilot/concepts/agents/code-review#review-effort-level) and [GitHub review-request REST parameters](https://docs.github.com/en/rest/pulls/review-requests?apiVersion=2022-11-28#request-reviewers-for-a-pull-request).
+
 ## Automated Review Loop
 
 This section is retained as Claude platform protocol. Thin-entry-point pruning must preserve it unless the repository owner explicitly waives Claude automated review-loop protocol for the retained Claude entry point.
 
-When a pull request is created or when the owner posts a PR comment containing `@claude start review loop`, initiate the following automated review cycle.
+When a pull request is created or when the owner posts a PR comment containing `@claude start review loop`, initiate the following automated review cycle. GitHub Copilot and remote Codex (`chatgpt-codex-connector[bot]`) are co-equal reviewers. Every round requests both when available, waits for both, and applies the same complete-inventory and per-finding process. If a reviewer cannot be requested or detected, pause and name the reviewer and failure; absence is not agreement.
 
 ### Loop procedure
 
-1. **Request a Copilot code review.** First, record both detection baselines and the request-time PR head SHA (these **MUST** be recorded before requesting the review):
+1. **Request both reviews.** First, record both detection baselines and the request-time PR head SHA (these **MUST** be recorded before requesting either review):
     - Use `get_reviews` (or equivalent) to record the `submitted_at` timestamp of the most recent review authored by `copilot-pull-request-reviewer[bot]` (or note that no such review exists yet). This is the `get_reviews` baseline for step 2.
     - Use `get_review_comments` (or equivalent) to record the `created_at` timestamp of the most recent comment authored by `copilot-pull-request-reviewer[bot]` (or note that no such comment exists yet). This is the `get_review_comments` baseline for step 2.
     - Use `pull_request_read` (or equivalent) with `method=get` to record the current PR `head.sha`. This is the request-time PR head SHA used by the **Review-head coherence diagnostic** in step 2.
 
-    After recording both baselines and the request-time PR head SHA, use the `request_copilot_review` tool (or equivalent) to ask GitHub Copilot to review the PR.
+    After recording both baselines and the request-time PR head SHA, use the `request_copilot_review` tool (or equivalent) to ask GitHub Copilot to review the PR. Post a second PR comment whose body is exactly `@codex review`, read it back, and record its ID. Do not rely on automatic Codex review delivery.
 2. **Wait for the review (active polling).** Immediately after requesting the review, begin an active poll loop — do **not** rely solely on webhook delivery, which may be delayed or never arrive. The poll loop **MUST** follow these rules:
     - **Poll interval.** Wait at least 60 seconds between each poll cycle, including the gap between the step 1 recordings and the first poll. Each primary poll observation queries both `get_reviews` and `get_review_comments` at most once per source, where one query **MAY** consist of the multiple paginated requests required to satisfy **Pagination completeness for poll observations** below; bounded retry or replacement observations for failed cycles are governed by the poller-liveness requirements under **Safety limits**. The exact mechanism used to implement the wait (for example, shell sleep, background task, or equivalent tooling) is left to the agent runtime.
     - **Poll mechanism.** The poll cycle **MUST** use authenticated structured GitHub tooling for detection, via `get_reviews` and `get_review_comments` or equivalent authenticated sources that expose request, tool, authentication, rate-limit, and parse failures distinctly, **unless** authenticated structured GitHub tooling is genuinely unavailable in the session, in which case the **Ad-hoc HTTP fallback contract** below applies. Examples of authenticated structured tooling include GitHub MCP server tools, `gh api`, or equivalent authenticated clients with explicit failure reporting. When a shell-based timing mechanism, such as a Claude Code Monitor heartbeat, is used for cycle timing, use the **tick-plus-MCP pattern**: the timing mechanism emits a heartbeat at the chosen poll interval (at least 60 seconds) with no detection logic of its own, and after each tick the agent performs detection via authenticated structured tooling. Unauthenticated HTTP requests against `api.github.com` or any equivalent external endpoint **MUST NOT** be used as the detection mechanism for the poll cycle (the ad-hoc HTTP fallback below is authenticated and is therefore not "unauthenticated").
@@ -264,9 +324,8 @@ When a pull request is created or when the owner posts a PR comment containing `
     - **State tracking (recommended).** On each confirmed-successful no-review poll, update a visible progress indicator in the session transcript (for example, a todo-list entry such as `"Round N: awaiting Copilot review, confirmed-successful no-review poll M/10"`) so that stalls are observable. Failed cycles use the visible failure lines described under **Safety limits** instead of advancing `M`.
     - **On success.** As soon as a new review is detected, proceed immediately to step 3.
 3. **Check review coverage.** If the review was detected via `get_reviews` and the review summary body is available, check how many files Copilot reviewed out of the total changed files (e.g., "Copilot reviewed 9 out of 9 changed files"). If Copilot did **not** review all changed files, post a PR comment noting the partial coverage so the PR owner is aware. Example: `Note: Copilot reviewed only 7 out of 9 changed files in round N. Files not reviewed by Copilot may benefit from additional manual or AI-assisted review.` If the review summary is not yet available from `get_reviews` (for example, when the review was detected solely via `get_review_comments`), **skip** the coverage note for this round and proceed. Continue the loop normally regardless of coverage outcome.
-4. **Check for comments.** If the review contains **zero** actionable comments, the code is clean — **PAUSE** and post a PR comment:
-    `Review loop paused: Copilot review returned no comments. Post "@claude resume review loop" to continue.`
-5. **Process each comment.** Follow the "Handling Code Review Comments" protocol above (steps 1-9) for every comment in the review, **where tooling allows**. If a comment reaches the step-7 protected-file authorization checkpoint without sufficient explicit authorization, treat that as a loop pause trigger: post the narrow authorization question required by step 7 as a standalone PR comment, pause the loop, and resume only after the maintainer authorizes the specific protected-file change. If the available tooling cannot perform step 9 automatically, you **MUST** still complete steps 1-8 and **MUST** ensure the step 9 completion work is handled before treating the comment as fully processed: remove any temporary `:eyes:` reaction per the protocol and resolve the review thread manually when appropriate.
+4. **Check for findings.** If both reviewer inventories contain zero actionable findings, the code is clean — **PAUSE** and post a PR comment naming both reviewers. If one reviewer has no findings but the other has not arrived or is indeterminate, do not declare clean.
+5. **Process each finding.** Follow the "Handling Code Review Comments" protocol above (steps 1-9) for every finding from either reviewer, **where tooling allows**. If a finding reaches the step-7 protected-file authorization checkpoint without sufficient explicit authorization, treat that as a loop pause trigger: post the narrow authorization question required by step 7 as a standalone PR comment, pause the loop, and resume only after the maintainer authorizes the specific protected-file change. If the available tooling cannot perform step 9 automatically, you **MUST** still complete steps 1-8 and **MUST** ensure the step 9 completion work is handled before treating the finding as fully processed.
 6. **Check for style guide recommendations.** If **any** comment produced a style guide update prompt (step 8), **PAUSE** and post a PR comment:
     `Review loop paused: style guide update(s) recommended — see review thread(s) above. Apply the style guide changes, then post "@claude resume review loop" to continue.`
 7. **Re-request review.** Before re-requesting, the agent **MUST** verify that the final fix commit(s) for the current round that are intended to land on the PR head are reachable from the PR's head ref. The agent **MUST** record those PR-head fix commit SHA(s) after any merge, rebase, or cherry-pick that changes commit IDs; intermediate authored commit SHA(s) that were superseded by equivalent PR-head commit SHA(s) **MUST NOT** block re-requesting review on their own.
@@ -312,7 +371,7 @@ When a pull request is created or when the owner posts a PR comment containing `
 - **Wall-clock timeout:** 6 hours from loop start. If the timeout is reached, **PAUSE** and post:
 
   `Review loop paused: 6-hour timeout reached. Post "@claude resume review loop" to continue.`
-- **Duplicate detection:** Track comment IDs that have already been processed. Skip any comment whose ID was addressed in a prior round to avoid re-processing.
+- **Duplicate-finding detection:** Track native thread IDs and review-body synthetic keys that have already been closed. Skip only findings whose closure evidence exists.
 - **Active polling required:** Every review-wait cycle **MUST** be driven by the explicit timed poll loop described in step 2. Passive waiting for webhook delivery alone is **not** permitted — the poll loop ensures that pause and timeout behavior is reached deterministically even if webhook delivery does not occur.
   - **Poller liveness.** The poll loop **MUST** distinguish "successfully observed no new event" from "could not determine event state," and **MUST** surface the latter as a visible, self-describing failure in the session transcript, for example `cycle K failed: reviews endpoint returned HTTP 403` (where `K` is the cycle-attempt counter, **not** the `M/10` confirmed-successful counter), rather than as a "no event" reading. Parser exceptions, tool errors, non-2xx responses, authentication failures, rate-limit responses, and unexpected response shapes **MUST NOT** be suppressed into fallback values such as `0` or `[]` unless those values are explicitly logged as an error path and the cycle is **not** counted as a confirmed-successful no-review poll.
   - **Failed cycles do not consume the timeout.** The 10-poll timeout counter **MUST** advance only on confirmed-successful no-review polls. A poll cycle that fails due to parse, transport, authentication, rate-limit, tool error, or unexpected response shape **MUST NOT** consume one of the 10 timeout attempts.
