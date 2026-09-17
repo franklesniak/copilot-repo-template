@@ -294,6 +294,18 @@ poll and does not advance the timeout counter. The loop MUST wait for terminal
 results from both Copilot and remote Codex before it declares clean, even when
 one reviewer arrives first or reports no findings.
 
+After Copilot arrives, maintain a missing-Codex counter independently from the
+combined no-review counter. A confirmed-successful missing-Codex poll requires
+complete, parsed, pagination-complete Codex sources with no terminal Codex
+result. After **10 confirmed-successful missing-Codex polls** (at least 10
+minutes), **PAUSE** with `Review loop paused: remote Codex review did not
+arrive after 10 confirmed-successful missing-Codex polls.` Failed or
+indeterminate Codex observations do not advance this counter. If Codex returns
+a terminal `failed`, `canceled`, `skipped`, `expired`, or `timed-out` result,
+**PAUSE** with a visible message such as `Review loop paused: remote Codex returned terminal status <status> for head <sha>.` Do not treat an
+unsuccessful terminal result as missing, clean, or an automatic retry; require
+owner resumption with a new baseline.
+
 1. Record each bot's newest review, inline-comment, and PR-comment IDs/times and the request-time head before requesting either reviewer.
 2. Request Copilot through the plugin or documented fallback, post exact `@codex review`, and read both request events back.
 3. Poll authenticated review bodies, complete `reviewThreads`, and PR comments at intervals of at least 60 seconds. A confirmed-successful no-review poll requires both co-equal sources to be queried, parsed, and pagination-complete. A transport, authentication, parser, rate-limit, tool, or shape failure is a visible failed cycle, not a no-event result.
