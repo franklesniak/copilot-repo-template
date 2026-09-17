@@ -3274,7 +3274,7 @@ def test_partial_reference_stripping_preserves_retained_instruction_contracts() 
 
         scoped_contracts = INSTRUCTION_CONTRACTS.parse_required_sections(contract_mapping)
         assert not INSTRUCTION_CONTRACTS.section_failures(
-            stripped_text, scoped_contracts
+            stripped_text, scoped_contracts, ISSUE_694_PARTIAL_PROTECTED_DOC_MODULES
         ), f"{relative_path}: scoped policy lost during partial reference stripping"
 
         for heading in _as_string_list(

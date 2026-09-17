@@ -7,7 +7,7 @@ import hashlib
 import json
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, NoReturn, cast
 
@@ -56,6 +56,7 @@ class RequiredSection:
     required_paragraphs: tuple[str, ...]
     required_tables: tuple[RequiredTable, ...]
     next_heading: str | None = None
+    requires_modules: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -333,6 +334,13 @@ def parse_required_sections(raw_contract: dict[str, object]) -> tuple[RequiredSe
         next_heading = cast(str | None, raw["next_heading"])
         if next_heading == heading:
             raise InstructionContractValidationError(f"Self-successor section: {heading}")
+        requires_modules = _required_string_list(raw, "requires_modules")
+        if "requires_modules" in raw and (
+            not requires_modules or len(set(requires_modules)) != len(requires_modules)
+        ):
+            raise InstructionContractValidationError(
+                f"Section requires_modules must be nonempty and unique: {heading}"
+            )
         paragraphs = _required_string_list(raw, "required_paragraphs")
         normalized_paragraphs = [" ".join(value.split()) for value in paragraphs]
         if any(not value for value in normalized_paragraphs):
@@ -368,8 +376,21 @@ def parse_required_sections(raw_contract: dict[str, object]) -> tuple[RequiredSe
                 paragraphs,
                 tuple(tables),
                 next_heading,
+                requires_modules,
             )
         )
+    successors = {section.heading: section.next_heading for section in sections}
+    for section in sections:
+        visited: set[str] = set()
+        successor: str | None = section.heading
+        while successor in successors:
+            assert successor is not None
+            if successor in visited:
+                raise InstructionContractValidationError(
+                    f"Cyclic section successor chain: {section.heading}"
+                )
+            visited.add(successor)
+            successor = successors[successor]
     return tuple(sections)
 
 
@@ -418,6 +439,13 @@ def parse_contracts(
         required_headings = _required_string_list(raw_contract, "required_headings")
         required_phrases = _required_string_list(raw_contract, "required_phrases")
         required_sections = parse_required_sections(raw_contract)
+        for section in required_sections:
+            unknown_section_modules = set(section.requires_modules) - manifest_modules
+            if unknown_section_modules:
+                raise InstructionContractValidationError(
+                    f"{path}: {section.heading} references unknown manifest module(s): "
+                    + ", ".join(sorted(unknown_section_modules))
+                )
         if not required_headings and not required_phrases and not required_sections:
             raise InstructionContractValidationError(
                 f"{path} must define at least one required heading, phrase, or section."
@@ -1245,13 +1273,51 @@ def parse_policy_body(lines: list[str]) -> tuple[list[str], list[RequiredTable]]
     return paragraphs, tables
 
 
-def section_failures(text: str, sections: tuple[RequiredSection, ...]) -> list[str]:
+def section_applies(section: RequiredSection, included_modules: set[str] | None) -> bool:
+    """Apply all sections upstream and only retained section module sets downstream."""
+    return included_modules is None or set(section.requires_modules).issubset(included_modules)
+
+
+def applicable_section_boundary(
+    section: RequiredSection,
+    sections: dict[str, RequiredSection],
+    live_lines: set[str],
+    included_modules: set[str] | None,
+) -> RequiredSection:
+    """Skip only absent, inapplicable declared successors in an acyclic catalog.
+
+    A present optional heading remains the exact boundary, including when the
+    separate protected-guide checks require an explicit stale-section waiver.
+    Applicable or uncontracted successors cannot be skipped.
+    """
+    successor = section.next_heading
+    while successor in sections and successor not in live_lines:
+        assert successor is not None
+        following = sections[successor]
+        if section_applies(following, included_modules):
+            break
+        successor = following.next_heading
+    return replace(section, next_heading=successor)
+
+
+def section_failures(
+    text: str,
+    sections: tuple[RequiredSection, ...],
+    included_modules: set[str] | None = None,
+) -> list[str]:
     """Return stable, individually waivable failures for scoped policy contracts."""
     failures: list[str] = []
     lines = operative_markdown_lines(text)
+    sections_by_heading = {section.heading: section for section in sections}
+    live_lines = set(lines)
     for section in sections:
+        if not section_applies(section, included_modules):
+            continue
         prefix = f"section:{section.heading}"
-        boundary_failure = section_boundary_failure(lines, section)
+        boundary = applicable_section_boundary(
+            section, sections_by_heading, live_lines, included_modules
+        )
+        boundary_failure = section_boundary_failure(lines, boundary)
         if boundary_failure is not None:
             failures.append(boundary_failure)
         body = section_body(lines, section.heading)
@@ -1373,7 +1439,7 @@ def validate_contracts(
                     )
                 )
 
-        for anchor in section_failures(text, contract.required_sections):
+        for anchor in section_failures(text, contract.required_sections, included_modules):
             waiver = find_waiver(waivers, contract.path, anchor)
             if waiver is not None:
                 applied_waivers.append(waiver)

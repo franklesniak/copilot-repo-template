@@ -882,6 +882,15 @@ def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -
                 mutations.append(
                     (".github/instructions/yaml.instructions.md", producer_limit, replacement)
                 )
+        if removed != "AGENTS.md":
+            agents = read_file(target / "AGENTS.md")
+            for heading, successor in (
+                ("## GitHub Plugin Usage", "## Azure DevOps PR Review Protocol"),
+                ("## Azure DevOps PR Review Protocol", "## PR Review Workflow (Codex-adapted)"),
+            ):
+                start = agents.index(heading + "\n")
+                end = agents.index(successor + "\n", start)
+                mutations.append(("AGENTS.md", agents[start:end], ""))
         for relative_path, before, after in mutations:
             if relative_path == removed:
                 continue
@@ -3884,6 +3893,34 @@ def test_materialized_github_powershell_profile_records_protected_guide_waivers(
 
     assert validation_result.returncode == 0, validation_result.stdout + validation_result.stderr
     assert "Protected guide contract waiver:" in validation_result.stdout
+
+    # The fixture owner now authorizes removal of this excluded host protocol.
+    # Other protected guide waivers still govern the other retained entry points.
+    agents_path = target_root / "AGENTS.md"
+    agents = read_file(agents_path)
+    start = agents.index("## Azure DevOps PR Review Protocol\n")
+    end = agents.index("## PR Review Workflow (Codex-adapted)\n", start)
+    write_file(agents_path, agents[:start] + agents[end:])
+    remaining_waivers = [
+        record
+        for record in protected_guide_waivers
+        if as_mapping(record, "waiver must be a mapping")["path"] != "AGENTS.md"
+    ]
+    template_sync["protected_guide_contract_waivers"] = remaining_waivers
+    write_yaml(target_root / ".template-sync/marker.yml", marker)
+    direct_command = [
+        sys.executable,
+        str(target_root / ".template-sync/scripts/validate_instruction_contracts.py"),
+        "--mode",
+        "downstream",
+        "--require-marker",
+        "--repo-root",
+        str(target_root),
+    ]
+    direct = subprocess.run(direct_command, check=False, capture_output=True, text=True)
+    aggregate = run_downstream_adoption_validator(target_root)
+    assert direct.returncode == 0, direct.stdout + direct.stderr
+    assert aggregate.returncode == 0, aggregate.stdout + aggregate.stderr
 
 
 @pytest.mark.slow

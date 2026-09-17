@@ -97,7 +97,14 @@
         "next_heading": {
           "type": ["string", "null"],
           "pattern": "^#{1,6} [^\\r\\n]+$",
-          "description": "Exact unique immediate next live heading, or null for EOF. Added child, sibling, or higher-level headings fail this boundary. The successor itself is outside this section's scope."
+          "description": "Exact unique immediate next live heading, or null for EOF. Downstream may follow the declared acyclic successor chain only through absent sections whose requires_modules are not retained. Present optional sections remain boundaries. Added unrecognized headings fail; the successor itself is outside this section's scope."
+        },
+        "requires_modules": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/moduleName" },
+          "description": "Optional additional modules, all required along with the parent contract modules for downstream enforcement. Omit for parent-only applicability. Upstream enforces every section; the semantic loader rejects unknown modules."
         },
         "required_paragraphs": {
           "$ref": "#/$defs/anchorList",

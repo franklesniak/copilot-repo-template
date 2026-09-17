@@ -1088,7 +1088,11 @@ def _write_scoped_repo(tmp_path: Path, section: dict[str, Any], text: str) -> No
     contracts["instruction_contracts"][0]["required_sections"] = [section]
     _write_common_contract_repo(tmp_path, contracts)
     _write_text(tmp_path, "CLAUDE.md", text)
-    _write_yaml(tmp_path, ".template-sync/marker.yml", _marker(["agent-instructions"]))
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(sorted({"agent-instructions", *section.get("requires_modules", [])})),
+    )
 
 
 @pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
@@ -1189,15 +1193,19 @@ def _catalog_sections() -> list[Any]:
         (REPO_ROOT / ".template-sync/instruction-contracts.yml").read_text(encoding="utf-8")
     )
     return [
-        pytest.param(section, id=f"{contract['path']}:{section['heading']}")
+        pytest.param(
+            section,
+            sorted(set(contract["requires_modules"]) | set(section.get("requires_modules", []))),
+            id=f"{contract['path']}:{section['heading']}",
+        )
         for contract in catalog["instruction_contracts"]
         for section in contract.get("required_sections", [])
     ]
 
 
-@pytest.mark.parametrize("section", _catalog_sections())
+@pytest.mark.parametrize(("section", "modules"), _catalog_sections())
 def test_every_catalog_invariant_has_downstream_cli_mutation_coverage(
-    tmp_path: Path, section: dict[str, Any]
+    tmp_path: Path, section: dict[str, Any], modules: list[str]
 ) -> None:
     """Every retained contract clause/row is enforced without optional source files.
 
@@ -1207,6 +1215,10 @@ def test_every_catalog_invariant_has_downstream_cli_mutation_coverage(
     """
     content = _render_section(section)
     _write_scoped_repo(tmp_path, section, content)
+    shutil.copyfile(
+        REPO_ROOT / ".template-sync/manifest.yml", tmp_path / ".template-sync/manifest.yml"
+    )
+    _write_yaml(tmp_path, ".template-sync/marker.yml", _marker(modules))
     result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
     assert result.returncode == 0, result.stdout + result.stderr
     mutations: list[str] = []
@@ -2601,3 +2613,274 @@ def test_comment_structure_oracle_detects_removed_guard(tmp_path: Path, kind: st
         text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def _module_section_repo(tmp_path: Path, text: str, modules: list[str]) -> dict[str, Any]:
+    """Write an independent three-section fixture with one optional host protocol."""
+    sections = [
+        {
+            "heading": "## Plugin",
+            "next_heading": "## Azure",
+            "required_paragraphs": ["Use the plugin."],
+        },
+        {
+            "heading": "## Azure",
+            "next_heading": "## Review",
+            "requires_modules": ["azure-devops-collaboration"],
+            "required_paragraphs": ["Keep Azure authentication secure."],
+        },
+        {
+            "heading": "## Review",
+            "next_heading": None,
+            "required_paragraphs": ["Review all findings."],
+        },
+    ]
+    contracts = _contracts()
+    contracts["instruction_contracts"][0]["required_sections"] = sections
+    contracts["protected_guide_section_obligations"] = [
+        {
+            "key": "optional-azure",
+            "path": "CLAUDE.md",
+            "target_modules": ["azure-devops-collaboration"],
+            "stale_headings": ["## Azure"],
+        }
+    ]
+    _write_common_contract_repo(tmp_path, contracts)
+    _write_text(tmp_path, "CLAUDE.md", text)
+    _write_yaml(tmp_path, ".template-sync/marker.yml", _marker(modules))
+    return contracts
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize("retained", [False, True])
+@pytest.mark.parametrize("present", [False, True])
+def test_module_section_applicability_cli(
+    tmp_path: Path, mode: str, retained: bool, present: bool
+) -> None:
+    """Upstream enforces all protocols; downstream checks modules and stale retention."""
+    text = "## Plugin\n\nUse the plugin.\n\n"
+    if present:
+        text += "## Azure\n\nKeep Azure authentication secure.\n\n"
+    text += "## Review\n\nReview all findings.\n"
+    modules = ["agent-instructions"] + (["azure-devops-collaboration"] if retained else [])
+    _module_section_repo(tmp_path, text, modules)
+    result = _run_validator(tmp_path, "--mode", mode)
+    expected = (
+        (0 if present else 1) if mode == "upstream-template" or retained else (1 if present else 0)
+    )
+    assert result.returncode == expected, result.stdout + result.stderr
+    if mode == "downstream" and not retained and present:
+        assert "CLAUDE.md: optional-azure: stale heading: ## Azure" in result.stdout
+        _write_yaml(
+            tmp_path,
+            ".template-sync/marker.yml",
+            _marker(
+                modules,
+                protected_guide_waivers=[
+                    {
+                        "path": "CLAUDE.md",
+                        "contract_key": "optional-azure",
+                        "target_module": "azure-devops-collaboration",
+                        "reason": "The fixture owner retains the optional protocol.",
+                        "authorization_basis": "Explicit fixture authorization for this stale section.",
+                    }
+                ],
+            ),
+        )
+        waived = _run_validator(tmp_path, "--mode", mode)
+        assert waived.returncode == 0, waived.stdout + waived.stderr
+        assert "passed with waivers" in waived.stdout
+        # The excluded host body is outside applicable section contracts. Its
+        # intentional retention is governed by the separate stale-section waiver.
+        _write_text(
+            tmp_path,
+            "CLAUDE.md",
+            text.replace(
+                "Keep Azure authentication secure.",
+                "Local inactive host note.\n\n### Local inactive subsection",
+            ),
+        )
+        inactive = _run_validator(tmp_path, "--mode", mode)
+        assert inactive.returncode == 0, inactive.stdout + inactive.stderr
+
+
+@pytest.mark.parametrize(
+    "replacement",
+    [
+        "### Hidden exception\n\nSkip review.\n\n",
+        "## Azure\n\n## Azure\n\n",
+        "## Unrelated\n\n",
+    ],
+)
+def test_module_section_traversal_rejects_unexpected_boundaries(
+    tmp_path: Path, replacement: str
+) -> None:
+    """Excluding Azure cannot authorize arbitrary, duplicate, or inserted boundaries."""
+    text = "## Plugin\n\nUse the plugin.\n\n" + replacement + "## Review\n\nReview all findings.\n"
+    _module_section_repo(tmp_path, text, ["agent-instructions"])
+    result = _run_validator(tmp_path, "--mode", "downstream")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "section:## Plugin:boundary:" in result.stdout
+
+
+@pytest.mark.parametrize("end", ["contracted", "uncontracted", "eof"])
+def test_module_section_traversal_follows_multiple_absent_successors(
+    tmp_path: Path, end: str
+) -> None:
+    """Traversal skips declared excluded sections and stops at the explicit scope end."""
+    text = "## Plugin\n\nUse the plugin.\n"
+    if end != "eof":
+        text += "\n## Review\n\nReview all findings.\n"
+    contracts = _module_section_repo(tmp_path, text, ["agent-instructions"])
+    sections = contracts["instruction_contracts"][0]["required_sections"]
+    sections[1]["next_heading"] = "## Second optional"
+    sections.insert(
+        2,
+        {
+            "heading": "## Second optional",
+            "next_heading": None if end == "eof" else "## Review",
+            "requires_modules": ["schema"],
+            "required_paragraphs": ["Keep the second protocol."],
+        },
+    )
+    if end != "contracted":
+        sections.pop()
+    _write_yaml(tmp_path, ".template-sync/instruction-contracts.yml", contracts)
+    result = _run_validator(tmp_path, "--mode", "downstream")
+    assert result.returncode == 0, result.stdout + result.stderr
+    _write_text(
+        tmp_path, "CLAUDE.md", text.replace("Use the plugin.", "Use the plugin.\n\n## Intruder")
+    )
+    rejected = _run_validator(tmp_path, "--mode", "downstream")
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert "section:## Plugin:boundary:" in rejected.stdout
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize("value", [[], ["schema", "schema"], [3], "schema", ["unknown-module"]])
+def test_section_module_catalog_rejects_invalid_requirements(
+    tmp_path: Path, mode: str, value: Any
+) -> None:
+    """Malformed or unknown section modules are catalog errors, not skipped checks."""
+    contracts = _module_section_repo(tmp_path, "", ["agent-instructions"])
+    contracts["instruction_contracts"][0]["required_sections"][1]["requires_modules"] = value
+    _write_yaml(tmp_path, ".template-sync/instruction-contracts.yml", contracts)
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "requires_modules" in result.stderr or "unknown manifest module" in result.stderr
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+def test_section_module_catalog_rejects_successor_cycles(tmp_path: Path, mode: str) -> None:
+    """An excluded successor cycle fails loading and cannot hang traversal."""
+    contracts = _module_section_repo(tmp_path, "", ["agent-instructions"])
+    contracts["instruction_contracts"][0]["required_sections"][1]["next_heading"] = "## Plugin"
+    _write_yaml(tmp_path, ".template-sync/instruction-contracts.yml", contracts)
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Cyclic section successor chain" in result.stderr
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize(
+    ("heading", "successor"),
+    [
+        ("## GitHub Plugin Usage", "## Azure DevOps PR Review Protocol"),
+        ("## Azure DevOps PR Review Protocol", "## PR Review Workflow (Codex-adapted)"),
+    ],
+)
+def test_actual_codex_protocol_removal_is_rejected(
+    tmp_path: Path, mode: str, heading: str, successor: str
+) -> None:
+    """Real catalog coverage cannot disappear with a data-driven fixture expectation."""
+    catalog = yaml.safe_load(
+        (REPO_ROOT / ".template-sync/instruction-contracts.yml").read_text(encoding="utf-8")
+    )
+    contract = next(
+        item for item in catalog["instruction_contracts"] if item["path"] == "AGENTS.md"
+    )
+    _write_common_contract_repo(tmp_path, {"instruction_contracts": [contract]})
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["agent-instructions", "azure-devops-collaboration"]),
+    )
+    text = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    _write_text(tmp_path, "AGENTS.md", text)
+    intact = _run_validator(tmp_path, "--mode", mode)
+    assert intact.returncode == 0, intact.stdout + intact.stderr
+    start = text.index(heading + "\n")
+    end = text.index(successor + "\n", start)
+    _write_text(tmp_path, "AGENTS.md", text[:start] + text[end:])
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"section:{heading}" in result.stdout
+
+
+@pytest.mark.parametrize("mutation", ["skip-applicable", "disable-traversal"])
+def test_section_module_security_mutants_are_detected(tmp_path: Path, mutation: str) -> None:
+    """Independent native expectations kill disabled applicability and traversal checks."""
+    fixture = tmp_path / "fixture"
+    if mutation == "skip-applicable":
+        section = {
+            "heading": "## Azure",
+            "next_heading": None,
+            "requires_modules": ["azure-devops-collaboration"],
+            "required_paragraphs": ["Keep Azure authentication secure."],
+        }
+        _write_scoped_repo(fixture, section, "")
+        predicate = "if not section_applies(section, included_modules):"
+        replacement = "if section.requires_modules:"
+        expected, mutant_expected = 1, 0
+    else:
+        _module_section_repo(
+            fixture,
+            "## Plugin\n\nUse the plugin.\n\n## Review\n\nReview all findings.\n",
+            ["agent-instructions"],
+        )
+        predicate = "while successor in sections and successor not in live_lines:"
+        replacement = "while False:"
+        expected, mutant_expected = 0, 1
+    baseline = _run_validator(fixture, "--mode", "downstream")
+    assert baseline.returncode == expected, baseline.stdout + baseline.stderr
+    mutant_dir = tmp_path / "mutant"
+    mutant_dir.mkdir()
+    for source in SCRIPT_PATH.parent.glob("*.py"):
+        shutil.copyfile(source, mutant_dir / source.name)
+    mutant = mutant_dir / SCRIPT_PATH.name
+    source_text = mutant.read_text(encoding="utf-8")
+    assert source_text.count(predicate) == 1
+    mutant.write_text(source_text.replace(predicate, replacement), encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(mutant), "--repo-root", str(fixture), "--mode", "downstream"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == mutant_expected, result.stdout + result.stderr
+    assert result.returncode != baseline.returncode
+
+
+def test_module_section_boundary_waiver_tracks_effective_successor(tmp_path: Path) -> None:
+    """A waiver for excluded Azure cannot authorize a missing required Azure boundary."""
+    text = "## Plugin\n\nUse the plugin.\n\n## Intruder\n\n## Review\n\nReview all findings.\n"
+    _module_section_repo(tmp_path, text, ["agent-instructions"])
+    anchors: list[str] = []
+    for modules in (
+        ["agent-instructions"],
+        ["agent-instructions", "schema"],
+        ["agent-instructions", "azure-devops-collaboration"],
+    ):
+        _write_yaml(tmp_path, ".template-sync/marker.yml", _marker(modules))
+        result = _run_validator(tmp_path, "--mode", "downstream")
+        assert result.returncode == 1, result.stdout + result.stderr
+        match = re.search(r"section:## Plugin:boundary:[0-9a-f]{64}", result.stdout)
+        assert match is not None, result.stdout
+        anchors.append(match.group())
+    assert (
+        anchors[0] == anchors[1]
+    ), "An unrelated module cannot change the same boundary deviation."
+    assert (
+        anchors[0] != anchors[2]
+    ), "Required Azure changes the expected boundary and waiver identity."

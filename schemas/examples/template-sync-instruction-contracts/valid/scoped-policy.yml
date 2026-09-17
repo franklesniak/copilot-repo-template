@@ -5,6 +5,8 @@ instruction_contracts:
     required_sections:
       - heading: '## Review decisions'
         next_heading: null
+        requires_modules:
+          - azure-devops-collaboration
         required_paragraphs:
           - 'Agents MUST reject stale results.'
         required_tables:
