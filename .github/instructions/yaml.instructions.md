@@ -132,16 +132,23 @@ alter executable bytes in the privileged job. The inventory **MUST** include
 applicable workflow YAML and local actions; scripts, helpers, interpreters, and
 runtime selectors; manifests, lockfiles, and shrinkwrap files; package-manager
 configuration; and container, build, and generated-executable inputs. Path
-filters **MUST** cover every supported file in this inventory. A proposed
-change **MUST NOT** bypass validation because a changed selector is absent from
-`on.pull_request_target.paths`.
+filters **MUST** cover every supported file in this inventory when they are
+used as an optimization. A privileged trust-root validation **MUST** also run
+through an **unconditional or required companion gate** that does not rely on
+path-filter evaluation. Path filters **MUST NOT** be the only gate, and a
+proposed change **MUST NOT** bypass validation because a changed selector is
+absent from `on.pull_request_target.paths` or falls outside GitHub's changed-
+file evaluation window.
 
 A proposed trust-root change **MUST** be rejected through the authorized
 trusted-revision process or validated as inert data with trusted code. Inert
 validation **MUST** read the exact proposed Git object without replacing
-trusted workspace files and validate object type, byte limit, encoding, syntax,
-required semantic identity, and every error or indeterminate state. Do not
-interpolate untrusted values into generated shell source.
+trusted workspace files and validate object type, tree entry mode, byte limit,
+encoding, syntax, required semantic identity, and every error or indeterminate
+state. Each trust-root path **MUST** have an explicit allowlist of expected
+regular-file modes. Reject symlinks, gitlinks, and an unexpected executable-bit
+change before parsing. Do not interpolate untrusted values into generated
+shell source.
 
 Privileged fetches **MUST NOT** use a leading `+` refspec or `--force`. Resolve
 the fetched commit and compare it with the expected event commit before reading

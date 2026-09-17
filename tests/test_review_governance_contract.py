@@ -7,6 +7,7 @@ from pathlib import Path
 from tests._pytest_compat import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+pytestmark = pytest.mark.upstream_template_only
 
 REQUIREMENTS = {
     "AGENTS.md": (
@@ -16,6 +17,11 @@ REQUIREMENTS = {
         "Balanced",
         "Lite",
         "@codex review",
+        "chatgpt-codex-connector[bot]",
+        "request-time head",
+        "pagination-complete",
+        "not clean",
+        "both co-equal sources",
         "Failed cycles do not consume",
         "Deferring Work",
         "base branch",
@@ -29,6 +35,10 @@ REQUIREMENTS = {
         "Balanced",
         "Lite",
         "@codex review",
+        "chatgpt-codex-connector[bot]",
+        "request-time PR head SHA",
+        "pagination",
+        "not clean",
         "Failed cycles do not consume",
         "Deferring Work",
         "base branch",
@@ -42,6 +52,11 @@ REQUIREMENTS = {
         "trust root",
         "inert data",
         "MUST NOT",
+        "unconditional or required companion gate",
+        "tree entry mode",
+        "symlinks",
+        "gitlinks",
+        "unexpected executable-bit",
     ),
 }
 
@@ -82,11 +97,18 @@ def test_missing_semantic_marker_fails(
     ("relative_path", "original", "replacement"),
     [
         ("AGENTS.md", "Failed cycles do not consume", "Failed cycles consume"),
+        ("AGENTS.md", "both co-equal sources", "one co-equal source"),
         ("CLAUDE.md", "Balanced", "Standard"),
+        ("CLAUDE.md", "chatgpt-codex-connector[bot]", "codex-reviewer"),
         (
             ".github/instructions/yaml.instructions.md",
             "inert data",
             "executable data",
+        ),
+        (
+            ".github/instructions/yaml.instructions.md",
+            "unconditional or required companion gate",
+            "optional companion gate",
         ),
     ],
 )
