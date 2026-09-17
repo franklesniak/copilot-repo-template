@@ -41,10 +41,12 @@ instruction_contracts:
       - 'chatgpt-codex-connector[bot]'
       - 'Remote Codex arrival'
       - 'terminal results from both reviewers'
+      - 'Review loop paused: remote Codex'
       - 'Failed cycles do not consume'
   - path: .github/instructions/yaml.instructions.md
     requires_modules:
       - yaml
+      - agent-instructions
     required_headings:
       - '## GitHub Actions Privileged-Workflow Trust Roots'
     required_phrases:
