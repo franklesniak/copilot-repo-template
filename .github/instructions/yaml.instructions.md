@@ -7,13 +7,13 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.7.20260916.0
+**Version:** 1.7.20260917.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-16
+- **Last Updated:** 2026-09-17
 - **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, Azure Pipelines YAML, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by the companion JSON guide, if present) or generated YAML artifacts that are owned by another tool's serializer.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md) (companion guide, if present)
 

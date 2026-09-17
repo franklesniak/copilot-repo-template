@@ -39,6 +39,7 @@ REQUIREMENTS = {
         "request-time PR head SHA",
         "pagination",
         "not clean",
+        "terminal results from both reviewers",
         "Failed cycles do not consume",
         "Deferring Work",
         "base branch",
