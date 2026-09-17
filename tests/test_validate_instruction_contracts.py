@@ -770,7 +770,7 @@ def test_tabbed_closing_fence_exposes_later_policy(
         ([" \t\n"], "Empty normalized"),
         (["\u00a0\u2003"], "Empty normalized"),
         (["Rule  text", "Rule text"], "Duplicate normalized"),
-        (["Rule\ntext", "Rule\u00a0text"], "Duplicate normalized"),
+        (["Rule\ntext", "Rule\ttext"], "Duplicate normalized"),
     ],
 )
 def test_catalog_rejects_unsatisfiable_normalized_paragraphs(
@@ -797,7 +797,7 @@ def test_catalog_accepts_unique_wrapped_paragraphs(tmp_path: Path, mode: str) ->
         "next_heading": None,
         "required_paragraphs": [" Rule \ntext ", "Other\u00a0rule."],
     }
-    _write_scoped_repo(tmp_path, section, "## Review decisions\n\nRule text\n\nOther rule.\n")
+    _write_scoped_repo(tmp_path, section, "## Review decisions\n\nRule text\n\nOther\u00a0rule.\n")
     result = _run_validator(tmp_path, "--mode", mode)
     assert result.returncode == 0, result.stdout + result.stderr
 
@@ -880,7 +880,11 @@ def test_unicode_digit_false_fence_cannot_hide_policy(
 @pytest.mark.parametrize(
     ("paragraphs", "guard", "diagnostic"),
     [
-        ([" \t\n"], "any(not value for value in normalized_paragraphs)", "Empty normalized"),
+        (
+            [" \t\n"],
+            "any(not value or value.isspace() for value in normalized_paragraphs)",
+            "Empty normalized",
+        ),
         (
             ["Rule  text", "Rule text"],
             "len(set(normalized_paragraphs)) != len(normalized_paragraphs)",
@@ -2884,3 +2888,303 @@ def test_module_section_boundary_waiver_tracks_effective_successor(tmp_path: Pat
     assert (
         anchors[0] != anchors[2]
     ), "Required Azure changes the expected boundary and waiver identity."
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize(
+    ("original", "replacement"),
+    [
+        ("| Review state |", "| Review  state |"),
+        ("| Review state |", "| Review\tstate |"),
+        ("| Review state |", "| \x1cReview state |"),
+        ("Not clean", "Not  clean"),
+        ("Not clean", "Not\tclean"),
+        ("Not clean", "Not\x1cclean"),
+        ("Not clean", "Not\x85clean"),
+        ("Not clean", "Not\u00a0clean"),
+        ("Not clean", "Not\u2028clean"),
+        ("Not clean", "Not\ufeffclean"),
+        ("| --- |", "| \x1c---\x1c |"),
+        ("| --- |", "| \u00a0---\u00a0 |"),
+        ("| --- |", "| --\t- |"),
+        ("| --- |", "| -- - |"),
+    ],
+)
+def test_observed_table_cells_reject_noncanonical_whitespace(
+    tmp_path: Path, mode: str, original: str, replacement: str
+) -> None:
+    """Both CLIs retain invalid header, data and delimiter cell spelling."""
+    section = _scoped_policy()
+    section["required_tables"][0]["headers"][0] = "Review state"
+    text = _render_section(section).replace(original, replacement, 1)
+    _write_scoped_repo(tmp_path, section, text)
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "section:## Review decisions:tables:" in result.stdout
+
+
+@pytest.mark.parametrize("padding", ["", " ", "   ", "\t", " \t"])
+def test_observed_table_ascii_padding_preserves_canonical_cells(
+    tmp_path: Path, padding: str
+) -> None:
+    """Only cell-edge syntax padding changes; Unicode words and alignment stay usable."""
+    section = _scoped_policy()
+    table = section["required_tables"][0]
+    table["headers"][0] = "État 中文"
+    text = _render_section(section)
+    lines = []
+    for line in text.split("\n"):
+        if line.startswith("|"):
+            cells = [cell.strip(" ") for cell in line[1:-1].split("|")]
+            cells = [":---:" if cell == "---" else cell for cell in cells]
+            line = "|" + "|".join(padding + cell + padding for cell in cells) + "|"
+        lines.append(line)
+    _write_scoped_repo(tmp_path, section, "\n".join(lines))
+    result = _run_validator(tmp_path, "--mode", "downstream")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_observed_whitespace_character_matrix() -> None:
+    """Literal oracles cover every explicit cell separator and paragraph character."""
+    program = r"""
+import sys
+sys.path.insert(0, sys.argv[1])
+import validate_instruction_contracts as validator
+points = [
+    *range(0x09, 0x0E), *range(0x1C, 0x21), 0x85, 0xA0, 0x1680,
+    *range(0x2000, 0x200B), 0x2028, 0x2029, 0x202F, 0x205F, 0x3000, 0xFEFF,
+]
+assert len(points) == 30
+for point in points:
+    character = chr(point)
+    variants = [character + "A B", "A" + character + "B", "A B" + character]
+    for location in ("header", "data"):
+        for position, value in enumerate(variants):
+            lines = ["| A B | Gate |", "| --- | --- |", "| A B | Not clean |"]
+            row = 0 if location == "header" else 2
+            lines[row] = lines[row].replace("A B", value)
+            expected = point in (0x09, 0x20) if position != 1 else point == 0x20
+            try:
+                validator.parse_policy_body(lines)
+                accepted = True
+            except validator.InstructionContractValidationError:
+                accepted = False
+            assert accepted is expected, (point, location, position, accepted)
+    # Delimiter edges have their own structural check after cell validation.
+    lines = ["| A | B |", "|" + character + "---" + character + "| --- |", "| C | D |"]
+    try:
+        validator.parse_policy_body(lines)
+        accepted = True
+    except validator.InstructionContractValidationError:
+        accepted = False
+    assert accepted is (point in (0x09, 0x20)), (point, "delimiter")
+section = validator.RequiredSection("## Policy", ("Agents MUST act.",), ())
+for point in points:
+    if point in (0x09, 0x0A, 0x0D, 0x20):
+        continue
+    character = chr(point)
+    variants = [character + "Agents MUST act.", "Agents" + character + "MUST act.",
+                "Agents MUST act." + character]
+    for value in variants:
+        assert validator.section_failures("## Policy\n\n" + value + "\n", (section,)), point
+        literal = validator.RequiredSection("## Policy", (value,), ())
+        assert validator.section_failures("## Policy\n\n" + value + "\n", (literal,)) == [], point
+print("Explicit observed-cell and literal-paragraph character matrices passed.")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", program, str(SCRIPT_PATH.parent)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize("character", ["\x1c", "\x85", "\v", "\u00a0"])
+@pytest.mark.parametrize("position", ["leading", "internal", "trailing"])
+def test_paragraph_whitespace_drift_remains_literal(
+    tmp_path: Path, mode: str, character: str, position: str
+) -> None:
+    """Replacing or adding a non-ASCII wrapping character cannot satisfy a clause."""
+    section = _scoped_policy()
+    original = section["required_paragraphs"][0]
+    value = (
+        character + original
+        if position == "leading"
+        else (
+            original + character
+            if position == "trailing"
+            else original.replace("Agents MUST", "Agents" + character + "MUST")
+        )
+    )
+    _write_scoped_repo(tmp_path, section, _render_section(section).replace(original, value))
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "section:## Review decisions:paragraph:" in result.stdout
+    assert "section:## Review decisions:paragraphs:" in result.stdout
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize("wrapping", ["  ", "\t", "\n", "\r\n", "\r"])
+def test_paragraph_ascii_wrapping_preserves_literal_unicode(
+    tmp_path: Path, mode: str, wrapping: str
+) -> None:
+    """ASCII wrapping folds while distinct Unicode-bearing catalog clauses remain distinct."""
+    section: dict[str, Any] = {
+        "heading": "## Review decisions",
+        "next_heading": None,
+        "required_paragraphs": ["Agents MUST act.", "Agents\u00a0MUST act.", "État 中文."],
+    }
+    text = _render_section(section).replace("Agents MUST", "Agents" + wrapping + "MUST")
+    _write_scoped_repo(tmp_path, section, text)
+    # Preserve literal CR/LF combinations without host text-mode translation.
+    (tmp_path / "CLAUDE.md").write_bytes(text.encode("utf-8"))
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == 0, result.stdout + result.stderr
+    (tmp_path / "CLAUDE.md").write_bytes(
+        text.replace("Agents\u00a0MUST", "Agents MUST").encode("utf-8")
+    )
+    changed = _run_validator(tmp_path, "--mode", mode)
+    assert changed.returncode == 1, changed.stdout + changed.stderr
+    assert "section:## Review decisions:paragraph:" in changed.stdout
+
+
+@pytest.mark.parametrize("kind", ["table", "paragraph", "boundary"])
+def test_whitespace_waiver_cannot_authorize_another_deviation(tmp_path: Path, kind: str) -> None:
+    """An authorized control-character deviation cannot waive another or canonical content."""
+    section = _scoped_policy()
+    if kind == "boundary":
+        section["next_heading"] = "## End"
+    canonical = _render_section(section)
+    if kind == "table":
+        first = canonical.replace("Not clean", "Not\x1cclean")
+    elif kind == "paragraph":
+        first = canonical.replace("Agents MUST", "Agents\x1cMUST")
+    else:
+        first = canonical.replace("## End", "## Extra\n\nLocal\x1ctext.\n\n## End")
+    second = first.replace("\x1c", "\x85")
+    _write_scoped_repo(tmp_path, section, first)
+    initial = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert initial.returncode == 1, initial.stdout + initial.stderr
+    anchors = set(
+        re.findall(
+            r"section:## Review decisions:(?:paragraph|paragraphs|tables|boundary):[0-9a-f]{64}",
+            initial.stdout,
+        )
+    )
+    assert anchors
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["agent-instructions"],
+            waivers=[
+                {
+                    "path": "CLAUDE.md",
+                    "anchor": anchor,
+                    "reason": "Fixture owner accepts only this exact observed deviation.",
+                    "authorization_basis": "Explicit fixture authorization for the captured text.",
+                }
+                for anchor in sorted(anchors)
+            ],
+        ),
+    )
+    same = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert same.returncode == 0, same.stdout + same.stderr
+    assert "passed with waivers" in same.stdout
+    _write_text(tmp_path, "CLAUDE.md", second)
+    changed = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert changed.returncode == 1, changed.stdout + changed.stderr
+    _write_text(tmp_path, "CLAUDE.md", canonical)
+    restored = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert restored.returncode == 0, restored.stdout + restored.stderr
+    assert "Instruction contract waivers applied:" not in restored.stdout
+
+
+@pytest.mark.parametrize("kind", ["table", "paragraph"])
+def test_whitespace_matching_oracle_detects_broad_normalization(tmp_path: Path, kind: str) -> None:
+    """Restoring broad folding falsely accepts an independently invalid literal fixture."""
+    section = _scoped_policy()
+    if kind == "table":
+        text = _render_section(section).replace("Not clean", "Not\x1cclean")
+        original = 'cell.strip(" \\t")'
+        replacement = '" ".join(cell.split())'
+    else:
+        text = _render_section(section).replace("Agents MUST", "Agents\x1cMUST")
+        original = 'return re.sub(r"[ \\t\\r\\n]+", " ", text).strip(" ")'
+        replacement = 'return " ".join(text.split())'
+    fixture = tmp_path / "fixture"
+    _write_scoped_repo(fixture, section, text)
+    baseline = _run_validator(fixture, "--mode", "downstream")
+    assert baseline.returncode == 1, baseline.stdout + baseline.stderr
+    mutant_dir = tmp_path / "mutant"
+    mutant_dir.mkdir()
+    for source in SCRIPT_PATH.parent.glob("*.py"):
+        shutil.copyfile(source, mutant_dir / source.name)
+    mutant = mutant_dir / SCRIPT_PATH.name
+    source_text = mutant.read_text(encoding="utf-8")
+    assert source_text.count(original) == 1
+    mutant.write_text(source_text.replace(original, replacement), encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(mutant), "--repo-root", str(fixture), "--mode", "downstream"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("kind", ["malformed-table", "boundary"])
+def test_whitespace_identity_oracle_detects_normalized_hashes(tmp_path: Path, kind: str) -> None:
+    """Distinct observed controls need distinct anchors even after another defect is waived."""
+    program = r"""
+import sys
+sys.path.insert(0, sys.argv[1])
+import validate_instruction_contracts as validator
+kind = sys.argv[2]
+if kind == "malformed-table":
+    section = validator.RequiredSection("## Policy", (), (
+        validator.RequiredTable(("State", "Gate"), (("Failed", "Not clean"),)),
+    ))
+    text = "## Policy\n\n| State | Gate |\n| broken | --- |\n| Failed | Not\x1cclean |\n"
+    prefix = "section:## Policy:tables:"
+else:
+    section = validator.RequiredSection("## Policy", ("Agents MUST act.",), (), "## End")
+    text = "## Policy\n\nAgents MUST act.\n\n## Extra\n\nLocal\x1ctext.\n\n## End\n"
+    prefix = "section:## Policy:boundary:"
+first = next(a for a in validator.section_failures(text, (section,)) if a.startswith(prefix))
+second = next(a for a in validator.section_failures(text.replace("\x1c", "\x85"), (section,))
+              if a.startswith(prefix))
+print("distinct" if first != second else "collision")
+"""
+    baseline = subprocess.run(
+        [sys.executable, "-c", program, str(SCRIPT_PATH.parent), kind],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert baseline.returncode == 0, baseline.stdout + baseline.stderr
+    assert baseline.stdout.strip() == "distinct"
+    mutant_dir = tmp_path / "mutant"
+    mutant_dir.mkdir()
+    for source in SCRIPT_PATH.parent.glob("*.py"):
+        shutil.copyfile(source, mutant_dir / source.name)
+    mutant = mutant_dir / SCRIPT_PATH.name
+    source_text = mutant.read_text(encoding="utf-8")
+    if kind == "malformed-table":
+        original = '[line for line in body if line.startswith("|")]'
+        replacement = '[" ".join(line.split()) for line in body if line.startswith("|")]'
+    else:
+        original = "[normalize_policy_paragraph(line) for line in lines[start:end] if line]"
+        replacement = '[" ".join(line.split()) for line in lines[start:end] if line]'
+    assert source_text.count(original) == 1
+    mutant.write_text(source_text.replace(original, replacement), encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, "-c", program, str(mutant_dir), kind],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == "collision"

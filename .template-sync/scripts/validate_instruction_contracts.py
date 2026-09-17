@@ -302,6 +302,11 @@ def load_manifest_modules(
     return set(module_names)
 
 
+def normalize_policy_paragraph(text: str) -> str:
+    """Fold supported ASCII wrapping while retaining other literal characters."""
+    return re.sub(r"[ \t\r\n]+", " ", text).strip(" ")
+
+
 def _required_string_list(
     raw_contract: dict[str, object],
     field_name: str,
@@ -342,8 +347,8 @@ def parse_required_sections(raw_contract: dict[str, object]) -> tuple[RequiredSe
                 f"Section requires_modules must be nonempty and unique: {heading}"
             )
         paragraphs = _required_string_list(raw, "required_paragraphs")
-        normalized_paragraphs = [" ".join(value.split()) for value in paragraphs]
-        if any(not value for value in normalized_paragraphs):
+        normalized_paragraphs = [normalize_policy_paragraph(value) for value in paragraphs]
+        if any(not value or value.isspace() for value in normalized_paragraphs):
             raise InstructionContractValidationError(
                 f"Empty normalized contract paragraph: {heading}"
             )
@@ -1217,7 +1222,7 @@ def section_boundary_failure(lines: list[str], section: RequiredSection) -> str 
     )
     if actual_next != section.next_heading or not unique_successor:
         end = successors[0] if len(successors) == 1 and successors[0] >= start else len(lines)
-        observed = [" ".join(line.split()) for line in lines[start:end] if line]
+        observed = [normalize_policy_paragraph(line) for line in lines[start:end] if line]
         identity = policy_inventory_digest(
             section.next_heading, [actual_next, len(successors), observed]
         )
@@ -1244,7 +1249,7 @@ def parse_policy_body(lines: list[str]) -> tuple[list[str], list[RequiredTable]]
             or re.match(r"^(?:[0-9]+[.)]|[-+*]) ", line)
         )
         if boundary and paragraph:
-            paragraphs.append(" ".join(" ".join(paragraph).split()))
+            paragraphs.append(normalize_policy_paragraph(" ".join(paragraph)))
             paragraph = []
         if line.startswith("|"):
             cells: list[tuple[str, ...]] = []
@@ -1252,7 +1257,10 @@ def parse_policy_body(lines: list[str]) -> tuple[list[str], list[RequiredTable]]
                 row = lines[index]
                 if not row.endswith("|") or "\\|" in row:
                     raise InstructionContractValidationError("Malformed policy table row.")
-                cells.append(tuple(" ".join(cell.split()) for cell in row[1:-1].split("|")))
+                row_cells = tuple(cell.strip(" \t") for cell in row[1:-1].split("|"))
+                if any(POLICY_CELL_PATTERN.fullmatch(cell) is None for cell in row_cells):
+                    raise InstructionContractValidationError("Noncanonical observed policy cell.")
+                cells.append(row_cells)
                 index += 1
             if (
                 len(cells) < 3
@@ -1269,7 +1277,7 @@ def parse_policy_body(lines: list[str]) -> tuple[list[str], list[RequiredTable]]
             paragraph.append(line)
         index += 1
     if paragraph:
-        paragraphs.append(" ".join(" ".join(paragraph).split()))
+        paragraphs.append(normalize_policy_paragraph(" ".join(paragraph)))
     return paragraphs, tables
 
 
@@ -1332,9 +1340,7 @@ def section_failures(
         except InstructionContractValidationError:
             malformed = True
             tables = []
-            observed_tables = {
-                "malformed": [" ".join(line.split()) for line in body if line.startswith("|")]
-            }
+            observed_tables = {"malformed": [line for line in body if line.startswith("|")]}
         else:
             observed_tables = {"parsed": [(table.headers, table.rows) for table in tables]}
         table_identity = policy_inventory_digest(
@@ -1345,13 +1351,15 @@ def section_failures(
         # decision steps from substituting for the operative contract.
         cursor = 0
         for paragraph in section.required_paragraphs:
-            expected = " ".join(paragraph.split())
+            expected = normalize_policy_paragraph(paragraph)
             try:
                 cursor = paragraphs.index(expected, cursor) + 1
             except ValueError:
                 identity = hashlib.sha256(expected.encode("utf-8")).hexdigest()
                 failures.append(f"{prefix}:paragraph:{identity}")
-        expected_paragraphs = [" ".join(value.split()) for value in section.required_paragraphs]
+        expected_paragraphs = [
+            normalize_policy_paragraph(value) for value in section.required_paragraphs
+        ]
         positions = [
             expected_paragraphs.index(value) for value in paragraphs if value in expected_paragraphs
         ]
