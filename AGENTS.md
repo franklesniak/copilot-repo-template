@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for OpenAI Codex CLI
 
-**Version:** 1.6.20260916.0
+**Version:** 1.5.20260629.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-16
+- **Last Updated:** 2026-06-29
 - **Scope:** Agent-specific entry point for OpenAI Codex CLI and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
@@ -22,13 +22,6 @@ The authoritative source of truth for all repository rules is **`.github/copilot
 This file intentionally keeps only a minimal inline summary of the highest-priority shared rules so that agents receive critical guidance immediately. The full shared rule set remains in the canonical file above.
 
 **Thin entry point classification:** A thin entry point keeps shared repository rules brief; it does not mean platform-specific or required protocol sections may be discarded. Sections explicitly labeled as platform protocol or required protocol must be preserved unless the repository owner explicitly waives that protocol for the retained agent platform.
-
-## Codex Execution Model and Interfaces
-
-- **Instruction scope.** Build the instruction chain from global guidance through the launch directory. Use bounded discovery for deeper `AGENTS.md` files. Restart Codex after an active instruction changes. Re-read supplied instructions only when exact bytes matter.
-- **Agents and interfaces.** The local agent implements work. `chatgpt-codex-connector[bot]` is a separate reviewer requested by the exact `@codex review` comment. Prefer the GitHub connector; use authenticated `gh api graphql` for missing thread, pagination, review-body, or inline context, and verify mutations by authenticated readback. Use primary official sources when they materially improve correctness.
-- **Mutation and delegation.** Preserve unrelated work and keep one writer per worktree. Before a mutation or user-requested delegation, pin the repository, branch, head, tree, allowed paths, finding inventory, and public actions. Give each subagent one bounded task and define analysis, first-edit, validation, and public-mutation checkpoints.
-- **Communication and stopping.** Report useful phase boundaries. Quiet reasoning is not a hang. Continue authorized work until completion, an explicit pause, a user stop, or an exact unauthorized or ambiguous action boundary. Preserve validated decisions and scoped edits before stopping.
 
 ## Protected Instruction Files
 
@@ -170,14 +163,7 @@ This workflow adapts the Claude-targeted process documented in `CLAUDE.md` for C
 
 ### Handling each review comment
 
-For each finding received from GitHub Copilot (`copilot-pull-request-reviewer[bot]`), remote Codex (`chatgpt-codex-connector[bot]`), a human reviewer, or any other reviewer, follow these steps. Process every reviewer identically and address findings one at a time.
-
-Review feedback has two co-equal surfaces. Inspect both in every round and whole-PR audit:
-
-1. **Inline threads.** Enumerate the complete resolved-plus-unresolved GraphQL `reviewThreads` connection. Use `isResolved == false` only for open work. Do not inventory only by REST `commit_id == <round-head>` because GitHub can re-anchor mutable `commit_id`; retain original commit fields only as provenance.
-2. **Review-submission bodies.** Read every complete review `body`, including suppressed sections. A statement such as "generated no new comments" does not override another body finding. Key body-only findings as `review:<review-id>:<section-label>:<ordinal>`, record commit/location/full text, reconcile declared counts and `generated N comment(s)` against all native thread IDs, and fail closed on missing items, count mismatches, malformed/truncated bodies, or ambiguous boundaries.
-
-An inline finding closes only when answered and resolved. A body-only finding closes only after PR-level evaluation plus implementation or refutation evidence marks its synthetic key **closed**. Any missing or open inventory item blocks clean state. Steps 3 through 5 below are mandatory for every real finding, including a deferral, protected-file recommendation, or CI finding. Worker limits do not reduce this requirement.
+For each code review comment received from GitHub Copilot, a human reviewer, or any other reviewer, follow these steps:
 
 #### Protected-file authorization terms
 
@@ -194,9 +180,9 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
 2. **Validate the concern.** Determine whether the reviewer's feedback identifies a genuine gap, bug, style violation, or improvement opportunity. If the concern is not valid, post a reply explaining why through the GitHub plugin (or fallback), skip steps 3-8, and continue to step 9.
 
-3. **List options.** Enumerate every materially distinct resolution, including useful combinations and permutations. Consider the senior engineer, new developer, DevOps, documentation, project, cybersecurity executive, cybersecurity technical, business, audit, user, and any other relevant perspective. Use primary-source research when it can confirm technical facts. List options before scoring.
+3. **List options.** Enumerate all reasonable ways to resolve the problem or address the feedback.
 
-4. **Build an evaluation rubric.** Build a fresh weighted rubric for this finding on a 1-5 scale. Weight correctness, security, compatibility, testing, user impact, and long-term clarity above churn, effort, or tight PR scope unless the finding concerns one of those lower-weight criteria. Do not reuse another finding's rubric. Finish the rubric before scoring.
+4. **Build an evaluation rubric.** Define 4-6 scoring criteria relevant to the concern (for example: style guide compliance, performance, code simplicity, PII safety, PowerShell 5.1 compatibility). Score each criterion on a 1-5 scale.
 
 5. **Score and select.** Apply the rubric to every option and present the results in a Markdown table. Select the option with the highest total score. When the rubric produces a clear highest-scoring option, the agent **MUST** select that option and carry it forward to step 7. A topic touching owner preferences, governance, or policy is not, by itself, an escalation trigger when the rubric produces a clear winner; this clarification stands independently of the protected-file authorization checkpoint in step 7.
 
@@ -209,7 +195,7 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
     **PAUSE** processing of this comment until the owner responds. Continue processing other independent review comments in the meantime.
 
-6. **Post the evaluation.** Reply to an inline thread. For a body-only finding, post a PR comment with its synthetic key, review, commit, and location. Include options, weighted rubric, scores, selected action, references, tests, and implementation status or SHA. Prefer the plugin; use `gh` only for a missing capability.
+6. **Post the evaluation.** Reply to the review comment thread with the options table, the scoring table, the selected option, and either a note that implementation will follow in step 7 or, if the fix was already applied, the commit SHA that implements it. Post the reply through the GitHub plugin; fall back to `gh` only if the plugin reply tool is unavailable.
 
 7. **Implement the fix.** Apply the selected option locally, commit, and push to the agent's working branch using local `git`.
 
@@ -234,61 +220,11 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
 9. **Resolve or leave open.** If **no** style guide update was recommended in step 8, resolve the review comment thread when tooling permits (for example, the GitHub plugin's thread-resolution capability, a `gh api graphql` call against the `resolveReviewThread` mutation, or manual owner action). If a style guide update **was** recommended, leave the thread **open** so the owner can act on the prompt before it is dismissed. If thread-resolution tooling is not available in the current runtime, leave a brief note in the reply that the thread should be resolved manually and continue.
 
-## CI Failure Processing
-
-Apply the finding-specific decision framework to each confirmed CI root cause.
-Read the complete check result and logs, distinguish transport/parser failure
-from a check result, and never coerce an unavailable observation into success.
-Compare the same check on the PR base when evidence can establish whether the
-failure predates the change. Report a verified base-branch failure once and do
-not attribute it to the PR; without that evidence, attribute the failure to the
-PR and diagnose it normally.
-
-Use bounded local diagnostic instrumentation only. Remove it after the repair
-or record why it remains. Do not add external telemetry. Limit diagnosis to at
-most five instrumentation cycles for one failing check in one loop invocation;
-pause with the exact check and evidence when the bound is reached. A repair
-push does not wait for a running CI check to prove the repair; a later failure
-is a new finding. Preserve failed evidence and classify failed, canceled,
-skipped, timed-out, missing, and ambiguous checks truthfully.
-
-## Deferring Work
-
-A deferral leaves real work for later. It is not a label for unfinished work.
-
-1. Defer only when the complete per-finding options and weighted rubric select deferral on the merits.
-2. Context, budget, turns, size, tedium, reviewer availability, and round end are not reasons to defer.
-3. Before closure or merge, create and cite a GitHub Issue with the problem, rationale, trigger condition, scope, and origin link. PR text is not a replacement tracker.
-4. Name an accepted residual, accepted risk, intentional deviation, or fail-closed choice accurately. Do not call those pending work.
-5. After tracking genuine deferred work, resolve the thread or close the synthetic key. Sweep every review body, resolved/unresolved thread, PR comment, and the PR body before clean or merge.
-
-## GitHub Copilot pull-request reviews
-
-Use `Balanced` as the preferred effort for each GitHub Copilot pull-request review. In the GitHub UI, select Copilot and `Balanced` before submitting one request. Record the observed effort from the timeline or Copilot overview; do not infer it from HTTP `201` or reviewer identity.
-
-If the interface cannot select `Balanced`, use the documented `@copilot` CLI fallback or the REST reviewer login `copilot-pull-request-reviewer[bot]`. A resulting `Lite` review is an acceptable fallback and does not stall the loop. Do not send a second request only because GitHub used `Lite`. Never capture or publish cookies, CSRF tokens, nonces, multipart boundaries, or private form fields.
-
-References: [Copilot review effort levels](https://docs.github.com/en/copilot/concepts/agents/code-review#review-effort-level) and [GitHub review-request REST parameters](https://docs.github.com/en/rest/pulls/review-requests?apiVersion=2022-11-28#request-reviewers-for-a-pull-request).
-
-## Automated Review Loop (User-Initiated)
-
-When the owner asks for multiple rounds, use Copilot and remote Codex as co-equal reviewers while the local session remains active. Request Codex every round with a PR comment whose body is exactly `@codex review`; do not rely on an automatic trigger. This loop is not autonomous.
-
-1. Record each bot's newest review, inline-comment, and PR-comment IDs/times and the request-time head before requesting either reviewer.
-2. Request Copilot through the plugin or documented fallback, post exact `@codex review`, and read both request events back.
-3. Poll authenticated review bodies, complete `reviewThreads`, and PR comments at intervals of at least 60 seconds. A confirmed-successful no-review poll requires both co-equal sources to be queried, parsed, and pagination-complete. A transport, authentication, parser, rate-limit, tool, or shape failure is a visible failed cycle, not a no-event result.
-4. Retry at most once per failed source and use at most one alternate authenticated observation in that failed cycle. Failed cycles do not consume the successful no-review timeout counter. Pause with the concrete error if bounded recovery does not produce a complete observation.
-5. Reconcile native thread IDs, review-body counts, and synthetic keys. Apply the per-finding workflow to both reviewers and record an unavailable reviewer explicitly; absence is not agreement.
-6. Decide clean state only from current-head clean reviews, complete inventory, resolved native threads, closed body-only keys, and the Deferring Work sweep. Failed, pending, skipped, canceled, timed-out, expired, missing, stale, and ambiguous results are not clean.
-7. Re-request both reviewers only after fixes reach the PR head and current-head readiness passes. Outside an explicitly authorized active loop, push only to the working branch; do not infer direct PR-head authorization.
-
-The source repositories contain a larger planning-only state machine. This template adopts its reusable behavioral contract, not its controller, receipts, or repository-specific delivery ledger.
-
 ### Optional user-initiated review cycle
 
-When the PR owner explicitly asks Codex to drive multiple review rounds inside an active session (for example, *"run the review cycle on PR #N"*), Codex MAY iterate on the following bounded loop. The loop runs only while the Codex session is active; it MUST NOT be presented as autonomous. The co-equal reviewer, baseline, completeness, and failure rules in **Automated Review Loop (User-Initiated)** apply to every round.
+When the PR owner explicitly asks Codex to drive multiple review rounds inside an active session (for example, *"run the review cycle on PR #N"*), Codex MAY iterate on the following loop. The loop runs only while the Codex session is active; it MUST NOT be presented as autonomous.
 
-1. **Request both reviewers.** Request Copilot through the GitHub plugin if it exposes that capability, or use the documented fallback. Post the exact `@codex review` trigger and read it back. If a capability is unavailable, record the reviewer as unavailable; do not treat absence as agreement.
+1. **Request a Copilot code review** through the GitHub plugin if it exposes that capability. If not, fall back to `gh pr edit --add-reviewer github-copilot[bot]` (or the equivalent `gh api` call), or ask the user to request the review manually.
 2. **Wait for the review.** Codex cannot wake up on webhooks. Either keep the session active and poll the PR's review state through the GitHub plugin (or `gh pr view --json reviews,comments`) at a reasonable cadence, or ask the user to notify Codex when the review arrives.
 3. **Process each comment** using the per-comment workflow above. Skip any comment whose ID was already processed in an earlier round of this cycle.
 4. **Re-request review** only after the round's fix commits are reachable from the PR head. If a fix commit lives only on the agent's working branch (not on the PR head), state that in the round's summary reply and pause until the owner integrates it, unless the explicit-authorization conditions in step 7 above for direct PR-head placement are satisfied.
@@ -299,7 +235,7 @@ When the optional review cycle is used, retain these finite safety limits:
 
 - **Maximum rounds:** 8 review iterations per cycle invocation. After the eighth round, PAUSE and ask the user to confirm whether to continue.
 - **Wall-clock timeout:** 6 hours from cycle start. If the timeout is reached, PAUSE and ask the user to confirm whether to continue.
-- **Duplicate-finding skipping:** Track native thread IDs and review-body synthetic keys. Skip only findings whose closure evidence exists.
+- **Duplicate-comment skipping:** Track comment IDs already processed in earlier rounds and skip them on subsequent rounds.
 
 ### Fallbacks for unsupported plugin capabilities
 
@@ -307,8 +243,7 @@ When a workflow step depends on a capability the GitHub plugin does not currentl
 
 | Capability | Primary | Fallback |
 | --- | --- | --- |
-| Request a Copilot code review | GitHub plugin | `gh pr edit --add-reviewer '@copilot'`, `gh api`, or ask the owner to request the review manually |
-| Request a remote Codex review | PR comment with exact `@codex review` | `gh api` to create the comment, or ask the owner to post the exact trigger |
+| Request a Copilot code review | GitHub plugin | `gh pr edit --add-reviewer github-copilot[bot]`, `gh api`, or ask the owner to request the review manually |
 | Resolve a review thread | GitHub plugin | `gh api graphql` against the `resolveReviewThread` mutation, or ask the owner to resolve the thread manually |
 | Add a reaction on a review comment | GitHub plugin | `gh api -X POST /repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions -f content=eyes`, or skip silently if neither path is available |
 | Remove a reaction on a review comment | GitHub plugin | First list the comment's reactions via `gh api /repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions` and find the reaction whose `content` matches the one to remove (e.g. `eyes`) and whose `user.login` is the agent's own identity; then delete by reaction id via `gh api -X DELETE /repos/{owner}/{repo}/pulls/comments/{comment_id}/reactions/{reaction_id}`. Skip silently if neither path is available |
