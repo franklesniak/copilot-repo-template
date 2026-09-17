@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import copy
+import hashlib
+import json
 import shutil
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -201,7 +205,7 @@ def test_intact_upstream_claude_contract_passes() -> None:
 
     assert result.returncode == 0, result.stderr
     assert "Instruction-contract validation passed." in result.stdout
-    assert "Contracts checked: 1" in result.stdout
+    assert "Contracts checked: 5" in result.stdout
 
 
 @pytest.mark.parametrize(
@@ -683,3 +687,436 @@ def test_file_absent_with_authorized_remove_local_is_visible_skip(tmp_path: Path
     assert "Authorized removals skipped:" in result.stdout
     assert "CLAUDE.md" in result.stdout
     assert "Owner explicitly authorized removing CLAUDE.md." in result.stdout
+
+
+def _scoped_policy() -> dict[str, Any]:
+    """Provide an independent security/failure-truth oracle for parser tests."""
+    return {
+        "heading": "## Review decisions",
+        "required_paragraphs": [
+            "Agents MUST reject stale results.",
+            "Retry delivery after 120 seconds, at most twice.",
+        ],
+        "required_tables": [
+            {
+                "headers": ["State", "Action", "Gate"],
+                "rows": [
+                    ["Failed", "Retry only failed service, at most three attempts", "Not clean"],
+                    ["Stale", "Count toward ten complete pending observations", "Unknown"],
+                    ["One clean service", "Continue the other service", "Incomplete"],
+                    ["Both clean", "Reconcile all findings and CI", "Review complete"],
+                ],
+            }
+        ],
+    }
+
+
+def _render_section(section: dict[str, Any]) -> str:
+    """Render fixture input independently of the production Markdown parser."""
+    blocks = [section["heading"], *section.get("required_paragraphs", [])]
+    for table in section.get("required_tables", []):
+        lines = ["| " + " | ".join(table["headers"]) + " |"]
+        lines.append("| " + " | ".join("---" for _ in table["headers"]) + " |")
+        lines.extend("| " + " | ".join(row) + " |" for row in table["rows"])
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks) + "\n"
+
+
+def _write_scoped_repo(tmp_path: Path, section: dict[str, Any], text: str) -> None:
+    """Use a portable retained-agent fixture, never optional upstream files."""
+    contracts = _contracts()
+    contracts["instruction_contracts"][0]["required_sections"] = [section]
+    _write_common_contract_repo(tmp_path, contracts)
+    _write_text(tmp_path, "CLAUDE.md", text)
+    _write_yaml(tmp_path, ".template-sync/marker.yml", _marker(["agent-instructions"]))
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+def test_scoped_policy_cli_accepts_complete_live_content(tmp_path: Path, mode: str) -> None:
+    """Full clauses and decision rows are accepted in both supported modes."""
+    section = _scoped_policy()
+    _write_scoped_repo(tmp_path, section, _render_section(section))
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    ("original", "replacement"),
+    [
+        ("MUST reject", "MAY reject"),
+        ("120 seconds", "121 seconds"),
+        ("at most twice", "without a bound"),
+        ("at most three attempts", "at most four attempts"),
+        ("Not clean", "Clean"),
+        ("Count toward ten complete pending observations", "Reset the wait counter"),
+        ("Continue the other service", "Finish the pair"),
+        ("Reconcile all findings and CI", "Ignore earlier findings"),
+        ("| --- | --- | --- |", "| not a delimiter | --- | --- |"),
+        ("| Failed |", "| Failed | extra |"),
+    ],
+)
+def test_scoped_policy_cli_rejects_semantic_mutations(
+    tmp_path: Path, original: str, replacement: str
+) -> None:
+    """Independent expected failures guard retry, attribution, and completion truth."""
+    section = _scoped_policy()
+    _write_scoped_repo(tmp_path, section, _render_section(section).replace(original, replacement))
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "missing required section content" in result.stdout
+
+
+@pytest.mark.parametrize("decoy", ["fence", "quote", "lazy-quote", "indent", "comment", "sibling"])
+def test_scoped_policy_cli_rejects_inert_or_relocated_decoys(tmp_path: Path, decoy: str) -> None:
+    """A complete-looking example cannot replace the operative section."""
+    section = _scoped_policy()
+    content = _render_section(section)
+    if decoy == "fence":
+        content = "```markdown\n" + content + "```\n"
+    elif decoy == "quote":
+        content = "\n".join("> " + line for line in content.splitlines())
+    elif decoy == "lazy-quote":
+        content = (
+            section["heading"]
+            + "\n\n> Example only\n"
+            + "\n".join(section["required_paragraphs"])
+            + "\n"
+        )
+    elif decoy == "indent":
+        content = "\n".join("    " + line for line in content.splitlines())
+    elif decoy == "comment":
+        content = "<!--\n" + content + "-->\n"
+    else:
+        content = section["heading"] + "\n\n## Unrelated\n" + content.split("\n", 1)[1]
+    _write_scoped_repo(tmp_path, section, content)
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert result.returncode == 1, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    "mutation", ["heading", "table", "row", "extra", "order", "paragraph-order"]
+)
+def test_scoped_policy_cli_rejects_duplicates_and_reordering(tmp_path: Path, mutation: str) -> None:
+    """Ambiguous sections, extra decisions, and changed execution order fail closed."""
+    section = _scoped_policy()
+    content = _render_section(section)
+    changed = copy.deepcopy(section)
+    if mutation == "heading":
+        content += content
+    elif mutation == "table":
+        changed["required_tables"] *= 2
+        content = _render_section(changed)
+    elif mutation == "row":
+        changed["required_tables"][0]["rows"] *= 2
+        content = _render_section(changed)
+    elif mutation == "extra":
+        changed["required_tables"][0]["rows"].append(["Expired", "Declare success", "Clean"])
+        content = _render_section(changed)
+    elif mutation == "order":
+        changed["required_tables"][0]["rows"].reverse()
+        content = _render_section(changed)
+    else:
+        changed["required_paragraphs"].reverse()
+        content = _render_section(changed)
+    _write_scoped_repo(tmp_path, section, content)
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert result.returncode == 1, result.stdout + result.stderr
+
+
+def _catalog_sections() -> list[Any]:
+    """Collect catalog data retained by template-sync support in downstream trees."""
+    catalog = yaml.safe_load(
+        (REPO_ROOT / ".template-sync/instruction-contracts.yml").read_text(encoding="utf-8")
+    )
+    return [
+        pytest.param(section, id=f"{contract['path']}:{section['heading']}")
+        for contract in catalog["instruction_contracts"]
+        for section in contract.get("required_sections", [])
+    ]
+
+
+@pytest.mark.parametrize("section", _catalog_sections())
+def test_every_catalog_invariant_has_downstream_cli_mutation_coverage(
+    tmp_path: Path, section: dict[str, Any]
+) -> None:
+    """Every retained contract clause/row is enforced without optional source files.
+
+    The fixture is contract data; the expected native failure is independent of
+    the production predicates. Disabling either validation loop makes this test
+    fail. This suite deliberately remains enabled under downstream selection.
+    """
+    content = _render_section(section)
+    _write_scoped_repo(tmp_path, section, content)
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert result.returncode == 0, result.stdout + result.stderr
+    mutations: list[str] = []
+    for paragraph in section.get("required_paragraphs", []):
+        mutations.append(content.replace(paragraph, "Removed obligation.", 1))
+    for table in section.get("required_tables", []):
+        for row in table["rows"]:
+            original = "| " + " | ".join(row) + " |"
+            mutations.append(
+                content.replace(original, original.replace(row[-1], "Changed gate"), 1)
+            )
+    assert mutations, "Every scoped contract must enforce actual content."
+    for index, mutated in enumerate(mutations):
+        _write_text(tmp_path, "CLAUDE.md", mutated)
+        result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+        assert result.returncode == 1, f"mutation {index}: {result.stdout}{result.stderr}"
+        assert "missing required section content" in result.stdout
+
+
+def test_scoped_waiver_is_specific_and_reported(tmp_path: Path) -> None:
+    """An explicit clause waiver cannot silently waive the whole policy."""
+    section = _scoped_policy()
+    text = _render_section(section).replace("Agents MUST reject stale results.", "")
+    _write_scoped_repo(tmp_path, section, text)
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["agent-instructions"],
+            waivers=[
+                {
+                    "path": "CLAUDE.md",
+                    "anchor": "section:## Review decisions:paragraph:"
+                    + hashlib.sha256(b"Agents MUST reject stale results.").hexdigest(),
+                    "reason": "Owner selected a different local review policy.",
+                    "authorization_basis": "Explicit fixture owner authorization for this clause only.",
+                }
+            ],
+        ),
+    )
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "passed with waivers" in result.stdout
+    _write_text(tmp_path, "CLAUDE.md", text.replace("Not clean", "Clean"))
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert result.returncode == 1
+    assert "section:## Review decisions:tables" in result.stdout
+
+
+def test_malformed_table_waiver_cannot_hide_a_weakened_clause(tmp_path: Path) -> None:
+    """A waived table failure leaves independently violated paragraphs failing."""
+    section = _scoped_policy()
+    text = _render_section(section).replace("MUST reject", "MAY reject")
+    text = text.replace("| --- | --- | --- |", "| broken | --- | --- |")
+    _write_scoped_repo(tmp_path, section, text)
+    expected_tables = [[table["headers"], table["rows"]] for table in section["required_tables"]]
+    identity = hashlib.sha256(
+        json.dumps(expected_tables, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["agent-instructions"],
+            waivers=[
+                {
+                    "path": "CLAUDE.md",
+                    "anchor": "section:## Review decisions:tables:" + identity,
+                    "reason": "Fixture owner permits a different table format.",
+                    "authorization_basis": "Explicit authorization for this table inventory only.",
+                }
+            ],
+        ),
+    )
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert (
+        "missing required section content: section:## Review decisions:paragraph:" in result.stdout
+    )
+    assert "Instruction contract waivers applied:" in result.stdout
+
+
+def test_section_heading_waiver_cannot_hide_its_content(tmp_path: Path) -> None:
+    """A missing-heading exception does not authorize removal of the whole policy."""
+    _write_scoped_repo(tmp_path, _scoped_policy(), "# No policy\n")
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["agent-instructions"],
+            waivers=[
+                {
+                    "path": "CLAUDE.md",
+                    "anchor": "section:## Review decisions",
+                    "reason": "Fixture uses a different heading.",
+                    "authorization_basis": "Owner authorized the heading only.",
+                }
+            ],
+        ),
+    )
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert result.returncode == 1
+    assert "section:## Review decisions:paragraph:" in result.stdout
+    assert "section:## Review decisions:tables:" in result.stdout
+
+
+def test_content_waiver_does_not_move_to_another_obligation(tmp_path: Path) -> None:
+    """A changed expectation invalidates a waiver instead of reusing an ordinal."""
+    section = _scoped_policy()
+    section["required_paragraphs"][0] = "Agents MUST reject wrong actors."
+    _write_scoped_repo(tmp_path, section, _render_section(section).replace("MUST", "MAY"))
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(
+            ["agent-instructions"],
+            waivers=[
+                {
+                    "path": "CLAUDE.md",
+                    "anchor": "section:## Review decisions:paragraph:"
+                    + hashlib.sha256(b"Agents MUST reject stale results.").hexdigest(),
+                    "reason": "Old fixture exception.",
+                    "authorization_basis": "Owner authorized only the prior stale-results clause.",
+                }
+            ],
+        ),
+    )
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert result.returncode == 1
+    assert hashlib.sha256(b"Agents MUST reject wrong actors.").hexdigest() in result.stdout
+
+
+def test_live_commonmark_indentation_is_not_code(tmp_path: Path) -> None:
+    """Up to three spaces alone do not make a standalone paragraph indented code."""
+    section = _scoped_policy()
+    text = "\n".join("  " + line for line in _render_section(section).splitlines())
+    _write_scoped_repo(tmp_path, section, text)
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    "predicate", ["paragraphs.index(expected, cursor)", "tables != list(section.required_tables)"]
+)
+def test_security_oracle_detects_disabled_validator_assertion(
+    tmp_path: Path, predicate: str
+) -> None:
+    """A deliberate assertion-removal mutant defeats input validation and is detected."""
+    section = _scoped_policy()
+    content = _render_section(section).replace(
+        "Agents MUST reject stale results." if predicate.startswith("paragraphs") else "Not clean",
+        "" if predicate.startswith("paragraphs") else "Clean",
+    )
+    fixture = tmp_path / "fixture"
+    _write_scoped_repo(fixture, section, content)
+    baseline = _run_validator(fixture, "--mode", "downstream", "--require-marker")
+    assert baseline.returncode == 1, baseline.stdout + baseline.stderr
+    mutant_dir = tmp_path / "mutant"
+    mutant_dir.mkdir()
+    for source in SCRIPT_PATH.parent.glob("*.py"):
+        shutil.copyfile(source, mutant_dir / source.name)
+    mutant = mutant_dir / SCRIPT_PATH.name
+    source_text = mutant.read_text(encoding="utf-8")
+    assert source_text.count(predicate) == 1
+    mutant.write_text(
+        source_text.replace(predicate, "0" if predicate.startswith("paragraphs") else "False"),
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(mutant),
+            "--repo-root",
+            str(fixture),
+            "--mode",
+            "downstream",
+            "--require-marker",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (
+        baseline.returncode != result.returncode
+    ), "The independent rejection oracle must kill this mutant."
+
+
+@pytest.mark.upstream_template_only
+def test_codex_capacity_preserves_plugin_and_instruction_reserve() -> None:
+    """The upstream Codex opt-in has capacity without activating unrelated features."""
+    config = tomllib.loads((REPO_ROOT / ".codex/config.toml").read_text(encoding="utf-8"))
+    assert config["project_doc_max_bytes"] == 65536
+    assert config["plugins"]["github@openai-curated"]["enabled"] is True
+    assert "features" not in config
+    assert len((REPO_ROOT / "AGENTS.md").read_bytes()) + 16384 <= config["project_doc_max_bytes"]
+
+
+def test_additive_contradiction_is_not_accepted(tmp_path: Path) -> None:
+    """Keeping original words cannot hide an added conflicting completion rule."""
+    section = _scoped_policy()
+    text = _render_section(section) + "\nAgents MAY finish after only one reviewer is clean.\n"
+    _write_scoped_repo(tmp_path, section, text)
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "section:## Review decisions:paragraphs:" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "shape",
+    [
+        "empty-section",
+        "no-content",
+        "duplicate-heading",
+        "duplicate-table",
+        "duplicate-header",
+        "empty-header",
+        "empty-rows",
+        "ragged-row",
+        "duplicate-condition",
+        "duplicate-row",
+        "unexpected-property",
+    ],
+)
+def test_scoped_contract_cli_rejects_invalid_catalog_shapes(tmp_path: Path, shape: str) -> None:
+    """Both schema and semantic shape failures stop the real CLI before evaluation."""
+    section = _scoped_policy()
+    content = _render_section(section)
+    table = section["required_tables"][0]
+    sections = [section]
+    if shape == "empty-section":
+        sections = []
+    elif shape == "no-content":
+        sections = [{"heading": section["heading"]}]
+    elif shape == "duplicate-heading":
+        sections.append({"heading": section["heading"], "required_paragraphs": ["Other rule."]})
+    elif shape == "duplicate-table":
+        duplicate = copy.deepcopy(table)
+        duplicate["rows"][0][-1] = "Other gate"
+        section["required_tables"].append(duplicate)
+    elif shape == "duplicate-header":
+        table["headers"][1] = table["headers"][0]
+    elif shape == "empty-header":
+        table["headers"] = []
+    elif shape == "empty-rows":
+        table["rows"] = []
+    elif shape == "ragged-row":
+        table["rows"][0].pop()
+    elif shape == "duplicate-condition":
+        table["rows"][1][0] = table["rows"][0][0]
+    elif shape == "duplicate-row":
+        table["rows"].append(table["rows"][0][:])
+    else:
+        section["unsupported"] = True
+    contracts = _contracts()
+    contracts["instruction_contracts"][0]["required_sections"] = sections
+    _write_common_contract_repo(tmp_path, contracts)
+    _write_text(tmp_path, "CLAUDE.md", content)
+    result = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "error" in result.stderr.lower()
+
+
+def test_child_section_cannot_supply_parent_policy(tmp_path: Path) -> None:
+    """A child heading owns its clauses separately from its parent's direct body."""
+    section = _scoped_policy()
+    content = _render_section(section).replace(
+        "## Review decisions\n", "## Review decisions\n\n### Example\n", 1
+    )
+    _write_scoped_repo(tmp_path, section, content)
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "section:## Review decisions:paragraph:" in result.stdout

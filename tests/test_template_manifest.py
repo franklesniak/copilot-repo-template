@@ -49,6 +49,7 @@ if str(TEMPLATE_SYNC_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(TEMPLATE_SYNC_SCRIPT_DIR))
 
 import report_excluded_module_references as EXCLUDED_MODULE_REPORTER  # noqa: E402
+import validate_instruction_contracts as INSTRUCTION_CONTRACTS  # noqa: E402
 import validate_marker as VALIDATE_MARKER  # noqa: E402
 from template_sync_materialization_helpers import (  # noqa: E402
     INLINE_BLOCK_ANY_MODULES,
@@ -3030,6 +3031,11 @@ def test_partial_reference_stripping_preserves_retained_instruction_contracts() 
             ISSUE_694_PARTIAL_PROTECTED_DOC_MODULES,
         )
         checked_contracts += 1
+
+        scoped_contracts = INSTRUCTION_CONTRACTS.parse_required_sections(contract_mapping)
+        assert not INSTRUCTION_CONTRACTS.section_failures(
+            stripped_text, scoped_contracts
+        ), f"{relative_path}: scoped policy lost during partial reference stripping"
 
         for heading in _as_string_list(
             contract_mapping.get("required_headings", []),

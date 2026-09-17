@@ -7,13 +7,13 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.6.20260623.0
+**Version:** 1.6.20260917.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-23
+- **Last Updated:** 2026-09-17
 - **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, Azure Pipelines YAML, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by the companion JSON guide, if present) or generated YAML artifacts that are owned by another tool's serializer.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md) (companion guide, if present)
 
@@ -475,6 +475,18 @@ Additional ecosystem-specific validators (for example, `kubeval`/`kubeconform` f
 - GitHub Actions workflows **MUST** declare **least-privilege** `permissions:` blocks at the workflow or job level. Workflows **SHOULD** start from `permissions: {}` (or `contents: read`) and grant additional scopes only where required.
 - YAML loaded by application code **MUST** use a **safe loader**. In Python, this means `yaml.safe_load` (or `yaml.load(..., Loader=yaml.SafeLoader)`); authors **MUST NOT** call `yaml.load` with `Loader=yaml.FullLoader` or `Loader=yaml.UnsafeLoader` on untrusted input, and **MUST NOT** call `yaml.load` without an explicit safe `Loader=` argument (calling `yaml.load` without `Loader=` raises a warning in modern PyYAML and historically defaulted to the unsafe full loader). Equivalent safe-loading APIs **MUST** be used in other languages.
 - Custom or unsafe deserialization tags (for example, `!!python/object`, `!!python/object/apply`, `!ruby/object`) **MUST NOT** appear in YAML files in this repository, and the loaders that read those files **MUST NOT** be configured to honor such tags.
+
+### Privileged verification of proposed changes
+
+When a workflow uses privileged events or credentials to validate proposed policy, instructions, configuration, or artifacts, it MUST execute verifier code from a verified trusted base. Proposed files and supporting artifacts MUST remain bounded inert data. Do not check out and execute proposed scripts, install proposed dependencies, or let the candidate define its own acceptance oracle in that privileged context. This rule does not require adding a privileged workflow to a repository that has none.
+
+Such a verifier MUST cover every relevant event and determine applicability from a complete trusted change enumeration. Platform path filters and bounded changed-file responses alone MUST NOT gate security verification: a relevant file outside the returned window can otherwise escape the check. Fail closed when completeness or the trusted base cannot be established; do not label an unobserved or skipped security gate successful.
+
+Before extraction or parsing, the verifier MUST bind each allowed input to its exact Git tree path, entry mode, object type, blob identity, byte limit, and accepted encoding. For ordinary data require mode `100644`; permit `100755` only for an explicitly executable role. Reject symbolic-link mode `120000` and gitlink mode `160000`. A Git blob type alone does not reject a symlink. Filesystem permissions and symlink checks are separate controls and do not establish the Git tree entry mode.
+
+When a trusted verifier needs parser dependencies, it MUST verify the trusted package manifest and lockfile closure, including alternate lockfiles such as `npm-shrinkwrap.json` and relevant package-manager configuration such as `.npmrc`, before installation. Disabling lifecycle scripts does not make a proposed dependency safe: importing it can execute code. Use only the trusted dependency closure; reject unexpected overrides or inputs.
+
+Security validation MUST include positive, negative, and targeted mutation cases with independent expected outcomes. A mutation that removes a security assertion must make the suite fail. Do not derive the expected answer only from the same production predicate being tested. Record native command failures and distinguish a missing or skipped check from a pass.
 
 ## Definition of Done for YAML Changes
 

@@ -1,0 +1,15 @@
+instruction_contracts:
+  - path: AGENTS.md
+    requires_modules:
+      - agent-instructions
+    required_sections:
+      - heading: '## Review decisions'
+        required_tables:
+          - headers:
+              - State
+              - Gate
+            rows:
+              - - Failed
+                - Not clean
+              - - Failed
+                - Not clean

@@ -9,6 +9,7 @@ import importlib.util
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -694,6 +695,168 @@ def materialize_module_fixture(
 
     assert result.returncode == 0, result.stdout + result.stderr
     return target_root
+
+
+def finish_review_profile_link_cleanup(target: Path, profile: str) -> None:
+    """Model the adopter's authorized link cleanup after materialization.
+
+    Materialization deliberately reports manual cleanup separately. This fixture
+    owner authorizes removal of links to excluded instructions/YAML docs only;
+    link labels and all unrelated links remain. No validator waiver is added.
+    """
+    if profile not in {"neither", "no-yaml"}:
+        return
+    excluded = {".github/instructions/yaml.instructions.md", "templates/yaml/README.md"}
+    if profile == "neither":
+        excluded = {
+            ".github/copilot-instructions.md",
+            "COPILOT_CHAT_PROMPTS.md",
+            *(
+                f".github/instructions/{name}.instructions.md"
+                for name in (
+                    "docs",
+                    "gitattributes",
+                    "json",
+                    "powershell",
+                    "python",
+                    "terraform",
+                    "yaml",
+                )
+            ),
+        }
+    paths = subprocess.run(
+        ["git", "ls-files", "-z", "--", "*.md"],
+        cwd=target,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.split("\0")
+    for relative_path in filter(None, paths):
+        document = target / relative_path
+        assert not document.is_symlink()
+        assert document.resolve().is_relative_to(target.resolve())
+
+        def remove_excluded_link(match: re.Match[str], document: Path = document) -> str:
+            link = match.group(2).split("#", 1)[0]
+            if not link or ":" in link or link.startswith("/"):
+                return match.group(0)
+            resolved = (document.parent / link).resolve()
+            if not resolved.is_relative_to(target.resolve()):
+                return match.group(0)
+            if resolved.relative_to(target.resolve()).as_posix() in excluded:
+                assert not resolved.exists()
+                return match.group(1)
+            return match.group(0)
+
+        original = read_file(document)
+        cleaned = re.sub(r"\[([^\]\n]+)\]\(([^()\s]+)\)", remove_excluded_link, original)
+        if cleaned != original:
+            write_file(document, cleaned)
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize("profile", ["both", "codex-only", "claude-only", "neither", "no-yaml"])
+def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -> None:
+    """Actual retained policy passes direct/aggregate CLIs and rejects a weakened gate."""
+    modules = tuple(
+        module
+        for module in FULL_TEMPLATE_MODULES
+        if not (profile == "neither" and module == "agent-instructions")
+        and not (profile == "no-yaml" and module == "yaml")
+    )
+    target = tmp_path / "profile"
+    target.mkdir()
+    decisions = protected_take_decisions_for_modules(modules)
+    removed = {"codex-only": "CLAUDE.md", "claude-only": "AGENTS.md"}.get(profile)
+    if removed is not None:
+        decisions = [decision for decision in decisions if decision["path"] != removed]
+        decisions.append(
+            {
+                "path": removed,
+                "decision": "REMOVE-LOCAL",
+                "authorization_basis": f"Fixture owner explicitly removes {removed}.",
+                "authorized_scope": f"{removed} only.",
+                "reason": "This profile retains the other agent platform.",
+            }
+        )
+    fields: dict[str, Any] = azure_provider_fields_for_modules(modules)
+    fields["protected_file_decisions"] = decisions
+    if removed is not None:
+        runtime = ".claude/" if profile == "codex-only" else ".codex/"
+        fields["local_overrides"] = [
+            {
+                "path": removed,
+                "default_decision": "REMOVE-LOCAL",
+                "reason": "The fixture owner removes this unselected peer entry point.",
+            },
+            {
+                "path": runtime,
+                "default_decision": "SKIP",
+                "reason": "The fixture does not retain this peer runtime.",
+            },
+        ]
+    write_yaml(target / "decisions.yml", marker_document(list(modules), **fields))
+    result = run_materialize(
+        REPO_ROOT,
+        target,
+        "--decisions-file",
+        "decisions.yml",
+        *azure_provider_cli_args_for_modules(modules),
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    run_git(target, "init", "-q")
+    run_git(target, "add", ".")
+    finish_review_profile_link_cleanup(target, profile)
+    if removed is not None:
+        assert not (target / removed).exists()
+    if profile in {"claude-only", "neither"}:
+        assert not (target / ".codex").exists()
+    else:
+        assert (target / ".codex/config.toml").is_file()
+    if profile in {"codex-only", "neither"}:
+        assert not (target / ".claude").exists()
+    direct_command = [
+        sys.executable,
+        str(target / ".template-sync/scripts/validate_instruction_contracts.py"),
+        "--mode",
+        "downstream",
+        "--require-marker",
+        "--repo-root",
+        str(target),
+    ]
+    direct = subprocess.run(direct_command, check=False, capture_output=True, text=True)
+    aggregate = run_downstream_adoption_validator(target)
+    assert direct.returncode == 0, direct.stdout + direct.stderr
+    assert aggregate.returncode == 0, aggregate.stdout + aggregate.stderr
+    if profile != "neither":
+        mutations = [
+            (".github/copilot-instructions.md", "Exhausted, not clean", "Clean"),
+            (
+                "AGENTS.md",
+                "Codex MUST NOT promise webhook-driven wake-up",
+                "Codex MAY promise webhook-driven wake-up",
+            ),
+            (
+                "CLAUDE.md",
+                "Claude MUST follow [Shared Review Governance]",
+                "Claude MAY ignore [Shared Review Governance]",
+            ),
+        ]
+        for relative_path, before, after in mutations:
+            if relative_path == removed:
+                continue
+            policy = target / relative_path
+            original = read_file(policy)
+            assert before in original
+            write_file(policy, original.replace(before, after))
+            direct = subprocess.run(direct_command, check=False, capture_output=True, text=True)
+            aggregate = run_downstream_adoption_validator(target)
+            assert direct.returncode == 1, direct.stdout + direct.stderr
+            assert aggregate.returncode == 1, aggregate.stdout + aggregate.stderr
+            assert relative_path in direct.stdout
+            assert relative_path in aggregate.stdout
+            assert "section:" in aggregate.stdout
+            write_file(policy, original)
 
 
 def git_check_attributes_in_repo(

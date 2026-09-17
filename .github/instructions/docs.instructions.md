@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.6.20260623.0
+**Version:** 1.6.20260917.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-23
+- **Last Updated:** 2026-09-17
 - **Scope:** Defines documentation standards for Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) files in this repository, including specs, design docs, runbooks, ADRs, instruction files, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -177,9 +177,11 @@ This file preserves the AI review prompt used while preparing ADR-0003. The pres
 ### Normative Language
 
 - Use **MUST/SHOULD/MAY** for requirements and guarantees.
+- Uppercase requirement keywords have the meanings defined by [BCP 14](https://www.rfc-editor.org/rfc/rfc2119) and its [capitalization clarification](https://www.rfc-editor.org/rfc/rfc8174). Lowercase words retain their ordinary meaning; normative prose can also impose a requirement without a keyword. Examples MUST obey applicable requirements unless clearly labeled as counterexamples.
 - Use **CAN** only for capability, not obligation.
 - Label assumptions explicitly as **Assumption:** and keep them testable.
 - **Scope conditional obligations.** When a normative keyword constrains an action that is itself optional, explicitly scope the obligation to when that action occurs, for example, "When a document cites sources, it MUST cite only inspectable sources." This prevents readers from misreading the requirement as mandating the optional action.
+- **State evaluation point.** When an action can change the state tested by its own condition, the rule MUST identify when and against which state the condition is evaluated. For example: "Before sending a review request, compare the current head with the recorded reviewed head. If they differ, the old clean result does not satisfy the new head's review gate." A new head is the input, an incomplete review gate is the result, and the identity mismatch explains that result.
 - **Cross-instruction-file normative-level alignment.** When a document restates a normative requirement that is also defined in an applicable file under `.github/instructions/*`, the document's requirement level (`MUST`, `SHOULD`, `MAY`, and their negations) MUST match the level used in the instruction file when the scope and context are the same, unless the document explicitly justifies a stricter or weaker level in prose immediately adjacent to the restatement. If the scope or context differs from the instruction file, the document SHOULD note that scope/context difference at the restatement. Implicit divergence (silently using a different level when the scope and context are the same as in the instruction file, with no adjacent justification) MUST NOT occur.
 - **Intra-document normative-level consistency.** Within a single document, the normative requirement level for the same keyword, field, rule, and scope MUST be consistent across sections. If two sections appear to attach different levels to the same item, reconcile the wording or explicitly explain why the scopes differ.
 

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,6 +28,23 @@ class InstructionContractValidationError(Exception):
 
 
 @dataclass(frozen=True)
+class RequiredTable:
+    """An exact ordered decision table in an operative Markdown section."""
+
+    headers: tuple[str, ...]
+    rows: tuple[tuple[str, ...], ...]
+
+
+@dataclass(frozen=True)
+class RequiredSection:
+    """Complete ordered clauses and tables owned by one unique heading."""
+
+    heading: str
+    required_paragraphs: tuple[str, ...]
+    required_tables: tuple[RequiredTable, ...]
+
+
+@dataclass(frozen=True)
 class InstructionContract:
     """Required anchors for one protected instruction file."""
 
@@ -32,6 +52,7 @@ class InstructionContract:
     requires_modules: tuple[str, ...]
     required_headings: tuple[str, ...]
     required_phrases: tuple[str, ...]
+    required_sections: tuple[RequiredSection, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -286,6 +307,36 @@ def _required_string_list(
     return tuple(string_values)
 
 
+def parse_required_sections(raw_contract: dict[str, object]) -> tuple[RequiredSection, ...]:
+    """Parse schema-validated section contracts and reject ambiguous table shapes."""
+    sections: list[RequiredSection] = []
+    headings: set[str] = set()
+    for raw in cast(list[dict[str, Any]], raw_contract.get("required_sections", [])):
+        heading = cast(str, raw["heading"])
+        if heading in headings:
+            raise InstructionContractValidationError(f"Duplicate required section: {heading}")
+        headings.add(heading)
+        tables: list[RequiredTable] = []
+        for table in cast(list[dict[str, Any]], raw.get("required_tables", [])):
+            headers = tuple(cast(list[str], table["headers"]))
+            rows = tuple(tuple(row) for row in cast(list[list[str]], table["rows"]))
+            if any(len(row) != len(headers) for row in rows):
+                raise InstructionContractValidationError(f"Ragged contract table: {heading}")
+            if len({row[0] for row in rows}) != len(rows):
+                raise InstructionContractValidationError(f"Duplicate table condition: {heading}")
+            tables.append(RequiredTable(headers, rows))
+        if len({table.headers for table in tables}) != len(tables):
+            raise InstructionContractValidationError(f"Duplicate contract table: {heading}")
+        sections.append(
+            RequiredSection(
+                heading,
+                _required_string_list(raw, "required_paragraphs"),
+                tuple(tables),
+            )
+        )
+    return tuple(sections)
+
+
 def parse_contracts(
     contracts_document: dict[str, Any],
     manifest_modules: set[str],
@@ -330,9 +381,10 @@ def parse_contracts(
 
         required_headings = _required_string_list(raw_contract, "required_headings")
         required_phrases = _required_string_list(raw_contract, "required_phrases")
-        if not required_headings and not required_phrases:
+        required_sections = parse_required_sections(raw_contract)
+        if not required_headings and not required_phrases and not required_sections:
             raise InstructionContractValidationError(
-                f"{path} must define at least one required heading or phrase."
+                f"{path} must define at least one required heading, phrase, or section."
             )
 
         contracts.append(
@@ -341,6 +393,7 @@ def parse_contracts(
                 requires_modules=requires_modules,
                 required_headings=required_headings,
                 required_phrases=required_phrases,
+                required_sections=required_sections,
             )
         )
     return tuple(contracts)
@@ -758,6 +811,154 @@ def heading_is_present(text: str, heading: str) -> bool:
     return False
 
 
+def operative_markdown_lines(text: str) -> list[str]:
+    """Read the deliberately narrow live policy subset, preserving block boundaries.
+
+    Section contracts accept top-level ATX headings, paragraphs/list items, and
+    pipe tables. Fences, block quotes, indented code, and HTML comments cannot
+    supply an obligation. Existing loose heading/phrase contracts keep their
+    compatibility behavior. This is a static policy guard, not an agent runner.
+    """
+    without_comments = re.sub(
+        r"<!--[\s\S]*?(?:-->|$)",
+        lambda match: "\n" * (match.group().count("\n") + 1),
+        text,
+    )
+    live = dict(
+        lines_outside_markdown_fences(without_comments, fence_context=MARKDOWN_FENCE_CONTEXT)
+    )
+    result: list[str] = []
+    in_quote = False
+    for number, line in enumerate(without_comments.splitlines(), start=1):
+        if not line.strip():
+            in_quote = False
+        elif re.match(r"^ {0,3}>", line):
+            in_quote = True
+        elif re.match(r"^ {0,3}#{1,6} ", line):
+            # ATX headings interrupt lazy quote paragraphs in CommonMark.
+            in_quote = False
+        if in_quote:
+            result.append("")
+            continue
+        if number not in live or re.match(r"^(?: {4}| *\t| {0,3}>)", line):
+            result.append("")
+        else:
+            result.append(line.strip())
+    return result
+
+
+def section_body(lines: list[str], heading: str) -> list[str] | None:
+    """Return one unique heading's direct body, ending at the next ATX heading."""
+    matches = [index for index, line in enumerate(lines) if line == heading]
+    if len(matches) != 1:
+        return None
+    start = matches[0] + 1
+    end = len(lines)
+    for index in range(start, len(lines)):
+        match = re.match(r"^(#{1,6}) ", lines[index])
+        if match is not None:
+            end = index
+            break
+    return lines[start:end]
+
+
+def parse_policy_body(lines: list[str]) -> tuple[list[str], list[RequiredTable]]:
+    """Parse full paragraph/list-item clauses and strict, unescaped pipe tables.
+
+    Inline pipes and multiline table cells are outside this policy subset.
+    Malformed tables raise rather than quietly dropping decision rows.
+    """
+    paragraphs: list[str] = []
+    tables: list[RequiredTable] = []
+    paragraph: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        boundary = (
+            not line or line.startswith(("#", "|")) or re.match(r"^(?:[0-9]+[.)]|[-+*]) ", line)
+        )
+        if boundary and paragraph:
+            paragraphs.append(" ".join(" ".join(paragraph).split()))
+            paragraph = []
+        if line.startswith("|"):
+            cells: list[tuple[str, ...]] = []
+            while index < len(lines) and lines[index].startswith("|"):
+                row = lines[index]
+                if not row.endswith("|") or "\\|" in row:
+                    raise InstructionContractValidationError("Malformed policy table row.")
+                cells.append(tuple(" ".join(cell.split()) for cell in row[1:-1].split("|")))
+                index += 1
+            if (
+                len(cells) < 3
+                or len(cells[0]) < 2
+                or any(len(row) != len(cells[0]) for row in cells)
+                or any(not re.fullmatch(r":?-{3,}:?", cell) for cell in cells[1])
+                or any(not cell for row in (cells[0], *cells[2:]) for cell in row)
+                or len({row[0] for row in cells[2:]}) != len(cells[2:])
+            ):
+                raise InstructionContractValidationError("Malformed or duplicate policy table.")
+            tables.append(RequiredTable(cells[0], tuple(cells[2:])))
+            continue
+        if line and not line.startswith("#"):
+            paragraph.append(line)
+        index += 1
+    if paragraph:
+        paragraphs.append(" ".join(" ".join(paragraph).split()))
+    return paragraphs, tables
+
+
+def section_failures(text: str, sections: tuple[RequiredSection, ...]) -> list[str]:
+    """Return stable, individually waivable failures for scoped policy contracts."""
+    failures: list[str] = []
+    lines = operative_markdown_lines(text)
+    for section in sections:
+        prefix = f"section:{section.heading}"
+        body = section_body(lines, section.heading)
+        if body is None:
+            failures.append(prefix)
+            body = []
+        paragraphs, _ = parse_policy_body(["" if line.startswith("|") else line for line in body])
+        table_identity = hashlib.sha256(
+            json.dumps(
+                [(table.headers, table.rows) for table in section.required_tables],
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        table_anchor = f"{prefix}:tables:{table_identity}"
+        try:
+            _, tables = parse_policy_body(body)
+        except InstructionContractValidationError:
+            failures.append(table_anchor)
+            tables = []
+        # Ordered, complete paragraphs prevent scattered keywords or reordered
+        # decision steps from substituting for the operative contract.
+        cursor = 0
+        for paragraph in section.required_paragraphs:
+            expected = " ".join(paragraph.split())
+            try:
+                cursor = paragraphs.index(expected, cursor) + 1
+            except ValueError:
+                identity = hashlib.sha256(expected.encode("utf-8")).hexdigest()
+                failures.append(f"{prefix}:paragraph:{identity}")
+        expected_paragraphs = [" ".join(value.split()) for value in section.required_paragraphs]
+        positions = [
+            expected_paragraphs.index(value) for value in paragraphs if value in expected_paragraphs
+        ]
+        if any(value not in expected_paragraphs for value in paragraphs) or positions != sorted(
+            set(positions)
+        ):
+            identity = hashlib.sha256(
+                json.dumps(expected_paragraphs, ensure_ascii=False, separators=(",", ":")).encode(
+                    "utf-8"
+                )
+            ).hexdigest()
+            failures.append(f"{prefix}:paragraphs:{identity}")
+        if tables != list(section.required_tables):
+            failures.append(table_anchor)
+    return list(dict.fromkeys(failures))
+
+
 def validate_contracts(
     *,
     mode: str,
@@ -831,6 +1032,13 @@ def validate_contracts(
                         anchor=phrase,
                     )
                 )
+
+        for anchor in section_failures(text, contract.required_sections):
+            waiver = find_waiver(waivers, contract.path, anchor)
+            if waiver is not None:
+                applied_waivers.append(waiver)
+            else:
+                missing_anchors.append(MissingAnchor(contract.path, "section content", anchor))
 
     if included_modules is not None:
         missing_file_paths = {missing_file.path for missing_file in missing_files}

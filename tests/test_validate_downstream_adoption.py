@@ -10,6 +10,8 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
+from tests._pytest_compat import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "validate_downstream_adoption.py"
 CONTRACTS_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-instruction-contracts.schema.json"
@@ -850,3 +852,76 @@ def test_waivers_deferred_items_and_commands_are_reported(tmp_path: Path) -> Non
     assert "Validation commands considered:" in result.stdout
     assert "validate_marker.py --require-marker" in result.stdout
     assert "validate_instruction_contracts.py --mode downstream --require-marker" in (result.stdout)
+
+
+@pytest.mark.parametrize("retain_yaml,retain_agents", [(True, True), (False, True), (True, False)])
+def test_aggregate_scoped_contract_requires_all_modules(
+    tmp_path: Path, retain_yaml: bool, retain_agents: bool
+) -> None:
+    """Aggregate validation enforces a retained guide, never an excluded conjunction."""
+    modules = ["baseline", "template-sync-support"]
+    if retain_yaml:
+        modules.append("yaml")
+    if retain_agents:
+        modules.append("agent-instructions")
+    _run_git(tmp_path, "init")
+    _copy_schemas(tmp_path)
+    manifest = _manifest()
+    manifest["template_manifest"]["path_mappings"].append(
+        {
+            "pattern": ".github/instructions/yaml.instructions.md",
+            "requires_all": ["yaml", "agent-instructions"],
+        }
+    )
+    _write_yaml(tmp_path, ".template-sync/manifest.yml", manifest)
+    _write_yaml(tmp_path, ".template-sync/marker.yml", _marker(modules))
+    _write_text(tmp_path, "README.md", "# Downstream\n")
+    _write_text(tmp_path, ".pre-commit-config.yaml", "repos: []\n")
+    for script in (
+        "validate_marker.py",
+        "validate_instruction_contracts.py",
+        "validate_downstream_adoption.py",
+    ):
+        _write_text(tmp_path, f".template-sync/scripts/{script}")
+    if retain_yaml:
+        _write_text(tmp_path, ".yamllint.yml", "extends: default\n")
+    if retain_agents:
+        _write_text(tmp_path, "AGENTS.md", "# Agent instructions\n")
+    _write_yaml(
+        tmp_path,
+        ".template-sync/instruction-contracts.yml",
+        {
+            "instruction_contracts": [
+                {
+                    "path": ".github/instructions/yaml.instructions.md",
+                    "requires_modules": ["yaml", "agent-instructions"],
+                    "required_sections": [
+                        {
+                            "heading": "## Trusted inputs",
+                            "required_paragraphs": [
+                                "Reject Git modes 120000 and 160000 before parsing."
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    if retain_yaml and retain_agents:
+        _write_text(
+            tmp_path,
+            ".github/instructions/yaml.instructions.md",
+            "## Trusted inputs\n\nReject Git modes 120000 and 160000 before parsing.\n",
+        )
+    _run_git(tmp_path, "add", ".")
+    result = _run_validator(tmp_path, "--require-marker")
+    assert result.returncode == 0, result.stdout + result.stderr
+    if retain_yaml and retain_agents:
+        _write_text(
+            tmp_path,
+            ".github/instructions/yaml.instructions.md",
+            "## Trusted inputs\n\nAccept all Git blob modes.\n",
+        )
+        result = _run_validator(tmp_path, "--require-marker")
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert "section:## Trusted inputs:paragraph:" in result.stdout

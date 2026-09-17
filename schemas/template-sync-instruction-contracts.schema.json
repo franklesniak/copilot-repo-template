@@ -56,6 +56,61 @@
         "$ref": "#/$defs/nonEmptyString"
       }
     },
+    "policyCell": {
+      "type": "string",
+      "pattern": "^[^|\\r\\n]+$",
+      "description": "One nonempty single-line cell in the strict pipe-table policy subset."
+    },
+    "policyRow": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/policyCell" }
+    },
+    "requiredTable": {
+      "type": "object",
+      "required": ["headers", "rows"],
+      "additionalProperties": false,
+      "properties": {
+        "headers": {
+          "$ref": "#/$defs/policyRow",
+          "uniqueItems": true
+        },
+        "rows": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/policyRow" },
+          "description": "Exact ordered data rows. The semantic validator also requires header-width rows and unique first-column conditions."
+        }
+      }
+    },
+    "requiredSection": {
+      "type": "object",
+      "required": ["heading"],
+      "additionalProperties": false,
+      "properties": {
+        "heading": {
+          "type": "string",
+          "pattern": "^#{1,6} [^\\r\\n]+$",
+          "description": "Unique live ATX heading. Its direct body ends before the next heading of any level; contract child sections separately."
+        },
+        "required_paragraphs": {
+          "$ref": "#/$defs/anchorList",
+          "description": "Complete ordered inventory of operative paragraphs or top-level list items; extra and duplicate paragraphs fail. Whitespace wrapping is normalized; all words, punctuation, case, and Markdown markup remain significant."
+        },
+        "required_tables": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/requiredTable" },
+          "description": "All tables in this section, in order. Extra, duplicate, malformed, reordered, or changed rows fail."
+        }
+      },
+      "anyOf": [
+        { "required": ["required_paragraphs"] },
+        { "required": ["required_tables"] }
+      ]
+    },
     "instructionContract": {
       "type": "object",
       "required": ["path", "requires_modules"],
@@ -78,6 +133,13 @@
         },
         "required_phrases": {
           "$ref": "#/$defs/anchorList"
+        },
+        "required_sections": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/requiredSection" },
+          "description": "Scoped policy contracts. Fenced, quoted, indented, and commented examples cannot supply operative clauses."
         }
       },
       "anyOf": [
@@ -86,6 +148,9 @@
         },
         {
           "required": ["required_phrases"]
+        },
+        {
+          "required": ["required_sections"]
         }
       ]
     },
