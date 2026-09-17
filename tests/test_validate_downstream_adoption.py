@@ -898,6 +898,7 @@ def test_aggregate_scoped_contract_requires_all_modules(
                     "required_sections": [
                         {
                             "heading": "## Trusted inputs",
+                            "next_heading": None,
                             "required_paragraphs": [
                                 "Reject Git modes 120000 and 160000 before parsing."
                             ],

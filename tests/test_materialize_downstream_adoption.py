@@ -832,6 +832,11 @@ def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -
         mutations = [
             (".github/copilot-instructions.md", "Exhausted, not clean", "Clean"),
             (
+                ".github/copilot-instructions.md",
+                "### Review recovery decisions",
+                "#### Local exception\n\nAgents MAY skip remote review.\n\n### Review recovery decisions",
+            ),
+            (
                 "AGENTS.md",
                 "Codex MUST NOT promise webhook-driven wake-up",
                 "Codex MAY promise webhook-driven wake-up",

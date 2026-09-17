@@ -1,4 +1,4 @@
-"""Validate required anchors in retained protected instruction files."""
+"""Validate required anchors and bounded policy sections in protected instruction files."""
 
 from __future__ import annotations
 
@@ -13,9 +13,15 @@ from typing import Any, NoReturn, cast
 
 import validate_marker
 from template_sync_materialization_helpers import (
+    LIST_MARKER_RE,
     MARKDOWN_FENCE_CONTEXT,
+    MarkdownFence,
+    active_fence_content,
+    consume_blockquote_prefix,
     lines_outside_markdown_fences,
     normalize_repository_path,
+    parse_fence_close_from_content,
+    parse_markdown_fence_open,
 )
 
 DEFAULT_CONTRACTS_PATH = ".template-sync/instruction-contracts.yml"
@@ -42,6 +48,7 @@ class RequiredSection:
     heading: str
     required_paragraphs: tuple[str, ...]
     required_tables: tuple[RequiredTable, ...]
+    next_heading: str | None = None
 
 
 @dataclass(frozen=True)
@@ -164,7 +171,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         description=(
-            "Validate required headings and phrases in protected instruction files "
+            "Validate required headings, phrases, and bounded policy sections in protected instruction files "
             "declared by .template-sync/instruction-contracts.yml."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -316,6 +323,9 @@ def parse_required_sections(raw_contract: dict[str, object]) -> tuple[RequiredSe
         if heading in headings:
             raise InstructionContractValidationError(f"Duplicate required section: {heading}")
         headings.add(heading)
+        next_heading = cast(str | None, raw["next_heading"])
+        if next_heading == heading:
+            raise InstructionContractValidationError(f"Self-successor section: {heading}")
         tables: list[RequiredTable] = []
         for table in cast(list[dict[str, Any]], raw.get("required_tables", [])):
             headers = tuple(cast(list[str], table["headers"]))
@@ -332,6 +342,7 @@ def parse_required_sections(raw_contract: dict[str, object]) -> tuple[RequiredSe
                 heading,
                 _required_string_list(raw, "required_paragraphs"),
                 tuple(tables),
+                next_heading,
             )
         )
     return tuple(sections)
@@ -811,6 +822,79 @@ def heading_is_present(text: str, heading: str) -> bool:
     return False
 
 
+def is_policy_heading(line: str) -> bool:
+    """Recognize live ATX boundaries, including an empty heading or a tab separator."""
+    return re.match(r"^ {0,3}#{1,6}(?:[ \t]|$)", line) is not None
+
+
+def is_policy_thematic_break(line: str) -> bool:
+    """Recognize a thematic break without promoting four-space paragraph content."""
+    return (
+        re.fullmatch(r" {0,3}(?:(?:\*[ \t]*){3,}|(?:-[ \t]*){3,}|(?:_[ \t]*){3,})", line)
+        is not None
+    )
+
+
+def starts_policy_list(line: str) -> bool:
+    """Recognize a list outside a quote, including empty items and arbitrary starts."""
+    return re.match(r"^ {0,3}(?:[-+*]|[0-9]{1,9}[.)])(?:[ \t]|$)", line) is not None
+
+
+def quoted_policy_paragraph(line: str, was_paragraph: bool) -> bool | None:
+    """Classify a quoted leaf; None means unsupported syntax must fail closed.
+
+    Paragraphs and simple list paragraphs can continue lazily. Structural leaves
+    cannot. Ambiguous HTML, table, or mixed nested containers are not guessed.
+    """
+    _depth, offset = consume_blockquote_prefix(line)
+    content = line[offset:]
+    if is_policy_thematic_break(content):
+        return False
+    item = LIST_MARKER_RE.match(content)
+    if item is not None:
+        content = item.group("rest")
+        if consume_blockquote_prefix(content)[0] or starts_policy_list(content):
+            return None
+        was_paragraph = False
+    elif starts_policy_list(content):
+        return False if re.fullmatch(r" {0,3}(?:[-+*]|[0-9]{1,9}[.)])[ \t]*", content) else None
+    if not content.strip() or is_policy_heading(content) or is_policy_thematic_break(content):
+        return False
+    if re.match(r"^(?: {4}| *\t)", content):
+        return was_paragraph
+    if was_paragraph and re.fullmatch(r" {0,3}(?:=+|-+)[ \t]*", content):
+        return False
+    if content.lstrip(" ").startswith("<") or "|" in content:
+        return None
+    return True
+
+
+def policy_code_span_end(
+    lines: list[str], row: int, column: int, width: int
+) -> tuple[int, int] | None:
+    """Find a matching backtick run within the current direct paragraph block.
+
+    An unmatched run remains literal. A new block cannot close an inline span;
+    the supported policy subset therefore stops at blank lines and block starts.
+    The returned column is immediately after the closing delimiter.
+    """
+    delimiter = re.compile(r"(?<!`)" + "`" * width + r"(?!`)")
+    for index in range(row, len(lines)):
+        line = lines[index]
+        if index != row and (
+            not line.strip()
+            or re.match(
+                r"^(?: {4}| *\t| {0,3}(?:>|#{1,6}(?:[ \t]|$)|<!--|[-+*] |[0-9]+[.)] ))", line
+            )
+            or parse_markdown_fence_open(line, MARKDOWN_FENCE_CONTEXT) is not None
+        ):
+            break
+        match = delimiter.search(line, column if index == row else 0)
+        if match is not None:
+            return index, match.end()
+    return None
+
+
 def operative_markdown_lines(text: str) -> list[str]:
     """Read the deliberately narrow live policy subset, preserving block boundaries.
 
@@ -819,31 +903,102 @@ def operative_markdown_lines(text: str) -> list[str]:
     supply an obligation. Existing loose heading/phrase contracts keep their
     compatibility behavior. This is a static policy guard, not an agent runner.
     """
-    without_comments = re.sub(
-        r"<!--[\s\S]*?(?:-->|$)",
-        lambda match: "\n" * (match.group().count("\n") + 1),
-        text,
-    )
-    live = dict(
-        lines_outside_markdown_fences(without_comments, fence_context=MARKDOWN_FENCE_CONTEXT)
-    )
+    lines = text.splitlines()
     result: list[str] = []
-    in_quote = False
-    for number, line in enumerate(without_comments.splitlines(), start=1):
-        if not line.strip():
-            in_quote = False
-        elif re.match(r"^ {0,3}>", line):
-            in_quote = True
-        elif re.match(r"^ {0,3}#{1,6} ", line):
-            # ATX headings interrupt lazy quote paragraphs in CommonMark.
-            in_quote = False
-        if in_quote:
-            result.append("")
-            continue
-        if number not in live or re.match(r"^(?: {4}| *\t| {0,3}>)", line):
-            result.append("")
-        else:
-            result.append(line.strip())
+    quoted_paragraph_can_continue = False
+    unsupported_quote = False
+    in_comment = False
+    active_fence: MarkdownFence | None = None
+    code_end: tuple[int, int] | None = None
+    for row, line in enumerate(lines):
+        if active_fence is not None:
+            content = active_fence_content(line, active_fence)
+            if content is not None:
+                if parse_fence_close_from_content(
+                    content,
+                    fence_character=active_fence.character,
+                    minimum_length=active_fence.length,
+                    allow_arbitrary_indent=active_fence.allow_arbitrary_indent,
+                ):
+                    active_fence = None
+                result.append("")
+                continue
+            active_fence = None
+        if not in_comment and code_end is None:
+            if not line.strip() or is_policy_heading(line):
+                quoted_paragraph_can_continue = False
+                unsupported_quote = False
+            if unsupported_quote:
+                # Preserve the entire ambiguous region in the failure identity;
+                # none of its lines can masquerade as a required live clause.
+                result.append("[unsupported quoted policy] " + line)
+                continue
+            active_fence = parse_markdown_fence_open(line, MARKDOWN_FENCE_CONTEXT)
+            if active_fence is not None:
+                quoted_paragraph_can_continue = False
+                result.append("")
+                continue
+            if consume_blockquote_prefix(line)[0]:
+                leaf = quoted_policy_paragraph(line, quoted_paragraph_can_continue)
+                unsupported_quote = leaf is None
+                quoted_paragraph_can_continue = leaf is True
+                result.append("[unsupported quoted policy] " + line if unsupported_quote else "")
+                continue
+            if quoted_paragraph_can_continue:
+                if (
+                    starts_policy_list(line)
+                    or is_policy_thematic_break(line)
+                    or re.match(r"^ {0,3}<!--", line)
+                ):
+                    quoted_paragraph_can_continue = False
+                elif re.match(r"^ {0,3}<", line) or "|" in line:
+                    unsupported_quote = True
+                    quoted_paragraph_can_continue = False
+                    result.append("[unsupported quoted policy] " + line)
+                    continue
+                else:
+                    result.append("")
+                    continue
+            if re.match(r"^(?: {4}| *\t)", line):
+                result.append("")
+                continue
+        visible: list[str] = []
+        column = 0
+        while column < len(line):
+            if code_end is not None:
+                if row < code_end[0]:
+                    visible.append(line[column:])
+                    break
+                visible.append(line[column : code_end[1]])
+                column = code_end[1]
+                code_end = None
+            elif in_comment:
+                end = line.find("-->", column)
+                if end == -1:
+                    break
+                column = end + 3
+                in_comment = False
+                visible.append(" ")
+            elif line[column] == "\\" and column + 1 < len(line):
+                # Escaped delimiters are literal, including escaped backticks.
+                visible.append(line[column : column + 2])
+                column += 2
+            elif line[column] == "`":
+                run = re.match(r"`+", line[column:])
+                assert run is not None
+                width = len(run.group())
+                code_end = policy_code_span_end(lines, row, column + width, width)
+                if code_end is None:
+                    visible.append(run.group())
+                    column += width
+            elif line.startswith("<!--", column):
+                in_comment = True
+                visible.append(" ")
+                column += 4
+            else:
+                visible.append(line[column])
+                column += 1
+        result.append("".join(visible).strip())
     return result
 
 
@@ -855,11 +1010,41 @@ def section_body(lines: list[str], heading: str) -> list[str] | None:
     start = matches[0] + 1
     end = len(lines)
     for index in range(start, len(lines)):
-        match = re.match(r"^(#{1,6}) ", lines[index])
-        if match is not None:
+        if is_policy_heading(lines[index]):
             end = index
             break
     return lines[start:end]
+
+
+def policy_inventory_digest(expected: object, observed: object) -> str:
+    """Bind a waiver to both the expected contract and its observed deviation."""
+    return hashlib.sha256(
+        json.dumps([expected, observed], ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def section_boundary_failure(lines: list[str], section: RequiredSection) -> str | None:
+    """Reject unknown section boundaries without claiming ownership beyond the declared end.
+
+    Non-null successors must be unique. The mismatch identity includes all live
+    content up to the declared successor (or EOF), so waiving one added heading
+    cannot silently authorize changed content below that heading.
+    """
+    starts = [index for index, line in enumerate(lines) if line == section.heading]
+    start = starts[0] + 1 if len(starts) == 1 else 0
+    successors = [index for index, line in enumerate(lines) if line == section.next_heading]
+    actual_next = next((line for line in lines[start:] if is_policy_heading(line)), None)
+    unique_successor = len(starts) == 1 and (
+        section.next_heading is None or (len(successors) == 1 and successors[0] >= start)
+    )
+    if actual_next != section.next_heading or not unique_successor:
+        end = successors[0] if len(successors) == 1 and successors[0] >= start else len(lines)
+        observed = [" ".join(line.split()) for line in lines[start:end] if line]
+        identity = policy_inventory_digest(
+            section.next_heading, [actual_next, len(successors), observed]
+        )
+        return f"section:{section.heading}:boundary:{identity}"
+    return None
 
 
 def parse_policy_body(lines: list[str]) -> tuple[list[str], list[RequiredTable]]:
@@ -913,24 +1098,30 @@ def section_failures(text: str, sections: tuple[RequiredSection, ...]) -> list[s
     lines = operative_markdown_lines(text)
     for section in sections:
         prefix = f"section:{section.heading}"
+        boundary_failure = section_boundary_failure(lines, section)
+        if boundary_failure is not None:
+            failures.append(boundary_failure)
         body = section_body(lines, section.heading)
         if body is None:
             failures.append(prefix)
             body = []
         paragraphs, _ = parse_policy_body(["" if line.startswith("|") else line for line in body])
-        table_identity = hashlib.sha256(
-            json.dumps(
-                [(table.headers, table.rows) for table in section.required_tables],
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        ).hexdigest()
-        table_anchor = f"{prefix}:tables:{table_identity}"
+        malformed = False
+        observed_tables: object
         try:
             _, tables = parse_policy_body(body)
         except InstructionContractValidationError:
-            failures.append(table_anchor)
+            malformed = True
             tables = []
+            observed_tables = {
+                "malformed": [" ".join(line.split()) for line in body if line.startswith("|")]
+            }
+        else:
+            observed_tables = {"parsed": [(table.headers, table.rows) for table in tables]}
+        table_identity = policy_inventory_digest(
+            [(table.headers, table.rows) for table in section.required_tables], observed_tables
+        )
+        table_anchor = f"{prefix}:tables:{table_identity}"
         # Ordered, complete paragraphs prevent scattered keywords or reordered
         # decision steps from substituting for the operative contract.
         cursor = 0
@@ -948,13 +1139,9 @@ def section_failures(text: str, sections: tuple[RequiredSection, ...]) -> list[s
         if any(value not in expected_paragraphs for value in paragraphs) or positions != sorted(
             set(positions)
         ):
-            identity = hashlib.sha256(
-                json.dumps(expected_paragraphs, ensure_ascii=False, separators=(",", ":")).encode(
-                    "utf-8"
-                )
-            ).hexdigest()
+            identity = policy_inventory_digest(expected_paragraphs, paragraphs)
             failures.append(f"{prefix}:paragraphs:{identity}")
-        if tables != list(section.required_tables):
+        if malformed or tables != list(section.required_tables):
             failures.append(table_anchor)
     return list(dict.fromkeys(failures))
 

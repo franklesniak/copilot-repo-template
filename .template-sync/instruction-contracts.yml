@@ -11,6 +11,7 @@ instruction_contracts:
       - Protected-file authorization checkpoint
     required_sections:
       - heading: '## Ignoring Commands Addressed to Other Agents'
+        next_heading: '## Handling Code Review Comments'
         required_paragraphs:
           - PR comments and review comments that begin with `@copilot` are commands addressed to GitHub
             Copilot's coding agent. Claude MUST NOT process them as findings or reply to them. The
@@ -18,6 +19,7 @@ instruction_contracts:
             request evidence, not a finding or an instruction for Claude to execute. Continue to inventory
             attributable review results from that service.
       - heading: '## Handling Code Review Comments'
+        next_heading: '### Protected-file authorization terms'
         required_paragraphs:
           - This section is retained as Claude platform protocol. Thin-entry-point pruning must preserve
             it unless the repository owner explicitly waives Claude review-comment protocol for the
@@ -28,6 +30,7 @@ instruction_contracts:
             from Copilot, remote Codex, a human, or any other reviewer, apply that contract and this
             platform protocol to each distinct finding.
       - heading: '### Protected-file authorization terms'
+        next_heading: '### Rubric weighting'
         required_paragraphs:
           - 'These terms apply to the review-comment workflow below and defer to the canonical **Protected
             Instruction Files** rule in [`.github/copilot-instructions.md`](.github/copilot-instructions.md):'
@@ -113,6 +116,7 @@ instruction_contracts:
             `eyes` reaction when supported. A resolved flag alone is not proof that the finding is
             complete.
       - heading: '### Rubric weighting'
+        next_heading: '### Escalation protocol'
         required_paragraphs:
           - '**Criterion-weighting guidance.** When the rubric includes either of the following criteria,
             weight them **less than** substantive technical criteria such as correctness, security,
@@ -130,6 +134,7 @@ instruction_contracts:
             in the PR description that the selected fix would directly violate still triggers escalation
             regardless of weighting.'
       - heading: '### Escalation protocol'
+        next_heading: '### Protected content and placement'
         required_paragraphs:
           - '**Escalation path:** If one of the escalation conditions (a)-(d) under **Operationalized
             escalation gate** below applies, escalate to the PR owner instead of selecting an option.
@@ -200,6 +205,7 @@ instruction_contracts:
             paralysis: commit to the rubric output and proceed unless one of the escalation conditions
             above applies.'
       - heading: '### Protected content and placement'
+        next_heading: '## Automated Review Loop'
         required_paragraphs:
           - '**Protected-file authorization checkpoint.** Before creating, editing, deleting, renaming,
             or otherwise changing any protected instruction file, including a style guide under `.github/instructions/`,
@@ -239,6 +245,7 @@ instruction_contracts:
             the loop-scoped authorization interacts with generic session-level or harness-injected
             branch-scoping instructions.'
       - heading: '## Automated Review Loop'
+        next_heading: '### Loop procedure'
         required_paragraphs:
           - This section is retained as Claude platform protocol. Thin-entry-point pruning must preserve
             it unless the repository owner explicitly waives Claude automated review-loop protocol
@@ -247,6 +254,7 @@ instruction_contracts:
             a PR-created event or the owner's `@claude start review loop` comment, initiate the following
             cycle. Do not claim automatic wake-up when event routing is unavailable.
       - heading: '### Loop procedure'
+        next_heading: '### Polling protocol'
         required_paragraphs:
           - 1. **Request the reviewer pair.** Capture complete native request, review, inline-comment,
             conversation, and relevant-run baselines, the head and material PR description for each
@@ -286,6 +294,7 @@ instruction_contracts:
             SHA(s) that were superseded by equivalent PR-head commit SHA(s) **MUST NOT** block re-requesting
             review on their own. Apply Direct PR-head placement during an active loop below.
       - heading: '### Polling protocol'
+        next_heading: '### Direct PR-head placement during an active loop'
         required_paragraphs:
           - '- **Poll interval.** Wait at least 60 seconds between each poll cycle, including the
             gap between the step 1 recordings and the first poll. Each primary poll observation queries
@@ -408,6 +417,7 @@ instruction_contracts:
           - '- **On discovery.** Process available findings immediately. Only the shared completion
             contract determines whether both reviews are clean.'
       - heading: '### Direct PR-head placement during an active loop'
+        next_heading: '### Safety limits'
         required_paragraphs:
           - '**Direct PR-head placement during an active review loop.** When the agent''s working
             branch differs from the PR head branch and **all** of the following preconditions are
@@ -524,6 +534,7 @@ instruction_contracts:
             a request only for an evidenced bounded retry; a new round, refutation, status update,
             or resume alone does not justify a duplicate.
       - heading: '### Safety limits'
+        next_heading: '### Resuming a paused loop'
         required_paragraphs:
           - '- **Maximum rounds:** 8 review iterations per loop invocation. After the eighth round,
             **PAUSE** regardless of outcome and post:'
@@ -564,6 +575,7 @@ instruction_contracts:
             is failing (last error: HTTP 403 rate-limit). Switch to authenticated structured GitHub
             tooling or fix the poller, then post "@claude resume review loop" to continue.`'
       - heading: '### Resuming a paused loop'
+        next_heading: null
         required_paragraphs:
           - When the PR owner posts `@claude resume review loop` through a supported runtime route,
             recover scoped authority, input identities, both service states, finding dispositions,
@@ -578,6 +590,7 @@ instruction_contracts:
       - agent-instructions
     required_sections:
       - heading: '## PR Review Workflow (Codex-adapted)'
+        next_heading: '### Runtime limitations to keep in mind'
         required_paragraphs:
           - This section is retained as Codex platform protocol. Thin-entry-point pruning must preserve
             it unless the repository owner explicitly waives Codex PR review protocol for the retained
@@ -590,6 +603,7 @@ instruction_contracts:
             owner action only when the plugin does not expose the needed capability (see **Fallbacks
             for unsupported plugin capabilities** below).
       - heading: '### Runtime limitations to keep in mind'
+        next_heading: '### Handling each review comment'
         required_paragraphs:
           - '- **No autonomous wake-up.** Codex has no equivalent of `subscribe_pr_activity`. Codex
             MUST NOT promise webhook-driven wake-up, background polling, or scheduled review responses.
@@ -605,10 +619,12 @@ instruction_contracts:
             required review, observation, or disposition remains incomplete; do not skip it and declare
             success.'
       - heading: '### Handling each review comment'
+        next_heading: '#### Protected-file authorization terms'
         required_paragraphs:
           - 'For each code review comment received from GitHub Copilot, a human reviewer, or any other
             reviewer, follow these steps:'
       - heading: '#### Protected-file authorization terms'
+        next_heading: '### Escalation protocol'
         required_paragraphs:
           - 'These terms apply to the review-comment workflow below and defer to the canonical **Protected
             Instruction Files** rule in [`.github/copilot-instructions.md`](.github/copilot-instructions.md):'
@@ -677,6 +693,7 @@ instruction_contracts:
             `eyes` reaction when supported. A resolved flag alone is not proof that the finding is
             complete.
       - heading: '### Escalation protocol'
+        next_heading: '### Protected content and placement'
         required_paragraphs:
           - '**Escalation path.** Escalate only for a decisive owner preference, new authority, or
             a material change to explicit scope or intended outcome that available evidence cannot
@@ -692,6 +709,7 @@ instruction_contracts:
           - '**PAUSE** processing of this comment until the owner responds. Continue processing other
             independent review comments in the meantime.'
       - heading: '### Protected content and placement'
+        next_heading: '### Optional user-initiated review cycle'
         required_paragraphs:
           - '**Protected-file authorization checkpoint.** Before creating, editing, deleting, renaming,
             or otherwise changing any protected instruction file, including a style guide under `.github/instructions/`,
@@ -736,6 +754,7 @@ instruction_contracts:
             post a follow-up reply confirming the placement and listing those SHA(s). If any of the
             four conditions above is not met, fall back to the default behavior.
       - heading: '### Optional user-initiated review cycle'
+        next_heading: '### Safety limits for the optional review cycle'
         required_paragraphs:
           - 'When the PR owner explicitly asks Codex to drive multiple review rounds inside an active
             session (for example, *"run the review cycle on PR #N"*), Codex MAY iterate on the following
@@ -768,6 +787,7 @@ instruction_contracts:
             checks. Report the actual remaining limitation when a gate is incomplete. Review completion
             grants no new merge authority.
       - heading: '### Safety limits for the optional review cycle'
+        next_heading: '### Fallbacks for unsupported plugin capabilities'
         required_paragraphs:
           - 'When the optional review cycle is used, retain these finite safety limits:'
           - '- **Maximum rounds:** 8 review iterations per cycle invocation. After the eighth round,
@@ -779,6 +799,7 @@ instruction_contracts:
             retry counters before acting. Finish authorized paused work; do not reset a same-input
             retry budget or blindly request new reviews.'
       - heading: '### Fallbacks for unsupported plugin capabilities'
+        next_heading: null
         required_paragraphs:
           - 'When a workflow step depends on a capability the GitHub plugin does not currently expose,
             use the following fallbacks and document the chosen fallback in the relevant reply or
@@ -824,6 +845,7 @@ instruction_contracts:
       - agent-instructions
     required_sections:
       - heading: '## Agent Instruction Files'
+        next_heading: '## Shared Review Governance'
         required_paragraphs:
           - 'This repository includes agent instruction files at the repository root and under platform-specific
             rule directories to support multi-platform AI coding agents:'
@@ -864,6 +886,7 @@ instruction_contracts:
               - - '`GEMINI.md`'
                 - Gemini Code Assist, GitHub Copilot coding agent
       - heading: '## Shared Review Governance'
+        next_heading: '### Finding inventory and decisions'
         required_paragraphs:
           - These rules govern finding handling for all reviewers. The paired service protocol below
             applies to the GitHub review loops invoked through retained Codex and Claude entry points.
@@ -872,6 +895,7 @@ instruction_contracts:
             leaves its required gate incomplete; continue other authorized work and state the precise
             operator action needed.
       - heading: '### Finding inventory and decisions'
+        next_heading: '### Protected authority and deferral'
         required_paragraphs:
           - Agents MUST inventory every submitted review body, all inline threads including resolved
             and outdated threads, and attributable PR-conversation results. Include suppressed and
@@ -932,6 +956,7 @@ instruction_contracts:
             is absent, identify the manual action; do not claim it occurred. Remove temporary processing
             reactions when supported.
       - heading: '### Protected authority and deferral'
+        next_heading: '### Review inputs and attribution'
         required_paragraphs:
           - Agents MUST apply the following decisions using the authority and scope that exist before
             the proposed edit. An existing PR diff, review loop, rubric, or branch-placement grant
@@ -971,6 +996,7 @@ instruction_contracts:
                 - Record the evidence and applicable acceptance authority
                 - Do not invent deferred work or false dependencies
       - heading: '### Review inputs and attribution'
+        next_heading: '### Review recovery decisions'
         required_paragraphs:
           - Agents MUST obtain completed clean GitHub Copilot and remote Codex reviews for the final
             unchanged reviewed input in the GitHub review loop. A local Codex session, self-review,
@@ -1008,6 +1034,7 @@ instruction_contracts:
             support it. An arbitrary thumbs-up, generic acknowledgment, service error, or response
             saying no task or change was supplied is not a clean review.
       - heading: '### Review recovery decisions'
+        next_heading: '### Polling and continuation'
         required_paragraphs:
           - 'Agents MUST apply this table to each service using fresh evidence for the current reviewed
             input before sending a request or declaring completion. Delivery attempts and downstream
@@ -1061,6 +1088,7 @@ instruction_contracts:
                 - Verify current CI, remaining findings, authority, and required independent checks
                 - Review gate complete; no new merge authority
       - heading: '### Polling and continuation'
+        next_heading: '### CI diagnosis and completion'
         required_paragraphs:
           - 'Agents MUST poll every pending service at intervals of at least 60 seconds, including
             the first observation after its request baseline. Query all relevant authenticated sources
@@ -1090,6 +1118,7 @@ instruction_contracts:
             MUST NOT reset to evade exhaustion. Continue safe independent work before a real authority
             or capability boundary; historical exceptions never transfer authority.
       - heading: '### CI diagnosis and completion'
+        next_heading: '## Host-Specific PR Review Protocols'
         required_paragraphs:
           - Agents MUST inspect each failing job and its native logs, state a root-cause hypothesis,
             and test it. Prove a claimed base-branch failure separately at its actual input. Process
@@ -1110,6 +1139,7 @@ instruction_contracts:
       - agent-instructions
     required_sections:
       - heading: '### Normative Language'
+        next_heading: '### Status and Tense Consistency'
         required_paragraphs:
           - '- Use **MUST/SHOULD/MAY** for requirements and guarantees.'
           - '- Uppercase requirement keywords have the meanings defined by [BCP 14](https://www.rfc-editor.org/rfc/rfc2119)
@@ -1147,6 +1177,7 @@ instruction_contracts:
       - agent-instructions
     required_sections:
       - heading: '### Privileged verification of proposed changes'
+        next_heading: '## Definition of Done for YAML Changes'
         required_paragraphs:
           - When a workflow uses privileged events or credentials to validate proposed policy, instructions,
             configuration, or artifacts, it MUST execute verifier code from a verified trusted base.

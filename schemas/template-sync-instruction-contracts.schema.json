@@ -86,13 +86,18 @@
     },
     "requiredSection": {
       "type": "object",
-      "required": ["heading"],
+      "required": ["heading", "next_heading"],
       "additionalProperties": false,
       "properties": {
         "heading": {
           "type": "string",
           "pattern": "^#{1,6} [^\\r\\n]+$",
           "description": "Unique live ATX heading. Its direct body ends before the next heading of any level; contract child sections separately."
+        },
+        "next_heading": {
+          "type": ["string", "null"],
+          "pattern": "^#{1,6} [^\\r\\n]+$",
+          "description": "Exact unique immediate next live heading, or null for EOF. Added child, sibling, or higher-level headings fail this boundary. The successor itself is outside this section's scope."
         },
         "required_paragraphs": {
           "$ref": "#/$defs/anchorList",

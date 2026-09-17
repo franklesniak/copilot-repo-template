@@ -4,6 +4,7 @@ instruction_contracts:
       - agent-instructions
     required_sections:
       - heading: '## Review decisions'
+        next_heading: null
         required_paragraphs:
           - 'Agents MUST reject stale results.'
         required_tables:

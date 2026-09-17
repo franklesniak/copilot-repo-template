@@ -4,3 +4,4 @@ instruction_contracts:
       - agent-instructions
     required_sections:
       - heading: '## Review decisions'
+        next_heading: null
