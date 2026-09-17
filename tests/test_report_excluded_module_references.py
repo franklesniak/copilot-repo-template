@@ -530,6 +530,86 @@ def test_explicit_included_modules_without_marker_matches_marker_findings(
     assert _finding_lines(explicit_result.stdout) == _finding_lines(marker_result.stdout)
 
 
+def test_pre_adoption_catalog_is_protected_data_not_stale_prose(tmp_path: Path) -> None:
+    """A retained catalog keeps excluded obligations while actual prose is reported."""
+    root = tmp_path / "fixture"
+    root.mkdir()
+    _write_common_repo(root, include_marker=False)
+    catalog_path = ".template-sync/instruction-contracts.yml"
+    prose_paths = [".cursor/rules/policy.mdc", ".github/instructions/nested/policy"]
+    manifest = _manifest()
+    manifest["template_manifest"]["path_mappings"].extend(
+        [
+            {"pattern": catalog_path, "requires_all": ["template-sync-support"]},
+            *({"pattern": path, "requires_all": ["baseline"]} for path in prose_paths),
+        ]
+    )
+    _write_yaml(root, ".template-sync/manifest.yml", manifest)
+    _write_yaml(
+        root,
+        catalog_path,
+        {
+            "instruction_contracts": [
+                {
+                    "path": "AGENTS.md",
+                    "requires_modules": ["agent-instructions"],
+                    "required_phrases": ["Preserve review authority."],
+                }
+            ]
+        },
+    )
+    for path in prose_paths:
+        _write_text(root, path, "Use AGENTS.md for agent instructions.\n")
+    _run_git(root, "add", ".")
+    assert (root / "AGENTS.md").is_file()
+    assert not (root / ".template-sync/marker.yml").exists()
+    args = ["--included-module", "baseline", "--included-module", "template-sync-support"]
+    result = _run_report(root, *args)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "State source: explicit --included-module input" in result.stdout
+    findings = _finding_lines(result.stdout)
+    prose_findings = [
+        line for line in findings if line.startswith("protected-document.prose-reference |")
+    ]
+    assert not any(f"| {catalog_path}:" in line for line in prose_findings)
+    for path in prose_paths:
+        assert any(
+            f"| {path}:1 | AGENTS.md references excluded path AGENTS.md." in line
+            for line in prose_findings
+        ), prose_findings
+    assert any(
+        line.startswith(
+            "manifest-owned-path | protected_file_authorization_needed | "
+            "agent-instructions | AGENTS.md |"
+        )
+        for line in findings
+    ), findings
+
+    mutant_dir = tmp_path / "mutant"
+    mutant_dir.mkdir()
+    for source in SCRIPT_PATH.parent.glob("*.py"):
+        shutil.copyfile(source, mutant_dir / source.name)
+    mutant = mutant_dir / SCRIPT_PATH.name
+    source_text = mutant.read_text(encoding="utf-8")
+    original = "if not is_protected_prose_path(relative_path):"
+    assert source_text.count(original) == 1
+    mutant.write_text(
+        source_text.replace(original, "if not is_protected_instruction_path(relative_path):"),
+        encoding="utf-8",
+    )
+    mutated = subprocess.run(
+        [sys.executable, str(mutant), "--repo-root", str(root), *args],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert mutated.returncode == 0, mutated.stdout + mutated.stderr
+    assert any(
+        line.startswith("protected-document.prose-reference |") and f"| {catalog_path}:" in line
+        for line in _finding_lines(mutated.stdout)
+    ), "Restoring the broad prose predicate must fail the no-catalog-prose oracle."
+
+
 def test_ambiguous_marker_and_explicit_included_modules_fail(tmp_path: Path) -> None:
     """Marker-derived and explicit module state cannot both be supplied."""
     _write_common_repo(tmp_path)

@@ -360,7 +360,7 @@ def parse_required_sections(raw_contract: dict[str, object]) -> tuple[RequiredSe
             if len({row[0] for row in rows}) != len(rows):
                 raise InstructionContractValidationError(f"Duplicate table condition: {heading}")
             tables.append(RequiredTable(headers, rows))
-        if len({table.headers for table in tables}) != len(tables):
+        if len(set(tables)) != len(tables):
             raise InstructionContractValidationError(f"Duplicate contract table: {heading}")
         sections.append(
             RequiredSection(
@@ -886,12 +886,24 @@ def quoted_policy_paragraph(line: str, was_paragraph: bool) -> bool | None:
     Paragraphs and simple list paragraphs can continue lazily. Structural leaves
     cannot. Ambiguous HTML, table, or mixed nested containers are not guessed.
     """
-    _depth, offset = consume_blockquote_prefix(line)
-    content = line[offset:]
+    _depth, source_offset = consume_blockquote_prefix(line)
+    source_content = line[source_offset:]
+    prefix = re.match(r"[ \t]*(?:[-+*]|[0-9]{1,9}[.)])?[ \t]*", source_content)
+    assert prefix is not None
+    if "\t" in prefix.group():
+        # Nested container tab columns need a full block parser. Keep the
+        # original ambiguous region visible instead of guessing laziness.
+        return None
+    expanded = line.expandtabs(4)
+    _depth, offset = consume_blockquote_prefix(expanded)
+    content = expanded[offset:]
     if is_policy_thematic_break(content):
         return False
     item = LIST_MARKER_RE.match(content)
     if item is not None:
+        if item.group("rest").startswith(" "):
+            # More than four padding columns begin item code, not a paragraph.
+            return False
         content = item.group("rest")
         if consume_blockquote_prefix(content)[0] or starts_policy_list(content):
             return None
@@ -1060,6 +1072,7 @@ def operative_markdown_lines(text: str) -> list[str]:
                 )
                 continue
         visible: list[str] = []
+        elided_comment = in_comment
         column = 0
         while column < len(line):
             if code_end is not None:
@@ -1075,7 +1088,9 @@ def operative_markdown_lines(text: str) -> list[str]:
                     break
                 column = end + 3
                 in_comment = False
-                visible.append(" ")
+                if line[column:].strip(" \t"):
+                    visible.append("[unsupported comment tail] " + line)
+                    break
             elif line[column] == "\\" and column + 1 < len(line):
                 # Escaped delimiters are literal, including escaped backticks.
                 visible.append(line[column : column + 2])
@@ -1107,13 +1122,22 @@ def operative_markdown_lines(text: str) -> list[str]:
                     # inline forms must not hide a potentially visible clause.
                     visible.append("[unsupported inline comment] " + line[column:])
                     break
+                if block_comment and end != -1 and line[end + 3 :].strip(" \t"):
+                    visible.append("[unsupported comment tail] " + line)
+                    break
+                elided_comment = True
                 in_comment = end == -1
-                visible.append(" ")
                 column = column + 4 if in_comment else end + 3
             else:
                 visible.append(line[column])
                 column += 1
         observed = "".join(visible).strip(" \t")
+        if elided_comment and (
+            (is_policy_heading(observed) and not is_policy_heading(line))
+            or (starts_policy_list(observed) and not starts_policy_list(line))
+            or observed.startswith("|")
+        ):
+            observed = "[unsupported comment structure] " + line
         result.append(observed)
         if observed:
             paragraph_can_continue = not (

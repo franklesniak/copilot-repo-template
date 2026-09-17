@@ -41,6 +41,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     is_excluded_template_path,
     is_protected_instruction_path,
     is_protected_manifest_pattern,
+    is_protected_prose_path,
     is_retained_template_path,
     is_template_managed_path,
     lines_outside_markdown_fences,
@@ -380,6 +381,22 @@ def test_protected_file_classification_uses_shared_rules() -> None:
         "schemas/template-sync-instruction-contracts.schema.json"
     )
     assert not is_protected_instruction_path("README.md")
+    for path in (
+        ".github/copilot-instructions.md",
+        ".hermes.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "GEMINI.md",
+        ".github/instructions/python.instructions.md",
+        ".cursor/rules/repository-instructions.mdc",
+        ".github/instructions/nested/policy",
+        ".cursor/rules/nested/policy",
+    ):
+        assert is_protected_instruction_path(path)
+        assert is_protected_prose_path(path)
+    assert not is_protected_prose_path(".template-sync/instruction-contracts.yml")
+    assert not is_protected_prose_path(".template-sync/manifest.yml")
+    assert not is_protected_prose_path("README.md")
 
 
 @pytest.mark.parametrize(

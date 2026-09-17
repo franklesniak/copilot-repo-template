@@ -1765,6 +1765,13 @@ def is_protected_instruction_path(relative_path: str) -> bool:
     return any(fnmatch.fnmatchcase(relative_path, pattern) for pattern in PROTECTED_GLOB_PATTERNS)
 
 
+def is_protected_prose_path(relative_path: str) -> bool:
+    """Return whether a protected path holds human-facing instruction prose."""
+    if relative_path in AGENT_INSTRUCTION_EXACT_PATHS:
+        return True
+    return any(fnmatch.fnmatchcase(relative_path, pattern) for pattern in PROTECTED_GLOB_PATTERNS)
+
+
 def is_protected_manifest_pattern(pattern: str) -> bool:
     """Return whether a manifest pattern names protected instruction paths."""
     if not has_wildcard(pattern):

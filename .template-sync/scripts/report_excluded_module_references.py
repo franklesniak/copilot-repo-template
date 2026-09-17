@@ -40,6 +40,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     inline_block_module_requirement,
     is_locally_overridden,
     is_protected_instruction_path,
+    is_protected_prose_path,
     iter_safe_repository_files,
     lines_outside_markdown_fences,
     live_inline_marker_lines,
@@ -1064,7 +1065,7 @@ def protected_document_prose_reference_findings(
     findings: list[Finding] = []
     path_tokens = excluded_path_reference_tokens(state)
     for relative_path in state.safe_files:
-        if not is_protected_instruction_path(relative_path):
+        if not is_protected_prose_path(relative_path):
             continue
         if is_locally_overridden(relative_path, state.local_overrides):
             continue
