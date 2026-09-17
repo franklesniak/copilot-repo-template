@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for OpenAI Codex CLI
 
-**Version:** 1.6.20260916.0
+**Version:** 1.6.20260917.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-16
+- **Last Updated:** 2026-09-17
 - **Scope:** Agent-specific entry point for OpenAI Codex CLI and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
@@ -309,7 +309,7 @@ The source repositories contain a larger planning-only state machine. This templ
 When the PR owner explicitly asks Codex to drive multiple review rounds inside an active session (for example, *"run the review cycle on PR #N"*), Codex MAY iterate on the following bounded loop. The loop runs only while the Codex session is active; it MUST NOT be presented as autonomous. The co-equal reviewer, baseline, completeness, and failure rules in **Automated Review Loop (User-Initiated)** apply to every round.
 
 1. **Request both reviewers.** Request Copilot through the GitHub plugin if it exposes that capability, or use the documented fallback. Post the exact `@codex review` trigger and read it back. If a capability is unavailable, record the reviewer as unavailable; do not treat absence as agreement.
-2. **Wait for the review.** Codex cannot wake up on webhooks. Either keep the session active and poll the PR's review state through the GitHub plugin (or `gh pr view --json reviews,comments`) at a reasonable cadence, or ask the user to notify Codex when the review arrives.
+2. **Wait for the review.** Codex cannot wake up on webhooks. Either keep the session active and poll the PR's review state through the GitHub plugin or authenticated `gh api` calls at a reasonable cadence, or ask the user to notify Codex when the review arrives. A complete `gh` fallback MUST paginate `repos/{owner}/{repo}/pulls/{pr}/reviews`, `repos/{owner}/{repo}/pulls/{pr}/comments`, and `repos/{owner}/{repo}/issues/{pr}/comments`, and MUST run a paginated `gh api graphql` query for the complete resolved-plus-unresolved `reviewThreads` connection. `gh pr view --json reviews,comments` alone is not complete because it omits native review threads and inline review comments; treat that observation as indeterminate.
 3. **Process each finding** using the per-finding workflow above. Track native review-thread IDs and body-only synthetic keys. Skip only a finding whose closure evidence exists; seeing an event or comment ID in an earlier round is not closure evidence.
 4. **Re-request review** only after the round's fix commits are reachable from the PR head. If a fix commit lives only on the agent's working branch (not on the PR head), state that in the round's summary reply and pause until the owner integrates it, unless the explicit-authorization conditions in step 7 above for direct PR-head placement are satisfied.
 

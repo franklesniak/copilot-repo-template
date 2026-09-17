@@ -14,6 +14,10 @@ instruction_contracts:
       - 'review:<review-id>:<section-label>:<ordinal>'
       - 'Balanced'
       - '@codex review'
+      - 'chatgpt-codex-connector[bot]'
+      - 'pagination-complete'
+      - 'both co-equal sources'
+      - 'not clean'
       - 'Failed cycles do not consume'
   - path: CLAUDE.md
     requires_modules:
@@ -34,7 +38,22 @@ instruction_contracts:
       - 'review:<review-id>:<section-label>:<ordinal>'
       - 'Balanced'
       - '@codex review'
+      - 'chatgpt-codex-connector[bot]'
+      - 'Remote Codex arrival'
+      - 'terminal results from both reviewers'
       - 'Failed cycles do not consume'
+  - path: .github/instructions/yaml.instructions.md
+    requires_modules:
+      - yaml
+    required_headings:
+      - '## GitHub Actions Privileged-Workflow Trust Roots'
+    required_phrases:
+      - 'unconditional or required companion gate'
+      - 'Git tree entry mode'
+      - '100644'
+      - '100755'
+      - '120000'
+      - '160000'
 protected_guide_section_obligations:
   - key: agents-azure-devops-pr-review-protocol
     path: AGENTS.md

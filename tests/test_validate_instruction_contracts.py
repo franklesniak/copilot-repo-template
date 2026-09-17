@@ -201,7 +201,7 @@ def test_intact_upstream_claude_contract_passes() -> None:
 
     assert result.returncode == 0, result.stderr
     assert "Instruction-contract validation passed." in result.stdout
-    assert "Contracts checked: 2" in result.stdout
+    assert "Contracts checked: 3" in result.stdout
 
 
 @pytest.mark.parametrize(
