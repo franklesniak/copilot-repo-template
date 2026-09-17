@@ -22,6 +22,8 @@ REQUIREMENTS = {
         "pagination-complete",
         "not clean",
         "both co-equal sources",
+        "10 confirmed-successful missing-Codex polls",
+        "Review loop paused: remote Codex returned terminal status",
         "Failed cycles do not consume",
         "Deferring Work",
         "base branch",

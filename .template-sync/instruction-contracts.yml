@@ -18,6 +18,8 @@ instruction_contracts:
       - 'pagination-complete'
       - 'both co-equal sources'
       - 'not clean'
+      - '10 confirmed-successful missing-Codex polls'
+      - 'Review loop paused: remote Codex returned terminal status'
       - 'Failed cycles do not consume'
   - path: CLAUDE.md
     requires_modules:
