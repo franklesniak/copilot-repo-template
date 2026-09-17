@@ -274,6 +274,26 @@ References: [Copilot review effort levels](https://docs.github.com/en/copilot/co
 
 When the owner asks for multiple rounds, use Copilot and remote Codex as co-equal reviewers while the local session remains active. Request Codex every round with a PR comment whose body is exactly `@codex review`; do not rely on an automatic trigger. This loop is not autonomous.
 
+### Remote Codex request and arrival contract
+
+Treat `chatgpt-codex-connector[bot]` as the remote Codex reviewer. Before each
+exact `@codex review` request, record the request-time head SHA, the trigger
+comment ID, and the newest Codex-authored review submission, inline review
+comment, PR-conversation result, and complete resolved-plus-unresolved
+`reviewThreads` inventory. Read all paginated sources to completion. The
+trigger comment and a generic running-status summary are request evidence, not
+a completed review result.
+
+Codex arrival requires a post-baseline Codex-authored review submission, inline
+review comment, or completed PR-conversation result that is attributable to the
+request and the requested head. A result on another head is stale. A missing,
+pending, running, failed, canceled, skipped, expired, timed-out, or ambiguous
+Codex result is not clean. A poll is complete only when the Codex sources were
+queried, parsed, and pagination-complete; an indeterminate source is a failed
+poll and does not advance the timeout counter. The loop MUST wait for terminal
+results from both Copilot and remote Codex before it declares clean, even when
+one reviewer arrives first or reports no findings.
+
 1. Record each bot's newest review, inline-comment, and PR-comment IDs/times and the request-time head before requesting either reviewer.
 2. Request Copilot through the plugin or documented fallback, post exact `@codex review`, and read both request events back.
 3. Poll authenticated review bodies, complete `reviewThreads`, and PR comments at intervals of at least 60 seconds. A confirmed-successful no-review poll requires both co-equal sources to be queried, parsed, and pagination-complete. A transport, authentication, parser, rate-limit, tool, or shape failure is a visible failed cycle, not a no-event result.
@@ -290,7 +310,7 @@ When the PR owner explicitly asks Codex to drive multiple review rounds inside a
 
 1. **Request both reviewers.** Request Copilot through the GitHub plugin if it exposes that capability, or use the documented fallback. Post the exact `@codex review` trigger and read it back. If a capability is unavailable, record the reviewer as unavailable; do not treat absence as agreement.
 2. **Wait for the review.** Codex cannot wake up on webhooks. Either keep the session active and poll the PR's review state through the GitHub plugin (or `gh pr view --json reviews,comments`) at a reasonable cadence, or ask the user to notify Codex when the review arrives.
-3. **Process each comment** using the per-comment workflow above. Skip any comment whose ID was already processed in an earlier round of this cycle.
+3. **Process each finding** using the per-finding workflow above. Track native review-thread IDs and body-only synthetic keys. Skip only a finding whose closure evidence exists; seeing an event or comment ID in an earlier round is not closure evidence.
 4. **Re-request review** only after the round's fix commits are reachable from the PR head. If a fix commit lives only on the agent's working branch (not on the PR head), state that in the round's summary reply and pause until the owner integrates it, unless the explicit-authorization conditions in step 7 above for direct PR-head placement are satisfied.
 
 ### Safety limits for the optional review cycle
