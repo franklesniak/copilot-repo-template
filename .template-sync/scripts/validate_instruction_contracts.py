@@ -19,6 +19,7 @@ from template_sync_materialization_helpers import (
     active_fence_content,
     consume_blockquote_prefix,
     lines_outside_markdown_fences,
+    markdown_lines,
     normalize_repository_path,
     parse_fence_close_from_content,
     parse_markdown_fence_open,
@@ -321,7 +322,7 @@ def _required_string_list(
 
 
 def parse_required_sections(raw_contract: dict[str, object]) -> tuple[RequiredSection, ...]:
-    """Parse schema-validated section contracts and reject ambiguous table shapes."""
+    """Reject ambiguous normalized paragraphs and table shapes in section contracts."""
     sections: list[RequiredSection] = []
     headings: set[str] = set()
     for raw in cast(list[dict[str, Any]], raw_contract.get("required_sections", [])):
@@ -332,6 +333,16 @@ def parse_required_sections(raw_contract: dict[str, object]) -> tuple[RequiredSe
         next_heading = cast(str | None, raw["next_heading"])
         if next_heading == heading:
             raise InstructionContractValidationError(f"Self-successor section: {heading}")
+        paragraphs = _required_string_list(raw, "required_paragraphs")
+        normalized_paragraphs = [" ".join(value.split()) for value in paragraphs]
+        if any(not value for value in normalized_paragraphs):
+            raise InstructionContractValidationError(
+                f"Empty normalized contract paragraph: {heading}"
+            )
+        if len(set(normalized_paragraphs)) != len(normalized_paragraphs):
+            raise InstructionContractValidationError(
+                f"Duplicate normalized contract paragraph: {heading}"
+            )
         tables: list[RequiredTable] = []
         for table in cast(list[dict[str, Any]], raw.get("required_tables", [])):
             headers = tuple(cast(list[str], table["headers"]))
@@ -354,7 +365,7 @@ def parse_required_sections(raw_contract: dict[str, object]) -> tuple[RequiredSe
         sections.append(
             RequiredSection(
                 heading,
-                _required_string_list(raw, "required_paragraphs"),
+                paragraphs,
                 tuple(tables),
                 next_heading,
             )
@@ -818,7 +829,7 @@ def heading_is_present(text: str, heading: str) -> bool:
     lines with 4+ leading spaces or any leading tab character are indented code
     blocks rather than headings and cannot satisfy the contract.
     """
-    for line in text.splitlines():
+    for line in markdown_lines(text):
         leading_spaces = 0
         has_leading_tab = False
         for ch in line:
@@ -831,7 +842,7 @@ def heading_is_present(text: str, heading: str) -> bool:
                 break
         if has_leading_tab or leading_spaces > 3:
             continue
-        if line[leading_spaces:].rstrip() == heading:
+        if line[leading_spaces:].rstrip(" \t") == heading:
             return True
     return False
 
@@ -866,7 +877,7 @@ def policy_list_content_indent(line: str) -> int | None:
         return None
     rest = expanded[marker.end() :]
     padding = len(rest) - len(rest.lstrip(" "))
-    return marker.end() + (padding if rest.strip() and 1 <= padding <= 4 else 1)
+    return marker.end() + (padding if rest.strip(" \t") and 1 <= padding <= 4 else 1)
 
 
 def quoted_policy_paragraph(line: str, was_paragraph: bool) -> bool | None:
@@ -887,12 +898,16 @@ def quoted_policy_paragraph(line: str, was_paragraph: bool) -> bool | None:
         was_paragraph = False
     elif starts_policy_list(content):
         return False if re.fullmatch(r" {0,3}(?:[-+*]|[0-9]{1,9}[.)])[ \t]*", content) else None
-    if not content.strip() or is_policy_heading(content) or is_policy_thematic_break(content):
+    if not content.strip(" \t") or is_policy_heading(content) or is_policy_thematic_break(content):
         return False
     if re.match(r"^(?: {4}| *\t)", content):
         return was_paragraph
     if was_paragraph and re.fullmatch(r" {0,3}(?:=+|-+)[ \t]*", content):
         return False
+    if not was_paragraph and content.lstrip(" ").startswith("["):
+        # A reference definition can span lines and cannot establish laziness.
+        # Keep ambiguous new leaves visible instead of guessing their grammar.
+        return None
     if content.lstrip(" ").startswith("<") or "|" in content:
         return None
     return True
@@ -919,7 +934,7 @@ def policy_code_span_ends(lines: list[str]) -> dict[tuple[int, int], tuple[int, 
                 ends[(row, run.start() + 1)] = next_runs[width - 1]
             next_runs[width] = (row, run.end())
         if (
-            not line.strip()
+            not line.strip(" \t")
             or re.match(
                 r"^(?: {4}| *\t| {0,3}(?:>|#{1,6}(?:[ \t]|$)|<!--|[-+*] |[0-9]+[.)] ))", line
             )
@@ -937,7 +952,7 @@ def operative_markdown_lines(text: str) -> list[str]:
     supply an obligation. Existing loose heading/phrase contracts keep their
     compatibility behavior. This is a static policy guard, not an agent runner.
     """
-    lines = text.splitlines()
+    lines = markdown_lines(text)
     span_ends = policy_code_span_ends(lines)
     backtick_run = re.compile(r"`+")
     result: list[str] = []
@@ -966,6 +981,17 @@ def operative_markdown_lines(text: str) -> list[str]:
         if not in_comment and code_end is None:
             expanded = line.expandtabs(4)
             indent = len(expanded) - len(expanded.lstrip(" "))
+            ordered = re.match(r"^ {0,3}([0-9]{1,9})[.)](?:[ \t]|$)", line)
+            if (
+                paragraph_can_continue
+                and list_content_indent is None
+                and ordered is not None
+                and int(ordered.group(1)) != 1
+            ):
+                # A non-1 start cannot interrupt a direct paragraph. Do not
+                # let a stateless fence parser hide this live continuation.
+                result.append("[unsupported ordered continuation] " + line)
+                continue
             outside_block = (
                 is_policy_heading(line)
                 or starts_policy_list(line)
@@ -974,7 +1000,7 @@ def operative_markdown_lines(text: str) -> list[str]:
                 or re.match(r"^ {0,3}<!--", line) is not None
                 or parse_markdown_fence_open(line, MARKDOWN_FENCE_CONTEXT) is not None
             )
-            if line.strip() and list_content_indent is not None:
+            if line.strip(" \t") and list_content_indent is not None:
                 if indent >= list_content_indent and (
                     indent >= 4
                     or is_policy_heading(line)
@@ -986,9 +1012,9 @@ def operative_markdown_lines(text: str) -> list[str]:
                     continue
                 if indent < list_content_indent and (not paragraph_can_continue or outside_block):
                     list_content_indent = None
-            if not line.strip() or outside_block:
+            if not line.strip(" \t") or outside_block:
                 paragraph_can_continue = False
-            if not line.strip() or is_policy_heading(line):
+            if not line.strip(" \t") or is_policy_heading(line):
                 quoted_paragraph_can_continue = False
                 unsupported_quote = False
             if unsupported_quote:
@@ -1087,7 +1113,7 @@ def operative_markdown_lines(text: str) -> list[str]:
             else:
                 visible.append(line[column])
                 column += 1
-        observed = "".join(visible).strip()
+        observed = "".join(visible).strip(" \t")
         result.append(observed)
         if observed:
             paragraph_can_continue = not (
@@ -1160,7 +1186,10 @@ def parse_policy_body(lines: list[str]) -> tuple[list[str], list[RequiredTable]]
     while index < len(lines):
         line = lines[index]
         boundary = (
-            not line or line.startswith(("#", "|")) or re.match(r"^(?:[0-9]+[.)]|[-+*]) ", line)
+            not line
+            or is_policy_heading(line)
+            or line.startswith("|")
+            or re.match(r"^(?:[0-9]+[.)]|[-+*]) ", line)
         )
         if boundary and paragraph:
             paragraphs.append(" ".join(" ".join(paragraph).split()))
@@ -1184,7 +1213,7 @@ def parse_policy_body(lines: list[str]) -> tuple[list[str], list[RequiredTable]]
                 raise InstructionContractValidationError("Malformed or duplicate policy table.")
             tables.append(RequiredTable(cells[0], tuple(cells[2:])))
             continue
-        if line and not line.startswith("#"):
+        if line and not is_policy_heading(line):
             paragraph.append(line)
         index += 1
     if paragraph:

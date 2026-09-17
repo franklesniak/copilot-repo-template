@@ -24,14 +24,15 @@ These instructions are authoritative for all changes in this repository.
 
 ## Protected Instruction Files
 
-Instruction files and style guides are protected governance files. This rule applies to:
+Instruction files, style guides, and the retained instruction-contract catalog are protected governance files. This rule applies to:
 
 - The repo-wide constitution: `.github/copilot-instructions.md`
 - Root agent entry points: `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`
 - Cursor project rules under `.cursor/rules/`
 - Modular instruction files under `.github/instructions/`
+- The retained instruction-contract catalog: `.template-sync/instruction-contracts.yml`
 
-Agents **MUST NOT** create, edit, delete, rename, or otherwise change protected instruction files unless the repository owner or maintainer has directly and explicitly authorized the specific instruction-file change in the current task. Implied consent is insufficient.
+Agents **MUST NOT** create, edit, delete, rename, or otherwise change these protected governance files unless the repository owner or maintainer has directly and explicitly authorized the specific protected-content change in the current task. Implied consent is insufficient.
 
 Authorization **MUST NOT** be inferred from:
 
@@ -93,7 +94,7 @@ Pre-commit hooks are NOT optional. They enforce:
 
 1. Pull the latest branch
 2. Run pre-commit checks locally and review the fixes
-3. Add the fixes to commit history before pushing again: prefer amending the commit(s) that introduced the failures, or include the fixes in your next substantive commit on the same branch, rather than landing a standalone formatting-only or lint-only commit (see "What Not to Do" below). For `copilot/**` branches, the auto-fix workflow described under "Auto-Fix Workflow (Safety Net for Copilot Branches)" will normally apply these fixes automatically.
+3. Add the fixes to commit history before pushing again: prefer amending the commit(s) that introduced the failures, or include the fixes in your next substantive commit on the same branch, rather than landing a standalone formatting-only or lint-only commit (see "What Not to Do" below). For `copilot/**` branches, the optional workflow described under "Auto-Fix Workflow (Safety Net for Copilot Branches)" generates an untrusted fix preview for local review and application.
 4. Push again (force-push if you amended or rebased earlier commits)
 
 **CI is a safety net, not a substitute for local checks.**
@@ -169,19 +170,23 @@ If you encounter issues:
 
 ### Auto-Fix Workflow (Safety Net for Copilot Branches)
 
-This repository includes an auto-fix workflow (`.github/workflows/auto-fix-precommit.yml`) that automatically runs pre-commit hooks and commits fixes for `copilot/**` branches. This serves as a safety net when the Copilot Coding Agent pushes code that fails pre-commit checks.
+This repository includes an optional pre-commit fix-preview workflow (`.github/workflows/auto-fix-precommit.yml`) for `copilot/**` branches. It runs candidate hooks with read-only repository permissions and no persisted checkout credential. The workflow wrapper generates proposed fixes and does not commit or push them.
 
 **How it works:**
 
 - Triggers only on `push` events to `copilot/**` branches
-- Only runs when the pusher is `copilot-swe-agent[bot]` (prevents infinite loops)
-- Automatically commits any auto-fixes with message `chore: Apply pre-commit auto-fixes [automated]`
-- Uses `github-actions[bot]` identity for commits
+- Only runs when the pusher is `copilot-swe-agent[bot]`; this filter scopes the feature and is not a trust boundary
+- Configures the capture code to reject tracked patches over 8 MiB and status output over 1 MiB, and retains the untrusted preview with run/head information for three days
+- Lists untracked outputs separately; reproduce those outputs locally instead of assuming the patch includes them
+- Retains the native pre-commit exit and reports hook failure after capturing the preview
 
 **Important notes:**
 
 - This is a **safety net**, not a substitute for running pre-commit locally
 - Agents should still try to run pre-commit checks before pushing when possible
+- Review or reproduce the untrusted fixes locally, include them with the substantive change, and run all required checks on the resulting commit
+- Hooks and capture share a runner, so capture limits and provenance are candidate-produced checks, not independent guarantees against hostile hooks
+- The preview is not an acceptance oracle and MUST NOT be automatically consumed by privileged code; `precommit-ci.yml` remains the required final-head enforcement
 - The workflow only applies to `copilot/**` branches—human branches are not affected
 - Manual intervention may still be required for issues that cannot be auto-fixed
 
@@ -373,6 +378,8 @@ For each distinct real finding, agents MUST complete these steps in order. Do no
 10. Reply with implementation or refutation evidence. Resolve the native thread when the finding is complete and no pending guide action requires it to stay open. Close body-only findings by attributable disposition. A resolved flag is not proof. If resolution tooling is absent, identify the manual action; do not claim it occurred. Remove temporary processing reactions when supported.
 
 ### Protected authority and deferral
+
+The retained `.template-sync/instruction-contracts.yml` catalog is protected governance. Agents MUST obtain direct current-task owner or maintainer authorization that names or clearly bounds catalog changes, including obligation paths, module applicability, sections, clauses, tables, successors, and waiver semantics. Coordinated instruction edits, review feedback, validation repair, and keep-in-sync requests do not imply catalog authority. During adoption or sync, record a path-scoped `protected_file_decisions` entry before creating or replacing the catalog. An authorized `TAKE` copies the pinned reviewed catalog intact; `MERGE` permits only the authorized reviewed evolution. Keep module applicability in `requires_modules`; do not prune catalog obligations to match the selected agent profile. Candidate-local validation detects drift against its supplied catalog and does not independently prove authorization.
 
 Agents MUST apply the following decisions using the authority and scope that exist before the proposed edit. An existing PR diff, review loop, rubric, or branch-placement grant does not grant protected-content authority. A newly introduced protected file requires authority that explicitly covers that file; an earlier grant limited to the PR's existing files does not cover it.
 

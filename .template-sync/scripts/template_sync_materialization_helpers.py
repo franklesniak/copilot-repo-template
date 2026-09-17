@@ -34,7 +34,7 @@ SKIPPED_DISCOVERY_DIRS = frozenset(
         "__pycache__",
     }
 )
-PROTECTED_EXACT_PATHS = frozenset(
+AGENT_INSTRUCTION_EXACT_PATHS = frozenset(
     {
         ".github/copilot-instructions.md",
         ".hermes.md",
@@ -43,27 +43,30 @@ PROTECTED_EXACT_PATHS = frozenset(
         "GEMINI.md",
     }
 )
+PROTECTED_EXACT_PATHS = AGENT_INSTRUCTION_EXACT_PATHS | frozenset(
+    {".template-sync/instruction-contracts.yml"}
+)
 PROTECTED_GLOB_PATTERNS = (
     ".github/instructions/**",
     ".cursor/rules/**",
 )
 INLINE_BLOCK_MARKER_RE = re.compile(
-    r"^\s*(?:#\s*template-sync:|<!--\s*template-sync:)\s*"
-    r"(?P<kind>begin|end)\s+"
-    r"(?P<name>[a-z0-9-]+-(?:reference-)?only)\s*(?:-->)?\s*$"
+    r"^[ \t]*(?:#[ \t]*template-sync:|<!--[ \t]*template-sync:)[ \t]*"
+    r"(?P<kind>begin|end)[ \t]+"
+    r"(?P<name>[a-z0-9-]+-(?:reference-)?only)[ \t]*(?:-->)?[ \t]*(?:\r\n?|\n)?\Z"
 )
 MARKDOWN_RENDERED_SUFFIXES = frozenset({".md", ".mdc"})
 YAML_SUFFIXES = frozenset({".yml", ".yaml"})
 MARKDOWN_FENCE_CONTEXT = "markdown"
 EMBEDDED_MARKDOWN_FENCE_CONTEXT = "embedded-markdown"
 LIST_MARKER_RE = re.compile(
-    r"^(?P<indent> {0,3})(?P<marker>(?:[-+*]|\d{1,9}[.)]))(?P<spaces> {1,4})(?P<rest>.*)$"
+    r"^(?P<indent> {0,3})(?P<marker>(?:[-+*]|[0-9]{1,9}[.)]))(?P<spaces> {1,4})(?P<rest>.*)$"
 )
 # Same as ``LIST_MARKER_RE`` but with no 0-3 space cap on the leading indent, so
 # list-contained fences inside deeply-indented YAML block scalars are recognized
 # under the embedded-Markdown fence context.
 EMBEDDED_LIST_MARKER_RE = re.compile(
-    r"^(?P<indent> *)(?P<marker>(?:[-+*]|\d{1,9}[.)]))(?P<spaces> {1,4})(?P<rest>.*)$"
+    r"^(?P<indent> *)(?P<marker>(?:[-+*]|[0-9]{1,9}[.)]))(?P<spaces> {1,4})(?P<rest>.*)$"
 )
 # AND-retention markers. A block in this family is retained only when *every*
 # module it names is present in ``included_modules``; it is stripped when *any*
@@ -1923,6 +1926,22 @@ def line_body(line: str) -> str:
     return line.rstrip("\r\n")
 
 
+def markdown_lines(text: str, *, keepends: bool = False) -> list[str]:
+    """Split only CR, LF and CRLF physical lines, preserving other characters.
+
+    The fixed delimiter pattern scans once. Empty input and terminal endings
+    follow splitlines behavior without promoting Unicode/control separators.
+    """
+    lines: list[str] = []
+    start = 0
+    for ending in re.finditer(r"\r\n?|\n", text):
+        lines.append(text[start : ending.end() if keepends else ending.start()])
+        start = ending.end()
+    if start < len(text):
+        lines.append(text[start:])
+    return lines
+
+
 def consume_blockquote_prefix(
     line: str,
     *,
@@ -1954,7 +1973,7 @@ def consume_blockquote_prefix(
 
 def line_is_outside_list_item(line: str, content_indent: int) -> bool:
     """Return whether ``line`` ends a conservative list-item containing block."""
-    if not line.strip():
+    if not line.strip(" \t"):
         return False
     leading_spaces = len(line) - len(line.lstrip(" "))
     return leading_spaces < content_indent
@@ -2006,7 +2025,7 @@ def parse_fence_close_from_content(
         fence_length += 1
     if fence_length < minimum_length:
         return False
-    return stripped[fence_length:].strip(" ") == ""
+    return stripped[fence_length:].strip(" \t") == ""
 
 
 def parse_markdown_fence_open(line: str, fence_context: str) -> MarkdownFence | None:
@@ -2137,7 +2156,7 @@ def lines_outside_markdown_fences(
     return tuple(
         (state.line_number, state.line)
         for state in markdown_line_states(
-            text.splitlines(),
+            markdown_lines(text),
             fence_context=fence_context,
         )
         if not state.is_fenced
@@ -2194,7 +2213,7 @@ def live_inline_marker_lines(
 ) -> tuple[tuple[int, str, InlineBlockMarker | None], ...]:
     """Return text lines paired with live inline markers for ``relative_path``."""
     fence_context = markdown_fence_context_for_path(relative_path)
-    raw_lines = text.splitlines(keepends=True)
+    raw_lines = markdown_lines(text, keepends=True)
     if fence_context is None:
         states = tuple(
             MarkdownLineState(
@@ -2350,8 +2369,8 @@ def apply_blank_line_hygiene(
     blank_run = 0
     active_fence: MarkdownFence | None = None
 
-    for line in text.splitlines(keepends=True):
-        if line.strip():
+    for line in markdown_lines(text, keepends=True):
+        if line_body(line).strip(" \t"):
             body = line_body(line)
             if active_fence is not None:
                 content = active_fence_content(body, active_fence)

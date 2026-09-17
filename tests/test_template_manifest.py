@@ -1100,6 +1100,246 @@ def _run_git(repo_root: Path, *args: str) -> None:
     )
 
 
+def _fix_preview_document() -> dict[str, Any]:
+    """Load the actual workflow without YAML 1.1 boolean-key coercion."""
+    return cast(
+        dict[str, Any],
+        yaml.load(
+            (REPO_ROOT / ".github/workflows/auto-fix-precommit.yml").read_text(encoding="utf-8"),
+            Loader=yaml.BaseLoader,
+        ),
+    )
+
+
+def _assert_fix_preview_boundary(workflow: dict[str, Any]) -> None:
+    """Assert independent authority requirements for the shipped candidate workflow."""
+    assert workflow["on"] == {"push": {"branches": ["copilot/**"]}}
+    assert workflow["permissions"] == {"contents": "read"}
+    assert set(workflow["jobs"]) == {"fix-preview"}
+    job = workflow["jobs"]["fix-preview"]
+    assert job.get("permissions", {"contents": "read"}) == {"contents": "read"}
+    assert job["if"] == "github.actor == 'copilot-swe-agent[bot]'"
+    assert int(job["timeout-minutes"]) <= 30
+    steps = job["steps"]
+    checkouts = [step for step in steps if step.get("uses", "").startswith("actions/checkout@")]
+    assert len(checkouts) == 1
+    assert checkouts[0]["with"]["persist-credentials"] == "false"
+    assert checkouts[0]["with"]["ref"] == "${{ github.sha }}"
+    serialized = json.dumps(workflow)
+    assert "secrets." not in serialized and "github.token" not in serialized
+    assert "id-token" not in serialized
+    scripts = "\n".join(step.get("run", "") for step in steps)
+    assert re.search(r"\bgit\s+(?:push|commit)\b", scripts) is None
+    hooks = next(step for step in steps if step.get("id") == "hooks")
+    assert hooks["continue-on-error"] == "true"
+    assert 'exit "$hook_exit"' in hooks["run"]
+    assert "exit_code=%s" in hooks["run"]
+    preview = next(step for step in steps if step.get("id") == "preview")
+    assert preview["env"]["HOOK_EXIT"] == "${{ steps.hooks.outputs.exit_code }}"
+    failure = next(step for step in steps if step["name"] == "Preserve pre-commit failure")
+    assert "steps.hooks.outcome == 'failure'" in failure["if"]
+    assert failure["run"].rstrip().endswith("exit 1")
+    upload = next(
+        step for step in steps if step.get("uses", "").startswith("actions/upload-artifact@")
+    )
+    assert "steps.preview.outcome == 'success'" in upload["if"]
+    assert upload["with"]["if-no-files-found"] == "error"
+    assert upload["with"]["retention-days"] == "3"
+    assert upload["with"].get("include-hidden-files", "false") == "false"
+    assert upload["with"]["path"].splitlines() == [
+        "${{ runner.temp }}/precommit-fix-preview/tracked.patch",
+        "${{ runner.temp }}/precommit-fix-preview/status.txt",
+        "${{ runner.temp }}/precommit-fix-preview/README.txt",
+    ]
+
+
+def test_fix_preview_workflow_has_no_repository_write_authority() -> None:
+    """Candidate hooks have read-only authority and cannot publish branch mutations."""
+    _assert_fix_preview_boundary(_fix_preview_document())
+
+
+@pytest.mark.parametrize(
+    "mutation", ["write", "job-write", "persist", "token", "push", "failure", "hook-exit"]
+)
+def test_fix_preview_boundary_oracle_detects_unsafe_mutations(mutation: str) -> None:
+    """Removing a credential, branch-write, or failure-truth assertion is observable."""
+    workflow = _fix_preview_document()
+    job = workflow["jobs"]["fix-preview"]
+    if mutation == "write":
+        workflow["permissions"]["contents"] = "write"
+    elif mutation == "job-write":
+        job["permissions"] = {"contents": "write"}
+    elif mutation == "persist":
+        del job["steps"][0]["with"]["persist-credentials"]
+    elif mutation == "token":
+        job["steps"][0]["with"]["token"] = "${{ secrets.GITHUB_TOKEN }}"
+    elif mutation == "push":
+        job["steps"].append({"name": "Unsafe push", "run": "git push"})
+    elif mutation == "hook-exit":
+        step = next(step for step in job["steps"] if step.get("id") == "preview")
+        step["env"]["HOOK_EXIT"] = "0"
+    else:
+        step = next(step for step in job["steps"] if step["name"] == "Preserve pre-commit failure")
+        step["run"] = "exit 0"
+    with pytest.raises((AssertionError, KeyError)):
+        _assert_fix_preview_boundary(workflow)
+
+
+def _run_fix_preview_capture(
+    repo_root: Path, output_root: Path, *, mutant: str = "", event_head: str | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Execute the real inline Python capture step against an isolated Git fixture."""
+    workflow = _fix_preview_document()
+    step = next(
+        step for step in workflow["jobs"]["fix-preview"]["steps"] if step.get("id") == "preview"
+    )
+    script = step["run"]
+    if mutant == "size":
+        guard = "if len(data) > limit:"
+        assert script.count(guard) == 1
+        script = script.replace(guard, "if False:")
+        # Drain the finite oversized fixture so the deliberately unsafe mutant
+        # terminates; the independent expected rejection must then fail.
+        script = script.replace("process.stdout.read(limit + 1)", "process.stdout.read()")
+    elif mutant == "head":
+        assert script.count("require_event_head()\n") == 2
+        script = script.replace("require_event_head()\n", "pass\n")
+    elif mutant == "status":
+        # Raise only the 1 MiB status callsite limit without changing capture().
+        assert script.count("    1024 * 1024,") == 1
+        script = script.replace("    1024 * 1024,", "    8 * 1024 * 1024,")
+    env = os.environ.copy()
+    env.update(
+        RUNNER_TEMP=str(output_root),
+        GITHUB_SHA=(
+            event_head
+            if event_head is not None
+            else subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repo_root, text=True
+            ).strip()
+        ),
+        GITHUB_REF="refs/heads/copilot/fixture",
+        GITHUB_RUN_ID="123",
+        HOOK_EXIT="1",
+    )
+    return subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+
+
+def _preview_git_fixture(tmp_path: Path) -> Path:
+    """Create a repository owned only by this test, without invoking external hooks."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _run_git(repo, "init")
+    _run_git(repo, "config", "user.name", "Fixture")
+    _run_git(repo, "config", "user.email", "fixture@example.invalid")
+    _run_git(repo, "config", "core.autocrlf", "false")
+    (repo / "example.txt").write_text("before\n", encoding="utf-8")
+    _run_git(repo, "add", "example.txt")
+    _run_git(repo, "-c", "commit.gpgsign=false", "commit", "-m", "Fixture")
+    return repo
+
+
+def test_fix_preview_captures_changes_without_mutating_git_history(tmp_path: Path) -> None:
+    """The actual producer preserves untracked evidence, native exit and exact head."""
+    repo = _preview_git_fixture(tmp_path)
+    (repo / "example.txt").write_text("after\n", encoding="utf-8")
+    (repo / "untracked.txt").write_text("review separately\n", encoding="utf-8")
+    before = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo)
+    result = _run_fix_preview_capture(repo, tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    preview = tmp_path / "precommit-fix-preview"
+    patch = (preview / "tracked.patch").read_text(encoding="utf-8")
+    assert "-before" in patch and "+after" in patch
+    assert "untracked.txt" not in patch
+    assert "?? untracked.txt" in (preview / "status.txt").read_text(encoding="utf-8")
+    readme = (preview / "README.txt").read_text(encoding="utf-8")
+    assert "UNTRUSTED FIX PREVIEW" in readme
+    assert "Native pre-commit exit: 1" in readme
+    assert f"Head: {before.decode().strip()}" in readme
+    assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo) == before
+
+
+def test_fix_preview_size_oracle_detects_removed_capture_bound(tmp_path: Path) -> None:
+    """An oversized real Git diff fails; removing the byte assertion reverses that result."""
+    repo = _preview_git_fixture(tmp_path)
+    (repo / "example.txt").write_text("X" * (9 * 1024 * 1024), encoding="utf-8")
+    safe_output = tmp_path / "safe"
+    unsafe_output = tmp_path / "mutant"
+    safe_output.mkdir()
+    unsafe_output.mkdir()
+    result = _run_fix_preview_capture(repo, safe_output)
+    assert result.returncode != 0
+    assert "exceeds its byte limit" in result.stderr
+    assert not (safe_output / "precommit-fix-preview/README.txt").exists()
+    mutant = _run_fix_preview_capture(repo, unsafe_output, mutant="size")
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    assert (unsafe_output / "precommit-fix-preview/tracked.patch").stat().st_size > 8 * 1024 * 1024
+
+
+@pytest.mark.parametrize("mutation", ["commit", "reset"])
+def test_fix_preview_rejects_hook_history_changes(tmp_path: Path, mutation: str) -> None:
+    """A local commit/reset cannot silently change the preview's event baseline."""
+    repo = _preview_git_fixture(tmp_path)
+    original = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+    (repo / "example.txt").write_text("second\n", encoding="utf-8")
+    _run_git(repo, "add", ".")
+    _run_git(repo, "-c", "commit.gpgsign=false", "commit", "-m", "Second fixture commit")
+    second = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+    if mutation == "reset":
+        _run_git(repo, "reset", "--hard", original)
+        event_head = second
+    else:
+        event_head = original
+    safe, unsafe = tmp_path / "safe", tmp_path / "unsafe"
+    safe.mkdir()
+    unsafe.mkdir()
+    result = _run_fix_preview_capture(repo, safe, event_head=event_head)
+    assert result.returncode != 0
+    assert "Local HEAD changed" in result.stderr
+    assert not (safe / "precommit-fix-preview/README.txt").exists()
+    mutant = _run_fix_preview_capture(repo, unsafe, mutant="head", event_head=event_head)
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    patch = (unsafe / "precommit-fix-preview/tracked.patch").read_text(encoding="utf-8")
+    assert "second" in patch and "before" in patch
+
+
+def test_fix_preview_status_limit_is_load_bearing(tmp_path: Path) -> None:
+    """Changing only the status callsite limit defeats a real oversized-status oracle."""
+    repo = _preview_git_fixture(tmp_path)
+    # Approximately 5,000 bounded-length paths exceed 1 MiB without giant files.
+    for index in range(5000):
+        (repo / (f"{index:05d}-" + "x" * 215)).touch()
+    safe, unsafe = tmp_path / "safe", tmp_path / "unsafe"
+    safe.mkdir()
+    unsafe.mkdir()
+    result = _run_fix_preview_capture(repo, safe)
+    assert result.returncode != 0
+    assert "exceeds its byte limit" in result.stderr
+    assert not (safe / "precommit-fix-preview/README.txt").exists()
+    mutant = _run_fix_preview_capture(repo, unsafe, mutant="status")
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    assert (unsafe / "precommit-fix-preview/status.txt").stat().st_size > 1024 * 1024
+
+
+def test_fix_preview_authority_survives_terraform_exclusion() -> None:
+    """Optional tool pruning preserves the same read-only failure-truth boundary."""
+    source = (REPO_ROOT / ".github/workflows/auto-fix-precommit.yml").read_text(encoding="utf-8")
+    pruned = remove_inline_block_family(
+        source, "terraform-only", relative_path=".github/workflows/auto-fix-precommit.yml"
+    )
+    workflow = yaml.load(pruned, Loader=yaml.BaseLoader)
+    _assert_fix_preview_boundary(workflow)
+    assert "setup-terraform@" not in pruned and "setup-tflint@" not in pruned
+
+
 def _marker_name_from_expected_pair(
     relative_path: str,
     marker_begin: str,

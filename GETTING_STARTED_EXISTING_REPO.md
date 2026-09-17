@@ -1351,7 +1351,7 @@ GitHub Copilot Instructions guide AI-assisted development by providing project-s
 
 ### Protected-File Adoption Step
 
-The template treats `.github/copilot-instructions.md`, `.github/instructions/**`, `.cursor/rules/**`, and root agent instruction files such as `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` as protected governance files. When adopting into an existing repository:
+The template treats `.github/copilot-instructions.md`, `.github/instructions/**`, `.cursor/rules/**`, root agent instruction files such as `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`, and the retained `.template-sync/instruction-contracts.yml` catalog as protected governance files. When adopting into an existing repository:
 
 1. Perform non-protected cleanup first, including unused workflows, source examples, tests, templates, and lint configuration.
 2. Record the adoption mode for the protected files that remain. Use `minimal-preservation` by default; choose `tailored` only when the maintainer explicitly approves broader rewriting for named files.
@@ -1368,6 +1368,14 @@ The template treats `.github/copilot-instructions.md`, `.github/instructions/**`
 Use this copy-ready checklist for step 4 before creating marker records. Maintainer wording MAY use globs for readability, but implementation MUST expand every glob to concrete protected paths before editing, removing, skipping, deferring, or sending files through protected review. Do not write a glob such as `.github/instructions/*.instructions.md` into `template_sync.protected_file_decisions[].path`; expand it to the concrete instruction files for retained modules. For example, include `.github/instructions/docs.instructions.md` only when the Markdown module is retained, `.github/instructions/yaml.instructions.md` only when the YAML module is retained, and so on. The bundle scope is the retained-module instruction files, not every optional language instruction file in the template.
 
 `minimal-preservation` is the default protected-file adoption mode, but it still requires explicit maintainer authorization before any protected path is edited. Under `minimal-preservation`, the authorized edit scope is limited to placeholder substitution, removal of unadopted-module sections, link fixes, and recorded local overrides required by the downstream repository. It does not authorize broad rewriting, new policy, or structural redesign.
+
+When `template-sync-support` is retained, obtain a separate catalog decision even if no agent platform is retained. The selected-agent bundles below do not authorize catalog changes. The catalog stays intact across profiles; `requires_modules` controls which obligations apply. Copy-ready wording for a reviewed, unchanged catalog copy is:
+
+```text
+I authorize minimal-preservation TAKE of .template-sync/instruction-contracts.yml from the reviewed template revision. Authorized scope: create or replace that catalog with the reviewed bytes, without changing or pruning its obligation inventory. This authorization is separate from the selected-agent instruction bundle.
+```
+
+Record that decision under `template_sync.protected_file_decisions` with the exact catalog path, `decision: TAKE`, `adoption_mode: minimal-preservation`, the maintainer's wording as `authorization_basis`, and the stated scope as `authorized_scope`. A substantive catalog `MERGE` needs its own explicitly bounded authorization. Candidate-local validation does not prove that authorization. Excluding `template-sync-support` does not require a catalog decision or retain the catalog.
 
 1. **Full selected-agent bundle (`minimal-preservation`)**
 

@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-10
+- **Last Updated:** 2026-09-17
 - **Scope:** Durable design-decision record for this repository template, including rationale for GitHub configuration, instruction files, validation policy, template structure, maintenance conventions, and the documentation-tier inventory below.
 - **Related:** [Repository Copilot Instructions](copilot-instructions.md), [Documentation Writing Style](instructions/docs.instructions.md)
 
@@ -925,7 +925,7 @@ The repository ships a dedicated `.github/workflows/data-ci.yml` workflow that r
 
 **Trade-off accepted:** The duplication between `precommit-ci.yml` and `data-ci.yml` is intentional. The previous decision to keep aggregate pre-commit enforcement in `python-ci.yml` was reversed because excluding the `python` module deleted the aggregate gate for downstream repositories with no Python project source. The accepted topology keeps data-file visibility while moving shared hook enforcement to a baseline workflow.
 
-**Distinction from `auto-fix-precommit.yml`:** `data-ci.yml` is a contract enforcement gate that runs on all PRs and pushes. `.github/workflows/auto-fix-precommit.yml` is intentionally NOT a peer of `data-ci.yml`: it is a fix-up workflow scoped to `copilot/**` branches that auto-applies pre-commit fixes and does not enforce results. The two workflows serve different purposes and must not be conflated.
+**Distinction from `auto-fix-precommit.yml`:** `data-ci.yml` is a contract enforcement gate that runs on all PRs and pushes. `.github/workflows/auto-fix-precommit.yml` is an optional read-only fix-preview workflow scoped to Copilot-agent pushes on `copilot/**` branches. Candidate hooks receive no repository write credential, and checkout credentials do not persist. The workflow wrapper publishes an explicitly untrusted patch/status artifact, preserves hook failures, and does not commit or push. The capture code checks 8 MiB patch and 1 MiB status limits plus event-head identity, but hooks and capture share a runner. These candidate-produced checks do not independently guarantee uploaded size, integrity, or provenance against hostile hooks. The agent or owner must review and apply or reproduce fixes locally. This retains useful fix generation while avoiding privileged execution of proposed hooks. A new trusted privileged publisher would require a separate artifact and write trust boundary. The aggregate pre-commit workflow remains the required final-head enforcement.
 
 **Schema validation steps:** `data-ci.yml` invokes schema-backed validation by alias rather than by the aggregate `check-jsonschema` or `check-metaschema` hook IDs. Schema-owned aliases validate the worked-example schema fixtures, template-sync marker fixtures, and project-owned schemas against their declared Draft 2020-12 metaschemas inside `schema-only` inline blocks. Joint schema plus template-sync-support aliases validate `.template-sync/manifest.yml` and `.template-sync/marker.yml` inside `schema-template-sync-support-only` inline blocks. The GitHub-platform-owned `validate-dependabot-config` alias validates `.github/dependabot.yml` against `vendor.dependabot` in its own standalone step. This alias-based model preserves current validation when modules are retained while allowing downstream repositories to strip `schema` or `template-sync-support` blocks without leaving CI steps that invoke missing hooks or unrelated module-owned validation.
 

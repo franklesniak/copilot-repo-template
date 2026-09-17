@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.2.20260910.0
+**Version:** 1.2.20260917.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-10
+- **Last Updated:** 2026-09-17
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the first-adoption bootstrap command, the read-only first-adoption preflight/questionnaire mode, raw first-adoption state reporting, first-adoption quality-debt reports and suppressions, the adoption difficulties journal, one-shot first-adoption materialization, shell-safe first-adoption args files, package identity and collaboration-policy materialization, first-adoption structural convention assessment, first-adoption working-tree validation and doctor diagnostics, downstream local path ownership records, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -212,6 +212,7 @@ These settings may be completed through the GitHub UI even when `gh` is unavaila
 ## Protected-File Adoption Decisions
 
 - [ ] Protected instruction files identified before editing: `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, `.cursor/rules/*.mdc`, `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`.
+- [ ] When `template-sync-support` is retained, `.template-sync/instruction-contracts.yml` identified as a separate protected governance path, including in profiles with no agent platform.
 - [ ] Protected-file edits authorized by maintainer: `[none, path-scoped authorization, or deferred]`
 - [ ] Protected-file removals authorized by maintainer: `[none, path-scoped authorization, or deferred]`
 - [ ] `.template-sync/marker.yml` protected-file decisions updated if template sync support is retained.
@@ -653,6 +654,8 @@ Do not add ad hoc, non-schema fields to `.template-sync/marker.yml`. Use the sch
 ### Protected File Decisions
 
 Use `template_sync.protected_file_decisions` for every protected file that is edited, merged, taken, skipped, removed, deferred, or sent through protected review during first adoption or later sync. Valid `decision` values are `TAKE`, `MERGE`, `SKIP`, `REMOVE-LOCAL`, `DEFER`, and `PROTECTED-REVIEW`.
+
+The retained `.template-sync/instruction-contracts.yml` catalog requires its own explicit decision before initial creation or later replacement. An authorized `TAKE` copies the pinned reviewed catalog intact; a `MERGE` requires authorization for the specific obligation changes. Do not infer catalog authority from an agent-platform bundle, coordinated instruction edits, or validation repair. Keep the catalog across support-retaining profiles and let `requires_modules` determine applicability; do not prune obligations for excluded agents. A candidate-local validator is a drift check, not independent evidence of human authorization. When `template-sync-support` is excluded, no catalog decision or catalog output is required.
 
 - `TAKE` and `MERGE` MUST include `adoption_mode`, `authorization_basis`, and `authorized_scope`.
 - `adoption_mode: tailored` MUST include `tailored_authorization_basis`; use it only for authorized broad rewrites of the named protected path or path set.

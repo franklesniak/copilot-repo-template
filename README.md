@@ -112,7 +112,7 @@ Optional module-owned surfaces include:
 <!-- template-sync: end github-platform-reference-only -->
 - `.github/instructions/*.md` - Retained coding standards applied based on file patterns.
 - `.github/linting/PSScriptAnalyzerSettings.psd1` - PSScriptAnalyzer settings enforcing OTBS formatting for PowerShell.
-- `.github/workflows/auto-fix-precommit.yml` - Optional auto-fix workflow for pre-commit fixes on Copilot-agent branches.
+- `.github/workflows/auto-fix-precommit.yml` - Optional read-only pre-commit fix preview for Copilot-agent branches; review and apply proposed fixes locally.
 - `.github/workflows/check-placeholders.yml` - Transitional OWNER/REPO and `@OWNER` placeholder check.
 <!-- template-sync: begin data-ci-reference-only -->
 - `.github/workflows/data-ci.yml` - Baseline placeholder, data-file, and template-sync validation workflow, present when baseline or a data-file/template-sync module is retained.

@@ -2727,7 +2727,7 @@ The default configuration assumes:
    4. Push again
    ```
 
-4. **Different branch patterns for automated fixes:** If you use a different branch naming convention for AI-generated PRs, update the Auto-Fix Workflow section to match (and update the corresponding workflow file).
+4. **Different branch patterns for fix previews:** If you use a different branch naming convention for AI-generated PRs, update the Auto-Fix Workflow section to match (and update the corresponding workflow file).
 
 > **Note:** The pre-commit section should accurately reflect your project's tooling. Incorrect instructions will cause Copilot to suggest wrong commands or skip necessary checks.
 
@@ -3031,7 +3031,7 @@ If your project uses `requirements.txt` files instead of `pyproject.toml` option
 
 **File:** `.github/workflows/auto-fix-precommit.yml`
 
-The template includes an optional workflow that automatically runs pre-commit hooks and commits any auto-fixes (such as formatting corrections and trailing whitespace removal) for branches created by the GitHub Copilot Coding Agent.
+The template includes an optional workflow that automatically runs pre-commit hooks and publishes an untrusted fix preview for branches created by the GitHub Copilot Coding Agent. It has read-only repository permissions; its wrapper does not commit or push. Review or reproduce the fixes locally, include them with the substantive change, and run required checks on the resulting commit.
 
 ### Understanding the Workflow
 
@@ -3039,22 +3039,24 @@ This workflow:
 
 - Triggers only on `copilot/**` branches when pushed by `copilot-swe-agent[bot]`
 - Runs pre-commit hooks with auto-fix enabled
-- Commits any changes back to the branch automatically
-- Helps AI-assisted development pass pre-commit checks without manual intervention
+- Uses read-only permissions and does not persist checkout credentials into candidate hook execution
+- Configures capture checks for an 8 MiB tracked-file patch and 1 MiB status output, with run/head information and three-day retention
+- Lists untracked outputs separately so the agent or owner can reproduce them locally
+- Reports hook failure after generating the preview; an artifact is not evidence that validation passed
 
-> **Recommendation:** Keep this workflow enabled if you use GitHub Copilot Coding Agent. The safety net significantly reduces the need for manual pre-commit fix commits.
+Hooks and capture share a runner. A hook can affect later executable resolution or shared files, so the capture limits and provenance are candidate-produced checks, not independent guarantees against hostile hooks. Treat the artifact as untrusted proposed data. Review it or rerun pre-commit locally before applying changes. Do not feed it automatically to privileged automation. The ordinary aggregate pre-commit workflow remains the required gate for the final commit.
 
 ### When to Keep This Workflow
 
 Keep this workflow if:
 
 - You plan to use GitHub Copilot Coding Agent for automated PRs
-- You want a safety net that auto-fixes pre-commit issues on `copilot/**` branches
-- You prefer automated fixes over manual intervention
+- You want generated fix previews for pre-commit issues on `copilot/**` branches
+- You will review and apply or reproduce the proposed fixes locally
 
 ### Removing This Workflow
 
-If you don't use GitHub Copilot Coding Agent or prefer to manually commit pre-commit fixes, you can safely remove this workflow.
+If you don't use GitHub Copilot Coding Agent or local pre-commit runs provide enough feedback, you can safely remove this optional preview workflow.
 
 > **Note:** Removing this workflow is safe if another workflow still reports pre-commit failures. If you removed Python project CI but kept pre-commit hooks, keep `.github/workflows/precommit-ci.yml` or another aggregate required check as described in [Aggregate Pre-commit CI](#aggregate-pre-commit-ci).
 

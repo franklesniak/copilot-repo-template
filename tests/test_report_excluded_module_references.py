@@ -601,6 +601,32 @@ def test_invalid_explicit_module_is_runtime_failure(tmp_path: Path) -> None:
     assert "not defined by the manifest" in result.stderr
 
 
+def test_reference_reporter_preserves_physical_lines_and_literal_markers() -> None:
+    """Normal and malformed-marker fallback scans keep non-CR/LF characters literal."""
+    program = r"""
+import sys
+sys.path.insert(0, sys.argv[1])
+import report_excluded_module_references as reporter
+for literal in ("\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029", "\u00a0", "\u2003", "\x1f"):
+    begin = literal + "<!-- template-sync: begin python-reference-only -->"
+    end = literal + "<!-- template-sync: end python-reference-only -->"
+    text = begin + "\n[code](src/example.py)\n" + end + "\n"
+    assert reporter.lines_outside_inline_blocks(text, relative_path="README.md") == (
+        (1, begin), (2, "[code](src/example.py)"), (3, end))
+    malformed = "<!-- template-sync: begin unknown-fixture-only -->"
+    text = malformed + "\nleft" + literal + "right\n"
+    assert reporter.lines_outside_inline_blocks(text, relative_path="README.md") == (
+        (1, malformed), (2, "left" + literal + "right"))
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", program, str(SCRIPT_PATH.parent)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_inline_block_invalid_finding_reports_location_once(tmp_path: Path) -> None:
     """A structural inline-block error reports its location once in the finding."""
     _write_common_repo(tmp_path)

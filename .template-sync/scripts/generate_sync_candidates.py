@@ -28,11 +28,11 @@ from first_adoption_state import (  # noqa: E402
     inspect_first_adoption_state,
 )
 from template_sync_materialization_helpers import (  # noqa: E402
+    AGENT_INSTRUCTION_EXACT_PATHS,
     DEFAULT_MANIFEST_PATH,
     DEFAULT_MANIFEST_SCHEMA_PATH,
     DEFAULT_MARKER_PATH,
     DEFAULT_MARKER_SCHEMA_PATH,
-    PROTECTED_EXACT_PATHS,
     REMOVAL_DECISION,
     DeferredProtectedCandidate,
     LocalOverride,
@@ -3391,7 +3391,7 @@ def discover_security_files(repo_root: Path) -> tuple[str, ...]:
 
 def discover_agent_instruction_files(repo_root: Path) -> tuple[str, ...]:
     """Return existing agent-instruction and modular instruction files."""
-    direct_files = list_existing_paths(repo_root, tuple(sorted(PROTECTED_EXACT_PATHS)))
+    direct_files = list_existing_paths(repo_root, tuple(sorted(AGENT_INSTRUCTION_EXACT_PATHS)))
     modular_files = list_directory_files(repo_root, ".github/instructions", (".md",))
     cursor_rules = list_directory_files(repo_root, ".cursor/rules", (".mdc",))
     return tuple(sorted((*direct_files, *modular_files, *cursor_rules)))

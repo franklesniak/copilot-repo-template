@@ -101,7 +101,7 @@
         },
         "required_paragraphs": {
           "$ref": "#/$defs/anchorList",
-          "description": "Complete ordered inventory of operative paragraphs or top-level list items; extra and duplicate paragraphs fail. Whitespace wrapping is normalized; all words, punctuation, case, and Markdown markup remain significant."
+          "description": "Complete ordered inventory of operative paragraphs or top-level list items; extra and duplicate paragraphs fail. Whitespace wrapping is normalized; the semantic loader rejects normalized-empty or normalized-duplicate clauses. All words, punctuation, case, and Markdown markup remain significant."
         },
         "required_tables": {
           "type": "array",

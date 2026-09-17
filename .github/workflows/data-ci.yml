@@ -116,10 +116,10 @@
 #
 # 2. Relationship to auto-fix-precommit.yml:
 #    `.github/workflows/auto-fix-precommit.yml` is intentionally NOT a peer
-#    of this workflow. It is a fix-up workflow scoped to `copilot/**`
-#    branches that auto-applies pre-commit fixes; it is not a contract
-#    enforcement gate. `data-ci.yml` is a contract enforcement gate for all
-#    PRs and pushes.
+#    of this workflow. It is an optional read-only fix preview scoped to
+#    Copilot-agent pushes on `copilot/**` branches. It records hook failures
+#    and publishes an untrusted patch; its wrapper does not commit or push.
+#    `data-ci.yml` is a contract enforcement gate for all PRs and pushes.
 #
 # 3. Template Repository Trigger Policy:
 #    This workflow does NOT use path-based filtering. This repository is a

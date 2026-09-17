@@ -33,6 +33,7 @@ SCRIPT_DIR = SCRIPT_PATH.parent
 NESTED_MARKDOWN_LINT_PATH = REPO_ROOT / ".github" / "scripts" / "lint-nested-markdown.js"
 SOURCE_REPO = "https://github.com/franklesniak/copilot-repo-template.git"
 FULL_SHA = "0123456789abcdef0123456789abcdef01234567"
+INSTRUCTION_CONTRACTS_PATH = ".template-sync/instruction-contracts.yml"
 ISSUE_692_NO_PYTHON_MODULES = (
     "baseline",
     "agent-instructions",
@@ -78,12 +79,12 @@ DOWNSTREAM_PYTEST_MODULES = tuple(
 OPTIONAL_PRUNING_FIXTURES: tuple[Any, ...] = (
     pytest.param(
         ("baseline", "python", "schema", "template-sync-support"),
-        False,
+        True,
         id="python-schema-template-sync-without-terraform",
     ),
     pytest.param(
         ("baseline", "template-sync-support"),
-        False,
+        True,
         id="template-sync-support-without-powershell",
     ),
     pytest.param(
@@ -633,7 +634,7 @@ def run_materialize(
 
 
 def retained_protected_paths_for_modules(included_modules: tuple[str, ...]) -> tuple[str, ...]:
-    """Return protected instruction files retained by a materialized module set."""
+    """Return protected governance files retained by a materialized module set."""
     _manifest, _module_order, mappings = materializer.load_validated_manifest_context(REPO_ROOT)
     template_paths, skipped_symlinks = materializer.iter_safe_repository_files(REPO_ROOT)
     assert not skipped_symlinks, f"fixture source has skipped symlink(s): {skipped_symlinks}"
@@ -651,7 +652,7 @@ def retained_protected_paths_for_modules(included_modules: tuple[str, ...]) -> t
 def protected_take_decisions_for_modules(
     included_modules: tuple[str, ...],
 ) -> list[dict[str, str]]:
-    """Return marker decisions that allow a full protected-file fixture."""
+    """Return marker decisions that allow a full protected-governance fixture."""
     return [
         {
             "path": relative_path,
@@ -694,6 +695,13 @@ def materialize_module_fixture(
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
+    if "template-sync-support" in included_modules:
+        assert (
+            authorize_protected_files
+        ), "support-retaining fixtures must explicitly authorize the protected catalog"
+        assert (target_root / INSTRUCTION_CONTRACTS_PATH).read_bytes() == (
+            REPO_ROOT / INSTRUCTION_CONTRACTS_PATH
+        ).read_bytes()
     return target_root
 
 
@@ -804,6 +812,13 @@ def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -
         *azure_provider_cli_args_for_modules(modules),
     )
     assert result.returncode == 0, result.stdout + result.stderr
+    catalog_path = target / INSTRUCTION_CONTRACTS_PATH
+    assert catalog_path.read_bytes() == (REPO_ROOT / INSTRUCTION_CONTRACTS_PATH).read_bytes()
+    assert any(
+        decision["path"] == INSTRUCTION_CONTRACTS_PATH for decision in decisions
+    ), "support-retaining profiles must explicitly authorize the protected catalog"
+    if profile == "neither":
+        assert {decision["path"] for decision in decisions} == {INSTRUCTION_CONTRACTS_PATH}
     run_git(target, "init", "-q")
     run_git(target, "add", ".")
     finish_review_profile_link_cleanup(target, profile)
@@ -829,8 +844,19 @@ def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -
     assert direct.returncode == 0, direct.stdout + direct.stderr
     assert aggregate.returncode == 0, aggregate.stdout + aggregate.stderr
     if profile != "neither":
+        catalog_authorization = (
+            "Agents MUST obtain direct current-task owner or maintainer authorization that "
+            "names or clearly bounds catalog changes, including obligation paths, module "
+            "applicability, sections, clauses, tables, successors, and waiver semantics."
+        )
         mutations = [
             (".github/copilot-instructions.md", "Exhausted, not clean", "Clean"),
+            (
+                ".github/copilot-instructions.md",
+                catalog_authorization,
+                catalog_authorization.replace("MUST", "MAY", 1),
+            ),
+            (".github/copilot-instructions.md", catalog_authorization, ""),
             (
                 ".github/copilot-instructions.md",
                 "### Review recovery decisions",
@@ -847,6 +873,15 @@ def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -
                 "Claude MAY ignore [Shared Review Governance]",
             ),
         ]
+        if "yaml" in modules:
+            producer_limit = (
+                "Capture size and provenance checks on the same runner MUST NOT be treated as "
+                "independent guarantees against candidate hooks."
+            )
+            for replacement in (producer_limit.replace("MUST NOT", "MAY", 1), ""):
+                mutations.append(
+                    (".github/instructions/yaml.instructions.md", producer_limit, replacement)
+                )
         for relative_path, before, after in mutations:
             if relative_path == removed:
                 continue
@@ -915,11 +950,16 @@ def materialize_downstream_pytest_fixture(tmp_path: Path) -> Path:
     """Materialize a pytest-capable tree that excludes Terraform and PowerShell."""
     target_root = tmp_path / "downstream-pytest"
     target_root.mkdir()
-    module_args = [
-        argument
-        for module_name in DOWNSTREAM_PYTEST_MODULES
-        for argument in ("--included-module", module_name)
-    ]
+    write_yaml(
+        target_root / "decisions.yml",
+        marker_document(
+            list(DOWNSTREAM_PYTEST_MODULES),
+            **azure_provider_fields_for_modules(DOWNSTREAM_PYTEST_MODULES),
+            protected_file_decisions=protected_take_decisions_for_modules(
+                DOWNSTREAM_PYTEST_MODULES
+            ),
+        ),
+    )
     placeholder_args = azure_provider_cli_args_for_modules(DOWNSTREAM_PYTEST_MODULES)
 
     # placeholder_args already supplies --repository and --security-contact for
@@ -928,15 +968,15 @@ def materialize_downstream_pytest_fixture(tmp_path: Path) -> Path:
     result = run_materialize(
         REPO_ROOT,
         target_root,
-        "--source-repo",
-        SOURCE_REPO,
-        "--last-reviewed-template-commit",
-        FULL_SHA,
-        *module_args,
+        "--decisions-file",
+        "decisions.yml",
         *placeholder_args,
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
+    assert (target_root / INSTRUCTION_CONTRACTS_PATH).read_bytes() == (
+        REPO_ROOT / INSTRUCTION_CONTRACTS_PATH
+    ).read_bytes()
     run_git(target_root, "init", "-q")
     run_git(target_root, "add", ".")
     return target_root
@@ -1842,6 +1882,7 @@ def test_materialized_template_sync_support_only_first_adoption_plan_omits_power
     target_root = materialize_module_fixture(
         tmp_path,
         ("baseline", "template-sync-support"),
+        authorize_protected_files=True,
     )
     run_git(target_root, "init", "-q")
     run_git(target_root, "add", ".")
@@ -1874,6 +1915,7 @@ def test_materialized_gitattributes_baseline_lf_pins_survive_optional_stack_excl
     target_root = materialize_module_fixture(
         tmp_path,
         DOWNSTREAM_PYTEST_MODULES,
+        authorize_protected_files=True,
     )
     run_git(target_root, "init", "-q")
 
@@ -3736,6 +3778,13 @@ def test_materialized_template_update_procedure_passes_nested_markdown_lint(
 
     target_root = tmp_path / case_name
     target_root.mkdir()
+    write_yaml(
+        target_root / "decisions.yml",
+        marker_document(
+            list(included_modules),
+            protected_file_decisions=protected_take_decisions_for_modules(included_modules),
+        ),
+    )
     module_args = [
         argument
         for module_name in included_modules
@@ -3753,7 +3802,8 @@ def test_materialized_template_update_procedure_passes_nested_markdown_lint(
         "octocat/hello-world",
         "--security-contact",
         "security@example.com",
-        "--allow-conflicts",
+        "--decisions-file",
+        "decisions.yml",
         *module_args,
     )
 
@@ -3845,6 +3895,15 @@ def test_materialized_partial_adoption_strips_shared_baseline_doc_stale_referenc
     """Partial materialization strips excluded-stack prose from each shared baseline doc."""
     target_root = tmp_path / "partial-docs"
     target_root.mkdir()
+    write_yaml(
+        target_root / "decisions.yml",
+        marker_document(
+            list(ISSUE_693_PARTIAL_DOC_MODULES),
+            protected_file_decisions=protected_take_decisions_for_modules(
+                ISSUE_693_PARTIAL_DOC_MODULES
+            ),
+        ),
+    )
     module_args = [
         argument
         for module_name in ISSUE_693_PARTIAL_DOC_MODULES
@@ -3862,7 +3921,8 @@ def test_materialized_partial_adoption_strips_shared_baseline_doc_stale_referenc
         "octocat/hello-world",
         "--security-contact",
         "security@example.com",
-        "--allow-conflicts",
+        "--decisions-file",
+        "decisions.yml",
         *module_args,
     )
 
@@ -3912,6 +3972,13 @@ def test_materialized_readme_template_sync_support_reference_block(
     included_modules: tuple[str, ...] = NO_DATA_NO_TEMPLATE_SYNC_MODULES
     if template_sync_support_included:
         included_modules = (*included_modules, "template-sync-support")
+    write_yaml(
+        target_root / "decisions.yml",
+        marker_document(
+            list(included_modules),
+            protected_file_decisions=protected_take_decisions_for_modules(included_modules),
+        ),
+    )
     module_args = [
         argument
         for module_name in included_modules
@@ -3929,7 +3996,8 @@ def test_materialized_readme_template_sync_support_reference_block(
         "octocat/hello-world",
         "--security-contact",
         "security@example.com",
-        "--allow-conflicts",
+        "--decisions-file",
+        "decisions.yml",
         *module_args,
     )
 
@@ -3957,6 +4025,13 @@ def test_materialized_contributing_template_sync_support_reference_block(
     included_modules: tuple[str, ...] = NO_DATA_NO_TEMPLATE_SYNC_MODULES
     if template_sync_support_included:
         included_modules = (*included_modules, "template-sync-support")
+    write_yaml(
+        target_root / "decisions.yml",
+        marker_document(
+            list(included_modules),
+            protected_file_decisions=protected_take_decisions_for_modules(included_modules),
+        ),
+    )
     module_args = [
         argument
         for module_name in included_modules
@@ -3974,7 +4049,8 @@ def test_materialized_contributing_template_sync_support_reference_block(
         "octocat/hello-world",
         "--security-contact",
         "security@example.com",
-        "--allow-conflicts",
+        "--decisions-file",
+        "decisions.yml",
         *module_args,
     )
 
@@ -4055,6 +4131,13 @@ def test_excluded_module_report_retains_or_group_block_without_cleanup(
     target_root = tmp_path / "or-group-report"
     target_root.mkdir()
     included_modules = (*NO_DATA_NO_TEMPLATE_SYNC_MODULES, "template-sync-support")
+    write_yaml(
+        target_root / "decisions.yml",
+        marker_document(
+            list(included_modules),
+            protected_file_decisions=protected_take_decisions_for_modules(included_modules),
+        ),
+    )
     module_args = [
         argument
         for module_name in included_modules
@@ -4072,7 +4155,8 @@ def test_excluded_module_report_retains_or_group_block_without_cleanup(
         "octocat/hello-world",
         "--security-contact",
         "security@example.com",
-        "--allow-conflicts",
+        "--decisions-file",
+        "decisions.yml",
         *module_args,
     )
     assert result.returncode == 0, result.stderr
@@ -4229,6 +4313,15 @@ def test_materialized_no_python_adoption_prunes_dependabot_pip_ecosystem(
     """No-Python materialization keeps only ecosystems with retained surfaces."""
     target_root = tmp_path / "no-python"
     target_root.mkdir()
+    write_yaml(
+        target_root / "decisions.yml",
+        marker_document(
+            list(ISSUE_692_NO_PYTHON_MODULES),
+            protected_file_decisions=protected_take_decisions_for_modules(
+                ISSUE_692_NO_PYTHON_MODULES
+            ),
+        ),
+    )
     module_args = [
         argument
         for module_name in ISSUE_692_NO_PYTHON_MODULES
@@ -4242,7 +4335,8 @@ def test_materialized_no_python_adoption_prunes_dependabot_pip_ecosystem(
         SOURCE_REPO,
         "--last-reviewed-template-commit",
         FULL_SHA,
-        "--allow-conflicts",
+        "--decisions-file",
+        "decisions.yml",
         *module_args,
     )
 
@@ -4280,6 +4374,13 @@ def test_materialized_full_adoption_keeps_all_dependabot_ecosystems(
     """Full materialization keeps every default Dependabot ecosystem."""
     target_root = tmp_path / "full"
     target_root.mkdir()
+    write_yaml(
+        target_root / "decisions.yml",
+        marker_document(
+            list(FULL_TEMPLATE_MODULES),
+            protected_file_decisions=protected_take_decisions_for_modules(FULL_TEMPLATE_MODULES),
+        ),
+    )
     module_args = [
         argument
         for module_name in FULL_TEMPLATE_MODULES
@@ -4293,7 +4394,8 @@ def test_materialized_full_adoption_keeps_all_dependabot_ecosystems(
         SOURCE_REPO,
         "--last-reviewed-template-commit",
         FULL_SHA,
-        "--allow-conflicts",
+        "--decisions-file",
+        "decisions.yml",
         *module_args,
     )
 
@@ -5199,6 +5301,176 @@ def test_protected_files_require_concrete_decisions_before_write(tmp_path: Path)
 
     assert take_result.returncode == 0, take_result.stderr
     assert read_file(target_root / "AGENTS.md") == "agent instructions\n"
+
+
+@pytest.mark.parametrize(
+    "existing_catalog_bytes",
+    [
+        pytest.param(None, id="initial-creation"),
+        pytest.param(b"downstream catalog must survive\r\n", id="replacement"),
+    ],
+)
+def test_instruction_contract_catalog_protection_guard_requires_take_before_write(
+    tmp_path: Path,
+    existing_catalog_bytes: bytes | None,
+) -> None:
+    """Creating or replacing the catalog requires a path-scoped decision."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(
+        template_root,
+        [
+            {
+                "pattern": INSTRUCTION_CONTRACTS_PATH,
+                "requires_all": ["template-sync-support"],
+            }
+        ],
+    )
+    catalog_bytes = b"instruction_contracts:\r\n  version: 1\r\n  contracts: []\r\n"
+    source_catalog = template_root / INSTRUCTION_CONTRACTS_PATH
+    source_catalog.parent.mkdir(parents=True, exist_ok=True)
+    source_catalog.write_bytes(catalog_bytes)
+    target_catalog = target_root / INSTRUCTION_CONTRACTS_PATH
+    if existing_catalog_bytes is not None:
+        target_catalog.parent.mkdir(parents=True, exist_ok=True)
+        target_catalog.write_bytes(existing_catalog_bytes)
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "template-sync-support",
+    )
+
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert INSTRUCTION_CONTRACTS_PATH in result.stdout
+    assert "unrecorded protected-file decision required" in result.stdout
+    if existing_catalog_bytes is None:
+        assert not target_catalog.exists()
+    else:
+        assert target_catalog.read_bytes() == existing_catalog_bytes
+
+    if existing_catalog_bytes is not None:
+        # The separate ordinary-overwrite guard still rejects a replacement.
+        # Initial creation isolates the catalog's protected-classification guard.
+        return
+    mutant_dir = tmp_path / "mutant"
+    mutant_dir.mkdir()
+    for source in SCRIPT_DIR.glob("*.py"):
+        shutil.copyfile(source, mutant_dir / source.name)
+    helper = mutant_dir / "template_sync_materialization_helpers.py"
+    code = helper.read_text(encoding="utf-8")
+    protected_catalog = '{".template-sync/instruction-contracts.yml"}'
+    assert code.count(protected_catalog) == 1
+    helper.write_text(code.replace(protected_catalog, "set()"), encoding="utf-8")
+    mutant = subprocess.run(
+        [
+            sys.executable,
+            str(mutant_dir / SCRIPT_PATH.name),
+            "--template-root",
+            str(template_root),
+            "--target-root",
+            str(target_root),
+            "--source-repo",
+            SOURCE_REPO,
+            "--included-module",
+            "template-sync-support",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    assert target_catalog.read_bytes() == catalog_bytes
+
+
+@pytest.mark.parametrize(
+    "existing_catalog_bytes",
+    [
+        pytest.param(None, id="initial-creation"),
+        pytest.param(b"replace this downstream catalog\n", id="replacement"),
+    ],
+)
+def test_instruction_contract_catalog_take_is_byte_identical(
+    tmp_path: Path,
+    existing_catalog_bytes: bytes | None,
+) -> None:
+    """An explicit catalog TAKE copies the reviewed source bytes exactly."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(
+        template_root,
+        [
+            {
+                "pattern": INSTRUCTION_CONTRACTS_PATH,
+                "requires_all": ["template-sync-support"],
+            }
+        ],
+    )
+    catalog_bytes = b"instruction_contracts:\r\n  version: 1\r\n  contracts: []\r\n"
+    source_catalog = template_root / INSTRUCTION_CONTRACTS_PATH
+    source_catalog.parent.mkdir(parents=True, exist_ok=True)
+    source_catalog.write_bytes(catalog_bytes)
+    target_catalog = target_root / INSTRUCTION_CONTRACTS_PATH
+    if existing_catalog_bytes is not None:
+        target_catalog.parent.mkdir(parents=True, exist_ok=True)
+        target_catalog.write_bytes(existing_catalog_bytes)
+    write_yaml(
+        target_root / "decisions.yml",
+        marker_document(
+            ["template-sync-support"],
+            protected_file_decisions=[
+                {
+                    "path": INSTRUCTION_CONTRACTS_PATH,
+                    "decision": "TAKE",
+                    "adoption_mode": "minimal-preservation",
+                    "authorization_basis": "Fixture owner authorizes the reviewed catalog.",
+                    "authorized_scope": f"{INSTRUCTION_CONTRACTS_PATH} only.",
+                }
+            ],
+        ),
+    )
+
+    result = run_materialize(template_root, target_root, "--decisions-file", "decisions.yml")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert target_catalog.read_bytes() == catalog_bytes
+
+
+def test_instruction_contract_catalog_is_omitted_when_template_sync_support_is_excluded(
+    tmp_path: Path,
+) -> None:
+    """Excluding template-sync support omits the catalog without a decision."""
+    template_root = tmp_path / "template"
+    target_root = tmp_path / "target"
+    target_root.mkdir()
+    prepare_template(
+        template_root,
+        [
+            {
+                "pattern": INSTRUCTION_CONTRACTS_PATH,
+                "requires_all": ["template-sync-support"],
+            }
+        ],
+    )
+    write_file(template_root / INSTRUCTION_CONTRACTS_PATH, "instruction_contracts: {}\n")
+
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--included-module",
+        "baseline",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not (target_root / INSTRUCTION_CONTRACTS_PATH).exists()
+    assert "unrecorded protected-file decision required" not in result.stdout
 
 
 def test_decisions_file_path_traversal_is_rejected(tmp_path: Path) -> None:

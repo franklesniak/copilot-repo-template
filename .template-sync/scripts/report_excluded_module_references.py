@@ -47,6 +47,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     load_validated_marker_decision_data,
     load_yaml_mapping,
     manifest_pattern_matches_path,
+    markdown_lines,
     os_error_summary,
     parse_manifest_mappings,
     repository_relative_path,
@@ -919,7 +920,7 @@ def lines_outside_inline_blocks(
     try:
         live_lines = live_inline_marker_lines(text, relative_path=relative_path)
     except InlineBlockError:
-        return tuple(enumerate(text.splitlines(), 1))
+        return tuple(enumerate(markdown_lines(text), 1))
 
     for line_number, line, marker in live_lines:
         line = line.rstrip("\r\n")

@@ -35,7 +35,8 @@ instruction_contracts:
           - 'These terms apply to the review-comment workflow below and defer to the canonical **Protected
             Instruction Files** rule in [`.github/copilot-instructions.md`](.github/copilot-instructions.md):'
           - '- **Protected instruction file:** Any file covered by the canonical Protected Instruction
-            Files rule, including `.github/copilot-instructions.md`, the root agent entry points (`.hermes.md`,
+            Files rule, including the retained `.template-sync/instruction-contracts.yml` catalog,
+            `.github/copilot-instructions.md`, the root agent entry points (`.hermes.md`,
             `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`), files under `.github/instructions/`, and files
             under `.cursor/rules/`.'
           - '- **Explicit protected-file authorization:** A direct maintainer or owner instruction
@@ -629,7 +630,8 @@ instruction_contracts:
           - 'These terms apply to the review-comment workflow below and defer to the canonical **Protected
             Instruction Files** rule in [`.github/copilot-instructions.md`](.github/copilot-instructions.md):'
           - '- **Protected instruction file:** Any file covered by the canonical Protected Instruction
-            Files rule, including `.github/copilot-instructions.md`, the root agent entry points (`.hermes.md`,
+            Files rule, including the retained `.template-sync/instruction-contracts.yml` catalog,
+            `.github/copilot-instructions.md`, the root agent entry points (`.hermes.md`,
             `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`), files under `.github/instructions/`, and files
             under `.cursor/rules/`.'
           - '- **Explicit protected-file authorization:** A direct maintainer or owner instruction
@@ -958,6 +960,18 @@ instruction_contracts:
       - heading: '### Protected authority and deferral'
         next_heading: '### Review inputs and attribution'
         required_paragraphs:
+          - The retained `.template-sync/instruction-contracts.yml` catalog is protected governance.
+            Agents MUST obtain direct current-task owner or maintainer authorization that names or
+            clearly bounds catalog changes, including obligation paths, module applicability,
+            sections, clauses, tables, successors, and waiver semantics. Coordinated instruction
+            edits, review feedback, validation repair, and keep-in-sync requests do not imply
+            catalog authority. During adoption or sync, record a path-scoped
+            `protected_file_decisions` entry before creating or replacing the catalog. An authorized
+            `TAKE` copies the pinned reviewed catalog intact; `MERGE` permits only the authorized
+            reviewed evolution. Keep module applicability in `requires_modules`; do not prune
+            catalog obligations to match the selected agent profile. Candidate-local validation
+            detects drift against its supplied catalog and does not independently prove
+            authorization.
           - Agents MUST apply the following decisions using the authority and scope that exist before
             the proposed edit. An existing PR diff, review loop, rubric, or branch-placement grant
             does not grant protected-content authority. A newly introduced protected file requires
@@ -1185,6 +1199,15 @@ instruction_contracts:
             and execute proposed scripts, install proposed dependencies, or let the candidate define
             its own acceptance oracle in that privileged context. This rule does not require adding
             a privileged workflow to a repository that has none.
+          - Privileged context includes repository write authority, deployment or signing secrets,
+            elevated base-context events, or other authority beyond ordinary read-only candidate CI.
+            Read-only checkout credentials MUST NOT persist into candidate hook execution. An unprivileged
+            fix preview MAY run proposed hooks and publish untrusted proposed data with configured
+            output limits for local review. Its workflow wrapper MUST NOT commit, push, or feed its
+            artifacts automatically to privileged code. Capture size and provenance checks on the same
+            runner MUST NOT be treated as independent guarantees against candidate hooks. Such artifacts
+            are untrusted proposals, not acceptance evidence. A candidate-owned workflow cannot make later
+            changes to its own permissions tamper-proof; preserve the explicit security review boundary.
           - 'Such a verifier MUST cover every relevant event and determine applicability from a complete
             trusted change enumeration. Platform path filters and bounded changed-file responses alone
             MUST NOT gate security verification: a relevant file outside the returned window can otherwise
