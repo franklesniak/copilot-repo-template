@@ -40,6 +40,7 @@ REQUIREMENTS = {
         "pagination",
         "not clean",
         "terminal results from both reviewers",
+        "Review loop paused: remote Codex",
         "Failed cycles do not consume",
         "Deferring Work",
         "base branch",
@@ -103,6 +104,7 @@ def test_missing_semantic_marker_fails(
         ("AGENTS.md", "both co-equal sources", "one co-equal source"),
         ("CLAUDE.md", "Balanced", "Standard"),
         ("CLAUDE.md", "chatgpt-codex-connector[bot]", "codex-reviewer"),
+        ("CLAUDE.md", "Review loop paused: remote Codex", "Review loop paused: reviewer"),
         (
             ".github/instructions/yaml.instructions.md",
             "inert data",
