@@ -27,6 +27,12 @@ from template_sync_materialization_helpers import (
 DEFAULT_CONTRACTS_PATH = ".template-sync/instruction-contracts.yml"
 DEFAULT_CONTRACTS_SCHEMA_PATH = "schemas/template-sync-instruction-contracts.schema.json"
 VALIDATION_MODES = ("upstream-template", "downstream")
+POLICY_CELL_WORD = (
+    r"[^|\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680"
+    r"\u2000-\u200a\u2028-\u2029\u202f\u205f\u3000\ufeff]"
+)
+# Explicit classes keep schema consumers and Python whitespace semantics equal.
+POLICY_CELL_PATTERN = re.compile(rf"^{POLICY_CELL_WORD}+(?: {POLICY_CELL_WORD}+)*(?![\s\S])")
 
 
 class InstructionContractValidationError(Exception):
@@ -330,6 +336,14 @@ def parse_required_sections(raw_contract: dict[str, object]) -> tuple[RequiredSe
         for table in cast(list[dict[str, Any]], raw.get("required_tables", [])):
             headers = tuple(cast(list[str], table["headers"]))
             rows = tuple(tuple(row) for row in cast(list[list[str]], table["rows"]))
+            if any(
+                POLICY_CELL_PATTERN.fullmatch(cell) is None
+                for row in (headers, *rows)
+                for cell in row
+            ):
+                raise InstructionContractValidationError(
+                    f"Noncanonical contract table cell: {heading}"
+                )
             if any(len(row) != len(headers) for row in rows):
                 raise InstructionContractValidationError(f"Ragged contract table: {heading}")
             if len({row[0] for row in rows}) != len(rows):
@@ -840,6 +854,21 @@ def starts_policy_list(line: str) -> bool:
     return re.match(r"^ {0,3}(?:[-+*]|[0-9]{1,9}[.)])(?:[ \t]|$)", line) is not None
 
 
+def policy_list_content_indent(line: str) -> int | None:
+    """Return a top-level item's content margin, including empty/tabbed items.
+
+    Padding beyond four columns starts item code and uses a one-column margin.
+    The scanner retains potential nested content; it does not parse that code.
+    """
+    expanded = line.expandtabs(4)
+    marker = re.match(r"^ {0,3}(?:[-+*]|[0-9]{1,9}[.)])(?= |$)", expanded)
+    if marker is None or is_policy_thematic_break(line):
+        return None
+    rest = expanded[marker.end() :]
+    padding = len(rest) - len(rest.lstrip(" "))
+    return marker.end() + (padding if rest.strip() and 1 <= padding <= 4 else 1)
+
+
 def quoted_policy_paragraph(line: str, was_paragraph: bool) -> bool | None:
     """Classify a quoted leaf; None means unsupported syntax must fail closed.
 
@@ -869,30 +898,35 @@ def quoted_policy_paragraph(line: str, was_paragraph: bool) -> bool | None:
     return True
 
 
-def policy_code_span_end(
-    lines: list[str], row: int, column: int, width: int
-) -> tuple[int, int] | None:
-    """Find a matching backtick run within the current direct paragraph block.
+def policy_code_span_ends(lines: list[str]) -> dict[tuple[int, int], tuple[int, int]]:
+    """Index nearest equal-width backtick runs without rescanning paragraph tails.
 
-    An unmatched run remains literal. A new block cannot close an inline span;
-    the supported policy subset therefore stops at blank lines and block starts.
-    The returned column is immediately after the closing delimiter.
+    Each line and run is visited once in reverse order. Block starts prevent
+    earlier paragraphs from consuming their delimiters; same-line spans remain
+    supported. Unmatched runs have no entry and remain literal in the scanner.
     """
-    delimiter = re.compile(r"(?<!`)" + "`" * width + r"(?!`)")
-    for index in range(row, len(lines)):
-        line = lines[index]
-        if index != row and (
+    ends: dict[tuple[int, int], tuple[int, int]] = {}
+    next_runs: dict[int, tuple[int, int]] = {}
+    for row in range(len(lines) - 1, -1, -1):
+        line = lines[row]
+        for run in reversed(list(re.finditer(r"`+", line))):
+            width = run.end() - run.start()
+            if width in next_runs:
+                ends[(row, run.start())] = next_runs[width]
+            # An escaped first backtick leaves the remaining run as an opener.
+            # Inside a span, however, only the whole raw run can close it.
+            if width > 1 and width - 1 in next_runs:
+                ends[(row, run.start() + 1)] = next_runs[width - 1]
+            next_runs[width] = (row, run.end())
+        if (
             not line.strip()
             or re.match(
                 r"^(?: {4}| *\t| {0,3}(?:>|#{1,6}(?:[ \t]|$)|<!--|[-+*] |[0-9]+[.)] ))", line
             )
             or parse_markdown_fence_open(line, MARKDOWN_FENCE_CONTEXT) is not None
         ):
-            break
-        match = delimiter.search(line, column if index == row else 0)
-        if match is not None:
-            return index, match.end()
-    return None
+            next_runs.clear()
+    return ends
 
 
 def operative_markdown_lines(text: str) -> list[str]:
@@ -904,13 +938,18 @@ def operative_markdown_lines(text: str) -> list[str]:
     compatibility behavior. This is a static policy guard, not an agent runner.
     """
     lines = text.splitlines()
+    span_ends = policy_code_span_ends(lines)
+    backtick_run = re.compile(r"`+")
     result: list[str] = []
     quoted_paragraph_can_continue = False
     unsupported_quote = False
+    paragraph_can_continue = False
+    list_content_indent: int | None = None
     in_comment = False
     active_fence: MarkdownFence | None = None
     code_end: tuple[int, int] | None = None
     for row, line in enumerate(lines):
+        continued_comment = in_comment
         if active_fence is not None:
             content = active_fence_content(line, active_fence)
             if content is not None:
@@ -925,6 +964,30 @@ def operative_markdown_lines(text: str) -> list[str]:
                 continue
             active_fence = None
         if not in_comment and code_end is None:
+            expanded = line.expandtabs(4)
+            indent = len(expanded) - len(expanded.lstrip(" "))
+            outside_block = (
+                is_policy_heading(line)
+                or starts_policy_list(line)
+                or is_policy_thematic_break(line)
+                or consume_blockquote_prefix(line)[0] > 0
+                or re.match(r"^ {0,3}<!--", line) is not None
+                or parse_markdown_fence_open(line, MARKDOWN_FENCE_CONTEXT) is not None
+            )
+            if line.strip() and list_content_indent is not None:
+                if indent >= list_content_indent and (
+                    indent >= 4
+                    or is_policy_heading(line)
+                    or consume_blockquote_prefix(line)[0]
+                    or re.match(r"^ {0,3}<!--", line)
+                    or parse_markdown_fence_open(line, MARKDOWN_FENCE_CONTEXT) is not None
+                ):
+                    result.append("[unsupported nested policy] " + line)
+                    continue
+                if indent < list_content_indent and (not paragraph_can_continue or outside_block):
+                    list_content_indent = None
+            if not line.strip() or outside_block:
+                paragraph_can_continue = False
             if not line.strip() or is_policy_heading(line):
                 quoted_paragraph_can_continue = False
                 unsupported_quote = False
@@ -933,6 +996,12 @@ def operative_markdown_lines(text: str) -> list[str]:
                 # none of its lines can masquerade as a required live clause.
                 result.append("[unsupported quoted policy] " + line)
                 continue
+            if not consume_blockquote_prefix(line)[0]:
+                item_indent = policy_list_content_indent(line)
+                if item_indent is not None and (
+                    list_content_indent is None or indent < list_content_indent
+                ):
+                    list_content_indent = item_indent
             active_fence = parse_markdown_fence_open(line, MARKDOWN_FENCE_CONTEXT)
             if active_fence is not None:
                 quoted_paragraph_can_continue = False
@@ -960,7 +1029,9 @@ def operative_markdown_lines(text: str) -> list[str]:
                     result.append("")
                     continue
             if re.match(r"^(?: {4}| *\t)", line):
-                result.append("")
+                result.append(
+                    "[unsupported indented policy] " + line if paragraph_can_continue else ""
+                )
                 continue
         visible: list[str] = []
         column = 0
@@ -984,21 +1055,50 @@ def operative_markdown_lines(text: str) -> list[str]:
                 visible.append(line[column : column + 2])
                 column += 2
             elif line[column] == "`":
-                run = re.match(r"`+", line[column:])
+                run = backtick_run.match(line, column)
                 assert run is not None
                 width = len(run.group())
-                code_end = policy_code_span_end(lines, row, column + width, width)
+                code_end = span_ends.get((row, column))
                 if code_end is None:
                     visible.append(run.group())
                     column += width
             elif line.startswith("<!--", column):
-                in_comment = True
+                end = line.find("-->", column + 2)
+                block_comment = column <= 3 and not line[:column].strip(" ")
+                if end == -1 and not block_comment:
+                    # Inline comments need a complete delimiter. Wrapped forms
+                    # are outside this subset and must never hide later policy.
+                    visible.append("[unsupported inline comment] " + line[column:])
+                    break
+                comment_content = line[column + 4 : end]
+                ambiguous_inline = end < column + 4 or (
+                    comment_content.startswith((">", "->"))
+                    or comment_content.endswith("-")
+                    or "--" in comment_content
+                )
+                if end != -1 and not block_comment and ambiguous_inline:
+                    # Use the shared CommonMark/GFM grammar. Renderer-specific
+                    # inline forms must not hide a potentially visible clause.
+                    visible.append("[unsupported inline comment] " + line[column:])
+                    break
+                in_comment = end == -1
                 visible.append(" ")
-                column += 4
+                column = column + 4 if in_comment else end + 3
             else:
                 visible.append(line[column])
                 column += 1
-        result.append("".join(visible).strip())
+        observed = "".join(visible).strip()
+        result.append(observed)
+        if observed:
+            paragraph_can_continue = not (
+                is_policy_heading(line)
+                or is_policy_thematic_break(line)
+                or observed.startswith("|")
+                or re.match(r"^ {0,3}<!--", line)
+                or re.fullmatch(r"(?:[-+*]|[0-9]{1,9}[.)])[ \t]*", observed)
+            )
+        elif not continued_comment and not in_comment:
+            paragraph_can_continue = False
     return result
 
 
