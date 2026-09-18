@@ -399,6 +399,426 @@ FOLLOW_UP_GOVERNANCE_MUTATIONS = (
 )
 
 
+GOVERNANCE_REFINEMENT_MUTATIONS = (
+    pytest.param(
+        ".github/instructions/docs.instructions.md",
+        "### Tier 1 — Required",
+        "- **Status:** Draft | Proposed | Active | Accepted | Superseded | Deprecated **(REQUIRED)**",
+        "- **Status:** Draft | Active | Deprecated **(REQUIRED)**",
+        "paragraph",
+        id="general-status-vocabulary",
+    ),
+    pytest.param(
+        ".github/instructions/docs.instructions.md",
+        "## ADR Standards",
+        "Each ADR status is also permitted by the general Tier 1 metadata vocabulary.",
+        "ADR statuses can contradict the general Tier 1 metadata vocabulary.",
+        "paragraph",
+        id="adr-subset",
+    ),
+    pytest.param(
+        ".github/instructions/docs.instructions.md",
+        "## ADR Standards",
+        "- **Status:** Proposed | Accepted | Superseded | Deprecated",
+        "- **Status:** Draft | Active | Deprecated",
+        "paragraph",
+        id="adr-status-vocabulary",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "## Shared Review Governance",
+        "applies to every real review finding and to material non-review bugs, design questions, investigation or test findings, and implementation choices",
+        "applies only to real review findings",
+        "paragraph",
+        id="material-non-review-scope",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "## Shared Review Governance",
+        "Apply PR inventory, native posting, reviewer attribution, replies, thread or body closure, and paired-review duties only to actual PR review findings.",
+        "Apply all PR duties to every non-review finding.",
+        "paragraph",
+        id="pr-duties-only-for-pr-findings",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "## Shared Review Governance",
+        "Do not create a PR solely to process a non-review finding.",
+        "Create a PR for every non-review finding.",
+        "paragraph",
+        id="no-pr-created-for-non-review-finding",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "## Shared Review Governance",
+        "For non-review work only, agents MAY reuse a complete existing decision record for mechanical implementation of the same finding when all relevant inputs remain unchanged and implementation authority is already granted.",
+        "Agents MAY reuse any incomplete decision for any finding.",
+        "paragraph",
+        id="mechanical-reuse-guards",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "## Shared Review Governance",
+        "A new material choice or changed relevant input requires a new evaluation.",
+        "A new material choice can reuse the old evaluation.",
+        "paragraph",
+        id="changed-input-needs-new-evaluation",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "## Shared Review Governance",
+        "This exception MUST NOT waive the mandatory analysis of a real review finding.",
+        "This exception MAY waive analysis of a real review finding.",
+        "paragraph",
+        id="review-analysis-not-waived",
+    ),
+    pytest.param(
+        "AGENTS.md",
+        "## Execution",
+        "Preserve its narrow mechanical-reuse conditions and its distinction between general decisions and PR-specific duties.",
+        "Apply PR-specific duties to every general decision.",
+        "paragraph",
+        id="codex-entry-link",
+    ),
+    pytest.param(
+        "CLAUDE.md",
+        "## Execution",
+        "Preserve its narrow mechanical-reuse conditions and its distinction between general decisions and PR-specific duties.",
+        "Apply PR-specific duties to every general decision.",
+        "paragraph",
+        id="claude-entry-link",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "### Selected-action writing rule",
+        "does not claim full conformance with the external specification",
+        "certifies full conformance with the external specification",
+        "paragraph",
+        id="no-full-conformance-claim",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "### Selected-action writing rule",
+        "No external specification or general prose-linting engine is required to apply this local rule.",
+        "An external specification and general prose-linting engine are mandatory.",
+        "paragraph",
+        id="local-rule-no-general-engine",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "### Selected-action writing rule",
+        "- Limit each instruction sentence to 20 words and each description sentence to 25 words.",
+        "- Use any sentence length.",
+        "paragraph",
+        id="sentence-limits",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "### Selected-action writing rule",
+        "Name the affected files and intended behavior. Explain the decisive rationale, tradeoffs, and any lost guarantee or coverage.",
+        "Describe the change without affected files, tradeoffs, or lost coverage.",
+        "paragraph",
+        id="action-content",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "### Selected-action writing rule",
+        "Distinguish pending tests from observed passes.",
+        "Describe pending tests as observed passes.",
+        "paragraph",
+        id="test-result-truth",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "## Agent Execution",
+        "agents MUST verify the intended resulting state through authenticated evidence before claiming success",
+        "agents MAY claim success from an unverified request",
+        "paragraph",
+        id="verify-remote-result",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "## Agent Execution",
+        "Reuse reliable returned final-state evidence when it establishes the result; otherwise read the affected object.",
+        "Always trust an acknowledgment without resulting-state evidence.",
+        "paragraph",
+        id="reliable-returned-state",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "## Agent Execution",
+        "A delivery acknowledgment alone is insufficient. Reconcile an uncertain, failed, or mismatched result before retrying.",
+        "A delivery acknowledgment proves success and permits an immediate retry.",
+        "paragraph",
+        id="uncertain-result-before-retry",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "## Agent Execution",
+        "Do not require separate per-command receipts or local-edit readbacks.",
+        "Require a remote receipt for every local edit.",
+        "paragraph",
+        id="proportionate-verification",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "### Protected authority and deferral",
+        "the originating finding/PR/review link",
+        "no origin record",
+        "tables",
+        id="deferral-origin",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "### Protected authority and deferral",
+        "an explicit condition for resuming work",
+        "no condition for resuming work",
+        "tables",
+        id="resume-condition",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "### Ownership and delegation",
+        "the requested worker model and reasoning effort, or inherited defaults",
+        "only the worker name",
+        "paragraph",
+        id="requested-settings-or-defaults",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "### Ownership and delegation",
+        "Record effective settings only when reliable runtime evidence identifies them; otherwise state that they are unavailable.",
+        "Treat requested settings as proven effective settings.",
+        "paragraph",
+        id="effective-settings-evidence",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "### Ownership and delegation",
+        "Require applicable analysis, first-edit, validation, and public-mutation checkpoints.",
+        "Require only a final checkpoint.",
+        "paragraph",
+        id="applicable-checkpoints",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "### Ownership and delegation",
+        "A read-only assignment has no first-edit checkpoint.",
+        "Every read-only assignment has a fictional first edit.",
+        "paragraph",
+        id="read-only-checkpoint-applicability",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "### Ownership and delegation",
+        "Public mutations remain with the integration owner unless an explicitly delegated bounded operation falls within existing authority.",
+        "Every worker may perform unbounded public mutations.",
+        "paragraph",
+        id="public-mutation-owner",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "### Ownership and delegation",
+        "These requirements do not mandate a model-selection API or invent an unavailable capability.",
+        "These requirements mandate an unavailable model-selection API.",
+        "paragraph",
+        id="no-invented-settings-capability",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "### Continuity and recovery",
+        "meaningful phase, finding, blocker, and handoff boundaries",
+        "every command boundary",
+        "paragraph",
+        id="meaningful-update-boundaries",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "### Continuity and recovery",
+        "State the current result, remaining uncertainty, and next useful action.",
+        "State only that work continues.",
+        "paragraph",
+        id="useful-update-content",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "### Continuity and recovery",
+        "Follow the active runtime's communication timing requirements.",
+        "Ignore the active runtime's communication timing requirements.",
+        "paragraph",
+        id="runtime-timing",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "### Continuity and recovery",
+        "Normal quiet reasoning is not proof of a hang, but this distinction MUST NOT justify indefinite silence.",
+        "Quiet reasoning always proves a hang or permits indefinite silence.",
+        "paragraph",
+        id="quiet-reasoning-boundary",
+    ),
+    pytest.param(
+        ".github/copilot-instructions.md",
+        "### Continuity and recovery",
+        "do not add telemetry, a polling framework, or mandatory per-command narration",
+        "add telemetry and narrate every command",
+        "paragraph",
+        id="no-telemetry-or-command-narration",
+    ),
+    pytest.param(
+        "AGENTS.md",
+        "## Execution",
+        "For runtimes that follow [OpenAI's documented instruction discovery]",
+        "Every runtime always follows undocumented Codex loading behavior.",
+        "paragraph",
+        id="runtime-qualified-discovery",
+    ),
+    pytest.param(
+        "AGENTS.md",
+        "## Execution",
+        "Global guidance precedes project guidance from the root through the launch working directory.",
+        "Only the nearest instruction file applies.",
+        "paragraph",
+        id="startup-chain",
+    ),
+    pytest.param(
+        "AGENTS.md",
+        "## Execution",
+        "Codex MUST perform bounded discovery along the relevant file paths and read applicable instructions.",
+        "Codex MAY skip deeper applicable instructions.",
+        "paragraph",
+        id="bounded-deeper-discovery",
+    ),
+    pytest.param(
+        "AGENTS.md",
+        "## Execution",
+        "If active guidance is stale, use the runtime's supported refresh; the documented CLI procedure is to restart in the target directory.",
+        "Continue with stale guidance without refreshing.",
+        "paragraph",
+        id="stale-session-refresh",
+    ),
+    pytest.param(
+        "AGENTS.md",
+        "## Execution",
+        "Preserve the shared disk-recovery requirements and exact-file rereads after compaction or instruction changes.",
+        "Reconstruct instructions from memory after compaction.",
+        "paragraph",
+        id="preserve-disk-recovery",
+    ),
+    pytest.param(
+        "AGENTS.md",
+        "## Execution",
+        "This guidance does not require changing configuration or apply Codex loading semantics to other agents.",
+        "Change configuration and apply Codex loading semantics to every agent.",
+        "paragraph",
+        id="codex-only-no-config-change",
+    ),
+    pytest.param(
+        ".github/instructions/yaml.instructions.md",
+        "### Exact Node.js version-file exception",
+        "A workflow MAY use `actions/setup-node` with `node-version-file` instead of `node-version` only when all conditions below hold. This optional exception does not change the direct release-line default, other setup actions, or Azure Pipelines selector rules.",
+        "A workflow MAY use any version file instead of a direct selector.",
+        "paragraph",
+        id="node-version-file-is-bounded-exception",
+    ),
+    pytest.param(
+        ".github/instructions/yaml.instructions.md",
+        "### Exact Node.js version-file exception",
+        "- The file MUST be tracked, repository-relative, and read from the reviewed revision. External, generated, or untracked version sources do not qualify.",
+        "- The file MAY be external, generated, or untracked.",
+        "paragraph",
+        id="version-file-reviewed-provenance",
+    ),
+    pytest.param(
+        ".github/instructions/yaml.instructions.md",
+        "### Exact Node.js version-file exception",
+        "- The referenced action revision MUST document support for the format. The inspected setup-node v7 format set is `.nvmrc`, `.node-version`, `.tool-versions`, and `package.json`. Do not infer support for a later format from newer action documentation.",
+        "- Any format documented by a later action release is accepted.",
+        "paragraph",
+        id="format-support-bound-to-action-revision",
+    ),
+    pytest.param(
+        ".github/instructions/yaml.instructions.md",
+        "### Exact Node.js version-file exception",
+        "- The selected value MUST be one exact stable `major.minor.patch` version. Ranges, wildcards, aliases, release channels, prereleases, and build metadata do not qualify.",
+        "- The selected value MAY be a range, alias, prerelease, or floating channel.",
+        "paragraph",
+        id="exact-stable-version",
+    ),
+    pytest.param(
+        ".github/instructions/yaml.instructions.md",
+        "### Exact Node.js version-file exception",
+        "- For `.nvmrc` and `.node-version`, use only the exact version. For `.tool-versions`, use one unambiguous `node` or `nodejs` entry with that exact version.",
+        "- Plain and tool version files MAY contain ambiguous selectors.",
+        "paragraph",
+        id="literal-version-file-formats",
+    ),
+    pytest.param(
+        ".github/instructions/yaml.instructions.md",
+        "### Exact Node.js version-file exception",
+        "- For `package.json`, account for the action's precedence: `volta.node`, then the first `devEngines.runtime` entry with a case-insensitive `node` name and a version, then `engines.node`, then recursive `volta.extends`. Higher-precedence fields MUST be absent or select the same exact version as the declared canonical field. Multiple Node runtime entries MUST agree. Any inherited file MUST also be tracked, reviewed, repository-contained, and cycle-free.",
+        "- For `package.json`, read any convenient field and ignore conflicting or inherited values.",
+        "paragraph",
+        id="package-json-precedence-and-agreement",
+    ),
+    pytest.param(
+        ".github/instructions/yaml.instructions.md",
+        "### Exact Node.js version-file exception",
+        "- The setup step MUST NOT also supply `node-version`. The action gives that input priority, which would make the file non-authoritative.",
+        "- The setup step MAY also supply a competing `node-version` input.",
+        "paragraph",
+        id="no-competing-direct-input",
+    ),
+    pytest.param(
+        ".github/instructions/yaml.instructions.md",
+        "### Exact Node.js version-file exception",
+        "- Before dependency installation, build, lint, test, or other Node-dependent project work, a later step MUST read the same canonical field and compare the installed version with it. The job MUST fail unless `process.versions.node` equals the expected version exactly. Disable optional automatic package-manager caching when it would perform dependent work before this check.",
+        "- Version verification MAY occur after Node-dependent project work and need not fail on a mismatch.",
+        "paragraph",
+        id="exact-verification-before-dependent-work",
+    ),
+    pytest.param(
+        ".github/instructions/yaml.instructions.md",
+        "### Exact Node.js version-file exception",
+        "See the [setup-node version-file documentation](https://github.com/actions/setup-node/blob/820762786026740c76f36085b0efc47a31fe5020/docs/advanced-usage.md#node-version-file) and [its selected-field parser](https://github.com/actions/setup-node/blob/820762786026740c76f36085b0efc47a31fe5020/src/util.ts#L11-L73). Exact pins require deliberate patch maintenance; they do not constitute a transitive dependency lock.",
+        "An exact runtime pin is a complete transitive dependency lock and needs no maintenance.",
+        "paragraph",
+        id="exact-pin-is-not-dependency-lock",
+    ),
+    pytest.param(
+        ".github/instructions/yaml.instructions.md",
+        "### Exact Node.js version-file exception",
+        "Compliant example: this tracked `package.json` declares only `engines.node` as the canonical Node.js field. The version is illustrative, not a runtime-currency recommendation.",
+        "Compliant example: use any unreviewed field and treat this value as a currency recommendation.",
+        "paragraph",
+        id="example-selected-field-and-currency-limit",
+    ),
+    pytest.param(
+        ".github/instructions/yaml.instructions.md",
+        "### Exact Node.js version-file exception",
+        "The following step sequence uses Bash for the verification step. It reads the same JSON field, rejects a non-exact value, and stops before `npm ci` on mismatch.",
+        "The verification step may read another field or run after `npm ci`.",
+        "paragraph",
+        id="example-verifies-selected-field-first",
+    ),
+    pytest.param(
+        ".github/instructions/yaml.instructions.md",
+        "### Exact Node.js version-file exception",
+        "Non-compliant cases include a file containing `24`, `24.x`, `>=24`, `lts/*`, or `24.18.0-rc.1`; both setup inputs; a check of another field; a missing equality check; or verification after `npm ci`. Correct the source or verification before dependent work.",
+        "Release lines, prereleases, competing inputs, and late verification are compliant.",
+        "paragraph",
+        id="noncompliant-boundaries",
+    ),
+    pytest.param(
+        ".github/instructions/yaml.instructions.md",
+        "### Exact Node.js version-file exception",
+        "Instruction contracts and focused example tests protect this guidance. They do not validate every downstream workflow or prove agent compliance. When a repository retains a toolchain inventory scanner, its selected-file parsing MUST agree with the action. The inventory does not replace checks of tracked provenance, exactness, or verification ordering. This rule does not require retaining an optional scanner or its module.",
+        "The optional inventory proves every downstream workflow compliant and is mandatory in every profile.",
+        "paragraph",
+        id="contract-and-scanner-scope",
+    ),
+)
+
+
 @pytest.mark.upstream_template_only
 @pytest.mark.parametrize(
     ("variant", "required_scope"),
@@ -600,6 +1020,248 @@ def test_follow_up_governance_clauses_reject_deletion_and_weakening(
     assert result.returncode == 1, result.stdout + result.stderr
     assert ".github/copilot-instructions.md" in result.stdout
     assert f"section:{heading}:paragraph:" in result.stdout
+
+
+@pytest.mark.upstream_template_only
+def test_document_status_vocabulary_contains_the_adr_subset() -> None:
+    """The real guide and ADR examples use one consistent status vocabulary."""
+    guide = (REPO_ROOT / ".github/instructions/docs.instructions.md").read_text(encoding="utf-8")
+    tier_one = guide.split("### Tier 1 — Required\n", 1)[1].split("\n### Tier 2 — Not Required", 1)[
+        0
+    ]
+    adr_rules = guide.split("## ADR Standards\n", 1)[1].split(
+        "\n## Requirements Documentation Standards", 1
+    )[0]
+
+    general_match = re.search(
+        r"^- \*\*Status:\*\* (?P<values>.+?) \*\*\(REQUIRED\)\*\*$",
+        tier_one,
+        re.MULTILINE,
+    )
+    adr_match = re.search(
+        r"^  - \*\*Status:\*\* (?P<values>.+)$",
+        adr_rules,
+        re.MULTILINE,
+    )
+    assert general_match is not None
+    assert adr_match is not None
+    general = {item.strip() for item in general_match.group("values").split("|")}
+    adr = {item.strip() for item in adr_match.group("values").split("|")}
+    assert general == {
+        "Draft",
+        "Proposed",
+        "Active",
+        "Accepted",
+        "Superseded",
+        "Deprecated",
+    }
+    assert adr == {"Proposed", "Accepted", "Superseded", "Deprecated"}
+    assert adr < general
+
+    guide_status = re.search(r"^- \*\*Status:\*\* (?P<value>\w+)$", guide, re.MULTILINE)
+    assert guide_status is not None
+    assert guide_status.group("value") == "Active"
+    assert guide_status.group("value") in general
+    for status in sorted(adr):
+        example = f"# ADR\n\n## Metadata\n\n- **Status:** {status}\n"
+        match = re.search(r"^- \*\*Status:\*\* (?P<value>\w+)$", example, re.MULTILINE)
+        assert match is not None
+        assert match.group("value") in adr
+        assert match.group("value") in general
+
+
+@pytest.mark.upstream_template_only
+def test_document_status_oracle_rejects_the_old_contradiction() -> None:
+    """The previous general list cannot contain the retained ADR lifecycle."""
+    guide = (REPO_ROOT / ".github/instructions/docs.instructions.md").read_text(encoding="utf-8")
+    old_general = (
+        "- **Status:** Draft | Proposed | Active | Accepted | Superseded | Deprecated "
+        "**(REQUIRED)**"
+    )
+    contradictory = guide.replace(
+        old_general,
+        "- **Status:** Draft | Active | Deprecated **(REQUIRED)**",
+        1,
+    )
+    assert contradictory != guide
+    tier_one = contradictory.split("### Tier 1 — Required\n", 1)[1].split(
+        "\n### Tier 2 — Not Required", 1
+    )[0]
+    adr_rules = contradictory.split("## ADR Standards\n", 1)[1].split(
+        "\n## Requirements Documentation Standards", 1
+    )[0]
+    general_match = re.search(
+        r"^- \*\*Status:\*\* (?P<values>.+?) \*\*\(REQUIRED\)\*\*$",
+        tier_one,
+        re.MULTILINE,
+    )
+    adr_match = re.search(
+        r"^  - \*\*Status:\*\* (?P<values>.+)$",
+        adr_rules,
+        re.MULTILINE,
+    )
+    assert general_match is not None
+    assert adr_match is not None
+    general = {item.strip() for item in general_match.group("values").split("|")}
+    adr = {item.strip() for item in adr_match.group("values").split("|")}
+    assert not adr.issubset(general)
+    assert adr - general == {"Proposed", "Accepted", "Superseded"}
+
+
+@pytest.mark.upstream_template_only
+def test_codex_discovery_guidance_remains_codex_specific() -> None:
+    """Codex discovery and recovery stay in AGENTS without changing Claude loading rules."""
+    agents = (REPO_ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    claude = (REPO_ROOT / "CLAUDE.md").read_text(encoding="utf-8")
+    agents_execution = agents.split("## Execution\n", 1)[1].split(
+        "\n## Protected Instruction Files", 1
+    )[0]
+    claude_execution = claude.split("## Execution\n", 1)[1].split(
+        "\n## Protected Instruction Files", 1
+    )[0]
+    for clause in (
+        "OpenAI's documented instruction discovery",
+        "AGENTS.override.md",
+        "bounded discovery along the relevant file paths",
+        "restart in the target directory",
+        "exact-file rereads after compaction or instruction changes",
+    ):
+        assert clause in agents_execution
+        assert clause not in claude_execution
+    assert "does not require changing configuration" in agents_execution
+    assert "apply Codex loading semantics to other agents" in agents_execution
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize(
+    ("path", "heading", "clause", "weakened", "anchor_kind"),
+    GOVERNANCE_REFINEMENT_MUTATIONS,
+)
+@pytest.mark.parametrize("mutation", ["delete", "weaken"])
+def test_governance_refinements_reject_removed_or_narrowed_obligations(
+    tmp_path: Path,
+    path: str,
+    heading: str,
+    clause: str,
+    weakened: str,
+    anchor_kind: str,
+    mutation: str,
+) -> None:
+    """The real catalog rejects removal or weakening of each expanded decision, execution, and version-file rule."""
+    _copy_real_instruction_contract_surface(tmp_path)
+    baseline = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert baseline.returncode == 0, baseline.stdout + baseline.stderr
+
+    policy_path = tmp_path / path
+    policy = policy_path.read_text(encoding="utf-8")
+    assert policy.count(clause) == 1, (path, clause)
+    replacement = "" if mutation == "delete" else weakened
+    policy_path.write_text(policy.replace(clause, replacement, 1), encoding="utf-8")
+
+    result = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert path in result.stdout
+    assert f"section:{heading}:{anchor_kind}:" in result.stdout
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize(
+    ("included_modules", "include_guide", "mutate_clause", "expected_exit"),
+    (
+        pytest.param(
+            ["agent-instructions", "yaml"],
+            True,
+            False,
+            0,
+            id="yaml-retained",
+        ),
+        pytest.param(
+            ["agent-instructions", "yaml"],
+            True,
+            True,
+            1,
+            id="yaml-retained-weakened",
+        ),
+        pytest.param(
+            ["agent-instructions"],
+            False,
+            False,
+            0,
+            id="yaml-excluded",
+        ),
+    ),
+)
+def test_node_version_file_contract_follows_yaml_module_selection(
+    tmp_path: Path,
+    included_modules: list[str],
+    include_guide: bool,
+    mutate_clause: bool,
+    expected_exit: int,
+) -> None:
+    """The real version-file contract is enforced only when the YAML guide is retained."""
+    catalog = yaml.safe_load(
+        (REPO_ROOT / ".template-sync/instruction-contracts.yml").read_text(encoding="utf-8")
+    )
+    yaml_contract = next(
+        contract
+        for contract in catalog["instruction_contracts"]
+        if contract["path"] == ".github/instructions/yaml.instructions.md"
+    )
+    node_section = next(
+        section
+        for section in yaml_contract["required_sections"]
+        if section["heading"] == "### Exact Node.js version-file exception"
+    )
+    assert node_section["next_heading"] == "## GitHub Actions Documentation Comment URLs"
+
+    _copy_schemas(tmp_path)
+    (tmp_path / ".template-sync").mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(
+        REPO_ROOT / ".template-sync/manifest.yml",
+        tmp_path / ".template-sync/manifest.yml",
+    )
+    _write_yaml(
+        tmp_path,
+        ".template-sync/instruction-contracts.yml",
+        {"instruction_contracts": [yaml_contract]},
+    )
+    _write_yaml(tmp_path, ".template-sync/marker.yml", _marker(included_modules))
+
+    if include_guide:
+        guide_path = tmp_path / ".github/instructions/yaml.instructions.md"
+        guide_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPO_ROOT / ".github/instructions/yaml.instructions.md", guide_path)
+        if mutate_clause:
+            clause = (
+                "- The setup step MUST NOT also supply `node-version`. The action gives that "
+                "input priority, which would make the file non-authoritative."
+            )
+            guide = guide_path.read_text(encoding="utf-8")
+            assert guide.count(clause) == 1
+            guide_path.write_text(
+                guide.replace(
+                    clause,
+                    "- The setup step MAY also supply a competing `node-version` input.",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert result.returncode == expected_exit, result.stdout + result.stderr
+    if included_modules == ["agent-instructions"]:
+        assert "Instruction-contract validation passed." in result.stdout
+        skipped = _section_entries(
+            result.stdout, "Contracts skipped by downstream module selection"
+        )
+        assert any(
+            item.startswith(".github/instructions/yaml.instructions.md ") for item in skipped
+        )
+    elif mutate_clause:
+        assert ".github/instructions/yaml.instructions.md" in result.stdout
+        assert "section:### Exact Node.js version-file exception:paragraph:" in result.stdout
+    else:
+        assert "Instruction-contract validation passed." in result.stdout
 
 
 @pytest.mark.parametrize(

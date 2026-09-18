@@ -13,6 +13,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import yaml  # type: ignore[import-untyped]
+
 from tests._pytest_compat import pytest
 
 pytestmark = pytest.mark.upstream_template_only
@@ -52,6 +54,64 @@ def assert_immutable_action_references(workflow: str) -> None:
             r"uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40} # v[0-9]+\.[0-9]+\.[0-9]+",
             line,
         ), line
+
+
+def assert_candidate_hook_checkout(workflow_text: str) -> None:
+    """Require credential-free checkout before actual candidate pre-commit steps."""
+    workflow = yaml.safe_load(workflow_text)
+    hook_jobs = 0
+    for job in workflow["jobs"].values():
+        steps = job.get("steps", [])
+        hook_indexes = [
+            index
+            for index, step in enumerate(steps)
+            if re.search(r"\bpre-commit\s+run\b", step.get("run", ""))
+        ]
+        if not hook_indexes:
+            continue
+        hook_jobs += 1
+        assert job.get("permissions", workflow.get("permissions")) == {"contents": "read"}
+        for hook_index in hook_indexes:
+            checkouts = [
+                step
+                for step in steps[:hook_index]
+                if step.get("uses", "").startswith("actions/checkout@")
+            ]
+            assert checkouts, "candidate hooks require a preceding checkout"
+            for checkout in checkouts:
+                assert checkout.get("with", {}).get("persist-credentials") is False
+    assert hook_jobs, "the fixture must exercise an actual candidate-hook job"
+
+
+@pytest.mark.parametrize("relative_path", PYTHON_INSTALLER_PATHS[:3])
+def test_candidate_hook_workflows_do_not_persist_checkout_credentials(relative_path: str) -> None:
+    """All three real hook entry points retain read-only, credential-free checkout."""
+    assert_candidate_hook_checkout((REPO_ROOT / relative_path).read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("relative_path", PYTHON_INSTALLER_PATHS[:3])
+@pytest.mark.parametrize("mutation", ["omitted", "true", "string-false", "write-permission"])
+def test_candidate_hook_workflow_rejects_weakened_checkout(
+    relative_path: str, mutation: str
+) -> None:
+    """Mutations of actual workflows must fail the independent structural oracle."""
+    workflow = yaml.safe_load((REPO_ROOT / relative_path).read_text(encoding="utf-8"))
+    checkout = next(
+        step
+        for job in workflow["jobs"].values()
+        for step in job["steps"]
+        if step.get("uses", "").startswith("actions/checkout@")
+    )
+    if mutation == "omitted":
+        del checkout["with"]["persist-credentials"]
+    elif mutation == "true":
+        checkout["with"]["persist-credentials"] = True
+    elif mutation == "string-false":
+        checkout["with"]["persist-credentials"] = "false"
+    else:
+        workflow["permissions"]["contents"] = "write"
+    with pytest.raises(AssertionError):
+        assert_candidate_hook_checkout(yaml.safe_dump(workflow))
 
 
 @pytest.mark.parametrize("relative_path", PYTHON_INSTALLER_PATHS[:3])

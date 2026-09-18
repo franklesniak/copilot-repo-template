@@ -2044,13 +2044,16 @@ def test_materialized_azure_pipelines_without_github_actions_omits_actionlint(
     assert 'Path("requirements-pre-commit.txt")' in data_pipeline_text
 
 
+@pytest.mark.parametrize("retain_yaml", [False, True])
 def test_materialized_github_baseline_without_python_retains_runner_consumers(
     tmp_path: Path,
+    retain_yaml: bool,
 ) -> None:
-    """GitHub baseline gates retain their runner without Python project metadata."""
+    """Baseline retains its runner and checkout boundary without optional languages."""
+    modules = ("baseline", "github-actions") + (("yaml",) if retain_yaml else ())
     target_root = materialize_module_fixture(
         tmp_path,
-        ("baseline", "github-actions", "yaml"),
+        modules,
     )
 
     assert (target_root / "requirements-pre-commit.txt").is_file()
@@ -2064,6 +2067,16 @@ def test_materialized_github_baseline_without_python_retains_runner_consumers(
         workflow_path = target_root / relative_path
         assert workflow_path.is_file(), relative_path
         assert 'Path("requirements-pre-commit.txt")' in read_file(workflow_path)
+        workflow = yaml.safe_load(read_file(workflow_path))
+        assert workflow["permissions"] == {"contents": "read"}
+        for job in workflow["jobs"].values():
+            checkouts = [
+                step
+                for step in job["steps"]
+                if step.get("uses", "").startswith("actions/checkout@")
+            ]
+            assert checkouts
+            assert all(step["with"]["persist-credentials"] is False for step in checkouts)
 
 
 @pytest.mark.upstream_template_only

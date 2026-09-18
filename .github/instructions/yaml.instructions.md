@@ -44,6 +44,7 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - **[All]** **MUST NOT** commit secrets in YAML.
 - **[Actions]** **MUST** apply least-privilege `permissions:` on GitHub Actions workflows.
 - **[Actions]** `setup-*` action `with.*-version:` inputs (for example, `python-version`, `node-version`, `go-version`, and `dotnet-version`) in workflow files under `.github/workflows/` **MUST** resolve from checked-in release-line selectors and **MUST NOT** use a broad floating selector such as `'3.x'`, `'latest'`, or `'*'`. The required granularity follows each ecosystem's release model: Python and Go **MUST** use major.minor (for example, `"3.13"` or `"1.26"`); Node.js **MAY** use major for an LTS line (for example, `"24"`) or major.minor (for example, `"24.17"`); .NET **MAY** use the most specific stable SDK channel selector documented by `actions/setup-dotnet`, such as major.minor.x (for example, `"10.0.x"`); for other ecosystems, use the most specific stable release-line selector documented by the action's README.
+- **[Actions]** `actions/setup-node` **MAY** instead use the guarded [exact Node.js version-file exception](#exact-nodejs-version-file-exception). Its file, precedence, exactness, and verification conditions all apply.
 - **[AzurePipelines]** Repositories that use Azure Pipelines language/runtime/SDK tool-installer tasks **MUST** explicitly provide checked-in compliant selectors for in-scope `version` or `versionSpec` inputs and **MUST NOT** rely on broad task defaults, queue-time-only values, `"latest"`, bare `"*"`, comparator/operator ranges, or composite ranges.
 - **[AzurePipelines]** Azure Pipelines YAML **MUST** pass retained host-neutral local YAML hooks, and pipeline schema/branch-policy validation **MUST** be treated as Azure DevOps Services-backed validation rather than `actionlint`.
 - **[Actions]** Documentation/navigation comments above `uses:` lines **MUST** use versionless upstream URLs; the `uses:` line remains the authoritative action version.
@@ -151,7 +152,7 @@ This rule applies to GitHub Actions push events only. It does not prescribe GitH
 
 ## GitHub Actions Setup Version Pins
 
-GitHub Actions workflow files under `.github/workflows/` that use `setup-*` actions **MUST** pass checked-in release-line selectors to `with.*-version:` inputs such as `python-version`, `node-version`, `go-version`, and `dotnet-version`. Broad floating selectors such as `'3.x'`, `'latest'`, and `'*'` **MUST NOT** be used for these inputs. When a setup action input is fed by indirection, such as a checked-in matrix value, every checked-in value that can feed the selector **MUST** satisfy the same rule.
+Except for the guarded [exact Node.js version-file exception](#exact-nodejs-version-file-exception) below, GitHub Actions workflow files under `.github/workflows/` that use `setup-*` actions **MUST** pass checked-in release-line selectors to `with.*-version:` inputs such as `python-version`, `node-version`, `go-version`, and `dotnet-version`. Broad floating selectors such as `'3.x'`, `'latest'`, and `'*'` **MUST NOT** be used for these inputs. When a setup action input is fed by indirection, such as a checked-in matrix value, every checked-in value that can feed the selector **MUST** satisfy the same rule.
 
 Repositories that use Azure Pipelines language/runtime/SDK tool-installer tasks **MUST** explicitly provide checked-in selectors for in-scope `version` and `versionSpec` inputs. This Azure Pipelines rule is construct-conditional: it applies wherever Azure Pipelines YAML is stored when the repository uses those tasks, including repository-root `azure-pipelines.yml`, configured custom pipeline paths, and `.azuredevops/` pipeline layouts. It is not limited to one hardcoded directory name.
 
@@ -285,6 +286,57 @@ steps:
   - task: UseRubyVersion@0
     # Non-compliant: relies on the task's documented broad default selector.
 ```
+
+### Exact Node.js version-file exception
+
+A workflow MAY use `actions/setup-node` with `node-version-file` instead of `node-version` only when all conditions below hold. This optional exception does not change the direct release-line default, other setup actions, or Azure Pipelines selector rules.
+
+- The file MUST be tracked, repository-relative, and read from the reviewed revision. External, generated, or untracked version sources do not qualify.
+- The referenced action revision MUST document support for the format. The inspected setup-node v7 format set is `.nvmrc`, `.node-version`, `.tool-versions`, and `package.json`. Do not infer support for a later format from newer action documentation.
+- The selected value MUST be one exact stable `major.minor.patch` version. Ranges, wildcards, aliases, release channels, prereleases, and build metadata do not qualify.
+- For `.nvmrc` and `.node-version`, use only the exact version. For `.tool-versions`, use one unambiguous `node` or `nodejs` entry with that exact version.
+- For `package.json`, account for the action's precedence: `volta.node`, then the first `devEngines.runtime` entry with a case-insensitive `node` name and a version, then `engines.node`, then recursive `volta.extends`. Higher-precedence fields MUST be absent or select the same exact version as the declared canonical field. Multiple Node runtime entries MUST agree. Any inherited file MUST also be tracked, reviewed, repository-contained, and cycle-free.
+- The setup step MUST NOT also supply `node-version`. The action gives that input priority, which would make the file non-authoritative.
+- Before dependency installation, build, lint, test, or other Node-dependent project work, a later step MUST read the same canonical field and compare the installed version with it. The job MUST fail unless `process.versions.node` equals the expected version exactly. Disable optional automatic package-manager caching when it would perform dependent work before this check.
+
+See the [setup-node version-file documentation](https://github.com/actions/setup-node/blob/820762786026740c76f36085b0efc47a31fe5020/docs/advanced-usage.md#node-version-file) and [its selected-field parser](https://github.com/actions/setup-node/blob/820762786026740c76f36085b0efc47a31fe5020/src/util.ts#L11-L73). Exact pins require deliberate patch maintenance; they do not constitute a transitive dependency lock.
+
+Compliant example: this tracked `package.json` declares only `engines.node` as the canonical Node.js field. The version is illustrative, not a runtime-currency recommendation.
+
+```json
+{
+  "engines": {
+    "node": "24.18.0"
+  }
+}
+```
+
+The following step sequence uses Bash for the verification step. It reads the same JSON field, rejects a non-exact value, and stops before `npm ci` on mismatch.
+
+```yaml
+- uses: actions/checkout@v7
+  with:
+    persist-credentials: false
+- uses: actions/setup-node@v7
+  with:
+    node-version-file: package.json
+    package-manager-cache: false
+- name: Verify the exact Node.js runtime
+  shell: bash
+  run: |
+    node <<'NODE'
+    const fs = require('node:fs');
+    const expected = JSON.parse(fs.readFileSync('package.json', 'utf8')).engines.node;
+    if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(expected) || process.versions.node !== expected) {
+      throw new Error(`Expected Node.js ${expected}; got ${process.versions.node}`);
+    }
+    NODE
+- run: npm ci
+```
+
+Non-compliant cases include a file containing `24`, `24.x`, `>=24`, `lts/*`, or `24.18.0-rc.1`; both setup inputs; a check of another field; a missing equality check; or verification after `npm ci`. Correct the source or verification before dependent work.
+
+Instruction contracts and focused example tests protect this guidance. They do not validate every downstream workflow or prove agent compliance. When a repository retains a toolchain inventory scanner, its selected-file parsing MUST agree with the action. The inventory does not replace checks of tracked provenance, exactness, or verification ordering. This rule does not require retaining an optional scanner or its module.
 
 ## GitHub Actions Documentation Comment URLs
 

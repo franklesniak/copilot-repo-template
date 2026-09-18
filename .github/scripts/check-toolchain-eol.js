@@ -64,15 +64,15 @@ function asArray(value) {
     return Array.isArray(value) ? value : [value];
 }
 
-function uniqueValues(values) {
+function uniqueValues(values, preserveEmpty = false) {
     const seen = new Set();
     const result = [];
     for (const value of values) {
-        if (value === undefined || value === null) {
+        if ((value === undefined || value === null) && !preserveEmpty) {
             continue;
         }
-        const stringValue = String(value).trim();
-        if (!stringValue || seen.has(stringValue)) {
+        const stringValue = value === undefined || value === null ? '' : String(value).trim();
+        if ((!stringValue && !preserveEmpty) || seen.has(stringValue)) {
             continue;
         }
         seen.add(stringValue);
@@ -183,7 +183,7 @@ function isSetupNodeStep(step) {
     );
 }
 
-function collectGithubMatrixValues(matrix, key) {
+function collectGithubMatrixValues(matrix, key, preserveEmpty = false) {
     if (!matrix || typeof matrix !== 'object') {
         return [];
     }
@@ -203,17 +203,17 @@ function collectGithubMatrixValues(matrix, key) {
             }
         }
     }
-    return uniqueValues(values);
+    return uniqueValues(values, preserveEmpty);
 }
 
-function resolveGithubExpression(value, matrix) {
+function resolveGithubExpression(value, matrix, preserveEmpty = false) {
     if (typeof value !== 'string') {
-        return uniqueValues([value]).map((rawValue) => ({ rawValue, origin: 'literal' }));
+        return uniqueValues([value], preserveEmpty).map((rawValue) => ({ rawValue, origin: 'literal' }));
     }
 
     const matrixMatch = value.match(/^\s*\$\{\{\s*matrix\.([A-Za-z0-9_.-]+)\s*\}\}\s*$/);
     if (matrixMatch) {
-        return collectGithubMatrixValues(matrix, matrixMatch[1]).map((rawValue) => ({
+        return collectGithubMatrixValues(matrix, matrixMatch[1], preserveEmpty).map((rawValue) => ({
             rawValue,
             origin: `matrix.${matrixMatch[1]}`,
         }));
@@ -282,6 +282,63 @@ function readVersionFileSelector(repoRoot, filePathValue, sourcePath, sourceType
     ];
 }
 
+function readGithubNodeVersionFile(repoRoot, absolutePath, seen = new Set()) {
+    // Inventory the effective setup-node value; this is not a workflow-policy checker.
+    const realPath = fs.realpathSync(absolutePath);
+    assertPathWithinRepo(fs.realpathSync(repoRoot), realPath);
+    if (!fs.statSync(realPath).isFile()) {
+        throw new Error('Node.js version source must be a regular file.');
+    }
+    if (seen.has(realPath) || seen.size >= 32) {
+        throw new Error('Node.js version inheritance is cyclic or exceeds the 32-file inventory limit.');
+    }
+    seen.add(realPath);
+    const content = fs.readFileSync(realPath, 'utf8');
+    let manifest;
+    try {
+        manifest = JSON.parse(content);
+    } catch (error) {
+        if (!(error instanceof SyntaxError)) {
+            throw error;
+        }
+        if (path.basename(realPath) === 'package.json') {
+            throw new Error('Node.js version package.json must contain valid JSON.');
+        }
+    }
+
+    let rawValue;
+    if (manifest && typeof manifest === 'object') {
+        rawValue = manifest.volta && manifest.volta.node;
+        if (!rawValue) {
+            const runtime = asArray(manifest.devEngines && manifest.devEngines.runtime)
+                .find((entry) => {
+                    if (entry === null || (entry.name != null && typeof entry.name !== 'string')) {
+                        throw new Error('devEngines.runtime entries require a string name.');
+                    }
+                    return typeof entry.name === 'string' &&
+                        entry.name.toLowerCase() === 'node' && entry.version;
+                });
+            rawValue = (runtime && runtime.version) || (manifest.engines && manifest.engines.node);
+        }
+        if (!rawValue && manifest.volta && manifest.volta.extends) {
+            if (typeof manifest.volta.extends !== 'string') {
+                throw new Error('volta.extends must be a repository-contained file path.');
+            }
+            const inheritedPath = path.resolve(path.dirname(absolutePath), manifest.volta.extends);
+            assertPathWithinRepo(repoRoot, inheritedPath);
+            return readGithubNodeVersionFile(repoRoot, inheritedPath, seen);
+        }
+    } else {
+        // Match the inspected setup-node parser, including node/nodejs prefixes.
+        const match = content.match(/^(?:node(js)?\s+)?v?(?<version>[^\s]+)$/m);
+        rawValue = match ? match.groups.version : content.trim();
+    }
+    if (typeof rawValue !== 'string' || !rawValue.trim()) {
+        throw new Error('Node.js version file does not select a string version.');
+    }
+    return { rawValue, referencedPath: repoRelativePath(repoRoot, absolutePath) };
+}
+
 function collectGithubWorkflowSelectors(repoRoot, selectors, problems) {
     for (const relativeWorkflowPath of getWorkflowFiles(repoRoot)) {
         const workflowPath = path.join(repoRoot, relativeWorkflowPath);
@@ -302,7 +359,16 @@ function collectGithubWorkflowSelectors(repoRoot, selectors, problems) {
 
                     const stepWith = step.with || {};
                     if (Object.prototype.hasOwnProperty.call(stepWith, 'node-version')) {
-                        for (const resolved of resolveGithubExpression(stepWith['node-version'], matrix)) {
+                        const versions = resolveGithubExpression(stepWith['node-version'], matrix, true);
+                        if (versions.length === 0) {
+                            problems.push({
+                                path: relativeWorkflowPath,
+                                message: 'Direct Node.js matrix input cannot be resolved from checked-in values.',
+                            });
+                            continue;
+                        }
+                        const nonemptyVersions = versions.filter((item) => String(item.rawValue).trim());
+                        for (const resolved of nonemptyVersions) {
                             addSelector(selectors, {
                                 selectorClass: 'ci-runtime',
                                 sourceType: 'github-actions:setup-node node-version',
@@ -311,21 +377,55 @@ function collectGithubWorkflowSelectors(repoRoot, selectors, problems) {
                                 rawValue: resolved.rawValue,
                             });
                         }
+                        // Only nonempty direct values override the file at runtime.
+                        if (nonemptyVersions.length === versions.length) {
+                            continue;
+                        }
+                        if (nonemptyVersions.length > 0 &&
+                            String(stepWith['node-version-file'] || '').includes('${{')) {
+                            problems.push({
+                                path: relativeWorkflowPath,
+                                message: 'Cannot correlate mixed blank/nonblank Node.js matrix inputs with a version-file expression.',
+                            });
+                            continue;
+                        }
                     }
 
                     if (Object.prototype.hasOwnProperty.call(stepWith, 'node-version-file')) {
-                        for (const resolved of resolveGithubExpression(
+                        const versionFiles = resolveGithubExpression(
                             stepWith['node-version-file'],
                             matrix,
-                        )) {
-                            for (const selector of readVersionFileSelector(
-                                repoRoot,
-                                resolved.rawValue,
-                                relativeWorkflowPath,
-                                'github-actions:setup-node node-version-file',
-                                problems,
-                            )) {
-                                addSelector(selectors, selector);
+                            true,
+                        );
+                        if (versionFiles.length === 0) {
+                            problems.push({
+                                path: relativeWorkflowPath,
+                                message: 'Node.js version-file input cannot be resolved from checked-in values.',
+                            });
+                            continue;
+                        }
+                        for (const resolved of versionFiles) {
+                            if (!String(resolved.rawValue).trim()) {
+                                problems.push({
+                                    path: relativeWorkflowPath,
+                                    message: 'Node.js version-file input has a blank value; no checked-in runtime can be inventoried.',
+                                });
+                                continue;
+                            }
+                            try {
+                                const selected = readGithubNodeVersionFile(
+                                    repoRoot,
+                                    resolveRepoPath(repoRoot, resolved.rawValue),
+                                );
+                                addSelector(selectors, {
+                                    selectorClass: 'ci-runtime',
+                                    sourceType: 'github-actions:setup-node node-version-file',
+                                    origin: 'version-file',
+                                    path: relativeWorkflowPath,
+                                    ...selected,
+                                });
+                            } catch (error) {
+                                problems.push({ path: relativeWorkflowPath, message: error.message });
                             }
                         }
                     }

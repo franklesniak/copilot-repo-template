@@ -27,6 +27,8 @@ This file intentionally keeps only a minimal inline summary of the highest-prior
 
 Agents MUST follow [Agent Execution](.github/copilot-instructions.md#agent-execution) for task input records, unrelated-work preservation, exclusive ownership, bounded delegation, verification, and continuity after interruption. Use only capabilities available in the active runtime.
 
+Agents MUST apply the [shared decision process](.github/copilot-instructions.md#shared-review-governance) to material non-review findings as well as review feedback. Preserve its narrow mechanical-reuse conditions and its distinction between general decisions and PR-specific duties.
+
 ## Protected Instruction Files
 
 Instruction files, style guides, and the instruction-contract catalog (when retained) are protected governance files. Do not create, edit, delete, rename, or otherwise change `.template-sync/instruction-contracts.yml`, `.github/copilot-instructions.md`, files under `.github/instructions/`, files under `.cursor/rules/`, or root agent instruction files (`.hermes.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`) unless the repository owner or maintainer has directly and explicitly authorized that specific protected-governance change in the current task. Implied consent is not enough; do not infer authorization from a plan you generated, review feedback, a general request to update docs, cleanup/validation work, or a "keep files in sync" instruction.

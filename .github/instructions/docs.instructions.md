@@ -82,7 +82,7 @@ The metadata header block is **REQUIRED** for documents whose primary purpose is
 
 The Tier 1 metadata header block consists of these fields:
 
-- **Status:** Draft | Active | Deprecated **(REQUIRED)**
+- **Status:** Draft | Proposed | Active | Accepted | Superseded | Deprecated **(REQUIRED)**
 - **Owner:** Person or team **(REQUIRED)**
 - **Last Updated:** YYYY-MM-DD **(REQUIRED)**
 - **Scope:** What this doc covers (and does not cover) **(REQUIRED)**
@@ -364,6 +364,8 @@ The safer boundary is the whole comment line, so the substituted result is meani
 ## ADR Standards
 
 ADRs exist to prevent re-litigating decisions.
+
+ADRs MUST use the ADR-specific status subset below. Each ADR status is also permitted by the general Tier 1 metadata vocabulary.
 
 - File naming pattern: `docs/adr/ADR-0001-short-title.md`
 - ADRs MUST include:

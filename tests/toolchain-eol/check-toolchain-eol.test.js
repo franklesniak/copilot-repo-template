@@ -2,7 +2,9 @@ const assert = require('assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { spawnSync } = require('child_process');
 const { test, after } = require('node:test');
+const yaml = require('yaml');
 
 const scanner = require('../../.github/scripts/check-toolchain-eol.js');
 
@@ -470,4 +472,293 @@ steps:
         ),
     );
     assert.equal(inventory.selectors.length, 0);
+});
+
+function writeNodeWorkflow(repoRoot, inputs, matrix) {
+    writeFile(repoRoot, '.github/workflows/node.yml', yaml.stringify({
+        jobs: { test: {
+            ...(matrix ? { strategy: { matrix } } : {}),
+            steps: [{ uses: 'actions/setup-node@v7', with: inputs }],
+        } },
+    }));
+}
+
+const nodeVersionFileCases = [
+    ['.nvmrc', '24.18.0\n', '24.18.0'],
+    ['.node-version', '24.18.0\n', '24.18.0'],
+    ['.tool-versions', 'python 3.13.14\nnodejs 24.18.0\n', '24.18.0'],
+    ['.tool-versions', 'node 24.18.0\n', '24.18.0'],
+    ['.nvmrc', 'v24.18.0\n', '24.18.0'],
+    ['config/package.json', { volta: { node: '22.19.0' }, devEngines: { runtime: { name: 'node', version: '24.18.0' } }, engines: { node: '26.9.0' } }, '22.19.0'],
+    ['config/package.json', { devEngines: { runtime: { name: 'NoDe', version: '24.18.0' } }, engines: { node: '26.9.0' } }, '24.18.0'],
+    ['config/package.json', { devEngines: { runtime: [{ name: 'python', version: '3.13.14' }, { name: 'node' }, { name: 'NODE', version: '22.19.0' }, { name: 'node', version: '24.18.0' }] }, engines: { node: '26.9.0' } }, '22.19.0'],
+    ['config/package.json', { engines: { node: '24.18.0' }, volta: { extends: 'missing.json' } }, '24.18.0'],
+    ['config/package.json', { engines: { node: '24' } }, '24'],
+    ['config/package.json', { volta: { node: '24.18.0' }, devEngines: { runtime: [null] } }, '24.18.0'],
+];
+
+for (const [index, [file, value, expected]] of nodeVersionFileCases.entries()) {
+    test(`inventories setup-node file selection ${index}: ${file}`, () => {
+        const repoRoot = makeTempRepo();
+        writeFile(repoRoot, file, typeof value === 'string' ? value : JSON.stringify(value));
+        writeNodeWorkflow(repoRoot, { 'node-version-file': file });
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        assert.deepEqual(inventory.problems, []);
+        assert.deepEqual(inventory.selectors.map((item) => [item.rawValue, item.referencedPath]), [[expected, file]]);
+    });
+}
+
+test('setup-node inventory follows relative Volta inheritance', () => {
+    const repoRoot = makeTempRepo();
+    writeFile(repoRoot, 'config/package.json', JSON.stringify({ volta: { extends: '../shared/base.json' } }));
+    writeFile(repoRoot, 'shared/base.json', JSON.stringify({ volta: { extends: 'runtime.json' } }));
+    writeFile(repoRoot, 'shared/runtime.json', JSON.stringify({ engines: { node: '24.18.0' } }));
+    writeNodeWorkflow(repoRoot, { 'node-version-file': 'config/package.json' });
+    const inventory = scanner.collectNodeSelectors(repoRoot);
+    assert.deepEqual(inventory.problems, []);
+    assert.deepEqual(inventory.selectors.map((item) => [item.rawValue, item.referencedPath]), [['24.18.0', 'shared/runtime.json']]);
+});
+
+test('nonempty direct setup-node input overrides the file; blank direct input permits it', () => {
+    for (const [direct, file, expected] of [
+        ['24', 'missing.json', '24'],
+        ['24', '.nvmrc', '24'],
+        ['', '.nvmrc', '22.19.0'],
+        ['   ', '.nvmrc', '22.19.0'],
+    ]) {
+        const repoRoot = makeTempRepo();
+        writeFile(repoRoot, '.nvmrc', '22.19.0\n');
+        writeNodeWorkflow(repoRoot, { 'node-version': direct, 'node-version-file': file });
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        assert.deepEqual(inventory.problems, []);
+        assert.deepEqual(inventory.selectors.map((item) => item.rawValue), [expected]);
+    }
+});
+
+test('setup-node file inventory reports missing, malformed, escaping, and cyclic sources', () => {
+    const cases = [
+        ['missing.json', undefined, /ENOENT/],
+        ['config/package.json', '{', /valid JSON/],
+        ['config/package.json', {}, /does not select a string/],
+        ['config/package.json', { volta: { node: 24 } }, /does not select a string/],
+        ['config/package.json', { devEngines: { runtime: [null] }, engines: { node: '24.18.0' } }, /string name/],
+        ['config/package.json', { devEngines: { runtime: { name: 42, version: '24.18.0' } }, engines: { node: '24.18.0' } }, /string name/],
+        ['config/package.json', { volta: { extends: 42 } }, /repository-contained/],
+        ['config/package.json', { volta: { extends: '../../outside.json' } }, /escapes repository root/],
+        ['config/package.json', { volta: { extends: 'package.json' } }, /cyclic/],
+        ['.nvmrc', '', /does not select a string/],
+    ];
+    for (const [file, value, message] of cases) {
+        const repoRoot = makeTempRepo();
+        if (value !== undefined) {
+            writeFile(repoRoot, file, typeof value === 'string' ? value : JSON.stringify(value));
+        }
+        writeNodeWorkflow(repoRoot, { 'node-version-file': file });
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        assert.equal(inventory.selectors.length, 0);
+        assert.equal(inventory.problems.length, 1);
+        assert.match(inventory.problems[0].message, message);
+    }
+});
+
+test('setup-node mixed matrix variants retain the literal version-file fallback', () => {
+    const cases = [
+        [{ node: ['', '24'] }, ['22.19.0', '24']],
+        [{ node: [null, '24'] }, ['22.19.0', '24']],
+        [{ include: [{ node: ' ' }, { node: '24' }] }, ['22.19.0', '24']],
+        [{ node: ['', ' '] }, ['22.19.0']],
+        [{ node: ['24', '26'] }, ['24', '26']],
+    ];
+    for (const [matrix, expected] of cases) {
+        const repoRoot = makeTempRepo();
+        writeFile(repoRoot, '.nvmrc', '22.19.0\n');
+        writeNodeWorkflow(repoRoot, {
+            'node-version': '${{ matrix.node }}',
+            'node-version-file': expected.includes('22.19.0') ? '.nvmrc' : 'ignored-missing-file',
+        }, matrix);
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        assert.deepEqual(inventory.problems, []);
+        assert.deepEqual(inventory.selectors.map((item) => item.rawValue).sort(), expected);
+    }
+});
+
+test('setup-node all-blank direct matrix still inventories file-matrix values', () => {
+    const repoRoot = makeTempRepo();
+    writeFile(repoRoot, '.nvmrc', '22.19.0\n');
+    writeFile(repoRoot, '.node-version', '24.18.0\n');
+    writeNodeWorkflow(repoRoot, {
+        'node-version': '${{ matrix.node }}',
+        'node-version-file': '${{ matrix.file }}',
+    }, { node: ['', ' '], file: ['.nvmrc', '.node-version'] });
+    const inventory = scanner.collectNodeSelectors(repoRoot);
+    assert.deepEqual(inventory.problems, []);
+    assert.deepEqual(inventory.selectors.map((item) => item.rawValue).sort(), ['22.19.0', '24.18.0']);
+});
+
+test('setup-node reports ambiguous matrix pairing and unresolved direct matrix inputs', () => {
+    for (const [matrix, expected, message] of [
+        [{ include: [{ node: '', file: '.nvmrc' }, { node: '24', file: 'ignored-file' }] }, ['24'], /Cannot correlate/],
+        [{ file: ['.nvmrc'] }, [], /cannot be resolved/],
+    ]) {
+        const repoRoot = makeTempRepo();
+        writeFile(repoRoot, '.nvmrc', '22.19.0\n');
+        writeNodeWorkflow(repoRoot, {
+            'node-version': '${{ matrix.node }}',
+            'node-version-file': '${{ matrix.file }}',
+        }, matrix);
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        assert.deepEqual(inventory.selectors.map((item) => item.rawValue), expected);
+        assert.equal(inventory.problems.length, 1);
+        assert.match(inventory.problems[0].message, message);
+    }
+});
+
+test('setup-node reports unresolved consulted version-file matrices', () => {
+    for (const matrix of [{}, { file: [] }]) {
+        for (const direct of [undefined, '${{ matrix.node }}']) {
+            const repoRoot = makeTempRepo();
+            writeNodeWorkflow(repoRoot, {
+                ...(direct === undefined ? {} : { 'node-version': direct }),
+                'node-version-file': '${{ matrix.file }}',
+            }, { ...matrix, node: ['', ' '] });
+            const inventory = scanner.collectNodeSelectors(repoRoot);
+            assert.deepEqual(inventory.selectors, []);
+            assert.equal(inventory.problems.length, 1);
+            assert.equal(inventory.problems[0].path.split(path.sep).join('/'), '.github/workflows/node.yml');
+            assert.match(inventory.problems[0].message, /version-file input cannot be resolved/);
+        }
+    }
+});
+
+test('setup-node reports blank consulted version-file values without losing valid files', () => {
+    for (const blank of ['', ' ', null]) {
+        for (const validFile of [false, true]) {
+            const repoRoot = makeTempRepo();
+            writeFile(repoRoot, '.nvmrc', '22.19.0\n');
+            writeNodeWorkflow(repoRoot, { 'node-version-file': '${{ matrix.file }}' }, {
+                file: validFile ? [blank, '.nvmrc'] : [blank],
+            });
+            const inventory = scanner.collectNodeSelectors(repoRoot);
+            assert.deepEqual(inventory.selectors.map((item) => item.rawValue), validFile ? ['22.19.0'] : []);
+            assert.equal(inventory.problems.length, 1);
+            assert.match(inventory.problems[0].message, /version-file input has a blank value/);
+        }
+        const repoRoot = makeTempRepo();
+        writeNodeWorkflow(repoRoot, { 'node-version-file': blank });
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        assert.deepEqual(inventory.selectors, []);
+        assert.equal(inventory.problems.length, 1);
+        assert.match(inventory.problems[0].message, /version-file input has a blank value/);
+    }
+});
+
+test('setup-node nonblank direct input ignores unresolved or blank version-file inputs', () => {
+    for (const file of ['${{ matrix.file }}', '', null]) {
+        const repoRoot = makeTempRepo();
+        writeNodeWorkflow(repoRoot, {
+            'node-version': '${{ matrix.node }}',
+            'node-version-file': file,
+        }, { node: ['24'] });
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        assert.deepEqual(inventory.problems, []);
+        assert.deepEqual(inventory.selectors.map((item) => item.rawValue), ['24']);
+    }
+});
+
+test('setup-node inventory accepts 32 inherited files and reports a longer chain', () => {
+    for (const count of [32, 33]) {
+        const repoRoot = makeTempRepo();
+        for (let index = 0; index < count; index += 1) {
+            writeFile(repoRoot, `config/${index}.json`, JSON.stringify(index + 1 === count
+                ? { engines: { node: '24.18.0' } }
+                : { volta: { extends: `${index + 1}.json` } }));
+        }
+        writeNodeWorkflow(repoRoot, { 'node-version-file': 'config/0.json' });
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        if (count === 32) {
+            assert.deepEqual(inventory.problems, []);
+            assert.deepEqual(inventory.selectors.map((item) => item.rawValue), ['24.18.0']);
+        } else {
+            assert.equal(inventory.selectors.length, 0);
+            assert.equal(inventory.problems.length, 1);
+            assert.match(inventory.problems[0].message, /32-file/);
+        }
+    }
+});
+
+const yamlGuidePath = path.resolve(__dirname, '..', '..', '.github/instructions/yaml.instructions.md');
+const optionalYamlGuide = { skip: !fs.existsSync(yamlGuidePath) && 'Optional YAML guide is excluded.' };
+
+function documentedNodeExample() {
+    const guide = fs.readFileSync(yamlGuidePath, 'utf8');
+    const section = guide.split(/### Exact Node\.js version-file exception\r?\n/)[1]
+        .split(/\r?\n## GitHub Actions Documentation Comment URLs/)[0];
+    const manifest = JSON.parse(section.match(/```json\r?\n([\s\S]*?)\r?\n```/)[1]);
+    const steps = yaml.parse(section.match(/```yaml\r?\n([\s\S]*?)\r?\n```/)[1]);
+    return { manifest, steps };
+}
+
+function assertDocumentedNodeExample(manifest, steps) {
+    // A narrow oracle for this documented example, not an arbitrary-workflow validator.
+    assert.deepEqual(Object.keys(manifest), ['engines']);
+    assert.match(manifest.engines.node, /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);
+    const setup = steps.findIndex((step) => step.uses && step.uses.startsWith('actions/setup-node@'));
+    const verify = steps.findIndex((step) => step.name === 'Verify the exact Node.js runtime');
+    const install = steps.findIndex((step) => step.run === 'npm ci');
+    assert(setup >= 0 && verify > setup && install > verify);
+    assert.equal(steps[setup].with['node-version-file'], 'package.json');
+    assert(!Object.hasOwn(steps[setup].with, 'node-version'));
+    assert.equal(steps[setup].with['package-manager-cache'], false);
+    assert.equal(steps[verify].shell, 'bash');
+    assert.match(steps[verify].run, /readFileSync\('package\.json', 'utf8'\)\)\.engines\.node/);
+    assert.match(steps[verify].run, /process\.versions\.node !== expected/);
+}
+
+test('documented Node file example preserves selection and verification order', optionalYamlGuide, () => {
+    const { manifest, steps } = documentedNodeExample();
+    assertDocumentedNodeExample(manifest, steps);
+    const mutations = [
+        (m) => { m.engines.node = '24'; },
+        (m) => { m.engines.node = '24.x'; },
+        (m) => { m.engines.node = '>=24'; },
+        (m) => { m.engines.node = 'lts/*'; },
+        (m) => { m.engines.node = '24.18.0-rc.1'; },
+        (m) => { m.engines.node = '24.18.0+build'; },
+        (m, s) => { s[1].with['node-version'] = '24'; },
+        (m, s) => { s[2].run = s[2].run.replace('.engines.node', '.volta.node'); },
+        (m, s) => { s[2].run = 'node --version'; },
+        (m, s) => { [s[2], s[3]] = [s[3], s[2]]; },
+    ];
+    for (const mutate of mutations) {
+        const changed = structuredClone({ manifest, steps });
+        mutate(changed.manifest, changed.steps);
+        assert.throws(() => assertDocumentedNodeExample(changed.manifest, changed.steps));
+    }
+});
+
+test('documented Node verifier executes and rejects mismatched or non-exact values', optionalYamlGuide, () => {
+    const { steps } = documentedNodeExample();
+    const verification = steps.find((step) => step.name === 'Verify the exact Node.js runtime');
+    const script = verification.run.match(/^node <<'NODE'\n([\s\S]*)\nNODE\n?$/)[1];
+    const repoRoot = makeTempRepo();
+    // Use the executing runtime for a portable success; the published pin is illustrative.
+    const cases = [
+        [process.versions.node, 0],
+        ['0.0.0', 1],
+        ['24', 1],
+        ['24.x', 1],
+        ['>=24', 1],
+        ['lts/*', 1],
+        ['24.18.0-rc.1', 1],
+        ['24.18.0+build', 1],
+    ];
+    for (const [expected, exitCode] of cases) {
+        writeFile(repoRoot, 'package.json', JSON.stringify({ engines: { node: expected } }));
+        const result = spawnSync(process.execPath, ['-e', script], { cwd: repoRoot, encoding: 'utf8', timeout: 10000 });
+        assert.ifError(result.error);
+        assert.equal(result.status, exitCode, result.stderr);
+        if (exitCode !== 0) {
+            assert.match(result.stderr, /Expected Node.js/);
+        }
+    }
 });
