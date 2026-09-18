@@ -375,6 +375,7 @@ def parse_required_sections(raw_contract: dict[str, object]) -> tuple[RequiredSe
     """Reject ambiguous normalized paragraphs and table shapes in section contracts."""
     sections: list[RequiredSection] = []
     headings: set[str] = set()
+    successor_owners: dict[str | None, str] = {}
     for raw in cast(list[dict[str, Any]], raw_contract.get("required_sections", [])):
         heading = cast(str, raw["heading"])
         next_heading = cast(str | None, raw["next_heading"])
@@ -390,6 +391,12 @@ def parse_required_sections(raw_contract: dict[str, object]) -> tuple[RequiredSe
         headings.add(heading)
         if next_heading == heading:
             raise InstructionContractValidationError(f"Self-successor section: {heading}")
+        if next_heading in successor_owners:
+            raise InstructionContractValidationError(
+                f"Shared section successor {next_heading!r}: "
+                f"{successor_owners[next_heading]} and {heading}"
+            )
+        successor_owners[next_heading] = heading
         requires_modules = _required_string_list(raw, "requires_modules")
         if "requires_modules" in raw and (
             not requires_modules or len(set(requires_modules)) != len(requires_modules)
@@ -1073,6 +1080,7 @@ def operative_markdown_lines(text: str) -> list[str]:
     backtick_run = re.compile(r"`+")
     result: list[str] = []
     quoted_paragraph_can_continue = False
+    quoted_paragraph_depth = 0
     unsupported_quote = False
     paragraph_can_continue = False
     list_content_indent: int | None = None
@@ -1109,6 +1117,21 @@ def operative_markdown_lines(text: str) -> list[str]:
                 result.append(POLICY_HTML_AMBIGUITY_PREFIX + line)
             expanded = line.expandtabs(4)
             indent = len(expanded) - len(expanded.lstrip(" "))
+            quote_depth, quote_offset = consume_blockquote_prefix(expanded)
+            quote_content = expanded[quote_offset:]
+            if (
+                quoted_paragraph_can_continue
+                and max(quoted_paragraph_depth, quote_depth) > 1
+                and quote_depth != quoted_paragraph_depth
+                and quote_content.strip(" ")
+                and len(quote_content) - len(quote_content.lstrip(" ")) >= 4
+            ):
+                # Omitted or changed nested containers can expose an indented
+                # block and later live text. Do not guess paragraph laziness.
+                unsupported_quote = True
+                quoted_paragraph_can_continue = False
+                result.append("[unsupported quoted policy] " + line)
+                continue
             html_end = policy_html_block_end(
                 line,
                 paragraph_can_continue=(paragraph_can_continue or quoted_paragraph_can_continue),
@@ -1179,9 +1202,15 @@ def operative_markdown_lines(text: str) -> list[str]:
                 result.append("")
                 continue
             if consume_blockquote_prefix(line)[0]:
+                if not quoted_paragraph_can_continue:
+                    quoted_paragraph_depth = 0
                 leaf = quoted_policy_paragraph(line, quoted_paragraph_can_continue)
                 unsupported_quote = leaf is None
                 quoted_paragraph_can_continue = leaf is True
+                if quoted_paragraph_can_continue:
+                    quoted_paragraph_depth = max(quoted_paragraph_depth, quote_depth)
+                else:
+                    quoted_paragraph_depth = 0
                 result.append("[unsupported quoted policy] " + line if unsupported_quote else "")
                 continue
             if quoted_paragraph_can_continue:

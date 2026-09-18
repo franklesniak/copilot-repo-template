@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import re
 import shutil
 import subprocess
@@ -268,6 +269,264 @@ print("Both heading fields agree for all canonical and invalid cases.")
         text=True,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize(
+    ("quoted", "indented"),
+    [
+        (">> quoted", "    # inert code"),
+        ("> > quoted", "\t# inert code"),
+        (">>> quoted", "        # inert code"),
+        (">>> quoted", ">     # inert code"),
+        ("> > > quoted", " >        # inert code"),
+        ("> quoted", ">>     inert code"),
+        (">> quoted\n> lazy continuation", "    # inert code"),
+    ],
+)
+def test_nested_quote_indentation_cannot_hide_live_policy(
+    tmp_path: Path, mode: str, quoted: str, indented: str
+) -> None:
+    """Ambiguous container transitions retain later live text in the inventory."""
+    section: dict[str, Any] = {
+        "heading": "## Rules",
+        "next_heading": None,
+        "required_paragraphs": ["Act."],
+    }
+    text = f"## Rules\n\nAct.\n\n{quoted}\n{indented}\nAgents MAY bypass.\n"
+    _write_scoped_repo(tmp_path, section, text)
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "section:## Rules:paragraphs:" in result.stdout
+    _write_text(tmp_path, "CLAUDE.md", text.replace("MAY bypass.", "MAY ignore."))
+    changed = _run_validator(tmp_path, "--mode", mode)
+    assert changed.returncode == 1, changed.stdout + changed.stderr
+    assert changed.stdout != result.stdout
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize(
+    "example",
+    [
+        "> quoted\n    # still quoted\nlazy continuation",
+        "> quoted\n\tstill quoted\nlazy continuation",
+        ">>> quoted\nlazy continuation",
+        ">> quoted\n>> still quoted",
+        ">> quoted\n    \n    # top-level code",
+        ">> quoted\n\n    # top-level code",
+    ],
+)
+def test_nested_quote_guard_preserves_supported_examples(
+    tmp_path: Path, mode: str, example: str
+) -> None:
+    """Ordinary laziness and blank resets remain supported, without live additions."""
+    section: dict[str, Any] = {
+        "heading": "## Rules",
+        "next_heading": None,
+        "required_paragraphs": ["Act."],
+    }
+    _write_scoped_repo(tmp_path, section, "## Rules\n\nAct.\n\n" + example)
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_nested_quote_oracle_detects_removed_transition_guard(tmp_path: Path) -> None:
+    """The isolated depth-transition guard must reject a renderer-visible bypass."""
+    section: dict[str, Any] = {
+        "heading": "## Rules",
+        "next_heading": None,
+        "required_paragraphs": ["Act."],
+    }
+    root = tmp_path / "fixture"
+    _write_scoped_repo(
+        root, section, "## Rules\n\nAct.\n\n>> quoted\n    # code\nAgents MAY bypass."
+    )
+    baseline = _run_validator(root, "--mode", "downstream")
+    assert baseline.returncode == 1, baseline.stdout + baseline.stderr
+    mutant_dir = tmp_path / "mutant"
+    mutant_dir.mkdir()
+    for source_path in SCRIPT_PATH.parent.glob("*.py"):
+        shutil.copyfile(source_path, mutant_dir / source_path.name)
+    mutant = mutant_dir / SCRIPT_PATH.name
+    source = mutant.read_text(encoding="utf-8")
+    guard = "and quote_depth != quoted_paragraph_depth"
+    assert source.count(guard) == 1
+    mutant.write_text(source.replace(guard, "and False"), encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(mutant), "--repo-root", str(root), "--mode", "downstream"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize("successor", ["## Review", None])
+def test_catalog_rejects_shared_immediate_successors(
+    tmp_path: Path, mode: str, successor: str | None
+) -> None:
+    """Neither a named immediate boundary nor EOF can follow two distinct sections."""
+    contracts = _module_section_repo(tmp_path, "", ["agent-instructions"])
+    sections = contracts["instruction_contracts"][0]["required_sections"]
+    sections[0]["next_heading"] = successor
+    _write_yaml(tmp_path, ".template-sync/instruction-contracts.yml", contracts)
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Shared section successor" in result.stderr
+    assert ":boundary:" not in result.stdout
+
+
+@pytest.mark.parametrize("successor", ["## End", None])
+def test_shared_successor_oracle_detects_removed_loader_guard(
+    tmp_path: Path, successor: str | None
+) -> None:
+    """Removing just shared-successor rejection makes the invalid catalog load again."""
+    mutant_dir = tmp_path / "mutant"
+    mutant_dir.mkdir()
+    for source_path in SCRIPT_PATH.parent.glob("*.py"):
+        shutil.copyfile(source_path, mutant_dir / source_path.name)
+    mutant = mutant_dir / SCRIPT_PATH.name
+    source = mutant.read_text(encoding="utf-8")
+    guard = "if next_heading in successor_owners:"
+    assert source.count(guard) == 1
+    mutant.write_text(source.replace(guard, "if False:"), encoding="utf-8")
+    program = """
+import json, sys
+sys.path.insert(0, sys.argv[1])
+import validate_instruction_contracts as validator
+successor = json.loads(sys.argv[2])
+raw = {"required_sections": [
+    {"heading": heading, "next_heading": successor, "required_paragraphs": ["Act."]}
+    for heading in ["## A", "## B"]
+]}
+validator.parse_required_sections(raw)
+print("Catalog accepted")
+"""
+    for directory, expected in [(SCRIPT_PATH.parent, 1), (mutant_dir, 0)]:
+        result = subprocess.run(
+            [sys.executable, "-c", program, str(directory), json.dumps(successor)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == expected, result.stdout + result.stderr
+        if expected:
+            assert "Shared section successor" in result.stderr
+        else:
+            assert result.stdout.strip() == "Catalog accepted"
+
+
+def _canonical_host_contract_fixture(
+    tmp_path: Path, modules: list[str]
+) -> tuple[dict[str, Any], str]:
+    """Use the actual canonical contract while retaining an independent literal deletion."""
+    catalog = yaml.safe_load(
+        (REPO_ROOT / ".template-sync/instruction-contracts.yml").read_text(encoding="utf-8")
+    )
+    contract = next(
+        item
+        for item in catalog["instruction_contracts"]
+        if item["path"] == ".github/copilot-instructions.md"
+    )
+    contracts = {"instruction_contracts": [contract]}
+    _write_common_contract_repo(tmp_path, contracts)
+    _write_yaml(tmp_path, ".template-sync/marker.yml", _marker(modules))
+    text = (REPO_ROOT / ".github/copilot-instructions.md").read_text(encoding="utf-8")
+    _write_text(tmp_path, ".github/copilot-instructions.md", text)
+    return contracts, text
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize(
+    "change", ["host-paragraph", "azure-section", "azure-heading", "azure-clause"]
+)
+def test_actual_canonical_host_protocol_rejects_loss(
+    tmp_path: Path, mode: str, change: str
+) -> None:
+    """The original host role needs complete body ownership, not only a boundary heading."""
+    _contracts_data, text = _canonical_host_contract_fixture(
+        tmp_path, ["agent-instructions", "azure-devops-collaboration"]
+    )
+    intact = _run_validator(tmp_path, "--mode", mode)
+    assert intact.returncode == 0, intact.stdout + intact.stderr
+    azure = "### Azure DevOps Services with Azure Repos"
+    following = "## Linting and Validation Configurations"
+    if change == "azure-section":
+        text = text[: text.index(azure)] + text[text.index(following) :]
+    elif change == "azure-heading":
+        text = text.replace(azure, "", 1)
+    elif change == "azure-clause":
+        text = text.replace(
+            "- The repository must be a Git repository in Azure Repos; TFVC is not supported.",
+            "",
+            1,
+        )
+    else:
+        text = text.replace(
+            "agents MUST NOT rename, weaken, or replace the GitHub protocol",
+            "agents MAY replace the GitHub protocol",
+            1,
+        )
+    _write_text(tmp_path, ".github/copilot-instructions.md", text)
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "section:" in result.stdout
+
+
+@pytest.mark.upstream_template_only
+def test_actual_canonical_host_protocol_preserves_excluded_host(tmp_path: Path) -> None:
+    """Excluded Azure sections may be absent while the primary-host relationship remains."""
+    _contracts_data, text = _canonical_host_contract_fixture(tmp_path, ["agent-instructions"])
+    azure = "### Azure DevOps Services with Azure Repos"
+    following = "## Linting and Validation Configurations"
+    text = text[: text.index(azure)] + text[text.index(following) :]
+    _write_text(tmp_path, ".github/copilot-instructions.md", text)
+    accepted = _run_validator(tmp_path, "--mode", "downstream")
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+    text = text.replace(
+        "agents MUST NOT rename, weaken, or replace the GitHub protocol",
+        "agents MAY replace the GitHub protocol",
+        1,
+    )
+    _write_text(tmp_path, ".github/copilot-instructions.md", text)
+    rejected = _run_validator(tmp_path, "--mode", "downstream")
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize("section", ["host", "azure"])
+def test_canonical_host_clause_oracle_detects_removed_catalog_ownership(
+    tmp_path: Path, section: str
+) -> None:
+    """Deleting one catalog owner must resurrect its independently deleted-clause defect."""
+    contracts, text = _canonical_host_contract_fixture(
+        tmp_path, ["agent-instructions", "azure-devops-collaboration"]
+    )
+    if section == "host":
+        heading = "## Host-Specific PR Review Protocols"
+        text = text.replace(
+            "agents MUST NOT rename, weaken, or replace the GitHub protocol",
+            "agents MAY replace the GitHub protocol",
+            1,
+        )
+    else:
+        heading = "### Azure DevOps Services with Azure Repos"
+        text = text.replace(
+            "- The repository must be a Git repository in Azure Repos; TFVC is not supported.",
+            "",
+            1,
+        )
+    _write_text(tmp_path, ".github/copilot-instructions.md", text)
+    baseline = _run_validator(tmp_path, "--mode", "downstream")
+    assert baseline.returncode == 1, baseline.stdout + baseline.stderr
+    sections = contracts["instruction_contracts"][0]["required_sections"]
+    assert sum(item["heading"] == heading for item in sections) == 1
+    sections[:] = [item for item in sections if item["heading"] != heading]
+    _write_yaml(tmp_path, ".template-sync/instruction-contracts.yml", contracts)
+    mutant = _run_validator(tmp_path, "--mode", "downstream")
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
 
 
 def _write_text(repo_root: Path, relative_path: str, text: str) -> None:
