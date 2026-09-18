@@ -7,15 +7,21 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.6.20260917.0
+**Version:** 1.6.20260918.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-17
+- **Last Updated:** 2026-09-18
 - **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, Azure Pipelines YAML, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by the companion JSON guide, if present) or generated YAML artifacts that are owned by another tool's serializer.
-- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md) (companion guide, if present)
+- **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
+<!-- template-sync: begin baseline-reference-only -->
+- **Related baseline guidance:** [`.gitattributes` Rules](./gitattributes.instructions.md)
+<!-- template-sync: end baseline-reference-only -->
+<!-- template-sync: begin json-reference-only -->
+- **Related JSON guidance:** [JSON Writing Style](./json.instructions.md)
+<!-- template-sync: end json-reference-only -->
 
 ## Purpose and Scope
 
@@ -58,7 +64,10 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - Indentation **MUST** be exactly **2 spaces** per level. Tabs **MUST NOT** appear in YAML files.
 - Block style **MUST** be the default for mappings and sequences. Flow style (`{key: value}`, `[a, b, c]`) **MAY** be used only for short, obviously-bounded inline values where block style would be visually disruptive.
 - Document separators (`---`, `...`) **SHOULD NOT** appear in single-document files. Multi-document YAML files **MAY** use `---` separators when the consumer requires multi-document input (for example, Kubernetes manifest bundles) or when the file format mandates a leading `---`.
-- Files **SHOULD NOT** contain trailing whitespace and **SHOULD** end with a single newline. Line-ending, BOM, EOF newline, and trailing-whitespace policy at the Git layer is owned by [`.gitattributes` Rules](./gitattributes.instructions.md); this guide does not duplicate or contradict it.
+- Files **SHOULD NOT** contain trailing whitespace and **SHOULD** end with a single newline.
+<!-- template-sync: begin baseline-reference-only -->
+- Line-ending, BOM, EOF newline, and trailing-whitespace policy at the Git layer is owned by [`.gitattributes` Rules](./gitattributes.instructions.md); this guide does not duplicate or contradict it.
+<!-- template-sync: end baseline-reference-only -->
 
 ## Quoting Rules
 
@@ -105,6 +114,40 @@ rules:
 ```
 
 This configuration preserves the idiomatic GitHub Actions `on:` key while still flagging YAML 1.1 truthy hazards in **values**. Authors **MAY** alternatively quote the key as `"on":` to satisfy a stricter `truthy.check-keys: true` configuration, but this form is **non-idiomatic** in the GitHub Actions ecosystem and **SHOULD NOT** be adopted unless a repository policy requires it.
+
+## GitHub Actions Push Ref and Path Scope
+
+When a GitHub Actions `push` event uses `paths` or `paths-ignore`, authors MUST define its branch and tag intent explicitly. GitHub does not evaluate path filters for tag pushes; a tag-enabled workflow MUST NOT rely on those filters to select tag events.
+
+For a branch-only workflow, define `branches` or `branches-ignore` and omit tag filters. GitHub then excludes tag pushes and requires both the branch and path filters to accept each branch push. When tag execution is intended, define `tags` or `tags-ignore` deliberately and document the tag behavior independently of changed paths.
+
+See [GitHub's branch/tag and path filter syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore).
+
+Branch-only example: a matching path change on any branch can run this workflow; tag pushes do not.
+
+```yaml
+on:
+  push:
+    branches:
+      - "**"
+    paths:
+      - "docs/**"
+```
+
+Tag-enabled example: matching branch changes run it, and every matching `v*` tag runs it regardless of changed paths.
+
+```yaml
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
+    paths:
+      - "docs/**"
+```
+
+This rule applies to GitHub Actions push events only. It does not prescribe GitHub trigger syntax for Azure Pipelines or require adding path filters, tag triggers, or a workflow-policy engine. Preserve the separate completeness requirements for privileged verification.
 
 ## GitHub Actions Setup Version Pins
 
@@ -501,5 +544,5 @@ A YAML change is "done" when **all** of the following are true:
 - Comments explain **why**, not **what**; behavior is not documented only in comments.
 - The repository's configured YAML syntax and style validators pass.
 - Any schema or ecosystem validator wired into pre-commit or CI passes for the affected files (for example, `actionlint` for GitHub Actions workflow files, `check-jsonschema` for schema-backed YAML covered by an active hook). When no such validator is wired up for the file family being changed, authors **SHOULD** run the applicable validator locally before committing. For Azure Pipelines YAML, service-backed validation through Azure DevOps Services pipeline creation, queued runs, or Azure Repos branch-policy build validation should be recorded when it cannot be performed in the current task.
-- Pre-commit hooks pass locally (`pre-commit run --all-files`) and in the repository's configured CI.
+- When pre-commit is retained, its hooks pass locally (`pre-commit run --all-files`) and in the repository's configured CI.
 - No secrets are committed; GitHub Actions workflows declare least-privilege `permissions:`.

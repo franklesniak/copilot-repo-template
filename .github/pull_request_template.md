@@ -96,10 +96,12 @@ outside the scope of that rule and CI check.
 - [ ] I have added or updated tests where appropriate
 - [ ] New and existing tests pass locally (where applicable)
 
+<!-- template-sync: begin baseline-reference-only -->
 ### Pre-commit Verification (if configured)
 
 - [ ] If this repository uses pre-commit, I ran `pre-commit run --all-files` and all checks pass
 - [ ] If pre-commit made auto-fixes, I reviewed and committed them
+<!-- template-sync: end baseline-reference-only -->
 
 <!-- template-sync: begin python-reference-only -->
 ### Python-Specific (if applicable)
@@ -120,13 +122,13 @@ outside the scope of that rule and CI check.
 - [ ] PowerShell formatting follows repository standards (OTBS, consistent line endings)
 
 <!-- template-sync: end powershell-reference-only -->
-<!-- template-sync: begin data-ci-reference-only -->
+<!-- template-sync: begin baseline-reference-only -->
 ### Data-File-Specific (if applicable)
 
 - [ ] Retained data-file checks pass locally through `pre-commit run --all-files` or the matching targeted pre-commit hooks
 - [ ] No secrets, real PII, or production credentials appear in any committed data file or fixture
 
-<!-- template-sync: end data-ci-reference-only -->
+<!-- template-sync: end baseline-reference-only -->
 <!-- template-sync: begin schema-reference-only -->
 ### Schema-Specific (if applicable)
 

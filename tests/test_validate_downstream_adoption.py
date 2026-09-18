@@ -502,25 +502,24 @@ def test_or_group_inline_block_is_valid_when_any_member_module_retained(
 ) -> None:
     """An OR-retention (ANY) inline block is not flagged while any member is retained.
 
-    ``PARTIAL_MODULES`` excludes ``json`` but keeps ``yaml``, ``schema``, and
-    ``template-sync-support``, so the ``data-ci-reference-only`` OR-group block is
-    correctly retained. A naive AND check would flag it as requiring the excluded
-    ``json`` module.
+    ``PARTIAL_MODULES`` excludes ``python`` but keeps ``baseline``, so the
+    ``pip-dependencies-only`` OR-group block is correctly retained. A naive AND
+    check would flag it as requiring the excluded ``python`` module.
     """
     _write_common_downstream_repo(
         tmp_path,
         readme_text=(
             "# Downstream\n\n"
-            "<!-- template-sync: begin data-ci-reference-only -->\n"
-            "Data CI guidance.\n"
-            "<!-- template-sync: end data-ci-reference-only -->\n"
+            "<!-- template-sync: begin pip-dependencies-only -->\n"
+            "Baseline runner dependency guidance.\n"
+            "<!-- template-sync: end pip-dependencies-only -->\n"
         ),
     )
 
     result = _run_validator(tmp_path, "--require-marker")
 
     assert result.returncode == 0, result.stdout
-    assert "data-ci-reference-only" not in result.stdout
+    assert "pip-dependencies-only" not in result.stdout
 
 
 def test_azure_guide_or_group_inline_block_is_reported_without_azure_modules(

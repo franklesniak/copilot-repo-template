@@ -177,6 +177,31 @@ def _run_validator(repo_root: Path, *extra_args: str) -> subprocess.CompletedPro
     )
 
 
+def _copy_real_instruction_contract_surface(repo_root: Path) -> None:
+    """Copy the actual protected-contract inputs into an isolated repository."""
+    catalog_path = REPO_ROOT / ".template-sync/instruction-contracts.yml"
+    catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
+    assert isinstance(catalog, dict)
+    contracts = catalog.get("instruction_contracts")
+    assert isinstance(contracts, list)
+
+    _copy_schemas(repo_root)
+    for relative_path in (
+        ".template-sync/manifest.yml",
+        ".template-sync/instruction-contracts.yml",
+    ):
+        destination = repo_root / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPO_ROOT / relative_path, destination)
+    for contract in contracts:
+        assert isinstance(contract, dict)
+        contract_path = contract.get("path")
+        assert isinstance(contract_path, str)
+        destination = repo_root / contract_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPO_ROOT / contract_path, destination)
+
+
 def _section_entries(output: str, heading: str) -> set[str]:
     """Return bullet entries rendered under a named output section."""
     entries: set[str] = set()
@@ -206,6 +231,375 @@ def test_intact_upstream_claude_contract_passes() -> None:
     assert result.returncode == 0, result.stderr
     assert "Instruction-contract validation passed." in result.stdout
     assert "Contracts checked: 5" in result.stdout
+
+
+FOLLOW_UP_GOVERNANCE_MUTATIONS = (
+    pytest.param(
+        "### Safe PR-head placement",
+        "Do not use a stale tracking ref as proof.",
+        "A stale tracking ref is sufficient proof.",
+        id="r01-fresh-authenticated-head",
+    ),
+    pytest.param(
+        "### Safe PR-head placement",
+        "Agents MUST inspect the entire outgoing commit range and every changed path",
+        "Agents MAY inspect only the latest outgoing commit and selected changed paths",
+        id="r01-entire-outgoing-range",
+    ),
+    pytest.param(
+        "### Safe PR-head placement",
+        "agents MUST use an explicit non-force source-to-destination refspec",
+        "agents MAY use an implicit or force source-to-destination refspec",
+        id="r01-explicit-non-force-refspec",
+    ),
+    pytest.param(
+        "### Safe PR-head placement",
+        "do not treat a series of partial file writes as equivalent tested placement",
+        "treat a series of partial file writes as equivalent tested placement",
+        id="r01-api-tested-tree-equivalence",
+    ),
+    pytest.param(
+        "### Safe PR-head placement",
+        "A failed, uncertain, or mismatched readback leaves placement incomplete",
+        "A failed, uncertain, or mismatched readback establishes placement success",
+        id="r01-authenticated-readback",
+    ),
+    pytest.param(
+        "### Ownership and delegation",
+        "Agents MUST preserve unrelated user and agent work.",
+        "Agents MAY overwrite unrelated user and agent work.",
+        id="r02-preserve-unrelated-work",
+    ),
+    pytest.param(
+        "### Ownership and delegation",
+        "Before mutation or delegation, record the repository, worktree, branch, head and tree identities, allowed scope and paths, applicable findings, permitted public actions, and authority limits.",
+        "Before mutation or delegation, record only the branch name.",
+        id="r02-exact-task-input-and-scope",
+    ),
+    pytest.param(
+        "### Ownership and delegation",
+        "Agents MUST prevent overlapping writers to a file, worktree, index, branch ref, or remote object.",
+        "Agents MAY allow overlapping writers to a file, worktree, index, branch ref, or remote object.",
+        id="r02-exclusive-writers",
+    ),
+    pytest.param(
+        "### Ownership and delegation",
+        "Workers MUST stay within the assigned authority and MUST NOT create unbounded descendants.",
+        "Workers MAY expand their authority and create unbounded descendants.",
+        id="r02-bounded-worker-authority",
+    ),
+    pytest.param(
+        "### Ownership and delegation",
+        "The integration owner MUST verify worker claims against actual files, diffs, and native validation results before integration.",
+        "The integration owner MAY trust worker summaries without inspecting native evidence.",
+        id="r02-parent-native-verification",
+    ),
+    pytest.param(
+        "### Ownership and delegation",
+        "A self-review MUST NOT be described as an independent review.",
+        "A self-review MAY be described as an independent review.",
+        id="r02-independent-review-truth",
+    ),
+    pytest.param(
+        "### Continuity and recovery",
+        "Analysis, an option selection, or a next-step preview is not completion while authorized work remains.",
+        "Analysis or a next-step preview completes the task while authorized work remains.",
+        id="r03-continue-through-validation",
+    ),
+    pytest.param(
+        "### Continuity and recovery",
+        "agents MUST keep one compact task-private, untracked state index",
+        "agents MAY rely on an unrecorded conversation summary",
+        id="r03-task-private-index",
+    ),
+    pytest.param(
+        "### Continuity and recovery",
+        "Do not reconstruct requirements, authority, results, or pending operations from memory or a summary.",
+        "Reconstruct requirements, authority, results, and pending operations from memory or a summary.",
+        id="r03-full-input-recovery",
+    ),
+    pytest.param(
+        "### Continuity and recovery",
+        "reconcile uncertain remote operations before retrying",
+        "retry uncertain remote operations before reconciliation",
+        id="r03-uncertain-operation-reconciliation",
+    ),
+    pytest.param(
+        "### Continuity and recovery",
+        "Reuse passing results only when their relevant inputs are unchanged and repository policy permits it.",
+        "Reuse passing results after relevant inputs change.",
+        id="r03-input-bound-evidence-reuse",
+    ),
+    pytest.param(
+        "### Continuity and recovery",
+        "The record is evidence, not authority",
+        "The record grants authority",
+        id="r03-record-is-not-authority",
+    ),
+    pytest.param(
+        "### Finding inventory and decisions",
+        "A standalone `@codex review` or a command-only `@copilot` comment, with harmless surrounding whitespace, is request evidence rather than a finding",
+        "Every bot command is a finding and surrounding whitespace changes its classification",
+        id="r04-command-only-request-evidence",
+    ),
+    pytest.param(
+        "### Finding inventory and decisions",
+        "If a comment also contains substantive feedback, inventory that feedback regardless of its prefix.",
+        "Discard substantive feedback when a comment begins with a bot command.",
+        id="r04-command-with-substantive-feedback",
+    ),
+    pytest.param(
+        "### Finding inventory and decisions",
+        "agents MUST enumerate all-state review threads and their comments, including resolved, unresolved, and outdated threads.",
+        "agents MAY enumerate only current unresolved review threads.",
+        id="r04-complete-all-state-inventory",
+    ),
+    pytest.param(
+        "### Finding inventory and decisions",
+        "Agents MUST NOT filter inventory membership by REST `commit_id == current head`",
+        "Agents MAY filter inventory membership by REST `commit_id == current head`",
+        id="r04-no-mutable-head-filter",
+    ),
+    pytest.param(
+        "### Finding inventory and decisions",
+        "Keep current and original commit identities as provenance, not membership filters.",
+        "Use current and original commit identities as membership filters.",
+        id="r04-commit-identities-are-provenance",
+    ),
+    pytest.param(
+        "### Finding inventory and decisions",
+        "agents MUST perform a bounded search for the same root cause in relevant helpers and callers, copies of the same policy or configuration, and retained platform or module variants",
+        "agents MAY inspect only the reported line and skip related variants",
+        id="r05-bounded-related-defect-search",
+    ),
+    pytest.param(
+        "### Finding inventory and decisions",
+        "A materially different concern needs its own finding and decision",
+        "Group a materially different concern into the existing decision",
+        id="r05-separate-material-concerns",
+    ),
+    pytest.param(
+        "### Finding inventory and decisions",
+        "discovery does not expand task or protected-content authority",
+        "discovery expands task and protected-content authority",
+        id="r05-search-does-not-expand-authority",
+    ),
+    pytest.param(
+        "### Finding inventory and decisions",
+        "tests MUST include positive and negative controls and a targeted assertion-removal or failure-injection case with an expected result independent of the production predicate",
+        "tests MAY repeat the production predicate without negative or mutation controls",
+        id="r05-independent-guard-oracle",
+    ),
+    pytest.param(
+        "### Finding inventory and decisions",
+        "Do not require mutation tests for every prose, formatting, or cosmetic edit.",
+        "Require mutation tests for every prose, formatting, and cosmetic edit.",
+        id="r05-proportionate-mutation-scope",
+    ),
+)
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize(
+    ("variant", "required_scope"),
+    (
+        (
+            "Secondary Guide Prompt Only",
+            "Do not implement that secondary guide change in this task, even if earlier authority would allow it.",
+        ),
+        (
+            "Authorized Secondary Guide Changes",
+            "Implement a selected fix or secondary style-guide change only when specific current-task authority covers its content.",
+        ),
+        (
+            "No Secondary Guide Proposal",
+            "Assess guide impact, but do not prepare or implement a separate secondary guide proposal.",
+        ),
+    ),
+)
+def test_review_prompt_variants_keep_copyable_scope(variant: str, required_scope: str) -> None:
+    """Each copied prompt retains its own authority boundary and guide-output scope."""
+    document = (REPO_ROOT / "docs/PR_REVIEW_PROMPTS.md").read_text(encoding="utf-8")
+    heading = f"### Evaluate, Decide, and Implement — {variant}\n"
+    section = document.split(heading, 1)[1].split("\n### ", 1)[0]
+    prompts = re.findall(r"^```markdown\n(.*?)\n```$", section, re.MULTILINE | re.DOTALL)
+    assert len(prompts) == 1
+    # Inspect the copyable block, not explanatory prose that a user may omit.
+    prompt = " ".join(prompts[0].split())
+    assert "Shared Review Governance and Protected Instruction Files" in prompt
+    assert ".github/copilot-instructions.md" in prompt
+    assert "fresh weighted rubric, displayed scores, pre-edit evaluation" in prompt
+    assert "This prompt grants no protected-content, branch-placement or merge authority." in prompt
+    assert required_scope in prompt
+
+
+@pytest.mark.upstream_template_only
+def test_issue_evaluation_prompt_preserves_nonmutating_copyable_contract() -> None:
+    """The copied issue prompt preserves evidence and has no implicit action grant."""
+    source = (REPO_ROOT / "docs/ISSUE_EVALUATION_PROMPT.md").read_text(encoding="utf-8")
+    blocks = re.findall(r"^```markdown\n(.*?)\n```$", source, re.MULTILINE | re.DOTALL)
+    assert len(blocks) == 1
+    prompt = " ".join(blocks[0].split())
+    assert "Do not create or edit issues, files, branches, comments or settings" in prompt
+    assert "do not implement the proposed change" in prompt
+    assert "Preserve the reported problem, useful evidence and intended outcome." in prompt
+    assert "Distinguish verified facts, inferences, proposed remedies and open questions." in prompt
+    assert "acceptance conditions and validation" in prompt
+    assert "A prose link alone does not establish a native dependency." in prompt
+    assert "This prompt grants no protected-content, branch-placement or merge authority." in prompt
+    assert "STYLE_GUIDE.md" not in source
+    assert "STYLE_GUIDE_RATIONALE.md" not in source
+
+
+@pytest.mark.upstream_template_only
+def test_push_scope_examples_preserve_explicit_ref_intent() -> None:
+    """The two real guide examples express the documented GitHub event shapes."""
+    guide = (REPO_ROOT / ".github/instructions/yaml.instructions.md").read_text(encoding="utf-8")
+    section = guide.split("## GitHub Actions Push Ref and Path Scope\n", 1)[1].split(
+        "## GitHub Actions Setup Version Pins\n", 1
+    )[0]
+    examples = re.findall(r"```yaml\n(.*?)```", section, re.DOTALL)
+    assert len(examples) == 2
+    # BaseLoader keeps GitHub's "on" key literal instead of YAML 1.1 Boolean coercion.
+    branch_only, tag_enabled = (yaml.load(item, Loader=yaml.BaseLoader) for item in examples)
+    assert branch_only["on"]["push"] == {
+        "branches": ["**"],
+        "paths": ["docs/**"],
+    }
+    assert tag_enabled["on"]["push"] == {
+        "branches": ["**"],
+        "tags": ["v*"],
+        "paths": ["docs/**"],
+    }
+    assert "regardless of changed paths" in section
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize(
+    ("clause", "replacement"),
+    [
+        ("authors MUST define its branch and tag intent explicitly", ""),
+        (
+            "a tag-enabled workflow MUST NOT rely on those filters to select tag events",
+            "a tag-enabled workflow MAY rely on those filters to select tag events",
+        ),
+        (
+            "For a branch-only workflow, define `branches` or `branches-ignore` and omit tag filters.",
+            "Path filters alone establish branch-only behavior.",
+        ),
+        ("This rule applies to GitHub Actions push events only.", ""),
+    ],
+)
+def test_push_scope_contract_rejects_missing_or_weakened_rule(
+    tmp_path: Path, clause: str, replacement: str
+) -> None:
+    """A changed trigger obligation fails through the production contract CLI."""
+    _copy_real_instruction_contract_surface(tmp_path)
+    baseline = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert baseline.returncode == 0, baseline.stdout + baseline.stderr
+    path = tmp_path / ".github/instructions/yaml.instructions.md"
+    text = path.read_text(encoding="utf-8")
+    assert text.count(clause) == 1
+    path.write_text(text.replace(clause, replacement, 1), encoding="utf-8")
+    result = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert ".github/instructions/yaml.instructions.md" in result.stdout
+    assert "section:## GitHub Actions Push Ref and Path Scope:paragraph:" in result.stdout
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize(
+    ("path", "clause", "replacement"),
+    (
+        (
+            ".github/copilot-instructions.md",
+            "grants MUST remain valid across a verified resume of the same task, repository, PR, scope, and action class",
+            "grants expire after every interruption",
+        ),
+        (
+            ".github/copilot-instructions.md",
+            "Protected-content, branch-placement, and merge authority remain separate; a resume creates none of them.",
+            "A resume grants all publication authority.",
+        ),
+        (
+            "AGENTS.md",
+            "for this specific PR in the current task, including a verified resume under the shared continuity rule",
+            "for any PR in any task",
+        ),
+        (
+            "CLAUDE.md",
+            "This is an intentional platform policy difference, not a transferable grant.",
+            "This platform grant applies to all agents.",
+        ),
+    ),
+)
+def test_verified_resume_authority_rejects_scope_drift(
+    tmp_path: Path, path: str, clause: str, replacement: str
+) -> None:
+    """Real contracts detect lost continuity and expanded cross-task/platform grants."""
+    _copy_real_instruction_contract_surface(tmp_path)
+    baseline = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert baseline.returncode == 0, baseline.stdout + baseline.stderr
+    policy = tmp_path / path
+    text = policy.read_text(encoding="utf-8")
+    assert text.count(clause) == 1
+    policy.write_text(text.replace(clause, replacement, 1), encoding="utf-8")
+    result = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert path in result.stdout
+    assert ":paragraph:" in result.stdout
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize(
+    "clause",
+    (
+        "it is descriptive, not a second authoritative pin.",
+        "but does not create vulnerability alerts for SHA-pinned actions.",
+    ),
+)
+def test_action_pin_contract_rejects_lost_authority_or_alert_limit(
+    tmp_path: Path, clause: str
+) -> None:
+    """The actual policy cannot lose its pin authority or truthful alert boundary."""
+    _copy_real_instruction_contract_surface(tmp_path)
+    baseline = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert baseline.returncode == 0, baseline.stdout + baseline.stderr
+    path = tmp_path / ".github/copilot-instructions.md"
+    source = path.read_text(encoding="utf-8")
+    assert source.count(clause) == 1
+    path.write_text(source.replace(clause, "", 1), encoding="utf-8")
+    result = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "section:### Immutable action pins and release comments:paragraph:" in result.stdout
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize(("heading", "clause", "weakened"), FOLLOW_UP_GOVERNANCE_MUTATIONS)
+@pytest.mark.parametrize("mutation", ["delete", "weaken"])
+def test_follow_up_governance_clauses_reject_deletion_and_weakening(
+    tmp_path: Path,
+    heading: str,
+    clause: str,
+    weakened: str,
+    mutation: str,
+) -> None:
+    """Removed or weakened governance clauses fail through the real contract validator."""
+    _copy_real_instruction_contract_surface(tmp_path)
+    baseline = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert baseline.returncode == 0, baseline.stdout + baseline.stderr
+
+    policy_path = tmp_path / ".github/copilot-instructions.md"
+    policy = policy_path.read_text(encoding="utf-8")
+    assert policy.count(clause) == 1
+    replacement = "" if mutation == "delete" else weakened
+    policy_path.write_text(policy.replace(clause, replacement, 1), encoding="utf-8")
+
+    result = _run_validator(tmp_path, "--mode", "upstream-template")
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert ".github/copilot-instructions.md" in result.stdout
+    assert f"section:{heading}:paragraph:" in result.stdout
 
 
 @pytest.mark.parametrize(

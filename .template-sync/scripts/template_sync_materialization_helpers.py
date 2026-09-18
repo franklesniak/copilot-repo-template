@@ -74,6 +74,9 @@ EMBEDDED_LIST_MARKER_RE = re.compile(
 # the default inline-block semantics and covers both the ``*-only`` toolchain
 # blocks and the single-module ``*-reference-only`` documentation blocks.
 INLINE_BLOCK_MODULES = {
+    "baseline-only": frozenset({"baseline"}),
+    "baseline-reference-only": frozenset({"baseline"}),
+    "github-data-ci-reference-only": frozenset({"baseline", "github-actions"}),
     "git-lfs-only": frozenset({"git-lfs"}),
     "terraform-only": frozenset({"terraform"}),
     "markdown-only": frozenset({"markdown"}),
@@ -100,16 +103,13 @@ INLINE_BLOCK_MODULES = {
 # when the included modules are disjoint from the marker's module set (i.e.
 # *none* of the named modules is included). This mirrors a manifest
 # ``requires_any`` relation, so it can guard prose that documents a file which
-# is itself materialized under OR semantics (for example the data-file CI
-# workflow row, whose file requires ``github-actions`` plus any one of
-# ``baseline``, ``json``, ``yaml``, ``schema``, ``template-sync-support``).
+# is itself materialized under OR semantics. The pip updater also uses this
+# relation to cover baseline runner requirements or Python project metadata.
 INLINE_BLOCK_ANY_MODULES = {
     "azure-devops-guide-reference-only": frozenset(
         {"azure-devops-platform", "azure-pipelines", "azure-devops-collaboration"}
     ),
-    "data-ci-reference-only": frozenset(
-        {"baseline", "json", "yaml", "schema", "template-sync-support"}
-    ),
+    "pip-dependencies-only": frozenset({"baseline", "python"}),
 }
 
 
@@ -445,15 +445,51 @@ def resolve_repo_path(repo_root: Path, raw_path: str) -> Path:
     return path
 
 
-def load_json_mapping(path: Path, repo_root: Path) -> dict[str, Any]:
-    """Load a JSON file that must contain a mapping."""
+def read_repository_text(
+    path: Path,
+    repo_root: Path,
+    *,
+    encoding: str = "utf-8",
+    maximum_bytes: int | None = None,
+) -> str:
+    """Read a caller-resolved repository file with strict decoding and safe errors.
+
+    A supplied nonnegative byte limit bounds the read before decoding. Without
+    a limit, retain the existing text-reader size behavior. Both paths preserve
+    universal newlines. Callers retain responsibility for path containment.
+    I/O, oversized input, and decoding failures raise the existing domain error.
+    """
+    if maximum_bytes is not None and maximum_bytes < 0:
+        raise ValueError("maximum_bytes must be nonnegative.")
     try:
-        parsed = json.loads(path.read_text(encoding="utf-8"))
+        if maximum_bytes is None:
+            return path.read_text(encoding=encoding)
+        with path.open("rb") as stream:
+            data = stream.read(maximum_bytes + 1)
+        if len(data) > maximum_bytes:
+            relative_path = repository_relative_path(path, repo_root)
+            raise TemplateSyncMaterializationError(
+                f"{relative_path} exceeds the {maximum_bytes}-byte input limit."
+            )
+        return data.decode(encoding).replace("\r\n", "\n").replace("\r", "\n")
     except OSError as error:
         relative_path = repository_relative_path(path, repo_root)
         raise TemplateSyncMaterializationError(
             f"Unable to read {relative_path}: {os_error_summary(error)}"
         ) from error
+    except UnicodeDecodeError as error:
+        relative_path = repository_relative_path(path, repo_root)
+        raise TemplateSyncMaterializationError(
+            f"Invalid {encoding} in {relative_path}: {error.reason}."
+        ) from error
+
+
+def load_json_mapping(
+    path: Path, repo_root: Path, *, maximum_bytes: int | None = None
+) -> dict[str, Any]:
+    """Load a JSON mapping with an optional pre-decode byte limit."""
+    try:
+        parsed = json.loads(read_repository_text(path, repo_root, maximum_bytes=maximum_bytes))
     except json.JSONDecodeError as error:
         relative_path = repository_relative_path(path, repo_root)
         raise TemplateSyncMaterializationError(
@@ -465,15 +501,14 @@ def load_json_mapping(path: Path, repo_root: Path) -> dict[str, Any]:
     return cast(dict[str, Any], parsed)
 
 
-def load_yaml_mapping(path: Path, repo_root: Path) -> dict[str, Any]:
-    """Load a YAML file that must contain a mapping."""
+def load_yaml_mapping(
+    path: Path, repo_root: Path, *, maximum_bytes: int | None = None
+) -> dict[str, Any]:
+    """Load a YAML mapping with an optional pre-decode byte limit."""
     try:
-        parsed = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
-    except OSError as error:
-        relative_path = repository_relative_path(path, repo_root)
-        raise TemplateSyncMaterializationError(
-            f"Unable to read {relative_path}: {os_error_summary(error)}"
-        ) from error
+        parsed = yaml.safe_load(
+            read_repository_text(path, repo_root, encoding="utf-8-sig", maximum_bytes=maximum_bytes)
+        )
     except yaml.YAMLError as error:
         relative_path = repository_relative_path(path, repo_root)
         raise TemplateSyncMaterializationError(

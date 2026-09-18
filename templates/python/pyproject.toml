@@ -36,8 +36,8 @@ dependencies = []
 
 # Development dependencies
 # Note: pre-commit is intentionally NOT included here.
-# Install pre-commit globally via: pip install pre-commit
-# See CONTRIBUTING.md for details.
+# Use the repository's reviewed runner requirement and local setup instructions.
+# The optional Python project metadata does not own the pre-commit runner pin.
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",

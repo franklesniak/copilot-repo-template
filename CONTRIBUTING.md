@@ -68,19 +68,19 @@ When you adopt the Python module, use a Python version that is currently in the 
 
 ### 3. Install Pre-commit
 
-Install `pre-commit` globally using **one** of the following. With `pip`:
+From the repository root, install the version in `requirements-pre-commit.txt` using **one** of the following. With `pip` in your chosen Python environment:
 
 ```bash
-pip install pre-commit
+python -m pip install -r requirements-pre-commit.txt
 ```
 
 Or, for isolated tooling, with `pipx`:
 
 ```bash
-pipx install pre-commit
+pipx install --force "$(cat requirements-pre-commit.txt)"
 ```
 
-`pre-commit` manages isolated hook environments, so it does not need to be installed as a project runtime dependency.
+`pre-commit` manages isolated hook environments, so it does not need to be installed as a project runtime dependency. The requirement pins the runner directly; it does not lock transitive packages. CI derives its expected version from this file and rejects a mismatched command. For PowerShell pipx setup, use `pipx install --force (Get-Content -Raw requirements-pre-commit.txt).Trim()`.
 
 ### 4. Install Git Hooks
 
@@ -306,12 +306,12 @@ For Azure DevOps Services-hosted adoptions, see [`docs/azure-devops-support.md`]
 This repository includes retained GitHub Actions workflows that run automatically:
 
 - **Pre-commit CI** (`.github/workflows/precommit-ci.yml`) - Runs the aggregate `pre-commit run --all-files` gate over every hook in `.pre-commit-config.yaml`.
-- **Auto-fix Pre-commit** (`.github/workflows/auto-fix-precommit.yml`) - Automatically commits pre-commit auto-fixes on Copilot-agent branches when the workflow conditions match.
+- **Auto-fix Pre-commit** (`.github/workflows/auto-fix-precommit.yml`) - Produces an untrusted fix preview on matching Copilot-agent branches. The workflow wrapper does not commit or push; review or reproduce the proposed fixes locally and run the required checks before committing them with the substantive change.
 - **Markdown Lint** (`.github/workflows/markdownlint.yml`) - Validates Markdown formatting and local links.
 - **PowerShell CI** (`.github/workflows/powershell-ci.yml`) - Runs PSScriptAnalyzer and Pester on PowerShell files.
-<!-- template-sync: begin data-ci-reference-only -->
+<!-- template-sync: begin github-data-ci-reference-only -->
 - **Data CI** (`.github/workflows/data-ci.yml`) - Runs retained baseline placeholder, data-file, GitHub Actions, template-sync, and schema validation hooks.
-<!-- template-sync: end data-ci-reference-only -->
+<!-- template-sync: end github-data-ci-reference-only -->
 <!-- template-sync: begin python-reference-only -->
 - **Python CI** (`.github/workflows/python-ci.yml`) - Runs type checking and pytest on Python files.
 <!-- template-sync: end python-reference-only -->

@@ -114,9 +114,9 @@ Optional module-owned surfaces include:
 - `.github/linting/PSScriptAnalyzerSettings.psd1` - PSScriptAnalyzer settings enforcing OTBS formatting for PowerShell.
 - `.github/workflows/auto-fix-precommit.yml` - Optional read-only pre-commit fix preview for Copilot-agent branches; review and apply proposed fixes locally.
 - `.github/workflows/check-placeholders.yml` - Transitional OWNER/REPO and `@OWNER` placeholder check.
-<!-- template-sync: begin data-ci-reference-only -->
-- `.github/workflows/data-ci.yml` - Baseline placeholder, data-file, and template-sync validation workflow, present when baseline or a data-file/template-sync module is retained.
-<!-- template-sync: end data-ci-reference-only -->
+<!-- template-sync: begin github-data-ci-reference-only -->
+- `.github/workflows/data-ci.yml` - Baseline placeholder, data-file, and template-sync validation workflow, present when both baseline and GitHub Actions are retained.
+<!-- template-sync: end github-data-ci-reference-only -->
 - `.github/workflows/markdownlint.yml` - Markdown linting and offline link-validation workflow.
 - `.github/workflows/powershell-ci.yml` - PowerShell linting and Pester testing workflow.
 - `.github/workflows/precommit-ci.yml` - Aggregate `pre-commit run --all-files` gate.

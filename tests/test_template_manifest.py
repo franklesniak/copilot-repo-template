@@ -85,14 +85,14 @@ TERRAFORM_SHARED_SURFACE_TOKENS = {
         ".github/scripts/terraform_hooks.py tflint",
     ),
     ".github/workflows/auto-fix-precommit.yml": (
-        "hashicorp/setup-terraform@v4",
-        "terraform-linters/setup-tflint@v6",
+        "hashicorp/setup-terraform@",
+        "terraform-linters/setup-tflint@",
         'terraform_version: "1.14.4"',
         'tflint_version: "v0.51.1"',
     ),
     ".github/workflows/precommit-ci.yml": (
-        "hashicorp/setup-terraform@v4",
-        "terraform-linters/setup-tflint@v6",
+        "hashicorp/setup-terraform@",
+        "terraform-linters/setup-tflint@",
         'terraform_version: "1.14.4"',
         'tflint_version: "v0.51.1"',
     ),
@@ -125,7 +125,6 @@ GITHUB_ACTIONS_SHARED_SURFACE_TOKENS = {
 }
 PYTHON_INLINE_BLOCK_COUNTS = {
     ".pre-commit-config.yaml": 1,
-    ".github/dependabot.yml": 2,
 }
 PYTHON_INLINE_MARKER_BEGIN = "# template-sync: begin python-only"
 PYTHON_INLINE_MARKER_END = "# template-sync: end python-only"
@@ -135,12 +134,6 @@ PYTHON_SHARED_SURFACE_TOKENS = {
         "id: black",
         "https://github.com/astral-sh/ruff-pre-commit",
         "id: ruff-check",
-    ),
-    ".github/dependabot.yml": (
-        "pip (pyproject.toml) - Python dependencies",
-        "# Python dependencies (pyproject.toml)",
-        'package-ecosystem: "pip"',
-        "pip-minor-patch",
     ),
 }
 YAML_INLINE_BLOCK_COUNTS = {
@@ -318,6 +311,7 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         ".github/pull_request_template.md": 1,
     },
     "python-reference-only": {
+        "OPTIONAL_CONFIGURATIONS.md": 1,
         ".github/copilot-instructions.md": 3,
         ".cursor/rules/repository-instructions.mdc": 2,
         ".hermes.md": 2,
@@ -339,6 +333,10 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "CONTRIBUTING.md": 6,
     },
     "json-reference-only": {
+        ".github/instructions/yaml.instructions.md": 1,
+        "GETTING_STARTED_EXISTING_REPO.md": 1,
+        "GETTING_STARTED_NEW_REPO.md": 1,
+        "schemas/README.md": 1,
         ".github/copilot-instructions.md": 2,
         ".cursor/rules/repository-instructions.mdc": 3,
         ".hermes.md": 3,
@@ -349,6 +347,11 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "CONTRIBUTING.md": 2,
     },
     "yaml-reference-only": {
+        ".github/instructions/json.instructions.md": 1,
+        "GETTING_STARTED_EXISTING_REPO.md": 1,
+        "GETTING_STARTED_NEW_REPO.md": 1,
+        "OPTIONAL_CONFIGURATIONS.md": 1,
+        "schemas/README.md": 1,
         ".github/copilot-instructions.md": 6,
         ".cursor/rules/repository-instructions.mdc": 3,
         ".hermes.md": 3,
@@ -373,10 +376,31 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "README.md": 2,
         "CONTRIBUTING.md": 1,
     },
-    "data-ci-reference-only": {
+    "baseline-reference-only": {
+        ".github/instructions/json.instructions.md": 3,
+        ".github/instructions/yaml.instructions.md": 2,
+        "GETTING_STARTED_NEW_REPO.md": 1,
+        "OPTIONAL_CONFIGURATIONS.md": 1,
+        "docs/terraform/TERRAFORM_LINTING_GUIDE.md": 2,
+        "schemas/README.md": 13,
+        ".github/copilot-instructions.md": 1,
+        ".cursor/rules/repository-instructions.mdc": 2,
+        ".hermes.md": 2,
+        "AGENTS.md": 2,
+        "CLAUDE.md": 2,
+        "GEMINI.md": 2,
+        ".github/pull_request_template.md": 2,
+    },
+    "github-data-ci-reference-only": {
+        ".github/copilot-instructions.md": 1,
+        ".cursor/rules/repository-instructions.mdc": 1,
+        ".hermes.md": 1,
+        "AGENTS.md": 1,
+        "CLAUDE.md": 1,
+        "GEMINI.md": 1,
+        "GETTING_STARTED_NEW_REPO.md": 1,
         "README.md": 1,
         "CONTRIBUTING.md": 1,
-        ".github/pull_request_template.md": 1,
     },
     "github-actions-reference-only": {
         "README.md": 5,
@@ -402,19 +426,21 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "schemas/README.md": 1,
     },
 }
-# Single-module AND-retention reference-only markers. Each block is stripped when
-# its one named module is excluded.
+# AND-retention reference-only markers. Each block is stripped unless every
+# named module is included.
 REFERENCE_ONLY_MARKER_MODULES = {
-    "markdown-reference-only": "markdown",
-    "powershell-reference-only": "powershell",
-    "python-reference-only": "python",
-    "terraform-reference-only": "terraform",
-    "json-reference-only": "json",
-    "yaml-reference-only": "yaml",
-    "schema-reference-only": "schema",
-    "template-sync-support-reference-only": "template-sync-support",
-    "github-actions-reference-only": "github-actions",
-    "github-platform-reference-only": "github-platform",
+    "baseline-reference-only": ("baseline",),
+    "github-data-ci-reference-only": ("baseline", "github-actions"),
+    "markdown-reference-only": ("markdown",),
+    "powershell-reference-only": ("powershell",),
+    "python-reference-only": ("python",),
+    "terraform-reference-only": ("terraform",),
+    "json-reference-only": ("json",),
+    "yaml-reference-only": ("yaml",),
+    "schema-reference-only": ("schema",),
+    "template-sync-support-reference-only": ("template-sync-support",),
+    "github-actions-reference-only": ("github-actions",),
+    "github-platform-reference-only": ("github-platform",),
 }
 # OR-retention (ANY) reference-only markers. Each block is retained when at least
 # one named module is included and stripped only when all of them are excluded;
@@ -425,13 +451,6 @@ ANY_REFERENCE_ONLY_MARKER_MODULES = {
         "azure-pipelines",
         "azure-devops-collaboration",
     ),
-    "data-ci-reference-only": (
-        "baseline",
-        "json",
-        "yaml",
-        "schema",
-        "template-sync-support",
-    ),
 }
 PROTECTED_ENTRY_POINT_REFERENCE_PATHS = (
     ".cursor/rules/repository-instructions.mdc",
@@ -441,6 +460,10 @@ PROTECTED_ENTRY_POINT_REFERENCE_PATHS = (
     "GEMINI.md",
 )
 REFERENCE_ONLY_MANIFEST_PATTERNS = {
+    ".github/instructions/json.instructions.md": ".github/instructions/json.instructions.md",
+    ".github/instructions/yaml.instructions.md": ".github/instructions/yaml.instructions.md",
+    "GETTING_STARTED_EXISTING_REPO.md": "GETTING_STARTED_EXISTING_REPO.md",
+    "docs/terraform/TERRAFORM_LINTING_GUIDE.md": "docs/terraform/**",
     ".github/copilot-instructions.md": ".github/copilot-instructions.md",
     ".cursor/rules/repository-instructions.mdc": ".cursor/rules/**",
     ".hermes.md": ".hermes.md",
@@ -449,6 +472,7 @@ REFERENCE_ONLY_MANIFEST_PATTERNS = {
     "GEMINI.md": "GEMINI.md",
     "README.md": "README.md",
     "CONTRIBUTING.md": "CONTRIBUTING.md",
+    "GETTING_STARTED_NEW_REPO.md": "GETTING_STARTED_NEW_REPO.md",
     ".github/pull_request_template.md": ".github/pull_request_template.md",
     "OPTIONAL_CONFIGURATIONS.md": "OPTIONAL_CONFIGURATIONS.md",
     "COPILOT_CHAT_PROMPTS.md": "COPILOT_CHAT_PROMPTS.md",
@@ -1415,8 +1439,8 @@ def _strip_reference_only_blocks_for_modules(
         if relative_path in path_counts
     }
 
-    for marker_name, module_name in REFERENCE_ONLY_MARKER_MODULES.items():
-        if module_name in included_modules or marker_name not in path_marker_counts:
+    for marker_name, required_modules in REFERENCE_ONLY_MARKER_MODULES.items():
+        if set(required_modules) <= included_modules or marker_name not in path_marker_counts:
             continue
         stripped_text = _strip_inline_blocks_from_text(
             text,
@@ -1959,29 +1983,20 @@ def test_template_manifest_schema_rejects_malformed_relation_combinations() -> N
         assert _manifest_validation_errors(manifest)
 
 
-def test_template_manifest_data_ci_mapping_uses_v2_boolean_semantics() -> None:
-    """The data-file workflow must require GitHub Actions plus one owning module."""
+def test_template_manifest_data_ci_mapping_requires_baseline_and_github_actions() -> None:
+    """The data-file workflow must retain both its config and GitHub host."""
     data_ci_mapping = _path_mapping_by_pattern()[".github/workflows/data-ci.yml"]
 
-    assert _relation_modules(data_ci_mapping, "requires_all") == ("github-actions",)
-    assert _relation_modules(data_ci_mapping, "requires_any") == (
+    assert _relation_modules(data_ci_mapping, "requires_all") == (
         "baseline",
-        "json",
-        "yaml",
-        "schema",
-        "template-sync-support",
+        "github-actions",
     )
-    assert _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "json"})
-    assert _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "yaml"})
-    assert _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "schema"})
-    assert _path_mapping_matches_modules(
-        data_ci_mapping,
-        {"github-actions", "template-sync-support"},
-    )
+    assert _relation_modules(data_ci_mapping, "requires_any") == ()
     assert _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "baseline"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"github-actions"})
+    assert not _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "json"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"yaml", "schema"})
-    assert not _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "terraform"})
+    assert not _path_mapping_matches_modules(data_ci_mapping, {"baseline", "terraform"})
 
 
 def test_template_manifest_compatibility_groups_define_host_families() -> None:
@@ -2085,12 +2100,8 @@ def test_template_manifest_maps_azure_pipelines_to_ci_host_and_stack_modules() -
         ".azuredevops/pipelines/python-ci.yml": ("python", "azure-pipelines"),
         ".azuredevops/pipelines/terraform-ci.yml": ("terraform", "azure-pipelines"),
         ".azuredevops/pipelines/data-ci.yml": (
-            "azure-pipelines",
             "baseline",
-            "json",
-            "yaml",
-            "schema",
-            "template-sync-support",
+            "azure-pipelines",
         ),
         ".azuredevops/pipelines/future-pipeline.yml": ("azure-pipelines",),
     }
@@ -2099,27 +2110,18 @@ def test_template_manifest_maps_azure_pipelines_to_ci_host_and_stack_modules() -
         assert _manifest_modules_for_path(relative_path) == expected_modules
 
 
-def test_template_manifest_azure_data_pipeline_uses_v2_boolean_semantics() -> None:
-    """The Azure data pipeline must require Azure Pipelines plus one owning module."""
+def test_template_manifest_azure_data_pipeline_requires_baseline_and_host() -> None:
+    """The Azure data pipeline must retain both its config and Azure host."""
     data_ci_mapping = _path_mapping_by_pattern()[".azuredevops/pipelines/data-ci.yml"]
 
-    assert _relation_modules(data_ci_mapping, "requires_all") == ("azure-pipelines",)
-    assert _relation_modules(data_ci_mapping, "requires_any") == (
+    assert _relation_modules(data_ci_mapping, "requires_all") == (
         "baseline",
-        "json",
-        "yaml",
-        "schema",
-        "template-sync-support",
+        "azure-pipelines",
     )
-    assert _path_mapping_matches_modules(data_ci_mapping, {"azure-pipelines", "json"})
-    assert _path_mapping_matches_modules(data_ci_mapping, {"azure-pipelines", "yaml"})
-    assert _path_mapping_matches_modules(data_ci_mapping, {"azure-pipelines", "schema"})
-    assert _path_mapping_matches_modules(
-        data_ci_mapping,
-        {"azure-pipelines", "template-sync-support"},
-    )
+    assert _relation_modules(data_ci_mapping, "requires_any") == ()
     assert _path_mapping_matches_modules(data_ci_mapping, {"azure-pipelines", "baseline"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"azure-pipelines"})
+    assert not _path_mapping_matches_modules(data_ci_mapping, {"azure-pipelines", "json"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"yaml", "schema"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "yaml"})
 
@@ -2497,6 +2499,34 @@ def test_dependabot_schema_regression_surface_maps_to_github_platform_and_schema
         _manifest_modules_for_path("tests/fixtures/dependabot/auto-assignment.yml")
         == expected_modules
     )
+
+
+def test_precommit_runner_and_ci_consumers_share_baseline_ownership() -> None:
+    """Runner input and every template-managed consumer retain their dependencies."""
+    assert _manifest_modules_for_path("requirements-pre-commit.txt") == ("baseline",)
+    assert _manifest_modules_for_path(".pre-commit-config.yaml") == ("baseline",)
+    for relative_path in (
+        ".github/workflows/precommit-ci.yml",
+        ".github/workflows/data-ci.yml",
+        ".github/workflows/auto-fix-precommit.yml",
+    ):
+        assert _manifest_modules_for_path(relative_path) == (
+            "baseline",
+            "github-actions",
+        )
+    for relative_path in (
+        ".azuredevops/pipelines/precommit.yml",
+        ".azuredevops/pipelines/data-ci.yml",
+    ):
+        assert _manifest_modules_for_path(relative_path) == (
+            "baseline",
+            "azure-pipelines",
+        )
+
+
+def test_issue_evaluation_prompt_follows_agent_instruction_ownership() -> None:
+    """The generic issue prompt follows retained agent support, not either host."""
+    assert _manifest_modules_for_path("docs/ISSUE_EVALUATION_PROMPT.md") == ("agent-instructions",)
 
 
 def test_template_sync_inline_markers_are_known_and_paired() -> None:
@@ -3047,7 +3077,13 @@ def test_reference_only_inline_blocks_are_declared_for_template_sync() -> None:
                 str,
             ), f"{manifest_pattern} mapping must describe reference-only inline blocks"
             assert "*-reference-only inline blocks" in notes
-            assert "when its module is excluded" in notes
+            if (
+                marker_name == "github-data-ci-reference-only"
+                and relative_path == "GETTING_STARTED_NEW_REPO.md"
+            ):
+                assert "when either required module is excluded" in notes
+            else:
+                assert "when its module is excluded" in notes
 
 
 def test_procedure_registers_reference_only_marker_family() -> None:
@@ -3055,7 +3091,8 @@ def test_procedure_registers_reference_only_marker_family() -> None:
     procedure_text = PROCEDURE_PATH.read_text(encoding="utf-8")
 
     assert "`*-reference-only` family" in procedure_text
-    assert "same strip semantics" in procedure_text
+    assert "AND-retention" in procedure_text
+    assert "OR-retention" in procedure_text
     for marker_name in REFERENCE_ONLY_MARKER_MODULES:
         assert marker_name in procedure_text
     for marker_name in ANY_REFERENCE_ONLY_MARKER_MODULES:
@@ -3201,13 +3238,13 @@ def test_pr_template_reference_pruning_follows_module_boundaries() -> None:
     ):
         assert forbidden_token not in no_optional_text
     assert "### General" in no_optional_text
-    assert "### Pre-commit Verification" in no_optional_text
+    assert "### Pre-commit Verification" not in no_optional_text
 
     schema_only_text = _strip_inline_blocks_for_modules(
         ".github/pull_request_template.md",
         {"github-templates", "schema"},
     )
-    assert "Data-File-Specific" in schema_only_text
+    assert "Data-File-Specific" not in schema_only_text
     assert "Schema-Specific" in schema_only_text
     assert "check-jsonschema" in schema_only_text
     assert "GitHub Actions-Specific" not in schema_only_text
@@ -3215,8 +3252,10 @@ def test_pr_template_reference_pruning_follows_module_boundaries() -> None:
 
     schema_actions_text = _strip_inline_blocks_for_modules(
         ".github/pull_request_template.md",
-        {"github-templates", "schema", "github-actions"},
+        {"baseline", "github-templates", "schema", "github-actions"},
     )
+    assert "Pre-commit Verification" in schema_actions_text
+    assert "Data-File-Specific" in schema_actions_text
     assert "Schema-Specific" in schema_actions_text
     assert "GitHub Actions-Specific" in schema_actions_text
     assert "actionlint" in schema_actions_text

@@ -75,7 +75,16 @@ CONTACT_LINK_URL_RE = re.compile(
 UPSTREAM_BLOB_PREFIX = "/franklesniak/copilot-repo-template/blob/HEAD/"
 DEPENDABOT_ECOSYSTEM_MODULES: dict[str, tuple[str, tuple[str, ...]]] = {
     "npm": ("markdown", ("package.json", "package-lock.json")),
-    "pip": ("python", ("pyproject.toml", "requirements.txt", "setup.py", "setup.cfg")),
+    "pip": (
+        "python",
+        (
+            "requirements-pre-commit.txt",
+            "pyproject.toml",
+            "requirements.txt",
+            "setup.py",
+            "setup.cfg",
+        ),
+    ),
     # Directory surfaces end with "/" so the prefix branch of
     # dependency_file_is_retained_or_present() treats them as directories.
     "github-actions": ("github-actions", (".github/workflows/",)),

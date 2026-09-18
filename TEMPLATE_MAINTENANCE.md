@@ -6,9 +6,9 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-10
+- **Last Updated:** 2026-09-18
 - **Scope:** Periodic maintenance procedures for the `franklesniak/copilot-repo-template` repository, including dependency review cadence, pre-commit hook upkeep, Terraform/TFLint version reviews, schema and worked-example reviews, template sync taxonomy upkeep, and validation steps for template-only changes. Does not cover repositories created FROM this template; consumers of the template should follow [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md#ongoing-maintenance) instead.
-- **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [Contributing](CONTRIBUTING.md)
+- **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [upstream Contributing](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/CONTRIBUTING.md)
 
 This guide is for **maintainers of the `franklesniak/copilot-repo-template` repository**. It documents periodic maintenance tasks to keep the template current and functional.
 
@@ -57,9 +57,19 @@ To keep the template current and functional, maintainers **SHOULD** review templ
 
 ---
 
+### Reviewing the Pinned Review-Support Actions
+
+The GitHub pre-commit aggregate, data-CI and fix-preview workflows use upstream-verified full action commit SHAs with same-line release comments. Keep the direct `uses:` declarations and `github-actions` Dependabot updates. For each update, verify the new commit against its upstream repository and release, review changes and advisories, confirm supported inputs and runner requirements, and run the affected gates. Preserve the fix-preview permissions and failure boundary.
+
+[Dependabot version updates](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories#github-actions) support these pins and same-line comments. [Vulnerability alerts for actions](https://docs.github.com/en/actions/reference/security/secure-use#monitoring-the-actions-in-your-workflows) do not cover SHA references, so do not rely on that alert channel for these workflows. The remaining workflows retain their existing reference policy. A SHA does not lock downloaded tools or make an action compatible with unsupported runners or GitHub Enterprise Server.
+
 ## Updating Pre-commit Hook Versions
 
 Pre-commit hooks **SHOULD** be kept up-to-date for security and compatibility.
+
+The runner is a separate dependency. Its one exact direct pin lives in `requirements-pre-commit.txt`, owned by `baseline` rather than the optional Python language module. GitHub Dependabot's `pip` ecosystem updates that requirement; its `pre-commit` ecosystem updates hook revisions. Review runner release notes and Python compatibility, install with `python -m pip install -r requirements-pre-commit.txt`, compare `pre-commit --version` with the requirement, then run the aggregate gate. CI and the Claude web bootstrap derive their expected version from the requirement. Do not copy the numeric version into other consumers.
+
+The direct pin does not lock transitive dependencies or prove package authenticity. The GitHub pip cache names the requirement, and hook-cache keys include it with the hook configuration. A runner update therefore invalidates the relevant caches. Azure-only adopters review this requirement manually or with their chosen supported update service; GitHub Dependabot is not supplied by Azure Pipelines.
 
 ### Maintenance Cadence
 
@@ -198,7 +208,7 @@ When updating to new major versions, check the release notes for breaking change
 
 ## Reviewing the Worked-Example Schema and Data CI Workflow
 
-The template ships a worked-example JSON Schema (`schemas/example-config.schema.json`), valid and invalid example fixtures under `schemas/examples/example-config/`, the schema-example pytest contract at `tests/test_schema_examples.py`, and the dedicated [`.github/workflows/data-ci.yml`](.github/workflows/data-ci.yml) workflow. These need periodic review to stay aligned with current JSON Schema and pre-commit hook versions.
+The template ships a worked-example JSON Schema (`schemas/example-config.schema.json`), valid and invalid example fixtures under `schemas/examples/example-config/`, the schema-example pytest contract at `tests/test_schema_examples.py`, and the dedicated [`.github/workflows/data-ci.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/data-ci.yml) workflow. These need periodic review to stay aligned with current JSON Schema and pre-commit hook versions.
 
 **When to review:** Quarterly, or whenever `check-jsonschema`, `pre-commit-hooks`, `yamllint`, or `actionlint` have a major version bump.
 
@@ -239,7 +249,7 @@ When reviewing a taxonomy change, include `pytest tests/test_template_manifest.p
 
 ## Adding or Modifying Template-Substitution Markers
 
-For the portable authoring principle, see [Template-substitution marker boundaries and replacement surfaces](.github/instructions/docs.instructions.md#template-substitution-marker-boundaries-and-replacement-surfaces).
+For the portable authoring principle, see [upstream Template-substitution marker boundaries and replacement surfaces](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/instructions/docs.instructions.md#template-substitution-marker-boundaries-and-replacement-surfaces).
 
 When adding or modifying a template-substitution marker, maintainers **MUST** keep these repository-specific surfaces in sync in the same change:
 
@@ -247,8 +257,8 @@ When adding or modifying a template-substitution marker, maintainers **MUST** ke
 - The GNU `sed` snippet in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
 - The BSD `sed` snippet in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
 - The manual Find/Replace instructions in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
-- The grep patterns for hard-coded marker strings in [`.github/workflows/check-placeholders.yml`](.github/workflows/check-placeholders.yml)
-- The validation phases and allowlists in [`.github/workflows/check-placeholders.yml`](.github/workflows/check-placeholders.yml), because the placeholder validation workflow must stay aligned with every marker that adopters are expected to replace.
+- The grep patterns for hard-coded marker strings in [upstream `.github/workflows/check-placeholders.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/check-placeholders.yml)
+- The validation phases and allowlists in [upstream `.github/workflows/check-placeholders.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/check-placeholders.yml), because the placeholder validation workflow must stay aligned with every marker that adopters are expected to replace.
 - The **Files That Need Placeholders Replaced** inventory table in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md), because it is the at-a-glance marker-to-file mapping adopters read first and must add or update the corresponding row when a marker changes.
 - The **What the Placeholders Mean** definition list in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md), because it is the canonical glossary for each marker's meaning and must define new markers or reflect renames.
 - The **GHES adopters** callouts and snippet comments in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md) that enumerate files requiring `github.com`-to-GHES host substitution, because they tell GHES adopters which absolute GitHub URLs need host substitution.
@@ -319,7 +329,7 @@ The Terraform instructions file uses the newest stable major versions in provide
    - [Azure Provider](https://registry.terraform.io/providers/hashicorp/azurerm/latest)
    - [GCP Provider](https://registry.terraform.io/providers/hashicorp/google/latest)
 
-   > **Note:** Terraform Registry navigation links — including the provider links above — **MUST** use the `latest` path segment, not a pinned provider or module version. See the **Terraform Registry Reference URLs Use /latest/** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md) for the scope (Terraform-file comments and instructional Markdown), rationale, and authoritative version sources; the canonical, agent-loadable rule for Terraform-file comments lives in [`.github/instructions/terraform.instructions.md`](.github/instructions/terraform.instructions.md).
+   > **Note:** Terraform Registry navigation links — including the provider links above — **MUST** use the `latest` path segment, not a pinned provider or module version. See the **Terraform Registry Reference URLs Use /latest/** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md) for the scope (Terraform-file comments and instructional Markdown), rationale, and authoritative version sources; the canonical, agent-loadable rule for Terraform-file comments lives in [upstream `.github/instructions/terraform.instructions.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/instructions/terraform.instructions.md).
 2. Identify current stable major versions for each provider
 3. If a new major version is now the recommended stable release, update the following files:
    - `.github/instructions/terraform.instructions.md` (version constraint examples throughout)

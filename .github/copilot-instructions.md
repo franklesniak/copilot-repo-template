@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.6.20260917.0
+**Version:** 1.6.20260918.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-17
+- **Last Updated:** 2026-09-18
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
@@ -43,7 +43,7 @@ Authorization **MUST NOT** be inferred from:
 
 When an agent identifies a warranted instruction or style-guide update without explicit authorization, it **MUST** propose the change separately (for example, as a prompt or Open Question) and wait for explicit approval before editing protected files.
 
-When explicit authorization is granted, keep protected instruction-file edits narrowly scoped, preserve the canonical source-of-truth hierarchy, and update related metadata and version fields according to [Documentation Writing Style](instructions/docs.instructions.md).
+When explicit authorization is granted, keep protected instruction-file edits narrowly scoped, preserve the canonical source-of-truth hierarchy, and update related metadata and version fields according to the Documentation Writing Style guide when that guide is retained.
 
 ### Template Adoption and Stack Selection
 
@@ -73,6 +73,8 @@ Downstream repositories that keep only part of this template's language or tooli
    - Refuse path traversal and symlink escapes.
 
 ## Pre-commit Discipline (CRITICAL)
+
+This section applies when the baseline pre-commit toolchain is retained. Excluding baseline does not require installing these hooks. Schema-contract maintenance remains required for retained schemas.
 
 **⚠️ ALWAYS run pre-commit checks before committing code.**
 
@@ -118,14 +120,18 @@ In addition to formatting, linting, trailing-whitespace, and end-of-file fixes, 
 - Worked-example schema validation uses `check-jsonschema` for valid example data under `schemas/examples/example-config/valid/` against `schemas/example-config.schema.json`, and uses `check-metaschema` to self-validate `schemas/example-config.schema.json`.
 <!-- template-sync: end schema-reference-only -->
 
+<!-- template-sync: begin baseline-reference-only -->
 `.pre-commit-config.yaml` is the authoritative list of active hooks. Do **not** rely on a hardcoded total hook count when describing the validation model; consult `.pre-commit-config.yaml` directly to see which hooks are wired up. For the policy and rationale behind which real load-bearing configuration files receive built-in schema validation, see the **Built-in Schema Validation for Real Load-Bearing Configuration Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md).
+<!-- template-sync: end baseline-reference-only -->
 
 Prettier is **opt-in** and is **not** part of the default data-file toolchain. (This framing has been re-verified against the built-in schema validation ADR and remains correct.)
 
-When the `github-actions` module is retained, the dedicated [`.github/workflows/data-ci.yml`](workflows/data-ci.yml) workflow re-runs the repository's retained data-file pre-commit hooks (JSON, TOML, YAML, and GitHub Actions checks plus the retained schema-validation alias hooks) so retained data-file enforcement can be required via branch protection independent of language-specific CI jobs. That workflow file is the authoritative list of the hooks it executes.
+<!-- template-sync: begin github-data-ci-reference-only -->
+When both `baseline` and `github-actions` are retained, the dedicated [`.github/workflows/data-ci.yml`](workflows/data-ci.yml) workflow re-runs the repository's retained data-file pre-commit hooks (JSON, TOML, YAML, and GitHub Actions checks plus the retained schema-validation alias hooks) so retained data-file enforcement can be required via branch protection independent of language-specific CI jobs. That workflow file is the authoritative list of the hooks it executes.
+<!-- template-sync: end github-data-ci-reference-only -->
 
 <!-- template-sync: begin azure-devops-guide-reference-only -->
-When the `azure-pipelines` module is retained, `.azuredevops/pipelines/data-ci.yml` re-runs retained data-file and template-sync hooks in Azure Pipelines without GitHub Actions-only `actionlint`. Azure Pipelines YAML registration, service-schema validation, queued runs, and Azure Repos branch-policy build validation remain Azure DevOps Services setup and verification tasks. For Azure DevOps Services security scanning, dependency-update choices, URL forms, and service-validation boundaries, use the durable Azure DevOps Services support guide at `docs/azure-devops-support.md` when that guide is retained.
+When both `baseline` and `azure-pipelines` are retained, `.azuredevops/pipelines/data-ci.yml` re-runs retained data-file and template-sync hooks in Azure Pipelines without GitHub Actions-only `actionlint`. Azure Pipelines YAML registration, service-schema validation, queued runs, and Azure Repos branch-policy build validation remain Azure DevOps Services setup and verification tasks. For Azure DevOps Services security scanning, dependency-update choices, URL forms, and service-validation boundaries, use the durable Azure DevOps Services support guide at `docs/azure-devops-support.md` when that guide is retained.
 <!-- template-sync: end azure-devops-guide-reference-only -->
 
 <!-- template-sync: begin yaml-reference-only -->
@@ -141,8 +147,8 @@ pipeline also re-runs `yamllint`.
 > - The schema file under `schemas/<name>.schema.json`.
 > - Valid example fixtures under `schemas/examples/<name>/valid/`.
 > - Invalid example fixtures under `schemas/examples/<name>/invalid/`.
-> - The pre-commit hook scope in `.pre-commit-config.yaml`.
-> - `.github/workflows/data-ci.yml` only when the `github-actions` module is retained and the change is **adding or removing a hook ID** (for example, introducing a new `check-yaml-custom` hook), or when adding, removing, or renaming an explicit CI step or hook alias that the workflow invokes by name. Apply the same condition to `.azuredevops/pipelines/data-ci.yml` when the `azure-pipelines` module is retained. Changes to an **existing** hook's `files:` regex (including `check-jsonschema` scope changes) are picked up automatically, because each `data-ci.yml` step invokes hooks by ID via `pre-commit run <hook-id> --all-files`.
+> - The pre-commit hook scope in `.pre-commit-config.yaml` when baseline is retained.
+> - `.github/workflows/data-ci.yml` only when both `baseline` and `github-actions` are retained and the change is **adding or removing a hook ID** (for example, introducing a new `check-yaml-custom` hook), or when adding, removing, or renaming an explicit CI step or hook alias that the workflow invokes by name. Apply the same condition to `.azuredevops/pipelines/data-ci.yml` when both `baseline` and `azure-pipelines` are retained. Changes to an **existing** hook's `files:` regex (including `check-jsonschema` scope changes) are picked up automatically, because each `data-ci.yml` step invokes hooks by ID via `pre-commit run <hook-id> --all-files`.
 > - The **Built-in Schema Validation for Real Load-Bearing Configuration Files** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md) when **adding or removing** a default validated real load-bearing configuration file (for example, when wiring or unwiring a new built-in vendor schema).
 > - Any documentation that references the schema or the validation policy (for example, `schemas/README.md`, `README.md`, `CONTRIBUTING.md`, and `OPTIONAL_CONFIGURATIONS.md`).
 <!-- template-sync: end schema-reference-only -->
@@ -200,9 +206,17 @@ For the rationale, see the **Workflow Version Pinning and Dependabot Coherence**
 
 - Third-party action versions **MUST** remain directly visible in `uses:` references (for example, `actions/checkout@v6`, `actions/setup-node@v6`) so Dependabot's `github-actions` ecosystem can update them.
 - Repeated `uses:` references to the same action across jobs and steps are acceptable when each occurrence is a normal Dependabot-managed `uses:` reference. Dependabot updates each `uses:` line directly.
-- Do **NOT** store an action version in a workflow-level `env:` variable, comment, cache key, file path, shell literal, manually constructed image tag, or any other secondary location as a mirror of a `uses:` version. The `uses:` line **MUST** be the only authoritative source for the action version because Dependabot rewrites `uses:` references and will leave unrelated literals stale.
+- Do **NOT** store an action version in a workflow-level `env:` variable, unmanaged comment, cache key, file path, shell literal, manually constructed image tag, or any other secondary location as a mirror of a `uses:` version. The `uses:` line **MUST** be the only authoritative source for the action version because Dependabot rewrites `uses:` references and will leave unrelated literals stale.
 - Do **NOT** copy a Dependabot-managed action version into secondary workflow locations that Dependabot will not reliably rewrite (for example, cache keys, file paths, shell commands, manually constructed image tags, or comments presented as authoritative version state).
 - If secondary workflow behavior needs to change when a `uses:` version changes, derive that behavior from a stable source that naturally changes with the workflow or tool configuration. Prefer cache keys scoped to the specific configuration file that governs the cached artifact — for example, `hashFiles('.pre-commit-config.yaml')` for pre-commit caches or `hashFiles('package-lock.json')` for Node dependency caches, mirroring the pattern already used in this repository's workflows. Avoid broad wildcard patterns such as `hashFiles('.github/workflows/*.yml')` for cache keys: any unrelated workflow edit would invalidate every job's cache. The goal is to track the configuration that actually drives the cached content, not the workflow definition that consumes it.
+
+### Immutable action pins and release comments
+
+When immutable GitHub Action identity is selected, use a full commit SHA verified against the upstream action repository. A same-line release tag or release link managed by Dependabot MAY annotate that `uses:` reference; it is descriptive, not a second authoritative pin. Other version mirrors remain prohibited. Navigation comments above `uses:` lines remain versionless under the YAML writing guide when retained.
+
+Dependabot supports version updates for SHA references and their same-line release comments, but does not create vulnerability alerts for SHA-pinned actions. Maintainers MUST account for that alert limitation when selecting and maintaining pins, including reviewing upstream releases and advisories. A SHA identifies action code; it does not lock everything that action downloads or establish trust in its source.
+
+See [GitHub's action security guidance](https://docs.github.com/en/actions/reference/security/secure-use#using-third-party-actions), [Dependabot's supported reference and comment forms](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories#github-actions), and [the SHA-action alert limitation](https://docs.github.com/en/actions/reference/security/secure-use#monitoring-the-actions-in-your-workflows).
 
 ### Tool versions passed as action inputs or shell arguments
 
@@ -231,7 +245,7 @@ If a Dependabot-managed dependency genuinely cannot be represented only through 
 ### Concrete examples in this repository
 
 - Pinned action majors such as `actions/checkout@v6`, `actions/setup-python@v6`, `actions/cache@v5`, and `actions/setup-node@v6` appear repeatedly in workflow `uses:` lines. These are acceptable because each occurrence is a normal Dependabot-managed `uses:` reference.
-- In Markdown CI, the value of the `node-version` input in [`.github/workflows/markdownlint.yml`](workflows/markdownlint.yml) is the source of truth for the Node.js version installed by `actions/setup-node@v6`. This is a Node.js version (not the `actions/setup-node` action version), so it is **not** a Dependabot `uses:` desynchronization case. It is a useful candidate for a future single source of truth (such as a workflow-level `env:` value) if duplication grows; refactoring existing workflows to that shape is out of scope for this rule.
+- In the upstream template's Markdown CI, the value of the `node-version` input in [`.github/workflows/markdownlint.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/markdownlint.yml) is the source of truth for the Node.js version installed by `actions/setup-node@v6`. This is a Node.js version (not the `actions/setup-node` action version), so it is **not** a Dependabot `uses:` desynchronization case. It is a useful candidate for a future single source of truth (such as a workflow-level `env:` value) if duplication grows; refactoring existing workflows to that shape is out of scope for this rule.
 
 ## Repository Self-Containment
 
@@ -267,13 +281,13 @@ If a needed reference cannot be expressed in repository-observable terms, follow
 
 For each PR-sized change:
 
-- **Run pre-commit checks locally and fix all issues before committing.**
+- **When baseline is retained, run pre-commit checks locally and fix all issues before committing.**
   - Pre-commit hooks will auto-fix many issues (formatting, linting, whitespace).
   - Always review and commit these auto-fixes as part of your change.
 - Add/adjust tests for new behavior.
   - Python: pytest tests in `tests/`
   - PowerShell: Pester tests in `tests/PowerShell/`
-- For data-file changes, run the applicable validation hooks via `pre-commit run --all-files` so that retained checks such as `check-json`, `check-yaml`, GitHub Actions-only `actionlint`, and configured `check-jsonschema` / `check-metaschema` hooks pass before committing.
+- When baseline is retained, for data-file changes run the applicable validation hooks via `pre-commit run --all-files` so that retained checks such as `check-json`, `check-yaml`, GitHub Actions-only `actionlint`, and configured `check-jsonschema` / `check-metaschema` hooks pass before committing.
   <!-- template-sync: begin yaml-reference-only -->
   - When YAML style validation is retained, `yamllint` must also pass.
   <!-- template-sync: end yaml-reference-only -->
@@ -354,11 +368,39 @@ When explicitly authorized to modify high-priority shared guidance in `.github/c
 - Remove agent files for platforms you do not use
 - Keep the remaining agent files limited to minimal inline summaries plus any necessary platform-specific guidance
 
+## Agent Execution
+
+These rules apply to authorized agent work. Use the actual runtime's capabilities and preserve the instruction hierarchy, task scope, and platform-specific approval and stopping rules.
+
+### Ownership and delegation
+
+Agents MUST preserve unrelated user and agent work. Before mutation or delegation, record the repository, worktree, branch, head and tree identities, allowed scope and paths, applicable findings, permitted public actions, and authority limits. Verify ownership instead of assuming that a matching branch name belongs to the task.
+
+Use one integration owner for the task's index, commits, branch updates, and public mutations. Agents MUST prevent overlapping writers to a file, worktree, index, branch ref, or remote object. Separate worktrees do not isolate shared refs or repository configuration. Prefer independent read-only work or isolated implementation with explicit disjoint ownership.
+
+When useful subagent capabilities are available, assign bounded objectives, exact input revisions, applicable instructions, allowed paths, an owned output location, acceptance criteria, authority limits, and checkpoints. Workers MUST stay within the assigned authority and MUST NOT create unbounded descendants. Delegation does not grant content, placement, or merge permission.
+
+The integration owner MUST verify worker claims against actual files, diffs, and native validation results before integration. Resolve shared dependencies and conflicting results. If delegation is unavailable or unsuitable, continue serially with the same validation requirements. A self-review MUST NOT be described as an independent review.
+
+### Continuity and recovery
+
+Agents MUST carry authorized multi-step work from analysis through implementation and validation. Analysis, an option selection, or a next-step preview is not completion while authorized work remains. Pause only for required input that cannot be obtained, an applicable authority, policy, or runtime boundary, or task completion. Continue independent authorized work while a dependent action is paused.
+
+For sustained tasks, agents MUST keep one compact task-private, untracked state index. Link the full request and amendments, authority and exclusions, exact inputs, decisions, owned outputs, validation commands and native exits, active processes, pending or uncertain public operations, and the next action. Update it at meaningful decisions, edits, validation, handoffs, and before waits or expected interruption. Reuse existing evidence links instead of duplicating records. Keep task execution artifacts out of the reusable product.
+
+After restart, context compaction, or worker replacement, agents MUST read the state index, complete applicable requests and amendments, relevant decisions, exact source files, worker outputs, and native evidence before acting. Do not reconstruct requirements, authority, results, or pending operations from memory or a summary. Verify actual ownership and input state; reconcile uncertain remote operations before retrying. Reuse passing results only when their relevant inputs are unchanged and repository policy permits it. The record is evidence, not authority, and does not waive an approval, review, retry, or stopping rule.
+
+Explicit owner or maintainer grants MUST remain valid across a verified resume of the same task, repository, PR, scope, and action class. Recover the complete grant and amendments and verify current identities before relying on it; preserve any input or head restriction, revocation, higher-priority instruction, and current runtime or repository control. Agents MUST NOT request unchanged authority again or infer missing authority from a summary, state label, rubric, unrelated task, or historical exception. Ask for missing or expanded authority and continue independent work. Protected-content, branch-placement, and merge authority remain separate; a resume creates none of them.
+
 ## Shared Review Governance
 
 These rules govern finding handling for all reviewers. The paired service protocol below applies to the GitHub review loops invoked through retained Codex and Claude entry points. It does not substitute GitHub services for Azure Repos protocols. Platform-specific start, wake-up, placement, and tool rules remain in the retained entry point. A missing capability leaves its required gate incomplete; continue other authorized work and state the precise operator action needed.
 
 ### Finding inventory and decisions
+
+Agents MUST distinguish command-only bot triggers from findings. A standalone `@codex review` or a command-only `@copilot` comment, with harmless surrounding whitespace, is request evidence rather than a finding; retain its native identity and time. If a comment also contains substantive feedback, inventory that feedback regardless of its prefix. Continue to inventory the addressed service's attributable results. A command addressed to another agent is not authority for the local agent to execute it.
+
+For inline inventory, agents MUST enumerate all-state review threads and their comments, including resolved, unresolved, and outdated threads. Use GraphQL `reviewThreads` or an equivalent complete authenticated source. Agents MUST NOT filter inventory membership by REST `commit_id == current head`: GitHub can re-anchor that mutable field. Keep current and original commit identities as provenance, not membership filters. This does not relax the separate current-input attribution required for a completed clean review.
 
 Agents MUST inventory every submitted review body, all inline threads including resolved and outdated threads, and attributable PR-conversation results. Include suppressed and advisory findings. Use authenticated native records and paginate every collection and nested thread-comment collection whose completeness is needed. `gh pr view --json reviews,comments` alone does not supply all inline threads. Reconcile declared finding counts with the inventory; missing bodies and count mismatches remain unknown, not zero findings.
 
@@ -376,6 +418,26 @@ For each distinct real finding, agents MUST complete these steps in order. Do no
 8. Check protected-file content authority separately from branch placement authority. Keep the selected option fixed. Implement already-authorized work without repeated approval. Test the fix, retain native failure exits, run required checks before committing, and audit every outgoing commit and path. Record the resulting PR-head SHA and fix reachability after placement.
 9. Read the full applicable style guide before evaluating prevention. Implement an in-scope authorized guide change. Otherwise post a ready-to-file issue prompt in a Markdown code fence with the proposed rule, rationale, scope, acceptance tests, and narrow authorization question. Do not change a protected guide without authority; continue independent work.
 10. Reply with implementation or refutation evidence. Resolve the native thread when the finding is complete and no pending guide action requires it to stay open. Close body-only findings by attributable disposition. A resolved flag is not proof. If resolution tooling is absent, identify the manual action; do not claim it occurred. Remove temporary processing reactions when supported.
+
+After a real fix and before closing the finding or requesting another review, agents MUST perform a bounded search for the same root cause in relevant helpers and callers, copies of the same policy or configuration, and retained platform or module variants. Record the searched paths or symbols and the result. A materially different concern needs its own finding and decision; discovery does not expand task or protected-content authority. A bounded search does not establish the absence of unrelated defects.
+
+For a new or strengthened security or failure-truth guard, tests MUST include positive and negative controls and a targeted assertion-removal or failure-injection case with an expected result independent of the production predicate. Keep boundary cases proportionate to the guarded property. Do not require mutation tests for every prose, formatting, or cosmetic edit. Preserve applicable language-specific test rules, including narrower mirrored-excerpt and privileged-verification requirements.
+
+### Safe PR-head placement
+
+When direct PR-head placement is already authorized, agents MUST apply this procedure before each Git or API update. It adds safety checks, not authority. Keep the retained platform's content, placement, branch-protection, signing, CI, and fallback rules.
+
+Before placement, identify the authorized repository and PR head ref through authenticated tooling. Fetch its current head and record the expected commit. Verify that this fetched head is an ancestor of the candidate commit. Do not use a stale tracking ref as proof.
+
+Agents MUST inspect the entire outgoing commit range and every changed path from that fetched head to the candidate. Match each commit and change, including deletions, renames, and mode changes, to the authorized task. Run required checks on the exact candidate tree and retain its identity.
+
+If ancestry fails or the range contains unrelated work, agents MUST NOT publish that candidate. When authorized, construct and validate a clean descendant of the fetched head that contains only the intended fixes. Otherwise use the platform's safe fallback. If the remote head moves, reconcile it and repeat the affected audit and validation before another update.
+
+For Git placement, agents MUST use an explicit non-force source-to-destination refspec to the verified repository and head ref. Do not use force options, a leading `+`, history rewriting, or extra ref updates. A policy rejection is not permission to bypass the policy.
+
+An API fallback MUST preserve the same expected parent, authorized changes, exact tested tree, non-destructive ancestry, and repository controls. Prefer creating the complete candidate tree and commit before a non-force ref update. When an API exposes intermediate commits, each visible tree MUST independently satisfy these checks before publication. If the tool cannot establish these guarantees, use the safe fallback; do not treat a series of partial file writes as equivalent tested placement.
+
+After placement, agents MUST read back the PR head and its tree through authenticated tooling. Verify the intended result and fix reachability. A failed, uncertain, or mismatched readback leaves placement incomplete; reconcile native state before retrying. Record the resulting identities and validation in the existing task record, and preserve the platform's required placement reply and development history. Do not add a separate receipt or duplicate ledger solely for this procedure.
 
 ### Protected authority and deferral
 
@@ -483,12 +545,14 @@ This repository includes linting and validation tool configurations that align w
 <!-- template-sync: begin yaml-reference-only -->
 - yamllint: `.yamllint.yml` for YAML style enforcement.
 <!-- template-sync: end yaml-reference-only -->
-- JSON Schema / `check-jsonschema`: `.pre-commit-config.yaml` wires schema-driven validation for retained schema-backed configuration, including selected real load-bearing configuration files validated against built-in vendor schemas.
+- When baseline is retained, JSON Schema / `check-jsonschema`: `.pre-commit-config.yaml` wires schema-driven validation for retained schema-backed configuration, including selected real load-bearing configuration files validated against built-in vendor schemas.
 <!-- template-sync: begin schema-reference-only -->
 - Worked-example JSON Schema validation covers example schemas and fixtures under `schemas/`, and `tests/test_dependabot_schema.py` guards the documented Dependabot optional auto-assignment surface.
 <!-- template-sync: end schema-reference-only -->
 
 ### Running Linters
+
+The pre-commit commands below apply only when baseline and the matching data or host modules are retained. Direct language-tool commands apply when their language modules are retained.
 
 **Markdown:**
 
@@ -626,6 +690,6 @@ terraform test -verbose
 pytest tests/test_schema_examples.py -v
 ```
 
-`tests/test_schema_examples.py` shells out to the `check-jsonschema` validator by first using the `check-jsonschema` console script when it is on `PATH`, then falling back to `python -m check_jsonschema` when the package is importable in the pytest environment. The parametrized cases skip only when neither invocation is available (a skipped test is not a passing test — pytest still exits `0`, but no schema validation actually ran). Install it via `pip install -e ".[dev]"` or `pip install check-jsonschema` so the package is importable and, where supported by the environment, the console script is on `PATH`. To validate schemas through the pre-commit toolchain instead, run `pre-commit run check-jsonschema --all-files` for example-fixture validation against schemas and `pre-commit run check-metaschema --all-files` for project-owned schema self-validation; `pre-commit run --all-files` exercises both at once. See [`README.md`](../README.md) for the full prerequisite note.
+`tests/test_schema_examples.py` shells out to the `check-jsonschema` validator by first using the `check-jsonschema` console script when it is on `PATH`, then falling back to `python -m check_jsonschema` when the package is importable in the pytest environment. The parametrized cases skip only when neither invocation is available (a skipped test is not a passing test — pytest still exits `0`, but no schema validation actually ran). Install it via `pip install check-jsonschema` in the pytest environment so the package is importable and, where supported by the environment, the console script is on `PATH`. When baseline is retained, to validate schemas through the pre-commit toolchain instead, run `pre-commit run check-jsonschema --all-files` for example-fixture validation against schemas and `pre-commit run check-metaschema --all-files` for project-owned schema self-validation; `pre-commit run --all-files` exercises both at once. See the [upstream template prerequisite note](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/README.md) for setup context.
 
 <!-- template-sync: end schema-reference-only -->

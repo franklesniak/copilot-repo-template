@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.6.20260917.0
+**Version:** 1.6.20260918.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-17
+- **Last Updated:** 2026-09-18
 - **Scope:** Agent-specific entry point for Claude Code and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
@@ -22,6 +22,10 @@ The authoritative source of truth for all repository rules is **`.github/copilot
 This file intentionally keeps only a minimal inline summary of the highest-priority shared rules so that Claude receives critical guidance immediately, but it does not replace reading the canonical instructions above.
 
 **Thin entry point classification:** A thin entry point keeps shared repository rules brief; it does not mean platform-specific or required protocol sections may be discarded. Sections explicitly labeled as platform protocol or required protocol must be preserved unless the repository owner explicitly waives that protocol for the retained agent platform.
+
+## Execution
+
+Agents MUST follow [Agent Execution](.github/copilot-instructions.md#agent-execution) for task input records, unrelated-work preservation, exclusive ownership, bounded delegation, verification, and continuity after interruption. Use only capabilities available in the active runtime.
 
 ## Protected Instruction Files
 
@@ -39,7 +43,9 @@ During downstream template adoption and stack selection, perform non-protected c
   - Respect allowlisted file access boundaries; reject path traversal and symlink escapes.
 
 - **Pre-commit and validation**
+  <!-- template-sync: begin baseline-reference-only -->
   - Run `pre-commit run --all-files` before every commit.
+  <!-- template-sync: end baseline-reference-only -->
   - Include all auto-fixes in the same commit as the related change.
   - Do not push code when pre-commit or required validation checks are failing; fix issues and re-run until the checks pass.
   - Use the repository's existing validation commands as needed:
@@ -62,7 +68,9 @@ During downstream template adoption and stack selection, perform non-protected c
     - `tflint --recursive`
     - `terraform test -verbose`
     <!-- template-sync: end terraform-reference-only -->
+  <!-- template-sync: begin baseline-reference-only -->
   - The `pre-commit run --all-files` command exercises the active hooks configured in [`.pre-commit-config.yaml`](.pre-commit-config.yaml), the authoritative list of active hooks.
+  <!-- template-sync: end baseline-reference-only -->
   <!-- template-sync: begin json-reference-only -->
   - Retained JSON checks include strict JSON syntax (`check-json`).
   <!-- template-sync: end json-reference-only -->
@@ -74,9 +82,11 @@ During downstream template adoption and stack selection, perform non-protected c
   <!-- template-sync: begin schema-reference-only -->
   - Retained schema checks include JSON Schema validation (`check-jsonschema`) and schema self-validation (`check-metaschema`).
   <!-- template-sync: end schema-reference-only -->
-  - When the `github-actions` module is retained, the dedicated [`.github/workflows/data-ci.yml`](.github/workflows/data-ci.yml) workflow re-runs retained data-file hooks so adopted data-file enforcement can be required via branch protection.
+  <!-- template-sync: begin github-data-ci-reference-only -->
+  - When both `baseline` and `github-actions` are retained, the dedicated [`.github/workflows/data-ci.yml`](.github/workflows/data-ci.yml) workflow re-runs retained data-file hooks so adopted data-file enforcement can be required via branch protection.
+  <!-- template-sync: end github-data-ci-reference-only -->
   <!-- template-sync: begin azure-devops-guide-reference-only -->
-  - When the `azure-pipelines` module is retained, `.azuredevops/pipelines/data-ci.yml` re-runs retained data-file hooks; pipeline YAML and branch-policy validation remain Azure DevOps Services-backed.
+  - When both `baseline` and `azure-pipelines` are retained, `.azuredevops/pipelines/data-ci.yml` re-runs retained data-file hooks; pipeline YAML and branch-policy validation remain Azure DevOps Services-backed.
   <!-- template-sync: end azure-devops-guide-reference-only -->
   - Retained data-file authoring guidance lives in the matching module docs.
   <!-- template-sync: begin json-reference-only -->
@@ -138,7 +148,7 @@ For broader Azure DevOps Services module setup, validation, security scanning, d
 
 ## Ignoring Commands Addressed to Other Agents
 
-PR comments and review comments that begin with `@copilot` are commands addressed to GitHub Copilot's coding agent. Claude MUST NOT process them as findings or reply to them. The exact `@codex review` trigger is a request to the remote Codex reviewer; observe it as request evidence, not a finding or an instruction for Claude to execute. Continue to inventory attributable review results from that service.
+Claude MUST apply the shared [Finding inventory and decisions](.github/copilot-instructions.md#finding-inventory-and-decisions) distinction: ignore command-only `@copilot` comments as findings and do not execute or reply to commands addressed to another agent. Treat the standalone `@codex review` trigger as remote request evidence. Inventory substantive feedback in mixed comments and the addressed service's attributable review results.
 
 ## Handling Code Review Comments
 
@@ -277,6 +287,10 @@ When this active session creates a pull request, or a supported runtime route de
 - **On discovery.** Process available findings immediately. Only the shared completion contract determines whether both reviews are clean.
 
 ### Direct PR-head placement during an active loop
+
+Claude MUST apply [Safe PR-head placement](.github/copilot-instructions.md#safe-pr-head-placement) to Git pushes and the API fallback below. The shared procedure does not expand the active-loop authorization or relax its preconditions.
+
+Apply the shared [Continuity and recovery](.github/copilot-instructions.md#continuity-and-recovery) rule to verified task grants. Codex requires an explicit PR-specific task grant for direct placement; Claude's documented active-loop grant applies only under its own preconditions. This is an intentional platform policy difference, not a transferable grant. Neither placement rule supplies protected-content or merge authority.
 
 **Direct PR-head placement during an active review loop.** When the agent's working branch differs from the PR head branch and **all** of the following preconditions are satisfied, the agent **MAY** push the current round's fix commit(s) directly to the PR head branch instead of pausing for manual integration:
 

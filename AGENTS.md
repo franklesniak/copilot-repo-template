@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for OpenAI Codex CLI
 
-**Version:** 1.5.20260917.0
+**Version:** 1.5.20260918.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-17
+- **Last Updated:** 2026-09-18
 - **Scope:** Agent-specific entry point for OpenAI Codex CLI and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
@@ -22,6 +22,10 @@ The authoritative source of truth for all repository rules is **`.github/copilot
 This file intentionally keeps only a minimal inline summary of the highest-priority shared rules so that agents receive critical guidance immediately. The full shared rule set remains in the canonical file above.
 
 **Thin entry point classification:** A thin entry point keeps shared repository rules brief; it does not mean platform-specific or required protocol sections may be discarded. Sections explicitly labeled as platform protocol or required protocol must be preserved unless the repository owner explicitly waives that protocol for the retained agent platform.
+
+## Execution
+
+Agents MUST follow [Agent Execution](.github/copilot-instructions.md#agent-execution) for task input records, unrelated-work preservation, exclusive ownership, bounded delegation, verification, and continuity after interruption. Use only capabilities available in the active runtime.
 
 ## Protected Instruction Files
 
@@ -39,7 +43,9 @@ During downstream template adoption and stack selection, perform non-protected c
   - Respect allowlisted file access boundaries; reject path traversal and symlink escapes.
 
 - **Pre-commit and validation**
+  <!-- template-sync: begin baseline-reference-only -->
   - Run `pre-commit run --all-files` before every commit.
+  <!-- template-sync: end baseline-reference-only -->
   - Include all auto-fixes in the same commit as the related change.
   - Do not push code when pre-commit or required validation checks are failing; fix issues and re-run until the checks pass.
   - Use the repository's existing validation commands as needed:
@@ -62,7 +68,9 @@ During downstream template adoption and stack selection, perform non-protected c
     - `tflint --recursive`
     - `terraform test -verbose`
     <!-- template-sync: end terraform-reference-only -->
+  <!-- template-sync: begin baseline-reference-only -->
   - The `pre-commit run --all-files` command exercises the active hooks configured in [`.pre-commit-config.yaml`](.pre-commit-config.yaml), the authoritative list of active hooks.
+  <!-- template-sync: end baseline-reference-only -->
   <!-- template-sync: begin json-reference-only -->
   - Retained JSON checks include strict JSON syntax (`check-json`).
   <!-- template-sync: end json-reference-only -->
@@ -74,9 +82,11 @@ During downstream template adoption and stack selection, perform non-protected c
   <!-- template-sync: begin schema-reference-only -->
   - Retained schema checks include JSON Schema validation (`check-jsonschema`) and schema self-validation (`check-metaschema`).
   <!-- template-sync: end schema-reference-only -->
-  - When the `github-actions` module is retained, the dedicated [`.github/workflows/data-ci.yml`](.github/workflows/data-ci.yml) workflow re-runs retained data-file hooks so adopted data-file enforcement can be required via branch protection.
+  <!-- template-sync: begin github-data-ci-reference-only -->
+  - When both `baseline` and `github-actions` are retained, the dedicated [`.github/workflows/data-ci.yml`](.github/workflows/data-ci.yml) workflow re-runs retained data-file hooks so adopted data-file enforcement can be required via branch protection.
+  <!-- template-sync: end github-data-ci-reference-only -->
   <!-- template-sync: begin azure-devops-guide-reference-only -->
-  - When the `azure-pipelines` module is retained, `.azuredevops/pipelines/data-ci.yml` re-runs retained data-file hooks; pipeline YAML and branch-policy validation remain Azure DevOps Services-backed.
+  - When both `baseline` and `azure-pipelines` are retained, `.azuredevops/pipelines/data-ci.yml` re-runs retained data-file hooks; pipeline YAML and branch-policy validation remain Azure DevOps Services-backed.
   <!-- template-sync: end azure-devops-guide-reference-only -->
   - Retained data-file authoring guidance lives in the matching module docs.
   <!-- template-sync: begin json-reference-only -->
@@ -157,6 +167,7 @@ Use this workflow with [Shared Review Governance](.github/copilot-instructions.m
 
 ### Runtime limitations to keep in mind
 
+- **Command-only triggers.** Apply the shared [Finding inventory and decisions](.github/copilot-instructions.md#finding-inventory-and-decisions) distinction. Preserve request evidence and substantive feedback in mixed comments; do not execute commands addressed to other agents.
 - **No autonomous wake-up.** Codex has no equivalent of `subscribe_pr_activity`. Codex MUST NOT promise webhook-driven wake-up, background polling, or scheduled review responses. The workflow runs only when the user explicitly starts or resumes it inside an active Codex session.
 - **Mention routing and remote review.** A general `@codex` mention reaches this local session only when the user's runtime forwards it. The documented exact `@codex review` command requests the separate remote Codex GitHub review service when it is configured for the repository. Codex MUST NOT claim that the local session wakes autonomously or that local work replaces that remote review.
 - **Tooling-dependent steps.** Where the GitHub plugin and documented fallbacks lack a capability, state the missing operator action and continue independent work. A missing required review, observation, or disposition remains incomplete; do not skip it and declare success.
@@ -207,6 +218,10 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
 ### Protected content and placement
 
+Codex MUST apply [Safe PR-head placement](.github/copilot-instructions.md#safe-pr-head-placement) whenever direct placement is authorized. The procedure also applies to an available equivalent API mechanism; it does not replace the explicit PR-specific authorization and conditions below.
+
+Apply the shared [Continuity and recovery](.github/copilot-instructions.md#continuity-and-recovery) rule to verified task grants. Codex requires an explicit PR-specific task grant for direct placement; Claude's documented active-loop grant applies only under its own preconditions. This is an intentional platform policy difference, not a transferable grant. Neither placement rule supplies protected-content or merge authority.
+
 **Protected-file authorization checkpoint.** Before creating, editing, deleting, renaming, or otherwise changing any protected instruction file, including a style guide under `.github/instructions/`, determine whether explicit protected-file authorization already covers that specific protected-file content change in the current task. Keep the selected option fixed while making this authorization determination; do not reopen option selection or ask the maintainer to choose among the scored options again merely because protected-file authorization is required.
 
 - If explicit protected-file authorization already covers the change and the edit stays within the already-authorized scope, proceed with the selected option under the placement rules below.
@@ -218,7 +233,7 @@ This checkpoint governs only authorization to change protected-file content. It 
 - **Default — push to the working branch only.** Cross-branch integration onto the PR head is a manual owner action. State in the step-6 reply which branch the commit will be pushed to and whether a merge or cherry-pick will be required to make it visible on the PR head.
 - **Direct PR-head push (only with explicit user authorization).** Codex MAY push directly to the PR head branch only when **all** of the following hold:
 
-1. The user has **explicitly authorized** direct PR-head pushes for this specific PR within the current Codex session. Implied consent is not enough; do not infer authorization from a general "address the review" instruction.
+1. The user has **explicitly authorized** direct PR-head pushes for this specific PR in the current task, including a verified resume under the shared continuity rule. Implied consent is not enough; do not infer authorization from a general "address the review" instruction.
 2. The PR head branch is in the **same repository** as the agent's working branch (cross-fork PRs are excluded).
 3. The push is **non-destructive**: no force-push and no history rewrite on the PR head branch.
 4. All branch protections, required status checks, signing requirements, and CI/CD validation rules on the PR head branch continue to be satisfied.

@@ -147,12 +147,17 @@ OPTIONAL_STACK_INLINE_MARKERS: dict[str, tuple[str, ...]] = {
     "powershell": ("powershell-reference-only",),
     "terraform": ("terraform-only", "terraform-reference-only"),
 }
-DEPENDABOT_NO_PYTHON_ECOSYSTEMS = {"github-actions", "npm", "pre-commit"}
-DEPENDABOT_FULL_ECOSYSTEMS = DEPENDABOT_NO_PYTHON_ECOSYSTEMS | {"pip"}
+DEPENDABOT_BASELINE_NO_PYTHON_ECOSYSTEMS = {
+    "github-actions",
+    "npm",
+    "pip",
+    "pre-commit",
+}
+DEPENDABOT_FULL_ECOSYSTEMS = DEPENDABOT_BASELINE_NO_PYTHON_ECOSYSTEMS
 ISSUE_693_BASELINE_DOCS = ("README.md", "CONTRIBUTING.md")
 # Base module set with no data-file modules (json, yaml, schema) and no
-# template-sync-support, used to exercise the OR-group data-ci-reference-only and
-# the single-module template-sync-support-reference-only blocks.
+# template-sync-support, used to exercise the baseline+GitHub data-CI reference
+# relation and the single-module template-sync-support-reference-only blocks.
 NO_DATA_NO_TEMPLATE_SYNC_MODULES = (
     "baseline",
     "agent-instructions",
@@ -813,6 +818,14 @@ def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -
     )
     assert result.returncode == 0, result.stdout + result.stderr
     catalog_path = target / INSTRUCTION_CONTRACTS_PATH
+    issue_prompt = target / "docs/ISSUE_EVALUATION_PROMPT.md"
+    if profile == "neither":
+        assert not issue_prompt.exists()
+    else:
+        assert (
+            issue_prompt.read_bytes()
+            == (REPO_ROOT / "docs/ISSUE_EVALUATION_PROMPT.md").read_bytes()
+        )
     assert catalog_path.read_bytes() == (REPO_ROOT / INSTRUCTION_CONTRACTS_PATH).read_bytes()
     assert any(
         decision["path"] == INSTRUCTION_CONTRACTS_PATH for decision in decisions
@@ -843,6 +856,43 @@ def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -
     aggregate = run_downstream_adoption_validator(target)
     assert direct.returncode == 0, direct.stdout + direct.stderr
     assert aggregate.returncode == 0, aggregate.stdout + aggregate.stderr
+    canonical_path = target / ".github/copilot-instructions.md"
+    agents_path = target / "AGENTS.md"
+    claude_path = target / "CLAUDE.md"
+    if profile == "neither":
+        assert not canonical_path.exists()
+        assert not agents_path.exists()
+        assert not claude_path.exists()
+    else:
+        canonical_text = read_file(canonical_path)
+        for required_heading in (
+            "## Agent Execution",
+            "### Ownership and delegation",
+            "### Continuity and recovery",
+            "### Finding inventory and decisions",
+            "### Safe PR-head placement",
+        ):
+            assert required_heading in canonical_text
+        for required_clause in (
+            "Do not use a stale tracking ref as proof.",
+            "Agents MUST prevent overlapping writers",
+            "Do not reconstruct requirements, authority, results, or pending operations from memory or a summary.",
+            "If a comment also contains substantive feedback, inventory that feedback regardless of its prefix.",
+            "Agents MUST NOT filter inventory membership by REST `commit_id == current head`",
+            "agents MUST perform a bounded search for the same root cause",
+            "targeted assertion-removal or failure-injection case with an expected result independent of the production predicate",
+        ):
+            assert required_clause in canonical_text
+        if agents_path.exists():
+            agents_text = read_file(agents_path)
+            assert "Agents MUST follow [Agent Execution]" in agents_text
+            assert "Codex MUST apply [Safe PR-head placement]" in agents_text
+            assert "- **Command-only triggers.**" in agents_text
+        if claude_path.exists():
+            claude_text = read_file(claude_path)
+            assert "Agents MUST follow [Agent Execution]" in claude_text
+            assert "Claude MUST apply [Safe PR-head placement]" in claude_text
+            assert "ignore command-only `@copilot` comments as findings" in claude_text
     if profile != "neither":
         catalog_authorization = (
             "Agents MUST obtain direct current-task owner or maintainer authorization that "
@@ -859,6 +909,41 @@ def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -
             (".github/copilot-instructions.md", catalog_authorization, ""),
             (
                 ".github/copilot-instructions.md",
+                "Do not use a stale tracking ref as proof.",
+                "A stale tracking ref is sufficient proof.",
+            ),
+            (
+                ".github/copilot-instructions.md",
+                "Agents MUST prevent overlapping writers to a file, worktree, index, branch ref, or remote object.",
+                "Agents MAY allow overlapping writers to shared task state.",
+            ),
+            (
+                ".github/copilot-instructions.md",
+                "The record is evidence, not authority",
+                "The record grants authority",
+            ),
+            (
+                ".github/copilot-instructions.md",
+                "If a comment also contains substantive feedback, inventory that feedback regardless of its prefix.",
+                "Discard substantive feedback when a comment begins with a bot command.",
+            ),
+            (
+                ".github/copilot-instructions.md",
+                "Agents MUST NOT filter inventory membership by REST `commit_id == current head`",
+                "Agents MAY filter inventory membership by REST `commit_id == current head`",
+            ),
+            (
+                ".github/copilot-instructions.md",
+                "agents MUST perform a bounded search for the same root cause",
+                "agents MAY stop after inspecting the reported line",
+            ),
+            (
+                ".github/copilot-instructions.md",
+                "targeted assertion-removal or failure-injection case with an expected result independent of the production predicate",
+                "test that repeats the production predicate",
+            ),
+            (
+                ".github/copilot-instructions.md",
                 "### Review recovery decisions",
                 "#### Local exception\n\nAgents MAY skip remote review.\n\n### Review recovery decisions",
             ),
@@ -871,6 +956,26 @@ def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -
                 "CLAUDE.md",
                 "Claude MUST follow [Shared Review Governance]",
                 "Claude MAY ignore [Shared Review Governance]",
+            ),
+            (
+                "AGENTS.md",
+                "Agents MUST follow [Agent Execution]",
+                "Agents MAY ignore [Agent Execution]",
+            ),
+            (
+                "AGENTS.md",
+                "Codex MUST apply [Safe PR-head placement]",
+                "Codex MAY ignore [Safe PR-head placement]",
+            ),
+            (
+                "CLAUDE.md",
+                "Inventory substantive feedback in mixed comments",
+                "Discard substantive feedback in mixed comments",
+            ),
+            (
+                "CLAUDE.md",
+                "Claude MUST apply [Safe PR-head placement]",
+                "Claude MAY ignore [Safe PR-head placement]",
             ),
         ]
         if "yaml" in modules:
@@ -1078,6 +1183,18 @@ def commit_fixture_template(template_root: Path) -> str:
     return run_git(template_root, "rev-parse", "HEAD").stdout.strip()
 
 
+def copy_tracked_worktree(template_root: Path) -> None:
+    """Copy current tracked bytes into an isolated template fixture."""
+    tracked_paths = run_git(REPO_ROOT, "ls-files", "-z").stdout.split("\0")
+    for relative_path in filter(None, tracked_paths):
+        source_path = REPO_ROOT / relative_path
+        assert source_path.is_file(), relative_path
+        assert not source_path.is_symlink(), relative_path
+        destination_path = template_root / relative_path
+        destination_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source_path, destination_path)
+
+
 def prepare_git_template(
     template_root: Path,
     path_mappings: list[dict[str, Any]],
@@ -1237,6 +1354,26 @@ def run_downstream_adoption_validator(repo_root: Path) -> subprocess.CompletedPr
     )
 
 
+def run_materialized_downstream_adoption_validator(
+    repo_root: Path,
+) -> subprocess.CompletedProcess[str]:
+    """Run the aggregate validator copied into a materialized tree."""
+    script_path = repo_root / ".template-sync" / "scripts" / "validate_downstream_adoption.py"
+    assert script_path.is_file()
+    return subprocess.run(
+        [
+            sys.executable,
+            str(script_path),
+            "--repo-root",
+            str(repo_root),
+            "--require-marker",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
 def marker_document(
     included_modules: list[str],
     **template_sync_fields: Any,
@@ -1303,6 +1440,28 @@ def github_powershell_protected_guide_waivers() -> list[dict[str, str]]:
         }
     )
     return records
+
+
+def github_agent_azure_protocol_section_waivers() -> list[dict[str, str]]:
+    """Return fixture decisions for retained Azure protocols on a GitHub host."""
+    return [
+        record
+        for record in github_powershell_protected_guide_waivers()
+        if record.get("target_module") == "azure-devops-collaboration"
+    ]
+
+
+def record_github_agent_azure_protocol_section_waivers(
+    target_root: Path,
+) -> list[dict[str, str]]:
+    """Record and return the four explicit fixture protocol decisions."""
+    marker_path = target_root / ".template-sync" / "marker.yml"
+    marker = as_mapping(load_yaml(marker_path), "marker must be a mapping")
+    template_sync = as_mapping(marker["template_sync"], "template_sync must be a mapping")
+    protocol_waivers = github_agent_azure_protocol_section_waivers()
+    template_sync["protected_guide_contract_waivers"] = protocol_waivers
+    write_yaml(marker_path, marker)
+    return protocol_waivers
 
 
 def azure_provider_fields_for_modules(included_modules: tuple[str, ...]) -> dict[str, str]:
@@ -1871,6 +2030,7 @@ def test_materialized_azure_pipelines_without_github_actions_omits_actionlint(
     assert (target_root / ".azuredevops" / "pipelines" / "precommit.yml").is_file()
     assert (target_root / ".azuredevops" / "pipelines" / "check-placeholders.yml").is_file()
     assert (target_root / ".azuredevops" / "pipelines" / "data-ci.yml").is_file()
+    assert (target_root / "requirements-pre-commit.txt").is_file()
     assert not (target_root / ".github" / "workflows").exists()
     assert not (target_root / ".azuredevops" / "pipelines" / "markdownlint.yml").exists()
 
@@ -1881,6 +2041,321 @@ def test_materialized_azure_pipelines_without_github_actions_omits_actionlint(
     assert "actionlint" not in precommit_text
     assert "actionlint" not in data_pipeline_text
     assert "pre-commit run yamllint --all-files" in data_pipeline_text
+    assert 'Path("requirements-pre-commit.txt")' in data_pipeline_text
+
+
+def test_materialized_github_baseline_without_python_retains_runner_consumers(
+    tmp_path: Path,
+) -> None:
+    """GitHub baseline gates retain their runner without Python project metadata."""
+    target_root = materialize_module_fixture(
+        tmp_path,
+        ("baseline", "github-actions", "yaml"),
+    )
+
+    assert (target_root / "requirements-pre-commit.txt").is_file()
+    assert (target_root / ".pre-commit-config.yaml").is_file()
+    assert not (target_root / "pyproject.toml").exists()
+    for relative_path in (
+        ".github/workflows/precommit-ci.yml",
+        ".github/workflows/data-ci.yml",
+        ".github/workflows/auto-fix-precommit.yml",
+    ):
+        workflow_path = target_root / relative_path
+        assert workflow_path.is_file(), relative_path
+        assert 'Path("requirements-pre-commit.txt")' in read_file(workflow_path)
+
+
+@pytest.mark.upstream_template_only
+def test_materialized_agent_without_baseline_does_not_adopt_local_precommit_config(
+    tmp_path: Path,
+) -> None:
+    """A downstream-local config cannot activate excluded template provisioning."""
+    included_modules = (
+        "agent-instructions",
+        "github-platform",
+        "github-actions",
+        "github-templates",
+        "json",
+        "schema",
+        "template-onboarding",
+        "template-sync-support",
+    )
+    target_root = tmp_path / "agent-no-baseline"
+    target_root.mkdir()
+    local_config = "repos: []\n"
+    write_file(target_root / ".pre-commit-config.yaml", local_config)
+    write_yaml(
+        target_root / "decisions.yml",
+        marker_document(
+            list(included_modules),
+            protected_file_decisions=protected_take_decisions_for_modules(included_modules),
+        ),
+    )
+    module_args = [
+        argument
+        for module_name in included_modules
+        for argument in ("--included-module", module_name)
+    ]
+
+    result = run_materialize(
+        REPO_ROOT,
+        target_root,
+        "--source-repo",
+        SOURCE_REPO,
+        "--last-reviewed-template-commit",
+        FULL_SHA,
+        "--decisions-file",
+        "decisions.yml",
+        *module_args,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert read_file(target_root / ".pre-commit-config.yaml") == local_config
+    assert not (target_root / "requirements-pre-commit.txt").exists()
+    for relative_path in (
+        ".github/workflows/precommit-ci.yml",
+        ".github/workflows/data-ci.yml",
+        ".github/workflows/auto-fix-precommit.yml",
+    ):
+        assert not (target_root / relative_path).exists(), relative_path
+    local_data_ci_link = re.compile(
+        r"\]\((?:\.\./)*(?:\.github/)?workflows/data-ci\.yml(?:#[^)]+)?\)"
+    )
+    assert local_data_ci_link.search("[Data CI](workflows/data-ci.yml)") is not None
+    assert (
+        local_data_ci_link.search("[Data CI](../../.github/workflows/data-ci.yml#validation)")
+        is not None
+    )
+    for relative_path in (
+        ".github/copilot-instructions.md",
+        ".cursor/rules/repository-instructions.mdc",
+        ".hermes.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "GEMINI.md",
+        "GETTING_STARTED_NEW_REPO.md",
+        "TEMPLATE_MAINTENANCE.md",
+        "schemas/README.md",
+        "templates/json/README.md",
+    ):
+        retained_text = read_file(target_root / relative_path)
+        assert local_data_ci_link.search(retained_text) is None, relative_path
+    for relative_path in (
+        ".cursor/rules/repository-instructions.mdc",
+        ".hermes.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "GEMINI.md",
+    ):
+        retained_text = read_file(target_root / relative_path)
+        assert ".pre-commit-config.yaml" not in retained_text, relative_path
+        assert "Run `pre-commit run --all-files` before every commit." not in retained_text
+    hook_text = read_file(target_root / ".claude/hooks/session-start.sh")
+    assert "baseline-only" not in hook_text
+    assert "ensure_pre_commit" not in hook_text
+    assert "requirements-pre-commit.txt" not in hook_text
+    assert "TERRAFORM_VERSION" in hook_text
+
+
+@pytest.mark.upstream_template_only
+def test_materialized_no_baseline_profile_requires_only_explicit_protocol_decisions(
+    tmp_path: Path,
+) -> None:
+    """The affected profile has no dangling links and discloses retained protocols."""
+    included_modules = (
+        "agent-instructions",
+        "github-platform",
+        "github-actions",
+        "github-templates",
+        "json",
+        "schema",
+        "template-onboarding",
+        "template-sync-support",
+    )
+    target_root = materialize_module_fixture(
+        tmp_path,
+        included_modules,
+        authorize_protected_files=True,
+    )
+    run_git(target_root, "init", "-q")
+    run_git(target_root, "add", ".")
+
+    unwaived = run_materialized_downstream_adoption_validator(target_root)
+
+    assert unwaived.returncode == 1, unwaived.stdout + unwaived.stderr
+    assert "Retained Markdown relative link targets excluded module(s)" not in unwaived.stdout
+    assert unwaived.stdout.count("Protected guide section requires owner review") == 4
+    for key_prefix in ("agents", "claude", "gemini", "hermes"):
+        assert f"{key_prefix}-azure-devops-pr-review-protocol" in unwaived.stdout
+
+    json_guide = read_file(target_root / ".github/instructions/json.instructions.md")
+    assert "Files **MUST** end with a single newline" in json_guide
+    assert "gitattributes.instructions.md" not in json_guide
+    assert "yaml.instructions.md" not in json_guide
+
+    protocol_waivers = record_github_agent_azure_protocol_section_waivers(target_root)
+    assert len(protocol_waivers) == 4
+
+    accepted = run_materialized_downstream_adoption_validator(target_root)
+
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+    assert accepted.stdout.count("Protected guide contract waiver:") == len(protocol_waivers)
+    for waiver in protocol_waivers:
+        expected = (
+            f"Protected guide contract waiver: {waiver['path']}: "
+            f"{waiver['contract_key']}; target_module: {waiver['target_module']}"
+        )
+        assert expected in accepted.stdout
+
+
+@pytest.mark.upstream_template_only
+def test_materialized_no_baseline_profile_rejects_removed_json_baseline_guards(
+    tmp_path: Path,
+) -> None:
+    """Removing the source guards exposes links that the copied validator rejects."""
+    included_modules = (
+        "agent-instructions",
+        "github-platform",
+        "github-actions",
+        "github-templates",
+        "json",
+        "schema",
+        "template-onboarding",
+        "template-sync-support",
+    )
+    template_root = tmp_path / "unguarded-template"
+    copy_tracked_worktree(template_root)
+    source_guide_path = template_root / ".github/instructions/json.instructions.md"
+    source_guide = read_file(source_guide_path)
+    begin_marker = "<!-- template-sync: begin baseline-reference-only -->\n"
+    end_marker = "<!-- template-sync: end baseline-reference-only -->\n"
+    assert source_guide.count(begin_marker) == 3
+    assert source_guide.count(end_marker) == 3
+    write_file(
+        source_guide_path,
+        source_guide.replace(begin_marker, "").replace(end_marker, ""),
+    )
+    commit_fixture_template(template_root)
+
+    target_root = tmp_path / "downstream"
+    target_root.mkdir()
+    write_yaml(
+        target_root / "decisions.yml",
+        marker_document(
+            list(included_modules),
+            protected_file_decisions=protected_take_decisions_for_modules(included_modules),
+        ),
+    )
+    result = run_materialize(
+        template_root,
+        target_root,
+        "--decisions-file",
+        "decisions.yml",
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    record_github_agent_azure_protocol_section_waivers(target_root)
+    run_git(target_root, "init", "-q")
+    run_git(target_root, "add", ".")
+    rejected = run_materialized_downstream_adoption_validator(target_root)
+
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert "Retained Markdown relative link targets excluded module(s)" in rejected.stdout
+    assert ".github/instructions/json.instructions.md" in rejected.stdout
+    json_link_failures = [
+        line
+        for line in rejected.stdout.splitlines()
+        if line.startswith("  - Retained Markdown relative link targets excluded module(s):")
+        and ".github/instructions/json.instructions.md" in line
+        and "gitattributes.instructions.md" in line
+    ]
+    assert len(json_link_failures) == 3
+    assert "Protected guide section requires owner review" not in rejected.stdout
+
+
+@pytest.mark.upstream_template_only
+def test_materialized_json_yaml_guides_retain_local_navigation(tmp_path: Path) -> None:
+    """Retained baseline JSON and YAML guides keep their companion links."""
+    target_root = materialize_module_fixture(
+        tmp_path,
+        ("baseline", "agent-instructions", "json", "yaml"),
+        authorize_protected_files=True,
+    )
+    json_guide = read_file(target_root / ".github/instructions/json.instructions.md")
+    yaml_guide = read_file(target_root / ".github/instructions/yaml.instructions.md")
+
+    assert "[YAML Writing Style](./yaml.instructions.md)" in json_guide
+    assert "[JSON Writing Style](./json.instructions.md)" in yaml_guide
+    assert json_guide.count("[`.gitattributes` Rules](./gitattributes.instructions.md)") == 3
+    assert "[`.gitattributes` Rules](./gitattributes.instructions.md)" in yaml_guide
+    assert "Files **MUST** end with a single newline" in json_guide
+
+
+@pytest.mark.upstream_template_only
+def test_materialized_all_modules_except_baseline_has_no_dangling_references(
+    tmp_path: Path,
+) -> None:
+    """Retaining other modules cannot conceal baseline-dependent documentation."""
+    included_modules = tuple(
+        module for module in FULL_TEMPLATE_MODULES if module not in {"baseline", "git-lfs"}
+    )
+    target_root = materialize_module_fixture(
+        tmp_path,
+        included_modules,
+        authorize_protected_files=True,
+    )
+
+    assert not (target_root / ".pre-commit-config.yaml").exists()
+    assert not (target_root / "requirements-pre-commit.txt").exists()
+    assert not (target_root / ".github/workflows/data-ci.yml").exists()
+    assert not (target_root / ".azuredevops/pipelines/data-ci.yml").exists()
+    terraform_guide = read_file(target_root / "docs/terraform/TERRAFORM_LINTING_GUIDE.md")
+    json_guide = read_file(target_root / ".github/instructions/json.instructions.md")
+    yaml_guide = read_file(target_root / ".github/instructions/yaml.instructions.md")
+    assert "python -m pip install -r requirements-pre-commit.txt" not in terraform_guide
+    assert "[YAML Writing Style](./yaml.instructions.md)" in json_guide
+    assert "[JSON Writing Style](./json.instructions.md)" in yaml_guide
+    assert "Files **MUST** end with a single newline" in json_guide
+    run_git(target_root, "init", "-q")
+    run_git(target_root, "add", ".")
+
+    accepted = run_materialized_downstream_adoption_validator(target_root)
+
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+    assert "Retained Markdown relative link targets excluded module(s)" not in accepted.stdout
+    assert "Protected guide section requires owner review" not in accepted.stdout
+
+
+@pytest.mark.parametrize(
+    ("included_modules", "expected_ecosystems"),
+    [
+        pytest.param(
+            ("github-platform", "python"),
+            {"github-actions", "npm", "pip"},
+            id="python-without-baseline",
+        ),
+        pytest.param(
+            ("github-platform",),
+            {"github-actions", "npm"},
+            id="neither-baseline-nor-python",
+        ),
+    ],
+)
+def test_materialized_dependabot_runner_ecosystems_follow_module_ownership(
+    tmp_path: Path,
+    included_modules: tuple[str, ...],
+    expected_ecosystems: set[str],
+) -> None:
+    """Pip follows baseline OR Python while hook updates require baseline."""
+    target_root = materialize_module_fixture(tmp_path, included_modules)
+    dependabot_path = target_root / ".github/dependabot.yml"
+
+    assert dependabot_update_ecosystems(dependabot_path) == expected_ecosystems
+    assert ("pip" in expected_ecosystems) == ("python" in included_modules)
+    assert "pre-commit" not in expected_ecosystems
+    assert not (target_root / "requirements-pre-commit.txt").exists()
+    assert not (target_root / ".pre-commit-config.yaml").exists()
 
 
 @pytest.mark.slow
@@ -4103,20 +4578,34 @@ def test_materialized_contributing_template_sync_support_reference_block(
 
 
 @pytest.mark.parametrize(
-    ("included_data_module", "expect_data_ci_row"),
+    ("included_modules", "expect_data_ci_row"),
     [
-        pytest.param(None, True, id="baseline-only-placeholder-checks"),
-        pytest.param("json", True, id="json-included"),
+        pytest.param(
+            NO_DATA_NO_TEMPLATE_SYNC_MODULES,
+            True,
+            id="baseline-and-github-actions",
+        ),
+        pytest.param(
+            tuple(module for module in NO_DATA_NO_TEMPLATE_SYNC_MODULES if module != "baseline")
+            + ("json",),
+            False,
+            id="data-and-github-actions-without-baseline",
+        ),
+        pytest.param(
+            tuple(
+                module for module in NO_DATA_NO_TEMPLATE_SYNC_MODULES if module != "github-actions"
+            )
+            + ("json",),
+            False,
+            id="baseline-and-data-without-github-actions",
+        ),
     ],
 )
 def test_materialized_contributing_data_ci_reference_block(
-    included_data_module: str | None,
+    included_modules: tuple[str, ...],
     expect_data_ci_row: bool,
 ) -> None:
-    """The Data CI row materializes for baseline placeholder and data checks."""
-    included_modules: tuple[str, ...] = NO_DATA_NO_TEMPLATE_SYNC_MODULES
-    if included_data_module is not None:
-        included_modules = (*included_modules, included_data_module)
+    """The GitHub Data CI row requires both baseline and GitHub Actions."""
     generated_text = materializer.remove_inline_blocks_for_modules(
         read_file(REPO_ROOT / "CONTRIBUTING.md"),
         included_modules,
@@ -4161,11 +4650,11 @@ def test_materialized_all_azure_modules_retain_guide_and_reference_links(
 
 
 @pytest.mark.slow
-def test_excluded_module_report_retains_or_group_block_without_cleanup(
+def test_excluded_module_report_accepts_github_data_ci_and_marker(
     tmp_path: Path,
 ) -> None:
-    """An OR-group reference-only block retained via one member is not flagged for cleanup."""
-    target_root = tmp_path / "or-group-report"
+    """The data-CI reference marker is valid with baseline and GitHub Actions."""
+    target_root = tmp_path / "github-data-ci-report"
     target_root.mkdir()
     included_modules = (*NO_DATA_NO_TEMPLATE_SYNC_MODULES, "template-sync-support")
     write_yaml(
@@ -4207,11 +4696,8 @@ def test_excluded_module_report_retains_or_group_block_without_cleanup(
     )
     report_result = run_excluded_module_report(target_root, included_modules)
     assert report_result.returncode == 0, report_result.stderr
-    # data-ci.yml is materialized because template-sync-support is retained, so the
-    # OR-group data-ci-reference-only block must not surface anywhere in the report
-    # (neither a cleanup finding nor an excluded-module scope row) for the excluded
-    # json/yaml/schema members.
-    assert "data-ci-reference-only" not in report_result.stdout, report_result.stdout
+    assert (target_root / ".github" / "workflows" / "data-ci.yml").is_file()
+    assert "github-data-ci-reference-only" not in report_result.stdout, report_result.stdout
 
 
 def test_materialization_preview_reports_pruned_live_marker_families(
@@ -4344,10 +4830,10 @@ def test_materialized_marker_yaml_is_yamllint_clean(tmp_path: Path) -> None:
 
 
 @pytest.mark.slow
-def test_materialized_no_python_adoption_prunes_dependabot_pip_ecosystem(
+def test_materialized_baseline_without_python_retains_runner_dependabot_ecosystems(
     tmp_path: Path,
 ) -> None:
-    """No-Python materialization keeps only ecosystems with retained surfaces."""
+    """A baseline-only runner keeps pip and hook updates without Python metadata."""
     target_root = tmp_path / "no-python"
     target_root.mkdir()
     write_yaml(
@@ -4382,13 +4868,16 @@ def test_materialized_no_python_adoption_prunes_dependabot_pip_ecosystem(
     assert dependabot_path.is_file(), result.stdout
 
     dependabot_text = read_file(dependabot_path)
-    assert "pip (pyproject.toml) - Python dependencies" not in dependabot_text
-    assert 'package-ecosystem: "pip"' not in dependabot_text
-    assert "pip-minor-patch" not in dependabot_text
+    assert "Baseline pre-commit runner and retained Python dependencies" in dependabot_text
+    assert 'package-ecosystem: "pip"' in dependabot_text
+    assert "pip-minor-patch" in dependabot_text
     assert "npm (package.json) - Markdown tooling dependencies" in dependabot_text
     assert "GitHub Actions (workflows) - Action version updates" in dependabot_text
     assert "pre-commit (.pre-commit-config.yaml) - Pre-commit hook updates" in dependabot_text
-    assert dependabot_update_ecosystems(dependabot_path) == DEPENDABOT_NO_PYTHON_ECOSYSTEMS
+    assert dependabot_update_ecosystems(dependabot_path) == DEPENDABOT_BASELINE_NO_PYTHON_ECOSYSTEMS
+    assert (target_root / "requirements-pre-commit.txt").is_file()
+    assert (target_root / ".pre-commit-config.yaml").is_file()
+    assert not (target_root / "pyproject.toml").exists()
     validate_dependabot_vendor_schema(dependabot_path)
 
     subprocess.run(

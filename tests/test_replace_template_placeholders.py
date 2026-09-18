@@ -1133,8 +1133,8 @@ def test_placeholder_manifest_paths_resolve_through_template_manifest() -> None:
         mappings,
     )
     assert data_ci_relation is not None
-    assert data_ci_relation.requires_all == frozenset({"github-actions"})
-    assert "baseline" in data_ci_relation.requires_any
+    assert data_ci_relation.requires_all == frozenset({"baseline", "github-actions"})
+    assert data_ci_relation.requires_any == frozenset()
 
 
 def test_classified_scan_preserves_all_contexts(tmp_path: Path) -> None:

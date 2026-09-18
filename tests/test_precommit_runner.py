@@ -1,0 +1,536 @@
+"""Verify the baseline-owned pre-commit runner consumers."""
+
+from __future__ import annotations
+
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import textwrap
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+from tests._pytest_compat import pytest
+
+pytestmark = pytest.mark.upstream_template_only
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+RUNNER_REQUIREMENT_PATH = REPO_ROOT / "requirements-pre-commit.txt"
+PYTHON_INSTALLER_PATHS = (
+    ".github/workflows/precommit-ci.yml",
+    ".github/workflows/data-ci.yml",
+    ".github/workflows/auto-fix-precommit.yml",
+    ".azuredevops/pipelines/precommit.yml",
+    ".azuredevops/pipelines/data-ci.yml",
+)
+GITHUB_CACHE_WORKFLOWS = (
+    ".github/workflows/precommit-ci.yml",
+    ".github/workflows/data-ci.yml",
+)
+HOOK_PATH = REPO_ROOT / ".claude/hooks/session-start.sh"
+EXACT_REQUIREMENT_RE = re.compile(r"pre-commit==(?P<version>[0-9]+\.[0-9]+\.[0-9]+)\Z")
+
+
+def runner_requirement() -> str:
+    """Return the repository pin after independently validating its public shape."""
+    requirement = RUNNER_REQUIREMENT_PATH.read_text(encoding="utf-8").strip()
+    assert EXACT_REQUIREMENT_RE.fullmatch(requirement)
+    return requirement
+
+
+def assert_immutable_action_references(workflow: str) -> None:
+    """Require full upstream-style references and same-line release annotations."""
+    uses_lines = [
+        line.strip() for line in workflow.splitlines() if line.strip().startswith("uses:")
+    ]
+    assert uses_lines
+    for line in uses_lines:
+        assert re.fullmatch(
+            r"uses: [A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40} # v[0-9]+\.[0-9]+\.[0-9]+",
+            line,
+        ), line
+
+
+@pytest.mark.parametrize("relative_path", PYTHON_INSTALLER_PATHS[:3])
+def test_review_support_actions_are_immutable_and_release_annotated(relative_path: str) -> None:
+    """Each changed GitHub workflow keeps direct immutable, updateable references."""
+    workflow = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+    assert_immutable_action_references(workflow)
+    without_pin = re.sub(r"@[0-9a-f]{40}", "@v7", workflow, count=1)
+    without_release = re.sub(r" # v[0-9]+\.[0-9]+\.[0-9]+", "", workflow, count=1)
+    assert without_pin != workflow
+    assert without_release != workflow
+    for mutant in (without_pin, without_release):
+        with pytest.raises(AssertionError):
+            assert_immutable_action_references(mutant)
+
+
+def expected_version_output(requirement: str | None = None) -> str:
+    """Return the CLI identity selected by an exact runner requirement."""
+    selected = requirement or runner_requirement()
+    match = EXACT_REQUIREMENT_RE.fullmatch(selected)
+    assert match is not None
+    return f"pre-commit {match.group('version')}"
+
+
+def github_python_block(path: Path) -> str:
+    """Extract the one actual ``shell: python`` installer block from a workflow."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    shell_index = next(index for index, line in enumerate(lines) if line.strip() == "shell: python")
+    run_index = next(
+        index for index in range(shell_index + 1, len(lines)) if lines[index].strip() == "run: |"
+    )
+    run_indent = len(lines[run_index]) - len(lines[run_index].lstrip())
+    block_lines: list[str] = []
+    for line in lines[run_index + 1 :]:
+        indent = len(line) - len(line.lstrip())
+        if line.strip() and indent <= run_indent:
+            break
+        block_lines.append(line)
+    return textwrap.dedent("\n".join(block_lines)).strip() + "\n"
+
+
+def azure_python_block(path: Path) -> str:
+    """Extract the actual Python heredoc installer from an Azure pipeline."""
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = next(index for index, line in enumerate(lines) if line.strip() == "python - <<'PY'")
+    end = next(index for index in range(start + 1, len(lines)) if lines[index].strip() == "PY")
+    return textwrap.dedent("\n".join(lines[start + 1 : end])).strip() + "\n"
+
+
+def installer_source(relative_path: str) -> str:
+    """Return one real installer source block without reimplementing it."""
+    path = REPO_ROOT / relative_path
+    if relative_path.startswith(".github/"):
+        return github_python_block(path)
+    return azure_python_block(path)
+
+
+def execute_installer_source(
+    source: str,
+    tmp_path: Path,
+    monkeypatch: Any,
+    *,
+    requirement_text: str | None,
+    run: Callable[..., Any],
+    check_output: Callable[..., str],
+) -> None:
+    """Execute an extracted installer with controlled filesystem and subprocesses."""
+    if requirement_text is not None:
+        (tmp_path / "requirements-pre-commit.txt").write_text(
+            requirement_text,
+            encoding="utf-8",
+            newline="\n",
+        )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(subprocess, "check_output", check_output)
+    exec(compile(source, "<workflow pre-commit installer>", "exec"), {})  # noqa: S102
+
+
+@pytest.mark.parametrize("relative_path", PYTHON_INSTALLER_PATHS)
+def test_actual_ci_installer_uses_exact_runner_source_and_verifies_command(
+    tmp_path: Path,
+    monkeypatch: Any,
+    relative_path: str,
+) -> None:
+    """Every real CI installer consumes the shared file and checks the runnable CLI."""
+    requirement = runner_requirement()
+    run_calls: list[tuple[list[str], dict[str, Any]]] = []
+    version_calls: list[tuple[list[str], dict[str, Any]]] = []
+
+    def fake_run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        run_calls.append((command, kwargs))
+        return subprocess.CompletedProcess(command, 0)
+
+    def fake_check_output(command: list[str], **kwargs: Any) -> str:
+        version_calls.append((command, kwargs))
+        return expected_version_output(requirement)
+
+    execute_installer_source(
+        installer_source(relative_path),
+        tmp_path,
+        monkeypatch,
+        requirement_text=requirement + "\n",
+        run=fake_run,
+        check_output=fake_check_output,
+    )
+
+    assert run_calls == [
+        (
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--requirement",
+                "requirements-pre-commit.txt",
+            ],
+            {"check": True},
+        )
+    ]
+    assert version_calls == [(["pre-commit", "--version"], {"text": True})]
+
+
+@pytest.mark.parametrize("relative_path", PYTHON_INSTALLER_PATHS)
+@pytest.mark.parametrize(
+    "requirement_text",
+    [
+        None,
+        "pre-commit",
+        "pre-commit>=4",
+        f"{runner_requirement()}\nwheel==1",
+    ],
+    ids=("missing", "malformed", "range", "extra-requirement"),
+)
+def test_actual_ci_installer_rejects_missing_or_nonexact_runner_source(
+    tmp_path: Path,
+    monkeypatch: Any,
+    relative_path: str,
+    requirement_text: str | None,
+) -> None:
+    """Missing, ranged, malformed, and multi-requirement sources fail before install."""
+
+    def unexpected(*_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("invalid input must fail before invoking subprocess")
+
+    with pytest.raises((FileNotFoundError, SystemExit)):
+        execute_installer_source(
+            installer_source(relative_path),
+            tmp_path,
+            monkeypatch,
+            requirement_text=requirement_text,
+            run=unexpected,
+            check_output=unexpected,
+        )
+
+
+@pytest.mark.parametrize("relative_path", PYTHON_INSTALLER_PATHS)
+def test_actual_ci_installer_propagates_install_failure(
+    tmp_path: Path,
+    monkeypatch: Any,
+    relative_path: str,
+) -> None:
+    """A failed pip install cannot continue to a version check."""
+
+    def failed_run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if kwargs.get("check"):
+            raise subprocess.CalledProcessError(1, command)
+        return subprocess.CompletedProcess(command, 1)
+
+    def unexpected_version(*_args: Any, **_kwargs: Any) -> str:
+        raise AssertionError("failed install must not reach version verification")
+
+    with pytest.raises(subprocess.CalledProcessError):
+        execute_installer_source(
+            installer_source(relative_path),
+            tmp_path,
+            monkeypatch,
+            requirement_text=runner_requirement(),
+            run=failed_run,
+            check_output=unexpected_version,
+        )
+
+
+@pytest.mark.parametrize("relative_path", PYTHON_INSTALLER_PATHS)
+@pytest.mark.parametrize("failure", ["mismatch", "broken-command"])
+def test_actual_ci_installer_rejects_wrong_or_broken_installed_command(
+    tmp_path: Path,
+    monkeypatch: Any,
+    relative_path: str,
+    failure: str,
+) -> None:
+    """Successful installation is insufficient without the expected executable identity."""
+
+    def successful_run(command: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, 0)
+
+    def failed_version(command: list[str], **_kwargs: Any) -> str:
+        if failure == "broken-command":
+            raise subprocess.CalledProcessError(1, command)
+        return "pre-commit 0.0.0"
+
+    expected_error = subprocess.CalledProcessError if failure == "broken-command" else SystemExit
+    with pytest.raises(expected_error):
+        execute_installer_source(
+            installer_source(relative_path),
+            tmp_path,
+            monkeypatch,
+            requirement_text=runner_requirement(),
+            run=successful_run,
+            check_output=failed_version,
+        )
+
+
+def test_installer_failure_oracle_detects_removed_check_guard(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    """The failure oracle kills a mutant that stops asking pip to raise."""
+    source = installer_source(PYTHON_INSTALLER_PATHS[0])
+    mutant = source.replace("check=True", "check=False", 1)
+    assert mutant != source
+
+    def check_sensitive_run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if kwargs.get("check"):
+            raise subprocess.CalledProcessError(1, command)
+        return subprocess.CompletedProcess(command, 1)
+
+    def expected_output(*_args: Any, **_kwargs: Any) -> str:
+        return expected_version_output()
+
+    execute_installer_source(
+        mutant,
+        tmp_path,
+        monkeypatch,
+        requirement_text=runner_requirement(),
+        run=check_sensitive_run,
+        check_output=expected_output,
+    )
+
+    fresh = tmp_path / "production"
+    fresh.mkdir()
+    with pytest.raises(subprocess.CalledProcessError):
+        execute_installer_source(
+            source,
+            fresh,
+            monkeypatch,
+            requirement_text=runner_requirement(),
+            run=check_sensitive_run,
+            check_output=expected_output,
+        )
+
+
+def test_github_runner_caches_follow_both_runner_inputs() -> None:
+    """The two cached gates invalidate Python and hook caches on the shared source."""
+    expected_hash = "hashFiles('.pre-commit-config.yaml', 'requirements-pre-commit.txt')"
+    for relative_path in GITHUB_CACHE_WORKFLOWS:
+        text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+        assert re.search(r"cache:\s*['\"]pip['\"]", text)
+        assert "cache-dependency-path: requirements-pre-commit.txt" in text
+        assert expected_hash in text
+
+    auto_fix_text = (REPO_ROOT / ".github/workflows/auto-fix-precommit.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "cache: pip" not in auto_fix_text
+    assert "hashFiles(" not in auto_fix_text
+
+
+def hook_prefix() -> str:
+    """Return the actual hook through the end of its baseline-only block."""
+    text = HOOK_PATH.read_text(encoding="utf-8")
+    end_marker = "# template-sync: end baseline-only"
+    end = text.index(end_marker) + len(end_marker)
+    return text[:end] + "\n"
+
+
+def make_executable(path: Path, text: str) -> None:
+    """Write an LF shell fixture and make it executable on POSIX hosts."""
+    path.write_text(text, encoding="utf-8", newline="\n")
+    path.chmod(0o755)
+
+
+def bash_path(bash: str, path: Path) -> str:
+    """Return a path usable by Bash on both native POSIX and Git for Windows."""
+    if os.name != "nt":
+        return str(path)
+    if subprocess.check_output([bash, "-lc", "uname -s"], text=True).strip() == "Linux":
+        drive, tail = os.path.splitdrive(str(path.resolve()))
+        assert drive and drive.endswith(":")
+        normalized_tail = tail.lstrip("\\/").replace("\\", "/")
+        return f"/mnt/{drive[0].lower()}/{normalized_tail}"
+    return subprocess.check_output(
+        [bash, "-lc", 'cygpath -u "$1"', "bash", str(path)],
+        text=True,
+    ).strip()
+
+
+def run_hook_fixture(
+    tmp_path: Path,
+    *,
+    installer: str | None,
+    initial_version: str | None,
+    requirement_text: str | None = None,
+    broken_precommit: bool = False,
+    installer_exit: int = 0,
+    installer_updates: bool = True,
+) -> tuple[subprocess.CompletedProcess[str], str]:
+    """Run the actual baseline hook block with local executable mocks."""
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("Bash is required to exercise the actual Claude hook")
+    assert bash is not None
+
+    repo = tmp_path / "repo"
+    hook = repo / ".claude" / "hooks" / "session-start.sh"
+    hook.parent.mkdir(parents=True)
+    make_executable(hook, hook_prefix())
+    if requirement_text is not None:
+        (repo / "requirements-pre-commit.txt").write_text(
+            requirement_text,
+            encoding="utf-8",
+            newline="\n",
+        )
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    state = tmp_path / "pre-commit.state"
+    install_log = tmp_path / "installer.log"
+    env_file = tmp_path / "claude.env"
+    env_file.write_text("", encoding="utf-8")
+    if initial_version is not None:
+        state.write_text(initial_version + "\n", encoding="utf-8", newline="\n")
+
+    make_executable(
+        fake_bin / "pre-commit",
+        """#!/bin/sh
+if [ "${BROKEN_PRECOMMIT:-}" = "1" ]; then
+  exit 2
+fi
+if [ -f "$PRE_COMMIT_STATE" ]; then
+  cat "$PRE_COMMIT_STATE"
+else
+  echo "pre-commit 0.0.0"
+fi
+""",
+    )
+    installer_script = """#!/bin/sh
+printf '%s\n' "$*" >> "$INSTALL_LOG"
+if [ "${INSTALLER_EXIT:-0}" -ne 0 ]; then
+  exit "$INSTALLER_EXIT"
+fi
+if [ "${INSTALLER_UPDATES:-1}" = "1" ]; then
+  printf '%s\n' "$EXPECTED_PRE_COMMIT" > "$PRE_COMMIT_STATE"
+fi
+"""
+    if installer in {"uv", "pipx"}:
+        make_executable(fake_bin / installer, installer_script)
+    if installer == "python":
+        make_executable(
+            fake_bin / "python",
+            """#!/bin/sh
+if [ "$1" = "-m" ] && [ "$2" = "site" ] && [ "$3" = "--user-base" ]; then
+  printf '%s\n' "$FAKE_USER_BASE"
+  exit 0
+fi
+printf '%s\n' "$*" >> "$INSTALL_LOG"
+if [ "${INSTALLER_EXIT:-0}" -ne 0 ]; then
+  exit "$INSTALLER_EXIT"
+fi
+if [ "${INSTALLER_UPDATES:-1}" = "1" ]; then
+  printf '%s\n' "$EXPECTED_PRE_COMMIT" > "$PRE_COMMIT_STATE"
+fi
+""",
+        )
+
+    requirement = requirement_text if requirement_text is not None else runner_requirement()
+    expected = (
+        expected_version_output(requirement)
+        if EXACT_REQUIREMENT_RE.fullmatch(requirement.strip())
+        else "invalid"
+    )
+    fake_bin_bash = bash_path(bash, fake_bin)
+    shell_env = {
+        "PATH": f"{fake_bin_bash}:/usr/bin:/bin",
+        "CLAUDE_CODE_REMOTE": "true",
+        "CLAUDE_ENV_FILE": bash_path(bash, env_file),
+        "HOME": bash_path(bash, tmp_path / "home"),
+        "UV_TOOL_BIN_DIR": fake_bin_bash,
+        "PIPX_BIN_DIR": fake_bin_bash,
+        "FAKE_USER_BASE": bash_path(bash, tmp_path),
+        "PRE_COMMIT_STATE": bash_path(bash, state),
+        "INSTALL_LOG": bash_path(bash, install_log),
+        "EXPECTED_PRE_COMMIT": expected,
+        "BROKEN_PRECOMMIT": "1" if broken_precommit else "0",
+        "INSTALLER_EXIT": str(installer_exit),
+        "INSTALLER_UPDATES": "1" if installer_updates else "0",
+    }
+    wrapper = tmp_path / "run-hook.sh"
+    exports = "\n".join(f"export {name}={shlex.quote(value)}" for name, value in shell_env.items())
+    make_executable(
+        wrapper,
+        f"#!/bin/sh\n{exports}\nexec /bin/bash {shlex.quote(bash_path(bash, hook))}\n",
+    )
+    result = subprocess.run(
+        [bash, bash_path(bash, wrapper)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    log = install_log.read_text(encoding="utf-8") if install_log.exists() else ""
+    return result, log
+
+
+def test_claude_hook_reuses_the_exact_available_runner(tmp_path: Path) -> None:
+    """An exact runnable command avoids every installer branch."""
+    result, install_log = run_hook_fixture(
+        tmp_path,
+        installer="uv",
+        initial_version=expected_version_output(),
+        requirement_text=runner_requirement(),
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "pre-commit already available" in result.stdout
+    assert install_log == ""
+
+
+@pytest.mark.parametrize("installer", ["uv", "pipx", "python"])
+def test_claude_hook_installs_exact_runner_through_supported_branch(
+    tmp_path: Path,
+    installer: str,
+) -> None:
+    """Each supported installer receives the exact shared requirement."""
+    result, install_log = run_hook_fixture(
+        tmp_path,
+        installer=installer,
+        initial_version="pre-commit 0.0.0",
+        requirement_text=runner_requirement(),
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert runner_requirement() in install_log
+    if installer == "uv":
+        assert f"tool install --force {runner_requirement()}" in install_log
+    elif installer == "pipx":
+        assert f"install --force {runner_requirement()}" in install_log
+    else:
+        assert f"-m pip install --user {runner_requirement()}" in install_log
+    assert expected_version_output() in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("case", "kwargs"),
+    [
+        pytest.param("missing", {"requirement_text": None}, id="missing-requirement"),
+        pytest.param("range", {"requirement_text": "pre-commit>=4"}, id="ranged-requirement"),
+        pytest.param("broken", {"broken_precommit": True}, id="broken-command"),
+        pytest.param("installer", {"installer_exit": 7}, id="installer-failure"),
+        pytest.param("wrong", {"installer_updates": False}, id="wrong-version-after-install"),
+    ],
+)
+def test_claude_hook_fails_closed_for_invalid_or_unfulfilled_runner(
+    tmp_path: Path,
+    case: str,
+    kwargs: dict[str, Any],
+) -> None:
+    """The hook rejects invalid input and cannot report an unfulfilled install."""
+    call_kwargs = dict(kwargs)
+    supplied_requirement = call_kwargs.pop("requirement_text", runner_requirement())
+    if case == "missing":
+        requirement_text = None
+    else:
+        requirement_text = supplied_requirement
+    result, _install_log = run_hook_fixture(
+        tmp_path,
+        installer="uv",
+        initial_version="pre-commit 0.0.0",
+        requirement_text=requirement_text,
+        **call_kwargs,
+    )
+
+    assert result.returncode != 0, result.stdout + result.stderr

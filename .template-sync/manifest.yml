@@ -146,7 +146,10 @@ template_manifest:
         Contains Markdown-safe *-reference-only inline blocks for optional stack
         references in protected canonical guidance, including optional
         instruction-file rows, lint/test command examples, module-owned
-        validator prose, and workflow tool-version examples. Remove each
+        validator prose, and workflow tool-version examples. Baseline config
+        references use baseline-reference-only; the data-CI link uses
+        github-data-ci-reference-only and requires baseline plus github-actions.
+        Remove each
         delimited reference-only block when its module is excluded while
         preserving required shared protocol text.
     - pattern: '.github/instructions/docs.instructions.md'
@@ -161,6 +164,11 @@ template_manifest:
       requires_all:
         - json
         - agent-instructions
+      notes: >-
+        Contains Markdown-safe *-reference-only inline blocks for baseline
+        Git-attribute guidance and the optional YAML companion guide. Remove
+        each delimited reference-only block when its module is excluded while
+        preserving JSON authoring requirements, including the final newline.
     - pattern: '.github/instructions/powershell.instructions.md'
       requires_all:
         - powershell
@@ -177,6 +185,11 @@ template_manifest:
       requires_all:
         - yaml
         - agent-instructions
+      notes: >-
+        Contains Markdown-safe *-reference-only inline blocks for baseline
+        Git-attribute guidance and the optional JSON companion guide. Remove
+        each delimited reference-only block when its module is excluded while
+        preserving YAML authoring requirements.
     - pattern: '.github/instructions/*.instructions.md'
       requires_all:
         - agent-instructions
@@ -205,7 +218,9 @@ template_manifest:
         - agent-instructions
       notes: >-
         Contains Markdown-safe *-reference-only inline blocks for optional stack
-        references in the protected Codex entry point. Remove each delimited
+        references in the protected Codex entry point. Baseline commands and
+        config links use baseline-reference-only; github-data-ci-reference-only
+        requires both baseline and github-actions. Remove each delimited
         reference-only block when its module is excluded while preserving
         retained Codex platform protocol.
     - pattern: 'CLAUDE.md'
@@ -213,7 +228,9 @@ template_manifest:
         - agent-instructions
       notes: >-
         Contains Markdown-safe *-reference-only inline blocks for optional stack
-        references in the protected Claude entry point. Remove each delimited
+        references in the protected Claude entry point. Baseline commands and
+        config links use baseline-reference-only; github-data-ci-reference-only
+        requires both baseline and github-actions. Remove each delimited
         reference-only block when its module is excluded while preserving
         retained Claude platform protocol.
     - pattern: 'GEMINI.md'
@@ -232,6 +249,9 @@ template_manifest:
         Azure DevOps Services guide links in reusable adoption prompts. Remove
         each delimited reference-only block when its module is excluded while
         preserving retained prompt guidance.
+    - pattern: 'docs/ISSUE_EVALUATION_PROMPT.md'
+      requires_all:
+        - agent-instructions
     - pattern: 'docs/PR_REVIEW_PROMPTS.md'
       requires_all:
         - agent-instructions
@@ -246,6 +266,9 @@ template_manifest:
     - pattern: '.claude/**'
       requires_all:
         - agent-instructions
+      notes: >-
+        The session-start hook has a baseline-only pre-commit provisioning
+        block. Strip it when baseline is excluded.
     - pattern: '.github/ISSUE_TEMPLATE/**'
       requires_all:
         - github-templates
@@ -270,9 +293,9 @@ template_manifest:
       requires_all:
         - github-platform
       notes: >-
-        Contains Python-only inline blocks for the pip ecosystem header and
-        update block. Remove the delimited blocks when the python module is
-        excluded so Dependabot only monitors retained dependency surfaces.
+        Contains pip-dependencies-only blocks retained for baseline OR python
+        and baseline-only blocks for the pre-commit hook updater. Other
+        ecosystems follow the documented downstream tailoring procedure.
     - pattern: '.azuredevops/platform/**'
       requires_all:
         - azure-devops-platform
@@ -322,13 +345,8 @@ template_manifest:
         - github-actions
     - pattern: '.github/workflows/data-ci.yml'
       requires_all:
-        - github-actions
-      requires_any:
         - baseline
-        - json
-        - yaml
-        - schema
-        - template-sync-support
+        - github-actions
       notes: >-
         Contains YAML-only inline blocks for yamllint-specific documentation and
         the dedicated yamllint CI step. Contains Schema-only inline blocks for
@@ -344,9 +362,8 @@ template_manifest:
         and remove the delimited Template-sync-support-only inline blocks when
         the template-sync-support module is excluded. Remove the delimited
         github-platform-only inline block when the github-platform module is
-        excluded. Retain this workflow only when github-actions is adopted and
-        baseline placeholder validation or at least one data-file or
-        template-sync-support module is adopted.
+        excluded. Retain this workflow only when baseline and github-actions
+        are adopted, so its pre-commit configuration and runner are present.
     - pattern: '.github/template-placeholders.json'
       requires_all:
         - baseline
@@ -400,13 +417,8 @@ template_manifest:
         - azure-pipelines
     - pattern: '.azuredevops/pipelines/data-ci.yml'
       requires_all:
-        - azure-pipelines
-      requires_any:
         - baseline
-        - json
-        - yaml
-        - schema
-        - template-sync-support
+        - azure-pipelines
       notes: >-
         Runs retained data-file and template-sync hooks in Azure Pipelines
         without GitHub Actions-only actionlint validation. Contains YAML-only
@@ -424,9 +436,8 @@ template_manifest:
         Template-sync-support-only inline blocks when the template-sync-support
         module is excluded, and remove the delimited github-platform-only
         inline block when the github-platform module is excluded. Retain this
-        pipeline only when azure-pipelines is
-        adopted and baseline placeholder validation or at least one data-file
-        or template-sync-support module is adopted. Azure Pipelines
+        pipeline only when baseline and azure-pipelines are adopted, so its
+        pre-commit configuration and runner are present. Azure Pipelines
         service-schema validation remains
         service-backed through Azure DevOps pipeline creation, queued runs, or
         Azure Repos branch policy build validation.
@@ -461,6 +472,12 @@ template_manifest:
         excluded, remove the delimited Markdown block when the markdown module
         is excluded, and remove the delimited Terraform block when the
         terraform module is excluded.
+    - pattern: 'requirements-pre-commit.txt'
+      requires_all:
+        - baseline
+      notes: >-
+        Single exact pre-commit runner requirement for retained local, GitHub,
+        and Azure setup. Independent of the optional Python language module.
     - pattern: '.markdownlint.jsonc'
       requires_all:
         - markdown
@@ -553,7 +570,9 @@ template_manifest:
         github-platform-reference-only blocks for the optional GitHub Dependabot
         built-in schema validation subsection in `schemas/README.md` and
         azure-devops-guide-reference-only blocks for the optional Azure DevOps
-        Services guide link. Remove each delimited reference-only block when
+        Services guide link. Baseline blocks guard local hook execution and
+        placeholder assets; JSON and YAML blocks guard companion guide links.
+        Remove each delimited reference-only block when
         its module is excluded while preserving retained schema guidance.
     - pattern: 'tests/test_schema_examples.py'
       requires_any:
@@ -598,6 +617,12 @@ template_manifest:
     - pattern: 'tests/test_validate_instruction_contracts.py'
       requires_all:
         - template-sync-support
+    - pattern: 'tests/test_instruction_input_limits.py'
+      requires_all:
+        - template-sync-support
+    - pattern: 'tests/test_precommit_runner.py'
+      requires_all:
+        - template-sync-support
     - pattern: '.github/scripts/terraform_hooks.py'
       requires_all:
         - terraform
@@ -628,6 +653,11 @@ template_manifest:
     - pattern: 'docs/terraform/**'
       requires_all:
         - terraform
+      notes: >-
+        Contains Markdown-safe *-reference-only inline blocks for baseline
+        pre-commit integration and its table of contents in the linting guide.
+        Remove each delimited reference-only block when its module is excluded
+        while preserving direct Terraform linting guidance.
     - pattern: 'modules/**'
       requires_all:
         - terraform
@@ -657,11 +687,9 @@ template_manifest:
         sections, rows, prose, and links in the shared baseline README,
         including template-sync-support-reference-only blocks guarding the
         .template-sync/ and template-sync schema surface rows and the
-        downstream partial-adoption validation section, and an OR-group
-        data-ci-reference-only block guarding the .github/workflows/data-ci.yml
-        key-file bullet that is retained when baseline placeholder validation
-        or any of json, yaml, schema, or template-sync-support is adopted and
-        removed only when every one of them is excluded, plus
+        downstream partial-adoption validation section, and a
+        github-data-ci-reference-only block guarding the data-CI key-file
+        bullet that requires both baseline and github-actions, plus
         azure-devops-guide-reference-only OR-group blocks
         guarding Azure DevOps Services guide links. Remove each delimited
         reference-only block when its module is excluded (and the OR-group
@@ -675,9 +703,20 @@ template_manifest:
     - pattern: 'GETTING_STARTED_NEW_REPO.md'
       requires_all:
         - template-onboarding
+      notes: >-
+        Contains Markdown-safe *-reference-only inline blocks. The data-CI
+        validation bullet uses github-data-ci-reference-only and requires
+        both baseline and github-actions. Remove this block when either
+        required module is excluded. Baseline, JSON, and YAML references use
+        their corresponding blocks. Remove each delimited reference-only block
+        when its module is excluded while preserving retained onboarding.
     - pattern: 'GETTING_STARTED_EXISTING_REPO.md'
       requires_all:
         - template-onboarding
+      notes: >-
+        Contains Markdown-safe *-reference-only inline blocks for JSON and YAML
+        companion guide links. Remove each delimited reference-only block when
+        its module is excluded while preserving retained onboarding guidance.
     - pattern: 'OPTIONAL_CONFIGURATIONS.md'
       requires_all:
         - template-onboarding
@@ -685,7 +724,9 @@ template_manifest:
         Contains Markdown-safe *-reference-only inline blocks, currently
         github-platform-reference-only blocks for GitHub Dependabot optional
         configuration guidance and azure-devops-guide-reference-only blocks for
-        optional Azure DevOps Services guide links. Remove each delimited
+        optional Azure DevOps Services guide links. Baseline, Python, and YAML
+        blocks guard local hook and companion-template references.
+        Remove each delimited
         reference-only block when its module is excluded while preserving
         retained onboarding guidance and Azure DevOps security/dependency
         automation choices.
@@ -701,10 +742,9 @@ template_manifest:
       notes: >-
         Contains Markdown-safe *-reference-only inline blocks for optional stack
         contributor guidance, validation commands, workflow rows, and links in
-        the shared baseline contributing guide, including an OR-group
-        data-ci-reference-only block guarding the Data CI workflow row that is
-        retained when baseline placeholder validation or any of json, yaml,
-        schema, or template-sync-support is adopted, a
+        the shared baseline contributing guide, including a
+        github-data-ci-reference-only block guarding the Data CI workflow row
+        that requires both baseline and github-actions, a
         template-sync-support-reference-only block guarding the Template-Sync
         Validation section, and an
         azure-devops-guide-reference-only OR-group block guarding the Azure

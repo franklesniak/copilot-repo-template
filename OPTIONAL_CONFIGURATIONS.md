@@ -791,7 +791,7 @@ Add checklist sections for your project's technology stack:
 
 ### Adjusting the Data-File-Specific Pull Request Checklist
 
-The default PR template includes a `### Data-File-Specific (if applicable)` section that prompts contributors to verify the data-file definition-of-done items documented in [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md), [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md), and the **Data-File Validation** subsection of [`.github/copilot-instructions.md`](.github/copilot-instructions.md). The default checklist covers the baseline pre-commit hooks (`check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, `check-metaschema`), schema-fixture parity, the schema example tests under `tests/test_schema_examples.py`, GitHub Actions workflow linting, `check-jsonschema` hook bookkeeping, and a normative no-secrets/PII/credentials rule.
+When baseline is retained, the default PR template includes a `### Data-File-Specific (if applicable)` section that prompts contributors to verify the data-file definition-of-done items documented in the retained JSON/YAML authoring guides and the **Data-File Validation** subsection of [`.github/copilot-instructions.md`](.github/copilot-instructions.md). The default checklist covers the baseline pre-commit hooks (`check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, `check-metaschema`), schema-fixture parity, the schema example tests under `tests/test_schema_examples.py`, GitHub Actions workflow linting, `check-jsonschema` hook bookkeeping, and a normative no-secrets/PII/credentials rule. Excluding baseline removes this section; the customization instructions below apply only while the section is present.
 
 The no-secrets/PII/credentials bullet in this section is a high-visibility, data-file-specific reminder. Its secrets and credentials portion echoes the **No secrets in code or repo** rule from [`.github/copilot-instructions.md`](.github/copilot-instructions.md) (the constitution); the PII portion is an additional precaution that this template's PR checklist layers on top of the constitution and is not separately defined as a repo-wide rule in the constitution today. The General checklist carries its own no-secrets/PII/credentials bullet, so even if this Data-File-Specific section is removed downstream, the General-checklist bullet remains in force. When this section is present, the data-file-specific bullet **MUST** remain in the template and **MUST** be checked before the PR is submitted. The other bullets in this section **MAY** be customized as described below.
 
@@ -1226,7 +1226,7 @@ Sample data files that should validate cleanly can be placed in either of two lo
 - **Inside the file family path covered by the family hook** (for example, `config/example.valid.json` for the hook above). The family hook will validate these automatically because they match its `files:` pattern.
 - **Under `schemas/examples/<schema-name>/{valid,invalid}/`** (for example, `schemas/examples/project-config/valid/minimal.json`). This `schemas/examples/<schema-name>/{valid,invalid}/` layout is the convention used by `schemas/README.md` and the pytest tests referenced below, but it does **not** match the family hook's `files:` pattern, so these examples need a separate validation path. Choose one of:
 
-  - Add a dedicated `check-jsonschema` hook scoped to **valid** fixtures under `schemas/examples/` only (for example, `files: ^schemas/examples/project-config/valid/.*\.json$`). Anchor the pattern under the `valid/` directory so the hook does not pick up `invalid/` fixtures (which MUST NOT be wired into a normal `check-jsonschema` hook — see the next subsection). This aligns with the `schemas/examples/<schema-name>/{valid,invalid}/` layout used in `schemas/README.md` § Examples and exercised by both [`tests/test_schema_examples.py`](tests/test_schema_examples.py) and [`templates/python/tests/test_schema_examples.py`](templates/python/tests/test_schema_examples.py).
+  - Add a dedicated `check-jsonschema` hook scoped to **valid** fixtures under `schemas/examples/` only (for example, `files: ^schemas/examples/project-config/valid/.*\.json$`). Anchor the pattern under the `valid/` directory so the hook does not pick up `invalid/` fixtures (which MUST NOT be wired into a normal `check-jsonschema` hook — see the next subsection). This aligns with the `schemas/examples/<schema-name>/{valid,invalid}/` layout used in `schemas/README.md` § Examples and exercised by both [`tests/test_schema_examples.py`](tests/test_schema_examples.py) and [upstream Python starter test](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/templates/python/tests/test_schema_examples.py).
   - Run `check-jsonschema` directly from a CI step or local script:
 
     ```bash
@@ -1243,7 +1243,7 @@ Whichever placement you choose, valid examples MUST exit with code `0`; a non-ze
 
 Invalid examples (intentionally malformed fixtures used to prove that the schema rejects bad input) MUST NOT be wired into a normal `check-jsonschema` pre-commit hook, because the validator's non-zero exit would be reported as a hook failure on every run. Instead, write a test or script that **asserts validation fails**.
 
-A starter pytest template lives at [`templates/python/tests/test_schema_examples.py`](templates/python/tests/test_schema_examples.py); the active, canonical version that this repository runs in CI lives at [`tests/test_schema_examples.py`](tests/test_schema_examples.py). Both auto-discover `(schema, example, expected_to_pass)` triples from `schemas/*.schema.json` and `schemas/examples/<schema-name>/{valid,invalid}/`. To use the starter:
+A starter pytest template lives at [upstream Python starter test](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/templates/python/tests/test_schema_examples.py); the active, canonical version that this repository runs in CI lives at [`tests/test_schema_examples.py`](tests/test_schema_examples.py). Both auto-discover `(schema, example, expected_to_pass)` triples from `schemas/*.schema.json` and `schemas/examples/<schema-name>/{valid,invalid}/`. To use the starter:
 
 1. Copy the file into your project's real `tests/` directory.
 2. Place schemas under `schemas/<name>.schema.json` and examples under `schemas/examples/<name>/{valid,invalid}/`. Discovery is automatic — no per-case configuration is required.
@@ -1289,8 +1289,10 @@ If you remove the `skipif` guard, you MUST ensure `check-jsonschema` is installe
 
 This template ships starter content under `templates/json/` and `templates/yaml/` that downstream consumers MAY copy and adapt to add schema-backed JSON contracts and YAML linting to their own repositories. The starter content is intentionally outside the active hook and test scopes:
 
+<!-- template-sync: begin baseline-reference-only -->
 - The active `Validate example-config valid examples` `check-jsonschema` hook in [`.pre-commit-config.yaml`](.pre-commit-config.yaml) is anchored to `^schemas/examples/example-config/valid/.*\.json$`.
 - The active `check-metaschema` hook is anchored to `^schemas/example-config\.schema\.json$`.
+<!-- template-sync: end baseline-reference-only -->
 - The active root test [`tests/test_schema_examples.py`](tests/test_schema_examples.py) discovers schemas only under `schemas/`, not under `templates/**`.
 
 **Do not broaden these scopes to cover `templates/**`.** The starter content is meant to be lifted into a downstream repository's `schemas/` and `.yamllint.yml`, not exercised as an active schema contract or active linting configuration in place. The starter files are still parsed by the repository's `check-json`, `check-yaml`, and `yamllint` pre-commit hooks like every other JSON/YAML file in the tree; the carve-out is specifically about schema validation (`check-jsonschema`/`check-metaschema`), the schema-example pytest contract, and "active configuration" roles, not about basic JSON/YAML parsing or style enforcement.
@@ -1298,7 +1300,9 @@ This template ships starter content under `templates/json/` and `templates/yaml/
 The two starter directories are described in detail in their own READMEs:
 
 - [`templates/json/README.md`](templates/json/README.md)
+<!-- template-sync: begin yaml-reference-only -->
 - [`templates/yaml/README.md`](templates/yaml/README.md)
+<!-- template-sync: end yaml-reference-only -->
 
 ### Adopting the JSON Starter Schema and Examples
 
@@ -1314,7 +1318,7 @@ To adopt the starter schema in a downstream repository:
 2. Update `$id`, `title`, `description`, `properties`, `required`, and `additionalProperties` to reflect the real shape of your file family.
 3. Copy `templates/json/examples/starter/valid/` to `schemas/examples/<your-name>/valid/` and `templates/json/examples/starter/invalid/` to `schemas/examples/<your-name>/invalid/`.
 4. Add a scoped `check-jsonschema` pre-commit hook for the copied schema, following the pattern in [Schema Validation Configuration](#schema-validation-configuration). Anchor the hook's `files:` regex to the **valid** fixtures under the copied path (for example, `^schemas/examples/<your-name>/valid/.*\.json$`); do **not** wire invalid fixtures into a normal `check-jsonschema` hook.
-5. Optionally, copy [`templates/python/tests/test_schema_examples.py`](templates/python/tests/test_schema_examples.py) into your project's `tests/` directory so that invalid fixtures are exercised by a test that asserts validation fails.
+5. Optionally, copy [upstream Python starter test](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/templates/python/tests/test_schema_examples.py) into your project's `tests/` directory so that invalid fixtures are exercised by a test that asserts validation fails.
 
 ### Adopting the YAML Starter Configurations
 
@@ -3294,7 +3298,11 @@ rm -f .github/workflows/powershell-ci.yml
 
 **Directory:** `templates/python/`
 
-This template repository includes reference Python configuration files and scaffolding for projects adopting Python tooling. These files demonstrate how to configure Python tooling to align with the coding standards defined in [`.github/instructions/python.instructions.md`](.github/instructions/python.instructions.md).
+This template repository includes reference Python configuration files and scaffolding for projects adopting Python tooling.
+
+<!-- template-sync: begin python-reference-only -->
+These files demonstrate how to configure Python tooling to align with the retained [Python writing guide](.github/instructions/python.instructions.md).
+<!-- template-sync: end python-reference-only -->
 
 ### Files Included
 

@@ -23,11 +23,14 @@ from template_sync_materialization_helpers import (
     normalize_repository_path,
     parse_fence_close_from_content,
     parse_markdown_fence_open,
+    read_repository_text,
 )
 
 DEFAULT_CONTRACTS_PATH = ".template-sync/instruction-contracts.yml"
 DEFAULT_CONTRACTS_SCHEMA_PATH = "schemas/template-sync-instruction-contracts.schema.json"
 VALIDATION_MODES = ("upstream-template", "downstream")
+# Per-file local resource bound, independent of agent document-context settings.
+MAXIMUM_INPUT_BYTES = 1024 * 1024
 POLICY_CELL_WORD = (
     r"[^|\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680"
     r"\u2000-\u200a\u2028-\u2029\u202f\u205f\u3000\ufeff]"
@@ -285,8 +288,12 @@ def load_schema_validated_yaml(
     repo_root: Path,
 ) -> dict[str, Any]:
     """Load a YAML mapping and validate it against a JSON Schema."""
-    document = validate_marker.load_yaml_mapping(document_path, repo_root)
-    schema = validate_marker.load_json_mapping(schema_path, repo_root)
+    document = validate_marker.load_yaml_mapping(
+        document_path, repo_root, maximum_bytes=MAXIMUM_INPUT_BYTES
+    )
+    schema = validate_marker.load_json_mapping(
+        schema_path, repo_root, maximum_bytes=MAXIMUM_INPUT_BYTES
+    )
     validate_marker.validate_schema(document, schema, document_path, repo_root)
     return document
 
@@ -772,13 +779,7 @@ def read_instruction_file(repo_root: Path, relative_path: str) -> str | None:
         return None
     if not path.is_file():
         raise InstructionContractValidationError(f"{relative_path} is not a regular file.")
-    try:
-        return path.read_text(encoding="utf-8")
-    except OSError as error:
-        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
-        raise InstructionContractValidationError(
-            f"Unable to read {relative_path}: {error_summary}"
-        ) from error
+    return read_repository_text(path, repo_root, maximum_bytes=MAXIMUM_INPUT_BYTES)
 
 
 def find_waiver(

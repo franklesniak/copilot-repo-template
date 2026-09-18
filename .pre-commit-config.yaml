@@ -14,7 +14,8 @@
 # ============================================================================
 
 # Pre-commit configuration
-# Install:  pip install pre-commit && pre-commit install
+# Install: python -m pip install -r requirements-pre-commit.txt
+# Activate: pre-commit install
 # Run:  pre-commit run --all-files
 #
 # Note: This file configures pre-commit hooks for all projects. Module-specific

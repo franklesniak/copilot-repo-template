@@ -6,9 +6,15 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-17
+- **Last Updated:** 2026-09-18
 - **Scope:** Conventions for JSON Schemas that describe load-bearing JSON and YAML files in this repository, the baseline placeholder manifest schema, the template sync manifest, marker, instruction-contract, and first-adoption quality suppression schemas, plus a clearly removable worked example (`example-config.schema.json` with valid and invalid example data) wired into pre-commit and data CI to demonstrate the schema-validation pipeline end to end.
-- **Related:** [JSON Authoring Standards](../.github/instructions/json.instructions.md), [YAML Authoring Standards](../.github/instructions/yaml.instructions.md), [Repository Copilot Instructions](../.github/copilot-instructions.md), [Template Design Decisions — Schema Location at Repository Root](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-location-at-repository-root), [Template Design Decisions — Schema Validation Tiers](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-validation-tiers), [Template Design Decisions — Built-in Schema Validation for Real Load-Bearing Configuration Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files), [Template Design Decisions — `additionalProperties` Policy](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-additionalproperties-policy), [Template Design Decisions — Testing Beyond Linting for JSON/YAML](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-testing-beyond-linting-for-jsonyaml)
+- **Related:** [Repository Copilot Instructions](../.github/copilot-instructions.md), [Template Design Decisions — Schema Location at Repository Root](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-location-at-repository-root), [Template Design Decisions — Schema Validation Tiers](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-validation-tiers), [Template Design Decisions — Built-in Schema Validation for Real Load-Bearing Configuration Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files), [Template Design Decisions — `additionalProperties` Policy](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-additionalproperties-policy), [Template Design Decisions — Testing Beyond Linting for JSON/YAML](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-testing-beyond-linting-for-jsonyaml)
+<!-- template-sync: begin json-reference-only -->
+- **Related JSON guidance:** [JSON Authoring Standards](../.github/instructions/json.instructions.md)
+<!-- template-sync: end json-reference-only -->
+<!-- template-sync: begin yaml-reference-only -->
+- **Related YAML guidance:** [YAML Authoring Standards](../.github/instructions/yaml.instructions.md)
+<!-- template-sync: end yaml-reference-only -->
 
 ## Purpose
 
@@ -22,9 +28,13 @@ This template provides `schemas/` as a convention for repositories that adopt sc
 
 ## Repository-Specific Validation Inventory
 
+The inventory below describes the upstream template. Downstream pre-commit configuration and its runner requirement are retained only with `baseline`; data CI also requires the matching host module. A data-module selection without baseline retains content but does not supply this pre-commit enforcement. Upstream workflow links remain useful when the downstream workflow is absent.
+
 The portable JSON and YAML style guides describe validation rules generically so they can be reused by repositories with different schema, test, and CI layouts. This README is the repository-specific home for this template's concrete schema inventory, worked-example fixtures, built-in schema validation choices, regression tests, and data-file CI wiring.
 
-The authoritative active hook list remains [`.pre-commit-config.yaml`](../.pre-commit-config.yaml). The dedicated data-file workflow, [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml), re-runs the retained data-file hooks so branch protection can require JSON, YAML, GitHub Actions, and schema validation independently of language-specific CI jobs.
+<!-- template-sync: begin baseline-reference-only -->
+The authoritative active hook list remains [`.pre-commit-config.yaml`](../.pre-commit-config.yaml). When GitHub Actions is also retained, the dedicated data-file workflow, [`.github/workflows/data-ci.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/data-ci.yml), re-runs the retained data-file hooks so branch protection can require JSON, YAML, GitHub Actions, and schema validation independently of language-specific CI jobs.
+<!-- template-sync: end baseline-reference-only -->
 
 ## Conventions
 
@@ -71,7 +81,11 @@ Schemas whose root type is `object` SHOULD define:
 
 ## Validation
 
-Schema-backed files are validated by pre-commit and the dedicated data-file CI workflow ([`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml)). This template ships a worked example (see [Worked Example](#worked-example) below) so the validation pipeline is exercised end to end out of the box, and it ships production schemas for the baseline placeholder manifest, template sync manifest, marker, instruction contracts, and first-adoption quality suppressions (see [Template Placeholder Manifest Schema](#template-placeholder-manifest-schema), [Template Sync Manifest Schema](#template-sync-manifest-schema), [Template Sync Marker Schema](#template-sync-marker-schema), [Template Sync Instruction Contracts Schema](#template-sync-instruction-contracts-schema), and [First-Adoption Quality Suppressions Schema](#first-adoption-quality-suppressions-schema)). Downstream repositories that do not use general schema-backed data files SHOULD remove the worked example using the [Downstream Removal Checklist](#downstream-removal-checklist). Repositories that keep the baseline placeholder helper SHOULD retain the placeholder manifest schema, manifest file, and placeholder-specific invalid-example validator. Repositories that keep `template-sync-support` SHOULD retain the template-sync production schemas and their template-sync example fixtures even when they remove the general `schema` module. See the JSON authoring standards for the schema-validation policy and tier guidance.
+This template ships a [Worked Example](#worked-example) and production schemas for the [Template Sync Manifest](#template-sync-manifest-schema), [Template Sync Marker](#template-sync-marker-schema), [Template Sync Instruction Contracts](#template-sync-instruction-contracts-schema), and [First-Adoption Quality Suppressions](#first-adoption-quality-suppressions-schema). Downstream repositories that do not use general schema-backed data files SHOULD remove the worked example using the [Downstream Removal Checklist](#downstream-removal-checklist). Repositories that keep `template-sync-support` SHOULD retain the template-sync production schemas and their template-sync example fixtures even when they remove the general `schema` module. See the JSON authoring standards for the schema-validation policy and tier guidance when that guide is retained.
+
+<!-- template-sync: begin baseline-reference-only -->
+Schema-backed files are validated by pre-commit and, when the matching host module is retained, data CI. Baseline also supplies the [Template Placeholder Manifest Schema](#template-placeholder-manifest-schema). Repositories that keep the baseline placeholder helper SHOULD retain the placeholder manifest schema, manifest file, and placeholder-specific invalid-example validator.
+<!-- template-sync: end baseline-reference-only -->
 
 ### Schema Categories
 
@@ -81,12 +95,12 @@ This repository distinguishes two schema categories. The distinction matters for
    - Stored under `schemas/` in this repository.
    - MAY include valid and invalid example fixtures under `schemas/examples/<schema-name>/{valid,invalid}/`.
    - Tested by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py), which auto-discovers schema/example pairs and asserts that valid examples pass and invalid examples fail.
-   - Wired into pre-commit by adding a `check-jsonschema` hook that points at the schema with `--schemafile schemas/<name>.schema.json` and an anchored `files:` pattern matching the file family the schema covers.
+   - When pre-commit is retained, wired into it by adding a `check-jsonschema` hook that points at the schema with `--schemafile schemas/<name>.schema.json` and an anchored `files:` pattern matching the file family the schema covers.
    - The [Worked Example](#worked-example) below is the canonical illustration of the general `schema` module. The [Template Sync Manifest Schema](#template-sync-manifest-schema), [Template Sync Marker Schema](#template-sync-marker-schema), [Template Sync Instruction Contracts Schema](#template-sync-instruction-contracts-schema), and [First-Adoption Quality Suppressions Schema](#first-adoption-quality-suppressions-schema) are production schema-backed contracts owned by `template-sync-support` because the support scripts load them at runtime or validate downstream-created retained state.
 
 2. **External built-in schemas.**
    - Referenced through `check-jsonschema --builtin-schema vendor.<name>` against schemas that ship inside the pinned `check-jsonschema` release.
-   - **Not vendored** into this repository. Schema content tracks `check-jsonschema` upstream releases and is updated through the Dependabot `pre-commit` ecosystem.
+   - **Not vendored** into this repository. Schema content tracks `check-jsonschema` upstream releases. When baseline and GitHub platform support are retained, Dependabot's `pre-commit` ecosystem updates the hook dependency.
    - Used for selected real, load-bearing repository configuration files where the external schema is mature and validation is low-noise.
    - See the [Built-in Schema Validation for Real Load-Bearing Configuration Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files) ADR for the policy, the full list of selected files, and the explicit "Evaluated but deferred" negative-space record.
 
@@ -96,7 +110,7 @@ The two categories are complementary. A downstream repository MAY use either, bo
 
 ### Real Repository Configuration Files Validated Through Built-in Schemas
 
-The following real, load-bearing repository configuration files are validated by default through `check-jsonschema --builtin-schema ...` hooks in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml):
+When baseline is retained, the following real, load-bearing repository configuration files are validated by default through `check-jsonschema --builtin-schema ...` hooks in `.pre-commit-config.yaml`:
 
 | File | Built-in schema identifier | Regression coverage |
 | --- | --- | --- |
@@ -112,23 +126,26 @@ For Azure DevOps-only adoptions, see the [Azure DevOps Services Support Guide](.
 
 ### Project-Owned Schema-Backed Files
 
-The following project-owned file families are validated by default through `check-jsonschema --schemafile ...` hooks in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml):
+The following project-owned file families have retained schema contracts:
 
 | File | Schema |
 | --- | --- |
-| [`.github/template-placeholders.json`](../.github/template-placeholders.json) | [`template-placeholders.schema.json`](./template-placeholders.schema.json) |
 | [`.template-sync/manifest.yml`](../.template-sync/manifest.yml) | [`template-sync-manifest.schema.json`](./template-sync-manifest.schema.json) |
 | `.template-sync/marker.yml` when present | [`template-sync-marker.schema.json`](./template-sync-marker.schema.json) |
 | [`.template-sync/instruction-contracts.yml`](../.template-sync/instruction-contracts.yml) | [`template-sync-instruction-contracts.schema.json`](./template-sync-instruction-contracts.schema.json) |
 | `.template-sync/first-adoption/quality-suppressions.json` when present | [`first-adoption-quality-suppressions.schema.json`](./first-adoption-quality-suppressions.schema.json) |
 
+<!-- template-sync: begin baseline-reference-only -->
+Baseline additionally supplies [`.github/template-placeholders.json`](../.github/template-placeholders.json), governed by [`template-placeholders.schema.json`](./template-placeholders.schema.json). These file families are validated by default through `check-jsonschema --schemafile ...` hooks in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml).
+<!-- template-sync: end baseline-reference-only -->
+
 ### File-Family Hooks
 
-When real schemas exist, validation SHOULD be wired in per **file family**:
+When real schemas and a pre-commit toolchain are retained, validation SHOULD be wired in per **file family**:
 
 - Add **one `check-jsonschema` hook per real schema-backed file family**, scoped to the files that family covers (for example, `^config/.*\.json$`).
 - **Do not add placeholder hooks** for schemas that do not yet exist. An empty or speculative hook adds noise without enforcing anything.
-- **Do not validate every JSON or YAML file by default.** Generic `check-jsonschema --check-metaschema` style sweeps are out of scope; pre-commit already runs `check-json` and `check-yaml` for syntax. Schema validation is a contract check for specific file families, not a global sweep.
+- **Do not validate every JSON or YAML file by default.** Generic `check-jsonschema --check-metaschema` style sweeps are out of scope; the retained syntax validators cover syntax. Schema validation is a contract check for specific file families, not a global sweep.
 
 Example hook pattern (illustrative — do not copy verbatim without re-verifying the version):
 
@@ -219,11 +236,11 @@ def test_invalid_example_is_rejected():
 
 The command resolver prefers the `check-jsonschema` console script when it is on `PATH`, falls back to `python -m check_jsonschema` when the package is importable in the pytest environment, and skips only when neither invocation is available. The same shape applies in PowerShell, Bash, or any CI step: invoke the validator on the invalid fixture and assert a non-zero exit.
 
-A starter version of this pattern lives at [`templates/python/tests/test_schema_examples.py`](../templates/python/tests/test_schema_examples.py); the active, canonical version that this repository runs in CI lives at [`tests/test_schema_examples.py`](../tests/test_schema_examples.py). Both auto-discover schema/example pairs under `schemas/`, prefer the console script, and fall back to `python -m check_jsonschema` when the package is importable. The starter retains a `skipif` guard so it remains safe to copy into downstream projects that have not yet added `check-jsonschema` to their dev/test dependencies.
+The upstream template's Python starter version of this pattern lives at [`templates/python/tests/test_schema_examples.py`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/templates/python/tests/test_schema_examples.py); the active, canonical version that this repository runs in CI lives at [`tests/test_schema_examples.py`](../tests/test_schema_examples.py). Both auto-discover schema/example pairs under `schemas/`, prefer the console script, and fall back to `python -m check_jsonschema` when the package is importable. The starter retains a `skipif` guard so it remains safe to copy into downstream projects that have not yet added `check-jsonschema` to their dev/test dependencies.
 
 ## Worked Example
 
-This template ships a worked example so the schema-validation pipeline works out of the box. The worked example is **template starter content**, not a production contract for downstream repositories.
+This template ships a worked example with direct tests and optional pre-commit integration. The worked example is **template starter content**, not a production contract for downstream repositories.
 
 - Schema: [`example-config.schema.json`](./example-config.schema.json)
 - Valid example data: [`examples/example-config/valid/`](./examples/example-config/valid/)
@@ -236,10 +253,14 @@ This template ships a worked example so the schema-validation pipeline works out
 
 How the worked example is validated:
 
-- The `valid/` example data files are validated by the `Validate example-config valid examples` `check-jsonschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) and by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
-- The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate example-config schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
-- The `invalid/` example data files are exercised by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py), which uses `check-jsonschema` to assert that each invalid example causes a non-zero exit code (and that each valid example exits cleanly). A starter version of this pattern, with the same discovery and assertion logic but with project-root resolution suitable for downstream repositories, is also available at [`templates/python/tests/test_schema_examples.py`](../templates/python/tests/test_schema_examples.py).
+<!-- template-sync: begin baseline-reference-only -->
+- The `valid/` example data files are validated by the `Validate example-config valid examples` `check-jsonschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) and by [`.github/workflows/data-ci.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/data-ci.yml).
+- The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate example-config schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/data-ci.yml).
+<!-- template-sync: end baseline-reference-only -->
+- The `invalid/` example data files are exercised by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py), which uses `check-jsonschema` to assert that each invalid example causes a non-zero exit code (and that each valid example exits cleanly). An upstream Python starter version of this pattern, with the same discovery and assertion logic but with project-root resolution suitable for downstream repositories, is also available at [`templates/python/tests/test_schema_examples.py`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/templates/python/tests/test_schema_examples.py).
 - Invalid example data files MUST NOT be wired into a normal pre-commit hook because `check-jsonschema` would treat their (expected) failure as a hook failure.
+
+<!-- template-sync: begin baseline-reference-only -->
 
 ## Template Placeholder Manifest Schema
 
@@ -247,28 +268,36 @@ How the worked example is validated:
 
 How the placeholder manifest contract is validated:
 
-- The live manifest file is validated by the `Validate template placeholder manifest` `check-jsonschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) and by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+- The live manifest file is validated by the `Validate template placeholder manifest` `check-jsonschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) and by [`.github/workflows/data-ci.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/data-ci.yml).
 - Valid placeholder manifest fixtures under [`examples/template-placeholders/valid/`](./examples/template-placeholders/valid/) are validated by the `Validate template placeholder valid examples` hook and by the data-file CI workflow.
 - Invalid placeholder manifest fixtures under [`examples/template-placeholders/invalid/`](./examples/template-placeholders/invalid/) are exercised by [`.github/scripts/validate-placeholder-schema-examples.py`](../.github/scripts/validate-placeholder-schema-examples.py), which asserts they are rejected. That retained hook declares its own `jsonschema` dependency in pre-commit.
 - The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate template placeholder schema` hook.
+
+<!-- template-sync: end baseline-reference-only -->
 
 ## Template Sync Manifest Schema
 
 [`template-sync-manifest.schema.json`](./template-sync-manifest.schema.json) defines the shape of [`.template-sync/manifest.yml`](../.template-sync/manifest.yml), which is the source of truth for the downstream sync module taxonomy.
 
-The schema accepts manifest version 1, version 2, and version 3 documents. Version 1 preserves the original `requires_all`-only path mapping contract for downstream compatibility. Version 2 adds `requires_any` so a path can require all `requires_all` modules plus at least one `requires_any` module, such as `.github/workflows/data-ci.yml` requiring `github-actions` plus at least one of `json`, `yaml`, `schema`, or `template-sync-support`. Version 3 adds `compatibility_groups` for host-family module metadata; the checked-in groups preserve GitHub defaults while allowing Azure DevOps-only selections and explicit mixed-host selections.
+The schema accepts manifest version 1, version 2, and version 3 documents. Version 1 preserves the original `requires_all`-only path mapping contract for downstream compatibility. Version 2 adds `requires_any` so a path can require all `requires_all` modules plus at least one `requires_any` module; for example, `tests/test_schema_examples.py` uses `requires_any: [schema, template-sync-support]`. Version 3 adds `compatibility_groups` for host-family module metadata; the checked-in groups preserve GitHub defaults while allowing Azure DevOps-only selections and explicit mixed-host selections.
 
 How the template sync manifest contract is validated:
 
-- The manifest file is validated by the `Validate template sync manifest` `check-jsonschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) and by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
-- The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate template-sync-manifest schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+<!-- template-sync: begin baseline-reference-only -->
+- The manifest file is validated by the `Validate template sync manifest` `check-jsonschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) and by [`.github/workflows/data-ci.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/data-ci.yml).
+- The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate template-sync-manifest schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/data-ci.yml).
+<!-- template-sync: end baseline-reference-only -->
 - [`tests/test_template_manifest.py`](../tests/test_template_manifest.py) validates manifest semantics that JSON Schema cannot express cleanly, including module-reference integrity, uniqueness rules, version 1 compatibility, version 2 relation semantics, version 3 compatibility grouping, filtering semantics, and drift between the manifest and the rendered taxonomy tables in [`TEMPLATE_UPDATE_PROCEDURE.md`](../TEMPLATE_UPDATE_PROCEDURE.md).
 
-Downstream repositories that intentionally do not retain machine-assisted future sync metadata MAY remove `.template-sync/manifest.yml`, `schemas/template-sync-manifest.schema.json`, the matching pre-commit hooks, and `tests/test_template_manifest.py`. Downstream repositories that use this sync procedure SHOULD still keep `.template-sync/marker.yml` and the template-sync support schemas required by the retained scripts.
+Downstream repositories that intentionally do not retain machine-assisted future sync metadata MAY remove `.template-sync/manifest.yml`, `schemas/template-sync-manifest.schema.json`, the matching pre-commit hooks when baseline is retained, and `tests/test_template_manifest.py`. Downstream repositories that use this sync procedure SHOULD still keep `.template-sync/marker.yml` and the template-sync support schemas required by the retained scripts.
 
 ## Template Sync Marker Schema
 
-[`template-sync-marker.schema.json`](./template-sync-marker.schema.json) defines the shape of the downstream sync marker at `.template-sync/marker.yml`. The schema validates marker contents only; marker placement is enforced by the `Validate template sync marker` hook's `files:` pattern in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml).
+[`template-sync-marker.schema.json`](./template-sync-marker.schema.json) defines the shape of the downstream sync marker at `.template-sync/marker.yml`. The schema validates marker contents only.
+
+<!-- template-sync: begin baseline-reference-only -->
+Marker placement is enforced by the `Validate template sync marker` hook's `files:` pattern in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml).
+<!-- template-sync: end baseline-reference-only -->
 
 The marker schema includes `template_sync.instruction_contract_waivers` for explicit waivers of missing required instruction-contract anchors. Each waiver requires `path`, `anchor`, `reason`, and `authorization_basis`; the instruction-contract validator reports applied waivers as `passed with waivers` rather than ordinary success.
 
@@ -284,13 +313,17 @@ For Azure DevOps Services adoptions, `template_sync.host_provider` values of `az
 
 How the template sync marker contract is validated:
 
+<!-- template-sync: begin baseline-reference-only -->
 - The marker file is validated by the `Validate template sync marker` `check-jsonschema` hook when `.template-sync/marker.yml` is present. Repositories without a marker are unaffected because no file matches the hook's anchored pattern.
-- Valid marker fixtures under [`examples/template-sync-marker/valid/`](./examples/template-sync-marker/valid/) are validated by the `Validate template sync marker valid examples` `check-jsonschema` hook and by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+- Valid marker fixtures under [`examples/template-sync-marker/valid/`](./examples/template-sync-marker/valid/) are validated by the `Validate template sync marker valid examples` `check-jsonschema` hook and by [`.github/workflows/data-ci.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/data-ci.yml).
+<!-- template-sync: end baseline-reference-only -->
 - Invalid marker fixtures under [`examples/template-sync-marker/invalid/`](./examples/template-sync-marker/invalid/) are exercised by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py), which asserts that each invalid example is rejected.
-- The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate template-sync-marker schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+<!-- template-sync: begin baseline-reference-only -->
+- The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate template-sync-marker schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/data-ci.yml).
+<!-- template-sync: end baseline-reference-only -->
 - [`tests/test_template_manifest.py`](../tests/test_template_manifest.py) checks that the baked `included_modules` enum in the marker schema matches the module names in [`.template-sync/manifest.yml`](../.template-sync/manifest.yml).
 
-Marker changes MUST be rejected when they fail this schema. Downstream repositories that use the sync procedure SHOULD keep `.template-sync/marker.yml`, `schemas/template-sync-marker.schema.json`, the matching pre-commit hooks, and the marker examples or an equivalent validation path. These files are retained with `template-sync-support`; they do not require retaining the general worked-example `schema` module.
+Marker changes MUST be rejected when they fail this schema. Downstream repositories that use the sync procedure SHOULD keep `.template-sync/marker.yml`, `schemas/template-sync-marker.schema.json`, the matching pre-commit hooks when baseline is retained, and the marker examples or an equivalent validation path. These files are retained with `template-sync-support`; they do not require retaining the general worked-example `schema` module.
 
 ## Template Sync Instruction Contracts Schema
 
@@ -324,16 +357,22 @@ The retained instruction-contract catalog is protected governance. Its creation,
 
 Markdown structure uses only CR, LF, or CRLF physical line endings and ASCII space/tab structural whitespace. Other Unicode/control characters remain source content and cannot create a fence close, heading, blank separator, or template-sync pruning marker. Paragraph matching still uses its documented whitespace normalization. The same physical-line helper is used by shared fence, marker, blank-hygiene, and excluded-reference scans.
 
+The instruction-contract validator limits each file it reads to **1 MiB (1,048,576 bytes)** before decoding or parsing. This applies to governed instruction and protected-guide files, the catalog, manifest, downstream marker, and their JSON schemas. The limit leaves room for substantial policy files while bounding local input allocation; it is independent of any agent's document-context limit. JSON and instructions use strict UTF-8; YAML keeps its optional UTF-8 BOM support. Existing newline normalization and repository containment remain unchanged. Oversized input and invalid UTF-8 fail with a controlled path-specific diagnostic; input is never silently truncated or repaired. For example, an otherwise valid 1,048,576-byte instruction file passes this size check, while one extra byte produces an input-limit error and exit 1. Invalid UTF-8 below the limit also produces exit 1. Split an unusually large document or review an intentional change to the validator's limit. This local check does not establish a trusted security boundary; other callers of the shared text loaders do not acquire this size limit automatically.
+
 How the instruction-contract contract is validated:
 
-- The contract file is validated by the `Validate template sync instruction contracts` `check-jsonschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) and by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
-- Valid instruction-contract fixtures under [`examples/template-sync-instruction-contracts/valid/`](./examples/template-sync-instruction-contracts/valid/) are validated by the `Validate template sync instruction contract valid examples` `check-jsonschema` hook and by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+<!-- template-sync: begin baseline-reference-only -->
+- The contract file is validated by the `Validate template sync instruction contracts` `check-jsonschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) and by [`.github/workflows/data-ci.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/data-ci.yml).
+- Valid instruction-contract fixtures under [`examples/template-sync-instruction-contracts/valid/`](./examples/template-sync-instruction-contracts/valid/) are validated by the `Validate template sync instruction contract valid examples` `check-jsonschema` hook and by [`.github/workflows/data-ci.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/data-ci.yml).
+<!-- template-sync: end baseline-reference-only -->
 - Invalid instruction-contract fixtures under [`examples/template-sync-instruction-contracts/invalid/`](./examples/template-sync-instruction-contracts/invalid/) are exercised by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py), which asserts that each invalid example is rejected.
-- The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate template-sync-instruction-contracts schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+<!-- template-sync: begin baseline-reference-only -->
+- The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate template-sync-instruction-contracts schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/data-ci.yml).
+<!-- template-sync: end baseline-reference-only -->
 - Required anchors are enforced by [`validate_instruction_contracts.py`](../.template-sync/scripts/validate_instruction_contracts.py). Upstream template CI invokes `--mode upstream-template`; downstream repositories SHOULD invoke `--mode downstream`, with `--require-marker` when the marker is required in CI.
 - Protected-guide reference obligations are composed by [`validate_downstream_adoption.py`](../.template-sync/scripts/validate_downstream_adoption.py), which keeps broad relative-link validation separate from declared absolute URL and prose-token obligations.
 
-Downstream repositories that use the sync procedure SHOULD keep `.template-sync/instruction-contracts.yml`, `schemas/template-sync-instruction-contracts.schema.json`, the matching pre-commit hooks, and the instruction-contract examples or an equivalent validation path. These files are retained with `template-sync-support`; they do not require retaining the general worked-example `schema` module.
+Downstream repositories that use the sync procedure SHOULD keep `.template-sync/instruction-contracts.yml`, `schemas/template-sync-instruction-contracts.schema.json`, the matching pre-commit hooks when baseline is retained, and the instruction-contract examples or an equivalent validation path. These files are retained with `template-sync-support`; they do not require retaining the general worked-example `schema` module.
 
 ## First-Adoption Quality Suppressions Schema
 
@@ -343,12 +382,16 @@ The current schema defines a report-scoped `path-reference` section. Each suppre
 
 How the first-adoption quality suppression contract is validated:
 
+<!-- template-sync: begin baseline-reference-only -->
 - The suppression file is validated by the `Validate first-adoption quality suppressions` `check-jsonschema` hook when `.template-sync/first-adoption/quality-suppressions.json` is present. Repositories without that file are unaffected because no file matches the hook's anchored pattern.
-- Valid suppression fixtures under [`examples/first-adoption-quality-suppressions/valid/`](./examples/first-adoption-quality-suppressions/valid/) are validated by the `Validate first-adoption quality suppression valid examples` `check-jsonschema` hook and by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+- Valid suppression fixtures under [`examples/first-adoption-quality-suppressions/valid/`](./examples/first-adoption-quality-suppressions/valid/) are validated by the `Validate first-adoption quality suppression valid examples` `check-jsonschema` hook and by [`.github/workflows/data-ci.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/data-ci.yml).
+<!-- template-sync: end baseline-reference-only -->
 - Invalid suppression fixtures under [`examples/first-adoption-quality-suppressions/invalid/`](./examples/first-adoption-quality-suppressions/invalid/) are exercised by [`tests/test_schema_examples.py`](../tests/test_schema_examples.py), which asserts that each invalid example is rejected.
-- The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate first-adoption quality suppressions schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+<!-- template-sync: begin baseline-reference-only -->
+- The schema itself is self-validated against its declared JSON Schema Draft 2020-12 metaschema by the `Self-validate first-adoption quality suppressions schema` `check-metaschema` hook in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml), also executed by [`.github/workflows/data-ci.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/data-ci.yml).
+<!-- template-sync: end baseline-reference-only -->
 
-Downstream repositories that use the first-adoption quality reports SHOULD keep `schemas/first-adoption-quality-suppressions.schema.json`, the matching pre-commit hooks, and the suppression examples or an equivalent validation path. These files are retained with `template-sync-support`; they do not require retaining the general worked-example `schema` module.
+Downstream repositories that use the first-adoption quality reports SHOULD keep `schemas/first-adoption-quality-suppressions.schema.json`, the matching pre-commit hooks when baseline is retained, and the suppression examples or an equivalent validation path. These files are retained with `template-sync-support`; they do not require retaining the general worked-example `schema` module.
 
 ### Downstream Removal Checklist
 
@@ -356,9 +399,9 @@ The worked example is intentionally easy to remove. This checklist removes only 
 
 1. Delete [`schemas/example-config.schema.json`](./example-config.schema.json).
 2. Delete the [`schemas/examples/example-config/`](./examples/example-config/) directory and all of its contents.
-3. Remove the `Validate example-config valid examples` and `Self-validate example-config schema` hooks (and the surrounding `python-jsonschema/check-jsonschema` repo block, if no other hooks from that repo remain) from [`.pre-commit-config.yaml`](../.pre-commit-config.yaml). Keep the template-sync support hooks when the repository retains `template-sync-support`.
-4. If you adopted the optional schema-example tests (for example, by copying [`templates/python/tests/test_schema_examples.py`](../templates/python/tests/test_schema_examples.py) into your repository's `tests/` directory), remove or adjust the corresponding test cases there if no schemas remain in the downstream repository.
-5. Update any documentation that mentions the example schema, including this `README.md` and any references in [`.github/workflows/data-ci.yml`](../.github/workflows/data-ci.yml).
+3. When pre-commit is retained, remove the `Validate example-config valid examples` and `Self-validate example-config schema` hooks (and the surrounding `python-jsonschema/check-jsonschema` repo block, if no other hooks from that repo remain) from `.pre-commit-config.yaml`. Keep the template-sync support hooks when the repository retains both `baseline` and `template-sync-support`.
+4. If you adopted the optional schema-example tests (for example, by copying the upstream [`templates/python/tests/test_schema_examples.py`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/templates/python/tests/test_schema_examples.py) into your repository's `tests/` directory), remove or adjust the corresponding test cases there if no schemas remain in the downstream repository.
+5. Update any documentation that mentions the example schema, including this `README.md` and the data-CI definitions when retained.
 
 ## Future Work
 
@@ -372,7 +415,7 @@ Candidate load-bearing repository configuration files that could later be schema
 - `.yamllint.yml` — not currently shipped as a `check-jsonschema` `--builtin-schema`. MUST NOT be weakened to satisfy an incomplete external schema; yamllint itself enforces its configuration shape when it loads `.yamllint.yml`.
 - GitHub Actions workflow files — already covered by `actionlint`, so an additional schema check would primarily be redundant.
 
-`.github/dependabot.yml` is already validated by default; see the [Real Repository Configuration Files Validated Through Built-in Schemas](#real-repository-configuration-files-validated-through-built-in-schemas) section above. The candidates above remain out of scope until a verified, mature builtin schema (or an explicitly pinned stable schema source) becomes available; downstream repositories MAY adopt them as additional `check-jsonschema` hooks at their discretion. See the [Built-in Schema Validation for Real Load-Bearing Configuration Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files) ADR for the durable "Evaluated but deferred" record covering each candidate.
+When baseline and GitHub platform support are retained, `.github/dependabot.yml` is validated by default. The candidates above remain out of scope until a verified, mature builtin schema (or an explicitly pinned stable schema source) becomes available; downstream repositories MAY adopt them as additional `check-jsonschema` hooks at their discretion. See the [Built-in Schema Validation for Real Load-Bearing Configuration Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files) ADR for the durable "Evaluated but deferred" record covering each candidate.
 
 ## Out of Scope for This Worked Example
 

@@ -1107,6 +1107,8 @@ After creating the label, uncomment the `- triage` line in each issue template (
 
 ## Installing and Configuring Pre-commit
 
+Run the installation commands below from the repository root after retaining or copying `requirements-pre-commit.txt` with `.pre-commit-config.yaml`. The baseline module owns both files; Python is the tooling runtime even when the Python language module is excluded. The requirement selects the runner version only, not a full transitive lock. If baseline is excluded, these template pre-commit setup steps do not apply.
+
 ### Understanding Pre-commit
 
 [Pre-commit](https://pre-commit.com/) is a framework for managing git hooks. It automatically runs code quality checks (formatting, linting, validation) before each commit, catching issues early and ensuring consistent code quality across your team.
@@ -1150,7 +1152,7 @@ Then install pre-commit:
 
 ```powershell
 # Use module invocation to ensure it works even if pipx isn't on PATH
-python -m pipx install pre-commit
+python -m pipx install --force (Get-Content -Raw requirements-pre-commit.txt).Trim()
 ```
 
 > **Note:** You need to restart your PowerShell window (or open a new one) before running `pre-commit` directly by name, because PATH changes only apply to new shells. Using `python -m pipx` avoids needing `pipx` on PATH and lets you install packages in the same session, but `pipx run pre-commit` runs from a temporary environment and should not be used for `pre-commit install` (it can create hooks that reference a non-existent interpreter).
@@ -1164,7 +1166,7 @@ Open PowerShell and run:
 python -m pip install --upgrade pip
 
 # Then install pre-commit
-python -m pip install pre-commit
+python -m pip install -r requirements-pre-commit.txt
 ```
 
 > **Note:** When using pip, the `pre-commit` command may not be recognized because Python's `Scripts` folder is not always added to PATH. Use `python -m pre_commit` instead of `pre-commit` for all commands. For example, use `python -m pre_commit --version` to verify installation.
@@ -1187,7 +1189,7 @@ pre-commit --version
 python -m pre_commit --version
 ```
 
-You should see output like `pre-commit 4.0.1`.
+The reported version must match `requirements-pre-commit.txt`, with `==` replaced by a space. A different version means a stale installation or another command earlier on PATH.
 
 ### Installation - macOS/Linux/FreeBSD
 
@@ -1219,15 +1221,18 @@ python3 -m pipx ensurepath
 Then install pre-commit:
 
 ```bash
-pipx install pre-commit
+pipx install --force "$(cat requirements-pre-commit.txt)"
 ```
 
-> **Note:** If you installed pipx via an OS package manager (Homebrew, apt, dnf), use `pipx install pre-commit` as shown above. If you installed pipx via pip and pipx isn't on your PATH yet, you can use `python3 -m pipx install pre-commit` instead. After installing pre-commit, you'll need to restart your terminal before running `pre-commit` directly by name. Do not use `pipx run pre-commit install`—it runs from a temporary environment and can create hooks referencing a non-existent interpreter.
+> **Note:** If you installed pipx via an OS package manager (Homebrew, apt, dnf), use `pipx install --force "$(cat requirements-pre-commit.txt)"` as shown above. If you installed pipx via pip and pipx isn't on your PATH yet, you can use `python3 -m pipx install --force "$(cat requirements-pre-commit.txt)"` instead. After installing pre-commit, you'll need to restart your terminal before running `pre-commit` directly by name. Do not use `pipx run pre-commit install`—it runs from a temporary environment and can create hooks referencing a non-existent interpreter.
 
-#### Option 2: Using Homebrew (macOS only)
+#### Option 2: Using Homebrew to install pipx (macOS only)
 
 ```bash
-brew install pre-commit
+brew install pipx
+pipx ensurepath
+# Restart the terminal if pipx is not on PATH, then run from the repository root.
+pipx install --force "$(cat requirements-pre-commit.txt)"
 ```
 
 #### Option 3: Using pip
@@ -1238,7 +1243,7 @@ brew install pre-commit
 > - Fedora: `sudo dnf install pipx && pipx ensurepath`
 > - macOS (Homebrew): `brew install pipx && pipx ensurepath`
 >
-> After running `pipx ensurepath`, restart your terminal, then run `pipx install pre-commit`.
+> After running `pipx ensurepath`, restart your terminal, then run `pipx install --force "$(cat requirements-pre-commit.txt)"`.
 
 If pip works on your system:
 
@@ -1247,7 +1252,7 @@ If pip works on your system:
 python3 -m pip install --upgrade pip
 
 # Then install pre-commit
-python3 -m pip install pre-commit
+python3 -m pip install -r requirements-pre-commit.txt
 ```
 
 > **Note:** When using pip, the `pre-commit` command may not be recognized if Python's `bin` folder is not in your PATH. Use `python3 -m pre_commit` instead of `pre-commit` for all commands. For example, use `python3 -m pre_commit --version` to verify installation.
@@ -1262,13 +1267,13 @@ pre-commit --version
 
 > **Note:** If `pre-commit` is not found, you need to restart your terminal so the PATH changes from `pipx ensurepath` take effect. Alternatively, you can verify pipx installed pre-commit by running `python3 -m pipx list` to see installed packages.
 
-**If you installed with Homebrew:**
+**If you installed pipx with Homebrew:**
 
 ```bash
 pre-commit --version
 ```
 
-> **Note:** If `pre-commit` is not found, ensure Homebrew's `bin` directory (typically `/opt/homebrew/bin` on Apple Silicon or `/usr/local/bin` on Intel Macs) is in your PATH. You can add it by running `eval "$(/opt/homebrew/bin/brew shellenv)"` (Apple Silicon) or `eval "$(/usr/local/bin/brew shellenv)"` (Intel) in your shell configuration file.
+> **Note:** If `pipx` is not found, ensure Homebrew's `bin` directory (typically `/opt/homebrew/bin` on Apple Silicon or `/usr/local/bin` on Intel Macs) is in your PATH. You can add it by running `eval "$(/opt/homebrew/bin/brew shellenv)"` (Apple Silicon) or `eval "$(/usr/local/bin/brew shellenv)"` (Intel) in your shell configuration file.
 
 **If you installed with pip:**
 
@@ -1276,7 +1281,7 @@ pre-commit --version
 python3 -m pre_commit --version
 ```
 
-You should see output like `pre-commit 4.0.1`.
+The reported version must match `requirements-pre-commit.txt`, with `==` replaced by a space. A different version means a stale installation or another command earlier on PATH.
 
 ### Activating Hooks in Your Repository
 
@@ -1311,14 +1316,14 @@ pre-commit install
 
 > **Note:** If `pre-commit` is not found, run `python3 -m pipx ensurepath` (or `pipx ensurepath` if `pipx` is already on your PATH) and restart your terminal. Do not use `pipx run pre-commit install` because it runs from a temporary environment and can create hooks that reference a non-existent interpreter.
 
-**If you installed with Homebrew:**
+**If you installed pipx with Homebrew:**
 
 ```bash
 cd ~/projects/your-repo-name
 pre-commit install
 ```
 
-> **Note:** If `pre-commit` is not found, ensure Homebrew's `bin` directory is in your PATH (see verification section above).
+> **Note:** If `pipx` is not found, ensure Homebrew's `bin` directory is in your PATH (see verification section above). Run `pipx ensurepath` and restart the terminal if the pre-commit command is missing.
 
 **If you installed with pip:**
 
@@ -1343,7 +1348,7 @@ pre-commit run --all-files
 
 > **Note:** If `pre-commit` is not found, you may need to add the pipx binary location to your PATH. On **Windows**, run `python -m pipx ensurepath`. On **macOS/Linux/FreeBSD**, run `python3 -m pipx ensurepath`. In both cases, you can alternatively run `pipx ensurepath` if `pipx` itself is already on your PATH, then restart your terminal. `pipx run pre-commit` can be used for one-off commands but runs from a temporary environment (slower and doesn't validate your installed version).
 
-**If you installed with Homebrew:**
+**If you installed pipx with Homebrew:**
 
 ```bash
 pre-commit run --all-files
@@ -1424,7 +1429,7 @@ Remove Python if you do not use it:
 - Delete `templates/python/`.
 - Keep `.github/workflows/precommit-ci.yml`. It is baseline-scoped and runs `pre-commit run --all-files` for repository hygiene; Python is still installed there only as the runtime for `pre-commit` itself and Python-based hooks (e.g., `check-jsonschema`).
 - Remove the `# template-sync: begin python-only` … `# template-sync: end python-only` block from `.pre-commit-config.yaml` (which contains the `black` and `ruff-check` hooks). The template-sync framework strips this block automatically when the `python` module is excluded; remove it manually if you are not using template sync.
-- Remove the `pip` ecosystem from `.github/dependabot.yml` if `pyproject.toml` is gone and no Python dependency manifest remains.
+- Keep `requirements-pre-commit.txt` with baseline tooling and retain the Dependabot `pip` ecosystem for its runner updates. Remove that ecosystem only if neither baseline requirements nor Python project dependencies remain.
 - Remove Python validation references from `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `README.md`, `CONTRIBUTING.md`, and the PR template after the protected-file cleanup step below is authorized.
 - Keep Python installed for development tooling if you still run `pre-commit`, `check-jsonschema`, `check-metaschema`, or repo-local hooks.
 
@@ -1791,7 +1796,15 @@ Edit `.github/pull_request_template.md` to remove the "PowerShell-Specific (if a
 
 The template ships with a default JSON/YAML toolchain that already covers most repositories — including JSON-config-only or YAML-heavy projects (for example, Kubernetes manifests, Helm charts, Ansible playbooks, GitHub Actions-only repos). Unlike the Python and PowerShell sections above, you typically do **not** need to add anything new for JSON/YAML; you mostly need to **keep** what is already there and decide how far to take optional schema validation.
 
-> **Do not duplicate full JSON/YAML policy here.** The authoritative authoring rules live in [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md) and [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md). Read those files when authoring JSON or YAML.
+> **Do not duplicate full JSON/YAML policy here.** Follow the retained authoring guides. Read those files when authoring JSON or YAML.
+
+<!-- template-sync: begin json-reference-only -->
+JSON rules: [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md).
+<!-- template-sync: end json-reference-only -->
+
+<!-- template-sync: begin yaml-reference-only -->
+YAML rules: [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md).
+<!-- template-sync: end yaml-reference-only -->
 
 #### What to Keep
 
@@ -1826,7 +1839,9 @@ How schema-backed validation works in this repo:
 - `check-jsonschema` runs against `schemas/examples/example-config/valid/` to confirm valid examples pass.
 - `check-metaschema` self-validates `schemas/example-config.schema.json` against its declared JSON Schema Draft 2020-12 metaschema.
 - `tests/test_schema_examples.py` auto-discovers `schemas/*.schema.json` and the matching `schemas/examples/<name>/{valid,invalid}/` fixtures and asserts that **valid** fixtures exit with code `0` and **invalid** fixtures exit non-zero. Run it with `pytest tests/test_schema_examples.py -v` after any schema or fixture change.
+<!-- template-sync: begin github-data-ci-reference-only -->
 - The dedicated [`.github/workflows/data-ci.yml`](.github/workflows/data-ci.yml) workflow re-runs the same data-file hooks so JSON/YAML/Actions enforcement can be required via branch protection.
+<!-- template-sync: end github-data-ci-reference-only -->
 
 To **adapt the worked example** for your own contract, follow the schema authoring conventions in [`schemas/README.md`](schemas/README.md) (Draft 2020-12, `.schema.json` naming, `additionalProperties: false` for closed contracts, `schemas/examples/<name>/{valid,invalid}/` layout) rather than restating those conventions here.
 
@@ -2006,7 +2021,7 @@ Examples of how to use your project.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
+See your project's `CONTRIBUTING.md` for development setup and guidelines.
 
 ## License
 
@@ -2560,7 +2575,7 @@ git push origin main
 **Solution:** Ensure pre-commit is installed globally and in your PATH:
 
 ```bash
-pip install pre-commit
+python -m pip install -r requirements-pre-commit.txt
 pre-commit --version
 ```
 
@@ -2647,13 +2662,13 @@ pre-commit install
 
 > **Note:** If `pre-commit` is not found, run `python3 -m pipx ensurepath` (or `pipx ensurepath` if `pipx` is already on your PATH) and restart your terminal. Do not use `pipx run pre-commit install` because it runs from a temporary environment and can create hooks that reference a non-existent interpreter.
 
-If you installed with Homebrew:
+If you installed pipx with Homebrew:
 
 ```bash
 pre-commit install
 ```
 
-> **Note:** If `pre-commit` is not found, ensure Homebrew's `bin` directory (typically `/opt/homebrew/bin` on Apple Silicon or `/usr/local/bin` on Intel Macs) is in your PATH.
+> **Note:** If `pipx` is not found, ensure Homebrew's `bin` directory (typically `/opt/homebrew/bin` on Apple Silicon or `/usr/local/bin` on Intel Macs) is in your PATH.
 
 If you installed with pip:
 
@@ -2687,7 +2702,9 @@ Now that your repository is set up, you're ready to start development! For the s
 - Submitting pull requests
 - Code review process
 
+<!-- template-sync: begin baseline-reference-only -->
 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed instructions.
+<!-- template-sync: end baseline-reference-only -->
 
 **Quick reference for daily development:**
 

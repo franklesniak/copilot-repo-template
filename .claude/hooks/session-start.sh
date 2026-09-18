@@ -50,6 +50,7 @@ persist_path_prepend() {
   fi
 }
 
+# template-sync: begin baseline-only
 python_executable() {
   if command -v python >/dev/null 2>&1; then
     command -v python
@@ -68,19 +69,29 @@ python_user_bin_dir() {
   printf '%s/bin\n' "$user_base"
 }
 
-# Treat pre-commit as usable only if it both resolves on PATH and actually
-# runs. A broken wrapper (stale shebang, missing interpreter) can satisfy
-# `command -v` yet fail on execution, which would otherwise let the hook skip
-# installation and report a false success.
-pre_commit_runnable() {
-  command -v pre-commit >/dev/null 2>&1 && pre-commit --version >/dev/null 2>&1
+# Check the command used by the gate, including wrong or broken PATH wrappers.
+pre_commit_matches() {
+  command -v pre-commit >/dev/null 2>&1 \
+    && [ "$(pre-commit --version 2>/dev/null)" = "$pre_commit_expected" ]
 }
 
 ensure_pre_commit() {
   local pre_commit_bin_dir
   local python_bin
+  local repository_root
+  local pre_commit_requirement
+  local pre_commit_expected
 
-  if pre_commit_runnable; then
+  repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+  pre_commit_requirement="$(cat "$repository_root/requirements-pre-commit.txt")"
+  pre_commit_requirement="${pre_commit_requirement%$'\r'}"
+  if [[ ! "$pre_commit_requirement" =~ ^pre-commit==[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "requirements-pre-commit.txt must contain one exact pre-commit pin" >&2
+    exit 1
+  fi
+  pre_commit_expected="${pre_commit_requirement/==/ }"
+
+  if pre_commit_matches; then
     echo "pre-commit already available at $(command -v pre-commit)"
     return 0
   fi
@@ -88,16 +99,16 @@ ensure_pre_commit() {
   if command -v uv >/dev/null 2>&1; then
     pre_commit_bin_dir="${UV_TOOL_BIN_DIR:-${HOME:?HOME or UV_TOOL_BIN_DIR must be set}/.local/bin}"
     persist_path_prepend "$pre_commit_bin_dir"
-    if ! pre_commit_runnable; then
+    if ! pre_commit_matches; then
       echo "Installing pre-commit with uv tool"
-      uv tool install pre-commit
+      uv tool install --force "$pre_commit_requirement"
     fi
   elif command -v pipx >/dev/null 2>&1; then
     pre_commit_bin_dir="${PIPX_BIN_DIR:-${HOME:?HOME or PIPX_BIN_DIR must be set}/.local/bin}"
     persist_path_prepend "$pre_commit_bin_dir"
-    if ! pre_commit_runnable; then
+    if ! pre_commit_matches; then
       echo "Installing pre-commit with pipx"
-      pipx install pre-commit
+      pipx install --force "$pre_commit_requirement"
     fi
   else
     python_bin="$(python_executable)" || {
@@ -106,14 +117,14 @@ ensure_pre_commit() {
     }
     pre_commit_bin_dir="$(python_user_bin_dir "$python_bin")"
     persist_path_prepend "$pre_commit_bin_dir"
-    if ! pre_commit_runnable; then
+    if ! pre_commit_matches; then
       echo "Installing pre-commit with ${python_bin} -m pip --user"
-      "$python_bin" -m pip install --user pre-commit
+      "$python_bin" -m pip install --user "$pre_commit_requirement"
     fi
   fi
 
-  if ! pre_commit_runnable; then
-    echo "pre-commit installation completed, but pre-commit is not runnable" >&2
+  if ! pre_commit_matches; then
+    echo "pre-commit installation did not provide $pre_commit_expected on PATH" >&2
     exit 1
   fi
 
@@ -121,6 +132,7 @@ ensure_pre_commit() {
 }
 
 ensure_pre_commit
+# template-sync: end baseline-only
 
 # Persist INSTALL_DIR via CLAUDE_ENV_FILE so the terraform we install below
 # resolves first in subsequent shells, even if a different `terraform` is
