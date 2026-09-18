@@ -37,6 +37,33 @@ POLICY_CELL_WORD = (
 )
 # Explicit classes keep schema consumers and Python whitespace semantics equal.
 POLICY_CELL_PATTERN = re.compile(rf"^{POLICY_CELL_WORD}+(?: {POLICY_CELL_WORD}+)*(?![\s\S])")
+# CommonMark 0.31.2 section 4.6. Comments retain their separate inline handling.
+POLICY_HTML_LITERAL_START = re.compile(
+    r"^ {0,3}<(?:pre|script|style|textarea)(?=[ \t>]|$)", re.IGNORECASE | re.ASCII
+)
+POLICY_HTML_LITERAL_END = re.compile(r"</(?:pre|script|style|textarea)>", re.IGNORECASE | re.ASCII)
+POLICY_HTML_BLOCK_START = re.compile(
+    r"^ {0,3}</?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|"
+    r"colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|"
+    r"frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|"
+    r"noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|"
+    r"thead|title|tr|track|ul)(?=[ \t>]|/>|$)",
+    re.IGNORECASE | re.ASCII,
+)
+POLICY_HTML_COMPLETE_TAG = re.compile(
+    r"^ {0,3}(?:</[A-Za-z][A-Za-z0-9-]*[ \t]*>|"
+    r"<(?![Pp][Rr][Ee](?=[ \t/>]))(?![Ss][Cc][Rr][Ii][Pp][Tt](?=[ \t/>]))"
+    r"(?![Ss][Tt][Yy][Ll][Ee](?=[ \t/>]))(?![Tt][Ee][Xx][Tt][Aa][Rr][Ee][Aa](?=[ \t/>]))"
+    r"[A-Za-z][A-Za-z0-9-]*(?:[ \t]+[A-Za-z_:][A-Za-z0-9_.:-]*"
+    r"(?:[ \t]*=[ \t]*(?:[^ \t\"'=<>`]+|'[^']*'|\"[^\"]*\"))?)*[ \t]*/?>)[ \t]*$"
+)
+POLICY_HTML_BLANK_END = re.compile(r"^[ \t]*$")
+POLICY_HTML_AMBIGUOUS_START = re.compile(
+    r"^ {0,3}(?:<[Tt][Ee][Xx][Tt][Aa][Rr][Ee][Aa](?=[ \t>]|/>|$)|"
+    r"</?(?:[Ss][Ee][Aa][Rr][Cc][Hh]|[Ss][Oo][Uu][Rr][Cc][Ee])(?=[ \t>]|/>|$)|<![a-z])"
+)
+POLICY_HTML_TEXTAREA_END = re.compile(r"</textarea>", re.IGNORECASE | re.ASCII)
+POLICY_HTML_AMBIGUITY_PREFIX = "[unsupported HTML grammar] "
 
 
 class InstructionContractValidationError(Exception):
@@ -985,16 +1012,40 @@ def policy_code_span_ends(lines: list[str]) -> dict[tuple[int, int], tuple[int, 
                 r"^(?: {4}| *\t| {0,3}(?:>|#{1,6}(?:[ \t]|$)|<!--|[-+*] |[0-9]+[.)] ))", line
             )
             or parse_markdown_fence_open(line, MARKDOWN_FENCE_CONTEXT) is not None
+            or policy_html_block_end(line, paragraph_can_continue=True) is not None
+            or POLICY_HTML_AMBIGUOUS_START.match(line) is not None
         ):
             next_runs.clear()
     return ends
+
+
+def policy_html_block_end(line: str, *, paragraph_can_continue: bool) -> re.Pattern[str] | None:
+    """Return a non-comment HTML block's end condition, or None for live text.
+
+    Literal tags, processing instructions, declarations and CDATA use explicit
+    terminators. Block tags and standalone complete tags end at a blank line.
+    Only the standalone complete-tag family cannot interrupt a paragraph.
+    """
+    if POLICY_HTML_LITERAL_START.match(line):
+        return POLICY_HTML_LITERAL_END
+    if re.match(r"^ {0,3}<\?", line):
+        return re.compile(r"\?>")
+    if re.match(r"^ {0,3}<![A-Za-z]", line):
+        return re.compile(r">")
+    if re.match(r"^ {0,3}<!\[CDATA\[", line):
+        return re.compile(r"\]\]>")
+    if POLICY_HTML_BLOCK_START.match(line) or (
+        not paragraph_can_continue and POLICY_HTML_COMPLETE_TAG.fullmatch(line)
+    ):
+        return POLICY_HTML_BLANK_END
+    return None
 
 
 def operative_markdown_lines(text: str) -> list[str]:
     """Read the deliberately narrow live policy subset, preserving block boundaries.
 
     Section contracts accept top-level ATX headings, paragraphs/list items, and
-    pipe tables. Fences, block quotes, indented code, and HTML comments cannot
+    pipe tables. Fences, block quotes, indented code, and raw HTML blocks cannot
     supply an obligation. Existing loose heading/phrase contracts keep their
     compatibility behavior. This is a static policy guard, not an agent runner.
     """
@@ -1008,9 +1059,17 @@ def operative_markdown_lines(text: str) -> list[str]:
     list_content_indent: int | None = None
     in_comment = False
     active_fence: MarkdownFence | None = None
+    active_html_end: re.Pattern[str] | None = None
     code_end: tuple[int, int] | None = None
     for row, line in enumerate(lines):
         continued_comment = in_comment
+        if active_html_end is not None:
+            if active_html_end is POLICY_HTML_LITERAL_END and POLICY_HTML_TEXTAREA_END.search(line):
+                result.append(POLICY_HTML_AMBIGUITY_PREFIX + line)
+            if active_html_end.search(line):
+                active_html_end = None
+            result.append("")
+            continue
         if active_fence is not None:
             content = active_fence_content(line, active_fence)
             if content is not None:
@@ -1025,8 +1084,16 @@ def operative_markdown_lines(text: str) -> list[str]:
                 continue
             active_fence = None
         if not in_comment and code_end is None:
+            if POLICY_HTML_AMBIGUOUS_START.match(line):
+                # These starts differ between CommonMark 0.31.2 and GFM 0.29.
+                # Keep document-level uncertainty visible even outside a section.
+                result.append(POLICY_HTML_AMBIGUITY_PREFIX + line)
             expanded = line.expandtabs(4)
             indent = len(expanded) - len(expanded.lstrip(" "))
+            html_end = policy_html_block_end(
+                line,
+                paragraph_can_continue=(paragraph_can_continue or quoted_paragraph_can_continue),
+            )
             ordered = re.match(r"^ {0,3}([0-9]{1,9})[.)](?:[ \t]|$)", line)
             if (
                 paragraph_can_continue
@@ -1044,6 +1111,7 @@ def operative_markdown_lines(text: str) -> list[str]:
                 or is_policy_thematic_break(line)
                 or consume_blockquote_prefix(line)[0] > 0
                 or re.match(r"^ {0,3}<!--", line) is not None
+                or html_end is not None
                 or parse_markdown_fence_open(line, MARKDOWN_FENCE_CONTEXT) is not None
             )
             if line.strip(" \t") and list_content_indent is not None:
@@ -1052,6 +1120,7 @@ def operative_markdown_lines(text: str) -> list[str]:
                     or is_policy_heading(line)
                     or consume_blockquote_prefix(line)[0]
                     or re.match(r"^ {0,3}<!--", line)
+                    or html_end is not None
                     or parse_markdown_fence_open(line, MARKDOWN_FENCE_CONTEXT) is not None
                 ):
                     result.append("[unsupported nested policy] " + line)
@@ -1061,6 +1130,11 @@ def operative_markdown_lines(text: str) -> list[str]:
             if not line.strip(" \t") or outside_block:
                 paragraph_can_continue = False
             if not line.strip(" \t") or is_policy_heading(line):
+                quoted_paragraph_can_continue = False
+                unsupported_quote = False
+            if html_end is not None:
+                # An unquoted interrupting block ends the preceding quote;
+                # its contents must not become live at a later heading.
                 quoted_paragraph_can_continue = False
                 unsupported_quote = False
             if unsupported_quote:
@@ -1074,6 +1148,12 @@ def operative_markdown_lines(text: str) -> list[str]:
                     list_content_indent is None or indent < list_content_indent
                 ):
                     list_content_indent = item_indent
+                if re.match(r"^ {0,3}(?:[-+*]|[0-9]{1,9}[.)]) {5,}[^ ]", expanded):
+                    # More than four visual padding columns begin item code.
+                    # Preserve its source instead of normalizing it into policy.
+                    paragraph_can_continue = False
+                    result.append("[unsupported list code] " + line)
+                    continue
             active_fence = parse_markdown_fence_open(line, MARKDOWN_FENCE_CONTEXT)
             if active_fence is not None:
                 quoted_paragraph_can_continue = False
@@ -1104,6 +1184,16 @@ def operative_markdown_lines(text: str) -> list[str]:
                 result.append(
                     "[unsupported indented policy] " + line if paragraph_can_continue else ""
                 )
+                continue
+            if html_end is not None:
+                # A block start wins over inline delimiters on this whole line.
+                if html_end is POLICY_HTML_LITERAL_END and POLICY_HTML_TEXTAREA_END.search(line):
+                    result.append(POLICY_HTML_AMBIGUITY_PREFIX + line)
+                active_html_end = None if html_end.search(line) else html_end
+                paragraph_can_continue = False
+                quoted_paragraph_can_continue = False
+                list_content_indent = None
+                result.append("")
                 continue
         visible: list[str] = []
         elided_comment = in_comment
@@ -1244,10 +1334,7 @@ def parse_policy_body(lines: list[str]) -> tuple[list[str], list[RequiredTable]]
     while index < len(lines):
         line = lines[index]
         boundary = (
-            not line
-            or is_policy_heading(line)
-            or line.startswith("|")
-            or re.match(r"^(?:[0-9]+[.)]|[-+*]) ", line)
+            not line or is_policy_heading(line) or line.startswith("|") or starts_policy_list(line)
         )
         if boundary and paragraph:
             paragraphs.append(normalize_policy_paragraph(" ".join(paragraph)))
@@ -1317,12 +1404,25 @@ def section_failures(
     """Return stable, individually waivable failures for scoped policy contracts."""
     failures: list[str] = []
     lines = operative_markdown_lines(text)
+    ambiguous_html = [line for line in lines if line.startswith(POLICY_HTML_AMBIGUITY_PREFIX)]
+    document_identity = hashlib.sha256(text.encode("utf-8")).hexdigest() if ambiguous_html else ""
     sections_by_heading = {section.heading: section for section in sections}
     live_lines = set(lines)
     for section in sections:
         if not section_applies(section, included_modules):
             continue
         prefix = f"section:{section.heading}"
+        if ambiguous_html:
+            expected_section = (
+                section.heading,
+                section.next_heading,
+                section.required_paragraphs,
+                [(table.headers, table.rows) for table in section.required_tables],
+            )
+            identity = policy_inventory_digest(
+                expected_section, [ambiguous_html, document_identity]
+            )
+            failures.append(f"{prefix}:html-grammar:{identity}")
         boundary = applicable_section_boundary(
             section, sections_by_heading, live_lines, included_modules
         )

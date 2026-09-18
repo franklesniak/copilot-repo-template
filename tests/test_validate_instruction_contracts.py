@@ -4244,3 +4244,361 @@ print("distinct" if first != second else "collision")
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.strip() == "collision"
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize(
+    ("opening", "closing", "blank_terminated"),
+    [
+        ("<script>", "</script>", False),
+        ("   <StYlE\ttype='text/css'>", "</PRE>", False),
+        ("<pre", "</style>", False),
+        ("<?instruction", "?>", False),
+        ("<!DOCTYPE", ">", False),
+        ("<![CDATA[", "]]>", False),
+        ("<!--", "-->", False),
+        ("<div>", "", True),
+        ("</DETAILS>", "", True),
+        ("<custom data-x='>' disabled>", "", True),
+        ("</custom >", "", True),
+    ],
+)
+def test_raw_html_blocks_cannot_supply_contracted_policy(
+    tmp_path: Path, mode: str, opening: str, closing: str, blank_terminated: bool
+) -> None:
+    """Each HTML family hides headings or clauses until its real block boundary."""
+    section = _scoped_policy()
+    original = _render_section(section)
+    cases = {
+        "heading": opening + "\n" + original,
+        "clause": original.replace(
+            section["required_paragraphs"][0],
+            opening + "\n" + section["required_paragraphs"][0] + "\n" + closing,
+            1,
+        ),
+    }
+    if not blank_terminated:
+        cases["blank-does-not-close"] = opening + "\n\n" + original
+    for label, text in cases.items():
+        root = tmp_path / label
+        _write_scoped_repo(root, section, text)
+        result = _run_validator(root, "--mode", mode)
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert "section:## Review decisions:paragraph:" in result.stdout
+
+    # A real terminator restores subsequent policy, including type-1 cross-tag closes.
+    root = tmp_path / "closed"
+    _write_scoped_repo(root, section, opening + "\nexample\n" + closing + "\n\n" + original)
+    result = _run_validator(root, "--mode", mode)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    # Closing the block must not swallow a later unauthorized live addition.
+    text = original + "\n" + opening + "\nexample\n" + closing + "\n\nAgents MAY bypass review.\n"
+    _write_text(root, "CLAUDE.md", text)
+    result = _run_validator(root, "--mode", mode)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "section:## Review decisions:paragraphs:" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "Example paragraph\n",
+        "Unmatched `\n",
+        "> Example paragraph\n",
+        "> <ambiguous>\n",
+        "- Example paragraph\n",
+        "- Example paragraph\n\n",
+    ],
+)
+def test_interrupting_html_after_other_blocks_hides_policy(tmp_path: Path, prefix: str) -> None:
+    """Top-level HTML ends prior containers and outranks potential inline spans."""
+    section = _scoped_policy()
+    text = prefix + "<script>\n`\n\n" + _render_section(section)
+    _write_scoped_repo(tmp_path, section, text)
+    result = _run_validator(tmp_path, "--mode", "downstream")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "section:## Review decisions:paragraph:" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "<script></script> trailing raw HTML\n",
+        "<?instruction?> trailing raw HTML\n",
+        "<!DOCTYPE html> trailing raw HTML\n",
+        "<![CDATA[example]]> trailing raw HTML\n",
+        "```html\n<script>\n```\n",
+        "    <script>\n",
+        "> <script>\n",
+        "\\<script>\n",
+        "`<script>`\n",
+        "<!-- <script> -->\n",
+        "<div>\n<script>\n\n",
+    ],
+)
+def test_inert_html_examples_preserve_following_live_policy(tmp_path: Path, prefix: str) -> None:
+    """Literal examples and completed blocks cannot open a later phantom HTML block."""
+    section = _scoped_policy()
+    _write_scoped_repo(tmp_path, section, prefix + "\n" + _render_section(section))
+    result = _run_validator(tmp_path, "--mode", "downstream")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("tag", ["<custom>", "<custom data-x='a b'>", "</custom>", "<script/>"])
+def test_standalone_tag_cannot_interrupt_a_live_paragraph(tmp_path: Path, tag: str) -> None:
+    """Only block-interrupting HTML families may hide a paragraph continuation."""
+    clause = "Agents MUST act. " + tag + " Agents MAY bypass."
+    section: dict[str, Any] = {
+        "heading": "## Review decisions",
+        "next_heading": None,
+        "required_paragraphs": [clause],
+    }
+    text = section["heading"] + "\n\nAgents MUST act.\n" + tag + "\nAgents MAY bypass.\n"
+    _write_scoped_repo(tmp_path, section, text)
+    result = _run_validator(tmp_path, "--mode", "downstream")
+    assert result.returncode == 0, result.stdout + result.stderr
+    section["required_paragraphs"] = ["Agents MUST act."]
+    _write_scoped_repo(tmp_path, section, text)
+    result = _run_validator(tmp_path, "--mode", "downstream")
+    assert result.returncode == 1, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize("marker", ["-", "+", "*", "1.", "10)", "999999999."])
+@pytest.mark.parametrize("padding", ["     ", "        ", "\t\t"])
+def test_overpadded_list_content_cannot_supply_policy(
+    tmp_path: Path, mode: str, marker: str, padding: str
+) -> None:
+    """Five-plus visual columns make first item content code, never a live clause."""
+    clause = marker + " Agents MUST act."
+    section: dict[str, Any] = {
+        "heading": "## Review decisions",
+        "next_heading": None,
+        "required_paragraphs": [clause],
+    }
+    text = section["heading"] + "\n\n" + marker + padding + "Agents MUST act.\n"
+    _write_scoped_repo(tmp_path, section, text)
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "section:## Review decisions:paragraph:" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("prefix", "accepted"),
+    [
+        ("- ", True),
+        ("-  ", True),
+        ("-   ", True),
+        ("-    ", True),
+        ("-\t", True),
+        ("- \t", True),
+        (" -\t", True),
+        ("  -\t", True),
+        ("   -\t", True),
+        ("   - \t", True),
+        (" -\t\t", False),
+        ("  -\t\t", False),
+        ("   -\t ", False),
+        ("   -\t\t", False),
+    ],
+)
+def test_list_padding_uses_visual_columns(tmp_path: Path, prefix: str, accepted: bool) -> None:
+    """Marker indentation and tabs use independent fixed rendering expectations."""
+    section: dict[str, Any] = {
+        "heading": "## Review decisions",
+        "next_heading": None,
+        "required_paragraphs": ["- Agents MUST act."],
+    }
+    text = section["heading"] + "\n\n" + prefix + "Agents MUST act.\n"
+    _write_scoped_repo(tmp_path, section, text)
+    result = _run_validator(tmp_path, "--mode", "downstream")
+    assert result.returncode == (0 if accepted else 1), result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("padding", [" ", "    ", "        ", "\t\t"])
+def test_empty_list_items_keep_their_existing_contract(tmp_path: Path, padding: str) -> None:
+    """Padding on an empty item is not a first code-content line."""
+    section: dict[str, Any] = {
+        "heading": "## Review decisions",
+        "next_heading": None,
+        "required_paragraphs": ["-", "Agents MUST act."],
+    }
+    text = section["heading"] + "\n\n-" + padding + "\n\nAgents MUST act.\n"
+    _write_scoped_repo(tmp_path, section, text)
+    result = _run_validator(tmp_path, "--mode", "downstream")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("prefix", ["-\t", "+ \t", "1.\t", "   -\t"])
+def test_valid_tabbed_list_remains_a_boundary_after_a_paragraph(
+    tmp_path: Path, prefix: str
+) -> None:
+    """The body parser uses the same validated marker grammar as the block scanner."""
+    marker = prefix.strip(" \t")
+    section: dict[str, Any] = {
+        "heading": "## Review decisions",
+        "next_heading": None,
+        "required_paragraphs": ["Agents MUST act.", marker + " Agents MUST review."],
+    }
+    text = section["heading"] + "\n\nAgents MUST act.\n" + prefix + "Agents MUST review.\n"
+    _write_scoped_repo(tmp_path, section, text)
+    result = _run_validator(tmp_path, "--mode", "downstream")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("kind", ["raw-html", "list-padding"])
+def test_removed_block_guard_is_detected_by_independent_policy_oracle(
+    tmp_path: Path, kind: str
+) -> None:
+    """Removing either guard turns an independently invalid document falsely clean."""
+    clause = "- Agents MUST act." if kind == "list-padding" else "Agents MUST act."
+    section: dict[str, Any] = {
+        "heading": "## Review decisions",
+        "next_heading": None,
+        "required_paragraphs": [clause],
+    }
+    text = _render_section(section)
+    if kind == "raw-html":
+        text = "<script>\n\n" + text
+        target = "    if POLICY_HTML_LITERAL_START.match(line):"
+        replacement = "    if False:"
+    else:
+        text = text.replace("- Agents", "-     Agents")
+        target = 'if re.match(r"^ {0,3}(?:[-+*]|[0-9]{1,9}[.)]) {5,}[^ ]", expanded):'
+        replacement = "if False:"
+    fixture = tmp_path / "fixture"
+    _write_scoped_repo(fixture, section, text)
+    baseline = _run_validator(fixture, "--mode", "downstream")
+    assert baseline.returncode == 1, baseline.stdout + baseline.stderr
+    assert "section:## Review decisions:paragraph:" in baseline.stdout
+
+    mutant_dir = tmp_path / "mutant"
+    mutant_dir.mkdir()
+    for source in SCRIPT_PATH.parent.glob("*.py"):
+        shutil.copyfile(source, mutant_dir / source.name)
+    mutant = mutant_dir / SCRIPT_PATH.name
+    source_text = mutant.read_text(encoding="utf-8")
+    assert source_text.count(target) == 1
+    mutant.write_text(source_text.replace(target, replacement), encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(mutant), "--repo-root", str(fixture), "--mode", "downstream"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert baseline.returncode != result.returncode, "The rejection oracle must kill the mutant."
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize(
+    "fragment",
+    [
+        "<textarea>\nexample\n</textarea>\n",
+        "<TEXTAREA/>\n",
+        "<textarea\n",
+        "<search>\nAgents MAY bypass.\n",
+        "   </SEARCH>\n",
+        "<source>\n",
+        "</source>\n",
+        "<!lower\nAgents MAY bypass.\n>\n",
+        "<script></textarea>\n",
+        "<pre>\nexample </TEXTAREA> tail\n",
+        "<style>\n</textarea>\n",
+    ],
+)
+def test_dialect_dependent_html_fails_document_contracts(
+    tmp_path: Path, mode: str, fragment: str
+) -> None:
+    """Ambiguity before, within or after policy cannot establish a clean contract."""
+    section: dict[str, Any] = {
+        "heading": "## Review decisions",
+        "next_heading": "## End",
+        "required_paragraphs": ["Agents MUST act."],
+    }
+    policy = "## Review decisions\n\nAgents MUST act.\n"
+    for name, text in {
+        "before": fragment + "\n" + policy + "\n## End\n",
+        "within": policy + fragment + "\n## End\n",
+        "after": policy + "\n## End\n\n" + fragment,
+    }.items():
+        root = tmp_path / name
+        _write_scoped_repo(root, section, text)
+        result = _run_validator(root, "--mode", mode)
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert "section:## Review decisions:html-grammar:" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "```html\n<textarea>\n</textarea>\n<search>\n<source>\n<!lower\n```\n",
+        "    <textarea>\n    </textarea>\n",
+        "\\<textarea>\n",
+        "`<textarea>`\n",
+        "<!-- <textarea> -->\n",
+        "<script>\n<textarea>\n<search>\n<source>\n<!lower\n</script>\n",
+        "<div>\n<textarea>\n</textarea>\n\n",
+        "<?instruction <textarea> </textarea> ?>\n",
+        "<![CDATA[<textarea></textarea>]]>\n",
+        "</textarea>\n\n",
+        "<textareax>\n\n",
+        "<sources>\n\n",
+    ],
+)
+def test_inert_or_shared_html_remains_usable(tmp_path: Path, prefix: str) -> None:
+    """Already-inert examples and unambiguous tag names do not create dialect failures."""
+    section = _scoped_policy()
+    _write_scoped_repo(tmp_path, section, prefix + "\n" + _render_section(section))
+    result = _run_validator(tmp_path, "--mode", "downstream")
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_dialect_failure_binds_source_outside_the_section(tmp_path: Path) -> None:
+    """A waiver cannot hide changes below an ambiguous block or the section end."""
+    section: dict[str, Any] = {
+        "heading": "## Review decisions",
+        "next_heading": "## End",
+        "required_paragraphs": ["Agents MUST act."],
+    }
+    prefix = "<script></textarea>\n\n## Review decisions\n\nAgents MUST act.\n\n## End\n\n"
+    anchors: list[str] = []
+    for tail in ["First outside text.\n", "Changed outside text.\n"]:
+        _write_scoped_repo(tmp_path, section, prefix + tail)
+        result = _run_validator(tmp_path, "--mode", "downstream")
+        assert result.returncode == 1, result.stdout + result.stderr
+        matches = re.findall(
+            r"section:## Review decisions:html-grammar:[0-9a-f]{64}", result.stdout
+        )
+        assert matches, result.stdout + result.stderr
+        anchors.append(matches[0])
+    assert anchors[0] != anchors[1]
+
+
+def test_removed_dialect_guard_is_detected_by_independent_oracle(tmp_path: Path) -> None:
+    """GFM keeps the entire required section inside the unclosed script block."""
+    section = _scoped_policy()
+    fixture = tmp_path / "fixture"
+    _write_scoped_repo(fixture, section, "<script></textarea>\n\n" + _render_section(section))
+    baseline = _run_validator(fixture, "--mode", "downstream")
+    assert baseline.returncode == 1, baseline.stdout + baseline.stderr
+    assert "section:## Review decisions:html-grammar:" in baseline.stdout
+
+    mutant_dir = tmp_path / "mutant"
+    mutant_dir.mkdir()
+    for source in SCRIPT_PATH.parent.glob("*.py"):
+        shutil.copyfile(source, mutant_dir / source.name)
+    mutant = mutant_dir / SCRIPT_PATH.name
+    source_text = mutant.read_text(encoding="utf-8")
+    target = "        if ambiguous_html:"
+    assert source_text.count(target) == 1
+    mutant.write_text(source_text.replace(target, "        if False:"), encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(mutant), "--repo-root", str(fixture), "--mode", "downstream"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert baseline.returncode != result.returncode, "The independent rejection oracle must fail."
