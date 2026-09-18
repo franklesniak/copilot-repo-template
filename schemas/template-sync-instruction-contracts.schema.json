@@ -56,6 +56,11 @@
         "$ref": "#/$defs/nonEmptyString"
       }
     },
+    "policyHeading": {
+      "type": "string",
+      "pattern": "^#{1,6} [^\\r\\n]*[^ \\t\\r\\n](?![\\s\\S])",
+      "description": "Exact single-line ATX heading spelling, without trailing ASCII space or tab. Internal whitespace and Unicode remain literal."
+    },
     "policyCell": {
       "type": "string",
       "pattern": "^[^|\\u0009-\\u000d\\u001c-\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028-\\u2029\\u202f\\u205f\\u3000\\ufeff]+(?: [^|\\u0009-\\u000d\\u001c-\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028-\\u2029\\u202f\\u205f\\u3000\\ufeff]+)*(?![\\s\\S])",
@@ -90,13 +95,14 @@
       "additionalProperties": false,
       "properties": {
         "heading": {
-          "type": "string",
-          "pattern": "^#{1,6} [^\\r\\n]+$",
+          "$ref": "#/$defs/policyHeading",
           "description": "Unique live ATX heading. Its direct body ends before the next heading of any level; contract child sections separately."
         },
         "next_heading": {
-          "type": ["string", "null"],
-          "pattern": "^#{1,6} [^\\r\\n]+$",
+          "anyOf": [
+            { "$ref": "#/$defs/policyHeading" },
+            { "type": "null" }
+          ],
           "description": "Exact unique immediate next live heading, or null for EOF. Downstream may follow the declared acyclic successor chain only through absent sections whose requires_modules are not retained. Present optional sections remain boundaries. Added unrecognized headings fail; the successor itself is outside this section's scope."
         },
         "requires_modules": {

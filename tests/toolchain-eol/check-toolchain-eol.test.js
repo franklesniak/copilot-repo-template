@@ -595,10 +595,10 @@ test('setup-node all-blank direct matrix still inventories file-matrix values', 
     assert.deepEqual(inventory.selectors.map((item) => item.rawValue).sort(), ['22.19.0', '24.18.0']);
 });
 
-test('setup-node reports ambiguous matrix pairing and unresolved direct matrix inputs', () => {
-    for (const [matrix, expected, message] of [
-        [{ include: [{ node: '', file: '.nvmrc' }, { node: '24', file: 'ignored-file' }] }, ['24'], /Cannot correlate/],
-        [{ file: ['.nvmrc'] }, [], /cannot be resolved/],
+test('setup-node correlates static pairs and treats missing direct properties as blank', () => {
+    for (const [matrix, expected] of [
+        [{ include: [{ node: '', file: '.nvmrc' }, { node: '24', file: 'ignored-file' }] }, ['22.19.0', '24']],
+        [{ file: ['.nvmrc'] }, ['22.19.0']],
     ]) {
         const repoRoot = makeTempRepo();
         writeFile(repoRoot, '.nvmrc', '22.19.0\n');
@@ -608,8 +608,7 @@ test('setup-node reports ambiguous matrix pairing and unresolved direct matrix i
         }, matrix);
         const inventory = scanner.collectNodeSelectors(repoRoot);
         assert.deepEqual(inventory.selectors.map((item) => item.rawValue), expected);
-        assert.equal(inventory.problems.length, 1);
-        assert.match(inventory.problems[0].message, message);
+        assert.deepEqual(inventory.problems, []);
     }
 });
 
@@ -625,7 +624,8 @@ test('setup-node reports unresolved consulted version-file matrices', () => {
             assert.deepEqual(inventory.selectors, []);
             assert.equal(inventory.problems.length, 1);
             assert.equal(inventory.problems[0].path.split(path.sep).join('/'), '.github/workflows/node.yml');
-            assert.match(inventory.problems[0].message, /version-file input cannot be resolved/);
+            assert.match(inventory.problems[0].message, Object.hasOwn(matrix, 'file')
+                ? /axis file must be a nonempty static list/ : /version-file input has a blank value/);
         }
     }
 });
@@ -662,6 +662,247 @@ test('setup-node nonblank direct input ignores unresolved or blank version-file 
         const inventory = scanner.collectNodeSelectors(repoRoot);
         assert.deepEqual(inventory.problems, []);
         assert.deepEqual(inventory.selectors.map((item) => item.rawValue), ['24']);
+    }
+});
+
+test('setup-node excludes unreachable blank variants before reading the version file', () => {
+    for (const file of ['.nvmrc', 'missing-file']) {
+        const repoRoot = makeTempRepo();
+        writeFile(repoRoot, '.nvmrc', '16.0.0\n');
+        writeNodeWorkflow(repoRoot, {
+            'node-version': '${{ matrix.node }}', 'node-version-file': file,
+        }, { node: ['', '24'], exclude: [{ node: '' }] });
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        assert.deepEqual(inventory.problems, []);
+        assert.deepEqual(inventory.selectors.map((item) => item.rawValue), ['24']);
+    }
+});
+
+test('setup-node distinguishes partial exclusions, complete removal, and include restoration', () => {
+    const cases = [
+        [{ os: ['ubuntu', 'windows'], node: ['', '24'], exclude: [{ os: 'ubuntu', node: '' }] }, ['22.19.0', '24']],
+        [{ os: ['ubuntu', 'windows'], node: ['', '24'], exclude: [{ node: '' }] }, ['24']],
+        [{ node: ['', '24'], exclude: [{ node: '' }], include: [{ node: '' }] }, ['22.19.0', '24']],
+        [{ node: [''], exclude: [{ node: '' }] }, []],
+        [{ node: [''], exclude: [{ node: '' }], include: [{ node: '24' }] }, ['24']],
+    ];
+    for (const [matrix, expected] of cases) {
+        const repoRoot = makeTempRepo();
+        if (expected.includes('22.19.0')) writeFile(repoRoot, '.nvmrc', '22.19.0\n');
+        writeNodeWorkflow(repoRoot, {
+            'node-version': '${{ matrix.node }}', 'node-version-file': '.nvmrc',
+        }, matrix);
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        assert.deepEqual(inventory.problems, []);
+        assert.deepEqual(inventory.selectors.map((item) => item.rawValue).sort(), expected);
+    }
+});
+
+test('setup-node applies ordered includes to original combinations only', () => {
+    const repoRoot = makeTempRepo();
+    writeFile(repoRoot, '.node-version', '22.19.0\n');
+    writeFile(repoRoot, '.nvmrc', '24.18.0\n');
+    writeNodeWorkflow(repoRoot, {
+        'node-version': '${{ matrix.node }}', 'node-version-file': '${{ matrix.file }}',
+    }, {
+        os: ['ubuntu'], node: [''],
+        include: [
+            { file: 'overwritten-missing-file' },
+            { os: 'windows', node: '', file: '.nvmrc' },
+            { file: '.node-version' },
+        ],
+    });
+    const inventory = scanner.collectNodeSelectors(repoRoot);
+    assert.deepEqual(inventory.problems, []);
+    assert.deepEqual(inventory.selectors.map((item) => [item.rawValue, item.referencedPath]), [
+        ['22.19.0', '.node-version'], ['24.18.0', '.nvmrc'],
+    ]);
+});
+
+test('setup-node resolves nested object axes and compares excluded objects structurally', () => {
+    const repoRoot = makeTempRepo();
+    writeNodeWorkflow(repoRoot, {
+        'node-version': '${{ matrix.node.version }}', 'node-version-file': 'missing-file',
+    }, {
+        node: [{ version: '', env: 'test' }, { version: '24' }],
+        exclude: [{ node: { env: 'test', version: '' } }],
+    });
+    const inventory = scanner.collectNodeSelectors(repoRoot);
+    assert.deepEqual(inventory.problems, []);
+    assert.deepEqual(inventory.selectors.map((item) => item.rawValue), ['24']);
+});
+
+test('setup-node reports missing direct matrix properties without a file fallback', () => {
+    const cases = [
+        [undefined, '${{ matrix.node }}', []],
+        [{ os: ['ubuntu'] }, '${{ matrix.node }}', []],
+        [{ node: [{}] }, '${{ matrix.node.version }}', []],
+        [{ node: [null] }, '${{ matrix.node.version }}', []],
+        [{ include: [{ os: 'ubuntu' }, { os: 'windows', node: '24' }] }, '${{ matrix.node }}', ['24']],
+        [{ os: ['ubuntu', 'windows'] }, '${{ matrix.node }}', []],
+    ];
+    for (const [matrix, direct, expected] of cases) {
+        const repoRoot = makeTempRepo();
+        writeNodeWorkflow(repoRoot, { 'node-version': direct }, matrix);
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        assert.deepEqual(inventory.selectors.map((item) => item.rawValue), expected);
+        assert.equal(inventory.problems.length, 1);
+        assert.match(inventory.problems[0].message, /direct matrix input matrix\.node(?:\.version)? is missing.*no version-file fallback/);
+        assert.equal(inventory.problems[0].path.split(path.sep).join('/'), '.github/workflows/node.yml');
+    }
+});
+
+test('setup-node preserves missing-property fallback and excluded combinations', () => {
+    for (const file of ['.nvmrc', '${{ matrix.file }}']) {
+        const repoRoot = makeTempRepo();
+        writeFile(repoRoot, '.nvmrc', '22.19.0\n');
+        writeNodeWorkflow(repoRoot, { 'node-version': '${{ matrix.node }}', 'node-version-file': file },
+            { file: ['.nvmrc'] });
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        assert.deepEqual(inventory.problems, []);
+        assert.deepEqual(inventory.selectors.map((item) => item.rawValue), ['22.19.0']);
+    }
+    const repoRoot = makeTempRepo();
+    writeNodeWorkflow(repoRoot, { 'node-version': '${{ matrix.node }}' },
+        { os: ['ubuntu'], exclude: [{ os: 'ubuntu' }] });
+    assert.deepEqual(scanner.collectNodeSelectors(repoRoot), { selectors: [], problems: [] });
+});
+
+test('setup-node preserves explicit empty matrix and auth-only inputs', () => {
+    for (const empty of ['', ' ', null]) {
+        const repoRoot = makeTempRepo();
+        writeNodeWorkflow(repoRoot, { 'node-version': '${{ matrix.node }}' }, { node: [empty, '24'] });
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        assert.deepEqual(inventory.problems, []);
+        assert.deepEqual(inventory.selectors.map((item) => item.rawValue), ['24']);
+        writeNodeWorkflow(repoRoot, { 'node-version': empty });
+        assert.deepEqual(scanner.collectNodeSelectors(repoRoot), { selectors: [], problems: [] });
+    }
+    const repoRoot = makeTempRepo();
+    writeNodeWorkflow(repoRoot, { 'registry-url': 'https://registry.npmjs.org' });
+    assert.deepEqual(scanner.collectNodeSelectors(repoRoot), { selectors: [], problems: [] });
+});
+
+test('missing matrix diagnostic oracle detects assertion removal', () => {
+    const repoRoot = makeTempRepo();
+    writeNodeWorkflow(repoRoot, { 'node-version': '${{ matrix.node }}' },
+        { include: [{ os: 'ubuntu' }, { os: 'windows', node: '24' }] });
+    const baseline = scanner.collectNodeSelectors(repoRoot);
+    assert.deepEqual(baseline.selectors.map((item) => item.rawValue), ['24']);
+    assert.equal(baseline.problems.length, 1);
+    const original = fs.readFileSync(path.resolve(__dirname, '../../.github/scripts/check-toolchain-eol.js'), 'utf8');
+    const predicate = 'if (resolved.missingProperty)';
+    assert.equal(original.split(predicate).length - 1, 1);
+    const mutant = path.join(repoRoot, 'scanner-mutant.js');
+    fs.writeFileSync(mutant, original.replace(predicate, 'if (false)'));
+    const child = spawnSync(process.execPath, ['-e', `
+        const assert = require('assert/strict');
+        const inventory = require(process.argv[1]).collectNodeSelectors(process.argv[2]);
+        assert.deepEqual(inventory.selectors.map((item) => item.rawValue), ['24']);
+        assert.equal(inventory.problems.length, 1, 'A valid sibling must not hide missing selection.');
+    `, mutant, repoRoot], {
+        encoding: 'utf8', timeout: 30000,
+        env: { ...process.env, NODE_PATH: path.resolve(__dirname, '../../node_modules') },
+    });
+    assert.ifError(child.error);
+    assert.equal(child.status, 1);
+    assert.match(child.stderr, /AssertionError/);
+    assert.match(child.stderr, /A valid sibling must not hide missing selection/);
+});
+
+test('setup-node static matrix diagnostics retain unknown and malformed inputs', () => {
+    const cases = [
+        ['${{ fromJSON(needs.build.outputs.matrix) }}', /static matrix mapping/],
+        [{ node: '${{ needs.build.outputs.versions }}' }, /dynamic/],
+        [{ node: ['${{ vars.NODE }}'] }, /dynamic/],
+        [{ node: ['24'], include: {} }, /include must be a list/],
+        [{ node: ['24'], exclude: [null] }, /exclude must be a list/],
+        [{ node: [{ version: '24' }] }, /must be scalar/],
+        [{ node: ['24'], os: [] }, /nonempty static list/],
+    ];
+    for (const [matrix, message] of cases) {
+        const repoRoot = makeTempRepo();
+        writeNodeWorkflow(repoRoot, { 'node-version': '${{ matrix.node }}' }, matrix);
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        assert.deepEqual(inventory.selectors, []);
+        assert.equal(inventory.problems.length, 1);
+        assert.match(inventory.problems[0].message, message);
+        assert.equal(inventory.problems[0].path.split(path.sep).join('/'), '.github/workflows/node.yml');
+    }
+});
+
+test('setup-node matrix limits apply separately before and after exclusions', () => {
+    const cases = [
+        [{ node: ['24'], job: Array.from({ length: 256 }, (_, i) => i) }, null],
+        [{ node: ['24'], job: Array.from({ length: 257 }, (_, i) => i) }, /256-job/],
+        [{ node: ['24'], os: ['keep', 'remove'], job: Array.from({ length: 256 }, (_, i) => i), exclude: [{ os: 'remove' }] }, null],
+        [{ node: ['24'], job: Array.from({ length: 4097 }, (_, i) => i), exclude: [{}] }, /4096-combination/],
+        [{ include: Array.from({ length: 257 }, (_, i) => ({ node: '24', job: i })) }, /256-job/],
+    ];
+    for (const [matrix, message] of cases) {
+        const repoRoot = makeTempRepo();
+        writeNodeWorkflow(repoRoot, { 'node-version': '${{ matrix.node }}' }, matrix);
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        if (message) {
+            assert.deepEqual(inventory.selectors, []);
+            assert.equal(inventory.problems.length, 1);
+            assert.match(inventory.problems[0].message, message);
+        } else {
+            assert.deepEqual(inventory.problems, []);
+            assert.deepEqual(inventory.selectors.map((item) => item.rawValue), ['24']);
+        }
+    }
+});
+
+test('setup-node literal direct input ignores an unrelated dynamic matrix', () => {
+    const repoRoot = makeTempRepo();
+    writeNodeWorkflow(repoRoot, { 'node-version': '24', 'node-version-file': 'missing-file' },
+        '${{ fromJSON(needs.build.outputs.matrix) }}');
+    const inventory = scanner.collectNodeSelectors(repoRoot);
+    assert.deepEqual(inventory.problems, []);
+    assert.deepEqual(inventory.selectors.map((item) => item.rawValue), ['24']);
+});
+
+test('setup-node matrix regression oracles fail when exclusion or correlation is removed', () => {
+    const originalPath = path.resolve(__dirname, '../../.github/scripts/check-toolchain-eol.js');
+    const original = fs.readFileSync(originalPath, 'utf8');
+    const cases = [
+        [
+            /originals = originals\.filter\([\s\S]*?matrixValuesEqual\(entry\[key\], value\)\)\)\);/,
+            'originals = originals;',
+            { node: ['', '24'], exclude: [{ node: '' }] }, ['24'],
+        ],
+        [
+            /resolveGithubExpression\(file, combination\)/,
+            'resolveGithubExpression(file, combinations[0])',
+            { include: [{ node: '24', file: 'ignored-file' }, { node: '', file: '.nvmrc' }] }, ['24', '22.19.0'],
+        ],
+    ];
+    for (const [pattern, replacement, matrix, expected] of cases) {
+        const repoRoot = makeTempRepo();
+        writeFile(repoRoot, '.nvmrc', '22.19.0\n');
+        writeNodeWorkflow(repoRoot, {
+            'node-version': '${{ matrix.node }}',
+            'node-version-file': Object.hasOwn(matrix, 'include') ? '${{ matrix.file }}' : '.nvmrc',
+        }, matrix);
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        assert.deepEqual(inventory.problems, []);
+        assert.deepEqual(inventory.selectors.map((item) => item.rawValue), expected);
+        assert.match(original, pattern);
+        const mutant = path.join(repoRoot, 'scanner-mutant.js');
+        fs.writeFileSync(mutant, original.replace(pattern, replacement));
+        const child = spawnSync(process.execPath, ['-e', `
+            const assert = require('assert/strict');
+            const inventory = require(process.argv[1]).collectNodeSelectors(process.argv[2]);
+            assert.deepEqual(inventory.problems, []);
+            assert.deepEqual(inventory.selectors.map((item) => item.rawValue), JSON.parse(process.argv[3]));
+        `, mutant, repoRoot, JSON.stringify(expected)], {
+            encoding: 'utf8', timeout: 30000,
+            env: { ...process.env, NODE_PATH: path.resolve(__dirname, '../../node_modules') },
+        });
+        assert.equal(child.error, undefined);
+        assert.equal(child.status, 1);
+        assert.match(child.stderr, /AssertionError/);
     }
 });
 

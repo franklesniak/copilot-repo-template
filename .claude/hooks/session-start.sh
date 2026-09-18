@@ -51,6 +51,18 @@ persist_path_prepend() {
 }
 
 # template-sync: begin baseline-only
+activate_pre_commit_bin() {
+  local path_entry="$1"
+
+  # Validate and persist first, then activate this installer's directory for
+  # this hook too. A stale executable can precede an entry already in PATH.
+  persist_path_prepend "$path_entry"
+  case "$PATH" in
+    "$path_entry"|"$path_entry":*) ;;
+    *) export PATH="$path_entry${PATH:+:$PATH}" ;;
+  esac
+}
+
 python_executable() {
   if command -v python >/dev/null 2>&1; then
     command -v python
@@ -98,14 +110,14 @@ ensure_pre_commit() {
 
   if command -v uv >/dev/null 2>&1; then
     pre_commit_bin_dir="${UV_TOOL_BIN_DIR:-${HOME:?HOME or UV_TOOL_BIN_DIR must be set}/.local/bin}"
-    persist_path_prepend "$pre_commit_bin_dir"
+    activate_pre_commit_bin "$pre_commit_bin_dir"
     if ! pre_commit_matches; then
       echo "Installing pre-commit with uv tool"
       uv tool install --force "$pre_commit_requirement"
     fi
   elif command -v pipx >/dev/null 2>&1; then
     pre_commit_bin_dir="${PIPX_BIN_DIR:-${HOME:?HOME or PIPX_BIN_DIR must be set}/.local/bin}"
-    persist_path_prepend "$pre_commit_bin_dir"
+    activate_pre_commit_bin "$pre_commit_bin_dir"
     if ! pre_commit_matches; then
       echo "Installing pre-commit with pipx"
       pipx install --force "$pre_commit_requirement"
@@ -116,7 +128,7 @@ ensure_pre_commit() {
       exit 1
     }
     pre_commit_bin_dir="$(python_user_bin_dir "$python_bin")"
-    persist_path_prepend "$pre_commit_bin_dir"
+    activate_pre_commit_bin "$pre_commit_bin_dir"
     if ! pre_commit_matches; then
       echo "Installing pre-commit with ${python_bin} -m pip --user"
       "$python_bin" -m pip install --user "$pre_commit_requirement"
@@ -137,7 +149,7 @@ ensure_pre_commit
 # Persist INSTALL_DIR via CLAUDE_ENV_FILE so the terraform we install below
 # resolves first in subsequent shells, even if a different `terraform` is
 # earlier on the base image's PATH. Reuse persist_path_prepend to match the
-# pre-commit bootstrap; note it only prepends INSTALL_DIR to this hook's live
+# persistence step; note it only prepends INSTALL_DIR to this hook's live
 # PATH when INSTALL_DIR is absent, and does not re-order an entry already
 # present later in PATH. That is fine here because the script calls terraform
 # by full path within this run.

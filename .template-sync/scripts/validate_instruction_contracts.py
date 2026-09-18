@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 import sys
+from bisect import bisect_left
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, NoReturn, cast
@@ -37,6 +38,7 @@ POLICY_CELL_WORD = (
 )
 # Explicit classes keep schema consumers and Python whitespace semantics equal.
 POLICY_CELL_PATTERN = re.compile(rf"^{POLICY_CELL_WORD}+(?: {POLICY_CELL_WORD}+)*(?![\s\S])")
+POLICY_HEADING_PATTERN = re.compile(r"^#{1,6} [^\r\n]*[^ \t\r\n](?![\s\S])")
 # CommonMark 0.31.2 section 4.6. Comments retain their separate inline handling.
 POLICY_HTML_LITERAL_START = re.compile(
     r"^ {0,3}<(?:pre|script|style|textarea)(?=[ \t>]|$)", re.IGNORECASE | re.ASCII
@@ -87,6 +89,14 @@ class RequiredSection:
     required_tables: tuple[RequiredTable, ...]
     next_heading: str | None = None
     requires_modules: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PolicyLineIndex:
+    """Positions and next-heading offsets for one operative document only."""
+
+    positions: dict[str, list[int]]
+    next_headings: list[int]
 
 
 @dataclass(frozen=True)
@@ -367,10 +377,17 @@ def parse_required_sections(raw_contract: dict[str, object]) -> tuple[RequiredSe
     headings: set[str] = set()
     for raw in cast(list[dict[str, Any]], raw_contract.get("required_sections", [])):
         heading = cast(str, raw["heading"])
+        next_heading = cast(str | None, raw["next_heading"])
+        for field, value in (("heading", heading), ("next_heading", next_heading)):
+            if (value is None and field == "heading") or (
+                value is not None and POLICY_HEADING_PATTERN.fullmatch(value) is None
+            ):
+                raise InstructionContractValidationError(
+                    f"Noncanonical contract {field}: {value!r}"
+                )
         if heading in headings:
             raise InstructionContractValidationError(f"Duplicate required section: {heading}")
         headings.add(heading)
-        next_heading = cast(str | None, raw["next_heading"])
         if next_heading == heading:
             raise InstructionContractValidationError(f"Self-successor section: {heading}")
         requires_modules = _required_string_list(raw, "requires_modules")
@@ -419,10 +436,11 @@ def parse_required_sections(raw_contract: dict[str, object]) -> tuple[RequiredSe
             )
         )
     successors = {section.heading: section.next_heading for section in sections}
+    completed: set[str] = set()
     for section in sections:
         visited: set[str] = set()
         successor: str | None = section.heading
-        while successor in successors:
+        while successor in successors and successor not in completed:
             assert successor is not None
             if successor in visited:
                 raise InstructionContractValidationError(
@@ -430,6 +448,7 @@ def parse_required_sections(raw_contract: dict[str, object]) -> tuple[RequiredSe
                 )
             visited.add(successor)
             successor = successors[successor]
+        completed.update(visited)
     return tuple(sections)
 
 
@@ -1250,6 +1269,13 @@ def operative_markdown_lines(text: str) -> list[str]:
                     visible.append("[unsupported comment tail] " + line)
                     break
                 elided_comment = True
+                if not block_comment and end != -1:
+                    # A comment is an inline token boundary, not removable
+                    # source text. Keep it before paragraph normalization so
+                    # deleting it cannot synthesize links or other markup.
+                    visible.append(line[column : end + 3])
+                    column = end + 3
+                    continue
                 in_comment = end == -1
                 column = column + 4 if in_comment else end + 3
             else:
@@ -1276,18 +1302,30 @@ def operative_markdown_lines(text: str) -> list[str]:
     return result
 
 
-def section_body(lines: list[str], heading: str) -> list[str] | None:
+def index_policy_lines(lines: list[str]) -> PolicyLineIndex:
+    """Index exact line occurrences and inclusive next-heading offsets once."""
+    positions: dict[str, list[int]] = {}
+    next_headings = [len(lines)] * (len(lines) + 1)
+    for offset in range(len(lines) - 1, -1, -1):
+        line = lines[offset]
+        positions.setdefault(line, []).append(offset)
+        next_headings[offset] = offset if is_policy_heading(line) else next_headings[offset + 1]
+    for offsets in positions.values():
+        offsets.reverse()
+    return PolicyLineIndex(positions, next_headings)
+
+
+def section_body(
+    lines: list[str], heading: str, index: PolicyLineIndex | None = None
+) -> list[str] | None:
     """Return one unique heading's direct body, ending at the next ATX heading."""
-    matches = [index for index, line in enumerate(lines) if line == heading]
+    if index is None:
+        index = index_policy_lines(lines)
+    matches = index.positions.get(heading, [])
     if len(matches) != 1:
         return None
     start = matches[0] + 1
-    end = len(lines)
-    for index in range(start, len(lines)):
-        if is_policy_heading(lines[index]):
-            end = index
-            break
-    return lines[start:end]
+    return lines[start : index.next_headings[start]]
 
 
 def policy_inventory_digest(expected: object, observed: object) -> str:
@@ -1297,17 +1335,24 @@ def policy_inventory_digest(expected: object, observed: object) -> str:
     ).hexdigest()
 
 
-def section_boundary_failure(lines: list[str], section: RequiredSection) -> str | None:
+def section_boundary_failure(
+    lines: list[str], section: RequiredSection, index: PolicyLineIndex | None = None
+) -> str | None:
     """Reject unknown section boundaries without claiming ownership beyond the declared end.
 
     Non-null successors must be unique. The mismatch identity includes all live
     content up to the declared successor (or EOF), so waiving one added heading
     cannot silently authorize changed content below that heading.
     """
-    starts = [index for index, line in enumerate(lines) if line == section.heading]
+    if index is None:
+        index = index_policy_lines(lines)
+    starts = index.positions.get(section.heading, [])
     start = starts[0] + 1 if len(starts) == 1 else 0
-    successors = [index for index, line in enumerate(lines) if line == section.next_heading]
-    actual_next = next((line for line in lines[start:] if is_policy_heading(line)), None)
+    successors = (
+        index.positions.get(section.next_heading, []) if section.next_heading is not None else []
+    )
+    next_offset = index.next_headings[start]
+    actual_next = lines[next_offset] if next_offset < len(lines) else None
     unique_successor = len(starts) == 1 and (
         section.next_heading is None or (len(successors) == 1 and successors[0] >= start)
     )
@@ -1379,6 +1424,7 @@ def applicable_section_boundary(
     sections: dict[str, RequiredSection],
     live_lines: set[str],
     included_modules: set[str] | None,
+    cache: dict[str, str | None] | None = None,
 ) -> RequiredSection:
     """Skip only absent, inapplicable declared successors in an acyclic catalog.
 
@@ -1387,12 +1433,21 @@ def applicable_section_boundary(
     Applicable or uncontracted successors cannot be skipped.
     """
     successor = section.next_heading
+    if cache is None:
+        cache = {}
+    skipped: list[str] = []
     while successor in sections and successor not in live_lines:
         assert successor is not None
+        if successor in cache:
+            successor = cache[successor]
+            break
         following = sections[successor]
         if section_applies(following, included_modules):
             break
+        skipped.append(successor)
         successor = following.next_heading
+    for heading in skipped:
+        cache[heading] = successor
     return replace(section, next_heading=successor)
 
 
@@ -1408,6 +1463,8 @@ def section_failures(
     document_identity = hashlib.sha256(text.encode("utf-8")).hexdigest() if ambiguous_html else ""
     sections_by_heading = {section.heading: section for section in sections}
     live_lines = set(lines)
+    line_index = index_policy_lines(lines)
+    successor_cache: dict[str, str | None] = {}
     for section in sections:
         if not section_applies(section, included_modules):
             continue
@@ -1424,12 +1481,12 @@ def section_failures(
             )
             failures.append(f"{prefix}:html-grammar:{identity}")
         boundary = applicable_section_boundary(
-            section, sections_by_heading, live_lines, included_modules
+            section, sections_by_heading, live_lines, included_modules, successor_cache
         )
-        boundary_failure = section_boundary_failure(lines, boundary)
+        boundary_failure = section_boundary_failure(lines, boundary, line_index)
         if boundary_failure is not None:
             failures.append(boundary_failure)
-        body = section_body(lines, section.heading)
+        body = section_body(lines, section.heading, line_index)
         if body is None:
             failures.append(prefix)
             body = []
@@ -1451,20 +1508,28 @@ def section_failures(
         # Ordered, complete paragraphs prevent scattered keywords or reordered
         # decision steps from substituting for the operative contract.
         cursor = 0
+        paragraph_offsets: dict[str, list[int]] = {}
+        for offset, paragraph in enumerate(paragraphs):
+            paragraph_offsets.setdefault(paragraph, []).append(offset)
         for paragraph in section.required_paragraphs:
             expected = normalize_policy_paragraph(paragraph)
-            try:
-                cursor = paragraphs.index(expected, cursor) + 1
-            except ValueError:
+            offsets = paragraph_offsets.get(expected, [])
+            offset_index = bisect_left(offsets, cursor)
+            if offset_index < len(offsets):
+                cursor = offsets[offset_index] + 1
+            else:
                 identity = hashlib.sha256(expected.encode("utf-8")).hexdigest()
                 failures.append(f"{prefix}:paragraph:{identity}")
         expected_paragraphs = [
             normalize_policy_paragraph(value) for value in section.required_paragraphs
         ]
+        expected_positions: dict[str, int] = {}
+        for offset, value in enumerate(expected_paragraphs):
+            expected_positions.setdefault(value, offset)
         positions = [
-            expected_paragraphs.index(value) for value in paragraphs if value in expected_paragraphs
+            expected_positions[value] for value in paragraphs if value in expected_positions
         ]
-        if any(value not in expected_paragraphs for value in paragraphs) or positions != sorted(
+        if any(value not in expected_positions for value in paragraphs) or positions != sorted(
             set(positions)
         ):
             identity = policy_inventory_digest(expected_paragraphs, paragraphs)

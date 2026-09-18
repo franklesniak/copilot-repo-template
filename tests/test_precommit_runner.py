@@ -11,7 +11,7 @@ import sys
 import textwrap
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml  # type: ignore[import-untyped]
 
@@ -523,6 +523,253 @@ fi
     )
     log = install_log.read_text(encoding="utf-8") if install_log.exists() else ""
     return result, log
+
+
+def run_hook_path_precedence_fixture(
+    tmp_path: Path,
+    *,
+    installer: Literal["uv", "pipx", "python"],
+    selected_position: Literal["first", "later", "absent"],
+    selected_version: str,
+    hook_source: str | None = None,
+) -> tuple[subprocess.CompletedProcess[str], str, str]:
+    """Run the actual hook with separate stale, installer, and selected directories."""
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("Bash is required to exercise the actual Claude hook")
+    assert bash is not None
+
+    repo = tmp_path / "repo"
+    hook = repo / ".claude" / "hooks" / "session-start.sh"
+    hook.parent.mkdir(parents=True)
+    make_executable(hook, hook_source or hook_prefix())
+    (repo / "requirements-pre-commit.txt").write_text(
+        runner_requirement(), encoding="utf-8", newline="\n"
+    )
+
+    stale_bin = tmp_path / "stale-bin"
+    installer_bin = tmp_path / "installer-bin"
+    selected_base = tmp_path / "selected-user" if installer == "python" else tmp_path
+    selected_bin = selected_base / "bin" if installer == "python" else tmp_path / "selected-bin"
+    for directory in (stale_bin, installer_bin, selected_bin):
+        directory.mkdir(parents=True, exist_ok=True)
+
+    selected_state = tmp_path / "selected-pre-commit.state"
+    selected_state.write_text(selected_version + "\n", encoding="utf-8", newline="\n")
+    install_log = tmp_path / "installer.log"
+    env_file = tmp_path / "claude.env"
+    env_file.write_text("", encoding="utf-8")
+
+    make_executable(stale_bin / "pre-commit", "#!/bin/sh\necho 'pre-commit 0.0.0'\n")
+    make_executable(
+        selected_bin / "pre-commit",
+        """#!/bin/sh
+cat "$SELECTED_PRE_COMMIT_STATE"
+""",
+    )
+    installer_script = """#!/bin/sh
+printf '%s\n' "$*" >> "$INSTALL_LOG"
+printf '%s\n' "$EXPECTED_PRE_COMMIT" > "$SELECTED_PRE_COMMIT_STATE"
+"""
+    if installer in {"uv", "pipx"}:
+        make_executable(installer_bin / installer, installer_script)
+    else:
+        make_executable(
+            installer_bin / "python",
+            """#!/bin/sh
+if [ "$1" = "-m" ] && [ "$2" = "site" ] && [ "$3" = "--user-base" ]; then
+  printf '%s\n' "$FAKE_USER_BASE"
+  exit 0
+fi
+printf '%s\n' "$*" >> "$INSTALL_LOG"
+printf '%s\n' "$EXPECTED_PRE_COMMIT" > "$SELECTED_PRE_COMMIT_STATE"
+""",
+        )
+
+    stale_bin_bash = bash_path(bash, stale_bin)
+    installer_bin_bash = bash_path(bash, installer_bin)
+    selected_bin_bash = bash_path(bash, selected_bin)
+    if selected_position == "first":
+        path_entries = [selected_bin_bash, stale_bin_bash, installer_bin_bash]
+    elif selected_position == "later":
+        path_entries = [stale_bin_bash, installer_bin_bash, selected_bin_bash]
+    else:
+        path_entries = [stale_bin_bash, installer_bin_bash]
+    initial_path = ":".join([*path_entries, "/usr/bin", "/bin"])
+
+    shell_env = {
+        "PATH": initial_path,
+        "CLAUDE_CODE_REMOTE": "true",
+        "CLAUDE_ENV_FILE": bash_path(bash, env_file),
+        "HOME": bash_path(bash, tmp_path / "home"),
+        "UV_TOOL_BIN_DIR": selected_bin_bash,
+        "PIPX_BIN_DIR": selected_bin_bash,
+        "FAKE_USER_BASE": bash_path(bash, selected_base),
+        "SELECTED_PRE_COMMIT_STATE": bash_path(bash, selected_state),
+        "INSTALL_LOG": bash_path(bash, install_log),
+        "EXPECTED_PRE_COMMIT": expected_version_output(),
+    }
+    exports = "\n".join(f"export {name}={shlex.quote(value)}" for name, value in shell_env.items())
+    wrapper = tmp_path / "run-hook-and-probe.sh"
+    make_executable(
+        wrapper,
+        (
+            f"#!/bin/bash\n{exports}\n"
+            f". {shlex.quote(bash_path(bash, hook))}\n"
+            "printf 'FINAL_COMMAND=%s\\n' \"$(command -v pre-commit)\"\n"
+            "printf 'FINAL_VERSION=%s\\n' \"$(pre-commit --version)\"\n"
+            "printf 'FINAL_PATH=%s\\n' \"$PATH\"\n"
+        ),
+    )
+    result = subprocess.run(
+        [bash, bash_path(bash, wrapper)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    log = install_log.read_text(encoding="utf-8") if install_log.exists() else ""
+    return result, log, env_file.read_text(encoding="utf-8")
+
+
+def assert_selected_runner_is_active(
+    result: subprocess.CompletedProcess[str],
+    *,
+    bash: str,
+    selected_bin: Path,
+) -> None:
+    """Require the ordinary command to resolve the selected exact runner."""
+    selected_bin_bash = bash_path(bash, selected_bin)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"FINAL_COMMAND={selected_bin_bash}/pre-commit" in result.stdout
+    assert f"FINAL_VERSION={expected_version_output()}" in result.stdout
+    final_path = next(
+        line.removeprefix("FINAL_PATH=")
+        for line in result.stdout.splitlines()
+        if line.startswith("FINAL_PATH=")
+    )
+    assert final_path.split(":", maxsplit=1)[0] == selected_bin_bash
+
+
+def selected_runner_bin(tmp_path: Path, installer: str) -> Path:
+    """Return the install directory chosen by one fixture installer branch."""
+    return (
+        tmp_path / "selected-user" / "bin" if installer == "python" else tmp_path / "selected-bin"
+    )
+
+
+def assert_expected_installer_call(installer: str, install_log: str) -> None:
+    """Require one installer to receive the exact shared pre-commit pin."""
+    requirement = runner_requirement()
+    if installer == "uv":
+        assert install_log == f"tool install --force {requirement}\n"
+    elif installer == "pipx":
+        assert install_log == f"install --force {requirement}\n"
+    else:
+        assert install_log == f"-m pip install --user {requirement}\n"
+
+
+@pytest.mark.parametrize("installer", ["uv", "pipx", "python"])
+def test_claude_hook_activates_selected_runner_ahead_of_stale_command(
+    tmp_path: Path, installer: Literal["uv", "pipx", "python"]
+) -> None:
+    """Every installer branch makes its exact runner win ordinary PATH lookup."""
+    result, install_log, env_text = run_hook_path_precedence_fixture(
+        tmp_path,
+        installer=installer,
+        selected_position="later",
+        selected_version="pre-commit 1.0.0",
+    )
+    bash = shutil.which("bash")
+    assert bash is not None
+    selected_bin = selected_runner_bin(tmp_path, installer)
+    assert_selected_runner_is_active(result, bash=bash, selected_bin=selected_bin)
+    assert_expected_installer_call(installer, install_log)
+
+    selected_bin_bash = bash_path(bash, selected_bin)
+    assert env_text.splitlines() == [f'export PATH="{selected_bin_bash}:$PATH"']
+    final_path = next(
+        line.removeprefix("FINAL_PATH=")
+        for line in result.stdout.splitlines()
+        if line.startswith("FINAL_PATH=")
+    )
+    assert final_path.split(":").count(selected_bin_bash) == 2
+
+
+@pytest.mark.parametrize("installer", ["uv", "pipx", "python"])
+def test_claude_hook_reuses_exact_runner_in_selected_later_directory(
+    tmp_path: Path, installer: Literal["uv", "pipx", "python"]
+) -> None:
+    """Activation avoids reinstalling an exact runner hidden behind a stale command."""
+    result, install_log, env_text = run_hook_path_precedence_fixture(
+        tmp_path,
+        installer=installer,
+        selected_position="later",
+        selected_version=expected_version_output(),
+    )
+    bash = shutil.which("bash")
+    assert bash is not None
+    selected_bin = selected_runner_bin(tmp_path, installer)
+    assert_selected_runner_is_active(result, bash=bash, selected_bin=selected_bin)
+    assert install_log == ""
+    selected_bin_bash = bash_path(bash, selected_bin)
+    assert env_text.splitlines() == [f'export PATH="{selected_bin_bash}:$PATH"']
+
+
+@pytest.mark.parametrize("selected_position", ["first", "absent"])
+def test_claude_hook_activation_preserves_first_and_absent_path_controls(
+    tmp_path: Path, selected_position: Literal["first", "absent"]
+) -> None:
+    """Activation remains correct when the selected directory is first or absent."""
+    result, install_log, env_text = run_hook_path_precedence_fixture(
+        tmp_path,
+        installer="uv",
+        selected_position=selected_position,
+        selected_version="pre-commit 1.0.0",
+    )
+    bash = shutil.which("bash")
+    assert bash is not None
+    selected_bin = selected_runner_bin(tmp_path, "uv")
+    assert_selected_runner_is_active(result, bash=bash, selected_bin=selected_bin)
+    assert_expected_installer_call("uv", install_log)
+    selected_bin_bash = bash_path(bash, selected_bin)
+    assert env_text.splitlines() == [f'export PATH="{selected_bin_bash}:$PATH"']
+    final_path = next(
+        line.removeprefix("FINAL_PATH=")
+        for line in result.stdout.splitlines()
+        if line.startswith("FINAL_PATH=")
+    )
+    assert final_path.split(":").count(selected_bin_bash) == 1
+
+
+def test_claude_hook_activation_oracle_rejects_removed_force_front(tmp_path: Path) -> None:
+    """The stale-command regression must return when only persistence remains."""
+    source = hook_prefix()
+    activation_call = 'activate_pre_commit_bin "$pre_commit_bin_dir"'
+    assert source.count(activation_call) == 3
+    mutant = source.replace(
+        activation_call,
+        'persist_path_prepend "$pre_commit_bin_dir"',
+    )
+
+    original_result, _original_log, _original_env = run_hook_path_precedence_fixture(
+        tmp_path / "original",
+        installer="uv",
+        selected_position="later",
+        selected_version="pre-commit 1.0.0",
+        hook_source=source,
+    )
+    mutant_result, mutant_log, _mutant_env = run_hook_path_precedence_fixture(
+        tmp_path / "mutant",
+        installer="uv",
+        selected_position="later",
+        selected_version="pre-commit 1.0.0",
+        hook_source=mutant,
+    )
+
+    assert original_result.returncode == 0, original_result.stdout + original_result.stderr
+    assert mutant_result.returncode != 0, mutant_result.stdout + mutant_result.stderr
+    assert_expected_installer_call("uv", mutant_log)
+    assert "installation did not provide" in mutant_result.stderr
 
 
 def test_claude_hook_reuses_the_exact_available_runner(tmp_path: Path) -> None:

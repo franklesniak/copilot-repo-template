@@ -183,43 +183,118 @@ function isSetupNodeStep(step) {
     );
 }
 
-function collectGithubMatrixValues(matrix, key, preserveEmpty = false) {
-    if (!matrix || typeof matrix !== 'object') {
-        return [];
-    }
-
-    const values = [];
-    if (Object.prototype.hasOwnProperty.call(matrix, key)) {
-        values.push(...asArray(matrix[key]));
-    }
-    if (Array.isArray(matrix.include)) {
-        for (const includeEntry of matrix.include) {
-            if (
-                includeEntry &&
-                typeof includeEntry === 'object' &&
-                Object.prototype.hasOwnProperty.call(includeEntry, key)
-            ) {
-                values.push(includeEntry[key]);
-            }
-        }
-    }
-    return uniqueValues(values, preserveEmpty);
+function isMapping(value) {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function resolveGithubExpression(value, matrix, preserveEmpty = false) {
-    if (typeof value !== 'string') {
-        return uniqueValues([value], preserveEmpty).map((rawValue) => ({ rawValue, origin: 'literal' }));
-    }
+function hasGithubExpression(value) {
+    return typeof value === 'string' && value.includes('${{');
+}
 
-    const matrixMatch = value.match(/^\s*\$\{\{\s*matrix\.([A-Za-z0-9_.-]+)\s*\}\}\s*$/);
-    if (matrixMatch) {
-        return collectGithubMatrixValues(matrix, matrixMatch[1], preserveEmpty).map((rawValue) => ({
-            rawValue,
-            origin: `matrix.${matrixMatch[1]}`,
-        }));
+function requireStaticMatrixValue(value, depth = 0) {
+    if (depth > 32 || hasGithubExpression(value)) {
+        throw new Error('Node.js matrix input cannot be resolved: dynamic or excessively nested matrix value.');
     }
+    if (Array.isArray(value) || isMapping(value)) {
+        for (const entry of Object.values(value)) {
+            requireStaticMatrixValue(entry, depth + 1);
+        }
+    } else if (value !== null && !['string', 'number', 'boolean'].includes(typeof value)) {
+        throw new Error('Node.js matrix input cannot be resolved: unsupported static value.');
+    }
+}
 
-    return [{ rawValue: value, origin: 'literal' }];
+function matrixValuesEqual(left, right) {
+    if (left === right) {
+        return true;
+    }
+    if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object' ||
+        Array.isArray(left) !== Array.isArray(right)) {
+        return false;
+    }
+    const keys = Object.keys(left);
+    return keys.length === Object.keys(right).length && keys.every((key) =>
+        Object.hasOwn(right, key) && matrixValuesEqual(left[key], right[key]));
+}
+
+function expandGithubMatrix(matrix) {
+    if (matrix === undefined) {
+        return [{}];
+    }
+    if (!isMapping(matrix)) {
+        throw new Error('Node.js matrix input cannot be resolved: expected a static matrix mapping.');
+    }
+    requireStaticMatrixValue(matrix);
+    const axes = Object.entries(matrix).filter(([key]) => !['include', 'exclude'].includes(key));
+    for (const name of ['include', 'exclude']) {
+        if (Object.hasOwn(matrix, name) &&
+            (!Array.isArray(matrix[name]) || !matrix[name].every(isMapping))) {
+            throw new Error(`Node.js matrix input cannot be resolved: ${name} must be a list of mappings.`);
+        }
+    }
+    let originals = [{}];
+    for (const [key, values] of axes) {
+        if (!Array.isArray(values) || values.length === 0) {
+            throw new Error(`Node.js matrix input cannot be resolved: axis ${key} must be a nonempty static list.`);
+        }
+        // This local work budget is distinct from GitHub's final 256-job limit.
+        if (originals.length * values.length > 4096) {
+            throw new Error('Node.js matrix input exceeds the local 4096-combination expansion budget.');
+        }
+        originals = originals.flatMap((entry) => values.map((value) => ({ ...entry, [key]: value })));
+    }
+    if (axes.length === 0 && Object.hasOwn(matrix, 'include')) {
+        originals = [];
+    }
+    originals = originals.filter((entry) => !(matrix.exclude || []).some((excluded) =>
+        Object.entries(excluded).every(([key, value]) =>
+            Object.hasOwn(entry, key) && matrixValuesEqual(entry[key], value))));
+    const combinations = originals.map((entry) => ({ ...entry }));
+    const standalone = [];
+    for (const included of matrix.include || []) {
+        let matched = false;
+        originals.forEach((original, index) => {
+            if (Object.entries(included).every(([key, value]) =>
+                !Object.hasOwn(original, key) || matrixValuesEqual(original[key], value))) {
+                combinations[index] = { ...combinations[index], ...included };
+                matched = true;
+            }
+        });
+        if (!matched) {
+            standalone.push(included);
+        }
+        if (combinations.length + standalone.length > 256) {
+            throw new Error('Node.js matrix input exceeds the final 256-job matrix limit.');
+        }
+    }
+    if (combinations.length + standalone.length > 256) {
+        throw new Error('Node.js matrix input exceeds the final 256-job matrix limit.');
+    }
+    return [...combinations, ...standalone];
+}
+
+function resolveGithubExpression(value, combination) {
+    let resolved = value;
+    let origin = 'literal';
+    if (hasGithubExpression(value)) {
+        const match = value.match(/^\s*\$\{\{\s*matrix\.([A-Za-z_][A-Za-z0-9_-]*(?:\.[A-Za-z_][A-Za-z0-9_-]*)*)\s*\}\}\s*$/);
+        if (!match) {
+            throw new Error('Node.js setup input cannot be resolved: only exact static matrix property expressions are supported.');
+        }
+        resolved = combination;
+        for (const key of match[1].split('.')) {
+            resolved = isMapping(resolved) && Object.hasOwn(resolved, key) ? resolved[key] : undefined;
+        }
+        origin = `matrix.${match[1]}`;
+    }
+    if (resolved !== null && resolved !== undefined && !['string', 'number', 'boolean'].includes(typeof resolved)) {
+        throw new Error('Node.js setup input cannot be resolved: the selected value must be scalar.');
+    }
+    return {
+        rawValue: resolved === null || resolved === undefined ? '' : String(resolved),
+        origin,
+        missingProperty: hasGithubExpression(value) && resolved === undefined,
+    };
 }
 
 function readVersionFileSelector(repoRoot, filePathValue, sourcePath, sourceType, problems) {
@@ -339,14 +414,69 @@ function readGithubNodeVersionFile(repoRoot, absolutePath, seen = new Set()) {
     return { rawValue, referencedPath: repoRelativePath(repoRoot, absolutePath) };
 }
 
+function collectGithubStepSelectors(repoRoot, sourcePath, stepWith, matrix, selectors, problems) {
+    const direct = stepWith['node-version'];
+    const file = stepWith['node-version-file'];
+    const addDirect = (resolved) => addSelector(selectors, {
+        selectorClass: 'ci-runtime',
+        sourceType: 'github-actions:setup-node node-version',
+        origin: resolved.origin,
+        path: sourcePath,
+        rawValue: resolved.rawValue,
+    });
+    // A literal direct version does not consult the matrix or version file.
+    if (!hasGithubExpression(direct)) {
+        const resolved = resolveGithubExpression(direct, {});
+        if (resolved.rawValue.trim()) {
+            addDirect(resolved);
+            return;
+        }
+    }
+    const combinations = hasGithubExpression(direct) || hasGithubExpression(file)
+        ? expandGithubMatrix(matrix) : [{}];
+    for (const combination of combinations) {
+        try {
+            const resolved = resolveGithubExpression(direct, combination);
+            if (resolved.rawValue.trim()) {
+                addDirect(resolved);
+                continue;
+            }
+            if (!Object.hasOwn(stepWith, 'node-version-file')) {
+                if (resolved.missingProperty) {
+                    throw new Error(`Node.js direct matrix input ${resolved.origin} is missing and has no version-file fallback; no checked-in runtime can be inventoried.`);
+                }
+                continue;
+            }
+            const selectedFile = resolveGithubExpression(file, combination);
+            if (!selectedFile.rawValue.trim()) {
+                throw new Error('Node.js version-file input has a blank value; no checked-in runtime can be inventoried.');
+            }
+            const selected = readGithubNodeVersionFile(
+                repoRoot,
+                resolveRepoPath(repoRoot, selectedFile.rawValue),
+            );
+            addSelector(selectors, {
+                selectorClass: 'ci-runtime',
+                sourceType: 'github-actions:setup-node node-version-file',
+                origin: 'version-file',
+                path: sourcePath,
+                ...selected,
+            });
+        } catch (error) {
+            problems.push({ path: sourcePath, message: error.message });
+        }
+    }
+}
+
 function collectGithubWorkflowSelectors(repoRoot, selectors, problems) {
+    const collected = [];
+    const issues = [];
     for (const relativeWorkflowPath of getWorkflowFiles(repoRoot)) {
         const workflowPath = path.join(repoRoot, relativeWorkflowPath);
         for (const workflow of readYamlFile(workflowPath)) {
             if (!workflow || typeof workflow !== 'object' || !workflow.jobs) {
                 continue;
             }
-
             for (const job of Object.values(workflow.jobs)) {
                 if (!job || typeof job !== 'object') {
                     continue;
@@ -356,80 +486,23 @@ function collectGithubWorkflowSelectors(repoRoot, selectors, problems) {
                     if (!isSetupNodeStep(step)) {
                         continue;
                     }
-
-                    const stepWith = step.with || {};
-                    if (Object.prototype.hasOwnProperty.call(stepWith, 'node-version')) {
-                        const versions = resolveGithubExpression(stepWith['node-version'], matrix, true);
-                        if (versions.length === 0) {
-                            problems.push({
-                                path: relativeWorkflowPath,
-                                message: 'Direct Node.js matrix input cannot be resolved from checked-in values.',
-                            });
-                            continue;
-                        }
-                        const nonemptyVersions = versions.filter((item) => String(item.rawValue).trim());
-                        for (const resolved of nonemptyVersions) {
-                            addSelector(selectors, {
-                                selectorClass: 'ci-runtime',
-                                sourceType: 'github-actions:setup-node node-version',
-                                origin: resolved.origin,
-                                path: relativeWorkflowPath,
-                                rawValue: resolved.rawValue,
-                            });
-                        }
-                        // Only nonempty direct values override the file at runtime.
-                        if (nonemptyVersions.length === versions.length) {
-                            continue;
-                        }
-                        if (nonemptyVersions.length > 0 &&
-                            String(stepWith['node-version-file'] || '').includes('${{')) {
-                            problems.push({
-                                path: relativeWorkflowPath,
-                                message: 'Cannot correlate mixed blank/nonblank Node.js matrix inputs with a version-file expression.',
-                            });
-                            continue;
-                        }
-                    }
-
-                    if (Object.prototype.hasOwnProperty.call(stepWith, 'node-version-file')) {
-                        const versionFiles = resolveGithubExpression(
-                            stepWith['node-version-file'],
-                            matrix,
-                            true,
-                        );
-                        if (versionFiles.length === 0) {
-                            problems.push({
-                                path: relativeWorkflowPath,
-                                message: 'Node.js version-file input cannot be resolved from checked-in values.',
-                            });
-                            continue;
-                        }
-                        for (const resolved of versionFiles) {
-                            if (!String(resolved.rawValue).trim()) {
-                                problems.push({
-                                    path: relativeWorkflowPath,
-                                    message: 'Node.js version-file input has a blank value; no checked-in runtime can be inventoried.',
-                                });
-                                continue;
-                            }
-                            try {
-                                const selected = readGithubNodeVersionFile(
-                                    repoRoot,
-                                    resolveRepoPath(repoRoot, resolved.rawValue),
-                                );
-                                addSelector(selectors, {
-                                    selectorClass: 'ci-runtime',
-                                    sourceType: 'github-actions:setup-node node-version-file',
-                                    origin: 'version-file',
-                                    path: relativeWorkflowPath,
-                                    ...selected,
-                                });
-                            } catch (error) {
-                                problems.push({ path: relativeWorkflowPath, message: error.message });
-                            }
-                        }
+                    try {
+                        collectGithubStepSelectors(repoRoot, relativeWorkflowPath, step.with || {}, matrix, collected, issues);
+                    } catch (error) {
+                        issues.push({ path: relativeWorkflowPath, message: error.message });
                     }
                 }
+            }
+        }
+    }
+    // Different jobs can select the same runtime and produce the same diagnostic.
+    for (const [records, destination] of [[collected, selectors], [issues, problems]]) {
+        const seen = new Set();
+        for (const record of records) {
+            const key = JSON.stringify(record);
+            if (!seen.has(key)) {
+                destination.push(record);
+                seen.add(key);
             }
         }
     }
