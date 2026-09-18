@@ -53,6 +53,7 @@ def test_inline_comments_cannot_synthesize_markdown(
     _write_scoped_repo(tmp_path, section, section["heading"] + "\n\n" + prefix + observed)
     result = _run_validator(tmp_path, "--mode", mode)
     assert result.returncode == 1, result.stdout + result.stderr
+
     assert "section:## Rules:paragraphs:" in result.stdout
 
 
@@ -529,6 +530,472 @@ def test_canonical_host_clause_oracle_detects_removed_catalog_ownership(
     assert mutant.returncode == 0, mutant.stdout + mutant.stderr
 
 
+BLOCK_ORDER_TABLE = "| State | Action |\n| --- | --- |\n| Pending | Wait |"
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize("change", ["intact", "cross-paragraph", "swap-tables"])
+def test_multiple_tables_preserve_interleaved_order(tmp_path: Path, mode: str, change: str) -> None:
+    """Distinct tables retain both their own order and their relation to prose."""
+    second = BLOCK_ORDER_TABLE.replace("Pending", "Complete").replace("Wait", "Stop")
+    section = {
+        "heading": "## Rules",
+        "next_heading": None,
+        "required_paragraphs": ["Before.", "Between.", "After."],
+        "required_tables": [
+            {"headers": ["State", "Action"], "rows": [["Pending", "Wait"]]},
+            {"headers": ["State", "Action"], "rows": [["Complete", "Stop"]]},
+        ],
+        "required_block_order": ["paragraph", "table", "paragraph", "table", "paragraph"],
+    }
+    parts = ["Before.", BLOCK_ORDER_TABLE, "Between.", second, "After."]
+    if change == "cross-paragraph":
+        parts = ["Before.", "Between.", BLOCK_ORDER_TABLE, second, "After."]
+    elif change == "swap-tables":
+        parts = ["Before.", second, "Between.", BLOCK_ORDER_TABLE, "After."]
+    _write_scoped_repo(tmp_path, section, "## Rules\n\n" + "\n\n".join(parts))
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == (0 if change == "intact" else 1), result.stdout + result.stderr
+    if change != "intact":
+        assert ":blocks:" in result.stdout
+    if change == "swap-tables":
+        assert ":tables:" in result.stdout
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize("boundary", ["heading", "list", "table"])
+def test_hard_break_guard_preserves_block_final_padding(
+    tmp_path: Path, mode: str, boundary: str
+) -> None:
+    """Spaces before a new block do not turn a final line into a hard break."""
+    section: dict[str, Any] = {
+        "heading": "## Rules",
+        "next_heading": None,
+        "required_paragraphs": ["Act."],
+    }
+    if boundary == "heading":
+        section["next_heading"] = "## Next"
+        following = "## Next\n\nUncontracted text."
+    elif boundary == "list":
+        section["required_paragraphs"].append("- Continue.")
+        following = "- Continue."
+    else:
+        section["required_tables"] = [
+            {"headers": ["State", "Action"], "rows": [["Pending", "Wait"]]}
+        ]
+        following = BLOCK_ORDER_TABLE
+    _write_scoped_repo(tmp_path, section, "## Rules\n\nAct.  \n" + following)
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def _interleaved_policy() -> dict[str, Any]:
+    """Use independent before/table/after source in ordering tests."""
+    return {
+        "heading": "## Rules",
+        "next_heading": None,
+        "required_paragraphs": ["Before.", "After."],
+        "required_tables": [{"headers": ["State", "Action"], "rows": [["Pending", "Wait"]]}],
+        "required_block_order": ["paragraph", "table", "paragraph"],
+    }
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize("position", ["first", "middle", "last"])
+def test_mixed_policy_blocks_keep_table_placement(tmp_path: Path, mode: str, position: str) -> None:
+    """Moving an unchanged table across prose requires an ordering waiver."""
+    parts = {
+        "first": [BLOCK_ORDER_TABLE, "Before.", "After."],
+        "middle": ["Before.", BLOCK_ORDER_TABLE, "After."],
+        "last": ["Before.", "After.", BLOCK_ORDER_TABLE],
+    }
+    _write_scoped_repo(
+        tmp_path, _interleaved_policy(), "## Rules\n\n" + "\n\n".join(parts[position])
+    )
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == (0 if position == "middle" else 1), result.stdout + result.stderr
+    if position != "middle":
+        assert "section:## Rules:blocks:" in result.stdout
+        assert "section:## Rules:tables:" not in result.stdout
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize(
+    "order",
+    [
+        [],
+        ["paragraph", "table"],
+        ["paragraph", "table", "paragraph", "table"],
+        ["paragraph", "unknown", "paragraph"],
+    ],
+)
+def test_catalog_rejects_invalid_block_order(tmp_path: Path, mode: str, order: list[str]) -> None:
+    """A sequence cannot omit, duplicate or invent inventory kinds."""
+    section = _interleaved_policy()
+    section["required_block_order"] = order
+    _write_scoped_repo(tmp_path, section, "## Rules\n\nBefore.")
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == 1, result.stdout + result.stderr
+    if order and all(kind in {"paragraph", "table"} for kind in order):
+        assert "Block order must match paragraph and table counts" in result.stderr
+    else:
+        assert "schema" in result.stderr.lower()
+
+
+def test_default_block_order_is_enforced_and_missing_clause_stays_individual(
+    tmp_path: Path,
+) -> None:
+    """Omission means prose then tables; missing clauses keep separate failures."""
+    section = _interleaved_policy()
+    section.pop("required_block_order")
+    _write_scoped_repo(tmp_path, section, "## Rules\n\nBefore.\n\nAfter.\n\n" + BLOCK_ORDER_TABLE)
+    accepted = _run_validator(tmp_path, "--mode", "downstream")
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+    _write_text(tmp_path, "CLAUDE.md", "## Rules\n\n" + BLOCK_ORDER_TABLE + "\n\nBefore.\n\nAfter.")
+    rejected = _run_validator(tmp_path, "--mode", "downstream")
+    assert rejected.returncode == 1 and ":blocks:" in rejected.stdout
+    _write_scoped_repo(
+        tmp_path, _interleaved_policy(), "## Rules\n\n" + BLOCK_ORDER_TABLE + "\n\nAfter."
+    )
+    missing = _run_validator(tmp_path, "--mode", "downstream")
+    assert missing.returncode == 1 and ":paragraph:" in missing.stdout
+    assert ":blocks:" not in missing.stdout
+
+
+@pytest.mark.parametrize(
+    "table",
+    [BLOCK_ORDER_TABLE.replace("Wait", "Ignore"), BLOCK_ORDER_TABLE.replace("---", "bad", 1)],
+)
+def test_table_waiver_identity_includes_cross_type_placement(tmp_path: Path, table: str) -> None:
+    """Changed or malformed table waivers cannot survive relocation."""
+    identities = []
+    for parts in [["Before.", table, "After."], ["Before.", "After.", table]]:
+        _write_scoped_repo(tmp_path, _interleaved_policy(), "## Rules\n\n" + "\n\n".join(parts))
+        result = _run_validator(tmp_path, "--mode", "downstream")
+        assert result.returncode == 1, result.stdout + result.stderr
+        identities.append(re.findall(r"section:## Rules:tables:[0-9a-f]+", result.stdout))
+    assert identities[0] and identities[1] and identities[0] != identities[1]
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
+@pytest.mark.parametrize("spaces", ["  ", "   "])
+def test_space_hard_breaks_are_not_soft_wrapping(
+    tmp_path: Path, mode: str, ending: str, spaces: str
+) -> None:
+    """Hard breaks keep content-bound failures in both CLI modes."""
+    section = {
+        "heading": "## Rules",
+        "next_heading": None,
+        "required_paragraphs": ["Act. Continue. Finish."],
+    }
+    text = ("## Rules\n\nAct." + spaces + "\nContinue. Finish.").replace("\n", ending)
+    _write_scoped_repo(tmp_path, section, text)
+    # Avoid Windows text translation turning an explicit CRLF into CR-CRLF.
+    (tmp_path / "CLAUDE.md").write_bytes(text.encode("utf-8"))
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == 1, result.stdout + result.stderr
+    first = re.findall(r"section:## Rules:hard-break:[0-9a-f]+", result.stdout)
+    assert first
+    changed_text = ("## Rules\n\nAct. Continue." + spaces + "\nFinish.").replace("\n", ending)
+    (tmp_path / "CLAUDE.md").write_bytes(changed_text.encode("utf-8"))
+    changed = _run_validator(tmp_path, "--mode", mode)
+    assert changed.returncode == 1, changed.stdout + changed.stderr
+    assert re.findall(r"section:## Rules:hard-break:[0-9a-f]+", changed.stdout) != first
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize(
+    ("clause", "source"),
+    [
+        ("Act. Continue.", "Act.\nContinue."),
+        ("Act. Continue.", "Act. \nContinue."),
+        ("Act. Continue.", "Act.\t\nContinue."),
+        ("Act. Continue.", "Act. Continue.   "),
+        ("Use \x60literal example\x60.", "Use \x60literal  \nexample\x60."),
+        ("Act.", "Act.  \n\n> quoted  \n> example"),
+        ("Act.", "Act.  \n\n~~~\ncode  \nexample\n~~~"),
+        ("Act.", "Act.  \n\n<!-- comment  \nexample -->"),
+    ],
+)
+def test_hard_break_guard_preserves_soft_and_inert_controls(
+    tmp_path: Path, mode: str, clause: str, source: str
+) -> None:
+    """Wrapping, block-final padding and examples remain supported."""
+    section = {"heading": "## Rules", "next_heading": None, "required_paragraphs": [clause]}
+    _write_scoped_repo(tmp_path, section, "## Rules\n\n" + source)
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("case", ["blocks", "hard-break"])
+def test_order_and_hard_break_oracles_detect_removed_guards(tmp_path: Path, case: str) -> None:
+    """Removing one guard restores its independently constructed false clean."""
+    root = tmp_path / "fixture"
+    if case == "blocks":
+        section = _interleaved_policy()
+        text = "## Rules\n\nBefore.\n\nAfter.\n\n" + BLOCK_ORDER_TABLE
+        guard, replacement = "if observed_ranks != sorted(observed_ranks):", "if False:"
+    else:
+        section = {
+            "heading": "## Rules",
+            "next_heading": None,
+            "required_paragraphs": ["Act. Continue."],
+        }
+        text = "## Rules\n\nAct.  \nContinue."
+        guard, replacement = (
+            'line.endswith("  ")',
+            "False",
+        )
+    _write_scoped_repo(root, section, text)
+    baseline = _run_validator(root, "--mode", "downstream")
+    assert baseline.returncode == 1 and f":{case}:" in baseline.stdout
+    mutant_dir = tmp_path / "mutant"
+    mutant_dir.mkdir()
+    for source_path in SCRIPT_PATH.parent.glob("*.py"):
+        shutil.copyfile(source_path, mutant_dir / source_path.name)
+    mutant = mutant_dir / SCRIPT_PATH.name
+    source = mutant.read_text(encoding="utf-8")
+    assert source.count(guard) == 1
+    mutant.write_text(source.replace(guard, replacement), encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(mutant), "--repo-root", str(root), "--mode", "downstream"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+def test_paragraph_waivers_cannot_authorize_block_relocation(tmp_path: Path, mode: str) -> None:
+    """An accepted altered clause stays bound to its original side of a table."""
+    section = _interleaved_policy()
+    positioned = "## Rules\n\nBefore.\n\n" + BLOCK_ORDER_TABLE + "\n\nAltered."
+    moved = "## Rules\n\nBefore.\n\nAltered.\n\n" + BLOCK_ORDER_TABLE
+    _write_scoped_repo(tmp_path, section, positioned)
+    baseline = _run_validator(tmp_path, "--mode", mode)
+    assert baseline.returncode == 1, baseline.stdout + baseline.stderr
+    anchors = re.findall(r"section:## Rules:paragraphs?:[0-9a-f]{64}", baseline.stdout)
+    assert len(anchors) == 2
+    if mode == "downstream":
+        _write_yaml(
+            tmp_path,
+            ".template-sync/marker.yml",
+            _marker(
+                ["agent-instructions"],
+                waivers=[
+                    {
+                        "path": "CLAUDE.md",
+                        "anchor": anchor,
+                        "reason": "Fixture owner permits Altered. after the table.",
+                        "authorization_basis": "Explicit fixture grant for this exact content and placement.",
+                    }
+                    for anchor in anchors
+                ],
+            ),
+        )
+        accepted = _run_validator(tmp_path, "--mode", mode)
+        assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+    _write_text(tmp_path, "CLAUDE.md", moved)
+    rejected = _run_validator(tmp_path, "--mode", mode)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    changed = re.findall(r"section:## Rules:paragraphs:[0-9a-f]{64}", rejected.stdout)
+    assert changed and changed[0] not in anchors
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize("thematic", ["***", "___"])
+@pytest.mark.parametrize("separation", ["\n", "\n\n"])
+@pytest.mark.parametrize("padding", ["before", "after", "both"])
+def test_thematic_boundaries_preserve_harmless_padding(
+    tmp_path: Path, mode: str, thematic: str, separation: str, padding: str
+) -> None:
+    """The admitted thematic source representation keeps block-final spaces harmless."""
+    clauses = [f"Act. {thematic} After."] if separation == "\n" else ["Act.", thematic, "After."]
+    section = {"heading": "## Rules", "next_heading": None, "required_paragraphs": clauses}
+    parts = [
+        "Act." + ("  " if padding in {"before", "both"} else ""),
+        thematic + ("  " if padding in {"after", "both"} else ""),
+        "After.",
+    ]
+    _write_scoped_repo(tmp_path, section, "## Rules\n\n" + separation.join(parts))
+    accepted = _run_validator(tmp_path, "--mode", mode)
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+    # A real break later in the same admitted source remains independently rejected.
+    clauses[-1] += " Continue."
+    text = "## Rules\n\n" + separation.join(parts) + "  \nContinue."
+    _write_scoped_repo(tmp_path, section, text)
+    rejected = _run_validator(tmp_path, "--mode", mode)
+    assert rejected.returncode == 1 and ":hard-break:" in rejected.stdout
+
+
+@pytest.mark.parametrize("case", ["paragraph-identity", "thematic-boundary", "block-count"])
+def test_inventory_and_boundary_oracles_detect_removed_guards(tmp_path: Path, case: str) -> None:
+    """Independent properties fail when their specific guard is removed."""
+    mutant_dir = tmp_path / "mutant"
+    mutant_dir.mkdir()
+    for source_path in SCRIPT_PATH.parent.glob("*.py"):
+        shutil.copyfile(source_path, mutant_dir / source_path.name)
+    mutant = mutant_dir / SCRIPT_PATH.name
+    source = mutant.read_text(encoding="utf-8")
+    if case == "paragraph-identity":
+        guard = "identity = policy_inventory_digest(\n                serialized_policy_blocks(expected_blocks), observed_tables\n            )"
+        replacement = "identity = policy_inventory_digest(expected_paragraphs, paragraphs)"
+    elif case == "thematic-boundary":
+        guard = "and not is_policy_thematic_break(following)"
+        replacement = "and True"
+    else:
+        guard = 'if "required_block_order" in raw and ('
+        replacement = "if False and ("
+    assert source.count(guard) == 1
+    mutant.write_text(source.replace(guard, replacement), encoding="utf-8")
+    program = r"""
+import sys
+sys.path.insert(0, sys.argv[1])
+import validate_instruction_contracts as v
+case = sys.argv[2]
+table = v.RequiredTable(("State", "Action"), (("Pending", "Wait"),))
+section = v.RequiredSection("## Rules", ("Before.", "After."), (table,), None, (), ("paragraph", "table", "paragraph"))
+literal = "| State | Action |\n| --- | --- |\n| Pending | Wait |"
+if case == "paragraph-identity":
+    positioned = v.section_failures("## Rules\n\nBefore.\n\n" + literal + "\n\nAltered.", (section,))
+    moved = v.section_failures("## Rules\n\nBefore.\n\nAltered.\n\n" + literal, (section,))
+    assert positioned != moved, (positioned, moved)
+elif case == "thematic-boundary":
+    section = v.RequiredSection("## Rules", ("Act. *** After.",), ())
+    assert v.section_failures("## Rules\n\nAct.  \n***\nAfter.", (section,)) == []
+else:
+    raw = {"required_sections": [{"heading": "## Rules", "next_heading": None,
+        "required_paragraphs": ["Before.", "After."],
+        "required_tables": [{"headers": ["State", "Action"], "rows": [["Pending", "Wait"]]}],
+        "required_block_order": ["paragraph", "table"]}]}
+    try:
+        sections = v.parse_required_sections(raw)
+    except v.InstructionContractValidationError as exc:
+        assert "Block order must match paragraph and table counts" in str(exc)
+    else:
+        failures = v.section_failures("## Rules\n\nBefore.\n\nAfter.\n\n" + literal, sections)
+        assert False, ("Invalid catalog accepted", failures)
+"""
+    for directory, expected in [(SCRIPT_PATH.parent, 0), (mutant_dir, 1)]:
+        result = subprocess.run(
+            [sys.executable, "-c", program, str(directory), case],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == expected, result.stdout + result.stderr
+        if expected:
+            assert "AssertionError" in result.stderr
+
+
+RETAINED_AZURE_HOSTS = [
+    "CLAUDE.md",
+    "GEMINI.md",
+    ".hermes.md",
+    ".cursor/rules/repository-instructions.mdc",
+]
+
+
+def _actual_azure_host_fixture(
+    tmp_path: Path, path: str, modules: list[str]
+) -> tuple[dict[str, Any], str]:
+    """Copy an actual host contract and independent source text."""
+    catalog = yaml.safe_load(
+        (REPO_ROOT / ".template-sync/instruction-contracts.yml").read_text(encoding="utf-8")
+    )
+    contract = next(item for item in catalog["instruction_contracts"] if item["path"] == path)
+    contracts = {"instruction_contracts": [contract]}
+    _write_common_contract_repo(tmp_path, contracts)
+    _write_yaml(tmp_path, ".template-sync/marker.yml", _marker(modules))
+    text = (REPO_ROOT / path).read_text(encoding="utf-8")
+    _write_text(tmp_path, path, text)
+    return contracts, text
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize("path", RETAINED_AZURE_HOSTS)
+@pytest.mark.parametrize("change", ["section", "clause", "boundary"])
+def test_actual_retained_azure_hosts_reject_protocol_loss(
+    tmp_path: Path, mode: str, path: str, change: str
+) -> None:
+    """Every retained host must preserve its complete Azure protocol."""
+    _contracts_data, text = _actual_azure_host_fixture(
+        tmp_path, path, ["agent-instructions", "azure-devops-collaboration"]
+    )
+    intact = _run_validator(tmp_path, "--mode", mode)
+    assert intact.returncode == 0, intact.stdout + intact.stderr
+    heading = "## Azure DevOps PR Review Protocol"
+    if change == "section":
+        start = text.index(heading)
+        end = text.find("\n## ", start + len(heading))
+        text = text[:start] + (text[end:] if end != -1 else "")
+    elif change == "clause":
+        assert "does not satisfy required-reviewer policies" in text
+        text = text.replace(
+            "does not satisfy required-reviewer policies", "satisfies required-reviewer policies", 1
+        )
+    else:
+        text = text.replace(heading, heading + "\n\n### Uncontracted boundary", 1)
+    _write_text(tmp_path, path, text)
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "section:" in result.stdout
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize("path", RETAINED_AZURE_HOSTS)
+def test_actual_azure_host_exclusion_and_owner_removal_oracle(tmp_path: Path, path: str) -> None:
+    """Exclusion permits absence; removing ownership restores the clause defect."""
+    contracts, text = _actual_azure_host_fixture(tmp_path, path, ["agent-instructions"])
+    heading = "## Azure DevOps PR Review Protocol"
+    start = text.index(heading)
+    end = text.find("\n## ", start + len(heading))
+    absent = text[:start] + (text[end:] if end != -1 else "")
+    _write_text(tmp_path, path, absent)
+    excluded = _run_validator(tmp_path, "--mode", "downstream")
+    assert excluded.returncode == 0, excluded.stdout + excluded.stderr
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["agent-instructions", "azure-devops-collaboration"]),
+    )
+    changed = text.replace(
+        "does not satisfy required-reviewer policies", "satisfies required-reviewer policies", 1
+    )
+    assert changed != text
+    _write_text(tmp_path, path, changed)
+    baseline = _run_validator(tmp_path, "--mode", "downstream")
+    assert baseline.returncode == 1, baseline.stdout + baseline.stderr
+    contract = contracts["instruction_contracts"][0]
+    sections = contract["required_sections"]
+    assert sum(item["heading"] == heading for item in sections) == 1
+    sections[:] = [item for item in sections if item["heading"] != heading]
+    if not sections:
+        del contract["required_sections"]
+        contract["required_headings"] = ["## Protected Instruction Files"]
+    _write_yaml(tmp_path, ".template-sync/instruction-contracts.yml", contracts)
+    mutant = _run_validator(tmp_path, "--mode", "downstream")
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+
+
+@pytest.mark.upstream_template_only
+def test_retained_azure_contracts_preserve_four_stale_decisions() -> None:
+    """Retained enforcement cannot add an excluded-host policy decision."""
+    catalog = yaml.safe_load(
+        (REPO_ROOT / ".template-sync/instruction-contracts.yml").read_text(encoding="utf-8")
+    )
+    paths = {
+        item["path"]
+        for item in catalog["protected_guide_section_obligations"]
+        if "azure-devops-collaboration" in item["target_modules"]
+        and "## Azure DevOps PR Review Protocol" in item.get("stale_headings", [])
+    }
+    assert paths == {"AGENTS.md", "CLAUDE.md", "GEMINI.md", ".hermes.md"}
+
+
 def _write_text(repo_root: Path, relative_path: str, text: str) -> None:
     """Write text below a fixture repository root."""
     path = repo_root / relative_path
@@ -734,7 +1201,7 @@ def test_intact_upstream_claude_contract_passes() -> None:
 
     assert result.returncode == 0, result.stderr
     assert "Instruction-contract validation passed." in result.stdout
-    assert "Contracts checked: 5" in result.stdout
+    assert "Contracts checked: 8" in result.stdout
 
 
 FOLLOW_UP_GOVERNANCE_MUTATIONS = (
@@ -2635,12 +3102,19 @@ def _scoped_policy() -> dict[str, Any]:
 
 def _render_section(section: dict[str, Any]) -> str:
     """Render fixture input independently of the production Markdown parser."""
-    blocks = [section["heading"], *section.get("required_paragraphs", [])]
+    paragraphs = list(section.get("required_paragraphs", []))
+    tables: list[str] = []
     for table in section.get("required_tables", []):
         lines = ["| " + " | ".join(table["headers"]) + " |"]
         lines.append("| " + " | ".join("---" for _ in table["headers"]) + " |")
         lines.extend("| " + " | ".join(row) + " |" for row in table["rows"])
-        blocks.append("\n".join(lines))
+        tables.append("\n".join(lines))
+    order = section.get(
+        "required_block_order", ["paragraph"] * len(paragraphs) + ["table"] * len(tables)
+    )
+    blocks = [section["heading"]]
+    for kind in order:
+        blocks.append(paragraphs.pop(0) if kind == "paragraph" else tables.pop(0))
     if section.get("next_heading") is not None:
         blocks.append(section["next_heading"])
     return "\n\n".join(blocks) + "\n"
@@ -4736,8 +5210,10 @@ print("distinct" if first != second else "collision")
     mutant = mutant_dir / SCRIPT_PATH.name
     source_text = mutant.read_text(encoding="utf-8")
     if kind == "malformed-table":
-        original = '[line for line in body if line.startswith("|")]'
-        replacement = '[" ".join(line.split()) for line in body if line.startswith("|")]'
+        # Fold source before it fans out into both malformed rows and the full
+        # body; mutating only one copy leaves the other protection effective.
+        original = "            malformed = True\n            tables = []\n"
+        replacement = original + '            body = [" ".join(line.split()) for line in body]\n'
     else:
         original = "[normalize_policy_paragraph(line) for line in lines[start:end] if line]"
         replacement = '[" ".join(line.split()) for line in lines[start:end] if line]'

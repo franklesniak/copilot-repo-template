@@ -122,6 +122,12 @@
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/requiredTable" },
           "description": "All tables in this section, in order. Extra, duplicate, malformed, reordered, or changed rows fail."
+        },
+        "required_block_order": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "enum": ["paragraph", "table"] },
+          "description": "Complete paragraph/table interleaving. Omission means all required paragraphs followed by all required tables. The semantic loader requires each token count to match its corresponding inventory."
         }
       },
       "anyOf": [

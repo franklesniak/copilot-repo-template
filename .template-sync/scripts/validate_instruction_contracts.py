@@ -9,6 +9,7 @@ import re
 import sys
 from bisect import bisect_left
 from dataclasses import dataclass, replace
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, NoReturn, cast
 
@@ -80,6 +81,9 @@ class RequiredTable:
     rows: tuple[tuple[str, ...], ...]
 
 
+PolicyBlock = tuple[str, str | RequiredTable]
+
+
 @dataclass(frozen=True)
 class RequiredSection:
     """Complete ordered clauses and tables owned by one unique heading."""
@@ -89,6 +93,7 @@ class RequiredSection:
     required_tables: tuple[RequiredTable, ...]
     next_heading: str | None = None
     requires_modules: tuple[str, ...] = ()
+    required_block_order: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -433,6 +438,15 @@ def parse_required_sections(raw_contract: dict[str, object]) -> tuple[RequiredSe
             tables.append(RequiredTable(headers, rows))
         if len(set(tables)) != len(tables):
             raise InstructionContractValidationError(f"Duplicate contract table: {heading}")
+        block_order = _required_string_list(raw, "required_block_order")
+        if "required_block_order" in raw and (
+            any(kind not in {"paragraph", "table"} for kind in block_order)
+            or block_order.count("paragraph") != len(paragraphs)
+            or block_order.count("table") != len(tables)
+        ):
+            raise InstructionContractValidationError(
+                f"Block order must match paragraph and table counts: {heading}"
+            )
         sections.append(
             RequiredSection(
                 heading,
@@ -440,6 +454,7 @@ def parse_required_sections(raw_contract: dict[str, object]) -> tuple[RequiredSe
                 tuple(tables),
                 next_heading,
                 requires_modules,
+                block_order,
             )
         )
     successors = {section.heading: section.next_heading for section in sections}
@@ -1311,6 +1326,18 @@ def operative_markdown_lines(text: str) -> list[str]:
                 visible.append(line[column])
                 column += 1
         observed = "".join(visible).strip(" \t")
+        trailing_spaces = re.search(r" {2,}$", line)
+        if (
+            observed
+            and trailing_spaces is not None
+            and code_end is None
+            and not in_comment
+            and not is_policy_heading(line)
+            and not observed.startswith("|")
+        ):
+            # Keep physical endings until the paragraph parser can distinguish
+            # a hard break from harmless block-final padding.
+            observed += trailing_spaces.group()
         if elided_comment and (
             (is_policy_heading(observed) and not is_policy_heading(line))
             or (starts_policy_list(observed) and not starts_policy_list(line))
@@ -1395,7 +1422,12 @@ def section_boundary_failure(
     return None
 
 
-def parse_policy_body(lines: list[str]) -> tuple[list[str], list[RequiredTable]]:
+def parse_policy_body(
+    lines: list[str],
+    *,
+    blocks: list[PolicyBlock] | None = None,
+    hard_breaks: list[str] | None = None,
+) -> tuple[list[str], list[RequiredTable]]:
     """Parse full paragraph/list-item clauses and strict, unescaped pipe tables.
 
     Inline pipes and multiline table cells are outside this policy subset.
@@ -1404,6 +1436,23 @@ def parse_policy_body(lines: list[str]) -> tuple[list[str], list[RequiredTable]]
     paragraphs: list[str] = []
     tables: list[RequiredTable] = []
     paragraph: list[str] = []
+
+    def finish_paragraph() -> None:
+        if not paragraph:
+            return
+        value = normalize_policy_paragraph(" ".join(paragraph))
+        paragraphs.append(value)
+        if blocks is not None:
+            blocks.append(("paragraph", value))
+        if hard_breaks is not None and any(
+            line.endswith("  ")
+            and not is_policy_thematic_break(line)
+            and not is_policy_thematic_break(following)
+            for line, following in pairwise(paragraph)
+        ):
+            hard_breaks.append("\n".join(paragraph))
+        paragraph.clear()
+
     index = 0
     while index < len(lines):
         line = lines[index]
@@ -1411,8 +1460,7 @@ def parse_policy_body(lines: list[str]) -> tuple[list[str], list[RequiredTable]]
             not line or is_policy_heading(line) or line.startswith("|") or starts_policy_list(line)
         )
         if boundary and paragraph:
-            paragraphs.append(normalize_policy_paragraph(" ".join(paragraph)))
-            paragraph = []
+            finish_paragraph()
         if line.startswith("|"):
             cells: list[tuple[str, ...]] = []
             while index < len(lines) and lines[index].startswith("|"):
@@ -1433,14 +1481,35 @@ def parse_policy_body(lines: list[str]) -> tuple[list[str], list[RequiredTable]]
                 or len({row[0] for row in cells[2:]}) != len(cells[2:])
             ):
                 raise InstructionContractValidationError("Malformed or duplicate policy table.")
-            tables.append(RequiredTable(cells[0], tuple(cells[2:])))
+            table = RequiredTable(cells[0], tuple(cells[2:]))
+            tables.append(table)
+            if blocks is not None:
+                blocks.append(("table", table))
             continue
         if line and not is_policy_heading(line):
             paragraph.append(line)
         index += 1
-    if paragraph:
-        paragraphs.append(normalize_policy_paragraph(" ".join(paragraph)))
+    finish_paragraph()
     return paragraphs, tables
+
+
+def expected_policy_blocks(section: RequiredSection) -> list[PolicyBlock]:
+    """Expand explicit or default interleaving without duplicating clause content."""
+    order = section.required_block_order or (
+        ("paragraph",) * len(section.required_paragraphs)
+        + ("table",) * len(section.required_tables)
+    )
+    paragraphs = iter(normalize_policy_paragraph(value) for value in section.required_paragraphs)
+    tables = iter(section.required_tables)
+    return [(kind, next(paragraphs) if kind == "paragraph" else next(tables)) for kind in order]
+
+
+def serialized_policy_blocks(blocks: list[PolicyBlock]) -> list[object]:
+    """Keep typed source inventories serializable in content-bound waiver identities."""
+    return [
+        [kind, value.headers, value.rows] if isinstance(value, RequiredTable) else [kind, value]
+        for kind, value in blocks
+    ]
 
 
 def section_applies(section: RequiredSection, included_modules: set[str] | None) -> bool:
@@ -1498,12 +1567,14 @@ def section_failures(
         if not section_applies(section, included_modules):
             continue
         prefix = f"section:{section.heading}"
+        expected_blocks = expected_policy_blocks(section)
         if ambiguous_html:
             expected_section = (
                 section.heading,
                 section.next_heading,
                 section.required_paragraphs,
                 [(table.headers, table.rows) for table in section.required_tables],
+                section.required_block_order,
             )
             identity = policy_inventory_digest(
                 expected_section, [ambiguous_html, document_identity]
@@ -1519,19 +1590,35 @@ def section_failures(
         if body is None:
             failures.append(prefix)
             body = []
-        paragraphs, _ = parse_policy_body(["" if line.startswith("|") else line for line in body])
+        hard_breaks: list[str] = []
+        paragraphs, _ = parse_policy_body(
+            ["" if line.startswith("|") else line for line in body],
+            hard_breaks=hard_breaks,
+        )
+        if hard_breaks:
+            identity = policy_inventory_digest(
+                serialized_policy_blocks(expected_blocks), hard_breaks
+            )
+            failures.append(f"{prefix}:hard-break:{identity}")
         malformed = False
+        observed_blocks: list[PolicyBlock] = []
         observed_tables: object
         try:
-            _, tables = parse_policy_body(body)
+            _, tables = parse_policy_body(body, blocks=observed_blocks)
         except InstructionContractValidationError:
             malformed = True
             tables = []
-            observed_tables = {"malformed": [line for line in body if line.startswith("|")]}
+            observed_tables = {
+                "malformed": [line for line in body if line.startswith("|")],
+                "body": body,
+            }
         else:
-            observed_tables = {"parsed": [(table.headers, table.rows) for table in tables]}
+            observed_tables = {
+                "parsed": [(table.headers, table.rows) for table in tables],
+                "blocks": serialized_policy_blocks(observed_blocks),
+            }
         table_identity = policy_inventory_digest(
-            [(table.headers, table.rows) for table in section.required_tables], observed_tables
+            serialized_policy_blocks(expected_blocks), observed_tables
         )
         table_anchor = f"{prefix}:tables:{table_identity}"
         # Ordered, complete paragraphs prevent scattered keywords or reordered
@@ -1561,10 +1648,23 @@ def section_failures(
         if any(value not in expected_positions for value in paragraphs) or positions != sorted(
             set(positions)
         ):
-            identity = policy_inventory_digest(expected_paragraphs, paragraphs)
+            identity = policy_inventory_digest(
+                serialized_policy_blocks(expected_blocks), observed_tables
+            )
             failures.append(f"{prefix}:paragraphs:{identity}")
         if malformed or tables != list(section.required_tables):
             failures.append(table_anchor)
+        if section.required_paragraphs and section.required_tables and not malformed:
+            expected_ranks = {block: offset for offset, block in enumerate(expected_blocks)}
+            observed_ranks = [
+                expected_ranks[block] for block in observed_blocks if block in expected_ranks
+            ]
+            if observed_ranks != sorted(observed_ranks):
+                identity = policy_inventory_digest(
+                    serialized_policy_blocks(expected_blocks),
+                    serialized_policy_blocks(observed_blocks),
+                )
+                failures.append(f"{prefix}:blocks:{identity}")
     return list(dict.fromkeys(failures))
 
 
