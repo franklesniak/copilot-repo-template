@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import os
 import re
 import shlex
@@ -21,6 +22,8 @@ pytestmark = pytest.mark.upstream_template_only
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RUNNER_REQUIREMENT_PATH = REPO_ROOT / "requirements-pre-commit.txt"
+MARKDOWN_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/markdownlint.yml"
+UPSTREAM_TEMPLATE_CONDITION = "${{ github.repository == 'franklesniak/copilot-repo-template' }}"
 PYTHON_INSTALLER_PATHS = (
     ".github/workflows/precommit-ci.yml",
     ".github/workflows/data-ci.yml",
@@ -31,6 +34,14 @@ PYTHON_INSTALLER_PATHS = (
 GITHUB_CACHE_WORKFLOWS = (
     ".github/workflows/precommit-ci.yml",
     ".github/workflows/data-ci.yml",
+)
+CREDENTIAL_FREE_WORKFLOWS = PYTHON_INSTALLER_PATHS[:3] + (
+    ".github/workflows/check-placeholders.yml",
+    ".github/workflows/markdownlint.yml",
+    ".github/workflows/powershell-ci.yml",
+    ".github/workflows/python-ci.yml",
+    ".github/workflows/terraform-ci.yml",
+    ".github/workflows/toolchain-eol.yml",
 )
 HOOK_PATH = REPO_ROOT / ".claude/hooks/session-start.sh"
 EXACT_REQUIREMENT_RE = re.compile(r"pre-commit==(?P<version>[0-9]+\.[0-9]+\.[0-9]+)\Z")
@@ -56,8 +67,77 @@ def assert_immutable_action_references(workflow: str) -> None:
         ), line
 
 
+def assert_credential_free_checkouts(workflow_text: str) -> None:
+    """Inspect every checkout and its effective permissions, including later steps."""
+    workflow = yaml.safe_load(workflow_text)
+    checkout_count = 0
+    for job in workflow["jobs"].values():
+        for step in job.get("steps", []):
+            if not step.get("uses", "").startswith("actions/checkout@"):
+                continue
+            checkout_count += 1
+            assert job.get("permissions", workflow.get("permissions")) == {"contents": "read"}
+            inputs = step.get("with", {})
+            assert isinstance(inputs, dict), "checkout inputs must be a mapping"
+            value = inputs.get("persist-credentials")
+            assert value is False or (
+                isinstance(value, str) and value.strip(" \t\r\n").lower() == "false"
+            )
+    assert checkout_count, "the fixture must exercise checkout"
+
+
+def assert_markdown_hook_regression_ci(workflow_text: str) -> None:
+    """Require provisioned, blocking hook coverage and optional-profile conditions."""
+    workflow = yaml.safe_load(workflow_text)
+    steps = workflow["jobs"]["markdownlint"]["steps"]
+    by_name = {step["name"]: step for step in steps}
+    assert len(by_name) == len(steps)
+    assert workflow_text.count("# template-sync: begin template-sync-support-only") == 2
+    assert workflow_text.count("# template-sync: end template-sync-support-only") == 2
+    assert all("template-sync:" not in str(step.get("if", "")) for step in steps)
+
+    setup = by_name["Setup Python"]
+    install = by_name["Install Python dependencies"]
+    for step in (setup, install):
+        condition = " ".join(step["if"].split())
+        assert "github.repository == 'franklesniak/copilot-repo-template'" in condition
+        assert "hashFiles('pyproject.toml') != ''" in condition
+        assert "hashFiles('tests/test_materialize_downstream_adoption.py') != ''" in condition
+
+    runner = by_name["Install pinned pre-commit runner"]
+    assert runner["if"] == UPSTREAM_TEMPLATE_CONDITION
+    assert runner["run"] == ("python -m pip install --requirement requirements-pre-commit.txt")
+
+    generated = by_name["Lint materialized generated output (nested Markdown)"]
+    generated_condition = " ".join(generated["if"].split())
+    assert "hashFiles('pyproject.toml') != ''" in generated_condition
+    assert "hashFiles('tests/test_materialize_downstream_adoption.py') != ''" in (
+        generated_condition
+    )
+    assert generated["continue-on-error"] is True
+
+    hook = by_name["Run actual nested Markdown hook regression"]
+    assert hook["if"] == UPSTREAM_TEMPLATE_CONDITION
+    assert hook["id"] == "test-nested-hook"
+    assert hook["continue-on-error"] is True
+    assert hook["run"].split() == [
+        "pytest",
+        (
+            "tests/test_precommit_runner.py::"
+            "test_nested_markdown_hook_actual_invocation_and_mutation"
+        ),
+        "-v",
+    ]
+
+    result = by_name["Check source-template regression results"]
+    assert "steps.lint-generated.outcome == 'failure'" in result["if"]
+    assert "steps.test-nested-hook.outcome == 'failure'" in result["if"]
+    assert "exit 1" in result["run"]
+
+
 def assert_candidate_hook_checkout(workflow_text: str) -> None:
     """Require credential-free checkout before actual candidate pre-commit steps."""
+    assert_credential_free_checkouts(workflow_text)
     workflow = yaml.safe_load(workflow_text)
     hook_jobs = 0
     for job in workflow["jobs"].values():
@@ -78,8 +158,6 @@ def assert_candidate_hook_checkout(workflow_text: str) -> None:
                 if step.get("uses", "").startswith("actions/checkout@")
             ]
             assert checkouts, "candidate hooks require a preceding checkout"
-            for checkout in checkouts:
-                assert checkout.get("with", {}).get("persist-credentials") is False
     assert hook_jobs, "the fixture must exercise an actual candidate-hook job"
 
 
@@ -90,7 +168,7 @@ def test_candidate_hook_workflows_do_not_persist_checkout_credentials(relative_p
 
 
 @pytest.mark.parametrize("relative_path", PYTHON_INSTALLER_PATHS[:3])
-@pytest.mark.parametrize("mutation", ["omitted", "true", "string-false", "write-permission"])
+@pytest.mark.parametrize("mutation", ["omitted", "true", "dynamic", "write-permission"])
 def test_candidate_hook_workflow_rejects_weakened_checkout(
     relative_path: str, mutation: str
 ) -> None:
@@ -106,8 +184,8 @@ def test_candidate_hook_workflow_rejects_weakened_checkout(
         del checkout["with"]["persist-credentials"]
     elif mutation == "true":
         checkout["with"]["persist-credentials"] = True
-    elif mutation == "string-false":
-        checkout["with"]["persist-credentials"] = "false"
+    elif mutation == "dynamic":
+        checkout["with"]["persist-credentials"] = "${{ inputs.persist }}"
     else:
         workflow["permissions"]["contents"] = "write"
     with pytest.raises(AssertionError):
@@ -841,3 +919,277 @@ def test_claude_hook_fails_closed_for_invalid_or_unfulfilled_runner(
     )
 
     assert result.returncode != 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("relative_path", CREDENTIAL_FREE_WORKFLOWS)
+def test_every_live_checkout_explicitly_disables_credentials(relative_path: str) -> None:
+    """The shipped workflows declare credential intent independently of action defaults."""
+    assert_credential_free_checkouts((REPO_ROOT / relative_path).read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("value", [True, "true", None, 0, 1, [], {}, "${{ inputs.persist }}", "no"])
+def test_later_checkout_rejects_invalid_credential_inputs(value: Any) -> None:
+    """A valid first checkout cannot conceal a later unsafe or ambiguous checkout."""
+    workflow = yaml.safe_load(
+        (REPO_ROOT / CREDENTIAL_FREE_WORKFLOWS[0]).read_text(encoding="utf-8")
+    )
+    job = next(iter(workflow["jobs"].values()))
+    job["steps"].append({"uses": "actions/checkout@v7", "with": {"persist-credentials": value}})
+    with pytest.raises(AssertionError):
+        assert_credential_free_checkouts(yaml.safe_dump(workflow))
+
+
+@pytest.mark.parametrize("value", ["false", "False", "FALSE", " false ", "\tfalse\t"])
+def test_quoted_false_checkout_input_is_valid(value: str) -> None:
+    """An action input string false has the same intended effect as YAML false."""
+    workflow = (REPO_ROOT / CREDENTIAL_FREE_WORKFLOWS[0]).read_text(encoding="utf-8")
+    document = yaml.safe_load(workflow)
+    for job in document["jobs"].values():
+        for step in job.get("steps", []):
+            if step.get("uses", "").startswith("actions/checkout@"):
+                step["with"]["persist-credentials"] = value
+    quoted = yaml.safe_dump(document)
+    assert quoted != workflow
+    assert_credential_free_checkouts(quoted)
+
+
+def test_checkout_oracle_detects_removed_credential_assertion() -> None:
+    """Independent missing-input expectation fails when the credential assertion vanishes."""
+    source = inspect.getsource(assert_credential_free_checkouts)
+    assertion = (
+        "            assert value is False or (\n"
+        '                isinstance(value, str) and value.strip(" \\t\\r\\n").lower() == "false"\n'
+        "            )"
+    )
+    assert source.count(assertion) == 1
+    namespace: dict[str, Any] = {"yaml": yaml}
+    # Execute only this module's owned oracle with one fixed guard-removal mutation.
+    exec(source.replace(assertion, "            pass"), namespace)  # noqa: S102
+    mutant = namespace["assert_credential_free_checkouts"]
+    workflow = (REPO_ROOT / CREDENTIAL_FREE_WORKFLOWS[0]).read_text(encoding="utf-8")
+    weakened = workflow.replace(
+        "          persist-credentials: false\n", "          fetch-depth: 1\n"
+    )
+    assert weakened != workflow
+
+    def rejects_missing(checker: Callable[[str], None]) -> None:
+        try:
+            checker(weakened)
+        except AssertionError:
+            return
+        raise AssertionError("missing checkout credential protection was accepted")
+
+    rejects_missing(assert_credential_free_checkouts)
+    with pytest.raises(AssertionError, match="protection was accepted"):
+        rejects_missing(mutant)
+
+
+def test_markdown_ci_provisions_actual_hook_regression() -> None:
+    """Markdown CI supplies every prerequisite and blocks on the actual hook regression."""
+    assert_markdown_hook_regression_ci(MARKDOWN_WORKFLOW_PATH.read_text(encoding="utf-8"))
+
+
+def test_markdown_ci_oracle_rejects_removed_hook_guards() -> None:
+    """Independent mutations cannot remove runner setup, invocation, or failure blocking."""
+    workflow = MARKDOWN_WORKFLOW_PATH.read_text(encoding="utf-8")
+    mutations = (
+        (
+            "python -m pip install --requirement requirements-pre-commit.txt",
+            "python -m pip install --requirement missing-runner.txt",
+        ),
+        (
+            "test_nested_markdown_hook_actual_invocation_and_mutation",
+            "test_nested_markdown_hook_launcher_preserves_arguments_and_failure",
+        ),
+        (
+            "steps.test-nested-hook.outcome == 'failure'",
+            "steps.test-nested-hook.outcome == 'cancelled'",
+        ),
+    )
+    for selected, replacement in mutations:
+        assert workflow.count(selected) == 1
+        mutant = workflow.replace(selected, replacement, 1)
+        with pytest.raises(AssertionError):
+            assert_markdown_hook_regression_ci(mutant)
+
+
+def test_nested_markdown_hook_launcher_preserves_arguments_and_failure(
+    monkeypatch: Any,
+    capsys: Any,
+) -> None:
+    """The launcher neither shells filenames nor converts a native lint failure to success."""
+    import runpy
+
+    namespace = runpy.run_path(str(REPO_ROOT / ".github/scripts/lint_nested_markdown_hook.py"))
+    calls: list[tuple[list[str], dict[str, Any]]] = []
+
+    def run(command: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        calls.append((command, kwargs))
+        return subprocess.CompletedProcess(command, 9)
+
+    monkeypatch.setattr(shutil, "which", lambda _name: "chosen-node")
+    monkeypatch.setattr(subprocess, "run", run)
+    assert namespace["main"](["docs/file with spaces.md", "--odd.mdc"]) == 9
+    assert calls == [
+        (
+            [
+                "chosen-node",
+                str(REPO_ROOT / ".github/scripts/lint-nested-markdown.js"),
+                "docs/file with spaces.md",
+                "--odd.mdc",
+            ],
+            {"cwd": REPO_ROOT, "check": False},
+        )
+    ]
+    calls.clear()
+    for args in ([], [""]):
+        assert namespace["main"](args) == 1
+    assert not calls
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    assert namespace["main"](["readme.md"]) == 1
+    assert "npm ci --ignore-scripts" in capsys.readouterr().err
+    assert not calls
+
+
+def test_nested_markdown_hook_os_error_diagnostics_hide_filenames(
+    monkeypatch: Any,
+    capsys: Any,
+    tmp_path: Path,
+) -> None:
+    """Launcher diagnostics keep context and cause without exposing OSError paths."""
+    import runpy
+
+    launcher_path = REPO_ROOT / ".github/scripts/lint_nested_markdown_hook.py"
+    source = launcher_path.read_text(encoding="utf-8")
+    namespace = runpy.run_path(str(launcher_path))
+    monkeypatch.setattr(shutil, "which", lambda _name: "chosen-node")
+
+    private_paths = ("source-private-canary.md", "destination-private-canary.md")
+
+    def require_safe_error(main: Callable[[list[str]], int], error: OSError) -> None:
+        def fail_run(*_args: Any, **_kwargs: Any) -> subprocess.CompletedProcess[str]:
+            raise error
+
+        monkeypatch.setattr(subprocess, "run", fail_run)
+        assert main(["README.md"]) == 1
+        diagnostic = capsys.readouterr().err
+        for private_path in private_paths:
+            assert (
+                private_path not in diagnostic
+            ), f"diagnostic exposed private path: {private_path}"
+        assert diagnostic.startswith("Cannot start nested Markdown lint: ")
+        assert f"{type(error).__name__}: {error.strerror or 'I/O error'}" in diagnostic
+
+    with_paths = OSError(5, "fixture I/O failure")
+    with_paths.filename, with_paths.filename2 = private_paths
+    require_safe_error(namespace["main"], with_paths)
+
+    without_strerror = OSError()
+    without_strerror.filename, without_strerror.filename2 = private_paths
+    require_safe_error(namespace["main"], without_strerror)
+
+    safe_summary = "f\"{type(error).__name__}: {error.strerror or 'I/O error'}\""
+    assert source.count(safe_summary) == 1
+    mutant_path = tmp_path / "raw_error_launcher.py"
+    mutant_path.write_text(source.replace(safe_summary, "str(error)", 1), encoding="utf-8")
+    mutant = runpy.run_path(str(mutant_path))
+    with pytest.raises(
+        AssertionError,
+        match="diagnostic exposed private path: source-private-canary.md",
+    ):
+        require_safe_error(mutant["main"], with_paths)
+
+
+def test_nested_markdown_hook_actual_invocation_and_mutation(tmp_path: Path) -> None:
+    """Run the real selected hook, including spaces, deletion, no files and an invocation mutant."""
+    executable = os.environ.get("PRE_COMMIT_EXECUTABLE") or shutil.which("pre-commit")
+    if not executable or not shutil.which("node") or not (REPO_ROOT / "node_modules").is_dir():
+        pytest.skip("Install the pinned pre-commit runner and run npm ci --ignore-scripts.")
+    assert executable is not None
+    version = subprocess.run([executable, "--version"], capture_output=True, text=True, check=False)
+    assert version.returncode == 0, version.stderr
+    assert version.stdout.strip() == expected_version_output()
+    root = tmp_path / "hook repository with spaces"
+    scripts = root / ".github/scripts"
+    scripts.mkdir(parents=True)
+    for name in ("lint-nested-markdown.js", "lint_nested_markdown_hook.py"):
+        shutil.copy2(REPO_ROOT / ".github/scripts" / name, scripts / name)
+    shutil.copy2(REPO_ROOT / ".markdownlint.jsonc", root / ".markdownlint.jsonc")
+    config = yaml.safe_load((REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8"))
+    hook = next(
+        hook
+        for repo in config["repos"]
+        for hook in repo["hooks"]
+        if hook["id"] == "lint-nested-markdown"
+    )
+    config_path = root / ".pre-commit-config.yaml"
+
+    def write_config(selected_hook: dict[str, Any]) -> None:
+        config_path.write_text(
+            yaml.safe_dump({"repos": [{"repo": "local", "hooks": [selected_hook]}]}),
+            encoding="utf-8",
+        )
+
+    write_config(hook)
+    subprocess.run(["git", "init", "--quiet", str(root)], check=True, capture_output=True)
+    bad = root / "bad example.mdc"
+    bad.write_text("# Example\n\n```markdown\n# Bad heading.\n```\n", encoding="utf-8")
+    good = root / "good example.md"
+    good.write_text("# Example\n\nReadable without nested blocks.\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "-C", str(root), "add", "--", bad.name, good.name], check=True, capture_output=True
+    )
+    environment = {**os.environ, "NODE_PATH": str(REPO_ROOT / "node_modules")}
+    environment.pop("SKIP", None)
+
+    def run_hook(*filenames: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [
+                executable,
+                "run",
+                "lint-nested-markdown",
+                "--config",
+                str(config_path),
+                "--files",
+                *filenames,
+            ],
+            cwd=root,
+            env=environment,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+
+    def require_rejected(result: subprocess.CompletedProcess[str]) -> None:
+        assert result.returncode != 0, result.stdout + result.stderr
+        assert "MD026" in result.stdout + result.stderr
+        assert bad.name in result.stdout + result.stderr
+
+    require_rejected(run_hook(bad.name))
+    assert run_hook(good.name).returncode == 0
+    # A removed invocation must fail the independent invalid-content oracle.
+    mutant = dict(hook, entry='python -c "import sys; sys.exit(0)"')
+    write_config(mutant)
+    with pytest.raises(AssertionError):
+        require_rejected(run_hook(bad.name))
+    write_config(hook)
+    bad.unlink()
+    deleted = run_hook(bad.name)
+    assert deleted.returncode == 0, deleted.stdout + deleted.stderr
+    assert "Skipped" in deleted.stdout and "no files to check" in deleted.stdout
+    (root / "unrelated.txt").write_text("No Markdown files selected.\n", encoding="utf-8")
+    empty = run_hook("unrelated.txt")
+    assert empty.returncode == 0, empty.stdout + empty.stderr
+    assert "Skipped" in empty.stdout
+    # Filtered deletion does not redefine explicit missing CLI inputs as success.
+    direct = subprocess.run(
+        [sys.executable, str(scripts / "lint_nested_markdown_hook.py"), bad.name],
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert direct.returncode != 0
+    assert bad.name in direct.stdout + direct.stderr

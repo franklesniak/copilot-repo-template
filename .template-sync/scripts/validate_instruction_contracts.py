@@ -5,8 +5,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import stat
+import subprocess
 import sys
+import threading
+import time
 from bisect import bisect_left
 from dataclasses import dataclass, replace
 from itertools import pairwise
@@ -33,6 +38,12 @@ DEFAULT_CONTRACTS_SCHEMA_PATH = "schemas/template-sync-instruction-contracts.sch
 VALIDATION_MODES = ("upstream-template", "downstream")
 # Per-file local resource bound, independent of agent document-context settings.
 MAXIMUM_INPUT_BYTES = 1024 * 1024
+MAXIMUM_GIT_OUTPUT_BYTES = 1024 * 1024
+MAXIMUM_CLAUDE_CONTAINER_STEPS = 64
+GIT_TIMEOUT_SECONDS = 30
+CLAUDE_IMPORT_PATTERN = re.compile(
+    r"(?m)(?<!\S)@(?P<target>(?!(?:claude|codex)(?=$|\s))[^\s<>]+)(?=$|\s)"
+)
 POLICY_CELL_WORD = (
     r"[^|\u0009-\u000d\u001c-\u0020\u0085\u00a0\u1680"
     r"\u2000-\u200a\u2028-\u2029\u202f\u205f\u3000\ufeff]"
@@ -194,6 +205,31 @@ class SkippedContract:
 
 
 @dataclass(frozen=True)
+class ActiveClaudeImport:
+    """One active Claude file import in a governed shared instruction file."""
+
+    path: str
+    line: int
+    target: str
+
+
+@dataclass(frozen=True)
+class ClaudeImportLine:
+    """One visible Claude-import line and its Markdown paragraph identity."""
+
+    source: str
+    visible: str
+    paragraph_id: int | None = None
+
+
+@dataclass(frozen=True)
+class TrackedClaudeLocalMemory:
+    """One exact-basename Claude local-memory path found in the Git index."""
+
+    path: str
+
+
+@dataclass(frozen=True)
 class InstructionContractReport:
     """Instruction contract validation details to print for the operator."""
 
@@ -207,16 +243,23 @@ class InstructionContractReport:
     applied_protected_guide_waivers: tuple[validate_marker.ProtectedGuideContractWaiver, ...]
     authorized_removals: tuple[AuthorizedRemoval, ...]
     warnings: tuple[str, ...]
+    active_claude_imports: tuple[ActiveClaudeImport, ...] = ()
+    tracked_claude_local_memory: tuple[TrackedClaudeLocalMemory, ...] = ()
+    tracked_claude_local_memory_inventory_applicable: bool = True
 
     @property
     def has_failures(self) -> bool:
         """Return whether validation found unwaived failures.
 
-        A failure is any unwaived missing file, missing anchor, or stale
-        protected-guide section.
+        A failure is any unwaived contract failure, active Claude import, or
+        tracked Claude local-memory path.
         """
         return bool(
-            self.missing_files or self.missing_anchors or self.stale_protected_guide_sections
+            self.missing_files
+            or self.missing_anchors
+            or self.stale_protected_guide_sections
+            or self.active_claude_imports
+            or self.tracked_claude_local_memory
         )
 
 
@@ -1358,6 +1401,511 @@ def operative_markdown_lines(text: str) -> list[str]:
     return result
 
 
+def claude_container_content(line: str) -> tuple[str, str]:
+    """Return a line with Markdown container prefixes blanked and its content."""
+    offset = 0
+    steps = 0
+    while offset < len(line) and steps < MAXIMUM_CLAUDE_CONTAINER_STEPS:
+        advanced = False
+        _depth, quote_offset = consume_blockquote_prefix(line[offset:])
+        if quote_offset:
+            offset += quote_offset
+            steps += 1
+            advanced = True
+            if steps == MAXIMUM_CLAUDE_CONTAINER_STEPS:
+                break
+        list_match = LIST_MARKER_RE.match(line[offset:])
+        if list_match is not None:
+            offset += list_match.start("rest")
+            steps += 1
+            advanced = True
+        if not advanced:
+            break
+    return " " * offset + line[offset:], line[offset:]
+
+
+def claude_import_lines(text: str) -> list[ClaudeImportLine]:
+    """Return visible lines with literals blanked and paragraph identities assigned."""
+    lines: list[ClaudeImportLine] = []
+    in_block_comment = False
+    active_fence: MarkdownFence | None = None
+    for line in markdown_lines(text):
+        normalized, content = claude_container_content(line)
+        if in_block_comment:
+            comment_end = content.find("-->")
+            if comment_end == -1:
+                lines.append(ClaudeImportLine(source="", visible=""))
+                continue
+            in_block_comment = False
+            tail_start = len(line) - len(content) + comment_end + 3
+            visible = " " * tail_start + line[tail_start:]
+            lines.append(ClaudeImportLine(source=visible, visible=visible))
+            continue
+        if active_fence is not None:
+            fence_content = active_fence_content(line, active_fence)
+            if fence_content is not None:
+                if parse_fence_close_from_content(
+                    fence_content,
+                    fence_character=active_fence.character,
+                    minimum_length=active_fence.length,
+                    allow_arbitrary_indent=active_fence.allow_arbitrary_indent,
+                ):
+                    active_fence = None
+                lines.append(ClaudeImportLine(source="", visible=""))
+                continue
+            active_fence = None
+        comment_start = re.match(r"^ {0,3}<!--", content)
+        if comment_start is not None:
+            comment_end = content.find("-->", comment_start.end())
+            if comment_end == -1:
+                in_block_comment = True
+                lines.append(ClaudeImportLine(source="", visible=""))
+                continue
+            tail_start = len(line) - len(content) + comment_end + 3
+            visible = " " * tail_start + line[tail_start:]
+            lines.append(ClaudeImportLine(source=visible, visible=visible))
+            continue
+        active_fence = parse_markdown_fence_open(line, MARKDOWN_FENCE_CONTEXT)
+        if active_fence is not None:
+            lines.append(ClaudeImportLine(source="", visible=""))
+            continue
+        lines.append(ClaudeImportLine(source=line, visible=normalized))
+    return classify_claude_paragraphs(lines)
+
+
+def claude_paragraph_text(content: str, *, paragraph_active: bool = False) -> bool:
+    """Return whether content can continue an active Markdown paragraph."""
+    if not content.strip(" \t"):
+        return False
+    if (
+        is_policy_heading(content)
+        or is_policy_thematic_break(content)
+        or starts_policy_list(content)
+        or parse_markdown_fence_open(content, MARKDOWN_FENCE_CONTEXT) is not None
+        or policy_html_block_end(content, paragraph_can_continue=paragraph_active) is not None
+        or POLICY_HTML_AMBIGUOUS_START.match(content) is not None
+        or re.fullmatch(r" {0,3}(?:=+|-+)[ \t]*", content) is not None
+        or re.match(r"^ {0,3}\[[^\]]+\]:", content) is not None
+    ):
+        return False
+    return paragraph_active or re.match(r"^(?: {4}| *\t)", content) is None
+
+
+ClaudeContainerStep = tuple[str, int]
+
+
+@dataclass(frozen=True)
+class ClaudeContinuation:
+    """One active paragraph continuation resolved against its container path."""
+
+    content_offset: int
+    ordered_marker_is_text: bool = False
+
+
+def claude_explicit_container(
+    source: str,
+) -> tuple[tuple[ClaudeContainerStep, ...], int, bool]:
+    """Return the ordered visible container path, content offset, and overflow."""
+    steps: list[ClaudeContainerStep] = []
+    offset = 0
+    while len(steps) < MAXIMUM_CLAUDE_CONTAINER_STEPS:
+        quote_depth, quote_offset = consume_blockquote_prefix(source[offset:])
+        if quote_depth:
+            steps.append(("quote", quote_depth))
+            offset += quote_offset
+            continue
+        list_match = LIST_MARKER_RE.match(source[offset:])
+        if list_match is not None and not is_policy_thematic_break(source[offset:]):
+            list_indent = list_match.start("rest")
+            steps.append(("list", list_indent))
+            offset += list_indent
+            continue
+        break
+    quote_depth, _quote_offset = consume_blockquote_prefix(source[offset:])
+    list_match = LIST_MARKER_RE.match(source[offset:])
+    overflow = len(steps) == MAXIMUM_CLAUDE_CONTAINER_STEPS and (
+        quote_depth > 0
+        or (list_match is not None and not is_policy_thematic_break(source[offset:]))
+    )
+    return tuple(steps), offset, overflow
+
+
+def claude_continuation_content_offset(
+    source: str,
+    active_steps: tuple[ClaudeContainerStep, ...],
+    explicit_prefix_end: int,
+) -> ClaudeContinuation | None:
+    """Consume explicit or lazily omitted markers for one active container path."""
+    offset = 0
+    omitted_container_prefix = False
+    omitted_list_indentation = False
+    for kind, amount in active_steps:
+        if kind == "quote":
+            depth, consumed = consume_blockquote_prefix(source[offset:], max_depth=amount)
+            # A quote reached only after omitting its owning list indentation is
+            # an ancestor quote that interrupts the old list-item paragraph.
+            if consumed and omitted_list_indentation:
+                return None
+            offset += consumed
+            omitted_container_prefix = omitted_container_prefix or depth < amount
+            continue
+        remaining = source[offset:]
+        leading_spaces = len(remaining) - len(remaining.lstrip(" "))
+        if leading_spaces >= amount:
+            offset += amount
+        else:
+            omitted_container_prefix = True
+            omitted_list_indentation = True
+
+    # Ordered markers whose start is not 1 cannot interrupt a paragraph at the
+    # deepest container that stayed open. They are still boundaries after an
+    # active list indentation was omitted, where they are sibling/ancestor
+    # items rather than paragraph text.
+    relative_list = LIST_MARKER_RE.match(source[offset:])
+    if relative_list is not None and not omitted_container_prefix:
+        marker = relative_list.group("marker")
+        if marker[0].isdigit() and int(marker[:-1]) != 1:
+            return ClaudeContinuation(offset, ordered_marker_is_text=True)
+    # Any explicit marker left unconsumed starts a different block container.
+    return ClaudeContinuation(offset) if offset >= explicit_prefix_end else None
+
+
+def classify_claude_paragraphs(lines: list[ClaudeImportLine]) -> list[ClaudeImportLine]:
+    """Assign bounded paragraph identities from raw list and quote structure.
+
+    The identity is intentionally narrower than a complete CommonMark AST. It
+    recognizes the explicit and lazy paragraph continuations that can carry a
+    multi-line code span. Other block transitions start a fresh identity, so an
+    unmatched delimiter cannot hide a later import across a structural boundary.
+    """
+    classified: list[ClaudeImportLine] = []
+    next_paragraph_id = 0
+    active_paragraph_id: int | None = None
+    active_steps: tuple[ClaudeContainerStep, ...] = ()
+    for line in lines:
+        source = line.source
+        if not source.strip(" \t"):
+            classified.append(line)
+            active_paragraph_id = None
+            active_steps = ()
+            continue
+
+        explicit_steps, explicit_prefix_end, overflow = claude_explicit_container(source)
+        continuation = None
+        if active_paragraph_id is not None and not overflow:
+            continuation = claude_continuation_content_offset(
+                source, active_steps, explicit_prefix_end
+            )
+        same_container = continuation is not None
+        content_offset = continuation.content_offset if continuation else explicit_prefix_end
+        content = source[content_offset:]
+        can_continue = not overflow and (
+            (continuation is not None and continuation.ordered_marker_is_text)
+            or claude_paragraph_text(content, paragraph_active=same_container)
+        )
+        if same_container and can_continue:
+            paragraph_id = active_paragraph_id
+        else:
+            paragraph_id = next_paragraph_id
+            next_paragraph_id += 1
+        classified.append(replace(line, paragraph_id=paragraph_id))
+
+        if same_container and can_continue:
+            active_paragraph_id = paragraph_id
+        elif can_continue:
+            active_paragraph_id = paragraph_id
+            active_steps = explicit_steps if not overflow else ()
+        else:
+            active_paragraph_id = None
+            active_steps = ()
+    return classified
+
+
+def mask_matched_claude_code_spans(lines: list[ClaudeImportLine]) -> list[str]:
+    """Blank spans matched within one paragraph; leave unmatched runs live."""
+    span_ends: dict[tuple[int, int], tuple[int, int]] = {}
+    next_runs: dict[tuple[int, int], tuple[int, int]] = {}
+    for row in range(len(lines) - 1, -1, -1):
+        line = lines[row]
+        if line.paragraph_id is None:
+            continue
+        for run in reversed(list(re.finditer(r"`+", line.visible))):
+            width = run.end() - run.start()
+            key = (line.paragraph_id, width)
+            if key in next_runs:
+                span_ends[(row, run.start())] = next_runs[key]
+            escaped_key = (line.paragraph_id, width - 1)
+            if width > 1 and escaped_key in next_runs:
+                span_ends[(row, run.start() + 1)] = next_runs[escaped_key]
+            next_runs[key] = (row, run.end())
+    offsets: list[int] = []
+    total = 0
+    for line in lines:
+        offsets.append(total)
+        total += len(line.visible) + 1
+    flat = "\n".join(line.visible for line in lines)
+    absolute_ends = {
+        offsets[start_row] + start_column: offsets[end_row] + end_column
+        for (start_row, start_column), (end_row, end_column) in span_ends.items()
+    }
+    masked = list(flat)
+    position = 0
+    while position < len(flat):
+        if flat[position] == "\\" and position + 1 < len(flat):
+            position += 2
+            continue
+        if flat[position] != "`":
+            position += 1
+            continue
+        run_end = position + 1
+        while run_end < len(flat) and flat[run_end] == "`":
+            run_end += 1
+        span_end = absolute_ends.get(position)
+        if span_end is None:
+            position = run_end
+            continue
+        for index in range(position, span_end):
+            if masked[index] != "\n":
+                masked[index] = " "
+        position = span_end
+    return "".join(masked).split("\n")
+
+
+def active_claude_imports(path: str, text: str) -> tuple[ActiveClaudeImport, ...]:
+    """Return active Claude imports from one retained governed document."""
+    imports: list[ActiveClaudeImport] = []
+    lines = mask_matched_claude_code_spans(claude_import_lines(text))
+    for line_number, line in enumerate(lines, 1):
+        for match in CLAUDE_IMPORT_PATTERN.finditer(line):
+            imports.append(
+                ActiveClaudeImport(
+                    path=path,
+                    line=line_number,
+                    target=match.group("target"),
+                )
+            )
+    return tuple(imports)
+
+
+def sanitized_git_environment() -> dict[str, str]:
+    """Return an environment without caller-controlled Git repository selectors."""
+    exact_keys = {
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_CEILING_DIRECTORIES",
+        "GIT_COMMON_DIR",
+        "GIT_CONFIG",
+        "GIT_DIR",
+        "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+        "GIT_EXEC_PATH",
+        "GIT_INDEX_FILE",
+        "GIT_LITERAL_PATHSPECS",
+        "GIT_GLOB_PATHSPECS",
+        "GIT_NOGLOB_PATHSPECS",
+        "GIT_ICASE_PATHSPECS",
+        "GIT_NAMESPACE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_PREFIX",
+        "GIT_WORK_TREE",
+    }
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if key.upper() not in exact_keys and not key.upper().startswith("GIT_CONFIG_")
+    }
+    environment["GIT_CONFIG_GLOBAL"] = os.devnull
+    environment["GIT_CONFIG_NOSYSTEM"] = "1"
+    environment["GIT_CONFIG_SYSTEM"] = os.devnull
+    environment["GIT_OPTIONAL_LOCKS"] = "0"
+    environment["GIT_PAGER"] = "cat"
+    return environment
+
+
+def os_error_diagnostic(error: OSError) -> str:
+    """Return an actionable OSError cause without either filename field."""
+    return f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+
+
+def run_bounded_git(repo_root: Path, arguments: list[str]) -> bytes:
+    """Run one shell-free Git query with bounded captured output."""
+    try:
+        process = subprocess.Popen(
+            ["git", "-C", str(repo_root), *arguments],
+            env=sanitized_git_environment(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    except FileNotFoundError as error:
+        raise InstructionContractValidationError(
+            "Git is required to inspect tracked Claude local memory for this worktree."
+        ) from error
+    except OSError as error:
+        raise InstructionContractValidationError(
+            f"Git inventory could not start: {os_error_diagnostic(error)}."
+        ) from error
+
+    stdout = bytearray()
+    stderr = bytearray()
+    output_exceeded = threading.Event()
+    reader_errors: list[OSError] = []
+    reader_error_lock = threading.Lock()
+
+    def read_stream(stream: Any, destination: bytearray) -> None:
+        try:
+            while True:
+                chunk = stream.read(64 * 1024)
+                if not chunk:
+                    return
+                remaining = MAXIMUM_GIT_OUTPUT_BYTES + 1 - len(destination)
+                destination.extend(chunk[:remaining])
+                if len(destination) > MAXIMUM_GIT_OUTPUT_BYTES:
+                    output_exceeded.set()
+                    try:
+                        process.kill()
+                    except OSError:
+                        pass
+                    return
+        except OSError as error:
+            with reader_error_lock:
+                reader_errors.append(error)
+        finally:
+            try:
+                stream.close()
+            except OSError as error:
+                with reader_error_lock:
+                    reader_errors.append(error)
+
+    assert process.stdout is not None
+    assert process.stderr is not None
+    stdout_stream = process.stdout
+    stderr_stream = process.stderr
+    stdout_thread = threading.Thread(target=read_stream, args=(stdout_stream, stdout), daemon=True)
+    stderr_thread = threading.Thread(target=read_stream, args=(stderr_stream, stderr), daemon=True)
+    stdout_thread.start()
+    stderr_thread.start()
+    deadline = time.monotonic() + GIT_TIMEOUT_SECONDS
+
+    try:
+        process.wait(timeout=max(0.0, deadline - time.monotonic()))
+    except subprocess.TimeoutExpired as error:
+        try:
+            process.kill()
+        except OSError:
+            pass
+        try:
+            process.wait(timeout=max(0.0, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            pass
+        raise InstructionContractValidationError(
+            f"Git inventory timed out after {GIT_TIMEOUT_SECONDS} seconds."
+        ) from error
+    for thread in (stdout_thread, stderr_thread):
+        thread.join(timeout=max(0.0, deadline - time.monotonic()))
+    if stdout_thread.is_alive() or stderr_thread.is_alive():
+        raise InstructionContractValidationError(
+            f"Git inventory streams did not close within {GIT_TIMEOUT_SECONDS} seconds."
+        )
+    if reader_errors:
+        reader_error = reader_errors[0]
+        raise InstructionContractValidationError(
+            f"Git inventory output could not be read: {os_error_diagnostic(reader_error)}."
+        ) from reader_error
+    if output_exceeded.is_set():
+        raise InstructionContractValidationError(
+            "Git inventory output exceeded the one-mebibyte per-stream limit."
+        )
+    if process.returncode != 0:
+        try:
+            detail = bytes(stderr).decode("utf-8", errors="strict").strip()
+        except UnicodeDecodeError as error:
+            raise InstructionContractValidationError(
+                "Git inventory failed and emitted non-UTF-8 diagnostics."
+            ) from error
+        if detail:
+            detail = detail.splitlines()[-1][:500]
+            raise InstructionContractValidationError(f"Git inventory failed: {detail}")
+        raise InstructionContractValidationError(
+            f"Git inventory failed with exit code {process.returncode}."
+        )
+    return bytes(stdout)
+
+
+def decode_git_output(output: bytes, purpose: str) -> str:
+    """Decode trusted-size Git output or fail closed on malformed bytes."""
+    try:
+        return output.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as error:
+        raise InstructionContractValidationError(
+            f"Git {purpose} output is not valid UTF-8."
+        ) from error
+
+
+def tracked_claude_local_memory(
+    repo_root: Path,
+) -> tuple[tuple[TrackedClaudeLocalMemory, ...], bool]:
+    """Return matching Git-index paths and whether this root has its own worktree."""
+    git_marker = repo_root / ".git"
+    try:
+        marker_status = git_marker.lstat()
+    except FileNotFoundError:
+        return (), False
+    except OSError as error:
+        raise InstructionContractValidationError(
+            f"Cannot inspect the repository Git marker: {os_error_diagnostic(error)}."
+        ) from error
+    if not (stat.S_ISDIR(marker_status.st_mode) or stat.S_ISREG(marker_status.st_mode)):
+        raise InstructionContractValidationError(
+            "The repository .git marker is neither a directory nor a regular worktree file."
+        )
+
+    top_level_output = run_bounded_git(repo_root, ["rev-parse", "--show-toplevel"])
+    top_level_text = decode_git_output(top_level_output, "top-level discovery").rstrip("\r\n")
+    if (
+        not top_level_text
+        or "\n" in top_level_text
+        or "\r" in top_level_text
+        or "\0" in top_level_text
+    ):
+        raise InstructionContractValidationError(
+            "Git top-level discovery returned malformed output."
+        )
+    try:
+        observed_top_level = Path(top_level_text).resolve(strict=True)
+        expected_top_level = repo_root.resolve(strict=True)
+    except OSError as error:
+        raise InstructionContractValidationError(
+            f"Cannot canonicalize the Git top level: {os_error_diagnostic(error)}."
+        ) from error
+    if observed_top_level != expected_top_level:
+        raise InstructionContractValidationError(
+            "The present root .git marker did not resolve to the validation root."
+        )
+
+    index_output = run_bounded_git(
+        repo_root,
+        [
+            "ls-files",
+            "-z",
+            "--cached",
+            "--",
+            ":(icase)CLAUDE.local.md",
+            ":(glob,icase)**/CLAUDE.local.md",
+        ],
+    )
+    if index_output and not index_output.endswith(b"\0"):
+        raise InstructionContractValidationError("Git index inventory returned malformed output.")
+    inventory = decode_git_output(index_output, "index inventory")
+    matches: set[str] = set()
+    for path in inventory.split("\0") if inventory else ():
+        if not path:
+            continue
+        parts = path.split("/")
+        if any(part in {"", ".", ".."} for part in parts):
+            raise InstructionContractValidationError("Git index inventory returned an unsafe path.")
+        if parts[-1].casefold() == "claude.local.md":
+            matches.add(path)
+    return tuple(TrackedClaudeLocalMemory(path=path) for path in sorted(matches)), True
+
+
 def index_policy_lines(lines: list[str]) -> PolicyLineIndex:
     """Index exact line occurrences and inclusive next-heading offsets once."""
     positions: dict[str, list[int]] = {}
@@ -1689,6 +2237,13 @@ def validate_contracts(
     applied_waivers: list[InstructionContractWaiver] = []
     applied_protected_guide_waivers: list[validate_marker.ProtectedGuideContractWaiver] = []
     authorized_removals: list[AuthorizedRemoval] = []
+    active_imports: list[ActiveClaudeImport] = []
+    tracked_local_memory, tracked_inventory_applicable = tracked_claude_local_memory(repo_root)
+    if not tracked_inventory_applicable:
+        warnings = (
+            *warnings,
+            "Tracked Claude local memory: N/A; the validation root has no .git marker.",
+        )
 
     for contract in contracts:
         if included_modules is not None and not set(contract.requires_modules).issubset(
@@ -1712,6 +2267,8 @@ def validate_contracts(
             continue
 
         checked_contracts.append(contract)
+        if contract.path.rsplit("/", 1)[-1] == "CLAUDE.md":
+            active_imports.extend(active_claude_imports(contract.path, text))
         scannable_text = strip_fenced_code_blocks(text)
         for heading in contract.required_headings:
             if heading_is_present(scannable_text, heading):
@@ -1824,6 +2381,9 @@ def validate_contracts(
         applied_protected_guide_waivers=tuple(dict.fromkeys(applied_protected_guide_waivers)),
         authorized_removals=tuple(authorized_removals),
         warnings=warnings,
+        active_claude_imports=tuple(active_imports),
+        tracked_claude_local_memory=tracked_local_memory,
+        tracked_claude_local_memory_inventory_applicable=tracked_inventory_applicable,
     )
 
 
@@ -1871,6 +2431,16 @@ def print_report(report: InstructionContractReport) -> None:
                 f"{stale_section.anchor_type}: {stale_section.anchor} "
                 f"(target modules: {', '.join(stale_section.target_modules)})"
             )
+
+    if report.active_claude_imports:
+        print("\nActive Claude imports:")
+        for active_import in report.active_claude_imports:
+            print(f"  - {active_import.path}:{active_import.line}: @{active_import.target}")
+
+    if report.tracked_claude_local_memory:
+        print("\nTracked Claude local memory:")
+        for local_memory in report.tracked_claude_local_memory:
+            print(f"  - {local_memory.path}")
 
     if report.authorized_removals:
         print("\nAuthorized removals skipped:")

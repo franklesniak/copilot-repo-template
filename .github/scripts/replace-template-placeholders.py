@@ -1812,13 +1812,18 @@ def replace_contributing_clone_block(
     text: str,
     context: ReplacementContext,
 ) -> tuple[str, int]:
-    """Render the Azure Repos clone block in CONTRIBUTING.md."""
+    """Render only the shipped clone block, preserving adjacent optional sections."""
     assert context.azure_devops is not None
-    start_marker = "### 1. Clone the Repository"
-    end_marker = "\n### 2. Install Node.js Dependencies"
-    start = text.find(start_marker)
-    end = text.find(end_marker, start)
-    if start == -1 or end == -1:
+    template_block = (
+        "### 1. Clone the Repository\n\n"
+        "<!-- CUSTOMIZE: Replace `OWNER/REPO` with your organization and repository name -->\n\n"
+        "```bash\n"
+        "git clone https://github.com/OWNER/REPO.git\n"
+        "cd REPO\n"
+        "```\n"
+    )
+    # Unknown or ambiguous blocks remain subject to the unresolved-placeholder scan.
+    if text.count(template_block) != 1:
         return text, 0
     azure_context = context.azure_devops
     replacement = (
@@ -1828,7 +1833,7 @@ def replace_contributing_clone_block(
         f"cd {shlex.quote(azure_context.repository)}\n"
         "```\n"
     )
-    return f"{text[:start]}{replacement}{text[end:]}", 1
+    return text.replace(template_block, replacement, 1), 1
 
 
 def replace_contributing_questions_block(

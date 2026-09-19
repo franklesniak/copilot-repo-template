@@ -1,6 +1,9 @@
 # Dependencies
 node_modules/
 
+# Personal Claude project memory (root and nested directories)
+CLAUDE.local.md
+
 # Python
 __pycache__/
 *.py[cod]

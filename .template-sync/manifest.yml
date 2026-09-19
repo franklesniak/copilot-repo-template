@@ -319,6 +319,11 @@ template_manifest:
       requires_all:
         - markdown
         - github-actions
+      notes: >-
+        Contains two Template-sync-support-only inline blocks for source-template
+        Python setup, regressions, and their aggregate failure predicates. Remove
+        those blocks when the template-sync-support module is excluded while
+        retaining the workflow's Markdown checks.
     - pattern: '.github/workflows/toolchain-eol.yml'
       requires_all:
         - markdown
@@ -338,7 +343,9 @@ template_manifest:
       notes: >-
         Runs the aggregate pre-commit gate. Contains a Terraform-only inline
         block for setup required by repo-local Terraform hooks. Remove the
-        delimited block when the terraform module is excluded.
+        delimited block when the terraform module is excluded. A Markdown-only inline block
+        installs the root Node toolchain for nested lint; remove that block
+        when the markdown module is excluded.
     - pattern: '.github/workflows/terraform-ci.yml'
       requires_all:
         - terraform
@@ -383,7 +390,9 @@ template_manifest:
         - github-actions
       notes: >-
         Contains a Terraform-only inline block for aggregate pre-commit setup.
-        Remove the delimited block when the terraform module is excluded.
+        Remove the delimited block when the terraform module is excluded. A
+        Markdown-only inline block installs the root Node toolchain for nested
+        lint; remove that block when the markdown module is excluded.
     - pattern: '.azuredevops/pipelines/README.md'
       requires_all:
         - azure-pipelines
@@ -394,7 +403,9 @@ template_manifest:
       notes: >-
         Runs the aggregate pre-commit gate in Azure Pipelines. Contains a
         Terraform-only inline block for setup required by repo-local Terraform
-        hooks. Remove the delimited block when the terraform module is excluded.
+        hooks. Remove the delimited block when the terraform module is excluded. A
+        Markdown-only inline block installs the root Node toolchain for nested
+        lint; remove that block when the markdown module is excluded.
     - pattern: '.azuredevops/pipelines/check-placeholders.yml'
       requires_all:
         - baseline
@@ -495,6 +506,13 @@ template_manifest:
         - markdown
     - pattern: '.github/scripts/lint-nested-markdown.js'
       requires_all:
+        - markdown
+    - pattern: '.github/scripts/lint-nested-markdown.test.js'
+      requires_all:
+        - markdown
+    - pattern: '.github/scripts/lint_nested_markdown_hook.py'
+      requires_all:
+        - baseline
         - markdown
     - pattern: '.github/scripts/check-toolchain-eol.js'
       requires_all:

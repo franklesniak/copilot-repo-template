@@ -7,13 +7,13 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.6.20260918.0
+**Version:** 1.7.20260919.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-18
+- **Last Updated:** 2026-09-19
 - **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, Azure Pipelines YAML, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by the companion JSON guide, if present) or generated YAML artifacts that are owned by another tool's serializer.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 <!-- template-sync: begin baseline-reference-only -->
@@ -52,13 +52,17 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - **[Actions]** Optional `workflow_dispatch` string inputs that also need defaults on non-dispatch triggers **SHOULD** derive the effective value from a single source, using a fallback only in keys where the needed contexts are available, rather than duplicating an unmarked input `default:` and `env:` literal.
 - **[Schemas]** Schema-backed YAML **MUST** pass any schema validator wired into pre-commit or CI; where no validator is wired up for a particular file family, authors **SHOULD** run the appropriate validator locally before committing.
 - **[Naming]** YAML filenames **SHOULD** be lowercase kebab-case; GitHub Actions workflows **MUST** use the `.yml` extension; project-owned YAML **MUST** choose `.yml` or `.yaml` and use it consistently.
-- **[IssueForms]** In `.github/ISSUE_TEMPLATE/*.yml`, repo-internal targets in both issue-form `value:` Markdown links (e.g., `bug_report.yml`) and `config.yml` `contact_links` `url:` fields **MUST** use absolute GitHub URLs such as `https://github.com/<owner>/<repo>/blob/HEAD/<path>` for file links; relative paths **MUST NOT** be used. Template repositories MAY ship a documented placeholder form for adopters to replace, but the final rendered URL still needs the real host, owner, and repository. The two file types fail for different reasons: `value:` Markdown blocks render at `/{owner}/{repo}/issues/new?...` so relative paths resolve against that URL and 404, while `contact_links` `url:` fields are not Markdown at all — GitHub validates them as absolute URLs at form-load time and rejects relative values outright.
+- **[IssueForms]** In `.github/ISSUE_TEMPLATE/*.yml`, repo-internal targets in both issue-form `value:` Markdown links (e.g., `bug_report.yml`) and `config.yml` `contact_links` `url:` fields **MUST** use absolute GitHub URLs such as `https://github.com/<owner>/<repo>/blob/HEAD/<path>` for file links; relative paths **MUST NOT** be used. Template repositories MAY ship unresolved live URLs using literal `OWNER/REPO`; other placeholder spellings MUST NOT serve that live role. Angle-bracket URL shapes here are schematic after substitution, and the final rendered URL still needs the real host, owner, and repository. The two file types fail for different reasons: `value:` Markdown blocks render at `/{owner}/{repo}/issues/new?...` so relative paths resolve against that URL and 404, while `contact_links` `url:` fields are not Markdown at all — GitHub validates them as absolute URLs at form-load time and rejects relative values outright.
 
 ## Dialect and Consumer Policy
 
 - Authors **SHOULD** target **YAML 1.2-compatible** values and avoid relying on parser-specific extensions.
 - Authors **MUST** avoid the YAML 1.1 *non-lowercase-`true`/`false`* truthy tokens that this guide does not permit as booleans (`y`, `Y`, `yes`, `Yes`, `YES`, `n`, `N`, `no`, `No`, `NO`, `on`, `On`, `ON`, `off`, `Off`, `OFF`, `True`, `TRUE`, `False`, `FALSE`); only lowercase `true` and `false` are allowed as booleans (see "Booleans, Nulls, and Numbers"). Many widely-deployed parsers (including those used by GitHub Actions, `js-yaml` defaults, and some legacy PyYAML configurations) still resolve some or all of these YAML 1.1 tokens as booleans, so any string value that would otherwise match one of them **MUST** be quoted.
 - Ecosystem-specific validators (for example, Kubernetes manifest validators, OpenAPI validators, Helm validators, Ansible validators) **SHOULD** be adopted only when the repository actually uses those ecosystems. Generic YAML guidance **MUST NOT** require validators that are irrelevant to the repository's stack. The repository's pre-commit configuration and CI definitions are the authoritative inventory of active YAML validators.
+
+## Encoding
+
+YAML files **MUST** use UTF-8 without a byte-order mark (BOM). This format-level authoring rule applies whether or not the repository retains baseline Git configuration. Git line-ending normalization is a separate concern.
 
 ## Formatting Rules
 
@@ -67,7 +71,7 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - Document separators (`---`, `...`) **SHOULD NOT** appear in single-document files. Multi-document YAML files **MAY** use `---` separators when the consumer requires multi-document input (for example, Kubernetes manifest bundles) or when the file format mandates a leading `---`.
 - Files **SHOULD NOT** contain trailing whitespace and **SHOULD** end with a single newline.
 <!-- template-sync: begin baseline-reference-only -->
-- Line-ending, BOM, EOF newline, and trailing-whitespace policy at the Git layer is owned by [`.gitattributes` Rules](./gitattributes.instructions.md); this guide does not duplicate or contradict it.
+- Git line-ending normalization and Git-layer whitespace handling are governed by [`.gitattributes` Rules](./gitattributes.instructions.md). The YAML encoding and formatting requirements above still apply.
 <!-- template-sync: end baseline-reference-only -->
 
 ## Quoting Rules
@@ -505,9 +509,15 @@ To make these links robust across non-GitHub.com renderers, GitHub Mobile, email
 - Relative paths such as `../blob/HEAD/<file>`, `blob/HEAD/<file>`, `./<file>`, or bare relative refs such as `(security)` **MUST NOT** be used in issue-form `value:` Markdown blocks or in `contact_links` URLs.
 - Use `blob/HEAD` rather than `blob/main` so file URLs work regardless of the repository's default branch name.
 - Repositories hosted on GitHub Enterprise Server **MUST** use their own host instead of `github.com` (for example, `https://github.company.com/<owner>/<repo>/blob/HEAD/<path>`).
-- Template repositories that intentionally ship unresolved URL placeholders **MUST** document their placeholder convention and substitution process in repository-local guidance. Placeholder validation, if any, is a repository-specific safety net; authors and adopters MUST still review the final rendered URLs.
+- Template repositories that intentionally ship unresolved URL placeholders **MUST** follow the live-placeholder convention below. Placeholder validation, if any, is a repository-specific safety net; authors and adopters MUST still review the final rendered URLs.
 
 If the repository also keeps Markdown documentation rules for issue templates or pull request templates, those rules SHOULD restate this behavior in their own scope so YAML and Markdown guidance remain independently understandable.
+
+### Live template URL placeholders
+
+Unresolved live adopter-substitution URLs **MUST** use literal `OWNER/REPO`, for example `https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md`. Authors **MUST NOT** use `<owner>/<repo>`, `<OWNER>/<REPO>`, or `your-org/your-repo` for that live role. Replace the token with the adopter's real owner and repository using the retained template replacement tool or an explicitly reviewed equivalent process, then verify the final host and rendered URL.
+
+Angle-bracket owner/repository notation **MAY** appear in explicitly labeled schematic prose or documentation of upstream action repositories. The URL shapes earlier in this section describe schematic URLs after substitution; they are not live adopter tokens. Do not rewrite those schematic examples as live placeholders or substitute the adopter's repository into an upstream action reference.
 
 ## Conservative YAML Subset
 

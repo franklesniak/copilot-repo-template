@@ -56,6 +56,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Run PSScriptAnalyzer
         shell: pwsh
@@ -185,6 +187,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       # Keep discovery scoped to PESTER_TEST_ROOT; the canonical rule lives in
       # `.github/instructions/powershell.instructions.md` under "Running Pester Tests".

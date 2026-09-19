@@ -44,13 +44,17 @@ git clone https://github.com/OWNER/REPO.git
 cd REPO
 ```
 
+<!-- template-sync: begin markdown-reference-only -->
 ### 2. Install Node.js Dependencies
 
-Install Node.js dependencies for Markdown linting scripts:
+Install the Markdown tooling from the committed lockfile without running install lifecycle scripts:
 
 ```bash
-npm install
+npm ci --ignore-scripts
 ```
+
+This keeps normal setup aligned with `package-lock.json` and reports a mismatch instead of rewriting the lock. For intentional dependency maintenance, use the appropriate `npm install --ignore-scripts` or `npm update --ignore-scripts` command, review the package and lockfile changes, and run validation. Later lint and test commands execute tools; disabling install scripts does not prevent that execution.
+<!-- template-sync: end markdown-reference-only -->
 
 Git hooks are managed by pre-commit.
 
@@ -150,6 +154,7 @@ git commit --no-verify -m "your message"
 
 ## Manual Validation
 
+<!-- template-sync: begin markdown-reference-only -->
 ### Markdown Linting
 
 ```bash
@@ -157,6 +162,7 @@ npm run lint:md
 npm run lint:md:links
 npm run lint:md:nested
 ```
+<!-- template-sync: end markdown-reference-only -->
 
 ### PowerShell Validation
 

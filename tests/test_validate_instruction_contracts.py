@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -5585,3 +5586,889 @@ def test_removed_dialect_guard_is_detected_by_independent_oracle(tmp_path: Path)
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert baseline.returncode != result.returncode, "The independent rejection oracle must fail."
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize(
+    "mutation", ["encoding-weakened", "encoding-fenced", "live-noncanonical", "schematic-ban"]
+)
+def test_yaml_encoding_and_live_placeholder_contract_rejects_policy_drift(
+    tmp_path: Path, mutation: str
+) -> None:
+    """New YAML policies require operative clauses, including their permitted schematic scope."""
+    _copy_real_instruction_contract_surface(tmp_path)
+    path = tmp_path / ".github/instructions/yaml.instructions.md"
+    text = path.read_text(encoding="utf-8")
+    assert _run_validator(tmp_path, "--mode", "upstream-template").returncode == 0
+    if mutation == "encoding-weakened":
+        changed = text.replace("YAML files **MUST** use UTF-8", "YAML files **MAY** use UTF-8", 1)
+    elif mutation == "encoding-fenced":
+        heading = "## Encoding\n\n"
+        start = text.index(heading) + len(heading)
+        end = text.index("\n\n## Formatting Rules", start)
+        changed = text[:start] + "```text\n" + text[start:end] + "\n```" + text[end:]
+    elif mutation == "live-noncanonical":
+        changed = text.replace(
+            "URLs **MUST** use literal `OWNER/REPO`",
+            "URLs **MUST** use literal `<owner>/<repo>`",
+            1,
+        )
+    else:
+        changed = text.replace("notation **MAY** appear", "notation **MUST NOT** appear", 1)
+    assert changed != text
+    path.write_text(changed, encoding="utf-8")
+    result = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert ".github/instructions/yaml.instructions.md" in result.stdout
+
+
+def _write_claude_import_fixture(repo_root: Path, text: str) -> None:
+    """Write a minimal cataloged Claude contract for import-scanner tests."""
+    _write_common_contract_repo(repo_root, _contracts(required_headings=["# Fixture"]))
+    _write_text(repo_root, "CLAUDE.md", text)
+
+
+def _initialize_git_repository(repo_root: Path) -> None:
+    """Initialize an isolated Git worktree without requiring commit identity."""
+    result = subprocess.run(
+        ["git", "init", "--quiet", str(repo_root)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def _git_add(repo_root: Path, relative_path: str) -> None:
+    """Force one fixture path into the isolated index."""
+    result = subprocess.run(
+        ["git", "-C", str(repo_root), "add", "-f", "--", relative_path],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def _copy_validator_sources(destination: Path) -> Path:
+    """Copy the validator module surface for an independent mutant run."""
+    destination.mkdir()
+    for source_path in SCRIPT_PATH.parent.glob("*.py"):
+        shutil.copyfile(source_path, destination / source_path.name)
+    return destination / SCRIPT_PATH.name
+
+
+def _run_validator_with_environment(
+    repo_root: Path, environment: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
+    """Run upstream validation with an explicit inherited environment."""
+    return subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--repo-root",
+            str(repo_root),
+            "--mode",
+            "upstream-template",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=environment,
+    )
+
+
+@pytest.mark.parametrize(
+    ("text", "targets"),
+    [
+        pytest.param(
+            "# Fixture\n\n@relative.md @/absolute.md @~/personal.md @../parent.md @LICENSE",
+            {"relative.md", "/absolute.md", "~/personal.md", "../parent.md", "LICENSE"},
+            id="active-target-forms",
+        ),
+        pytest.param(
+            "# Fixture\n\n>@quoted.md\n\n- > @nested.md",
+            {"quoted.md", "nested.md"},
+            id="blockquote-and-list",
+        ),
+        pytest.param(
+            "# Fixture\n\nText <!-- @inline.md --> remains prose.",
+            {"inline.md"},
+            id="inline-comment-is-not-exempt",
+        ),
+        pytest.param(
+            "# Fixture\n\nUnmatched ` delimiter leaves @visible.md live.",
+            {"visible.md"},
+            id="unmatched-code-run",
+        ),
+        pytest.param(
+            "# Fixture\n\nUse `@inline.md` and ``@double.md``.\n"
+            "A `multiline\n@multi.md` span.\n\n"
+            "```text\n@fenced.md\n```\n~~~text\n@tilde.md\n~~~\n"
+            "> ```text\n> @quoted-fence.md\n> ```\n"
+            "- ~~~text\n  @list-fence.md\n  ~~~\n",
+            set(),
+            id="code-spans-and-fences",
+        ),
+        pytest.param(
+            "# Fixture\n\n<!--\n```\n@hidden.md\n```\n--> @tail.md",
+            {"tail.md"},
+            id="block-comment-state-and-live-tail",
+        ),
+        pytest.param(
+            "# Fixture\n\n> <!--\n> @hidden.md\n> -->\n\n- <!-- @also-hidden.md -->",
+            set(),
+            id="block-comments-in-containers",
+        ),
+        pytest.param(
+            "# Fixture\n\n@claude start review loop\n@codex review\n"
+            "mail@example.com and (@not-boundary.md)",
+            set(),
+            id="commands-email-and-nonboundary",
+        ),
+        pytest.param(
+            "# Fixture\n\n@claude-policy.md @codex.md",
+            {"claude-policy.md", "codex.md"},
+            id="bot-prefixes-are-imports",
+        ),
+    ],
+)
+def test_active_claude_import_scanner_literals_and_boundaries(
+    tmp_path: Path, text: str, targets: set[str]
+) -> None:
+    """Only documented literal contexts and exact bot commands are exempt."""
+    _write_claude_import_fixture(tmp_path, text)
+    result = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert result.returncode == (1 if targets else 0), result.stdout + result.stderr
+    entries = _section_entries(result.stdout, "Active Claude imports")
+    observed = {entry.rsplit("@", 1)[-1] for entry in entries}
+    assert observed == targets
+
+
+@pytest.mark.parametrize(
+    ("body", "targets"),
+    [
+        pytest.param(
+            "> > `start\n> > @README`\n",
+            set(),
+            id="nested-quote-multiline-literal",
+        ),
+        pytest.param(
+            "- > `start\n  > @README`\n",
+            set(),
+            id="list-quote-multiline-literal",
+        ),
+        pytest.param(
+            "> - `start\n>   @README`\n",
+            set(),
+            id="quote-list-multiline-literal",
+        ),
+        pytest.param(
+            "`start\n    @README`\n",
+            set(),
+            id="indented-paragraph-continuation-literal",
+        ),
+        pytest.param(
+            "- - `start\n    @README`\n",
+            set(),
+            id="nested-list-multiline-literal",
+        ),
+        pytest.param(
+            "> > `start\n> @README\n> > end`\n",
+            set(),
+            id="partial-lazy-nested-quote-literal",
+        ),
+        pytest.param(
+            "100. `start\n     @README`\n",
+            set(),
+            id="ordered-list-multiline-literal",
+        ),
+        pytest.param(
+            "- `unmatched\n- @README\n- closing`\n",
+            {"README"},
+            id="new-list-items-break-unmatched-span",
+        ),
+        pytest.param(
+            "> - `unmatched\n> - @README\n> - closing`\n",
+            {"README"},
+            id="new-quoted-list-items-break-unmatched-span",
+        ),
+        pytest.param(
+            "`unmatched\n> @README\nclosing`\n",
+            {"README"},
+            id="new-quote-breaks-unmatched-span",
+        ),
+        pytest.param(
+            "> `unmatched\n@README\n> closing`\n",
+            set(),
+            id="lazy-quote-continuation-remains-literal",
+        ),
+        pytest.param(
+            "`open\n0. @README\nclose`\n",
+            set(),
+            id="ordered-zero-cannot-interrupt-root-paragraph",
+        ),
+        pytest.param(
+            "`open\n2. @README\nclose`\n",
+            set(),
+            id="ordered-two-cannot-interrupt-root-paragraph",
+        ),
+        pytest.param(
+            "`open\n003. @README\nclose`\n",
+            set(),
+            id="ordered-leading-zero-cannot-interrupt-root-paragraph",
+        ),
+        pytest.param(
+            "`open\n2) @README\nclose`\n",
+            set(),
+            id="ordered-parenthesis-cannot-interrupt-root-paragraph",
+        ),
+        pytest.param(
+            "> `open\n> 2. @README\n> close`\n",
+            set(),
+            id="ordered-two-cannot-interrupt-quoted-paragraph",
+        ),
+        pytest.param(
+            "`open\n2. # @README\nclose`\n",
+            set(),
+            id="heading-after-ordered-two-remains-paragraph-text",
+        ),
+        pytest.param(
+            "`open\n2. > @README\nclose`\n",
+            set(),
+            id="quote-after-ordered-two-remains-paragraph-text",
+        ),
+        pytest.param(
+            "> `open\n> 2. # @README\n> close`\n",
+            set(),
+            id="quoted-heading-after-ordered-two-remains-paragraph-text",
+        ),
+        pytest.param(
+            "> `open\n> 2. > @README\n> close`\n",
+            set(),
+            id="quoted-quote-after-ordered-two-remains-paragraph-text",
+        ),
+        pytest.param(
+            "`open\n1. @README\nclose`\n",
+            {"README"},
+            id="ordered-one-interrupts-root-paragraph",
+        ),
+        pytest.param(
+            "`open\n- @README\nclose`\n",
+            {"README"},
+            id="bullet-interrupts-root-paragraph",
+        ),
+        pytest.param(
+            "1. `open\n2. @README\n3. close`\n",
+            {"README"},
+            id="ordered-sibling-items-remain-boundaries",
+        ),
+        pytest.param(
+            "1. `open\n2) @README\n3. close`\n",
+            {"README"},
+            id="ordered-delimiter-change-remains-boundary",
+        ),
+        pytest.param(
+            "- `open\n2. @README\nclose`\n",
+            {"README"},
+            id="bullet-list-exit-before-ordered-two-remains-boundary",
+        ),
+        pytest.param(
+            "1. `open\n   2. @README\n   close`\n",
+            set(),
+            id="ordered-two-under-active-list-remains-literal",
+        ),
+        pytest.param(
+            "> `open\n2. @README\nclose`\n",
+            {"README"},
+            id="ordered-two-after-quote-exit-remains-boundary",
+        ),
+        pytest.param(
+            "- > `open\n> @README\nclose`\n",
+            {"README"},
+            id="quote-after-list-exit-remains-boundary",
+        ),
+        pytest.param(
+            "- > `open\n@README\n> close`\n",
+            {"README"},
+            id="later-quote-after-list-exit-remains-boundary",
+        ),
+        pytest.param(
+            "- > > `open\n> @README\n> close`\n",
+            {"README"},
+            id="nested-quote-after-list-exit-remains-boundary",
+        ),
+        pytest.param(
+            "- - > `open\n  > @README\n  > close`\n",
+            {"README"},
+            id="quote-after-nested-list-exit-remains-boundary",
+        ),
+        pytest.param(
+            "- > `open\n  > @README\n  > close`\n",
+            set(),
+            id="properly-indented-list-quote-remains-literal",
+        ),
+        pytest.param(
+            "- > `open\n@README\nclose`\n",
+            set(),
+            id="fully-lazy-list-quote-remains-literal",
+        ),
+        pytest.param(
+            "> - `open\n> @README\n> close`\n",
+            set(),
+            id="quote-list-lazy-continuation-remains-literal",
+        ),
+        pytest.param(
+            "- > > `open\n  > @README\n  > > close`\n",
+            set(),
+            id="partial-nested-quote-with-list-indent-remains-literal",
+        ),
+    ],
+)
+def test_active_import_code_spans_respect_markdown_paragraph_containers(
+    tmp_path: Path, body: str, targets: set[str]
+) -> None:
+    """Code spans stay within one explicit or lazy container paragraph."""
+    _write_claude_import_fixture(tmp_path, "# Fixture\n\n" + body)
+    result = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert result.returncode == (1 if targets else 0), result.stdout + result.stderr
+    entries = _section_entries(result.stdout, "Active Claude imports")
+    observed = {entry.rsplit("@", 1)[-1] for entry in entries}
+    assert observed == targets
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "paragraph-key",
+        "container-continuation",
+        "ordered-interruption",
+        "ordered-after-list-exit",
+        "quote-after-list-exit",
+        "split-list-laziness",
+    ],
+)
+def test_active_import_container_span_mutants_are_detected(tmp_path: Path, mutation: str) -> None:
+    """Independent outcomes kill paragraph and container-transition regressions."""
+    if mutation == "paragraph-key":
+        body = "- `unmatched\n- @README\n- closing`\n"
+        expected_returncode = 0
+        original = "key = (line.paragraph_id, width)"
+        replacement = "key = (0, width)"
+    elif mutation == "container-continuation":
+        body = "> > `start\n> > @README`\n"
+        expected_returncode = 1
+        original = "same_container = continuation is not None"
+        replacement = "same_container = False"
+    elif mutation == "ordered-interruption":
+        body = "`open\n2. @README\nclose`\n"
+        expected_returncode = 1
+        original = "if marker[0].isdigit() and int(marker[:-1]) != 1:"
+        replacement = "if False:"
+    elif mutation == "ordered-after-list-exit":
+        body = "- `open\n2. @README\nclose`\n"
+        expected_returncode = 0
+        original = "if relative_list is not None and not omitted_container_prefix:"
+        replacement = "if relative_list is not None:"
+    elif mutation == "quote-after-list-exit":
+        body = "- > `open\n> @README\nclose`\n"
+        expected_returncode = 0
+        original = "if consumed and omitted_list_indentation:"
+        replacement = "if False and omitted_list_indentation:"
+    else:
+        body = "- > `open\n@README\nclose`\n"
+        expected_returncode = 1
+        original = (
+            "else:\n"
+            "            omitted_container_prefix = True\n"
+            "            omitted_list_indentation = True"
+        )
+        replacement = "else:\n            return None"
+    _write_claude_import_fixture(tmp_path, "# Fixture\n\n" + body)
+    baseline = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert baseline.returncode == 1 - expected_returncode, baseline.stdout + baseline.stderr
+
+    mutant = _copy_validator_sources(tmp_path / f"mutant-{mutation}")
+    source = mutant.read_text(encoding="utf-8")
+    assert source.count(original) == 1
+    mutant.write_text(source.replace(original, replacement), encoding="utf-8")
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(mutant),
+            "--repo-root",
+            str(tmp_path),
+            "--mode",
+            "upstream-template",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == expected_returncode, result.stdout + result.stderr
+
+
+def test_active_import_container_normalization_is_bounded_and_fail_visible() -> None:
+    """A pathological alternating prefix cannot hide its import or rescan its tail."""
+    program = r"""
+import sys
+sys.path.insert(0, sys.argv[1])
+import validate_instruction_contracts as validator
+
+text = "- > " * 25_000 + "@README\n"
+imports = validator.active_claude_imports("CLAUDE.md", text)
+assert [(item.line, item.target) for item in imports] == [(1, "README")]
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", program, str(SCRIPT_PATH.parent)],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_active_import_scan_covers_cataloged_nested_claude_file(tmp_path: Path) -> None:
+    """A retained nested exact-basename Claude contract receives the same scan."""
+    contracts = {
+        "instruction_contracts": [
+            {
+                "path": "tools/CLAUDE.md",
+                "requires_modules": ["agent-instructions"],
+                "required_headings": ["# Nested"],
+            }
+        ]
+    }
+    _write_common_contract_repo(tmp_path, contracts)
+    _write_text(tmp_path, "tools/CLAUDE.md", "# Nested\n\n@outside.md\n")
+    result = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "tools/CLAUDE.md:3: @outside.md" in result.stdout
+
+
+def test_active_import_scan_skips_inapplicable_downstream_contract(tmp_path: Path) -> None:
+    """Module exclusion remains an explicit skip rather than reading the file."""
+    contracts = {
+        "instruction_contracts": [
+            {
+                "path": "CLAUDE.md",
+                "requires_modules": ["azure-devops-collaboration"],
+                "required_headings": ["# Fixture"],
+            }
+        ]
+    }
+    _write_common_contract_repo(tmp_path, contracts)
+    _write_text(tmp_path, "CLAUDE.md", "# Fixture\n\n@outside.md\n")
+    _write_yaml(tmp_path, ".template-sync/marker.yml", _marker(["agent-instructions"]))
+    result = _run_validator(tmp_path, "--mode", "downstream")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Contracts skipped by downstream module selection:" in result.stdout
+    assert "Active Claude imports:" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    ["CLAUDE.local.md", "tools/CLAUDE.LOCAL.md", "more/claude.Local.MD"],
+)
+def test_tracked_claude_local_memory_rejects_index_paths_without_reading_worktree(
+    tmp_path: Path, relative_path: str
+) -> None:
+    """Root, nested, mixed-case, and index-only local memory all fail."""
+    _write_claude_import_fixture(tmp_path, "# Fixture\n")
+    _initialize_git_repository(tmp_path)
+    _write_text(tmp_path, relative_path, "personal content must not be read")
+    _git_add(tmp_path, relative_path)
+    (tmp_path / relative_path).unlink()
+    result = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Tracked Claude local memory:" in result.stdout
+    assert relative_path in result.stdout
+
+
+def test_untracked_and_near_miss_local_memory_remain_valid(tmp_path: Path) -> None:
+    """Personal untracked memory and a tracked suffix near miss are not violations."""
+    _write_claude_import_fixture(tmp_path, "# Fixture\n")
+    _initialize_git_repository(tmp_path)
+    _write_text(tmp_path, "CLAUDE.local.md", "untracked personal content")
+    _write_text(tmp_path, "CLAUDE.local.md.bak", "tracked near miss")
+    _git_add(tmp_path, "CLAUDE.local.md.bak")
+    result = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Tracked Claude local memory:\n" not in result.stdout
+
+
+def test_non_git_and_outer_repository_roots_report_inventory_not_applicable(
+    tmp_path: Path,
+) -> None:
+    """An absent exact-root marker neither invokes nor borrows Git inventory."""
+    outer = tmp_path / "outer"
+    fixture = outer / "materialized"
+    _write_claude_import_fixture(fixture, "# Fixture\n")
+    _initialize_git_repository(outer)
+    environment = os.environ.copy()
+    environment["PATH"] = ""
+    result = _run_validator_with_environment(fixture, environment)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Tracked Claude local memory: N/A" in result.stdout
+    assert "Tracked Claude local memory:\n" not in result.stdout
+
+
+def test_present_git_marker_requires_working_git_and_valid_metadata(tmp_path: Path) -> None:
+    """Missing Git and corrupt exact-root metadata cannot become silent N/A."""
+    valid = tmp_path / "valid"
+    _write_claude_import_fixture(valid, "# Fixture\n")
+    _initialize_git_repository(valid)
+    environment = os.environ.copy()
+    environment["PATH"] = ""
+    missing_git = _run_validator_with_environment(valid, environment)
+    assert missing_git.returncode == 1
+    assert "Git is required" in missing_git.stderr
+    assert "N/A" not in missing_git.stdout
+
+    corrupt = tmp_path / "corrupt"
+    _write_claude_import_fixture(corrupt, "# Fixture\n")
+    (corrupt / ".git").mkdir()
+    broken = _run_validator(corrupt, "--mode", "upstream-template")
+    assert broken.returncode == 1
+    assert "Git inventory failed" in broken.stderr
+    assert "N/A" not in broken.stdout
+
+
+def test_git_inventory_ignores_repository_config_and_pathspec_environment(
+    tmp_path: Path,
+) -> None:
+    """Caller Git selectors cannot redirect or change the exact index query."""
+    _write_claude_import_fixture(tmp_path, "# Fixture\n")
+    _initialize_git_repository(tmp_path)
+    relative_path = "tools/CLAUDE.LOCAL.md"
+    _write_text(tmp_path, relative_path, "personal content must not be read")
+    _git_add(tmp_path, relative_path)
+    (tmp_path / relative_path).unlink()
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "GIT_CONFIG": str(tmp_path / "bogus-config"),
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "core.bare",
+            "GIT_CONFIG_VALUE_0": "true",
+            "GIT_DIR": str(tmp_path / "missing-git-dir"),
+            "GIT_INDEX_FILE": str(tmp_path / "missing-index"),
+            "GIT_WORK_TREE": str(tmp_path / "missing-work-tree"),
+            "GIT_LITERAL_PATHSPECS": "1",
+            "GIT_GLOB_PATHSPECS": "1",
+            "GIT_NOGLOB_PATHSPECS": "1",
+            "GIT_ICASE_PATHSPECS": "1",
+        }
+    )
+    result = _run_validator_with_environment(tmp_path, environment)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert relative_path in result.stdout
+
+
+def test_git_output_limit_is_enforced_during_capture(tmp_path: Path) -> None:
+    """The independent low-limit mutant proves Git output cannot grow unchecked."""
+    _write_claude_import_fixture(tmp_path, "# Fixture\n")
+    _initialize_git_repository(tmp_path)
+    mutant = _copy_validator_sources(tmp_path / "mutant-output")
+    source = mutant.read_text(encoding="utf-8")
+    assert source.count("MAXIMUM_GIT_OUTPUT_BYTES = 1024 * 1024") == 1
+    mutant.write_text(
+        source.replace("MAXIMUM_GIT_OUTPUT_BYTES = 1024 * 1024", "MAXIMUM_GIT_OUTPUT_BYTES = 1"),
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(mutant),
+            "--repo-root",
+            str(tmp_path),
+            "--mode",
+            "upstream-template",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "one-mebibyte per-stream limit" in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("kind", "message"),
+    [
+        ("reader-error", "Git inventory output could not be read"),
+        ("held-open", "Git inventory streams did not close"),
+    ],
+)
+def test_git_reader_failures_and_descendant_held_pipes_fail_boundedly(
+    kind: str, message: str
+) -> None:
+    """Reader exceptions and inherited open pipes cannot admit partial output or hang."""
+    program = r"""
+import io
+import sys
+import threading
+sys.path.insert(0, sys.argv[1])
+import validate_instruction_contracts as validator
+
+kind = sys.argv[2]
+closed = threading.Event()
+
+class BrokenStream:
+    def read(self, _size):
+        error = OSError(5, "synthetic reader failure", "synthetic-private-reader")
+        error.filename2 = "synthetic-private-reader-two"
+        raise error
+    def close(self):
+        pass
+
+class HeldStream:
+    def read(self, _size):
+        closed.wait()
+        return b""
+    def close(self):
+        closed.set()
+
+class FakeProcess:
+    returncode = 0
+    def __init__(self):
+        self.stdout = BrokenStream() if kind == "reader-error" else HeldStream()
+        self.stderr = io.BytesIO()
+    def wait(self, timeout=None):
+        return 0
+    def kill(self):
+        closed.set()
+
+validator.GIT_TIMEOUT_SECONDS = 0.05
+validator.subprocess.Popen = lambda *args, **kwargs: FakeProcess()
+try:
+    validator.run_bounded_git(validator.Path.cwd(), ["status"])
+except validator.InstructionContractValidationError as error:
+    if kind == "reader-error":
+        assert isinstance(error.__cause__, OSError)
+    print(error)
+else:
+    raise AssertionError("Synthetic Git stream failure was accepted.")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", program, str(SCRIPT_PATH.parent), kind],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert message in result.stdout
+    assert "synthetic-private-reader" not in result.stdout + result.stderr
+
+
+def test_real_descendant_held_git_pipe_cannot_defeat_deadline() -> None:
+    """A real inherited write handle must not block the validator's caller."""
+    program = r"""
+import subprocess
+import sys
+sys.path.insert(0, sys.argv[1])
+import validate_instruction_contracts as validator
+
+real_popen = subprocess.Popen
+git_parent = r'''
+import subprocess
+import sys
+subprocess.Popen([sys.executable, "-c", "import time; time.sleep(2)"])
+'''
+
+def spawn_git_parent(*args, **kwargs):
+    return real_popen([sys.executable, "-c", git_parent], **kwargs)
+
+validator.GIT_TIMEOUT_SECONDS = 0.5
+validator.subprocess.Popen = spawn_git_parent
+try:
+    validator.run_bounded_git(validator.Path.cwd(), ["status"])
+except validator.InstructionContractValidationError as error:
+    print(error)
+else:
+    raise AssertionError("A descendant-held Git pipe was accepted.")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", program, str(SCRIPT_PATH.parent)],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=1.5,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Git inventory streams did not close" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("kind", "context"),
+    [
+        ("spawn", "Git inventory could not start"),
+        ("marker", "Cannot inspect the repository Git marker"),
+        ("canonical", "Cannot canonicalize the Git top level"),
+    ],
+)
+def test_git_os_error_paths_exclude_exception_filenames(kind: str, context: str) -> None:
+    """Spawn, marker, and canonicalization failures retain safe native causes."""
+    program = r"""
+import stat
+import sys
+sys.path.insert(0, sys.argv[1])
+import validate_instruction_contracts as validator
+
+kind = sys.argv[2]
+private_one = "synthetic-private-directory/CLAUDE.local.md"
+private_two = "synthetic-private-directory-two/CLAUDE.local.md"
+native_error = PermissionError(13, "Access denied", private_one)
+native_error.filename2 = private_two
+
+def raise_native_error(*_args, **_kwargs):
+    raise native_error
+
+root = validator.Path.cwd()
+if kind == "spawn":
+    validator.subprocess.Popen = raise_native_error
+    operation = lambda: validator.run_bounded_git(root, ["status"])
+elif kind == "marker":
+    validator.Path.lstat = raise_native_error
+    operation = lambda: validator.tracked_claude_local_memory(root)
+else:
+    class MarkerStatus:
+        st_mode = stat.S_IFDIR
+    validator.Path.lstat = lambda _path: MarkerStatus()
+    validator.run_bounded_git = lambda *_args, **_kwargs: str(root).encode("utf-8")
+    validator.Path.resolve = raise_native_error
+    operation = lambda: validator.tracked_claude_local_memory(root)
+
+try:
+    operation()
+except validator.InstructionContractValidationError as error:
+    diagnostic = str(error)
+    assert error.__cause__ is native_error
+    assert "PermissionError: Access denied" in diagnostic
+    assert private_one not in diagnostic
+    assert private_two not in diagnostic
+    print(diagnostic)
+else:
+    raise AssertionError("Synthetic Git OSError was accepted.")
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", program, str(SCRIPT_PATH.parent), kind],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert context in result.stdout
+
+
+def test_os_error_diagnostic_fallback_and_raw_string_mutant(tmp_path: Path) -> None:
+    """Missing strerror stays useful and a raw exception rendering leaks filenames."""
+    privacy_program = r"""
+import sys
+sys.path.insert(0, sys.argv[1])
+import validate_instruction_contracts as validator
+
+private_one = "synthetic-private-directory/CLAUDE.local.md"
+private_two = "synthetic-private-directory-two/CLAUDE.local.md"
+native_error = PermissionError(13, "Access denied", private_one)
+native_error.filename2 = private_two
+diagnostic = validator.os_error_diagnostic(native_error)
+if private_one in diagnostic or private_two in diagnostic:
+    raise SystemExit(9)
+assert diagnostic == "PermissionError: Access denied"
+"""
+    program = (
+        privacy_program
+        + '\nassert validator.os_error_diagnostic(OSError("opaque")) == "OSError: I/O error"\n'
+    )
+    baseline = subprocess.run(
+        [sys.executable, "-c", program, str(SCRIPT_PATH.parent)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert baseline.returncode == 0, baseline.stdout + baseline.stderr
+
+    mutant = _copy_validator_sources(tmp_path / "mutant-raw-os-error")
+    source = mutant.read_text(encoding="utf-8")
+    original = "return f\"{type(error).__name__}: {error.strerror or 'I/O error'}\""
+    assert source.count(original) == 1
+    mutant.write_text(source.replace(original, "return str(error)"), encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, "-c", privacy_program, str(mutant.parent)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 9, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("mutation", ["scanner-call", "blockquote-prefix"])
+def test_active_import_mutants_are_detected(tmp_path: Path, mutation: str) -> None:
+    """Independent CLI outcomes kill scan-removal and container-prefix mutants."""
+    _write_claude_import_fixture(tmp_path, "# Fixture\n\n>@outside.md\n")
+    baseline = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert baseline.returncode == 1, baseline.stdout + baseline.stderr
+    mutant = _copy_validator_sources(tmp_path / f"mutant-{mutation}")
+    source = mutant.read_text(encoding="utf-8")
+    if mutation == "scanner-call":
+        original = "active_imports.extend(active_claude_imports(contract.path, text))"
+        replacement = "pass"
+    else:
+        original = "normalized, content = claude_container_content(line)"
+        replacement = "normalized, content = line, line"
+    assert source.count(original) == 1
+    mutant.write_text(source.replace(original, replacement), encoding="utf-8")
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(mutant),
+            "--repo-root",
+            str(tmp_path),
+            "--mode",
+            "upstream-template",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("mutation", ["failure-gate", "case-sensitive-basename"])
+def test_tracked_local_memory_mutants_are_detected(tmp_path: Path, mutation: str) -> None:
+    """Independent mixed-case index fixtures kill gate and exact-case mutants."""
+    _write_claude_import_fixture(tmp_path, "# Fixture\n")
+    _initialize_git_repository(tmp_path)
+    relative_path = "tools/CLAUDE.LOCAL.md"
+    _write_text(tmp_path, relative_path, "personal content")
+    _git_add(tmp_path, relative_path)
+    (tmp_path / relative_path).unlink()
+    baseline = _run_validator(tmp_path, "--mode", "upstream-template")
+    assert baseline.returncode == 1, baseline.stdout + baseline.stderr
+    mutant = _copy_validator_sources(tmp_path / f"mutant-{mutation}")
+    source = mutant.read_text(encoding="utf-8")
+    if mutation == "failure-gate":
+        original = "or self.tracked_claude_local_memory"
+        replacement = "or False"
+    else:
+        original = 'parts[-1].casefold() == "claude.local.md"'
+        replacement = 'parts[-1] == "CLAUDE.local.md"'
+    assert source.count(original) == 1
+    mutant.write_text(source.replace(original, replacement), encoding="utf-8")
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(mutant),
+            "--repo-root",
+            str(tmp_path),
+            "--mode",
+            "upstream-template",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

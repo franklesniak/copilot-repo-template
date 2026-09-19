@@ -407,6 +407,12 @@ repos:
         language: python
         types: [markdown]
         files: ^docs/.*\.md$
+      - id: lint-nested-markdown
+        name: Lint nested Markdown
+        entry: python .github/scripts/lint_nested_markdown_hook.py
+        language: python
+        types: [file]
+        files: '\.(md|mdc)$'
 
   # Markdown linting
   - repo: https://github.com/DavidAnson/markdownlint-cli2

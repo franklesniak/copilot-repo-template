@@ -27,6 +27,17 @@ steps:
     inputs:
       versionSpec: ${{ parameters.pythonVersion }}
 
+  # template-sync: begin markdown-only
+  - task: UseNode@1
+    displayName: "Use Node.js for nested Markdown"
+    inputs:
+      version: "24.x"
+
+  - bash: npm ci --ignore-scripts
+    displayName: "Install root Markdown dependencies"
+    workingDirectory: "$(Build.SourcesDirectory)"
+  # template-sync: end markdown-only
+
   # template-sync: begin terraform-only
   - bash: |
       set -euo pipefail

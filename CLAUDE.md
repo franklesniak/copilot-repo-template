@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.6.20260918.0
+**Version:** 1.7.20260919.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-18
+- **Last Updated:** 2026-09-19
 - **Scope:** Agent-specific entry point for Claude Code and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
@@ -28,6 +28,12 @@ This file intentionally keeps only a minimal inline summary of the highest-prior
 Agents MUST follow [Agent Execution](.github/copilot-instructions.md#agent-execution) for task input records, unrelated-work preservation, exclusive ownership, bounded delegation, verification, and continuity after interruption. Use only capabilities available in the active runtime.
 
 Agents MUST apply the [shared decision process](.github/copilot-instructions.md#shared-review-governance) to material non-review findings as well as review feedback. Preserve its narrow mechanical-reuse conditions and its distinction between general decisions and PR-specific duties.
+
+## Shared Instruction Integrity
+
+Shared project `CLAUDE.md` files MUST NOT contain active `@path` imports. Keep shared instructions within reviewed repository files and use ordinary Markdown links for navigation. Literal import examples in inline code or fenced code blocks and ordinary `@claude` or `@codex` command mentions remain permitted. Retained instruction-contract validation checks cataloged Claude files; it does not discover every unlisted instruction surface.
+
+The repository MUST NOT track any file whose exact basename is `CLAUDE.local.md`, including casing variants at the root or in nested directories. Personal untracked local memory remains permitted. The tracked-file check inspects Git index names without reading local-memory contents; it does not govern user, global, or organization instructions. Ignore rules do not replace this check, and the check does not require baseline configuration.
 
 ## Protected Instruction Files
 

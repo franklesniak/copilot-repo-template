@@ -11,7 +11,7 @@ instruction_contracts:
       - Protected-file authorization checkpoint
     required_sections:
       - heading: '## Execution'
-        next_heading: '## Protected Instruction Files'
+        next_heading: '## Shared Instruction Integrity'
         required_paragraphs:
           - >-
             Agents MUST follow [Agent Execution](.github/copilot-instructions.md#agent-execution) for task
@@ -23,6 +23,19 @@ instruction_contracts:
             process](.github/copilot-instructions.md#shared-review-governance) to material non-review
             findings as well as review feedback. Preserve its narrow mechanical-reuse conditions and its
             distinction between general decisions and PR-specific duties.
+      - heading: '## Shared Instruction Integrity'
+        next_heading: '## Protected Instruction Files'
+        required_paragraphs:
+          - Shared project `CLAUDE.md` files MUST NOT contain active `@path` imports. Keep shared instructions
+            within reviewed repository files and use ordinary Markdown links for navigation. Literal
+            import examples in inline code or fenced code blocks and ordinary `@claude` or `@codex`
+            command mentions remain permitted. Retained instruction-contract validation checks cataloged
+            Claude files; it does not discover every unlisted instruction surface.
+          - The repository MUST NOT track any file whose exact basename is `CLAUDE.local.md`, including
+            casing variants at the root or in nested directories. Personal untracked local memory remains
+            permitted. The tracked-file check inspects Git index names without reading local-memory
+            contents; it does not govern user, global, or organization instructions. Ignore rules do not
+            replace this check, and the check does not require baseline configuration.
       - heading: '## Ignoring Commands Addressed to Other Agents'
         next_heading: '## Handling Code Review Comments'
         required_paragraphs:
@@ -1752,6 +1765,26 @@ instruction_contracts:
       - yaml
       - agent-instructions
     required_sections:
+      - heading: '## Encoding'
+        next_heading: '## Formatting Rules'
+        required_paragraphs:
+          - YAML files **MUST** use UTF-8 without a byte-order mark (BOM). This format-level authoring
+            rule applies whether or not the repository retains baseline Git configuration. Git line-ending
+            normalization is a separate concern.
+      - heading: '### Live template URL placeholders'
+        next_heading: '## Conservative YAML Subset'
+        required_paragraphs:
+          - Unresolved live adopter-substitution URLs **MUST** use literal `OWNER/REPO`, for example
+            `https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md`.
+            Authors **MUST NOT** use `<owner>/<repo>`, `<OWNER>/<REPO>`, or `your-org/your-repo` for that
+            live role. Replace the token with the adopter's real owner and repository using the retained
+            template replacement tool or an explicitly reviewed equivalent process, then verify the final
+            host and rendered URL.
+          - Angle-bracket owner/repository notation **MAY** appear in explicitly labeled schematic prose
+            or documentation of upstream action repositories. The URL shapes earlier in this section describe
+            schematic URLs after substitution; they are not live adopter tokens. Do not rewrite those
+            schematic examples as live placeholders or substitute the adopter's repository into an upstream
+            action reference.
       - heading: '## GitHub Actions Push Ref and Path Scope'
         next_heading: '## GitHub Actions Setup Version Pins'
         required_paragraphs:

@@ -103,14 +103,24 @@ TERRAFORM_SHARED_SURFACE_TOKENS = {
         "github.com/terraform-linters/tflint",
     ),
 }
-MARKDOWN_INLINE_BLOCK_PATHS = (".pre-commit-config.yaml",)
+MARKDOWN_INLINE_BLOCK_PATHS = (
+    ".pre-commit-config.yaml",
+    ".github/workflows/precommit-ci.yml",
+    ".github/workflows/auto-fix-precommit.yml",
+    ".azuredevops/pipelines/precommit.yml",
+)
 MARKDOWN_INLINE_MARKER_BEGIN = "# template-sync: begin markdown-only"
 MARKDOWN_INLINE_MARKER_END = "# template-sync: end markdown-only"
 MARKDOWN_SHARED_SURFACE_TOKENS = {
     ".pre-commit-config.yaml": (
         "https://github.com/DavidAnson/markdownlint-cli2",
         "id: markdownlint-cli2",
+        "id: lint-nested-markdown",
+        "lint_nested_markdown_hook.py",
     ),
+    ".github/workflows/precommit-ci.yml": ("actions/setup-node@", "npm ci --ignore-scripts"),
+    ".github/workflows/auto-fix-precommit.yml": ("actions/setup-node@", "npm ci --ignore-scripts"),
+    ".azuredevops/pipelines/precommit.yml": ("UseNode@1", "npm ci --ignore-scripts"),
 }
 GITHUB_ACTIONS_INLINE_BLOCK_COUNTS = {
     ".pre-commit-config.yaml": 1,
@@ -185,6 +195,7 @@ SCHEMA_SHARED_SURFACE_TOKENS = {
 TEMPLATE_SYNC_SUPPORT_INLINE_BLOCK_COUNTS = {
     ".pre-commit-config.yaml": 1,
     ".github/workflows/data-ci.yml": 2,
+    ".github/workflows/markdownlint.yml": 2,
     ".azuredevops/pipelines/data-ci.yml": 2,
 }
 TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_BEGIN = "# template-sync: begin template-sync-support-only"
@@ -214,6 +225,11 @@ TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS = {
         "pre-commit run validate-template-sync-instruction-contracts --all-files",
         "pre-commit run validate-instruction-contracts-upstream --all-files",
         "pre-commit run validate-instruction-contracts-downstream --all-files",
+    ),
+    ".github/workflows/markdownlint.yml": (
+        "requirements-pre-commit.txt",
+        "tests/test_materialize_downstream_adoption.py",
+        "test_nested_markdown_hook_actual_invocation_and_mutation",
     ),
     ".azuredevops/pipelines/data-ci.yml": (
         "pre-commit run validate-template-sync-marker-valid-examples --all-files",
@@ -294,6 +310,7 @@ GIT_LFS_SHARED_SURFACE_TOKENS = {
 }
 REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
     "markdown-reference-only": {
+        "CONTRIBUTING.md": 2,
         ".github/copilot-instructions.md": 2,
         ".cursor/rules/repository-instructions.mdc": 3,
         ".hermes.md": 3,

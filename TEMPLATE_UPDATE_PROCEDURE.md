@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.2.20260918.0
+**Version:** 1.3.20260919.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-18
+- **Last Updated:** 2026-09-19
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the first-adoption bootstrap command, the read-only first-adoption preflight/questionnaire mode, raw first-adoption state reporting, first-adoption quality-debt reports and suppressions, the adoption difficulties journal, one-shot first-adoption materialization, shell-safe first-adoption args files, package identity and collaboration-policy materialization, first-adoption structural convention assessment, first-adoption working-tree validation and doctor diagnostics, downstream local path ownership records, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -776,7 +776,9 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `.yamllint.yml` | `yaml` |
 | `.pre-commit-config.yaml` | `baseline` |
 | `requirements-pre-commit.txt` | `baseline` |
-| `.markdownlint.jsonc`, `.remarkignore`, `.remarkrc.mjs`, `package.json`, `package-lock.json`, `.github/scripts/lint-nested-markdown.js`, `.github/scripts/check-toolchain-eol.js`, `.github/scripts/check-prohibited-placeholders.py` | `markdown` |
+| `.markdownlint.jsonc`, `.remarkignore`, `.remarkrc.mjs`, `package.json`, `package-lock.json`, `.github/scripts/lint-nested-markdown.js`, `.github/scripts/lint-nested-markdown.test.js` | `markdown` |
+| `.github/scripts/lint_nested_markdown_hook.py` | `baseline`, `markdown` |
+| `.github/scripts/check-toolchain-eol.js`, `.github/scripts/check-prohibited-placeholders.py` | `markdown` |
 | `tests/test_replace_template_placeholders.py` | `baseline` |
 | `tests/test_check_prohibited_placeholders.py` | `markdown` |
 | `tests/toolchain-eol/check-toolchain-eol.test.js` | `markdown` |
@@ -1010,9 +1012,10 @@ The current `python-only` inline block lives in:
 
 - `.pre-commit-config.yaml` for the `black` and `ruff-check` Python project hooks.
 
-The current `markdown-only` inline block lives in:
+The current `markdown-only` inline blocks live in:
 
-- `.pre-commit-config.yaml` for the `markdownlint-cli2` hook.
+- `.pre-commit-config.yaml` for outer and nested Markdown lint and placeholder checks.
+- `.github/workflows/precommit-ci.yml`, `.github/workflows/auto-fix-precommit.yml`, and `.azuredevops/pipelines/precommit.yml` for root Node dependency setup required by nested lint.
 
 The current `yaml-only` inline blocks live in:
 
@@ -1029,6 +1032,7 @@ The current `schema-only` inline blocks live in:
 The current `template-sync-support-only` inline blocks live in:
 
 - `.pre-commit-config.yaml` for template sync schema example validators, first-adoption quality suppression example validators, runtime schema self-validation hooks, the `validate-template-sync-manifest`, `validate-template-sync-marker`, `validate-template-sync-instruction-contracts`, `validate-first-adoption-quality-suppressions`, `validate-instruction-contracts-upstream`, and `validate-instruction-contracts-downstream` hooks.
+- `.github/workflows/markdownlint.yml` for source-template Python setup, generated-output nested-Markdown regression testing, actual nested-Markdown hook invocation testing, and their aggregate failure predicates.
 - `.github/workflows/data-ci.yml` for template sync schema example validation, first-adoption quality suppression validation, runtime schema self-validation, live template sync validation hook-list documentation, and the dedicated template sync validation alias steps.
 - `.azuredevops/pipelines/data-ci.yml` for template sync schema example validation, first-adoption quality suppression validation, runtime schema self-validation, live template sync validation hook-list documentation, and the dedicated template sync validation alias steps.
 
