@@ -1,12 +1,12 @@
 # Terraform Linting Implementation Guide
 
-**Version:** 1.0.20260518.0
+**Version:** 1.0.20260918.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-18
+- **Last Updated:** 2026-09-18
 - **Scope:** This document provides comprehensive guidance for implementing Terraform linting in CI for the `franklesniak/copilot-repo-template` repository. It covers tool selection, workflow design, configuration, pre-commit integration, and best practices. This is a **guidance-only** document—it does not modify workflows or configurations directly.
 - **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md), [Terraform Instructions](../../.github/instructions/terraform.instructions.md)
 
@@ -35,11 +35,13 @@
   - [Configuration File Placement](#configuration-file-placement)
   - [Recommended Rule Sets and Plugins](#recommended-rule-sets-and-plugins)
   - [Rule Customization](#rule-customization)
+<!-- template-sync: begin baseline-reference-only -->
 - [Pre-commit Integration](#pre-commit-integration)
   - [Recommended Hooks](#recommended-hooks)
   - [Updating pre-commit-config.yaml](#updating-pre-commit-configyaml)
   - [Local Workflow](#local-workflow)
   - [Troubleshooting Pre-commit Hooks](#troubleshooting-pre-commit-hooks)
+<!-- template-sync: end baseline-reference-only -->
 - [CI Workflow Design Decisions](#ci-workflow-design-decisions)
   - [Header Comment Documentation](#header-comment-documentation)
   - [Job Dependencies](#job-dependencies)
@@ -1047,7 +1049,11 @@ For organization-specific rules, consider:
 
 ---
 
+<!-- template-sync: begin baseline-reference-only -->
+
 ## Pre-commit Integration
+
+Run the installation commands below from the repository root after retaining or copying `requirements-pre-commit.txt` with `.pre-commit-config.yaml`. The baseline module owns both files; Python is the tooling runtime even when the Python language module is excluded. The requirement selects the runner version only, not a full transitive lock. If baseline is excluded, these template pre-commit setup steps do not apply.
 
 This repository already has Terraform hooks configured in `.pre-commit-config.yaml`. The active hooks are repo-local Python wrappers rather than POSIX shell hooks, so local validation works from native Windows / PowerShell, WSL/Linux, macOS, and Linux without depending on Bash path translation.
 
@@ -1124,7 +1130,7 @@ To add automatic documentation generation, add a dedicated `terraform-docs` hook
 
 ```bash
 # Install pre-commit globally
-pip install pre-commit
+python -m pip install -r requirements-pre-commit.txt
 
 # Install Terraform and TFLint so the repo-local hooks can find them on PATH
 terraform version
@@ -1205,6 +1211,8 @@ git commit --no-verify -m "Emergency commit"
 > **Warning:** Bypassing hooks should be reserved for emergencies. CI will still enforce these checks.
 
 ---
+
+<!-- template-sync: end baseline-reference-only -->
 
 ## CI Workflow Design Decisions
 
@@ -1425,7 +1433,7 @@ The repository's `auto-fix-precommit.yml` workflow could be extended to support 
 
 #### Potential Auto-fix Addition
 
-The existing auto-fix workflow runs `pre-commit run --all-files`, which includes `terraform-fmt`. The repo-local format hook reports diffs but does not rewrite files; developers should run `terraform fmt -recursive`, review the result, and include the formatting update in the same change.
+When baseline and GitHub Actions are retained, the existing auto-fix workflow runs `pre-commit run --all-files`, which includes `terraform-fmt`. The repo-local format hook reports diffs but does not rewrite files; developers should run `terraform fmt -recursive`, review the result, and include the formatting update in the same change.
 
 For repositories where TFLint can auto-fix issues, consider:
 
@@ -1567,7 +1575,7 @@ Avoid `latest` for reproducible CI runs:
 
 ### Repo-local Pre-commit Hook Maintenance
 
-The Terraform pre-commit hooks are `repo: local` wrappers, so there is no external pre-commit hook revision to pin:
+When baseline is retained, the Terraform pre-commit hooks are `repo: local` wrappers, so there is no external pre-commit hook revision to pin:
 
 ```yaml
 - repo: local

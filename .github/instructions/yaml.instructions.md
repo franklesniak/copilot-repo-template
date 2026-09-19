@@ -7,15 +7,21 @@ description: "YAML authoring standards: explicit, conservative, schema-backed, a
 
 # YAML Writing Style
 
-**Version:** 1.6.20260623.0
+**Version:** 1.7.20260919.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-23
+- **Last Updated:** 2026-09-19
 - **Scope:** Defines authoring standards for all YAML files in this repository, including GitHub Actions workflows, Azure Pipelines YAML, pre-commit configuration, linter configuration, and any other human-authored YAML configuration. Does not cover JSON files (covered by the companion JSON guide, if present) or generated YAML artifacts that are owned by another tool's serializer.
-- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [JSON Writing Style](./json.instructions.md) (companion guide, if present)
+- **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
+<!-- template-sync: begin baseline-reference-only -->
+- **Related baseline guidance:** [`.gitattributes` Rules](./gitattributes.instructions.md)
+<!-- template-sync: end baseline-reference-only -->
+<!-- template-sync: begin json-reference-only -->
+- **Related JSON guidance:** [JSON Writing Style](./json.instructions.md)
+<!-- template-sync: end json-reference-only -->
 
 ## Purpose and Scope
 
@@ -38,6 +44,7 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - **[All]** **MUST NOT** commit secrets in YAML.
 - **[Actions]** **MUST** apply least-privilege `permissions:` on GitHub Actions workflows.
 - **[Actions]** `setup-*` action `with.*-version:` inputs (for example, `python-version`, `node-version`, `go-version`, and `dotnet-version`) in workflow files under `.github/workflows/` **MUST** resolve from checked-in release-line selectors and **MUST NOT** use a broad floating selector such as `'3.x'`, `'latest'`, or `'*'`. The required granularity follows each ecosystem's release model: Python and Go **MUST** use major.minor (for example, `"3.13"` or `"1.26"`); Node.js **MAY** use major for an LTS line (for example, `"24"`) or major.minor (for example, `"24.17"`); .NET **MAY** use the most specific stable SDK channel selector documented by `actions/setup-dotnet`, such as major.minor.x (for example, `"10.0.x"`); for other ecosystems, use the most specific stable release-line selector documented by the action's README.
+- **[Actions]** `actions/setup-node` **MAY** instead use the guarded [exact Node.js version-file exception](#exact-nodejs-version-file-exception). Its file, precedence, exactness, and verification conditions all apply.
 - **[AzurePipelines]** Repositories that use Azure Pipelines language/runtime/SDK tool-installer tasks **MUST** explicitly provide checked-in compliant selectors for in-scope `version` or `versionSpec` inputs and **MUST NOT** rely on broad task defaults, queue-time-only values, `"latest"`, bare `"*"`, comparator/operator ranges, or composite ranges.
 - **[AzurePipelines]** Azure Pipelines YAML **MUST** pass retained host-neutral local YAML hooks, and pipeline schema/branch-policy validation **MUST** be treated as Azure DevOps Services-backed validation rather than `actionlint`.
 - **[Actions]** Documentation/navigation comments above `uses:` lines **MUST** use versionless upstream URLs; the `uses:` line remains the authoritative action version.
@@ -45,7 +52,7 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - **[Actions]** Optional `workflow_dispatch` string inputs that also need defaults on non-dispatch triggers **SHOULD** derive the effective value from a single source, using a fallback only in keys where the needed contexts are available, rather than duplicating an unmarked input `default:` and `env:` literal.
 - **[Schemas]** Schema-backed YAML **MUST** pass any schema validator wired into pre-commit or CI; where no validator is wired up for a particular file family, authors **SHOULD** run the appropriate validator locally before committing.
 - **[Naming]** YAML filenames **SHOULD** be lowercase kebab-case; GitHub Actions workflows **MUST** use the `.yml` extension; project-owned YAML **MUST** choose `.yml` or `.yaml` and use it consistently.
-- **[IssueForms]** In `.github/ISSUE_TEMPLATE/*.yml`, repo-internal targets in both issue-form `value:` Markdown links (e.g., `bug_report.yml`) and `config.yml` `contact_links` `url:` fields **MUST** use absolute GitHub URLs such as `https://github.com/<owner>/<repo>/blob/HEAD/<path>` for file links; relative paths **MUST NOT** be used. Template repositories MAY ship a documented placeholder form for adopters to replace, but the final rendered URL still needs the real host, owner, and repository. The two file types fail for different reasons: `value:` Markdown blocks render at `/{owner}/{repo}/issues/new?...` so relative paths resolve against that URL and 404, while `contact_links` `url:` fields are not Markdown at all — GitHub validates them as absolute URLs at form-load time and rejects relative values outright.
+- **[IssueForms]** In `.github/ISSUE_TEMPLATE/*.yml`, repo-internal targets in both issue-form `value:` Markdown links (e.g., `bug_report.yml`) and `config.yml` `contact_links` `url:` fields **MUST** use absolute GitHub URLs such as `https://github.com/<owner>/<repo>/blob/HEAD/<path>` for file links; relative paths **MUST NOT** be used. Template repositories MAY ship unresolved live URLs using literal `OWNER/REPO`; other placeholder spellings MUST NOT serve that live role. Angle-bracket URL shapes here are schematic after substitution, and the final rendered URL still needs the real host, owner, and repository. The two file types fail for different reasons: `value:` Markdown blocks render at `/{owner}/{repo}/issues/new?...` so relative paths resolve against that URL and 404, while `contact_links` `url:` fields are not Markdown at all — GitHub validates them as absolute URLs at form-load time and rejects relative values outright.
 
 ## Dialect and Consumer Policy
 
@@ -53,12 +60,19 @@ To keep YAML safe to edit, easy to diff, and portable across parsers, this repos
 - Authors **MUST** avoid the YAML 1.1 *non-lowercase-`true`/`false`* truthy tokens that this guide does not permit as booleans (`y`, `Y`, `yes`, `Yes`, `YES`, `n`, `N`, `no`, `No`, `NO`, `on`, `On`, `ON`, `off`, `Off`, `OFF`, `True`, `TRUE`, `False`, `FALSE`); only lowercase `true` and `false` are allowed as booleans (see "Booleans, Nulls, and Numbers"). Many widely-deployed parsers (including those used by GitHub Actions, `js-yaml` defaults, and some legacy PyYAML configurations) still resolve some or all of these YAML 1.1 tokens as booleans, so any string value that would otherwise match one of them **MUST** be quoted.
 - Ecosystem-specific validators (for example, Kubernetes manifest validators, OpenAPI validators, Helm validators, Ansible validators) **SHOULD** be adopted only when the repository actually uses those ecosystems. Generic YAML guidance **MUST NOT** require validators that are irrelevant to the repository's stack. The repository's pre-commit configuration and CI definitions are the authoritative inventory of active YAML validators.
 
+## Encoding
+
+YAML files **MUST** use UTF-8 without a byte-order mark (BOM). This format-level authoring rule applies whether or not the repository retains baseline Git configuration. Git line-ending normalization is a separate concern.
+
 ## Formatting Rules
 
 - Indentation **MUST** be exactly **2 spaces** per level. Tabs **MUST NOT** appear in YAML files.
 - Block style **MUST** be the default for mappings and sequences. Flow style (`{key: value}`, `[a, b, c]`) **MAY** be used only for short, obviously-bounded inline values where block style would be visually disruptive.
 - Document separators (`---`, `...`) **SHOULD NOT** appear in single-document files. Multi-document YAML files **MAY** use `---` separators when the consumer requires multi-document input (for example, Kubernetes manifest bundles) or when the file format mandates a leading `---`.
-- Files **SHOULD NOT** contain trailing whitespace and **SHOULD** end with a single newline. Line-ending, BOM, EOF newline, and trailing-whitespace policy at the Git layer is owned by [`.gitattributes` Rules](./gitattributes.instructions.md); this guide does not duplicate or contradict it.
+- Files **SHOULD NOT** contain trailing whitespace and **SHOULD** end with a single newline.
+<!-- template-sync: begin baseline-reference-only -->
+- Git line-ending normalization and Git-layer whitespace handling are governed by [`.gitattributes` Rules](./gitattributes.instructions.md). The YAML encoding and formatting requirements above still apply.
+<!-- template-sync: end baseline-reference-only -->
 
 ## Quoting Rules
 
@@ -106,9 +120,43 @@ rules:
 
 This configuration preserves the idiomatic GitHub Actions `on:` key while still flagging YAML 1.1 truthy hazards in **values**. Authors **MAY** alternatively quote the key as `"on":` to satisfy a stricter `truthy.check-keys: true` configuration, but this form is **non-idiomatic** in the GitHub Actions ecosystem and **SHOULD NOT** be adopted unless a repository policy requires it.
 
+## GitHub Actions Push Ref and Path Scope
+
+When a GitHub Actions `push` event uses `paths` or `paths-ignore`, authors MUST define its branch and tag intent explicitly. GitHub does not evaluate path filters for tag pushes; a tag-enabled workflow MUST NOT rely on those filters to select tag events.
+
+For a branch-only workflow, define `branches` or `branches-ignore` and omit tag filters. GitHub then excludes tag pushes and requires both the branch and path filters to accept each branch push. When tag execution is intended, define `tags` or `tags-ignore` deliberately and document the tag behavior independently of changed paths.
+
+See [GitHub's branch/tag and path filter syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#onpushpull_requestpull_request_targetpathspaths-ignore).
+
+Branch-only example: a matching path change on any branch can run this workflow; tag pushes do not.
+
+```yaml
+on:
+  push:
+    branches:
+      - "**"
+    paths:
+      - "docs/**"
+```
+
+Tag-enabled example: matching branch changes run it, and every matching `v*` tag runs it regardless of changed paths.
+
+```yaml
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
+    paths:
+      - "docs/**"
+```
+
+This rule applies to GitHub Actions push events only. It does not prescribe GitHub trigger syntax for Azure Pipelines or require adding path filters, tag triggers, or a workflow-policy engine. Preserve the separate completeness requirements for privileged verification.
+
 ## GitHub Actions Setup Version Pins
 
-GitHub Actions workflow files under `.github/workflows/` that use `setup-*` actions **MUST** pass checked-in release-line selectors to `with.*-version:` inputs such as `python-version`, `node-version`, `go-version`, and `dotnet-version`. Broad floating selectors such as `'3.x'`, `'latest'`, and `'*'` **MUST NOT** be used for these inputs. When a setup action input is fed by indirection, such as a checked-in matrix value, every checked-in value that can feed the selector **MUST** satisfy the same rule.
+Except for the guarded [exact Node.js version-file exception](#exact-nodejs-version-file-exception) below, GitHub Actions workflow files under `.github/workflows/` that use `setup-*` actions **MUST** pass checked-in release-line selectors to `with.*-version:` inputs such as `python-version`, `node-version`, `go-version`, and `dotnet-version`. Broad floating selectors such as `'3.x'`, `'latest'`, and `'*'` **MUST NOT** be used for these inputs. When a setup action input is fed by indirection, such as a checked-in matrix value, every checked-in value that can feed the selector **MUST** satisfy the same rule.
 
 Repositories that use Azure Pipelines language/runtime/SDK tool-installer tasks **MUST** explicitly provide checked-in selectors for in-scope `version` and `versionSpec` inputs. This Azure Pipelines rule is construct-conditional: it applies wherever Azure Pipelines YAML is stored when the repository uses those tasks, including repository-root `azure-pipelines.yml`, configured custom pipeline paths, and `.azuredevops/` pipeline layouts. It is not limited to one hardcoded directory name.
 
@@ -242,6 +290,57 @@ steps:
   - task: UseRubyVersion@0
     # Non-compliant: relies on the task's documented broad default selector.
 ```
+
+### Exact Node.js version-file exception
+
+A workflow MAY use `actions/setup-node` with `node-version-file` instead of `node-version` only when all conditions below hold. This optional exception does not change the direct release-line default, other setup actions, or Azure Pipelines selector rules.
+
+- The file MUST be tracked, repository-relative, and read from the reviewed revision. External, generated, or untracked version sources do not qualify.
+- The referenced action revision MUST document support for the format. The inspected setup-node v7 format set is `.nvmrc`, `.node-version`, `.tool-versions`, and `package.json`. Do not infer support for a later format from newer action documentation.
+- The selected value MUST be one exact stable `major.minor.patch` version. Ranges, wildcards, aliases, release channels, prereleases, and build metadata do not qualify.
+- For `.nvmrc` and `.node-version`, use only the exact version. For `.tool-versions`, use one unambiguous `node` or `nodejs` entry with that exact version.
+- For `package.json`, account for the action's precedence: `volta.node`, then the first `devEngines.runtime` entry with a case-insensitive `node` name and a version, then `engines.node`, then recursive `volta.extends`. Higher-precedence fields MUST be absent or select the same exact version as the declared canonical field. Multiple Node runtime entries MUST agree. Any inherited file MUST also be tracked, reviewed, repository-contained, and cycle-free.
+- The setup step MUST NOT also supply `node-version`. The action gives that input priority, which would make the file non-authoritative.
+- Before dependency installation, build, lint, test, or other Node-dependent project work, a later step MUST read the same canonical field and compare the installed version with it. The job MUST fail unless `process.versions.node` equals the expected version exactly. Disable optional automatic package-manager caching when it would perform dependent work before this check.
+
+See the [setup-node version-file documentation](https://github.com/actions/setup-node/blob/820762786026740c76f36085b0efc47a31fe5020/docs/advanced-usage.md#node-version-file) and [its selected-field parser](https://github.com/actions/setup-node/blob/820762786026740c76f36085b0efc47a31fe5020/src/util.ts#L11-L73). Exact pins require deliberate patch maintenance; they do not constitute a transitive dependency lock.
+
+Compliant example: this tracked `package.json` declares only `engines.node` as the canonical Node.js field. The version is illustrative, not a runtime-currency recommendation.
+
+```json
+{
+  "engines": {
+    "node": "24.18.0"
+  }
+}
+```
+
+The following step sequence uses Bash for the verification step. It reads the same JSON field, rejects a non-exact value, and stops before `npm ci` on mismatch.
+
+```yaml
+- uses: actions/checkout@v7
+  with:
+    persist-credentials: false
+- uses: actions/setup-node@v7
+  with:
+    node-version-file: package.json
+    package-manager-cache: false
+- name: Verify the exact Node.js runtime
+  shell: bash
+  run: |
+    node <<'NODE'
+    const fs = require('node:fs');
+    const expected = JSON.parse(fs.readFileSync('package.json', 'utf8')).engines.node;
+    if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(expected) || process.versions.node !== expected) {
+      throw new Error(`Expected Node.js ${expected}; got ${process.versions.node}`);
+    }
+    NODE
+- run: npm ci
+```
+
+Non-compliant cases include a file containing `24`, `24.x`, `>=24`, `lts/*`, or `24.18.0-rc.1`; both setup inputs; a check of another field; a missing equality check; or verification after `npm ci`. Correct the source or verification before dependent work.
+
+Instruction contracts and focused example tests protect this guidance. They do not validate every downstream workflow or prove agent compliance. When a repository retains a toolchain inventory scanner, its selected-file parsing MUST agree with the action. The inventory does not replace checks of tracked provenance, exactness, or verification ordering. This rule does not require retaining an optional scanner or its module.
 
 ## GitHub Actions Documentation Comment URLs
 
@@ -410,9 +509,15 @@ To make these links robust across non-GitHub.com renderers, GitHub Mobile, email
 - Relative paths such as `../blob/HEAD/<file>`, `blob/HEAD/<file>`, `./<file>`, or bare relative refs such as `(security)` **MUST NOT** be used in issue-form `value:` Markdown blocks or in `contact_links` URLs.
 - Use `blob/HEAD` rather than `blob/main` so file URLs work regardless of the repository's default branch name.
 - Repositories hosted on GitHub Enterprise Server **MUST** use their own host instead of `github.com` (for example, `https://github.company.com/<owner>/<repo>/blob/HEAD/<path>`).
-- Template repositories that intentionally ship unresolved URL placeholders **MUST** document their placeholder convention and substitution process in repository-local guidance. Placeholder validation, if any, is a repository-specific safety net; authors and adopters MUST still review the final rendered URLs.
+- Template repositories that intentionally ship unresolved URL placeholders **MUST** follow the live-placeholder convention below. Placeholder validation, if any, is a repository-specific safety net; authors and adopters MUST still review the final rendered URLs.
 
 If the repository also keeps Markdown documentation rules for issue templates or pull request templates, those rules SHOULD restate this behavior in their own scope so YAML and Markdown guidance remain independently understandable.
+
+### Live template URL placeholders
+
+Unresolved live adopter-substitution URLs **MUST** use literal `OWNER/REPO`, for example `https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md`. Authors **MUST NOT** use `<owner>/<repo>`, `<OWNER>/<REPO>`, or `your-org/your-repo` for that live role. Replace the token with the adopter's real owner and repository using the retained template replacement tool or an explicitly reviewed equivalent process, then verify the final host and rendered URL.
+
+Angle-bracket owner/repository notation **MAY** appear in explicitly labeled schematic prose or documentation of upstream action repositories. The URL shapes earlier in this section describe schematic URLs after substitution; they are not live adopter tokens. Do not rewrite those schematic examples as live placeholders or substitute the adopter's repository into an upstream action reference.
 
 ## Conservative YAML Subset
 
@@ -476,6 +581,20 @@ Additional ecosystem-specific validators (for example, `kubeval`/`kubeconform` f
 - YAML loaded by application code **MUST** use a **safe loader**. In Python, this means `yaml.safe_load` (or `yaml.load(..., Loader=yaml.SafeLoader)`); authors **MUST NOT** call `yaml.load` with `Loader=yaml.FullLoader` or `Loader=yaml.UnsafeLoader` on untrusted input, and **MUST NOT** call `yaml.load` without an explicit safe `Loader=` argument (calling `yaml.load` without `Loader=` raises a warning in modern PyYAML and historically defaulted to the unsafe full loader). Equivalent safe-loading APIs **MUST** be used in other languages.
 - Custom or unsafe deserialization tags (for example, `!!python/object`, `!!python/object/apply`, `!ruby/object`) **MUST NOT** appear in YAML files in this repository, and the loaders that read those files **MUST NOT** be configured to honor such tags.
 
+### Privileged verification of proposed changes
+
+When a workflow uses privileged events or credentials to validate proposed policy, instructions, configuration, or artifacts, it MUST execute verifier code from a verified trusted base. Proposed files and supporting artifacts MUST remain bounded inert data. Do not check out and execute proposed scripts, install proposed dependencies, or let the candidate define its own acceptance oracle in that privileged context. This rule does not require adding a privileged workflow to a repository that has none.
+
+Privileged context includes repository write authority, deployment or signing secrets, elevated base-context events, or other authority beyond ordinary read-only candidate CI. Read-only checkout credentials MUST NOT persist into candidate hook execution. An unprivileged fix preview MAY run proposed hooks and publish untrusted proposed data with configured output limits for local review. Its workflow wrapper MUST NOT commit, push, or feed its artifacts automatically to privileged code. Capture size and provenance checks on the same runner MUST NOT be treated as independent guarantees against candidate hooks. Such artifacts are untrusted proposals, not acceptance evidence. A candidate-owned workflow cannot make later changes to its own permissions tamper-proof; preserve the explicit security review boundary.
+
+Such a verifier MUST cover every relevant event and determine applicability from a complete trusted change enumeration. Platform path filters and bounded changed-file responses alone MUST NOT gate security verification: a relevant file outside the returned window can otherwise escape the check. Fail closed when completeness or the trusted base cannot be established; do not label an unobserved or skipped security gate successful.
+
+Before extraction or parsing, the verifier MUST bind each allowed input to its exact Git tree path, entry mode, object type, blob identity, byte limit, and accepted encoding. For ordinary data require mode `100644`; permit `100755` only for an explicitly executable role. Reject symbolic-link mode `120000` and gitlink mode `160000`. A Git blob type alone does not reject a symlink. Filesystem permissions and symlink checks are separate controls and do not establish the Git tree entry mode.
+
+When a trusted verifier needs parser dependencies, it MUST verify the trusted package manifest and lockfile closure, including alternate lockfiles such as `npm-shrinkwrap.json` and relevant package-manager configuration such as `.npmrc`, before installation. Disabling lifecycle scripts does not make a proposed dependency safe: importing it can execute code. Use only the trusted dependency closure; reject unexpected overrides or inputs.
+
+Security validation MUST include positive, negative, and targeted mutation cases with independent expected outcomes. A mutation that removes a security assertion must make the suite fail. Do not derive the expected answer only from the same production predicate being tested. Record native command failures and distinguish a missing or skipped check from a pass.
+
 ## Definition of Done for YAML Changes
 
 A YAML change is "done" when **all** of the following are true:
@@ -487,5 +606,5 @@ A YAML change is "done" when **all** of the following are true:
 - Comments explain **why**, not **what**; behavior is not documented only in comments.
 - The repository's configured YAML syntax and style validators pass.
 - Any schema or ecosystem validator wired into pre-commit or CI passes for the affected files (for example, `actionlint` for GitHub Actions workflow files, `check-jsonschema` for schema-backed YAML covered by an active hook). When no such validator is wired up for the file family being changed, authors **SHOULD** run the applicable validator locally before committing. For Azure Pipelines YAML, service-backed validation through Azure DevOps Services pipeline creation, queued runs, or Azure Repos branch-policy build validation should be recorded when it cannot be performed in the current task.
-- Pre-commit hooks pass locally (`pre-commit run --all-files`) and in the repository's configured CI.
+- When pre-commit is retained, its hooks pass locally (`pre-commit run --all-files`) and in the repository's configured CI.
 - No secrets are committed; GitHub Actions workflows declare least-privilege `permissions:`.

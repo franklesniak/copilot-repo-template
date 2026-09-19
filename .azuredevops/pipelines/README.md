@@ -15,7 +15,9 @@ repositories that select the `azure-pipelines` module.
 | `powershell-ci.yml` | PSScriptAnalyzer and Pester checks | `powershell`, `azure-pipelines` |
 | `python-ci.yml` | mypy and pytest checks | `python`, `azure-pipelines` |
 | `terraform-ci.yml` | Terraform fmt, validate, TFLint, and test checks | `terraform`, `azure-pipelines` |
-| `data-ci.yml` | JSON, YAML, schema, template-sync, and (when `github-platform` is retained) Dependabot configuration validation hooks | `azure-pipelines` plus one retained data or template-sync module |
+| `data-ci.yml` | JSON, YAML, schema, template-sync, and (when `github-platform` is retained) Dependabot configuration validation hooks | `baseline`, `azure-pipelines` |
+
+The aggregate and data pipelines install the exact runner from the baseline-owned `requirements-pre-commit.txt` and verify the command's version. The Python tooling runtime is required; the Python language module is optional. A data module selected without baseline retains its content but has no template-managed pre-commit configuration or data pipeline.
 
 ## Pull Request Validation
 

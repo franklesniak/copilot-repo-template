@@ -40,6 +40,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     inline_block_module_requirement,
     is_locally_overridden,
     is_protected_instruction_path,
+    is_protected_prose_path,
     iter_safe_repository_files,
     lines_outside_markdown_fences,
     live_inline_marker_lines,
@@ -47,6 +48,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     load_validated_marker_decision_data,
     load_yaml_mapping,
     manifest_pattern_matches_path,
+    markdown_lines,
     os_error_summary,
     parse_manifest_mappings,
     repository_relative_path,
@@ -73,7 +75,16 @@ CONTACT_LINK_URL_RE = re.compile(
 UPSTREAM_BLOB_PREFIX = "/franklesniak/copilot-repo-template/blob/HEAD/"
 DEPENDABOT_ECOSYSTEM_MODULES: dict[str, tuple[str, tuple[str, ...]]] = {
     "npm": ("markdown", ("package.json", "package-lock.json")),
-    "pip": ("python", ("pyproject.toml", "requirements.txt", "setup.py", "setup.cfg")),
+    "pip": (
+        "python",
+        (
+            "requirements-pre-commit.txt",
+            "pyproject.toml",
+            "requirements.txt",
+            "setup.py",
+            "setup.cfg",
+        ),
+    ),
     # Directory surfaces end with "/" so the prefix branch of
     # dependency_file_is_retained_or_present() treats them as directories.
     "github-actions": ("github-actions", (".github/workflows/",)),
@@ -919,7 +930,7 @@ def lines_outside_inline_blocks(
     try:
         live_lines = live_inline_marker_lines(text, relative_path=relative_path)
     except InlineBlockError:
-        return tuple(enumerate(text.splitlines(), 1))
+        return tuple(enumerate(markdown_lines(text), 1))
 
     for line_number, line, marker in live_lines:
         line = line.rstrip("\r\n")
@@ -1063,7 +1074,7 @@ def protected_document_prose_reference_findings(
     findings: list[Finding] = []
     path_tokens = excluded_path_reference_tokens(state)
     for relative_path in state.safe_files:
-        if not is_protected_instruction_path(relative_path):
+        if not is_protected_prose_path(relative_path):
             continue
         if is_locally_overridden(relative_path, state.local_overrides):
             continue

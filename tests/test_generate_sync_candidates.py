@@ -2617,6 +2617,31 @@ def test_local_overrides_are_reported(tmp_path: Path) -> None:
     assert "Local override present; use it as a default" in result.stdout
 
 
+def test_catalog_is_protected_without_becoming_an_agent_entry_point(tmp_path: Path) -> None:
+    """Catalog evolution needs authority even when the agent module is not retained."""
+    _init_repo(tmp_path)
+    catalog_path = ".template-sync/instruction-contracts.yml"
+    _write_text(tmp_path, catalog_path, "base\n")
+    base_sha = _commit_all(tmp_path, "base")
+    _write_text(tmp_path, catalog_path, "head\n")
+    head_sha = _commit_all(tmp_path, "head")
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["template-sync-support"], last_reviewed_template_commit=base_sha),
+    )
+    result = _run_generator(tmp_path, "--range-head", head_sha)
+    assert result.returncode == 0, result.stderr
+    assert "| .template-sync/instruction-contracts.yml | Modified |" in result.stdout
+    assert (
+        "Protected instruction/governance file; explicit owner authorization is required."
+        in result.stdout
+    )
+    assert catalog_path not in sync_candidates.discover_agent_instruction_files(tmp_path)
+    _write_text(tmp_path, "AGENTS.md", "Agent guidance\n")
+    assert "AGENTS.md" in sync_candidates.discover_agent_instruction_files(tmp_path)
+
+
 def test_deferred_protected_candidates_and_protected_files_are_flagged(tmp_path: Path) -> None:
     """Deferred protected marker entries and protected paths are visible."""
     _init_repo(tmp_path)

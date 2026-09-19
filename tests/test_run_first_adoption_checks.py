@@ -2216,19 +2216,29 @@ def test_package_markdown_scripts_run_when_present(tmp_path: Path) -> None:
     assert any(command[-2:] == ("run", "lint:md:links") for command in commands)
 
 
+@pytest.mark.parametrize("available_form", [(sys.executable, "-m"), ("py", "-m")])
 def test_pre_commit_prefix_falls_back_to_python_module(
     monkeypatch: Any,
+    available_form: tuple[str, ...],
 ) -> None:
-    """The runner works when the pre-commit console script is not on PATH."""
+    """The first available module launcher works without ambient console/module state."""
 
     def missing_executable(_name: str) -> None:
         return None
 
     monkeypatch.setattr(first_adoption.shutil, "which", missing_executable)
+    probes: list[tuple[str, ...]] = []
+
+    def module_probe(command: Sequence[str]) -> bool:
+        probes.append(tuple(command))
+        return tuple(command) == (*available_form, "pre_commit", "--version")
+
+    monkeypatch.setattr(first_adoption, "command_succeeds", module_probe)
 
     prefix = first_adoption.default_pre_commit_prefix()
 
-    assert prefix == (sys.executable, "-m", "pre_commit", "run", "--files")
+    assert prefix == (*available_form, "pre_commit", "run", "--files")
+    assert probes[-1] == (*available_form, "pre_commit", "--version")
 
 
 def test_npm_executable_prefers_cmd_shim_on_windows_style_path(

@@ -34,7 +34,7 @@ SKIPPED_DISCOVERY_DIRS = frozenset(
         "__pycache__",
     }
 )
-PROTECTED_EXACT_PATHS = frozenset(
+AGENT_INSTRUCTION_EXACT_PATHS = frozenset(
     {
         ".github/copilot-instructions.md",
         ".hermes.md",
@@ -43,27 +43,30 @@ PROTECTED_EXACT_PATHS = frozenset(
         "GEMINI.md",
     }
 )
+PROTECTED_EXACT_PATHS = AGENT_INSTRUCTION_EXACT_PATHS | frozenset(
+    {".template-sync/instruction-contracts.yml"}
+)
 PROTECTED_GLOB_PATTERNS = (
     ".github/instructions/**",
     ".cursor/rules/**",
 )
 INLINE_BLOCK_MARKER_RE = re.compile(
-    r"^\s*(?:#\s*template-sync:|<!--\s*template-sync:)\s*"
-    r"(?P<kind>begin|end)\s+"
-    r"(?P<name>[a-z0-9-]+-(?:reference-)?only)\s*(?:-->)?\s*$"
+    r"^[ \t]*(?:#[ \t]*template-sync:|<!--[ \t]*template-sync:)[ \t]*"
+    r"(?P<kind>begin|end)[ \t]+"
+    r"(?P<name>[a-z0-9-]+-(?:reference-)?only)[ \t]*(?:-->)?[ \t]*(?:\r\n?|\n)?\Z"
 )
 MARKDOWN_RENDERED_SUFFIXES = frozenset({".md", ".mdc"})
 YAML_SUFFIXES = frozenset({".yml", ".yaml"})
 MARKDOWN_FENCE_CONTEXT = "markdown"
 EMBEDDED_MARKDOWN_FENCE_CONTEXT = "embedded-markdown"
 LIST_MARKER_RE = re.compile(
-    r"^(?P<indent> {0,3})(?P<marker>(?:[-+*]|\d{1,9}[.)]))(?P<spaces> {1,4})(?P<rest>.*)$"
+    r"^(?P<indent> {0,3})(?P<marker>(?:[-+*]|[0-9]{1,9}[.)]))(?P<spaces> {1,4})(?P<rest>.*)$"
 )
 # Same as ``LIST_MARKER_RE`` but with no 0-3 space cap on the leading indent, so
 # list-contained fences inside deeply-indented YAML block scalars are recognized
 # under the embedded-Markdown fence context.
 EMBEDDED_LIST_MARKER_RE = re.compile(
-    r"^(?P<indent> *)(?P<marker>(?:[-+*]|\d{1,9}[.)]))(?P<spaces> {1,4})(?P<rest>.*)$"
+    r"^(?P<indent> *)(?P<marker>(?:[-+*]|[0-9]{1,9}[.)]))(?P<spaces> {1,4})(?P<rest>.*)$"
 )
 # AND-retention markers. A block in this family is retained only when *every*
 # module it names is present in ``included_modules``; it is stripped when *any*
@@ -71,6 +74,9 @@ EMBEDDED_LIST_MARKER_RE = re.compile(
 # the default inline-block semantics and covers both the ``*-only`` toolchain
 # blocks and the single-module ``*-reference-only`` documentation blocks.
 INLINE_BLOCK_MODULES = {
+    "baseline-only": frozenset({"baseline"}),
+    "baseline-reference-only": frozenset({"baseline"}),
+    "github-data-ci-reference-only": frozenset({"baseline", "github-actions"}),
     "git-lfs-only": frozenset({"git-lfs"}),
     "terraform-only": frozenset({"terraform"}),
     "markdown-only": frozenset({"markdown"}),
@@ -97,16 +103,13 @@ INLINE_BLOCK_MODULES = {
 # when the included modules are disjoint from the marker's module set (i.e.
 # *none* of the named modules is included). This mirrors a manifest
 # ``requires_any`` relation, so it can guard prose that documents a file which
-# is itself materialized under OR semantics (for example the data-file CI
-# workflow row, whose file requires ``github-actions`` plus any one of
-# ``baseline``, ``json``, ``yaml``, ``schema``, ``template-sync-support``).
+# is itself materialized under OR semantics. The pip updater also uses this
+# relation to cover baseline runner requirements or Python project metadata.
 INLINE_BLOCK_ANY_MODULES = {
     "azure-devops-guide-reference-only": frozenset(
         {"azure-devops-platform", "azure-pipelines", "azure-devops-collaboration"}
     ),
-    "data-ci-reference-only": frozenset(
-        {"baseline", "json", "yaml", "schema", "template-sync-support"}
-    ),
+    "pip-dependencies-only": frozenset({"baseline", "python"}),
 }
 
 
@@ -442,15 +445,51 @@ def resolve_repo_path(repo_root: Path, raw_path: str) -> Path:
     return path
 
 
-def load_json_mapping(path: Path, repo_root: Path) -> dict[str, Any]:
-    """Load a JSON file that must contain a mapping."""
+def read_repository_text(
+    path: Path,
+    repo_root: Path,
+    *,
+    encoding: str = "utf-8",
+    maximum_bytes: int | None = None,
+) -> str:
+    """Read a caller-resolved repository file with strict decoding and safe errors.
+
+    A supplied nonnegative byte limit bounds the read before decoding. Without
+    a limit, retain the existing text-reader size behavior. Both paths preserve
+    universal newlines. Callers retain responsibility for path containment.
+    I/O, oversized input, and decoding failures raise the existing domain error.
+    """
+    if maximum_bytes is not None and maximum_bytes < 0:
+        raise ValueError("maximum_bytes must be nonnegative.")
     try:
-        parsed = json.loads(path.read_text(encoding="utf-8"))
+        if maximum_bytes is None:
+            return path.read_text(encoding=encoding)
+        with path.open("rb") as stream:
+            data = stream.read(maximum_bytes + 1)
+        if len(data) > maximum_bytes:
+            relative_path = repository_relative_path(path, repo_root)
+            raise TemplateSyncMaterializationError(
+                f"{relative_path} exceeds the {maximum_bytes}-byte input limit."
+            )
+        return data.decode(encoding).replace("\r\n", "\n").replace("\r", "\n")
     except OSError as error:
         relative_path = repository_relative_path(path, repo_root)
         raise TemplateSyncMaterializationError(
             f"Unable to read {relative_path}: {os_error_summary(error)}"
         ) from error
+    except UnicodeDecodeError as error:
+        relative_path = repository_relative_path(path, repo_root)
+        raise TemplateSyncMaterializationError(
+            f"Invalid {encoding} in {relative_path}: {error.reason}."
+        ) from error
+
+
+def load_json_mapping(
+    path: Path, repo_root: Path, *, maximum_bytes: int | None = None
+) -> dict[str, Any]:
+    """Load a JSON mapping with an optional pre-decode byte limit."""
+    try:
+        parsed = json.loads(read_repository_text(path, repo_root, maximum_bytes=maximum_bytes))
     except json.JSONDecodeError as error:
         relative_path = repository_relative_path(path, repo_root)
         raise TemplateSyncMaterializationError(
@@ -462,15 +501,14 @@ def load_json_mapping(path: Path, repo_root: Path) -> dict[str, Any]:
     return cast(dict[str, Any], parsed)
 
 
-def load_yaml_mapping(path: Path, repo_root: Path) -> dict[str, Any]:
-    """Load a YAML file that must contain a mapping."""
+def load_yaml_mapping(
+    path: Path, repo_root: Path, *, maximum_bytes: int | None = None
+) -> dict[str, Any]:
+    """Load a YAML mapping with an optional pre-decode byte limit."""
     try:
-        parsed = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
-    except OSError as error:
-        relative_path = repository_relative_path(path, repo_root)
-        raise TemplateSyncMaterializationError(
-            f"Unable to read {relative_path}: {os_error_summary(error)}"
-        ) from error
+        parsed = yaml.safe_load(
+            read_repository_text(path, repo_root, encoding="utf-8-sig", maximum_bytes=maximum_bytes)
+        )
     except yaml.YAMLError as error:
         relative_path = repository_relative_path(path, repo_root)
         raise TemplateSyncMaterializationError(
@@ -1762,6 +1800,13 @@ def is_protected_instruction_path(relative_path: str) -> bool:
     return any(fnmatch.fnmatchcase(relative_path, pattern) for pattern in PROTECTED_GLOB_PATTERNS)
 
 
+def is_protected_prose_path(relative_path: str) -> bool:
+    """Return whether a protected path holds human-facing instruction prose."""
+    if relative_path in AGENT_INSTRUCTION_EXACT_PATHS:
+        return True
+    return any(fnmatch.fnmatchcase(relative_path, pattern) for pattern in PROTECTED_GLOB_PATTERNS)
+
+
 def is_protected_manifest_pattern(pattern: str) -> bool:
     """Return whether a manifest pattern names protected instruction paths."""
     if not has_wildcard(pattern):
@@ -1923,6 +1968,22 @@ def line_body(line: str) -> str:
     return line.rstrip("\r\n")
 
 
+def markdown_lines(text: str, *, keepends: bool = False) -> list[str]:
+    """Split only CR, LF and CRLF physical lines, preserving other characters.
+
+    The fixed delimiter pattern scans once. Empty input and terminal endings
+    follow splitlines behavior without promoting Unicode/control separators.
+    """
+    lines: list[str] = []
+    start = 0
+    for ending in re.finditer(r"\r\n?|\n", text):
+        lines.append(text[start : ending.end() if keepends else ending.start()])
+        start = ending.end()
+    if start < len(text):
+        lines.append(text[start:])
+    return lines
+
+
 def consume_blockquote_prefix(
     line: str,
     *,
@@ -1954,7 +2015,7 @@ def consume_blockquote_prefix(
 
 def line_is_outside_list_item(line: str, content_indent: int) -> bool:
     """Return whether ``line`` ends a conservative list-item containing block."""
-    if not line.strip():
+    if not line.strip(" \t"):
         return False
     leading_spaces = len(line) - len(line.lstrip(" "))
     return leading_spaces < content_indent
@@ -2006,7 +2067,7 @@ def parse_fence_close_from_content(
         fence_length += 1
     if fence_length < minimum_length:
         return False
-    return stripped[fence_length:].strip(" ") == ""
+    return stripped[fence_length:].strip(" \t") == ""
 
 
 def parse_markdown_fence_open(line: str, fence_context: str) -> MarkdownFence | None:
@@ -2137,7 +2198,7 @@ def lines_outside_markdown_fences(
     return tuple(
         (state.line_number, state.line)
         for state in markdown_line_states(
-            text.splitlines(),
+            markdown_lines(text),
             fence_context=fence_context,
         )
         if not state.is_fenced
@@ -2194,7 +2255,7 @@ def live_inline_marker_lines(
 ) -> tuple[tuple[int, str, InlineBlockMarker | None], ...]:
     """Return text lines paired with live inline markers for ``relative_path``."""
     fence_context = markdown_fence_context_for_path(relative_path)
-    raw_lines = text.splitlines(keepends=True)
+    raw_lines = markdown_lines(text, keepends=True)
     if fence_context is None:
         states = tuple(
             MarkdownLineState(
@@ -2350,8 +2411,8 @@ def apply_blank_line_hygiene(
     blank_run = 0
     active_fence: MarkdownFence | None = None
 
-    for line in text.splitlines(keepends=True):
-        if line.strip():
+    for line in markdown_lines(text, keepends=True):
+        if line_body(line).strip(" \t"):
             body = line_body(line)
             if active_fence is not None:
                 content = active_fence_content(body, active_fence)

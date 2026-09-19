@@ -66,8 +66,25 @@ steps:
 
   - bash: |
       set -euo pipefail
-      python -m pip install --upgrade pip
-      python -m pip install pre-commit
+      python - <<'PY'
+      import re
+      import subprocess
+      import sys
+      from pathlib import Path
+
+      requirement = Path("requirements-pre-commit.txt").read_text(encoding="utf-8").strip()
+      if re.fullmatch(r"pre-commit==[0-9]+\.[0-9]+\.[0-9]+", requirement) is None:
+          raise SystemExit("requirements-pre-commit.txt must contain one exact pre-commit pin")
+      subprocess.run(
+          [sys.executable, "-m", "pip", "install", "--requirement", "requirements-pre-commit.txt"],
+          check=True,
+      )
+      expected = requirement.replace("==", " ", 1)
+      actual = subprocess.check_output(["pre-commit", "--version"], text=True).strip()
+      if actual != expected:
+          raise SystemExit(f"pre-commit version mismatch: expected {expected}, got {actual}")
+      print(actual)
+      PY
     displayName: "Install pre-commit"
     workingDirectory: "$(Build.SourcesDirectory)"
 

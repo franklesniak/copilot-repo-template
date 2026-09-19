@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.2.20260910.0
+**Version:** 1.3.20260919.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-10
+- **Last Updated:** 2026-09-19
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the first-adoption bootstrap command, the read-only first-adoption preflight/questionnaire mode, raw first-adoption state reporting, first-adoption quality-debt reports and suppressions, the adoption difficulties journal, one-shot first-adoption materialization, shell-safe first-adoption args files, package identity and collaboration-policy materialization, first-adoption structural convention assessment, first-adoption working-tree validation and doctor diagnostics, downstream local path ownership records, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -212,6 +212,7 @@ These settings may be completed through the GitHub UI even when `gh` is unavaila
 ## Protected-File Adoption Decisions
 
 - [ ] Protected instruction files identified before editing: `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, `.cursor/rules/*.mdc`, `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`.
+- [ ] When `template-sync-support` is retained, `.template-sync/instruction-contracts.yml` identified as a separate protected governance path, including in profiles with no agent platform.
 - [ ] Protected-file edits authorized by maintainer: `[none, path-scoped authorization, or deferred]`
 - [ ] Protected-file removals authorized by maintainer: `[none, path-scoped authorization, or deferred]`
 - [ ] `.template-sync/marker.yml` protected-file decisions updated if template sync support is retained.
@@ -654,6 +655,8 @@ Do not add ad hoc, non-schema fields to `.template-sync/marker.yml`. Use the sch
 
 Use `template_sync.protected_file_decisions` for every protected file that is edited, merged, taken, skipped, removed, deferred, or sent through protected review during first adoption or later sync. Valid `decision` values are `TAKE`, `MERGE`, `SKIP`, `REMOVE-LOCAL`, `DEFER`, and `PROTECTED-REVIEW`.
 
+The retained `.template-sync/instruction-contracts.yml` catalog requires its own explicit decision before initial creation or later replacement. An authorized `TAKE` copies the pinned reviewed catalog intact; a `MERGE` requires authorization for the specific obligation changes. Do not infer catalog authority from an agent-platform bundle, coordinated instruction edits, or validation repair. Keep the catalog across support-retaining profiles and let `requires_modules` determine applicability; do not prune obligations for excluded agents. A candidate-local validator is a drift check, not independent evidence of human authorization. When `template-sync-support` is excluded, no catalog decision or catalog output is required.
+
 - `TAKE` and `MERGE` MUST include `adoption_mode`, `authorization_basis`, and `authorized_scope`.
 - `adoption_mode: tailored` MUST include `tailored_authorization_basis`; use it only for authorized broad rewrites of the named protected path or path set.
 - `SKIP`, `DEFER`, and `PROTECTED-REVIEW` MUST include `reason` and MUST NOT imply edit authorization.
@@ -739,7 +742,7 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `.github/instructions/*.instructions.md` not otherwise listed | `agent-instructions`; surface for owner to confirm or add additional module mappings |
 | `.cursor/rules/**` | `agent-instructions` |
 | `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` | `agent-instructions` |
-| `COPILOT_CHAT_PROMPTS.md`, `docs/PR_REVIEW_PROMPTS.md` | `agent-instructions` |
+| `COPILOT_CHAT_PROMPTS.md`, `docs/ISSUE_EVALUATION_PROMPT.md`, `docs/PR_REVIEW_PROMPTS.md` | `agent-instructions` |
 | `.codex/**` | `agent-instructions` |
 | `.claude/**` | `agent-instructions` |
 | `.github/ISSUE_TEMPLATE/**` | `github-templates` |
@@ -756,7 +759,7 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `.github/workflows/python-ci.yml` | `python`, `github-actions` |
 | `.github/workflows/precommit-ci.yml` | `baseline`, `github-actions` |
 | `.github/workflows/terraform-ci.yml` | `terraform`, `github-actions` |
-| `.github/workflows/data-ci.yml` | `github-actions`, plus one of `baseline`, `json`, `yaml`, `schema`, `template-sync-support` |
+| `.github/workflows/data-ci.yml` | `baseline`, `github-actions` |
 | `.github/template-placeholders.json` | `baseline` |
 | `.github/workflows/check-placeholders.yml` | `baseline`, `github-actions` |
 | `.github/scripts/replace-template-placeholders.py` | `baseline` |
@@ -768,11 +771,14 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `.azuredevops/pipelines/powershell-ci.yml` | `powershell`, `azure-pipelines` |
 | `.azuredevops/pipelines/python-ci.yml` | `python`, `azure-pipelines` |
 | `.azuredevops/pipelines/terraform-ci.yml` | `terraform`, `azure-pipelines` |
-| `.azuredevops/pipelines/data-ci.yml` | `azure-pipelines`, plus one of `baseline`, `json`, `yaml`, `schema`, `template-sync-support` |
+| `.azuredevops/pipelines/data-ci.yml` | `baseline`, `azure-pipelines` |
 | `.azuredevops/pipelines/**` | `azure-pipelines` |
 | `.yamllint.yml` | `yaml` |
 | `.pre-commit-config.yaml` | `baseline` |
-| `.markdownlint.jsonc`, `.remarkignore`, `.remarkrc.mjs`, `package.json`, `package-lock.json`, `.github/scripts/lint-nested-markdown.js`, `.github/scripts/check-toolchain-eol.js`, `.github/scripts/check-prohibited-placeholders.py` | `markdown` |
+| `requirements-pre-commit.txt` | `baseline` |
+| `.markdownlint.jsonc`, `.remarkignore`, `.remarkrc.mjs`, `package.json`, `package-lock.json`, `.github/scripts/lint-nested-markdown.js`, `.github/scripts/lint-nested-markdown.test.js` | `markdown` |
+| `.github/scripts/lint_nested_markdown_hook.py` | `baseline`, `markdown` |
+| `.github/scripts/check-toolchain-eol.js`, `.github/scripts/check-prohibited-placeholders.py` | `markdown` |
 | `tests/test_replace_template_placeholders.py` | `baseline` |
 | `tests/test_check_prohibited_placeholders.py` | `markdown` |
 | `tests/toolchain-eol/check-toolchain-eol.test.js` | `markdown` |
@@ -789,7 +795,7 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `tests/test_schema_examples.py` | one of `schema`, `template-sync-support` |
 | `tests/test_generate_sync_candidates.py`, `tests/test_bootstrap_first_adoption.py`, `tests/test_first_adoption_state.*`, `tests/test_initialize_adoption_journal.*`, `tests/test_report_excluded_module_references.py`, `tests/test_materialize_downstream_adoption.*` | `template-sync-support` |
 | `tests/test_run_first_adoption_checks.*`, `tests/test_first_adoption_quality_reports.*` | `template-sync-support` |
-| `tests/test_template_manifest.py`, `tests/test_template_sync_materialization_helpers.py`, `tests/test_validate_marker.py`, `tests/test_validate_downstream_adoption.py`, `tests/test_validate_instruction_contracts.py` | `template-sync-support` |
+| `tests/test_template_manifest.py`, `tests/test_template_sync_materialization_helpers.py`, `tests/test_validate_marker.py`, `tests/test_validate_downstream_adoption.py`, `tests/test_validate_instruction_contracts.py`, `tests/test_instruction_input_limits.py`, `tests/test_precommit_runner.py` | `template-sync-support` |
 | `.github/scripts/terraform_hooks.py`, `tests/test_terraform_hooks.py` | `terraform` |
 | `templates/python/**`, `pyproject.toml`, `pyrightconfig.json`, `src/copilot_repo_template/**`, `tests/*.py`, `tests/**/*.py` | `python` |
 | `templates/terraform/**`, `docs/terraform/**`, `modules/**`, `tests/**/*.tftest.hcl`, `.tflint.hcl`, `*.tf`, `*.tfvars`, `*.tftpl`, `*.tfbackend` | `terraform` |
@@ -807,7 +813,7 @@ To migrate a manifest from version 1 to version 2:
 
 1. Change `template_manifest.version` from `1` to `2`.
 2. Leave existing `requires_all` rows unchanged unless a path truly has cross-module alternatives.
-3. Add `requires_any` only for rows where a containing file should be retained when at least one alternative module is adopted. For example, `.github/workflows/data-ci.yml` uses `requires_all: [github-actions]` plus `requires_any: [baseline, json, yaml, schema, template-sync-support]`.
+3. Add `requires_any` only for rows where a containing file should be retained when at least one alternative module is adopted. For example, `tests/test_schema_examples.py` uses `requires_any: [schema, template-sync-support]`. Data CI instead requires both `baseline` and its matching host module through `requires_all`.
 4. Add `filtering.requires_any_semantics: OR`.
 5. Remove any `known_limitations` entry whose only purpose was to record a cross-module relation that is now expressed by `requires_any`.
 6. Validate the manifest with `pre-commit run validate-template-sync-manifest --all-files` and run [`tests/test_template_manifest.py`](tests/test_template_manifest.py).
@@ -818,7 +824,7 @@ Retained Markdown documents, meaning `.md` or `.mdc` paths whose most-specific m
 
 ### Inline Module Blocks
 
-Some retained files contain module-owned blocks delimited by YAML comments or Markdown-safe HTML comments. The `*-only` family is for configuration or workflow blocks owned by an optional module. The `*-reference-only` family is for textual references to an optional module inside a retained protected or shared document. Both families use the same strip semantics: if any module named by the marker is absent from `included_modules`, remove the complete block including the begin and end marker lines.
+Some retained files contain module-owned blocks delimited by YAML comments or Markdown-safe HTML comments. The `*-only` family is for configuration or workflow blocks owned by an optional module. The `*-reference-only` family is for textual references to an optional module inside a retained protected or shared document. Both families use the marker's registered AND or OR retention relation, described below. If `included_modules` does not satisfy that relation, remove the complete block including the begin and end marker lines.
 
 The current `*-only` marker forms are:
 
@@ -899,10 +905,6 @@ The current `*-reference-only` marker forms are Markdown-safe HTML comments:
 ...
 <!-- template-sync: end template-sync-support-reference-only -->
 
-<!-- template-sync: begin data-ci-reference-only -->
-...
-<!-- template-sync: end data-ci-reference-only -->
-
 <!-- template-sync: begin azure-devops-guide-reference-only -->
 ...
 <!-- template-sync: end azure-devops-guide-reference-only -->
@@ -916,15 +918,17 @@ The current `*-reference-only` marker forms are Markdown-safe HTML comments:
 <!-- template-sync: end github-platform-reference-only -->
 ```
 
-Most `*-reference-only` markers name a single module and use the same AND-retention strip semantics as the `*-only` family. The `schema-template-sync-support-only` marker is a registered multi-module AND-retention family: it is retained only when both `schema` and `template-sync-support` are adopted. Two reference-only marker families use OR-retention: `data-ci-reference-only` names the OR-group `baseline`, `json`, `yaml`, `schema`, and `template-sync-support`, mirroring the `requires_any` relation of `.github/workflows/data-ci.yml`; `azure-devops-guide-reference-only` names the OR-group `azure-devops-platform`, `azure-pipelines`, and `azure-devops-collaboration`, mirroring the `requires_any` relation of `docs/azure-devops-support.md`. Each is retained when at least one of its modules is adopted and is stripped only when every one of them is excluded.
+Most markers in both families use AND-retention; a single-module marker requires that module. The `schema-template-sync-support-only` marker requires both `schema` and `template-sync-support`. The `github-data-ci-reference-only` marker requires both `baseline` and `github-actions`, matching the data workflow's dependencies. Its delimiters are `<!-- template-sync: begin github-data-ci-reference-only -->` and `<!-- template-sync: end github-data-ci-reference-only -->`. The `baseline-reference-only` and `baseline-only` markers require `baseline`; the reference delimiters are `<!-- template-sync: begin baseline-reference-only -->` and `<!-- template-sync: end baseline-reference-only -->`.
+
+Two marker families use OR-retention: `azure-devops-guide-reference-only` requires any of `azure-devops-platform`, `azure-pipelines`, or `azure-devops-collaboration`; `pip-dependencies-only` requires `baseline` or `python`. Each is retained when at least one named module is adopted and stripped only when all are excluded.
 
 These inline blocks let a downstream repository keep the containing baseline or cross-module file while removing toolchain assumptions for a module it did not adopt. During Step 6, after path mapping decides whether the containing file itself is in scope, apply these rules:
 
-1. If every module named by an inline-block marker is present in `included_modules`, retain those blocks unchanged unless the per-file review records a separate `MERGE` decision.
-2. If any module named by an inline-block marker is absent from `included_modules`, remove each complete block for that marker, including the begin and end marker lines, before accepting or merging the containing file.
+1. For an AND-retention marker, retain its blocks unchanged when every named module is present in `included_modules`, unless the per-file review records a separate `MERGE` decision. Otherwise remove each complete block, including its begin and end marker lines, before accepting or merging the containing file.
+2. For an OR-retention marker, retain its blocks unchanged when at least one named module is present in `included_modules`, unless the per-file review records a separate `MERGE` decision. If none is present, remove each complete block, including its begin and end marker lines, before accepting or merging the containing file.
 3. Treat unmatched, nested, or unknown inline-block markers as an explicit sync question for the owner; do not silently keep or drop the affected block.
 
-If a marker names multiple modules, it is retained only when every module named in the marker is present in `included_modules`, and is stripped when any one of them is absent. A reference-only marker, for example `python-reference-only`, follows the same rule and is stripped when the corresponding module is absent.
+For a single-module AND marker such as `python-reference-only`, retain the block when its module is present and strip it when that module is absent. For multi-module markers, use the registered AND or OR relation described above.
 
 When an inline module block from either the `*-only` or `*-reference-only` family splits or participates in a retained sequentially numbered Markdown structure, authors **MUST NOT** leave a numbering gap in the post-strip Markdown source or rendered output. Running numbers **MUST** stay contiguous in the full template and after the block is stripped during partial adoption. When multiple inline blocks appear near the same numbered sequence, every supported retain/strip combination **MUST** leave that sequence contiguous. This rule applies to numbered Markdown headings, such as `### 3. ...`, and ordered-list items, such as `1.`, `2.`, and `3.`. A post-strip gap in an ordered list also fails markdownlint MD029 because `.markdownlint.jsonc` configures MD029 with `"style": "ordered"` when the stripped output is linted; a numbered-heading gap is a readability defect rather than a markdownlint numbering failure. A complete independent numbered sequence wholly inside an inline block is acceptable when stripping the block leaves no retained numbering gap.
 
@@ -972,6 +976,8 @@ The current `markdown-reference-only`, `powershell-reference-only`, `python-refe
 - `.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` for removable optional-stack references in protected agent entry-point summaries.
 - `README.md` and `CONTRIBUTING.md` for removable optional-stack references in shared baseline contributor-facing documentation.
 - `.github/pull_request_template.md` for removable Python, PowerShell, and schema checklist sections in the retained PR template.
+- `.github/instructions/json.instructions.md`, `.github/instructions/yaml.instructions.md`, `schemas/README.md`, `GETTING_STARTED_NEW_REPO.md`, and `GETTING_STARTED_EXISTING_REPO.md` for optional companion-guide links.
+- `OPTIONAL_CONFIGURATIONS.md` for optional Python guidance and YAML starter links.
 
 The current `github-actions-reference-only` inline blocks live in:
 
@@ -988,10 +994,15 @@ The current `template-sync-support-reference-only` inline block lives in:
 
 - `README.md` for the optional `.template-sync/` and `schemas/template-sync-*.schema.json` surface rows, which are removed when `template-sync-support` is excluded.
 
-The current `data-ci-reference-only` inline block lives in:
+The current `github-data-ci-reference-only` inline blocks live in:
 
-- `CONTRIBUTING.md` for the Data CI workflow row, and `README.md` for the `.github/workflows/data-ci.yml` key-file bullet, each retained when any of `baseline`, `json`, `yaml`, `schema`, or `template-sync-support` is adopted and removed only when all five are excluded.
-- `.github/pull_request_template.md` for the generic retained data-file checklist section.
+- `CONTRIBUTING.md` for the Data CI workflow row and `README.md` for its key-file bullet.
+- `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md`, `.hermes.md`, `GEMINI.md`, and `.cursor/rules/repository-instructions.mdc` for the data-CI summary.
+- `GETTING_STARTED_NEW_REPO.md` for the data-CI validation bullet.
+
+All these blocks require baseline and GitHub Actions. The schema inventory, JSON starter, and maintenance guide use upstream-template links for durable references to data CI that remain useful when the downstream workflow is absent.
+
+The `baseline-reference-only` blocks in `.github/pull_request_template.md` guard the generic pre-commit verification and data-file checklists. Blocks in `.github/copilot-instructions.md` and all five platform entry points guard baseline configuration references and checklist commands. Blocks in the JSON and YAML guides, schema inventory, `docs/terraform/TERRAFORM_LINTING_GUIDE.md`, new-repository onboarding guide, and optional-configuration guide guard baseline-owned companion links, hook execution, and placeholder assets. Portable authoring requirements, including the JSON single-newline requirement, remain outside those blocks. The `baseline-only` blocks guard the Claude session hook's pre-commit provisioning and the Dependabot pre-commit ecosystem header/update block. The `pip-dependencies-only` blocks guard the Dependabot pip header/update block, which scans baseline runner requirements and any retained Python project metadata.
 
 The current `azure-devops-guide-reference-only` inline blocks live in:
 
@@ -1000,11 +1011,11 @@ The current `azure-devops-guide-reference-only` inline blocks live in:
 The current `python-only` inline block lives in:
 
 - `.pre-commit-config.yaml` for the `black` and `ruff-check` Python project hooks.
-- `.github/dependabot.yml` for the `pip` ecosystem header line and update block.
 
-The current `markdown-only` inline block lives in:
+The current `markdown-only` inline blocks live in:
 
-- `.pre-commit-config.yaml` for the `markdownlint-cli2` hook.
+- `.pre-commit-config.yaml` for outer and nested Markdown lint and placeholder checks.
+- `.github/workflows/precommit-ci.yml`, `.github/workflows/auto-fix-precommit.yml`, and `.azuredevops/pipelines/precommit.yml` for root Node dependency setup required by nested lint.
 
 The current `yaml-only` inline blocks live in:
 
@@ -1021,6 +1032,7 @@ The current `schema-only` inline blocks live in:
 The current `template-sync-support-only` inline blocks live in:
 
 - `.pre-commit-config.yaml` for template sync schema example validators, first-adoption quality suppression example validators, runtime schema self-validation hooks, the `validate-template-sync-manifest`, `validate-template-sync-marker`, `validate-template-sync-instruction-contracts`, `validate-first-adoption-quality-suppressions`, `validate-instruction-contracts-upstream`, and `validate-instruction-contracts-downstream` hooks.
+- `.github/workflows/markdownlint.yml` for source-template Python setup, generated-output nested-Markdown regression testing, actual nested-Markdown hook invocation testing, and their aggregate failure predicates.
 - `.github/workflows/data-ci.yml` for template sync schema example validation, first-adoption quality suppression validation, runtime schema self-validation, live template sync validation hook-list documentation, and the dedicated template sync validation alias steps.
 - `.azuredevops/pipelines/data-ci.yml` for template sync schema example validation, first-adoption quality suppression validation, runtime schema self-validation, live template sync validation hook-list documentation, and the dedicated template sync validation alias steps.
 
@@ -1047,7 +1059,9 @@ The current `terraform-only` inline blocks live in:
 - `.github/workflows/auto-fix-precommit.yml` for the Terraform and TFLint setup steps required only when those hooks are retained.
 - `.azuredevops/pipelines/precommit.yml` for the Terraform and TFLint setup steps required only when those hooks are retained.
 
-After stripping `python-only` blocks, a downstream repository that excludes `python` should be able to run `pre-commit run --all-files` without retaining Python project formatters or linters such as Black and Ruff, and its Dependabot configuration should not retain the `pip` ecosystem.
+After stripping `python-only` blocks, a downstream repository that keeps baseline but excludes `python` can run `pre-commit run --all-files` without Python project formatters or linters such as Black and Ruff. The tooling runtime and `requirements-pre-commit.txt` remain. If GitHub platform support is retained, the pip updater remains for that runner requirement; it disappears only when both baseline and Python are excluded.
+
+The baseline module owns both `.pre-commit-config.yaml` and the exact runner requirement. Aggregate and data-file pre-commit CI require baseline plus the matching host. Selecting data modules without baseline keeps their content but supplies no template-managed pre-commit configuration or data CI. A no-baseline agent profile removes the pre-commit provisioning block from the Claude hook, even if the downstream repository owns a separate local config. The hook's unrelated Terraform setup is unchanged.
 
 After stripping `markdown-only` blocks, a downstream repository that excludes `markdown` should be able to run `pre-commit run --all-files` without installing Node.js or markdownlint.
 

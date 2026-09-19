@@ -498,6 +498,7 @@ def test_collect_powershell_candidate_paths_uses_analyzer_suffixes_case_insensit
     }
 
 
+@pytest.mark.upstream_template_only
 def test_report_suffix_policy_matches_shared_helper() -> None:
     """The Python report and PowerShell helper expose the same analyzer suffix set."""
     executable = quality_reports.powershell_executable()

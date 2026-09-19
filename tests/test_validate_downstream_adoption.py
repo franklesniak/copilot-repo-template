@@ -10,6 +10,8 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
+from tests._pytest_compat import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "validate_downstream_adoption.py"
 CONTRACTS_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-instruction-contracts.schema.json"
@@ -500,25 +502,24 @@ def test_or_group_inline_block_is_valid_when_any_member_module_retained(
 ) -> None:
     """An OR-retention (ANY) inline block is not flagged while any member is retained.
 
-    ``PARTIAL_MODULES`` excludes ``json`` but keeps ``yaml``, ``schema``, and
-    ``template-sync-support``, so the ``data-ci-reference-only`` OR-group block is
-    correctly retained. A naive AND check would flag it as requiring the excluded
-    ``json`` module.
+    ``PARTIAL_MODULES`` excludes ``python`` but keeps ``baseline``, so the
+    ``pip-dependencies-only`` OR-group block is correctly retained. A naive AND
+    check would flag it as requiring the excluded ``python`` module.
     """
     _write_common_downstream_repo(
         tmp_path,
         readme_text=(
             "# Downstream\n\n"
-            "<!-- template-sync: begin data-ci-reference-only -->\n"
-            "Data CI guidance.\n"
-            "<!-- template-sync: end data-ci-reference-only -->\n"
+            "<!-- template-sync: begin pip-dependencies-only -->\n"
+            "Baseline runner dependency guidance.\n"
+            "<!-- template-sync: end pip-dependencies-only -->\n"
         ),
     )
 
     result = _run_validator(tmp_path, "--require-marker")
 
     assert result.returncode == 0, result.stdout
-    assert "data-ci-reference-only" not in result.stdout
+    assert "pip-dependencies-only" not in result.stdout
 
 
 def test_azure_guide_or_group_inline_block_is_reported_without_azure_modules(
@@ -850,3 +851,77 @@ def test_waivers_deferred_items_and_commands_are_reported(tmp_path: Path) -> Non
     assert "Validation commands considered:" in result.stdout
     assert "validate_marker.py --require-marker" in result.stdout
     assert "validate_instruction_contracts.py --mode downstream --require-marker" in (result.stdout)
+
+
+@pytest.mark.parametrize("retain_yaml,retain_agents", [(True, True), (False, True), (True, False)])
+def test_aggregate_scoped_contract_requires_all_modules(
+    tmp_path: Path, retain_yaml: bool, retain_agents: bool
+) -> None:
+    """Aggregate validation enforces a retained guide, never an excluded conjunction."""
+    modules = ["baseline", "template-sync-support"]
+    if retain_yaml:
+        modules.append("yaml")
+    if retain_agents:
+        modules.append("agent-instructions")
+    _run_git(tmp_path, "init")
+    _copy_schemas(tmp_path)
+    manifest = _manifest()
+    manifest["template_manifest"]["path_mappings"].append(
+        {
+            "pattern": ".github/instructions/yaml.instructions.md",
+            "requires_all": ["yaml", "agent-instructions"],
+        }
+    )
+    _write_yaml(tmp_path, ".template-sync/manifest.yml", manifest)
+    _write_yaml(tmp_path, ".template-sync/marker.yml", _marker(modules))
+    _write_text(tmp_path, "README.md", "# Downstream\n")
+    _write_text(tmp_path, ".pre-commit-config.yaml", "repos: []\n")
+    for script in (
+        "validate_marker.py",
+        "validate_instruction_contracts.py",
+        "validate_downstream_adoption.py",
+    ):
+        _write_text(tmp_path, f".template-sync/scripts/{script}")
+    if retain_yaml:
+        _write_text(tmp_path, ".yamllint.yml", "extends: default\n")
+    if retain_agents:
+        _write_text(tmp_path, "AGENTS.md", "# Agent instructions\n")
+    _write_yaml(
+        tmp_path,
+        ".template-sync/instruction-contracts.yml",
+        {
+            "instruction_contracts": [
+                {
+                    "path": ".github/instructions/yaml.instructions.md",
+                    "requires_modules": ["yaml", "agent-instructions"],
+                    "required_sections": [
+                        {
+                            "heading": "## Trusted inputs",
+                            "next_heading": None,
+                            "required_paragraphs": [
+                                "Reject Git modes 120000 and 160000 before parsing."
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    if retain_yaml and retain_agents:
+        _write_text(
+            tmp_path,
+            ".github/instructions/yaml.instructions.md",
+            "## Trusted inputs\n\nReject Git modes 120000 and 160000 before parsing.\n",
+        )
+    _run_git(tmp_path, "add", ".")
+    result = _run_validator(tmp_path, "--require-marker")
+    assert result.returncode == 0, result.stdout + result.stderr
+    if retain_yaml and retain_agents:
+        _write_text(
+            tmp_path,
+            ".github/instructions/yaml.instructions.md",
+            "## Trusted inputs\n\nAccept all Git blob modes.\n",
+        )
+        result = _run_validator(tmp_path, "--require-marker")
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert "section:## Trusted inputs:paragraph:" in result.stdout

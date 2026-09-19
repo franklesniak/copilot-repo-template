@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import inspect
 import json
 import shutil
 import sys
@@ -23,6 +24,14 @@ placeholder_helper = importlib.util.module_from_spec(SCRIPT_SPEC)
 sys.modules[SCRIPT_SPEC.name] = placeholder_helper
 SCRIPT_SPEC.loader.exec_module(placeholder_helper)
 StructuredObject = dict[str, Any]
+RAW_CONTRIBUTING_CLONE_BLOCK = (
+    "### 1. Clone the Repository\n\n"
+    "<!-- CUSTOMIZE: Replace `OWNER/REPO` with your organization and repository name -->\n\n"
+    "```bash\n"
+    "git clone https://github.com/OWNER/REPO.git\n"
+    "cd REPO\n"
+    "```\n"
+)
 
 
 def write_file(path: Path, content: str) -> Path:
@@ -422,6 +431,7 @@ def test_azure_security_reporting_renders_security_md_without_github_urls(
     assert "[security contact email]" not in security_text
 
 
+@pytest.mark.upstream_template_only
 def test_azure_only_baseline_docs_do_not_leave_github_placeholders(tmp_path: Path) -> None:
     """Azure-only rendering removes GitHub OWNER/REPO placeholders from baseline docs."""
     for relative_path in ("CONTRIBUTING.md", "SECURITY.md", "CODE_OF_CONDUCT.md"):
@@ -444,7 +454,132 @@ def test_azure_only_baseline_docs_do_not_leave_github_placeholders(tmp_path: Pat
     )
     assert "[Platform](https://dev.azure.com/contoso/Platform)" in contributing_text
     assert "Azure Boards intake policy: work-items" in contributing_text
+    for boundary in ("begin", "end"):
+        marker = f"<!-- template-sync: {boundary} markdown-reference-only -->"
+        assert contributing_text.count(marker) == read_file(REPO_ROOT / "CONTRIBUTING.md").count(
+            marker
+        )
     assert placeholder_helper.scan_repository(tmp_path) == ()
+
+
+@pytest.mark.upstream_template_only
+def test_raw_clone_fixture_matches_shipped_contributing_document() -> None:
+    """The portable clone fixture stays identical to the shipped source block."""
+    template = read_file(REPO_ROOT / "CONTRIBUTING.md")
+    clone_start = template.index("### 1. Clone the Repository\n")
+    clone_end = template.index("\n```\n", clone_start) + len("\n```\n")
+
+    assert template[clone_start:clone_end] == RAW_CONTRIBUTING_CLONE_BLOCK
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        "\n### Install Python\n\nKeep this setup.\n",
+        (
+            "\n<!-- template-sync: begin markdown-reference-only -->\n"
+            "### 2. Install Node.js Dependencies\n\nKeep this setup.\n"
+            "<!-- template-sync: end markdown-reference-only -->\n"
+        ),
+        "\nAdopter notes before another heading.\n\n## More\n",
+        "",
+    ],
+)
+def test_azure_clone_rendering_preserves_adjacent_content(suffix: str) -> None:
+    """Clone rendering does not depend on or consume the next optional section."""
+    context = placeholder_helper.build_replacement_context(
+        host_provider="azure-devops-services",
+        azure_devops_organization="contoso",
+        azure_devops_project="Platform",
+        azure_devops_repository="Project Tools",
+    )
+    text = "Prefix stays.\n\n" + RAW_CONTRIBUTING_CLONE_BLOCK + suffix
+    expected = (
+        "Prefix stays.\n\n### 1. Clone the Repository\n\n```bash\n"
+        "git clone https://dev.azure.com/contoso/Platform/_git/Project%20Tools\n"
+        "cd 'Project Tools'\n```\n" + suffix
+    )
+
+    rendered, count = placeholder_helper.replace_contributing_clone_block(text, context)
+
+    assert count == 1
+    assert rendered == expected
+    assert placeholder_helper.replace_contributing_clone_block(rendered, context) == (rendered, 0)
+
+
+def test_azure_clone_rendering_preserves_customized_github_clone() -> None:
+    """Azure rendering does not retarget an adopter's customized GitHub clone block."""
+    context = placeholder_helper.build_replacement_context(
+        host_provider="azure-devops-services",
+        azure_devops_organization="contoso",
+        azure_devops_project="Platform",
+        azure_devops_repository="downstream-template",
+    )
+    customized = RAW_CONTRIBUTING_CLONE_BLOCK.replace("OWNER/REPO", "octocat/hello-world").replace(
+        "cd REPO", "cd hello-world"
+    )
+
+    assert placeholder_helper.replace_contributing_clone_block(customized, context) == (
+        customized,
+        0,
+    )
+
+
+@pytest.mark.parametrize("shape", ["custom-command", "missing-close", "duplicate"])
+def test_azure_clone_unknown_shape_retains_placeholder_failure(tmp_path: Path, shape: str) -> None:
+    """Unknown or ambiguous clone blocks stay intact and fail the unresolved scan."""
+    context = placeholder_helper.build_replacement_context(
+        host_provider="azure-devops-services",
+        azure_devops_organization="contoso",
+        azure_devops_project="Platform",
+        azure_devops_repository="downstream-template",
+    )
+    text = RAW_CONTRIBUTING_CLONE_BLOCK
+    if shape == "custom-command":
+        text = text.replace("git clone ", "git clone --filter=blob:none ")
+    elif shape == "missing-close":
+        text = text.removesuffix("```\n")
+    else:
+        text += "\n" + text
+
+    assert placeholder_helper.replace_contributing_clone_block(text, context) == (text, 0)
+    write_file(tmp_path / "CONTRIBUTING.md", text)
+    findings = placeholder_helper.scan_repository(tmp_path)
+    assert any(finding.path == "CONTRIBUTING.md" for finding in findings)
+    assert placeholder_helper.scan_has_failures(findings, "retained-hard")
+
+
+def test_azure_clone_oracle_detects_optional_heading_dependency(tmp_path: Path) -> None:
+    """An independent expected clone command rejects the old Node-heading assumption."""
+    context = placeholder_helper.build_replacement_context(
+        host_provider="azure-devops-services",
+        azure_devops_organization="contoso",
+        azure_devops_project="Platform",
+        azure_devops_repository="downstream-template",
+    )
+    text = RAW_CONTRIBUTING_CLONE_BLOCK + "\n### Install Python\n"
+    expected_command = "git clone https://dev.azure.com/contoso/Platform/_git/downstream-template"
+    assert expected_command in placeholder_helper.replace_contributing_clone_block(text, context)[0]
+    source = inspect.getsource(placeholder_helper.replace_contributing_clone_block)
+    anchor = "    assert context.azure_devops is not None\n"
+    assert source.count(anchor) == 1
+    mutant_source = source.replace(
+        anchor,
+        anchor
+        + '    if "### 2. Install Node.js Dependencies" not in text:\n        return text, 0\n',
+        1,
+    )
+    mutant_path = write_file(
+        tmp_path / "clone_mutant.py",
+        "from __future__ import annotations\nimport shlex\n\n" + mutant_source,
+    )
+    mutant_spec = importlib.util.spec_from_file_location("clone_heading_mutant", mutant_path)
+    assert mutant_spec is not None and mutant_spec.loader is not None
+    mutant = importlib.util.module_from_spec(mutant_spec)
+    mutant_spec.loader.exec_module(mutant)
+    mutant_text, _count = mutant.replace_contributing_clone_block(text, context)
+    with pytest.raises(AssertionError):
+        assert expected_command in mutant_text
 
 
 def test_azure_pr_template_materializes_service_links_and_policy_guidance(
@@ -1133,8 +1268,8 @@ def test_placeholder_manifest_paths_resolve_through_template_manifest() -> None:
         mappings,
     )
     assert data_ci_relation is not None
-    assert data_ci_relation.requires_all == frozenset({"github-actions"})
-    assert "baseline" in data_ci_relation.requires_any
+    assert data_ci_relation.requires_all == frozenset({"baseline", "github-actions"})
+    assert data_ci_relation.requires_any == frozenset()
 
 
 def test_classified_scan_preserves_all_contexts(tmp_path: Path) -> None:
@@ -1674,3 +1809,55 @@ def test_resolve_repo_path_rejects_symlinked_parent_directory(tmp_path: Path) ->
 
     with pytest.raises(placeholder_helper.PlaceholderError, match="must not traverse a symlink"):
         placeholder_helper.resolve_repo_path(tmp_path, ".github/CODEOWNERS")
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize("noncanonical", ["<owner>/<repo>", "<OWNER>/<REPO>", "your-org/your-repo"])
+def test_live_yaml_placeholders_are_canonical_and_replaced(
+    tmp_path: Path, noncanonical: str
+) -> None:
+    """Reject alternate live URL tokens without interpreting schematic documentation as config."""
+    import re
+
+    def assert_live_urls(document: dict[str, Any]) -> None:
+        values = [item["url"] for item in document.get("contact_links", [])]
+        values.extend(
+            item["attributes"]["value"]
+            for item in document.get("body", [])
+            if item.get("type") == "markdown"
+        )
+        assert values
+        for value in values:
+            assert not re.search(
+                r"https://[^/\s]+/(?:<owner>/<repo>|<OWNER>/<REPO>|your-org/your-repo)(?:/|$)",
+                value,
+            )
+
+    for relative in (".github/ISSUE_TEMPLATE/config.yml", ".github/ISSUE_TEMPLATE/bug_report.yml"):
+        source = read_file(REPO_ROOT / relative)
+        document = yaml.safe_load(source)
+        assert_live_urls(document)
+        assert "https://github.com/OWNER/REPO/" in source
+        invalid = source.replace(
+            "https://github.com/OWNER/REPO/", f"https://github.com/{noncanonical}/"
+        )
+        with pytest.raises(AssertionError):
+            assert_live_urls(yaml.safe_load(invalid))
+        write_file(tmp_path / relative, source)
+    schematic = "Schematic upstream URL: https://github.com/<owner>/<repo>/releases/latest\n"
+    write_file(tmp_path / "docs/schematic.md", schematic)
+    placeholder_helper.replace_placeholders(repo_root=tmp_path, context=build_context())
+    for relative in (".github/ISSUE_TEMPLATE/config.yml", ".github/ISSUE_TEMPLATE/bug_report.yml"):
+        rendered = read_file(tmp_path / relative)
+        assert "https://github.com/OWNER/REPO/" not in rendered
+        assert "https://github.com/octo/widget/" in rendered
+    assert read_file(tmp_path / "docs/schematic.md") == schematic
+    # The existing live manifest loader also refuses redefining the canonical token.
+    manifest = json.loads(read_file(REPO_ROOT / ".github/template-placeholders.json"))
+    token = next(
+        token for token in manifest["tokens"] if token["replacementStyle"] == "owner-repo-token"
+    )
+    token["placeholder"] = noncanonical
+    schema = json.loads(read_file(REPO_ROOT / "schemas/template-placeholders.schema.json"))
+    with pytest.raises(placeholder_helper.PlaceholderError, match="OWNER/REPO.*was expected"):
+        placeholder_helper.validate_placeholder_manifest(manifest, schema=schema)

@@ -49,6 +49,7 @@ if str(TEMPLATE_SYNC_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(TEMPLATE_SYNC_SCRIPT_DIR))
 
 import report_excluded_module_references as EXCLUDED_MODULE_REPORTER  # noqa: E402
+import validate_instruction_contracts as INSTRUCTION_CONTRACTS  # noqa: E402
 import validate_marker as VALIDATE_MARKER  # noqa: E402
 from template_sync_materialization_helpers import (  # noqa: E402
     INLINE_BLOCK_ANY_MODULES,
@@ -84,14 +85,14 @@ TERRAFORM_SHARED_SURFACE_TOKENS = {
         ".github/scripts/terraform_hooks.py tflint",
     ),
     ".github/workflows/auto-fix-precommit.yml": (
-        "hashicorp/setup-terraform@v4",
-        "terraform-linters/setup-tflint@v6",
+        "hashicorp/setup-terraform@",
+        "terraform-linters/setup-tflint@",
         'terraform_version: "1.14.4"',
         'tflint_version: "v0.51.1"',
     ),
     ".github/workflows/precommit-ci.yml": (
-        "hashicorp/setup-terraform@v4",
-        "terraform-linters/setup-tflint@v6",
+        "hashicorp/setup-terraform@",
+        "terraform-linters/setup-tflint@",
         'terraform_version: "1.14.4"',
         'tflint_version: "v0.51.1"',
     ),
@@ -102,14 +103,24 @@ TERRAFORM_SHARED_SURFACE_TOKENS = {
         "github.com/terraform-linters/tflint",
     ),
 }
-MARKDOWN_INLINE_BLOCK_PATHS = (".pre-commit-config.yaml",)
+MARKDOWN_INLINE_BLOCK_PATHS = (
+    ".pre-commit-config.yaml",
+    ".github/workflows/precommit-ci.yml",
+    ".github/workflows/auto-fix-precommit.yml",
+    ".azuredevops/pipelines/precommit.yml",
+)
 MARKDOWN_INLINE_MARKER_BEGIN = "# template-sync: begin markdown-only"
 MARKDOWN_INLINE_MARKER_END = "# template-sync: end markdown-only"
 MARKDOWN_SHARED_SURFACE_TOKENS = {
     ".pre-commit-config.yaml": (
         "https://github.com/DavidAnson/markdownlint-cli2",
         "id: markdownlint-cli2",
+        "id: lint-nested-markdown",
+        "lint_nested_markdown_hook.py",
     ),
+    ".github/workflows/precommit-ci.yml": ("actions/setup-node@", "npm ci --ignore-scripts"),
+    ".github/workflows/auto-fix-precommit.yml": ("actions/setup-node@", "npm ci --ignore-scripts"),
+    ".azuredevops/pipelines/precommit.yml": ("UseNode@1", "npm ci --ignore-scripts"),
 }
 GITHUB_ACTIONS_INLINE_BLOCK_COUNTS = {
     ".pre-commit-config.yaml": 1,
@@ -124,7 +135,6 @@ GITHUB_ACTIONS_SHARED_SURFACE_TOKENS = {
 }
 PYTHON_INLINE_BLOCK_COUNTS = {
     ".pre-commit-config.yaml": 1,
-    ".github/dependabot.yml": 2,
 }
 PYTHON_INLINE_MARKER_BEGIN = "# template-sync: begin python-only"
 PYTHON_INLINE_MARKER_END = "# template-sync: end python-only"
@@ -134,12 +144,6 @@ PYTHON_SHARED_SURFACE_TOKENS = {
         "id: black",
         "https://github.com/astral-sh/ruff-pre-commit",
         "id: ruff-check",
-    ),
-    ".github/dependabot.yml": (
-        "pip (pyproject.toml) - Python dependencies",
-        "# Python dependencies (pyproject.toml)",
-        'package-ecosystem: "pip"',
-        "pip-minor-patch",
     ),
 }
 YAML_INLINE_BLOCK_COUNTS = {
@@ -191,6 +195,7 @@ SCHEMA_SHARED_SURFACE_TOKENS = {
 TEMPLATE_SYNC_SUPPORT_INLINE_BLOCK_COUNTS = {
     ".pre-commit-config.yaml": 1,
     ".github/workflows/data-ci.yml": 2,
+    ".github/workflows/markdownlint.yml": 2,
     ".azuredevops/pipelines/data-ci.yml": 2,
 }
 TEMPLATE_SYNC_SUPPORT_INLINE_MARKER_BEGIN = "# template-sync: begin template-sync-support-only"
@@ -220,6 +225,11 @@ TEMPLATE_SYNC_SUPPORT_SHARED_SURFACE_TOKENS = {
         "pre-commit run validate-template-sync-instruction-contracts --all-files",
         "pre-commit run validate-instruction-contracts-upstream --all-files",
         "pre-commit run validate-instruction-contracts-downstream --all-files",
+    ),
+    ".github/workflows/markdownlint.yml": (
+        "requirements-pre-commit.txt",
+        "tests/test_materialize_downstream_adoption.py",
+        "test_nested_markdown_hook_actual_invocation_and_mutation",
     ),
     ".azuredevops/pipelines/data-ci.yml": (
         "pre-commit run validate-template-sync-marker-valid-examples --all-files",
@@ -300,6 +310,7 @@ GIT_LFS_SHARED_SURFACE_TOKENS = {
 }
 REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
     "markdown-reference-only": {
+        "CONTRIBUTING.md": 2,
         ".github/copilot-instructions.md": 2,
         ".cursor/rules/repository-instructions.mdc": 3,
         ".hermes.md": 3,
@@ -317,6 +328,7 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         ".github/pull_request_template.md": 1,
     },
     "python-reference-only": {
+        "OPTIONAL_CONFIGURATIONS.md": 1,
         ".github/copilot-instructions.md": 3,
         ".cursor/rules/repository-instructions.mdc": 2,
         ".hermes.md": 2,
@@ -338,6 +350,10 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "CONTRIBUTING.md": 6,
     },
     "json-reference-only": {
+        ".github/instructions/yaml.instructions.md": 1,
+        "GETTING_STARTED_EXISTING_REPO.md": 1,
+        "GETTING_STARTED_NEW_REPO.md": 1,
+        "schemas/README.md": 1,
         ".github/copilot-instructions.md": 2,
         ".cursor/rules/repository-instructions.mdc": 3,
         ".hermes.md": 3,
@@ -348,6 +364,11 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "CONTRIBUTING.md": 2,
     },
     "yaml-reference-only": {
+        ".github/instructions/json.instructions.md": 1,
+        "GETTING_STARTED_EXISTING_REPO.md": 1,
+        "GETTING_STARTED_NEW_REPO.md": 1,
+        "OPTIONAL_CONFIGURATIONS.md": 1,
+        "schemas/README.md": 1,
         ".github/copilot-instructions.md": 6,
         ".cursor/rules/repository-instructions.mdc": 3,
         ".hermes.md": 3,
@@ -372,10 +393,31 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "README.md": 2,
         "CONTRIBUTING.md": 1,
     },
-    "data-ci-reference-only": {
+    "baseline-reference-only": {
+        ".github/instructions/json.instructions.md": 3,
+        ".github/instructions/yaml.instructions.md": 2,
+        "GETTING_STARTED_NEW_REPO.md": 1,
+        "OPTIONAL_CONFIGURATIONS.md": 1,
+        "docs/terraform/TERRAFORM_LINTING_GUIDE.md": 2,
+        "schemas/README.md": 13,
+        ".github/copilot-instructions.md": 1,
+        ".cursor/rules/repository-instructions.mdc": 2,
+        ".hermes.md": 2,
+        "AGENTS.md": 2,
+        "CLAUDE.md": 2,
+        "GEMINI.md": 2,
+        ".github/pull_request_template.md": 2,
+    },
+    "github-data-ci-reference-only": {
+        ".github/copilot-instructions.md": 1,
+        ".cursor/rules/repository-instructions.mdc": 1,
+        ".hermes.md": 1,
+        "AGENTS.md": 1,
+        "CLAUDE.md": 1,
+        "GEMINI.md": 1,
+        "GETTING_STARTED_NEW_REPO.md": 1,
         "README.md": 1,
         "CONTRIBUTING.md": 1,
-        ".github/pull_request_template.md": 1,
     },
     "github-actions-reference-only": {
         "README.md": 5,
@@ -401,19 +443,21 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "schemas/README.md": 1,
     },
 }
-# Single-module AND-retention reference-only markers. Each block is stripped when
-# its one named module is excluded.
+# AND-retention reference-only markers. Each block is stripped unless every
+# named module is included.
 REFERENCE_ONLY_MARKER_MODULES = {
-    "markdown-reference-only": "markdown",
-    "powershell-reference-only": "powershell",
-    "python-reference-only": "python",
-    "terraform-reference-only": "terraform",
-    "json-reference-only": "json",
-    "yaml-reference-only": "yaml",
-    "schema-reference-only": "schema",
-    "template-sync-support-reference-only": "template-sync-support",
-    "github-actions-reference-only": "github-actions",
-    "github-platform-reference-only": "github-platform",
+    "baseline-reference-only": ("baseline",),
+    "github-data-ci-reference-only": ("baseline", "github-actions"),
+    "markdown-reference-only": ("markdown",),
+    "powershell-reference-only": ("powershell",),
+    "python-reference-only": ("python",),
+    "terraform-reference-only": ("terraform",),
+    "json-reference-only": ("json",),
+    "yaml-reference-only": ("yaml",),
+    "schema-reference-only": ("schema",),
+    "template-sync-support-reference-only": ("template-sync-support",),
+    "github-actions-reference-only": ("github-actions",),
+    "github-platform-reference-only": ("github-platform",),
 }
 # OR-retention (ANY) reference-only markers. Each block is retained when at least
 # one named module is included and stripped only when all of them are excluded;
@@ -424,13 +468,6 @@ ANY_REFERENCE_ONLY_MARKER_MODULES = {
         "azure-pipelines",
         "azure-devops-collaboration",
     ),
-    "data-ci-reference-only": (
-        "baseline",
-        "json",
-        "yaml",
-        "schema",
-        "template-sync-support",
-    ),
 }
 PROTECTED_ENTRY_POINT_REFERENCE_PATHS = (
     ".cursor/rules/repository-instructions.mdc",
@@ -440,6 +477,10 @@ PROTECTED_ENTRY_POINT_REFERENCE_PATHS = (
     "GEMINI.md",
 )
 REFERENCE_ONLY_MANIFEST_PATTERNS = {
+    ".github/instructions/json.instructions.md": ".github/instructions/json.instructions.md",
+    ".github/instructions/yaml.instructions.md": ".github/instructions/yaml.instructions.md",
+    "GETTING_STARTED_EXISTING_REPO.md": "GETTING_STARTED_EXISTING_REPO.md",
+    "docs/terraform/TERRAFORM_LINTING_GUIDE.md": "docs/terraform/**",
     ".github/copilot-instructions.md": ".github/copilot-instructions.md",
     ".cursor/rules/repository-instructions.mdc": ".cursor/rules/**",
     ".hermes.md": ".hermes.md",
@@ -448,6 +489,7 @@ REFERENCE_ONLY_MANIFEST_PATTERNS = {
     "GEMINI.md": "GEMINI.md",
     "README.md": "README.md",
     "CONTRIBUTING.md": "CONTRIBUTING.md",
+    "GETTING_STARTED_NEW_REPO.md": "GETTING_STARTED_NEW_REPO.md",
     ".github/pull_request_template.md": ".github/pull_request_template.md",
     "OPTIONAL_CONFIGURATIONS.md": "OPTIONAL_CONFIGURATIONS.md",
     "COPILOT_CHAT_PROMPTS.md": "COPILOT_CHAT_PROMPTS.md",
@@ -1099,6 +1141,246 @@ def _run_git(repo_root: Path, *args: str) -> None:
     )
 
 
+def _fix_preview_document() -> dict[str, Any]:
+    """Load the actual workflow without YAML 1.1 boolean-key coercion."""
+    return cast(
+        dict[str, Any],
+        yaml.load(
+            (REPO_ROOT / ".github/workflows/auto-fix-precommit.yml").read_text(encoding="utf-8"),
+            Loader=yaml.BaseLoader,
+        ),
+    )
+
+
+def _assert_fix_preview_boundary(workflow: dict[str, Any]) -> None:
+    """Assert independent authority requirements for the shipped candidate workflow."""
+    assert workflow["on"] == {"push": {"branches": ["copilot/**"]}}
+    assert workflow["permissions"] == {"contents": "read"}
+    assert set(workflow["jobs"]) == {"fix-preview"}
+    job = workflow["jobs"]["fix-preview"]
+    assert job.get("permissions", {"contents": "read"}) == {"contents": "read"}
+    assert job["if"] == "github.actor == 'copilot-swe-agent[bot]'"
+    assert int(job["timeout-minutes"]) <= 30
+    steps = job["steps"]
+    checkouts = [step for step in steps if step.get("uses", "").startswith("actions/checkout@")]
+    assert len(checkouts) == 1
+    assert checkouts[0]["with"]["persist-credentials"] == "false"
+    assert checkouts[0]["with"]["ref"] == "${{ github.sha }}"
+    serialized = json.dumps(workflow)
+    assert "secrets." not in serialized and "github.token" not in serialized
+    assert "id-token" not in serialized
+    scripts = "\n".join(step.get("run", "") for step in steps)
+    assert re.search(r"\bgit\s+(?:push|commit)\b", scripts) is None
+    hooks = next(step for step in steps if step.get("id") == "hooks")
+    assert hooks["continue-on-error"] == "true"
+    assert 'exit "$hook_exit"' in hooks["run"]
+    assert "exit_code=%s" in hooks["run"]
+    preview = next(step for step in steps if step.get("id") == "preview")
+    assert preview["env"]["HOOK_EXIT"] == "${{ steps.hooks.outputs.exit_code }}"
+    failure = next(step for step in steps if step["name"] == "Preserve pre-commit failure")
+    assert "steps.hooks.outcome == 'failure'" in failure["if"]
+    assert failure["run"].rstrip().endswith("exit 1")
+    upload = next(
+        step for step in steps if step.get("uses", "").startswith("actions/upload-artifact@")
+    )
+    assert "steps.preview.outcome == 'success'" in upload["if"]
+    assert upload["with"]["if-no-files-found"] == "error"
+    assert upload["with"]["retention-days"] == "3"
+    assert upload["with"].get("include-hidden-files", "false") == "false"
+    assert upload["with"]["path"].splitlines() == [
+        "${{ runner.temp }}/precommit-fix-preview/tracked.patch",
+        "${{ runner.temp }}/precommit-fix-preview/status.txt",
+        "${{ runner.temp }}/precommit-fix-preview/README.txt",
+    ]
+
+
+def test_fix_preview_workflow_has_no_repository_write_authority() -> None:
+    """Candidate hooks have read-only authority and cannot publish branch mutations."""
+    _assert_fix_preview_boundary(_fix_preview_document())
+
+
+@pytest.mark.parametrize(
+    "mutation", ["write", "job-write", "persist", "token", "push", "failure", "hook-exit"]
+)
+def test_fix_preview_boundary_oracle_detects_unsafe_mutations(mutation: str) -> None:
+    """Removing a credential, branch-write, or failure-truth assertion is observable."""
+    workflow = _fix_preview_document()
+    job = workflow["jobs"]["fix-preview"]
+    if mutation == "write":
+        workflow["permissions"]["contents"] = "write"
+    elif mutation == "job-write":
+        job["permissions"] = {"contents": "write"}
+    elif mutation == "persist":
+        del job["steps"][0]["with"]["persist-credentials"]
+    elif mutation == "token":
+        job["steps"][0]["with"]["token"] = "${{ secrets.GITHUB_TOKEN }}"
+    elif mutation == "push":
+        job["steps"].append({"name": "Unsafe push", "run": "git push"})
+    elif mutation == "hook-exit":
+        step = next(step for step in job["steps"] if step.get("id") == "preview")
+        step["env"]["HOOK_EXIT"] = "0"
+    else:
+        step = next(step for step in job["steps"] if step["name"] == "Preserve pre-commit failure")
+        step["run"] = "exit 0"
+    with pytest.raises((AssertionError, KeyError)):
+        _assert_fix_preview_boundary(workflow)
+
+
+def _run_fix_preview_capture(
+    repo_root: Path, output_root: Path, *, mutant: str = "", event_head: str | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Execute the real inline Python capture step against an isolated Git fixture."""
+    workflow = _fix_preview_document()
+    step = next(
+        step for step in workflow["jobs"]["fix-preview"]["steps"] if step.get("id") == "preview"
+    )
+    script = step["run"]
+    if mutant == "size":
+        guard = "if len(data) > limit:"
+        assert script.count(guard) == 1
+        script = script.replace(guard, "if False:")
+        # Drain the finite oversized fixture so the deliberately unsafe mutant
+        # terminates; the independent expected rejection must then fail.
+        script = script.replace("process.stdout.read(limit + 1)", "process.stdout.read()")
+    elif mutant == "head":
+        assert script.count("require_event_head()\n") == 2
+        script = script.replace("require_event_head()\n", "pass\n")
+    elif mutant == "status":
+        # Raise only the 1 MiB status callsite limit without changing capture().
+        assert script.count("    1024 * 1024,") == 1
+        script = script.replace("    1024 * 1024,", "    8 * 1024 * 1024,")
+    env = os.environ.copy()
+    env.update(
+        RUNNER_TEMP=str(output_root),
+        GITHUB_SHA=(
+            event_head
+            if event_head is not None
+            else subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=repo_root, text=True
+            ).strip()
+        ),
+        GITHUB_REF="refs/heads/copilot/fixture",
+        GITHUB_RUN_ID="123",
+        HOOK_EXIT="1",
+    )
+    return subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+
+
+def _preview_git_fixture(tmp_path: Path) -> Path:
+    """Create a repository owned only by this test, without invoking external hooks."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _run_git(repo, "init")
+    _run_git(repo, "config", "user.name", "Fixture")
+    _run_git(repo, "config", "user.email", "fixture@example.invalid")
+    _run_git(repo, "config", "core.autocrlf", "false")
+    (repo / "example.txt").write_text("before\n", encoding="utf-8")
+    _run_git(repo, "add", "example.txt")
+    _run_git(repo, "-c", "commit.gpgsign=false", "commit", "-m", "Fixture")
+    return repo
+
+
+def test_fix_preview_captures_changes_without_mutating_git_history(tmp_path: Path) -> None:
+    """The actual producer preserves untracked evidence, native exit and exact head."""
+    repo = _preview_git_fixture(tmp_path)
+    (repo / "example.txt").write_text("after\n", encoding="utf-8")
+    (repo / "untracked.txt").write_text("review separately\n", encoding="utf-8")
+    before = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo)
+    result = _run_fix_preview_capture(repo, tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    preview = tmp_path / "precommit-fix-preview"
+    patch = (preview / "tracked.patch").read_text(encoding="utf-8")
+    assert "-before" in patch and "+after" in patch
+    assert "untracked.txt" not in patch
+    assert "?? untracked.txt" in (preview / "status.txt").read_text(encoding="utf-8")
+    readme = (preview / "README.txt").read_text(encoding="utf-8")
+    assert "UNTRUSTED FIX PREVIEW" in readme
+    assert "Native pre-commit exit: 1" in readme
+    assert f"Head: {before.decode().strip()}" in readme
+    assert subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo) == before
+
+
+def test_fix_preview_size_oracle_detects_removed_capture_bound(tmp_path: Path) -> None:
+    """An oversized real Git diff fails; removing the byte assertion reverses that result."""
+    repo = _preview_git_fixture(tmp_path)
+    (repo / "example.txt").write_text("X" * (9 * 1024 * 1024), encoding="utf-8")
+    safe_output = tmp_path / "safe"
+    unsafe_output = tmp_path / "mutant"
+    safe_output.mkdir()
+    unsafe_output.mkdir()
+    result = _run_fix_preview_capture(repo, safe_output)
+    assert result.returncode != 0
+    assert "exceeds its byte limit" in result.stderr
+    assert not (safe_output / "precommit-fix-preview/README.txt").exists()
+    mutant = _run_fix_preview_capture(repo, unsafe_output, mutant="size")
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    assert (unsafe_output / "precommit-fix-preview/tracked.patch").stat().st_size > 8 * 1024 * 1024
+
+
+@pytest.mark.parametrize("mutation", ["commit", "reset"])
+def test_fix_preview_rejects_hook_history_changes(tmp_path: Path, mutation: str) -> None:
+    """A local commit/reset cannot silently change the preview's event baseline."""
+    repo = _preview_git_fixture(tmp_path)
+    original = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+    (repo / "example.txt").write_text("second\n", encoding="utf-8")
+    _run_git(repo, "add", ".")
+    _run_git(repo, "-c", "commit.gpgsign=false", "commit", "-m", "Second fixture commit")
+    second = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
+    if mutation == "reset":
+        _run_git(repo, "reset", "--hard", original)
+        event_head = second
+    else:
+        event_head = original
+    safe, unsafe = tmp_path / "safe", tmp_path / "unsafe"
+    safe.mkdir()
+    unsafe.mkdir()
+    result = _run_fix_preview_capture(repo, safe, event_head=event_head)
+    assert result.returncode != 0
+    assert "Local HEAD changed" in result.stderr
+    assert not (safe / "precommit-fix-preview/README.txt").exists()
+    mutant = _run_fix_preview_capture(repo, unsafe, mutant="head", event_head=event_head)
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    patch = (unsafe / "precommit-fix-preview/tracked.patch").read_text(encoding="utf-8")
+    assert "second" in patch and "before" in patch
+
+
+def test_fix_preview_status_limit_is_load_bearing(tmp_path: Path) -> None:
+    """Changing only the status callsite limit defeats a real oversized-status oracle."""
+    repo = _preview_git_fixture(tmp_path)
+    # Approximately 5,000 bounded-length paths exceed 1 MiB without giant files.
+    for index in range(5000):
+        (repo / (f"{index:05d}-" + "x" * 215)).touch()
+    safe, unsafe = tmp_path / "safe", tmp_path / "unsafe"
+    safe.mkdir()
+    unsafe.mkdir()
+    result = _run_fix_preview_capture(repo, safe)
+    assert result.returncode != 0
+    assert "exceeds its byte limit" in result.stderr
+    assert not (safe / "precommit-fix-preview/README.txt").exists()
+    mutant = _run_fix_preview_capture(repo, unsafe, mutant="status")
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    assert (unsafe / "precommit-fix-preview/status.txt").stat().st_size > 1024 * 1024
+
+
+def test_fix_preview_authority_survives_terraform_exclusion() -> None:
+    """Optional tool pruning preserves the same read-only failure-truth boundary."""
+    source = (REPO_ROOT / ".github/workflows/auto-fix-precommit.yml").read_text(encoding="utf-8")
+    pruned = remove_inline_block_family(
+        source, "terraform-only", relative_path=".github/workflows/auto-fix-precommit.yml"
+    )
+    workflow = yaml.load(pruned, Loader=yaml.BaseLoader)
+    _assert_fix_preview_boundary(workflow)
+    assert "setup-terraform@" not in pruned and "setup-tflint@" not in pruned
+
+
 def _marker_name_from_expected_pair(
     relative_path: str,
     marker_begin: str,
@@ -1174,8 +1456,8 @@ def _strip_reference_only_blocks_for_modules(
         if relative_path in path_counts
     }
 
-    for marker_name, module_name in REFERENCE_ONLY_MARKER_MODULES.items():
-        if module_name in included_modules or marker_name not in path_marker_counts:
+    for marker_name, required_modules in REFERENCE_ONLY_MARKER_MODULES.items():
+        if set(required_modules) <= included_modules or marker_name not in path_marker_counts:
             continue
         stripped_text = _strip_inline_blocks_from_text(
             text,
@@ -1718,29 +2000,20 @@ def test_template_manifest_schema_rejects_malformed_relation_combinations() -> N
         assert _manifest_validation_errors(manifest)
 
 
-def test_template_manifest_data_ci_mapping_uses_v2_boolean_semantics() -> None:
-    """The data-file workflow must require GitHub Actions plus one owning module."""
+def test_template_manifest_data_ci_mapping_requires_baseline_and_github_actions() -> None:
+    """The data-file workflow must retain both its config and GitHub host."""
     data_ci_mapping = _path_mapping_by_pattern()[".github/workflows/data-ci.yml"]
 
-    assert _relation_modules(data_ci_mapping, "requires_all") == ("github-actions",)
-    assert _relation_modules(data_ci_mapping, "requires_any") == (
+    assert _relation_modules(data_ci_mapping, "requires_all") == (
         "baseline",
-        "json",
-        "yaml",
-        "schema",
-        "template-sync-support",
+        "github-actions",
     )
-    assert _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "json"})
-    assert _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "yaml"})
-    assert _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "schema"})
-    assert _path_mapping_matches_modules(
-        data_ci_mapping,
-        {"github-actions", "template-sync-support"},
-    )
+    assert _relation_modules(data_ci_mapping, "requires_any") == ()
     assert _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "baseline"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"github-actions"})
+    assert not _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "json"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"yaml", "schema"})
-    assert not _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "terraform"})
+    assert not _path_mapping_matches_modules(data_ci_mapping, {"baseline", "terraform"})
 
 
 def test_template_manifest_compatibility_groups_define_host_families() -> None:
@@ -1844,12 +2117,8 @@ def test_template_manifest_maps_azure_pipelines_to_ci_host_and_stack_modules() -
         ".azuredevops/pipelines/python-ci.yml": ("python", "azure-pipelines"),
         ".azuredevops/pipelines/terraform-ci.yml": ("terraform", "azure-pipelines"),
         ".azuredevops/pipelines/data-ci.yml": (
-            "azure-pipelines",
             "baseline",
-            "json",
-            "yaml",
-            "schema",
-            "template-sync-support",
+            "azure-pipelines",
         ),
         ".azuredevops/pipelines/future-pipeline.yml": ("azure-pipelines",),
     }
@@ -1858,27 +2127,18 @@ def test_template_manifest_maps_azure_pipelines_to_ci_host_and_stack_modules() -
         assert _manifest_modules_for_path(relative_path) == expected_modules
 
 
-def test_template_manifest_azure_data_pipeline_uses_v2_boolean_semantics() -> None:
-    """The Azure data pipeline must require Azure Pipelines plus one owning module."""
+def test_template_manifest_azure_data_pipeline_requires_baseline_and_host() -> None:
+    """The Azure data pipeline must retain both its config and Azure host."""
     data_ci_mapping = _path_mapping_by_pattern()[".azuredevops/pipelines/data-ci.yml"]
 
-    assert _relation_modules(data_ci_mapping, "requires_all") == ("azure-pipelines",)
-    assert _relation_modules(data_ci_mapping, "requires_any") == (
+    assert _relation_modules(data_ci_mapping, "requires_all") == (
         "baseline",
-        "json",
-        "yaml",
-        "schema",
-        "template-sync-support",
+        "azure-pipelines",
     )
-    assert _path_mapping_matches_modules(data_ci_mapping, {"azure-pipelines", "json"})
-    assert _path_mapping_matches_modules(data_ci_mapping, {"azure-pipelines", "yaml"})
-    assert _path_mapping_matches_modules(data_ci_mapping, {"azure-pipelines", "schema"})
-    assert _path_mapping_matches_modules(
-        data_ci_mapping,
-        {"azure-pipelines", "template-sync-support"},
-    )
+    assert _relation_modules(data_ci_mapping, "requires_any") == ()
     assert _path_mapping_matches_modules(data_ci_mapping, {"azure-pipelines", "baseline"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"azure-pipelines"})
+    assert not _path_mapping_matches_modules(data_ci_mapping, {"azure-pipelines", "json"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"yaml", "schema"})
     assert not _path_mapping_matches_modules(data_ci_mapping, {"github-actions", "yaml"})
 
@@ -2256,6 +2516,34 @@ def test_dependabot_schema_regression_surface_maps_to_github_platform_and_schema
         _manifest_modules_for_path("tests/fixtures/dependabot/auto-assignment.yml")
         == expected_modules
     )
+
+
+def test_precommit_runner_and_ci_consumers_share_baseline_ownership() -> None:
+    """Runner input and every template-managed consumer retain their dependencies."""
+    assert _manifest_modules_for_path("requirements-pre-commit.txt") == ("baseline",)
+    assert _manifest_modules_for_path(".pre-commit-config.yaml") == ("baseline",)
+    for relative_path in (
+        ".github/workflows/precommit-ci.yml",
+        ".github/workflows/data-ci.yml",
+        ".github/workflows/auto-fix-precommit.yml",
+    ):
+        assert _manifest_modules_for_path(relative_path) == (
+            "baseline",
+            "github-actions",
+        )
+    for relative_path in (
+        ".azuredevops/pipelines/precommit.yml",
+        ".azuredevops/pipelines/data-ci.yml",
+    ):
+        assert _manifest_modules_for_path(relative_path) == (
+            "baseline",
+            "azure-pipelines",
+        )
+
+
+def test_issue_evaluation_prompt_follows_agent_instruction_ownership() -> None:
+    """The generic issue prompt follows retained agent support, not either host."""
+    assert _manifest_modules_for_path("docs/ISSUE_EVALUATION_PROMPT.md") == ("agent-instructions",)
 
 
 def test_template_sync_inline_markers_are_known_and_paired() -> None:
@@ -2806,7 +3094,13 @@ def test_reference_only_inline_blocks_are_declared_for_template_sync() -> None:
                 str,
             ), f"{manifest_pattern} mapping must describe reference-only inline blocks"
             assert "*-reference-only inline blocks" in notes
-            assert "when its module is excluded" in notes
+            if (
+                marker_name == "github-data-ci-reference-only"
+                and relative_path == "GETTING_STARTED_NEW_REPO.md"
+            ):
+                assert "when either required module is excluded" in notes
+            else:
+                assert "when its module is excluded" in notes
 
 
 def test_procedure_registers_reference_only_marker_family() -> None:
@@ -2814,7 +3108,8 @@ def test_procedure_registers_reference_only_marker_family() -> None:
     procedure_text = PROCEDURE_PATH.read_text(encoding="utf-8")
 
     assert "`*-reference-only` family" in procedure_text
-    assert "same strip semantics" in procedure_text
+    assert "AND-retention" in procedure_text
+    assert "OR-retention" in procedure_text
     for marker_name in REFERENCE_ONLY_MARKER_MODULES:
         assert marker_name in procedure_text
     for marker_name in ANY_REFERENCE_ONLY_MARKER_MODULES:
@@ -2960,13 +3255,13 @@ def test_pr_template_reference_pruning_follows_module_boundaries() -> None:
     ):
         assert forbidden_token not in no_optional_text
     assert "### General" in no_optional_text
-    assert "### Pre-commit Verification" in no_optional_text
+    assert "### Pre-commit Verification" not in no_optional_text
 
     schema_only_text = _strip_inline_blocks_for_modules(
         ".github/pull_request_template.md",
         {"github-templates", "schema"},
     )
-    assert "Data-File-Specific" in schema_only_text
+    assert "Data-File-Specific" not in schema_only_text
     assert "Schema-Specific" in schema_only_text
     assert "check-jsonschema" in schema_only_text
     assert "GitHub Actions-Specific" not in schema_only_text
@@ -2974,8 +3269,10 @@ def test_pr_template_reference_pruning_follows_module_boundaries() -> None:
 
     schema_actions_text = _strip_inline_blocks_for_modules(
         ".github/pull_request_template.md",
-        {"github-templates", "schema", "github-actions"},
+        {"baseline", "github-templates", "schema", "github-actions"},
     )
+    assert "Pre-commit Verification" in schema_actions_text
+    assert "Data-File-Specific" in schema_actions_text
     assert "Schema-Specific" in schema_actions_text
     assert "GitHub Actions-Specific" in schema_actions_text
     assert "actionlint" in schema_actions_text
@@ -3030,6 +3327,11 @@ def test_partial_reference_stripping_preserves_retained_instruction_contracts() 
             ISSUE_694_PARTIAL_PROTECTED_DOC_MODULES,
         )
         checked_contracts += 1
+
+        scoped_contracts = INSTRUCTION_CONTRACTS.parse_required_sections(contract_mapping)
+        assert not INSTRUCTION_CONTRACTS.section_failures(
+            stripped_text, scoped_contracts, ISSUE_694_PARTIAL_PROTECTED_DOC_MODULES
+        ), f"{relative_path}: scoped policy lost during partial reference stripping"
 
         for heading in _as_string_list(
             contract_mapping.get("required_headings", []),
