@@ -24,6 +24,8 @@ REFERENCE = re.compile(r"([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?:/[A-Za-z0-9_./-]+)?
 ANNOTATION = re.compile(r"# (v[0-9]+\.[0-9]+\.[0-9]+)\s*\Z")
 USES_LINE = re.compile(r"^\s*(?:#\s*)?(?:-\s*)?uses:\s*(\S+)")
 MARKDOWN_QUOTE_PREFIX = re.compile(r"[ \t]*(?:(?:[-+*]|[0-9]{1,9}[.)])[ \t]+)*>[ \t]?")
+EXAMPLE_FENCE = re.compile(r"^[ \t]*(?:(?:[-+*]|[0-9]{1,9}[.)])[ \t]+)?(`{3,}|~{3,})(.*)$")
+EXAMPLE_ACTION = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@")
 CONTROLS = (
     "name",
     "id",
@@ -34,6 +36,10 @@ CONTROLS = (
     "env",
     "with",
     "timeout-minutes",
+    "background",
+    "wait",
+    "wait-all",
+    "cancel",
 )
 
 
@@ -173,6 +179,10 @@ def describe_workflow(document: dict[str, Any]) -> dict[str, Any]:
                 field: job[field]
                 for field in (
                     "name",
+                    "concurrency",
+                    "cache-mode",
+                    "outputs",
+                    "snapshot",
                     "permissions",
                     "if",
                     "continue-on-error",
@@ -199,6 +209,8 @@ def describe_workflow(document: dict[str, Any]) -> dict[str, Any]:
         "permissions": document["permissions"],
         "defaults": document.get("defaults", {}),
         "env": document.get("env", {}),
+        **{field: document[field] for field in ("concurrency",) if field in document},
+        **{field: document[field] for field in ("cache-mode",) if field in document},
         "jobs": jobs,
     }
 
@@ -258,6 +270,8 @@ def validate_workflow(
     lines = text.splitlines()
     references = []
     for line in lines:
+        if line.lstrip().startswith("#"):
+            continue
         match = USES_LINE.match(line)
         if match:
             check_reference(match[1], line, resolver)
@@ -270,6 +284,8 @@ def validate_workflow(
         for step in job.get("steps", []):
             if not isinstance(step, dict):
                 raise PolicyError("Workflow step must be a mapping")
+            if "parallel" in step:
+                raise PolicyError("Parallel step groups require recursive workflow policy support")
             reference = step.get("uses")
             if reference is not None and reference not in references:
                 raise PolicyError("Action reference must have a literal annotated uses line")
@@ -279,6 +295,7 @@ def validate_workflow(
                 and step.get("with", {}).get("persist-credentials") is not False
             ):
                 raise PolicyError("Checkout must set persist-credentials: false")
+    check_commented_examples(lines, resolver)
     return describe_workflow(document)
 
 
@@ -307,6 +324,136 @@ def markdown_example_content(line: str) -> str:
     while (match := MARKDOWN_QUOTE_PREFIX.match(line, offset)) is not None:
         offset = match.end()
     return line[offset:]
+
+
+class ExampleLoader(yaml.BaseLoader):
+    """Compose inert documentation nodes with bounded depth and no object construction."""
+
+    def compose_node(self, parent: Any, index: Any) -> Any:
+        """Bound representation depth before composing potentially nested examples."""
+        depth = getattr(self, "policy_depth", 0)
+        if depth >= 64:
+            raise PolicyError("Example YAML nesting exceeds 64 levels")
+        self.policy_depth = depth + 1
+        try:
+            return super().compose_node(parent, index)
+        finally:
+            self.policy_depth = depth
+
+
+def example_references(text: str) -> list[tuple[int, str]]:
+    """Find decoded uses mappings without constructing tagged objects or following cycles."""
+    tree = yaml.compose(text, Loader=ExampleLoader)
+    pending = [tree]
+    seen: set[int] = set()
+    references: list[tuple[int, str]] = []
+    used_lines: set[int] = set()
+    while pending:
+        node = pending.pop()
+        if id(node) in seen:
+            continue
+        seen.add(id(node))
+        if isinstance(node, yaml.MappingNode):
+            for key, value in node.value:
+                if isinstance(key, yaml.ScalarNode) and key.value == "uses":
+                    if (
+                        not isinstance(value, yaml.ScalarNode)
+                        or not value.value
+                        or key.start_mark.line != value.start_mark.line
+                        or value.start_mark.line != value.end_mark.line
+                        or key.start_mark.line != key.end_mark.line
+                    ):
+                        raise PolicyError(
+                            "Example uses needs a scalar and annotation on one physical line"
+                        )
+                    line = value.start_mark.line
+                    if line in used_lines:
+                        raise PolicyError(
+                            "Multiple example uses on one line have an ambiguous annotation"
+                        )
+                    used_lines.add(line)
+                    references.append((line, value.value))
+                pending.extend((key, value))
+        elif isinstance(node, yaml.SequenceNode):
+            pending.extend(node.value)
+    return references
+
+
+def check_examples(text: str, resolver: Callable[[str, str], str] | None = None) -> None:
+    """Check semantic YAML fragments and fences while preserving literal legacy coverage."""
+    lines = [markdown_example_content(line) for line in text.splitlines()]
+    references: set[tuple[int, str]] = set()
+    fenced_lines: set[int] = set()
+    fence: tuple[str, int, int, bool] | None = None
+
+    def collect_block(start: int, end: int, *, unclosed: bool = False) -> None:
+        """Give complete YAML blocks authority over misleading isolated flow fragments."""
+        block_lines = lines[start:end]
+        if all(not line.strip() or line.lstrip().startswith("#") for line in block_lines):
+            block_lines = [re.sub(r"^(\s*)#\s?", r"\1", line, count=1) for line in block_lines]
+        block = "\n".join(block_lines)
+        try:
+            found = example_references(block)
+        except yaml.YAMLError as error:
+            if EXAMPLE_ACTION.search(block):
+                raise PolicyError("Invalid YAML in an action-containing example fence") from error
+            found = []
+        if unclosed and (found or EXAMPLE_ACTION.search(block)):
+            raise PolicyError("Unclosed action-containing example fence")
+        references.update((start + offset, ref) for offset, ref in found)
+        fenced_lines.update(range(start, end))
+
+    for number, candidate in enumerate(lines):
+        match = EXAMPLE_FENCE.match(candidate)
+        if not match:
+            continue
+        delimiter, info = match.groups()
+        if fence is None:
+            fence = (
+                delimiter[0],
+                len(delimiter),
+                number + 1,
+                info.strip().lower() in {"yaml", "yml", ""},
+            )
+        elif delimiter[0] == fence[0] and len(delimiter) >= fence[1] and not info.strip():
+            if fence[3]:
+                collect_block(fence[2], number)
+            fence = None
+    if fence is not None and fence[3]:
+        collect_block(fence[2], len(lines), unclosed=True)
+    block_reference_lines = {number for number, _reference in references}
+    for number, candidate in enumerate(lines):
+        if number in fenced_lines and (
+            number in block_reference_lines or not candidate.lstrip().startswith("#")
+        ):
+            continue
+        fragment = re.sub(r"^(\s*)#\s?", r"\1", candidate, count=1)
+        try:
+            references.update(
+                (number + offset, ref) for offset, ref in example_references(fragment)
+            )
+        except yaml.YAMLError:
+            pass  # Complete fences cover multiline YAML; surrounding prose is not YAML.
+    semantic_lines = {number for number, _reference in references}
+    for number, candidate in enumerate(lines):
+        if number not in semantic_lines and (match := USES_LINE.match(candidate)):
+            references.add((number, match[1]))
+    for number, reference in sorted(references):
+        check_reference(reference, lines[number], resolver)
+
+
+def check_commented_examples(
+    lines: list[str], resolver: Callable[[str, str], str] | None = None
+) -> None:
+    """Validate contiguous commented YAML fragments without changing executable binding."""
+    group: list[str] = []
+    for line in [*lines, ""]:
+        stripped = line.lstrip()
+        if stripped.startswith("#") and stripped[1:].strip():
+            group.append(stripped[1:])
+        elif group:
+            check_examples("```yaml\n" + "\n".join(group) + "\n```", resolver)
+            group = []
 
 
 def validate_repository(
@@ -338,11 +485,7 @@ def validate_repository(
             )
     for path in contract["examples"]:
         text = read_text(root, path)
-        for line in text.splitlines():
-            candidate = markdown_example_content(line)
-            match = USES_LINE.match(candidate)
-            if match:
-                check_reference(match[1], candidate, resolver)
+        check_examples(text, resolver)
     if strict:
         for path in (root / ".github/workflows").glob("*"):
             if path.suffix in {".yml", ".yaml"}:

@@ -42,8 +42,12 @@ def test_retained_profiles_pass_without_unrelated_stacks(
     _, _, mappings = lifecycle.materializer.load_validated_manifest_context(ROOT)
     expected = {
         path
-        for path in policy.load_contract(ROOT)["workflows"]
-        if lifecycle.materializer.selected_relation_for_path(path, mappings).is_retained_by(modules)
+        for file in (ROOT / ".github/workflows").iterdir()
+        if file.suffix in {".yml", ".yaml"}
+        and (path := file.relative_to(ROOT).as_posix())
+        and (relation := lifecycle.materializer.selected_relation_for_path(path, mappings))
+        is not None
+        and relation.is_retained_by(modules)
     }
     assert set(contract["workflows"]) == expected
     for module, filename in [
@@ -78,6 +82,132 @@ def snapshot(root: Path) -> dict[str, bytes]:
         for p in root.rglob("*")
         if p.is_file() and "__pycache__" not in p.parts and ".git" not in p.parts
     }
+
+
+@pytest.mark.parametrize("mutation", ["entry", "contract", "unmapped", "empty"])
+def test_retained_workflow_inventory_fails_before_staging(tmp_path: Path, mutation: str) -> None:
+    """A retained manifest file cannot escape its contract or leave partial staged output."""
+    from tests.test_workflow_security_contract import copy_policy
+
+    source, stage = tmp_path / "source", tmp_path / "stage"
+    contract = copy_policy(source)
+    _, _, mappings = lifecycle.materializer.load_validated_manifest_context(ROOT)
+    modules = ("baseline", "github-actions")
+    if mutation == "entry":
+        omitted = ".github/workflows/auto-fix-precommit.yml"
+        del contract["workflows"][omitted]
+        (source / policy.CONTRACT).write_text(yaml.safe_dump(contract), encoding="utf-8")
+        (source / omitted).write_text(
+            "on: pull_request_target\npermissions: write-all\njobs: {}\n", encoding="utf-8"
+        )
+    elif mutation == "contract":
+        (source / policy.CONTRACT).unlink()
+    elif mutation == "unmapped":
+        mappings = tuple(mapping for mapping in mappings if mapping.pattern != policy.CONTRACT)
+    else:
+        for path in (source / ".github/workflows").iterdir():
+            path.unlink()
+    stage.mkdir()
+    with pytest.raises(
+        lifecycle.materializer.MaterializationError, match="Retained workflow inventory"
+    ):
+        lifecycle.materializer.write_staged_candidate(
+            template_root=source,
+            staging_root=stage,
+            mappings=mappings,
+            included_modules=modules,
+            summary=lifecycle.materializer.Summary(list(modules), [], "copy"),
+        )
+    assert snapshot(stage) == {}
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+def test_direct_renderer_rejects_empty_inventory(explicit: bool) -> None:
+    """Both direct-call paths reject a contract that would violate its own schema."""
+    _, _, mappings = lifecycle.materializer.load_validated_manifest_context(ROOT)
+    arguments: dict[str, set[str]] = {"expected_workflows": set()} if explicit else {}
+    with pytest.raises(
+        lifecycle.materializer.MaterializationError, match="without retained workflows"
+    ):
+        lifecycle.materializer.render_workflow_contract(
+            ROOT, mappings, ("template-sync-support",), **arguments
+        )
+
+
+def test_excluded_workflow_and_unmapped_source_do_not_expand_inventory(tmp_path: Path) -> None:
+    """The source manifest selects ownership; omitted modules and local workflows stay outside."""
+    from tests.test_workflow_security_contract import copy_policy
+
+    source, stage = tmp_path / "source", tmp_path / "stage"
+    contract = copy_policy(source)
+    omitted = ".github/workflows/auto-fix-precommit.yml"
+    del contract["workflows"][omitted]
+    (source / policy.CONTRACT).write_text(yaml.safe_dump(contract), encoding="utf-8")
+    (source / ".github/workflows/local.yml").write_text(
+        "on: pull_request_target\njobs: {}", encoding="utf-8"
+    )
+    _, _, mappings = lifecycle.materializer.load_validated_manifest_context(ROOT)
+    lifecycle.materializer.write_staged_candidate(
+        template_root=source,
+        staging_root=stage,
+        mappings=mappings,
+        included_modules=("github-actions",),
+        summary=lifecycle.materializer.Summary(["github-actions"], [], "copy"),
+    )
+    assert policy.validate_repository(stage) == 1
+    assert not (stage / omitted).exists()
+    assert not (stage / ".github/workflows/local.yml").exists()
+
+
+@pytest.mark.parametrize("guard", ["entry", "contract"])
+def test_workflow_inventory_guard_removal(tmp_path: Path, monkeypatch: Any, guard: str) -> None:
+    """Independent pre-stage mutants restore omitted-contract and omitted-entry bypasses."""
+    from tests.test_workflow_security_contract import copy_policy
+
+    source, stage = tmp_path / "source", tmp_path / "stage"
+    contract = copy_policy(source)
+    omitted = ".github/workflows/auto-fix-precommit.yml"
+    if guard == "entry":
+        del contract["workflows"][omitted]
+        (source / policy.CONTRACT).write_text(yaml.safe_dump(contract), encoding="utf-8")
+        (source / omitted).write_text("on: pull_request_target\njobs: {}\n", encoding="utf-8")
+    else:
+        (source / policy.CONTRACT).unlink()
+    script = ROOT / ".template-sync/scripts/materialize_downstream_adoption.py"
+    code = script.read_text(encoding="utf-8")
+    predicate = (
+        "if set(rendered) != expected_workflows:"
+        if guard == "entry"
+        else "if expected_workflows or contract_retained:"
+    )
+    assert code.count(predicate) == 1
+    mutant_path = tmp_path / "inventory_mutant.py"
+    mutant_path.write_text(code.replace(predicate, "if False:"), encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("inventory_mutant", mutant_path)
+    assert spec is not None and spec.loader is not None
+    mutant = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, mutant.__name__, mutant)
+    spec.loader.exec_module(mutant)
+    monkeypatch.setattr(mutant, "TRUSTED_TOOL_ROOT", ROOT)
+    _, _, mappings = lifecycle.materializer.load_validated_manifest_context(ROOT)
+    arguments = {
+        "template_root": source,
+        "staging_root": stage,
+        "mappings": mappings,
+        "included_modules": ("baseline", "github-actions"),
+        "summary": mutant.Summary(["baseline", "github-actions"], [], "copy"),
+    }
+    with pytest.raises(
+        lifecycle.materializer.MaterializationError, match="Retained workflow inventory"
+    ):
+        lifecycle.materializer.write_staged_candidate(**arguments)
+    mutant.write_staged_candidate(**arguments)
+    if guard == "entry":
+        assert (stage / omitted).read_bytes() == (source / omitted).read_bytes()
+        assert policy.validate_repository(stage) == 4
+    else:
+        assert (stage / omitted).is_file()
+        assert not (stage / policy.CONTRACT).exists()
 
 
 def test_selected_validator_is_inert_and_trust_anchor_failure_is_detected(
@@ -174,6 +304,86 @@ def test_installed_support_tools_can_add_actions_and_require_shared_helpers(tmp_
             assert relative in failed.stderr
         finally:
             helper.write_bytes(original)
+
+
+@pytest.mark.parametrize("mutation", ["entry", "contract"])
+def test_installed_materializer_rejects_incomplete_source_inventory(
+    tmp_path: Path, mutation: str
+) -> None:
+    """Installed support tools reject missing ownership before changing an adopter tree."""
+    target = lifecycle.materialize_module_fixture(
+        tmp_path, ("template-sync-support",), authorize_protected_files=True
+    )
+    source = tmp_path / "source"
+    _, _, mappings = lifecycle.materializer.load_validated_manifest_context(ROOT)
+    paths, _ = lifecycle.materializer.iter_safe_repository_files(ROOT)
+    for relative in paths:
+        if lifecycle.materializer.selected_relation_for_path(relative, mappings) is not None:
+            destination = source / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / relative, destination)
+    if mutation == "entry":
+        contract = policy.load_contract(source)
+        del contract["workflows"][".github/workflows/workflow-security.yml"]
+        (source / policy.CONTRACT).write_text(yaml.safe_dump(contract), encoding="utf-8")
+    else:
+        (source / policy.CONTRACT).unlink()
+    modules = ("template-sync-support", "github-actions")
+    write_decisions(
+        target,
+        modules,
+        protected_file_decisions=lifecycle.protected_take_decisions_for_modules(modules),
+    )
+    before = snapshot(target)
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(target / ".template-sync/scripts/materialize_downstream_adoption.py"),
+            "--template-root",
+            str(source),
+            "--target-root",
+            str(target),
+            "--decisions-file",
+            "decisions.yml",
+            "--repository",
+            "octo/widget",
+            "--security-contact",
+            "security@example.com",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Retained workflow inventory" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert snapshot(target) == before
+
+
+@pytest.mark.parametrize(
+    "example",
+    [
+        "- uses : owner/action@v1 # v1.2.3",
+        '- {name: Checkout,\n "u\\u0073es": "owner\\/action\\u0040v1", # v1.2.3\n with: {}}',
+    ],
+)
+def test_installed_validator_checks_semantic_document_examples(
+    tmp_path: Path, example: str
+) -> None:
+    """The retained helper and governed example inventory enforce decoded YAML downstream."""
+    target = lifecycle.materialize_module_fixture(
+        tmp_path, ("github-actions", "yaml", "agent-instructions"), authorize_protected_files=True
+    )
+    script = target / ".github/scripts/validate_workflow_security.py"
+    command = [sys.executable, str(script), "--repo-root", str(target)]
+    positive = subprocess.run(command, capture_output=True, text=True, check=False)
+    assert positive.returncode == 0, positive.stdout + positive.stderr
+    path = target / ".github/instructions/yaml.instructions.md"
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write("\n```yaml\n" + example + "\n```\n")
+    negative = subprocess.run(command, capture_output=True, text=True, check=False)
+    assert negative.returncode == 1, negative.stdout + negative.stderr
+    assert "full SHA" in negative.stderr
 
 
 @pytest.mark.parametrize("candidate_schema", ["sentinel", "malformed", "missing"])
@@ -367,7 +577,7 @@ def test_existing_adoption_noop_customization_and_protection(tmp_path: Path) -> 
     assert policy.main(["--repo-root", str(target)]) == 1
 
 
-@pytest.mark.parametrize("change", ["command", "job-name"])
+@pytest.mark.parametrize("change", ["command", "job-name", "concurrency"])
 def test_template_update_requires_review_and_preserves_adopter_workflow(
     tmp_path: Path, change: str
 ) -> None:
@@ -404,14 +614,14 @@ def test_template_update_requires_review_and_preserves_adopter_workflow(
     local.write_text(local_content, encoding="utf-8")
     workflow_path = ".github/workflows/workflow-security.yml"
     workflow = source / workflow_path
-    original_control, updated_control = (
-        (
+    original_control, updated_control = {
+        "command": (
             "run: python .github/scripts/validate_workflow_security.py",
             "run: python .github/scripts/validate_workflow_security.py --strict",
-        )
-        if change == "command"
-        else ("  validate:\n", "  validate:\n    name: Reviewed workflow check\n")
-    )
+        ),
+        "job-name": ("  validate:\n", "  validate:\n    name: Reviewed workflow check\n"),
+        "concurrency": ("jobs:\n", "concurrency: reviewed-${{ github.ref }}\n\njobs:\n"),
+    }[change]
     workflow.write_text(
         workflow.read_text(encoding="utf-8").replace(original_control, updated_control),
         encoding="utf-8",

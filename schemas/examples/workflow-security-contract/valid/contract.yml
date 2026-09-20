@@ -1,6 +1,9 @@
 version: 1
 workflows:
   .github/workflows/example.yml:
+    concurrency:
+      group: example-${{ github.ref }}
+      cancel-in-progress: false
     events:
       - push
     permissions: {}
@@ -10,6 +13,7 @@ workflows:
       check:
         controls:
           name: Example check
+          concurrency: example-check-${{ github.ref }}
           permissions: {}
         steps: []
 examples: []

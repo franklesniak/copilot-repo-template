@@ -1,6 +1,9 @@
 version: 1
 workflows:
   .github/workflows/auto-fix-precommit.yml:
+    concurrency:
+      group: auto-fix-precommit-${{ github.ref }}
+      cancel-in-progress: false
     events:
       push:
         branches:

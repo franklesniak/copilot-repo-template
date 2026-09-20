@@ -44,6 +44,12 @@
         "jobs"
       ],
       "properties": {
+        "concurrency": {
+          "type": [
+            "string",
+            "object"
+          ]
+        },
         "events": {
           "type": [
             "object",
@@ -78,8 +84,31 @@
                 ],
                 "properties": {
                   "name": {},
+                  "concurrency": {
+                    "type": [
+                      "string",
+                      "object"
+                    ]
+                  },
                   "permissions": {
                     "$ref": "#/$defs/permissions"
+                  },
+                  "cache-mode": {
+                    "enum": [
+                      "read",
+                      "write",
+                      "write-only",
+                      "none"
+                    ]
+                  },
+                  "outputs": {
+                    "type": "object"
+                  },
+                  "snapshot": {
+                    "type": [
+                      "string",
+                      "object"
+                    ]
                   }
                 }
               },
@@ -111,12 +140,42 @@
                         "number",
                         "string"
                       ]
+                    },
+                    "background": {
+                      "type": "boolean"
+                    },
+                    "wait": {
+                      "oneOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      ]
+                    },
+                    "wait-all": {
+                      "type": "null"
+                    },
+                    "cancel": {
+                      "type": "string"
                     }
                   }
                 }
               }
             }
           }
+        },
+        "cache-mode": {
+          "enum": [
+            "read",
+            "write",
+            "write-only",
+            "none"
+          ]
         }
       }
     },

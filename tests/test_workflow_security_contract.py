@@ -162,7 +162,15 @@ def test_run_fingerprint_preserves_whitespace(changed: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "guard", ["workflow_permissions", "job_permissions", "job_name", "run_whitespace"]
+    "guard",
+    [
+        "workflow_permissions",
+        "job_permissions",
+        "job_name",
+        "workflow_concurrency",
+        "job_concurrency",
+        "run_whitespace",
+    ],
 )
 def test_descriptor_guard_removal(tmp_path: Path, guard: str) -> None:
     """Independent inputs expose restored permission omission or whitespace stripping."""
@@ -171,6 +179,11 @@ def test_descriptor_guard_removal(tmp_path: Path, guard: str) -> None:
         "workflow_permissions": ('        "permissions": document["permissions"],\n', ""),
         "job_permissions": ('                    "permissions",\n', ""),
         "job_name": ('                    "name",\n', ""),
+        "workflow_concurrency": (
+            '        **{field: document[field] for field in ("concurrency",) if field in document},\n',
+            "",
+        ),
+        "job_concurrency": ('                    "concurrency",\n', ""),
         "run_whitespace": (
             'step["run"].replace("\\r\\n", "\\n").encode("utf-8")',
             'step["run"].replace("\\r\\n", "\\n").strip().encode("utf-8")',
@@ -188,7 +201,12 @@ def test_descriptor_guard_removal(tmp_path: Path, guard: str) -> None:
         "    permissions: {contents: read}\n    steps:\n      - run: print(1)\n"
     )
     changed = copy.deepcopy(original)
-    if guard == "job_name":
+    if guard.endswith("concurrency"):
+        original_scope = original if guard.startswith("workflow") else original["jobs"]["check"]
+        changed_scope = changed if guard.startswith("workflow") else changed["jobs"]["check"]
+        original_scope["concurrency"] = {"group": "required", "cancel-in-progress": False}
+        changed_scope["concurrency"] = {"group": "required", "cancel-in-progress": True}
+    elif guard == "job_name":
         original["jobs"]["check"]["name"] = "Required check"
         changed["jobs"]["check"]["name"] = "Different check"
     elif guard == "workflow_permissions":
@@ -199,6 +217,62 @@ def test_descriptor_guard_removal(tmp_path: Path, guard: str) -> None:
         changed["jobs"]["check"]["steps"][0]["run"] = "  print(1)"
     assert policy.describe_workflow(original) != policy.describe_workflow(changed)
     assert mutant.describe_workflow(original) == mutant.describe_workflow(changed)
+
+
+@pytest.mark.parametrize("scope", ["workflow", "job"])
+@pytest.mark.parametrize("change", ["add", "delete", "group", "cancel", "string"])
+def test_concurrency_controls_require_review(tmp_path: Path, scope: str, change: str) -> None:
+    """Both concurrency scopes preserve reviewed scheduling and detect every drift form."""
+    contract = copy_policy(tmp_path)
+    path = ".github/workflows/workflow-security.yml"
+    document = policy.parse_yaml(policy.read_text(tmp_path, path))
+    target = document if scope == "workflow" else document["jobs"]["validate"]
+    if change != "add":
+        target["concurrency"] = {"group": "required", "cancel-in-progress": False}
+    # Review only the isolated fixture descriptor; do not rewrite executable annotations.
+    original = copy.deepcopy(policy.describe_workflow(document))
+    contract["workflows"][path] = original
+    (tmp_path / policy.CONTRACT).write_text(yaml.safe_dump(contract), encoding="utf-8")
+    policy.load_contract(tmp_path)
+    if change == "delete":
+        del target["concurrency"]
+    elif change == "group":
+        target["concurrency"]["group"] = "other-workflow"
+    elif change == "cancel":
+        target["concurrency"]["cancel-in-progress"] = True
+    elif change == "string":
+        target["concurrency"] = "shared-group"
+    else:
+        target["concurrency"] = {"group": "shared-group", "cancel-in-progress": True}
+    assert policy.describe_workflow(document) != original
+    contract["workflows"][path] = policy.describe_workflow(document)
+    (tmp_path / policy.CONTRACT).write_text(yaml.safe_dump(contract), encoding="utf-8")
+    policy.load_contract(tmp_path)
+    target["concurrency"] = 42
+    contract["workflows"][path] = policy.describe_workflow(document)
+    (tmp_path / policy.CONTRACT).write_text(yaml.safe_dump(contract), encoding="utf-8")
+    with pytest.raises(policy.jsonschema.ValidationError):
+        policy.load_contract(tmp_path)
+
+
+def test_existing_concurrency_cancellation_change_is_rejected(tmp_path: Path) -> None:
+    """The current auto-fix control and absent controls retain their distinct semantics."""
+    copy_policy(tmp_path)
+    path = tmp_path / ".github/workflows/auto-fix-precommit.yml"
+    text = path.read_text(encoding="utf-8")
+    expected = {"group": "auto-fix-precommit-${{ github.ref }}", "cancel-in-progress": False}
+    assert policy.validate_workflow(text)["concurrency"] == expected
+    assert policy.validate_repository(tmp_path) == 10
+    path.write_text(
+        text.replace("cancel-in-progress: false", "cancel-in-progress: true"), encoding="utf-8"
+    )
+    with pytest.raises(policy.PolicyError, match="execution controls"):
+        policy.validate_repository(tmp_path)
+    other = policy.validate_workflow(
+        policy.read_text(ROOT, ".github/workflows/workflow-security.yml")
+    )
+    assert "concurrency" not in other
+    assert "concurrency" not in other["jobs"]["validate"]["controls"]
 
 
 @pytest.mark.parametrize("change", ["rename", "delete", "add", "matrix", "fallback"])
@@ -335,7 +409,10 @@ def test_quoted_document_guard_removal(tmp_path: Path, mutation: str) -> None:
         policy.validate_repository(tmp_path)
     source = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
     before, after = (
-        ("candidate = markdown_example_content(line)", "candidate = line")
+        (
+            "lines = [markdown_example_content(line) for line in text.splitlines()]",
+            "lines = text.splitlines()",
+        )
         if mutation == "bypass"
         else (
             "while (match := MARKDOWN_QUOTE_PREFIX.match(line, offset))",
@@ -545,3 +622,311 @@ def test_configured_workflow_hook_native_failure(tmp_path: Path) -> None:
     )
     assert result.returncode == 1
     assert "persist-credentials" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "- uses : REF",
+        "- uses   : REF",
+        "- 'uses': REF",
+        '- "uses": "REF"',
+        r'- "u\u0073es": REF',
+        "- !!str uses: REF",
+        "- !inert uses: REF",
+        "- uses: !!str REF",
+        "- {uses: REF}",
+        '- {"uses":"REF"}',
+        "- {? uses : REF}",
+        "# - 'uses' : REF",
+        "> 1. > # - 'uses' : REF",
+    ],
+)
+@pytest.mark.parametrize("pinned", [False, True])
+def test_example_semantic_spellings(template: str, pinned: bool) -> None:
+    """Decoded YAML keys and values preserve pin policy across presentation forms."""
+    reference = "owner/action@" + ("a" * 40 if pinned else "v1")
+    text = template.replace("REF", reference) + " # v1.2.3"
+    if pinned:
+        policy.check_examples(text)
+    else:
+        with pytest.raises(policy.PolicyError, match="full SHA"):
+            policy.check_examples(text)
+
+
+@pytest.mark.parametrize("fence", ["```yaml", "~~~yml", "````yaml", "```"])
+@pytest.mark.parametrize("pinned", [False, True])
+def test_multiline_example_semantics(fence: str, pinned: bool) -> None:
+    """Whole fenced fragments expose flow mappings whose physical lines cannot parse alone."""
+    revision = "a" * 40 if pinned else "v1"
+    body = '- {name: Checkout,\n   "u\\u0073es" : "owner\\/action\\u0040' + revision
+    body += '", # v1.2.3\n   with: {}}\n'
+    close = fence.rstrip("yaml") if "yaml" in fence else fence.rstrip("yml")
+    text = fence + "\n" + body + close + "\n"
+    if pinned:
+        policy.check_examples(text)
+    else:
+        with pytest.raises(policy.PolicyError, match="full SHA"):
+            policy.check_examples(text)
+
+
+@pytest.mark.parametrize(
+    ("body", "message"),
+    [
+        ("- uses:", "physical line"),
+        ("- uses: []", "physical line"),
+        ("- uses: {}", "physical line"),
+        ("- uses:\n    REF # v1.2.3", "physical line"),
+        ("- {uses: REF, uses: REF} # v1.2.3", "Multiple"),
+        ("- {uses: owner/action@v1,", "Invalid YAML"),
+        ("- uses:owner/action@v1", "full SHA"),
+    ],
+)
+def test_example_ambiguous_or_malformed_forms(body: str, message: str) -> None:
+    """Missing values, ambiguous annotations, and incomplete action fences fail closed."""
+    text = "```yaml\n" + body.replace("REF", "owner/action@" + "a" * 40) + "\n```"
+    with pytest.raises(policy.PolicyError, match=message):
+        policy.check_examples(text)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "uses-extra: owner/action@v1",
+        "Uses: owner/action@v1",
+        "Prose uses an action.",
+        r"\> - uses: owner/action@v1",
+        "https://example.invalid/uses",
+        "```yaml\nnot: [a complete fragment\n```",
+        "````markdown\n```yaml\nnot: [a complete fragment\n```\n````",
+    ],
+)
+def test_example_semantic_near_matches(text: str) -> None:
+    """Prose and non-action fragments do not manufacture uses mappings."""
+    policy.check_examples(text)
+
+
+@pytest.mark.parametrize("guard", ["line", "fence", "comment", "legacy", "physical"])
+def test_example_semantic_guard_removal(tmp_path: Path, guard: str) -> None:
+    """Independent bypass fixtures expose removal of each semantic extraction boundary."""
+    source = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
+    replacement, text, message = {
+        "line": (
+            ("example_references(fragment)", "[]"),
+            "- uses : owner/action@v1 # v1.2.3",
+            "full SHA",
+        ),
+        "fence": (
+            ("example_references(block)", "[]"),
+            '```yaml\n- {name: Checkout,\n "u\\u0073es": "owner\\/action\\u0040v1", # v1.2.3\n with: {}}\n```',
+            "full SHA",
+        ),
+        "comment": (
+            (
+                'fragment = re.sub(r"^(\\s*)#\\s?", r"\\1", candidate, count=1)',
+                "fragment = candidate",
+            ),
+            "# - 'uses' : owner/action@v1 # v1.2.3",
+            "full SHA",
+        ),
+        "legacy": (
+            ("references.add((number, match[1]))", "pass"),
+            "uses:owner/action@v1 # v1.2.3",
+            "full SHA",
+        ),
+        "physical": (
+            ("or key.start_mark.line != value.start_mark.line", "or False"),
+            "```yaml\n- uses:\n    owner/action@" + "a" * 40 + " # v1.2.3\n```",
+            "physical line",
+        ),
+    }[guard]
+    before, after = replacement
+    assert source.count(before) == 1
+    mutant = load_policy_mutant(tmp_path, source.replace(before, after))
+    with pytest.raises(policy.PolicyError, match=message):
+        policy.check_examples(text)
+    mutant.check_examples(text)
+
+
+@pytest.mark.parametrize("key", ["uses :", "'uses':", '"uses":'])
+def test_document_spelling_support_does_not_relax_executable_binding(key: str) -> None:
+    """Documentation normalization cannot authorize alternate executable key spellings."""
+    text = policy.read_text(ROOT, ".github/workflows/workflow-security.yml")
+    with pytest.raises(policy.PolicyError, match="own literal"):
+        policy.validate_workflow(text.replace("uses:", key, 1))
+
+
+@pytest.mark.parametrize(
+    ("scope", "field", "before", "after"),
+    [
+        ("workflow", "cache-mode", "read", "write"),
+        ("job", "cache-mode", "read", "write"),
+        (
+            "job",
+            "outputs",
+            {"verdict": "${{ steps.gate.outputs.verdict }}"},
+            {"verdict": "success"},
+        ),
+        ("job", "snapshot", "reviewed-image", {"image-name": "changed-image"}),
+        ("step", "background", False, True),
+        ("step", "wait", "gate", ["other"]),
+        ("step", "wait-all", None, "absent"),
+        ("step", "cancel", "gate", "other"),
+    ],
+)
+def test_additional_execution_control_guards(
+    tmp_path: Path, scope: str, field: str, before: Any, after: Any
+) -> None:
+    """Known execution controls require review, and removing each binding restores drift."""
+    document = policy.parse_yaml(
+        "on: push\npermissions: {}\njobs:\n  check:\n    permissions: {}\n"
+        "    steps:\n      - run: echo check\n  consumer:\n    permissions: {}\n"
+        "    needs: check\n    if: needs.check.outputs.verdict == 'success'\n    steps: []\n"
+    )
+    target = {
+        "workflow": document,
+        "job": document["jobs"]["check"],
+        "step": document["jobs"]["check"]["steps"][0],
+    }[scope]
+    target[field] = before
+    baseline = copy.deepcopy(document)
+    reviewed = policy.describe_workflow(document)
+    # Schema validation of positive and absent forms is independent of the descriptor predicate.
+    schema = policy.parse_yaml(policy.read_text(ROOT, policy.SCHEMA))
+    policy.jsonschema.validate(
+        {"version": 1, "workflows": {".github/workflows/test.yml": reviewed}, "examples": []},
+        schema,
+    )
+    if after == "absent":
+        del target[field]
+    else:
+        target[field] = after
+    assert policy.describe_workflow(document) != reviewed
+    code = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
+    if scope == "workflow":
+        guard = '        **{field: document[field] for field in ("cache-mode",) if field in document},\n'
+    else:
+        guard = ("                    " if scope == "job" else "    ") + f'"{field}",\n'
+    assert code.count(guard) == 1
+    mutant = load_policy_mutant(tmp_path, code.replace(guard, ""))
+    assert mutant.describe_workflow(baseline) == mutant.describe_workflow(document)
+
+
+def test_parallel_groups_fail_until_recursive_policy_exists(tmp_path: Path) -> None:
+    """Unsupported nested steps cannot evade pin, command, or failure-control review."""
+    template = "on: push\npermissions: {}\njobs:\n  check:\n    permissions: {}\n    steps:\n      - parallel:\n          - run: echo VALUE\n"
+    for text in [template, template.replace("run: echo VALUE", "'uses': 'owner/action@v1'")]:
+        with pytest.raises(policy.PolicyError, match="Parallel"):
+            policy.validate_workflow(text)
+    source = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
+    guard = 'if "parallel" in step:'
+    assert source.count(guard) == 1
+    mutant = load_policy_mutant(tmp_path, source.replace(guard, "if False:"))
+    assert mutant.validate_workflow(template.replace("VALUE", "one")) == mutant.validate_workflow(
+        template.replace("VALUE", "two")
+    )
+
+
+@pytest.mark.parametrize("pinned", [False, True])
+@pytest.mark.parametrize("flow", [False, True])
+def test_commented_workflow_examples_use_semantic_keys(pinned: bool, flow: bool) -> None:
+    """Commented copyable workflows obey the same identity policy without becoming executable."""
+    ref = "owner/action@" + ("a" * 40 if pinned else "v1")
+    example = (
+        f'# - {{name: Checkout,\n#    "uses" : "{ref}", # v1.2.3\n#    with: {{}}}}'
+        if flow
+        else f"# - uses : {ref} # v1.2.3"
+    )
+    text = policy.read_text(ROOT, ".github/workflows/workflow-security.yml") + "\n" + example + "\n"
+    if pinned:
+        policy.validate_workflow(text)
+    else:
+        with pytest.raises(policy.PolicyError, match="full SHA"):
+            policy.validate_workflow(text)
+
+
+def test_commented_workflow_guard_removal(tmp_path: Path) -> None:
+    """Removing semantic comment checking restores the alternate-key bypass independently."""
+    text = policy.read_text(ROOT, ".github/workflows/workflow-security.yml")
+    text += "\n# - uses : owner/action@v1 # v1.2.3\n"
+    with pytest.raises(policy.PolicyError, match="full SHA"):
+        policy.validate_workflow(text)
+    code = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
+    guard = "    check_commented_examples(lines, resolver)\n"
+    assert code.count(guard) == 1
+    mutant = load_policy_mutant(tmp_path, code.replace(guard, ""))
+    assert mutant.validate_workflow(text)
+
+
+def test_unclosed_escaped_yaml_example_is_not_ignored() -> None:
+    """Escaping the action coordinate cannot hide decoded uses in an unfinished fence."""
+    text = '```yaml\n? "u\\\n  ses"\n: "owner\\/action\\u0040v1" # v1.2.3\n'
+    with pytest.raises(policy.PolicyError):
+        policy.check_examples(text)
+
+
+def test_pinned_multiline_plain_flow_example() -> None:
+    """A flow comma belongs to YAML syntax and is not part of the decoded action identity."""
+    text = "```yaml\n- {name: Checkout,\n uses : owner/action@" + "a" * 40
+    text += ", # v1.2.3\n with: {}}\n```"
+    policy.check_examples(text)
+
+
+def test_example_composition_bounds_and_inert_cycles(tmp_path: Path) -> None:
+    """Recursive nodes terminate and an independent deep input detects removed depth bounds."""
+    assert policy.example_references("&cycle [*cycle]") == []
+    assert policy.example_references("!!python/object/apply:os.system [not-executed]") == []
+    text = "[" * 70 + "x" + "]" * 70
+    with pytest.raises(policy.PolicyError, match="nesting"):
+        policy.example_references(text)
+    source = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
+    start = source.index("class ExampleLoader")
+    prefix, example_code = source[:start], source[start:]
+    assert example_code.count("if depth >= 64:") == 1
+    mutant = load_policy_mutant(
+        tmp_path, prefix + example_code.replace("if depth >= 64:", "if False:", 1)
+    )
+    assert mutant.example_references(text) == []
+
+
+@pytest.mark.parametrize(
+    ("scope", "field", "invalid"),
+    [
+        ("workflow", "cache-mode", "bogus"),
+        ("job", "cache-mode", "bogus"),
+        ("job", "outputs", []),
+        ("job", "snapshot", 42),
+        ("step", "background", "true"),
+        ("step", "wait", [1]),
+        ("step", "wait-all", False),
+        ("step", "cancel", ["gate"]),
+    ],
+)
+def test_optional_control_schema_guard_removal(scope: str, field: str, invalid: Any) -> None:
+    """Independent invalid values expose removal of optional schema shape restrictions."""
+    descriptor = policy.describe_workflow(
+        {"on": "push", "permissions": {}, "jobs": {"check": {"permissions": {}, "steps": [{}]}}}
+    )
+    target = {
+        "workflow": descriptor,
+        "job": descriptor["jobs"]["check"]["controls"],
+        "step": descriptor["jobs"]["check"]["steps"][0],
+    }[scope]
+    target[field] = invalid
+    contract = {
+        "version": 1,
+        "workflows": {".github/workflows/test.yml": descriptor},
+        "examples": [],
+    }
+    schema = policy.parse_yaml(policy.read_text(ROOT, policy.SCHEMA))
+    with pytest.raises(policy.jsonschema.ValidationError):
+        policy.jsonschema.validate(contract, schema)
+    workflow_properties = schema["$defs"]["workflow"]["properties"]
+    job_properties = workflow_properties["jobs"]["additionalProperties"]["properties"]
+    properties = {
+        "workflow": workflow_properties,
+        "job": job_properties["controls"]["properties"],
+        "step": job_properties["steps"]["items"]["properties"],
+    }[scope]
+    properties[field] = {}
+    policy.jsonschema.validate(contract, schema)

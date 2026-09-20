@@ -14,7 +14,7 @@ import sys
 import tempfile
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
 import yaml  # type: ignore[import-untyped]
@@ -2406,6 +2406,23 @@ def write_staged_candidate(
                 + ", ".join(sorted(managed_symlinks))
             )
 
+    expected_workflows = retained_workflow_paths(template_paths, mappings, included_modules)
+    contract_path = ".github/workflow-security-contract.yml"
+    contract_relation = selected_relation_for_path(contract_path, mappings)
+    contract_retained = contract_relation is not None and contract_relation.is_retained_by(
+        included_modules
+    )
+    rendered_contract = None
+    if expected_workflows or contract_retained:
+        if not expected_workflows or not contract_retained or contract_path not in template_paths:
+            raise MaterializationError(
+                "Retained workflow inventory requires a present, retained workflow contract "
+                "and at least one retained workflow; review the source contract and manifest."
+            )
+        rendered_contract = render_workflow_contract(
+            template_root, mappings, included_modules, expected_workflows=expected_workflows
+        )
+
     staged_paths: list[str] = []
     for relative_path in template_paths:
         relation = selected_relation_for_path(relative_path, mappings)
@@ -2441,8 +2458,9 @@ def write_staged_candidate(
                 included_modules,
                 relative_path=relative_path,
             )
-            if relative_path == ".github/workflow-security-contract.yml":
-                filtered_text = render_workflow_contract(template_root, mappings, included_modules)
+            if relative_path == contract_path:
+                assert rendered_contract is not None
+                filtered_text = rendered_contract
             destination.write_bytes(filtered_text.encode("utf-8"))
         staged_paths.append(relative_path)
     return tuple(sorted(staged_paths))
@@ -2461,10 +2479,28 @@ def trusted_tool_path(relative_path: str) -> Path:
     return path
 
 
+def retained_workflow_paths(
+    template_paths: Collection[str],
+    mappings: tuple[ManifestMapping, ...],
+    included_modules: Collection[str],
+) -> set[str]:
+    """Select present top-level workflows using the existing manifest ownership resolver."""
+    return {
+        path
+        for path in template_paths
+        if PurePosixPath(path).parent == PurePosixPath(".github/workflows")
+        and PurePosixPath(path).suffix in {".yml", ".yaml"}
+        and (relation := selected_relation_for_path(path, mappings)) is not None
+        and relation.is_retained_by(included_modules)
+    }
+
+
 def render_workflow_contract(
     template_root: Path,
     mappings: tuple[ManifestMapping, ...],
     included_modules: Collection[str],
+    *,
+    expected_workflows: set[str] | None = None,
 ) -> str:
     """Prune reviewed workflow controls using only manifest and inline-marker ownership.
 
@@ -2486,6 +2522,11 @@ def render_workflow_contract(
     validator = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(validator)
     trusted_tool_path(validator.SCHEMA)
+    if expected_workflows is None:
+        template_paths, _ = iter_safe_repository_files(template_root)
+        expected_workflows = retained_workflow_paths(template_paths, mappings, included_modules)
+    if not expected_workflows:
+        raise MaterializationError("Cannot render a workflow contract without retained workflows")
     try:
         validator.validate_repository(template_root, schema_root=TRUSTED_TOOL_ROOT)
         contract = validator.load_contract(template_root, schema_root=TRUSTED_TOOL_ROOT)
@@ -2501,6 +2542,13 @@ def render_workflow_contract(
                     relative_path=path,
                 )
                 rendered[path] = validator.validate_workflow(text)
+        if set(rendered) != expected_workflows:
+            raise MaterializationError(
+                "Retained workflow inventory differs from the reviewed contract; "
+                f"missing: {', '.join(sorted(expected_workflows - set(rendered))) or 'none'}; "
+                f"unexpected: {', '.join(sorted(set(rendered) - expected_workflows)) or 'none'}. "
+                "Review the source contract and manifest together."
+            )
         examples = []
         for path in contract["examples"]:
             relation = selected_relation_for_path(path, mappings)
