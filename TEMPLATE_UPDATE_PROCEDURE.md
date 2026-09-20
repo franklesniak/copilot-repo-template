@@ -1422,6 +1422,8 @@ When first-adoption materialization is used, inspect the command surface first:
 python .template-sync/scripts/materialize_downstream_adoption.py --help
 ```
 
+The Python interpreter running the materializer must provide PyYAML for parsing and jsonschema for manifest and marker validation. Help output requires PyYAML but does not load jsonschema. These requirements apply when only template-sync support is retained.
+
 The running materializer loads executable helpers only from its own reviewed installation. Selected template validators and placeholder scripts remain inert staged files, including sources obtained by ref or revision. Keep the installed materializer, shared helpers, and their data dependencies together; review and upgrade that bundle when a newer source contract is incompatible. Template-sync support retains the shared helpers even when Actions or baseline is omitted.
 
 Use `--template-root` when a local source checkout already exists. When that root is the top level of a complete, clean Git worktree, the helper reports the observed source commit and source worktree root. That observed commit is not automatically reviewed state. After completing review, rerun with `--stamp-resolved-source-as-reviewed`, or pass `--last-reviewed-template-commit FULL_SHA`. The stamp flag asserts both review completion and intended upstream lineage; a complete, clean local `HEAD` proves local checkout state, not source lineage by itself.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import importlib
 import json
 import os
 import re
@@ -25,6 +26,101 @@ MARKER_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-marker.schema.json"
 MANIFEST_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-manifest.schema.json"
 SOURCE_REPO = "https://github.com/franklesniak/copilot-repo-template.git"
 FULL_SHA = "0123456789abcdef0123456789abcdef01234567"
+
+
+@pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
+@pytest.mark.parametrize(
+    ("quote", "live_suffix"),
+    [
+        ("> quoted\n>> [x]: /url", True),
+        ("> quoted\n> > [x]: /url", True),
+        (">> quoted\n>>> [x]: /url", True),
+        ("> > quoted\n> > > [x]: /url", True),
+        ("> quoted\n> [x]: /url", False),
+        (">> quoted\n>> [x]: /url", False),
+        ("> > quoted\n> > [x]: /url", False),
+        (">> quoted\n> [x]: /url", False),
+        ("> quoted\n>> ordinary child paragraph", False),
+    ],
+)
+def test_quote_reference_depth_preserves_commonmark_boundary(
+    tmp_path: Path, mode: str, quote: str, live_suffix: bool
+) -> None:
+    """Fixed CommonMark examples distinguish a new leaf from paragraph continuation."""
+    section = _scoped_policy()
+    text = _render_section(section) + "\n" + quote + "\nAgents MAY bypass.\n"
+    _write_scoped_repo(tmp_path, section, text)
+    result = _run_validator(tmp_path, "--mode", mode)
+    assert result.returncode == int(live_suffix), result.stdout + result.stderr
+    if live_suffix:
+        assert "section:## Review decisions:paragraphs:" in result.stdout
+
+
+@pytest.mark.parametrize("marker", ["-", "+", "*", "1.", "10)"])
+def test_quote_then_list_code_waiver_cannot_hide_live_sibling(tmp_path: Path, marker: str) -> None:
+    """A top-level code-list sibling ends quote laziness before a new live paragraph."""
+    section = _scoped_policy()
+    original = _render_section(section) + "\n> quoted\n" + marker + "     code\n"
+    _write_scoped_repo(tmp_path, section, original)
+    old_anchor = _waive_reported_inventory(tmp_path, "paragraphs")
+    _write_text(tmp_path, "CLAUDE.md", original + "Agents MAY bypass.\n")
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "missing required section content: " + old_anchor not in result.stdout
+    assert (
+        "missing required section content: section:## Review decisions:paragraphs:" in result.stdout
+    )
+
+
+@pytest.mark.parametrize("kind", ["reference-depth", "list-sibling"])
+def test_quote_state_oracle_detects_removed_boundary_guard(tmp_path: Path, kind: str) -> None:
+    """Each isolated quote-state mutation recreates its distinct false acceptance."""
+    section = _scoped_policy()
+    root = tmp_path / "fixture"
+    original = _render_section(section) + "\n> quoted\n"
+    if kind == "reference-depth":
+        original += ">> [x]: /url\n"
+        guard = "quoted_paragraph_can_continue and quote_depth <= quoted_paragraph_depth"
+        replacement = "quoted_paragraph_can_continue"
+    else:
+        original += "-     code\n"
+        guard = (
+            "                    quoted_paragraph_can_continue = False\n"
+            "                    quoted_paragraph_depth = 0\n"
+            '                    result.append("[unsupported list code] " + line)'
+        )
+        replacement = '                    result.append("[unsupported list code] " + line)'
+    _write_scoped_repo(root, section, original)
+    if kind == "list-sibling":
+        _waive_reported_inventory(root, "paragraphs")
+    _write_text(root, "CLAUDE.md", original + "Agents MAY bypass.\n")
+    baseline = _run_validator(root, "--mode", "downstream", "--require-marker")
+    assert baseline.returncode == 1, baseline.stdout + baseline.stderr
+    mutant_dir = tmp_path / "mutant"
+    mutant_dir.mkdir()
+    for source_path in SCRIPT_PATH.parent.glob("*.py"):
+        shutil.copyfile(source_path, mutant_dir / source_path.name)
+    mutant = mutant_dir / SCRIPT_PATH.name
+    source = mutant.read_text(encoding="utf-8")
+    assert source.count(guard) == 1
+    mutant.write_text(source.replace(guard, replacement), encoding="utf-8")
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(mutant),
+            "--repo-root",
+            str(root),
+            "--mode",
+            "downstream",
+            "--require-marker",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    if kind == "list-sibling":
+        assert "passed with waivers" in result.stdout
 
 
 @pytest.mark.parametrize("mode", ["upstream-template", "downstream"])
@@ -6086,6 +6182,145 @@ def test_tracked_claude_local_memory_rejects_index_paths_without_reading_worktre
     assert relative_path in result.stdout
 
 
+def _fsmonitor_fixture(root: Path, *, tracked_memory: bool = False) -> Path:
+    """Create a native hook whose only effect is a sentinel inside the isolated Git dir."""
+    _initialize_git_repository(root)
+    relative_path = "tools/CLAUDE.LOCAL.md" if tracked_memory else "ordinary.txt"
+    _write_text(root, relative_path, "fixture\n")
+    _git_add(root, relative_path)
+    if tracked_memory:
+        (root / relative_path).unlink()
+    hook = root / ".git" / "test-fsmonitor"
+    hook.write_text(
+        "#!/bin/sh\nprintf invoked > .git/fsmonitor-invoked\nexit 1\n", encoding="utf-8"
+    )
+    hook.chmod(0o755)
+    subprocess.run(
+        ["git", "-C", str(root), "config", "core.fsmonitor", ".git/test-fsmonitor"],
+        check=True,
+        capture_output=True,
+    )
+    sentinel = root / ".git" / "fsmonitor-invoked"
+    # A positive control proves the platform actually executes this hook fixture.
+    subprocess.run(["git", "-C", str(root), "ls-files"], check=True, capture_output=True)
+    assert sentinel.read_text(encoding="utf-8") == "invoked"
+    sentinel.unlink()
+    return sentinel
+
+
+@pytest.mark.parametrize("tracked_memory", [False, True])
+def test_git_inventory_disables_native_fsmonitor(
+    tmp_path: Path, monkeypatch: Any, tracked_memory: bool
+) -> None:
+    """Neither a passing inventory nor an index-only violation may execute local hooks."""
+    sentinel = _fsmonitor_fixture(tmp_path, tracked_memory=tracked_memory)
+    monkeypatch.syspath_prepend(str(SCRIPT_PATH.parent))
+    validator = importlib.import_module("validate_instruction_contracts")
+    version = subprocess.run(["git", "--version"], check=True, capture_output=True, text=True)
+    match = re.match(r"git version ([0-9]+)\.([0-9]+)", version.stdout)
+    if match is None or tuple(map(int, match.groups())) < (2, 36):
+        pytest.skip("The modern Git override requires Git >=2.36")
+    inventory, applicable = validator.tracked_claude_local_memory(tmp_path)
+    assert applicable
+    assert bool(inventory) == tracked_memory
+    if tracked_memory:
+        assert inventory[0].path == "tools/CLAUDE.LOCAL.md"
+    assert not sentinel.exists()
+
+
+@pytest.mark.parametrize("version", [b"git version 2.35.1", b"unparseable Git"])
+@pytest.mark.parametrize("setting", [None, "", "true", "false", ".git/test-fsmonitor"])
+def test_git_inventory_legacy_fsmonitor_gate(
+    tmp_path: Path, monkeypatch: Any, version: bytes, setting: str | None
+) -> None:
+    """Unknown/old Git inspects configuration without entering the index when configured."""
+    sentinel = _fsmonitor_fixture(tmp_path, tracked_memory=True)
+    command = ["git", "-C", str(tmp_path), "config"]
+    command += ["--unset-all", "core.fsmonitor"] if setting is None else ["core.fsmonitor", setting]
+    subprocess.run(command, check=True, capture_output=True)
+    monkeypatch.syspath_prepend(str(SCRIPT_PATH.parent))
+    validator = importlib.import_module("validate_instruction_contracts")
+    real_runner = validator.run_bounded_git
+    calls: list[list[str]] = []
+
+    def runner(root: Path, args: list[str], **kwargs: Any) -> bytes:
+        calls.append(args)
+        return version if args == ["--version"] else real_runner(root, args, **kwargs)
+
+    monkeypatch.setattr(validator, "run_bounded_git", runner)
+    if setting is None:
+        inventory, applicable = validator.tracked_claude_local_memory(tmp_path)
+        assert applicable and inventory[0].path == "tools/CLAUDE.LOCAL.md"
+    else:
+        with pytest.raises(
+            validator.InstructionContractValidationError, match="requires Git detected"
+        ):
+            validator.tracked_claude_local_memory(tmp_path)
+        assert not any("ls-files" in call or "rev-parse" in call for call in calls)
+    assert not sentinel.exists()
+
+
+@pytest.mark.parametrize("kind", ["modern-override", "legacy-rejection", "absent-config-exit"])
+def test_git_fsmonitor_oracle_detects_removed_guard(tmp_path: Path, kind: str) -> None:
+    """Isolated source mutants distinguish callback suppression from safe absence handling."""
+    root = tmp_path / "fixture"
+    root.mkdir()
+    sentinel = _fsmonitor_fixture(root)
+    if kind == "absent-config-exit":
+        subprocess.run(
+            ["git", "-C", str(root), "config", "--unset-all", "core.fsmonitor"],
+            check=True,
+            capture_output=True,
+        )
+    mutant_dir = tmp_path / "mutant"
+    mutant_dir.mkdir()
+    for source_path in SCRIPT_PATH.parent.glob("*.py"):
+        shutil.copyfile(source_path, mutant_dir / source_path.name)
+    mutant = mutant_dir / SCRIPT_PATH.name
+    source = mutant.read_text(encoding="utf-8")
+    replacements = {
+        "modern-override": ('return ["-c", "core.fsmonitor=false"]', "return []"),
+        "legacy-rejection": ("if configured:\n", "if False:\n"),
+        "absent-config-exit": ("allowed_returncodes=(0, 1)", "allowed_returncodes=(0,)"),
+    }
+    guard, replacement = replacements[kind]
+    assert source.count(guard) == 1
+    mutant.write_text(source.replace(guard, replacement), encoding="utf-8")
+    program = r"""
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import validate_instruction_contracts as validator
+real_runner = validator.run_bounded_git
+def runner(root, args, **kwargs):
+    if args == ["--version"]:
+        return b"git version 2.36.0" if sys.argv[3] == "modern-override" else b"git version 2.35.1"
+    return real_runner(root, args, **kwargs)
+validator.run_bounded_git = runner
+try:
+    validator.tracked_claude_local_memory(Path(sys.argv[2]))
+except validator.InstructionContractValidationError as error:
+    print(error)
+    raise SystemExit(1)
+"""
+    baseline = subprocess.run(
+        [sys.executable, "-c", program, str(SCRIPT_PATH.parent), str(root), kind],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert baseline.returncode == int(kind == "legacy-rejection"), baseline.stdout + baseline.stderr
+    assert not sentinel.exists()
+    result = subprocess.run(
+        [sys.executable, "-c", program, str(mutant_dir), str(root), kind],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == int(kind == "absent-config-exit"), result.stdout + result.stderr
+    assert sentinel.exists() == (kind != "absent-config-exit")
+
+
 def test_untracked_and_near_miss_local_memory_remain_valid(tmp_path: Path) -> None:
     """Personal untracked memory and a tracked suffix near miss are not violations."""
     _write_claude_import_fixture(tmp_path, "# Fixture\n")
@@ -6337,7 +6572,9 @@ else:
     class MarkerStatus:
         st_mode = stat.S_IFDIR
     validator.Path.lstat = lambda _path: MarkerStatus()
-    validator.run_bounded_git = lambda *_args, **_kwargs: str(root).encode("utf-8")
+    validator.run_bounded_git = lambda _root, args, **_kwargs: (
+        b"git version 2.36.0" if args == ["--version"] else str(root).encode("utf-8")
+    )
     validator.Path.resolve = raise_native_error
     operation = lambda: validator.tracked_claude_local_memory(root)
 

@@ -2755,10 +2755,10 @@ def test_template_root_detection_displays_native_windows_worktree_path(
             return subprocess.CompletedProcess(args, 1, "", "")
         if args == ["rev-parse", "--verify", "--end-of-options", "HEAD^{commit}"]:
             return subprocess.CompletedProcess(args, 0, f"{FULL_SHA}\n", "")
-        if args == ["ls-files", "-z", "-v", "--full-name"]:
+        if args == ["-c", "core.fsmonitor=false", "ls-files", "-z", "-v", "--full-name"]:
             assert text is False
             return subprocess.CompletedProcess(args, 0, b"H README.md\0", b"")
-        if args == ["ls-files", "-z", "--stage", "--full-name"]:
+        if args == ["-c", "core.fsmonitor=false", "ls-files", "-z", "--stage", "--full-name"]:
             assert text is False
             stdout = f"100644 {FULL_SHA} 0\tREADME.md".encode() + b"\0"
             return subprocess.CompletedProcess(args, 0, stdout, b"")
@@ -2861,7 +2861,9 @@ def test_local_source_diagnostics_keep_multiline_git_stderr_single_line(
         return subprocess.CompletedProcess(args, 128, b"", b"alpha\nbeta\n")
 
     monkeypatch.setattr(materializer, "run_source_git", fake_completeness_failure)
-    completeness_reason = cast(str, materializer.source_completeness_reason(template_root))
+    completeness_reason = cast(
+        str, materializer.source_completeness_reason(template_root, git_args_prefix=())
+    )
 
     assert "alpha" in completeness_reason
     assert "beta" not in completeness_reason
@@ -3523,7 +3525,7 @@ def test_source_completeness_probe_uses_binary_v_records_without_f(
 
     monkeypatch.setattr(materializer, "run_source_git", fake_run_source_git)
 
-    assert materializer.source_completeness_reason(tmp_path) is None
+    assert materializer.source_completeness_reason(tmp_path, git_args_prefix=()) is None
     assert (["ls-files", "-z", "-v", "--full-name"], False) in calls
     for args, _text in calls:
         assert "-f" not in args
@@ -3665,7 +3667,7 @@ def test_source_gitlink_stage_parser_treats_malformed_records_as_indeterminate(
 
     monkeypatch.setattr(materializer, "run_source_git", fake_run_source_git)
 
-    reason = cast(str, materializer.source_completeness_reason(tmp_path))
+    reason = cast(str, materializer.source_completeness_reason(tmp_path, git_args_prefix=()))
 
     assert expected_reason in reason
     assert_single_physical_line(reason)
@@ -3681,15 +3683,21 @@ def test_stampability_backstop_runs_before_status_probe(
     def fake_partial_guard(_repo_root: Path, _git_version: Any) -> None:
         calls.append("partial")
 
-    def fake_completeness(_source_worktree: Path) -> str:
+    def fake_safety(_repo_root: Path, _git_version: Any) -> tuple[tuple[str, ...], None]:
+        calls.append("fsmonitor")
+        return ("-c", "core.fsmonitor=false"), None
+
+    def fake_completeness(_source_worktree: Path, *, git_args_prefix: Any) -> str:
+        assert git_args_prefix == ("-c", "core.fsmonitor=false")
         calls.append("completeness")
         return "the template source records submodule gitlinks, which are not supported"
 
-    def fake_status(_repo_root: Path, _git_version: Any) -> str | None:
+    def fake_status(_repo_root: Path, *, git_args_prefix: Any) -> str | None:
         calls.append("status")
         return "ordinary status should not decide this fixture"
 
     monkeypatch.setattr(materializer, "partial_promisor_guard_reason", fake_partial_guard)
+    monkeypatch.setattr(materializer, "source_fsmonitor_safety", fake_safety)
     monkeypatch.setattr(materializer, "source_completeness_reason", fake_completeness)
     monkeypatch.setattr(materializer, "status_probe_not_stampable_reason", fake_status)
 
@@ -3702,7 +3710,107 @@ def test_stampability_backstop_runs_before_status_probe(
         is False
     )
 
-    assert calls == ["partial", "completeness"]
+    assert calls == ["partial", "fsmonitor", "completeness"]
+
+
+@pytest.mark.parametrize("entry", ["detect", "verify", "completeness-mutant"])
+def test_source_index_queries_disable_native_fsmonitor(
+    tmp_path: Path, monkeypatch: Any, entry: str
+) -> None:
+    """Completeness and status cannot execute a source-local filesystem monitor."""
+    template_root = tmp_path / "template"
+    expected_sha = prepare_git_template(
+        template_root,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+    version = materializer.detect_git_version()
+    if not materializer.git_version_at_least(version, 2, 36):
+        pytest.skip("The modern Git override requires Git >=2.36")
+    hook = template_root / ".git" / "test-fsmonitor"
+    hook.write_text(
+        "#!/bin/sh\nprintf invoked > .git/fsmonitor-invoked\nexit 1\n", encoding="utf-8"
+    )
+    hook.chmod(0o755)
+    run_git(template_root, "config", "core.fsmonitor", ".git/test-fsmonitor")
+    sentinel = template_root / ".git" / "fsmonitor-invoked"
+    run_git(template_root, "ls-files")
+    assert sentinel.read_text(encoding="utf-8") == "invoked"
+    sentinel.unlink()
+    real_safety = materializer.source_fsmonitor_safety
+    safety_calls: list[Path] = []
+
+    def safety(root: Path, git_version: Any) -> Any:
+        safety_calls.append(root)
+        return real_safety(root, git_version)
+
+    monkeypatch.setattr(materializer, "source_fsmonitor_safety", safety)
+    if entry == "verify":
+        assert materializer.verify_source_worktree_stampable(template_root, version, fatal=True)
+    else:
+        detection = materializer.detect_local_template_source(template_root, version)
+        assert detection.stampable_sha == expected_sha, detection.not_stampable_reason
+    assert safety_calls == [template_root]
+    assert not sentinel.exists()
+    if entry == "completeness-mutant":
+        # Remove only completeness protection from an isolated copy; leave status intact.
+        mutant_dir = tmp_path / "mutant"
+        mutant_dir.mkdir()
+        for source_path in SCRIPT_DIR.glob("*.py"):
+            shutil.copyfile(source_path, mutant_dir / source_path.name)
+        mutant = mutant_dir / SCRIPT_PATH.name
+        source = mutant.read_text(encoding="utf-8")
+        guard = '[*git_args_prefix, "ls-files",'
+        assert source.count(guard) == 2
+        mutant.write_text(source.replace(guard, '["ls-files",'), encoding="utf-8")
+        program = (
+            "import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); "
+            "import materialize_downstream_adoption as m; "
+            "result=m.detect_local_template_source(Path(sys.argv[2]), m.detect_git_version()); "
+            "assert result.stampable_sha, result.not_stampable_reason"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", program, str(mutant_dir), str(template_root)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert sentinel.exists()
+
+
+@pytest.mark.parametrize("version", [materializer.GitVersion(2, 35), None])
+@pytest.mark.parametrize("setting", [None, "", "false", ".git/test-fsmonitor"])
+@pytest.mark.parametrize("fatal", [False, True])
+def test_source_legacy_fsmonitor_gate_precedes_index(
+    tmp_path: Path, monkeypatch: Any, version: Any, setting: str | None, fatal: bool
+) -> None:
+    """All configured legacy values block before completeness; absence remains supported."""
+    template_root = tmp_path / "template"
+    prepare_git_template(
+        template_root,
+        [{"pattern": "README.md", "requires_all": ["baseline"]}],
+        {"README.md": "template readme\n"},
+    )
+    if setting is not None:
+        run_git(template_root, "config", "core.fsmonitor", setting)
+    real_runner = materializer.run_source_git
+    index_calls: list[list[str]] = []
+
+    def runner(root: Path, args: list[str], **kwargs: Any) -> Any:
+        if "ls-files" in args or "status" in args:
+            index_calls.append(args)
+        return real_runner(root, args, **kwargs)
+
+    monkeypatch.setattr(materializer, "run_source_git", runner)
+    if setting is not None and fatal:
+        with pytest.raises(materializer.MaterializationError, match="core.fsmonitor is configured"):
+            materializer.verify_source_worktree_stampable(template_root, version, fatal=fatal)
+    else:
+        assert materializer.verify_source_worktree_stampable(
+            template_root, version, fatal=fatal
+        ) == (setting is None)
+    assert bool(index_calls) == (setting is None)
 
 
 def test_old_git_with_configured_fsmonitor_is_not_stampable(tmp_path: Path) -> None:

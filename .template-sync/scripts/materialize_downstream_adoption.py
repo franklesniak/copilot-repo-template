@@ -17,7 +17,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
-import jsonschema
 import yaml  # type: ignore[import-untyped]
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -1265,11 +1264,13 @@ def partial_promisor_guard_reason(repo_root: Path, git_version: GitVersion | Non
     return None
 
 
-def source_completeness_reason(source_worktree: Path) -> str | None:
+def source_completeness_reason(
+    source_worktree: Path, *, git_args_prefix: Sequence[str]
+) -> str | None:
     """Return a reason when tracked source content may be incomplete."""
     result = run_source_git(
         source_worktree,
-        ["ls-files", "-z", "-v", "--full-name"],
+        [*git_args_prefix, "ls-files", "-z", "-v", "--full-name"],
         text=False,
     )
     if result.returncode != 0:
@@ -1286,7 +1287,7 @@ def source_completeness_reason(source_worktree: Path) -> str | None:
 
     stage_result = run_source_git(
         source_worktree,
-        ["ls-files", "-z", "--stage", "--full-name"],
+        [*git_args_prefix, "ls-files", "-z", "--stage", "--full-name"],
         text=False,
     )
     if stage_result.returncode != 0:
@@ -1313,33 +1314,43 @@ def source_completeness_reason(source_worktree: Path) -> str | None:
     return None
 
 
-def status_probe_not_stampable_reason(
+def source_fsmonitor_safety(
     repo_root: Path,
     git_version: GitVersion | None,
-) -> str | None:
-    """Return a not-stampable reason from the clean-status gate."""
-    status_args = [
-        "status",
-        "--porcelain=v1",
-        "--untracked-files=all",
-        "--ignore-submodules=none",
-    ]
+) -> tuple[tuple[str, ...], str | None]:
+    """Choose safe index-query options before completeness or status can run hooks."""
     if git_version_at_least(git_version, 2, 36):
-        result = run_source_git(repo_root, ["-c", "core.fsmonitor=false", *status_args])
-    else:
-        fsmonitor_result = effective_git_config_value(repo_root, "core.fsmonitor")
-        if fsmonitor_result.returncode == 0:
-            return (
-                "core.fsmonitor is configured; stamping this source requires Git to "
-                "be detected as >=2.36 so the status probe can force-disable "
-                "fsmonitor, or an explicit --last-reviewed-template-commit FULL_SHA"
-            )
-        if fsmonitor_result.returncode != 1:
-            return (
-                "unable to determine core.fsmonitor state before status: "
-                f"{command_detail(fsmonitor_result)}"
-            )
-        result = run_source_git(repo_root, status_args)
+        return ("-c", "core.fsmonitor=false"), None
+    # Git <=2.35.1 interprets even Boolean 'false' as a hook pathname.
+    fsmonitor_result = effective_git_config_value(repo_root, "core.fsmonitor")
+    if fsmonitor_result.returncode == 0:
+        return (), (
+            "core.fsmonitor is configured; stamping this source requires Git to "
+            "be detected as >=2.36 so index probes can force-disable "
+            "fsmonitor, or an explicit --last-reviewed-template-commit FULL_SHA"
+        )
+    if fsmonitor_result.returncode != 1:
+        return (), (
+            "unable to determine core.fsmonitor state before index inspection: "
+            f"{command_detail(fsmonitor_result)}"
+        )
+    return (), None
+
+
+def status_probe_not_stampable_reason(
+    repo_root: Path, *, git_args_prefix: Sequence[str]
+) -> str | None:
+    """Return a not-stampable reason using the preselected safe index-query options."""
+    result = run_source_git(
+        repo_root,
+        [
+            *git_args_prefix,
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+            "--ignore-submodules=none",
+        ],
+    )
     if result.returncode != 0:
         return f"unable to inspect source status: {command_detail(result)}"
     if command_output_text(result.stdout):
@@ -1366,13 +1377,23 @@ def verify_source_worktree_stampable(
             raise MaterializationError(partial_reason)
         return False
 
-    completeness_reason = source_completeness_reason(source_worktree)
+    git_args_prefix, fsmonitor_reason = source_fsmonitor_safety(source_worktree, git_version)
+    if fsmonitor_reason is not None:
+        if fatal:
+            raise MaterializationError(fsmonitor_reason)
+        return False
+
+    completeness_reason = source_completeness_reason(
+        source_worktree, git_args_prefix=git_args_prefix
+    )
     if completeness_reason is not None:
         if fatal:
             raise MaterializationError(completeness_reason)
         return False
 
-    status_reason = status_probe_not_stampable_reason(source_worktree, git_version)
+    status_reason = status_probe_not_stampable_reason(
+        source_worktree, git_args_prefix=git_args_prefix
+    )
     if status_reason is not None:
         if fatal:
             raise MaterializationError(status_reason)
@@ -1457,7 +1478,17 @@ def detect_local_template_source(
                 ),
             )
 
-        completeness_reason = source_completeness_reason(template_root)
+        git_args_prefix, fsmonitor_reason = source_fsmonitor_safety(template_root, git_version)
+        if fsmonitor_reason is not None:
+            return LocalSourceDetection(
+                observed_source_sha=observed_source_sha,
+                source_worktree_root=source_worktree_root,
+                not_stampable_reason=fsmonitor_reason,
+            )
+
+        completeness_reason = source_completeness_reason(
+            template_root, git_args_prefix=git_args_prefix
+        )
         if completeness_reason is not None:
             return LocalSourceDetection(
                 observed_source_sha=observed_source_sha,
@@ -1465,7 +1496,9 @@ def detect_local_template_source(
                 not_stampable_reason=completeness_reason,
             )
 
-        status_reason = status_probe_not_stampable_reason(template_root, git_version)
+        status_reason = status_probe_not_stampable_reason(
+            template_root, git_args_prefix=git_args_prefix
+        )
         if status_reason is not None:
             return LocalSourceDetection(
                 observed_source_sha=observed_source_sha,
@@ -2439,6 +2472,13 @@ def render_workflow_contract(
     This is essential: unchecked regeneration would bless altered validation commands.
     The resulting runtime contract has no dependency on template-sync support.
     """
+    try:
+        import jsonschema
+    except ImportError as error:
+        raise MaterializationError(
+            "Workflow contract rendering requires jsonschema. Install it in the "
+            "Python environment running the materializer."
+        ) from error
     validator_path = trusted_tool_path(".github/scripts/validate_workflow_security.py")
     spec = importlib.util.spec_from_file_location("workflow_policy_renderer", validator_path)
     if spec is None or spec.loader is None:

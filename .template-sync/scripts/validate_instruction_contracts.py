@@ -1252,6 +1252,8 @@ def operative_markdown_lines(text: str) -> list[str]:
                     # More than four visual padding columns begin item code.
                     # Preserve its source instead of normalizing it into policy.
                     paragraph_can_continue = False
+                    quoted_paragraph_can_continue = False
+                    quoted_paragraph_depth = 0
                     result.append("[unsupported list code] " + line)
                     continue
             active_fence = parse_markdown_fence_open(line, MARKDOWN_FENCE_CONTEXT)
@@ -1262,7 +1264,10 @@ def operative_markdown_lines(text: str) -> list[str]:
             if consume_blockquote_prefix(line)[0]:
                 if not quoted_paragraph_can_continue:
                     quoted_paragraph_depth = 0
-                leaf = quoted_policy_paragraph(line, quoted_paragraph_can_continue)
+                leaf = quoted_policy_paragraph(
+                    line,
+                    quoted_paragraph_can_continue and quote_depth <= quoted_paragraph_depth,
+                )
                 unsupported_quote = leaf is None
                 quoted_paragraph_can_continue = leaf is True
                 if quoted_paragraph_can_continue:
@@ -1725,7 +1730,9 @@ def os_error_diagnostic(error: OSError) -> str:
     return f"{type(error).__name__}: {error.strerror or 'I/O error'}"
 
 
-def run_bounded_git(repo_root: Path, arguments: list[str]) -> bytes:
+def run_bounded_git(
+    repo_root: Path, arguments: list[str], *, allowed_returncodes: tuple[int, ...] = (0,)
+) -> bytes:
     """Run one shell-free Git query with bounded captured output."""
     try:
         process = subprocess.Popen(
@@ -1813,7 +1820,7 @@ def run_bounded_git(repo_root: Path, arguments: list[str]) -> bytes:
         raise InstructionContractValidationError(
             "Git inventory output exceeded the one-mebibyte per-stream limit."
         )
-    if process.returncode != 0:
+    if process.returncode not in allowed_returncodes:
         try:
             detail = bytes(stderr).decode("utf-8", errors="strict").strip()
         except UnicodeDecodeError as error:
@@ -1839,6 +1846,25 @@ def decode_git_output(output: bytes, purpose: str) -> str:
         ) from error
 
 
+def git_inventory_safe_prefix(repo_root: Path) -> list[str]:
+    """Prevent repository-configured fsmonitor callbacks before reading the index."""
+    version_text = decode_git_output(run_bounded_git(repo_root, ["--version"]), "version")
+    match = re.match(r"^git version ([0-9]+)\.([0-9]+)", version_text.strip())
+    if match is not None and tuple(map(int, match.groups())) >= (2, 36):
+        return ["-c", "core.fsmonitor=false"]
+    # Git <=2.35.1 treats even 'false' as a hook pathname, not a Boolean.
+    # NUL termination distinguishes a configured empty value from an absent key.
+    configured = run_bounded_git(
+        repo_root, ["config", "-z", "--get-all", "core.fsmonitor"], allowed_returncodes=(0, 1)
+    )
+    if configured:
+        raise InstructionContractValidationError(
+            "Safe Git inventory requires Git detected as >=2.36 or an unconfigured "
+            "core.fsmonitor setting for the validation root."
+        )
+    return []
+
+
 def tracked_claude_local_memory(
     repo_root: Path,
 ) -> tuple[tuple[TrackedClaudeLocalMemory, ...], bool]:
@@ -1857,7 +1883,8 @@ def tracked_claude_local_memory(
             "The repository .git marker is neither a directory nor a regular worktree file."
         )
 
-    top_level_output = run_bounded_git(repo_root, ["rev-parse", "--show-toplevel"])
+    safe_prefix = git_inventory_safe_prefix(repo_root)
+    top_level_output = run_bounded_git(repo_root, [*safe_prefix, "rev-parse", "--show-toplevel"])
     top_level_text = decode_git_output(top_level_output, "top-level discovery").rstrip("\r\n")
     if (
         not top_level_text
@@ -1883,6 +1910,7 @@ def tracked_claude_local_memory(
     index_output = run_bounded_git(
         repo_root,
         [
+            *safe_prefix,
             "ls-files",
             "-z",
             "--cached",

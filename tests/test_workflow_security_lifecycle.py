@@ -172,6 +172,73 @@ def test_installed_support_tools_can_add_actions_and_require_shared_helpers(tmp_
             helper.write_bytes(original)
 
 
+@pytest.mark.parametrize("mode", ["help", "materialize", "render", "eager-import-mutant"])
+def test_installed_support_schema_dependency_is_lazy(tmp_path: Path, mode: str) -> None:
+    """Help needs no schema runtime, while actual validation fails with a clear diagnostic."""
+    target = lifecycle.materialize_module_fixture(
+        tmp_path, ("template-sync-support",), authorize_protected_files=True
+    )
+    assert not (target / "pyproject.toml").exists()
+    assert not (target / policy.CONTRACT).exists()
+    script = target / ".template-sync/scripts/materialize_downstream_adoption.py"
+    if mode == "eager-import-mutant":
+        source = script.read_text(encoding="utf-8")
+        anchor = "import yaml  # type: ignore[import-untyped]"
+        assert source.count(anchor) == 1
+        script.write_text(source.replace(anchor, "import jsonschema\n" + anchor), encoding="utf-8")
+    runner = (
+        "import runpy, sys\n"
+        "from pathlib import Path\n"
+        "sys.modules['jsonschema'] = None\n"
+        "script = sys.argv.pop(1)\n"
+    )
+    if mode == "render":
+        runner += (
+            "namespace = runpy.run_path(script)\n"
+            "try:\n"
+            "    namespace['render_workflow_contract'](Path(sys.argv[1]), (), ('github-actions',))\n"
+            "except namespace['MaterializationError'] as error:\n"
+            "    print(error, file=sys.stderr)\n"
+            "    sys.exit(1)\n"
+        )
+        arguments = [str(ROOT)]
+    else:
+        runner += "runpy.run_path(script, run_name='__main__')\n"
+        arguments = ["--help"]
+        if mode == "materialize":
+            output = tmp_path / "output"
+            output.mkdir()
+            arguments = [
+                "--template-root",
+                str(ROOT),
+                "--target-root",
+                str(output),
+                "--included-module",
+                "template-sync-support",
+            ]
+    result = subprocess.run(
+        [sys.executable, "-c", runner, str(script), *arguments],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if mode == "help":
+        assert result.returncode == 0, result.stderr
+        assert "--template-root" in result.stdout
+    elif mode == "eager-import-mutant":
+        assert result.returncode == 1
+        assert "ModuleNotFoundError" in result.stderr
+    else:
+        assert result.returncode == 1
+        expected = (
+            "jsonschema is unavailable"
+            if mode == "materialize"
+            else "Workflow contract rendering requires jsonschema"
+        )
+        assert expected in result.stderr
+        assert "Traceback" not in result.stderr
+
+
 def write_decisions(target: Path, modules: tuple[str, ...], **fields: Any) -> None:
     """Record explicit fixture authorization using the normal marker schema."""
     reviewed = fields.pop("reviewed_commit", None)
