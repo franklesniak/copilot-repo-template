@@ -1,12 +1,12 @@
 # Terraform Linting Implementation Guide
 
-**Version:** 1.0.20260919.0
+**Version:** 1.0.20260920.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-19
+- **Last Updated:** 2026-09-20
 - **Scope:** This document provides comprehensive guidance for implementing Terraform linting in CI for the `franklesniak/copilot-repo-template` repository. It covers tool selection, workflow design, configuration, pre-commit integration, and best practices. This is a **guidance-only** document—it does not modify workflows or configurations directly.
 - **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md), [Terraform Instructions](../../.github/instructions/terraform.instructions.md)
 
@@ -1405,10 +1405,12 @@ on:
 
 In GitHub branch ruleset settings, configure these jobs as required status checks:
 
-1. `Terraform CI / Format Check`
-2. `Terraform CI / Validate`
-3. `Terraform CI / Lint (TFLint)`
-4. `Terraform CI / Test` (if tests exist)
+1. `Format Check`
+2. `Validate`
+3. `Lint (TFLint)`
+4. `Test` (if tests exist)
+
+Select the job checks from a recent successful run. Do not prepend the `Terraform CI` workflow label. See GitHub's [required-check troubleshooting](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/troubleshooting-rules#troubleshooting-required-status-checks).
 
 Security scans can be optional based on team preference.
 

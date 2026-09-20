@@ -2485,9 +2485,10 @@ def render_workflow_contract(
         raise MaterializationError("Cannot load workflow security validator")
     validator = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(validator)
+    trusted_tool_path(validator.SCHEMA)
     try:
-        validator.validate_repository(template_root)
-        contract = validator.load_contract(template_root)
+        validator.validate_repository(template_root, schema_root=TRUSTED_TOOL_ROOT)
+        contract = validator.load_contract(template_root, schema_root=TRUSTED_TOOL_ROOT)
         rendered: dict[str, Any] = {}
         for path in contract["workflows"]:
             relation = selected_relation_for_path(path, mappings)

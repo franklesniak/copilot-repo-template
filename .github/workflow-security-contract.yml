@@ -86,6 +86,7 @@ workflows:
     jobs:
       check-placeholders:
         controls:
+          name: Check for OWNER/REPO Placeholders
           permissions:
             contents: read
           if: github.repository != 'franklesniak/copilot-repo-template'
@@ -119,6 +120,7 @@ workflows:
     jobs:
       data-file-linting:
         controls:
+          name: Data file linting
           permissions:
             contents: read
           runs-on: ubuntu-latest
@@ -293,6 +295,7 @@ workflows:
     jobs:
       powershell-lint:
         controls:
+          name: Lint (PSScriptAnalyzer)
           permissions:
             contents: read
           env:
@@ -308,6 +311,7 @@ workflows:
             run_sha256: 7a383c8ad5375162d9763d16b8a705f147044487b2f9c73996cc8072eb7d0b16
       test:
         controls:
+          name: PowerShell Tests (Pester)
           permissions:
             contents: read
           env:
@@ -355,6 +359,7 @@ workflows:
     jobs:
       pre-commit:
         controls:
+          name: Pre-commit
           permissions:
             contents: read
           runs-on: ubuntu-latest
@@ -421,6 +426,7 @@ workflows:
     jobs:
       type-check:
         controls:
+          name: Type Check (mypy + Pyright)
           permissions:
             contents: read
           runs-on: ubuntu-latest
@@ -445,6 +451,7 @@ workflows:
             run_sha256: 83a643d03d5b5caf4b81a6bfdf9fc582c25e38d622fe7dad6ff86c62cae7a1ac
       test:
         controls:
+          name: Test
           permissions:
             contents: read
           runs-on: ${{ matrix.os }}
@@ -492,6 +499,7 @@ workflows:
     jobs:
       format:
         controls:
+          name: Format Check
           permissions:
             contents: read
           runs-on: ubuntu-latest
@@ -508,6 +516,7 @@ workflows:
             run_sha256: 4faf21577ac0bb9fb922c5e0f8e590141808a082ccfd8c397aa4f945c396cdb5
       validate:
         controls:
+          name: Validate
           permissions:
             contents: read
           needs: format
@@ -538,6 +547,7 @@ workflows:
             run_sha256: 54266b55d8e1e13f59e64b3f1970bb1f59175f33e1bf5b7fcbe9c5d38d670ffb
       lint:
         controls:
+          name: Lint (TFLint)
           permissions:
             contents: read
           needs: validate
@@ -565,6 +575,7 @@ workflows:
             run_sha256: eef5cdd0b6c1c3f5e1cce6bbc60eefc302745f2c0d4420ffd16d58ea520f20a8
       test:
         controls:
+          name: Test
           permissions:
             contents: read
           needs: validate
@@ -619,6 +630,7 @@ workflows:
     jobs:
       node-eol:
         controls:
+          name: Node.js EOL
           permissions:
             contents: read
           runs-on: ubuntu-latest

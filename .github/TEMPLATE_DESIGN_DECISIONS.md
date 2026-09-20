@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-19
+- **Last Updated:** 2026-09-20
 - **Scope:** Durable design-decision record for this repository template, including rationale for GitHub configuration, instruction files, validation policy, template structure, maintenance conventions, and the documentation-tier inventory below.
 - **Related:** [Repository Copilot Instructions](copilot-instructions.md), [upstream Documentation Writing Style](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/instructions/docs.instructions.md)
 
@@ -1469,19 +1469,19 @@ The template provides these CI jobs that can be configured as required status ch
 | --- | --- | --- | --- |
 | `precommit-ci.yml` | **Pre-commit** | ✅ Yes | Foundational check—catches formatting and linting issues |
 | `data-ci.yml` | **Data file linting** | ✅ Yes | Gives JSON/YAML/Actions validation a distinct required-check identity |
-| `python-ci.yml` | **Type Check (mypy)** | Optional | Set to `continue-on-error: true` by default; make strict when ready |
+| `python-ci.yml` | **Type Check (mypy + Pyright)** | Optional | Set to `continue-on-error: true` by default; make strict when ready |
 | `python-ci.yml` | **Test** | ✅ Yes | Ensures tests pass on all platforms |
-| `markdownlint.yml` | **Markdown Lint** | ✅ Yes | Ensures documentation quality |
+| `markdownlint.yml` | **markdownlint** | ✅ Yes | Ensures documentation quality |
 | `powershell-ci.yml` | **Lint (PSScriptAnalyzer)** | Optional | Only if using PowerShell |
 | `powershell-ci.yml` | **PowerShell Tests (Pester)** | Optional | Only if using PowerShell with tests |
 | `check-placeholders.yml` | **Check for OWNER/REPO Placeholders** | Optional | Only runs in repos created from this template (skipped in template repo itself) |
 
-> **Note:** In the GitHub Actions UI and branch ruleset status-check picker,
-> checks appear in the format **`Workflow name / Job name`** (for example,
-> `Pre-commit CI / Pre-commit`). The **Job Name** column above lists only the
-> job-level name; prepend the workflow name when searching for checks in the
-> ruleset configuration. Status checks only appear for selection after the
-> corresponding workflow has run at least once.
+> **Note:** Ordinary workflow required checks use the **job name**, such as
+> `Pre-commit`; do not prepend the workflow's Actions-tab label.
+> An unnamed job uses its job ID, such as `markdownlint`. Reusable workflow
+> checks use `Job name / Reusable job name`. Select the actual checks from a
+> recent successful run, including applicable matrix variants, and verify the
+> resulting ruleset. See GitHub's [required-check troubleshooting](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/troubleshooting-rules#troubleshooting-required-status-checks).
 >
 > The `auto-fix-precommit.yml` workflow is intentionally **not listed** above
 > because it only triggers on pushes to `copilot/**` branches by the Copilot
@@ -1563,11 +1563,11 @@ For a Python project using this template:
 - Pre-commit
 - Data file linting
 - Test
-- Markdown Lint
+- markdownlint
 
 **Optional but recommended:**
 
-- Type Check (mypy) — after making it strict by removing `continue-on-error: true`
+- Type Check (mypy + Pyright) — after making it strict by removing `continue-on-error: true`
 
 For a multi-language project (Python + PowerShell):
 
@@ -1576,7 +1576,7 @@ For a multi-language project (Python + PowerShell):
 - Pre-commit
 - Data file linting
 - Test
-- Markdown Lint
+- markdownlint
 - Lint (PSScriptAnalyzer)
 - PowerShell Tests (Pester)
 

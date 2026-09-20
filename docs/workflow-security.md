@@ -7,7 +7,7 @@
 - **Last Updated:** 2026-09-20
 - **Scope:** Documents the retained workflow contract, validation commands, security limits, and module lifecycle.
 
-The `github-actions` module owns the workflow contract, runtime schema, this guide, and the standalone Workflow Security job. The validator is shared with `template-sync-support` as a trusted materializer dependency. Actions validation remains usable without the Markdown, Python project, baseline, or template-sync-support modules. Install the validator dependencies declared in the standalone workflow before running the direct command:
+The `github-actions` module owns the workflow contract, this guide, and the standalone Workflow Security job. The validator and its schema are shared with `template-sync-support` as trusted materializer dependencies. Actions validation remains usable without the Markdown, Python project, baseline, or template-sync-support modules. Install the validator dependencies declared in the standalone workflow before running the direct command:
 
 ```text
 python .github/scripts/validate_workflow_security.py
@@ -36,7 +36,7 @@ External actions and reusable workflows require lowercase full commit SHAs and e
 
 Top-level and job permissions must explicitly be empty or `contents: read`. Checkout must set literal `persist-credentials: false`. The baseline rejects `pull_request_target` and `workflow_run`; it does not ship privileged exceptions. Local actions and Docker references are currently rejected because the template has no reviewed local-action or container surface. Supporting either requires an explicit policy extension and tests rather than an uninspected exemption.
 
-Required workflow and job permissions, job and step controls, order, conditions, environments, and shell-body SHA-256 fingerprints must match the reviewed contract. Fingerprints normalize CRLF to LF and preserve all other decoded scalar whitespace, including leading indentation and trailing newlines. A removed permission, removed check, advisory conversion, changed shell, skipped condition, or altered failure aggregator fails validation. Fingerprints detect reviewed-byte drift; they do not prove arbitrary shell semantics. `actionlint` remains the syntax check.
+Required workflow and job permissions, job and step controls, order, conditions, environments, and shell-body SHA-256 fingerprints must match the reviewed contract. Job display names and fallback job IDs are covered because they identify required checks. Top-level workflow display names remain free to change. Fingerprints normalize CRLF to LF and preserve all other decoded scalar whitespace, including leading indentation and trailing newlines. A removed permission, removed check, advisory conversion, changed shell, skipped condition, or altered failure aggregator fails validation. Fingerprints detect reviewed-byte drift; they do not prove arbitrary shell semantics. `actionlint` remains the syntax check.
 
 Existing exceptions are narrowly recorded: Markdown checks capture individual failures and aggregate their outcomes; the auto-fix preview restores pre-commit's native failure after collecting its artifact; Python type checks intentionally remain advisory in downstream repositories. Their exact conditions and shell bodies are covered by the contract. Changing these exceptions requires review and passing negative tests.
 
@@ -44,7 +44,7 @@ The parser bounds each input to 1 MiB, limits nesting, rejects duplicate keys, a
 
 ## Updates and removal
 
-Materialization executes the validator and placeholder helper from the running tool installation. Selected template scripts are inert staged data. Keep the installed tool bundle and its dependencies reviewed together; an incompatible source contract requires an explicit tool upgrade rather than executing the source's validator. Removing Actions while retaining template-sync support keeps the shared validator for future materialization.
+Materialization executes the validator and placeholder helper from the running tool installation. It validates selected contract data against that installation's trusted schema. The selected workflow validator and schema are inert staged data during the current run. Keep the installed tool bundle and its dependencies reviewed together; an incompatible source contract requires an explicit tool upgrade. Removing Actions while retaining template-sync support keeps the shared validator and schema for future materialization. Removing both modules omits both shared assets.
 
 Review changes to workflow paths, required steps, contract/schema, manifest mappings, and wiring together. For intentional command changes, compute the normalized command's SHA-256 with the validator's `describe_workflow` function after semantic review and update the corresponding contract entry. Never regenerate the contract merely to make a failed check pass. Run the positive/negative, wiring, and lifecycle suites, including the guard-removal test. Action-only updates do not require contract fingerprint changes.
 

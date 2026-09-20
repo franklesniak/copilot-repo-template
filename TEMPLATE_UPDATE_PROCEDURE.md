@@ -756,7 +756,7 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `docs/workflow-security.md` | `github-actions` |
 | `.github/workflow-security-contract.yml` | `github-actions` |
 | `.github/scripts/validate_workflow_security.py` | one of `github-actions`, `template-sync-support` |
-| `schemas/workflow-security-contract.schema.json` | `github-actions` |
+| `schemas/workflow-security-contract.schema.json` | one of `github-actions`, `template-sync-support` |
 | `.github/workflows/workflow-security.yml` | `github-actions` |
 | `schemas/examples/workflow-security-contract/**` | `github-actions`, `template-sync-support` |
 | `tests/test_workflow_security_contract.py` | `github-actions`, `template-sync-support` |
@@ -1424,7 +1424,7 @@ python .template-sync/scripts/materialize_downstream_adoption.py --help
 
 The Python interpreter running the materializer must provide PyYAML for parsing and jsonschema for manifest and marker validation. Help output requires PyYAML but does not load jsonschema. These requirements apply when only template-sync support is retained.
 
-The running materializer loads executable helpers only from its own reviewed installation. Selected template validators and placeholder scripts remain inert staged files, including sources obtained by ref or revision. Keep the installed materializer, shared helpers, and their data dependencies together; review and upgrade that bundle when a newer source contract is incompatible. Template-sync support retains the shared helpers even when Actions or baseline is omitted.
+The running materializer loads executable helpers only from its own reviewed installation. It validates selected workflow contract data against the workflow security schema from that installation. Selected workflow validators, workflow schemas, and placeholder scripts remain inert staged files during the current run, including sources obtained by ref or revision. Keep the installed materializer, shared helpers, and their data dependencies together; review and upgrade that bundle when a newer source contract is incompatible. Template-sync support retains the shared helpers and workflow schema even when Actions or baseline is omitted.
 
 Use `--template-root` when a local source checkout already exists. When that root is the top level of a complete, clean Git worktree, the helper reports the observed source commit and source worktree root. That observed commit is not automatically reviewed state. After completing review, rerun with `--stamp-resolved-source-as-reviewed`, or pass `--last-reviewed-template-commit FULL_SHA`. The stamp flag asserts both review completion and intended upstream lineage; a complete, clean local `HEAD` proves local checkout state, not source lineage by itself.
 
@@ -1818,11 +1818,11 @@ Future automation MAY add:
 
 ## Workflow Security Governance
 
-The `github-actions` module retains a self-contained workflow security contract, validator, schema, and standalone CI gate. The manifest owns selection; materialization validates the reviewed source before rendering the retained workflow controls. Baseline selections also retain the always-running pre-commit hook and Data CI invocation. Language-specific requirements disappear with their owning modules.
+The `github-actions` module retains a self-contained workflow security contract, validator, schema, and standalone CI gate. Template-sync support also retains the validator and schema as trusted dependencies for future materialization. The manifest owns selection; materialization validates the reviewed source before rendering the retained workflow controls. Baseline selections also retain the always-running pre-commit hook and Data CI invocation. Language-specific requirements disappear with their owning modules.
 
 Authorize `.github/workflow-security-contract.yml` explicitly as a protected policy path before first adoption or replacement. Record permitted local customization and the reviewed update decision. Adopter-created workflows remain outside baseline policy unless the owner explicitly enables `--strict`; synchronization preserves their bytes. Run `python .github/scripts/validate_workflow_security.py` after adoption and updates, and add `--verify-releases` when verifying changed action pins against upstream.
 
-Removing GitHub Actions requires reviewed cleanup of excluded standalone files and replacement of retained shared files with their pruned forms. Materialization never silently deletes those files. Validate the final downstream tree for excluded-module leftovers, including hooks, updater entries, schema, documentation, and policy references. Dependabot's Actions updater survives only when both GitHub platform automation and Actions are retained; otherwise action updates need manual review.
+Removing GitHub Actions requires reviewed cleanup of excluded standalone files and replacement of retained shared files with their pruned forms. Materialization never silently deletes those files. Validate the final downstream tree for excluded-module leftovers, including hooks, updater entries, documentation, and policy references. Remove the shared validator and schema only when neither Actions nor template-sync support remains. Dependabot's Actions updater survives only when both GitHub platform automation and Actions are retained; otherwise action updates need manual review.
 
 See the [workflow security guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/workflow-security.md) for the baseline/strict boundary, required authorization, exact command fingerprints, intentional failure-aggregation exceptions, and the SHA-pin vulnerability-alert limitation. Copilot setup and action-free acquisition remain future opt-in profiles; this module does not implement them.
 

@@ -329,8 +329,11 @@ template_manifest:
       notes: >-
         Shared trusted parser for the Actions runtime and the running materializer.
     - pattern: 'schemas/workflow-security-contract.schema.json'
-      requires_all:
+      requires_any:
         - github-actions
+        - template-sync-support
+      notes: >-
+        Shared trusted schema for the Actions runtime and the running materializer.
     - pattern: '.github/workflows/workflow-security.yml'
       requires_all:
         - github-actions

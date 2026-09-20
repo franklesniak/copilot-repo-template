@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib.util
+import json
 import shlex
 import shutil
 import subprocess
@@ -117,11 +119,12 @@ def test_installed_support_tools_can_add_actions_and_require_shared_helpers(tmp_
         ".github/scripts/replace-template-placeholders.py",
         ".github/template-placeholders.json",
         "schemas/template-placeholders.schema.json",
+        policy.SCHEMA,
     ]
     for relative in shared:
         assert (target / relative).is_file(), relative
     assert not (target / policy.CONTRACT).exists()
-    assert not (target / policy.SCHEMA).exists()
+    assert (target / policy.SCHEMA).is_file()
     modules = ("template-sync-support", "github-actions")
     write_decisions(
         target,
@@ -160,7 +163,7 @@ def test_installed_support_tools_can_add_actions_and_require_shared_helpers(tmp_
         check=False,
     )
     assert installed.returncode == 0, installed.stdout + installed.stderr
-    for relative in shared[:2]:
+    for relative in [*shared[:2], policy.SCHEMA]:
         helper = target / relative
         original = helper.read_bytes()
         helper.unlink()
@@ -168,8 +171,87 @@ def test_installed_support_tools_can_add_actions_and_require_shared_helpers(tmp_
             failed = subprocess.run(command, capture_output=True, text=True, check=False)
             assert failed.returncode == 1, failed.stdout + failed.stderr
             assert "trusted helper is unavailable" in failed.stderr
+            assert relative in failed.stderr
         finally:
             helper.write_bytes(original)
+
+
+@pytest.mark.parametrize("candidate_schema", ["sentinel", "malformed", "missing"])
+def test_candidate_workflow_schema_is_inert(tmp_path: Path, candidate_schema: str) -> None:
+    """Selected schema bytes cannot change the running renderer's validation authority."""
+    from tests.test_workflow_security_contract import copy_policy
+
+    source = tmp_path / "source"
+    copy_policy(source)
+    _, _, mappings = lifecycle.materializer.load_validated_manifest_context(ROOT)
+    expected = lifecycle.materializer.render_workflow_contract(
+        source, mappings, ("github-actions",)
+    )
+    path = source / policy.SCHEMA
+    if candidate_schema == "sentinel":
+        schema = json.loads(path.read_text(encoding="utf-8"))
+        schema["required"].append("candidate_schema_sentinel")
+        path.write_text(json.dumps(schema), encoding="utf-8")
+    elif candidate_schema == "malformed":
+        path.write_text("not a schema", encoding="utf-8")
+    else:
+        path.unlink()
+    assert (
+        lifecycle.materializer.render_workflow_contract(source, mappings, ("github-actions",))
+        == expected
+    )
+
+
+def test_installed_workflow_schema_is_authoritative(tmp_path: Path, monkeypatch: Any) -> None:
+    """The same harmless schema sentinel is enforced when installed in the trusted bundle."""
+    trusted = tmp_path / "trusted"
+    for relative in [".github/scripts/validate_workflow_security.py", policy.SCHEMA]:
+        path = trusted / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / relative, path)
+    path = trusted / policy.SCHEMA
+    schema = json.loads(path.read_text(encoding="utf-8"))
+    schema["required"].append("trusted_schema_sentinel")
+    path.write_text(json.dumps(schema), encoding="utf-8")
+    monkeypatch.setattr(lifecycle.materializer, "TRUSTED_TOOL_ROOT", trusted)
+    _, _, mappings = lifecycle.materializer.load_validated_manifest_context(ROOT)
+    with pytest.raises(
+        lifecycle.materializer.MaterializationError, match="trusted_schema_sentinel"
+    ):
+        lifecycle.materializer.render_workflow_contract(ROOT, mappings, ("github-actions",))
+
+
+@pytest.mark.parametrize("call", ["validate_repository", "load_contract"])
+def test_workflow_schema_authority_guard_removal(
+    tmp_path: Path, monkeypatch: Any, call: str
+) -> None:
+    """Removing either trusted-schema argument restores candidate control independently."""
+    from tests.test_workflow_security_contract import copy_policy
+
+    source = tmp_path / "source"
+    copy_policy(source)
+    schema_path = source / policy.SCHEMA
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    schema["required"].append("candidate_schema_sentinel")
+    schema_path.write_text(json.dumps(schema), encoding="utf-8")
+    _, _, mappings = lifecycle.materializer.load_validated_manifest_context(ROOT)
+    assert lifecycle.materializer.render_workflow_contract(source, mappings, ("github-actions",))
+    script = ROOT / ".template-sync/scripts/materialize_downstream_adoption.py"
+    code = script.read_text(encoding="utf-8")
+    before = f"validator.{call}(template_root, schema_root=TRUSTED_TOOL_ROOT)"
+    assert code.count(before) == 1
+    mutant_path = tmp_path / "materializer_schema_mutant.py"
+    mutant_path.write_text(
+        code.replace(before, f"validator.{call}(template_root)"), encoding="utf-8"
+    )
+    spec = importlib.util.spec_from_file_location("materializer_schema_mutant", mutant_path)
+    assert spec is not None and spec.loader is not None
+    mutant = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, mutant.__name__, mutant)
+    spec.loader.exec_module(mutant)
+    monkeypatch.setattr(mutant, "TRUSTED_TOOL_ROOT", ROOT)
+    with pytest.raises(mutant.MaterializationError, match="candidate_schema_sentinel"):
+        mutant.render_workflow_contract(source, mappings, ("github-actions",))
 
 
 @pytest.mark.parametrize("mode", ["help", "materialize", "render", "eager-import-mutant"])
@@ -285,7 +367,10 @@ def test_existing_adoption_noop_customization_and_protection(tmp_path: Path) -> 
     assert policy.main(["--repo-root", str(target)]) == 1
 
 
-def test_template_update_requires_review_and_preserves_adopter_workflow(tmp_path: Path) -> None:
+@pytest.mark.parametrize("change", ["command", "job-name"])
+def test_template_update_requires_review_and_preserves_adopter_workflow(
+    tmp_path: Path, change: str
+) -> None:
     """A reviewed template revision updates required behavior only with path decisions."""
     source = tmp_path / "source"
     source.mkdir()
@@ -319,11 +404,16 @@ def test_template_update_requires_review_and_preserves_adopter_workflow(tmp_path
     local.write_text(local_content, encoding="utf-8")
     workflow_path = ".github/workflows/workflow-security.yml"
     workflow = source / workflow_path
-    workflow.write_text(
-        workflow.read_text(encoding="utf-8").replace(
+    original_control, updated_control = (
+        (
             "run: python .github/scripts/validate_workflow_security.py",
             "run: python .github/scripts/validate_workflow_security.py --strict",
-        ),
+        )
+        if change == "command"
+        else ("  validate:\n", "  validate:\n    name: Reviewed workflow check\n")
+    )
+    workflow.write_text(
+        workflow.read_text(encoding="utf-8").replace(original_control, updated_control),
         encoding="utf-8",
     )
     # Unreviewed source drift must not be blessed by rendering new fingerprints.
@@ -368,13 +458,13 @@ def test_template_update_requires_review_and_preserves_adopter_workflow(tmp_path
             {
                 "path": workflow_path,
                 "default_decision": "TAKE",
-                "reason": "Fixture owner reviewed the stricter workflow.",
+                "reason": "Fixture owner reviewed the workflow control change.",
             }
         ],
     )
     updated = lifecycle.run_materialize(source, target, "--decisions-file", "decisions.yml")
     assert updated.returncode == 0, updated.stdout + updated.stderr
-    assert " --strict" in (target / workflow_path).read_text(encoding="utf-8")
+    assert updated_control in (target / workflow_path).read_text(encoding="utf-8")
     assert policy.validate_repository(target, strict=True) == 1
     installed = policy.parse_yaml((target / workflow_path).read_text(encoding="utf-8"))
     gate = installed["jobs"]["validate"]["steps"][-1]["run"]
@@ -453,7 +543,7 @@ def test_omission_and_reviewed_removal_leave_no_policy_orphans(tmp_path: Path) -
         p: b for p, b in snapshot(clean).items() if p not in ignored
     }
     assert not (target / policy.CONTRACT).exists()
-    assert not (target / policy.SCHEMA).exists()
+    assert (target / policy.SCHEMA).is_file()
     assert (target / ".github/scripts/validate_workflow_security.py").is_file()
     for relative in [
         ".github/workflows/workflow-security.yml",

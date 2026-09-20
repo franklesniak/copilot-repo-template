@@ -161,13 +161,16 @@ def test_run_fingerprint_preserves_whitespace(changed: str) -> None:
     assert policy.describe_workflow(document) != original
 
 
-@pytest.mark.parametrize("guard", ["workflow_permissions", "job_permissions", "run_whitespace"])
+@pytest.mark.parametrize(
+    "guard", ["workflow_permissions", "job_permissions", "job_name", "run_whitespace"]
+)
 def test_descriptor_guard_removal(tmp_path: Path, guard: str) -> None:
     """Independent inputs expose restored permission omission or whitespace stripping."""
     source = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
     before, after = {
         "workflow_permissions": ('        "permissions": document["permissions"],\n', ""),
         "job_permissions": ('                    "permissions",\n', ""),
+        "job_name": ('                    "name",\n', ""),
         "run_whitespace": (
             'step["run"].replace("\\r\\n", "\\n").encode("utf-8")',
             'step["run"].replace("\\r\\n", "\\n").strip().encode("utf-8")',
@@ -185,7 +188,10 @@ def test_descriptor_guard_removal(tmp_path: Path, guard: str) -> None:
         "    permissions: {contents: read}\n    steps:\n      - run: print(1)\n"
     )
     changed = copy.deepcopy(original)
-    if guard == "workflow_permissions":
+    if guard == "job_name":
+        original["jobs"]["check"]["name"] = "Required check"
+        changed["jobs"]["check"]["name"] = "Different check"
+    elif guard == "workflow_permissions":
         changed["permissions"] = {}
     elif guard == "job_permissions":
         changed["jobs"]["check"]["permissions"] = {}
@@ -193,6 +199,169 @@ def test_descriptor_guard_removal(tmp_path: Path, guard: str) -> None:
         changed["jobs"]["check"]["steps"][0]["run"] = "  print(1)"
     assert policy.describe_workflow(original) != policy.describe_workflow(changed)
     assert mutant.describe_workflow(original) == mutant.describe_workflow(changed)
+
+
+@pytest.mark.parametrize("change", ["rename", "delete", "add", "matrix", "fallback"])
+def test_job_check_identity_drift(tmp_path: Path, change: str) -> None:
+    """Explicit names and fallback IDs cannot silently change an owned check identity."""
+    copy_policy(tmp_path)
+    filename, before, after = {
+        "rename": ("precommit-ci", "    name: Pre-commit\n", "    name: Renamed check\n"),
+        "delete": ("precommit-ci", "    name: Pre-commit\n", ""),
+        "add": ("workflow-security", "  validate:\n", "  validate:\n    name: New check\n"),
+        "matrix": ("python-ci", "    name: Test\n", "    name: Changed test\n"),
+        "fallback": ("workflow-security", "  validate:\n", "  different-id:\n"),
+    }[change]
+    path = tmp_path / f".github/workflows/{filename}.yml"
+    text = path.read_text(encoding="utf-8")
+    assert text.count(before) == 1
+    path.write_text(text.replace(before, after), encoding="utf-8")
+    with pytest.raises(policy.PolicyError, match="execution controls"):
+        policy.validate_repository(tmp_path)
+
+
+def test_workflow_display_label_is_not_a_required_check_identity(tmp_path: Path) -> None:
+    """Changing only the Actions-tab label preserves the reviewed job controls."""
+    copy_policy(tmp_path)
+    path = tmp_path / ".github/workflows/precommit-ci.yml"
+    text = path.read_text(encoding="utf-8")
+    assert text.count("name: Pre-commit CI") == 1
+    path.write_text(text.replace("name: Pre-commit CI", "name: Renamed workflow"), encoding="utf-8")
+    assert policy.validate_repository(tmp_path) == 10
+
+
+@pytest.mark.parametrize("coordinate", ["actions/checkout", "Actions/Checkout", "ACTIONS/CHECKOUT"])
+@pytest.mark.parametrize("credentials", ["false", "true", "'false'", "missing", "empty"])
+def test_checkout_identity_is_case_insensitive(coordinate: str, credentials: str) -> None:
+    """Every spelling of the checkout repository requires literal false credentials."""
+    text = policy.read_text(ROOT, ".github/workflows/workflow-security.yml")
+    text = text.replace("actions/checkout@", coordinate + "@")
+    if credentials == "missing":
+        text = text.replace("        with:\n          persist-credentials: false\n", "")
+    elif credentials == "empty":
+        text = text.replace(
+            "        with:\n          persist-credentials: false\n", "        with: {}\n"
+        )
+    else:
+        text = text.replace("persist-credentials: false", "persist-credentials: " + credentials)
+    if credentials == "false":
+        assert policy.validate_workflow(text)
+    else:
+        with pytest.raises(policy.PolicyError, match="persist-credentials"):
+            policy.validate_workflow(text)
+
+
+@pytest.mark.parametrize(
+    "coordinate", ["actions/checkout-extra", "actions/checkout/path", "other/checkout"]
+)
+def test_checkout_near_matches_do_not_inherit_its_inputs(coordinate: str) -> None:
+    """Different external actions remain outside checkout's specific input contract."""
+    text = policy.read_text(ROOT, ".github/workflows/workflow-security.yml")
+    text = text.replace("actions/checkout@", coordinate + "@")
+    text = text.replace("        with:\n          persist-credentials: false\n", "")
+    assert policy.validate_workflow(text)
+
+
+def test_strict_adopter_checkout_casing_and_guard_mutant(tmp_path: Path) -> None:
+    """Strict scope catches the bypass and a case-sensitive mutant restores it."""
+    copy_policy(tmp_path)
+    bad = (
+        policy.read_text(ROOT, ".github/workflows/workflow-security.yml")
+        .replace("actions/checkout@", "Actions/Checkout@")
+        .replace("persist-credentials: false", "persist-credentials: true")
+    )
+    (tmp_path / ".github/workflows/adopter.yml").write_text(bad, encoding="utf-8")
+    assert policy.validate_repository(tmp_path) == 10
+    with pytest.raises(policy.PolicyError, match="persist-credentials"):
+        policy.validate_repository(tmp_path, strict=True)
+    source = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
+    guard = 'reference.split("@", 1)[0].casefold()'
+    assert source.count(guard) == 1
+    mutant = load_policy_mutant(tmp_path, source.replace(guard, 'reference.split("@", 1)[0]'))
+    assert mutant.validate_repository(tmp_path, strict=True) == 10
+
+
+def load_policy_mutant(root: Path, source: str) -> Any:
+    """Load an isolated deliberately weakened validator for an independent input oracle."""
+    path = root / "policy_mutant.py"
+    path.write_text(source, encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("policy_mutant", path)
+    assert spec is not None and spec.loader is not None
+    mutant = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mutant)
+    return mutant
+
+
+@pytest.mark.parametrize(
+    "prefix", ["> - ", "   > # ", ">> - ", "> # - ", "  > > - ", "- > - ", "> 1. > # - "]
+)
+@pytest.mark.parametrize("reference", ["pinned", "tag", "short", "missing", "malformed"])
+def test_quoted_document_action_policy(tmp_path: Path, prefix: str, reference: str) -> None:
+    """Copyable quoted actions use the same pin and annotation rules as plain examples."""
+    contract = copy_policy(tmp_path)
+    line = {
+        "pinned": "owner/action@" + "a" * 40 + " # v1.2.3",
+        "tag": "owner/action@v1 # v1.2.3",
+        "short": "owner/action@abcdef0 # v1.2.3",
+        "missing": "owner/action@" + "a" * 40,
+        "malformed": "owner/action@" + "a" * 40 + " # v1",
+    }[reference]
+    path = tmp_path / contract["examples"][0]
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write("\n> [!NOTE]\n>\n> ```yaml\n" + prefix + "uses: " + line + "\n> ```\n")
+    if reference == "pinned":
+        assert policy.validate_repository(tmp_path) == 10
+    else:
+        with pytest.raises(policy.PolicyError, match="full SHA"):
+            policy.validate_repository(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "line", [r"\> - uses: owner/action@v1", "prose > - uses: owner/action@v1", "> [!NOTE]"]
+)
+def test_markdown_prefix_near_matches(line: str) -> None:
+    """Escaped or prose quote markers do not manufacture action lines."""
+    assert policy.USES_LINE.match(policy.markdown_example_content(line)) is None
+
+
+@pytest.mark.parametrize("mutation", ["bypass", "one-level"])
+def test_quoted_document_guard_removal(tmp_path: Path, mutation: str) -> None:
+    """A fixed nested-quote counterexample exposes either removed container guard."""
+    contract = copy_policy(tmp_path)
+    path = tmp_path / contract["examples"][0]
+    with path.open("a", encoding="utf-8") as stream:
+        stream.write("\n>> - uses: owner/action@v1\n")
+    with pytest.raises(policy.PolicyError, match="full SHA"):
+        policy.validate_repository(tmp_path)
+    source = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
+    before, after = (
+        ("candidate = markdown_example_content(line)", "candidate = line")
+        if mutation == "bypass"
+        else (
+            "while (match := MARKDOWN_QUOTE_PREFIX.match(line, offset))",
+            "if (match := MARKDOWN_QUOTE_PREFIX.match(line, offset))",
+        )
+    )
+    assert source.count(before) == 1
+    mutant = load_policy_mutant(tmp_path, source.replace(before, after))
+    assert mutant.validate_repository(tmp_path) == 10
+
+
+def test_quoted_example_release_resolution() -> None:
+    """Peeling preserves the exact repository, release annotation, and digest oracle."""
+    line = policy.markdown_example_content("> 1. > - uses: owner/action@" + "a" * 40 + " # v1.2.3")
+    reference = policy.USES_LINE.match(line)[1]
+    calls = []
+
+    def resolve(repository: str, release: str) -> str:
+        """Record exact inputs without a network request."""
+        calls.append((repository, release))
+        return "a" * 40
+
+    policy.check_reference(reference, line, resolve)
+    assert calls == [("owner/action", "v1.2.3")]
+    with pytest.raises(policy.PolicyError, match="Misleading"):
+        policy.check_reference(reference, line, lambda _repository, _release: "b" * 40)
 
 
 def test_misleading_annotation_uses_upstream_resolution() -> None:

@@ -23,6 +23,7 @@ WORKFLOW = re.compile(r"\.github/workflows/[A-Za-z0-9_.-]+\.ya?ml\Z")
 REFERENCE = re.compile(r"([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)(?:/[A-Za-z0-9_./-]+)?@([0-9a-f]{40})\Z")
 ANNOTATION = re.compile(r"# (v[0-9]+\.[0-9]+\.[0-9]+)\s*\Z")
 USES_LINE = re.compile(r"^\s*(?:#\s*)?(?:-\s*)?uses:\s*(\S+)")
+MARKDOWN_QUOTE_PREFIX = re.compile(r"[ \t]*(?:(?:[-+*]|[0-9]{1,9}[.)])[ \t]+)*>[ \t]?")
 CONTROLS = (
     "name",
     "id",
@@ -171,6 +172,7 @@ def describe_workflow(document: dict[str, Any]) -> dict[str, Any]:
             "controls": {
                 field: job[field]
                 for field in (
+                    "name",
                     "permissions",
                     "if",
                     "continue-on-error",
@@ -273,17 +275,17 @@ def validate_workflow(
                 raise PolicyError("Action reference must have a literal annotated uses line")
             if (
                 reference
-                and reference.startswith("actions/checkout@")
+                and reference.split("@", 1)[0].casefold() == "actions/checkout"
                 and step.get("with", {}).get("persist-credentials") is not False
             ):
                 raise PolicyError("Checkout must set persist-credentials: false")
     return describe_workflow(document)
 
 
-def load_contract(root: Path) -> dict[str, Any]:
-    """Load and schema-validate the owned workflow contract."""
+def load_contract(root: Path, *, schema_root: Path | None = None) -> dict[str, Any]:
+    """Validate source contract data with an explicitly selected schema authority."""
     contract = parse_yaml(read_text(root, CONTRACT))
-    schema = parse_yaml(read_text(root, SCHEMA))
+    schema = parse_yaml(read_text(schema_root if schema_root is not None else root, SCHEMA))
     jsonschema.Draft202012Validator.check_schema(schema)
     pending: list[Any] = [schema]
     while pending:
@@ -299,9 +301,23 @@ def load_contract(root: Path) -> dict[str, Any]:
     return contract
 
 
-def validate_repository(root: Path, *, strict: bool = False, verify_releases: bool = False) -> int:
+def markdown_example_content(line: str) -> str:
+    """Peel quote containers without repeatedly copying the remaining input."""
+    offset = 0
+    while (match := MARKDOWN_QUOTE_PREFIX.match(line, offset)) is not None:
+        offset = match.end()
+    return line[offset:]
+
+
+def validate_repository(
+    root: Path,
+    *,
+    strict: bool = False,
+    verify_releases: bool = False,
+    schema_root: Path | None = None,
+) -> int:
     """Validate owned inputs, optionally including adopter workflows and upstream refs."""
-    contract = load_contract(root)
+    contract = load_contract(root, schema_root=schema_root)
     cache: dict[tuple[str, str], str] = {}
 
     def resolve(repository: str, release: str) -> str:
@@ -323,9 +339,10 @@ def validate_repository(root: Path, *, strict: bool = False, verify_releases: bo
     for path in contract["examples"]:
         text = read_text(root, path)
         for line in text.splitlines():
-            match = USES_LINE.match(line)
+            candidate = markdown_example_content(line)
+            match = USES_LINE.match(candidate)
             if match:
-                check_reference(match[1], line, resolver)
+                check_reference(match[1], candidate, resolver)
     if strict:
         for path in (root / ".github/workflows").glob("*"):
             if path.suffix in {".yml", ".yaml"}:
