@@ -34,6 +34,8 @@ permissions:
 
 jobs:
   pre-commit:
+    permissions:
+      contents: read
     name: Pre-commit
     runs-on: ubuntu-latest
 

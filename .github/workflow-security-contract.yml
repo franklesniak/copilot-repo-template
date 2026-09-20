@@ -1,0 +1,625 @@
+version: 1
+workflows:
+  .github/workflows/auto-fix-precommit.yml:
+    events:
+      push:
+        branches:
+          - copilot/**
+    defaults: {}
+    env: {}
+    jobs:
+      fix-preview:
+        controls:
+          if: github.actor == 'copilot-swe-agent[bot]'
+          runs-on: ubuntu-latest
+          timeout-minutes: 30
+        steps:
+          - name: Checkout code
+            with:
+              ref: ${{ github.sha }}
+              persist-credentials: false
+            action: actions/checkout
+          - name: Set up Python
+            with:
+              python-version: '3.14'
+            action: actions/setup-python
+          - name: Setup Node.js for nested Markdown
+            with:
+              node-version: '24'
+              cache: npm
+              cache-dependency-path: package-lock.json
+            action: actions/setup-node
+          - name: Install root Markdown dependencies
+            run_sha256: e568f48e4564d1ada4a272f93f6e94a1db7c70212a765c414a6ec92d2a889e21
+          - name: Setup Terraform
+            with:
+              terraform_version: 1.14.4
+            action: hashicorp/setup-terraform
+          - name: Setup TFLint
+            with:
+              tflint_version: v0.51.1
+            action: terraform-linters/setup-tflint
+          - name: Install pre-commit
+            shell: python
+            run_sha256: 7acffd8be7b89e167121a560bbd121fed99e81f35f4af5f84fec046e3c513a82
+          - name: Run pre-commit hooks
+            id: hooks
+            continue-on-error: true
+            run_sha256: 3397a95d1b40ee4e35cec2ac32ab99a649893be3f90a114dcfcb2ea2c6bb77ac
+          - name: Capture untrusted fix preview
+            id: preview
+            if: ${{ !cancelled() && (steps.hooks.outcome == 'success' || steps.hooks.outcome == 'failure') }}
+            shell: python
+            env:
+              HOOK_EXIT: ${{ steps.hooks.outputs.exit_code }}
+            run_sha256: 5ce4a9f59d5fc0781a3e10cdd61c812bc375cb954fad110a6d1eb5f39d5098ff
+          - name: Upload untrusted fix preview
+            if: ${{ !cancelled() && steps.preview.outcome == 'success' }}
+            with:
+              name: untrusted-precommit-fix-preview-${{ github.run_id }}-${{ github.run_attempt }}
+              path: '${{ runner.temp }}/precommit-fix-preview/tracked.patch
+
+                ${{ runner.temp }}/precommit-fix-preview/status.txt
+
+                ${{ runner.temp }}/precommit-fix-preview/README.txt
+
+                '
+              if-no-files-found: error
+              retention-days: 3
+            action: actions/upload-artifact
+          - name: Preserve pre-commit failure
+            if: ${{ !cancelled() && steps.hooks.outcome == 'failure' }}
+            run_sha256: e7d5230aa171477a4fa8816af18e815d13dd67a42cfced049f526a49be04c427
+  .github/workflows/check-placeholders.yml:
+    events:
+      push: null
+      pull_request: null
+      workflow_dispatch: null
+    defaults: {}
+    env: {}
+    jobs:
+      check-placeholders:
+        controls:
+          if: github.repository != 'franklesniak/copilot-repo-template'
+          runs-on: ubuntu-latest
+        steps:
+          - name: Checkout repository
+            with:
+              persist-credentials: false
+            action: actions/checkout
+          - name: Setup Python
+            with:
+              python-version: '3.14'
+            action: actions/setup-python
+          - name: Check for unresolved placeholders
+            run_sha256: 7efe5a89e1aec8a8ee74f66fb5b5b7b19e633bc078035621f7e3cc88069112e5
+          - name: Additional placeholder patterns check
+            run_sha256: d51fe7e959d1452d33ff7169a3cf9ddab150cfcb64ec1123edda0a5913139ebb
+  .github/workflows/data-ci.yml:
+    events:
+      push:
+        branches:
+          - '**'
+      pull_request:
+        branches:
+          - '**'
+      workflow_dispatch: null
+    defaults: {}
+    env: {}
+    jobs:
+      data-file-linting:
+        controls:
+          runs-on: ubuntu-latest
+        steps:
+          - name: Checkout repository
+            with:
+              persist-credentials: false
+            action: actions/checkout
+          - name: Setup Python
+            with:
+              python-version: '3.14'
+              cache: pip
+              cache-dependency-path: requirements-pre-commit.txt
+            action: actions/setup-python
+          - name: Cache pre-commit hooks
+            with:
+              path: ~/.cache/pre-commit
+              key: pre-commit-${{ hashFiles('.pre-commit-config.yaml', 'requirements-pre-commit.txt') }}
+            action: actions/cache
+          - name: Install pre-commit
+            shell: python
+            run_sha256: 7acffd8be7b89e167121a560bbd121fed99e81f35f4af5f84fec046e3c513a82
+          - name: Run check-json
+            run_sha256: a99b6d241dfd79866ec4644b1f9c628027d2afa33742a408e685ccc98609c29f
+          - name: Run check-toml
+            run_sha256: addc837042c2ac69350153fdc1ba0efe994f7c5b1afb64354168eb3d5fdd6ee7
+          - name: Run check-yaml
+            run_sha256: 317d1b458f8d90eda426d5a844a7d35fb00cad9ad3e9e09996ec4ec5eadd8838
+          - name: Run validate-template-placeholders-manifest
+            run_sha256: 57020c6717395cdbdc3d72bcd4c4a6587a6a51640417d6ae788fb15aac007ea5
+          - name: Run validate-template-placeholders-valid-examples
+            run_sha256: bf2213ec25720b0d1bb65e4023aac719862480430d656444aa15c084f943411b
+          - name: Run validate-template-placeholders-schema
+            run_sha256: 8f31ca20ca5937d8df6d093aea611a7ecc0b7d6eafd4509526e9824764bab2e0
+          - name: Run validate-template-placeholders-invalid-examples
+            run_sha256: b6bcdae8c88473a28f73d39dbed12543fdedcef2074a93b7f9e1289061ecebd8
+          - name: Run yamllint
+            run_sha256: 6fa0417aa3e65fccb22a9357c38ad6a4d0585fa87fe86afe456e9112f88d0dbd
+          - name: Run actionlint
+            run_sha256: e69bb638e5a790688da711b9410a99f76879c54397bcce796581491227de46b8
+          - name: Run validate-example-config-valid-examples
+            run_sha256: 2e24f9647f25bcbb3f6753ba74a38d64eda44c5bc5d3be6f6f28d52129032121
+          - name: Run validate-example-config-schema
+            run_sha256: fee68dfe87604d738c15e0e9ff9fd26a8794083659fa23987dd62fb2a9bff6b0
+          - name: Run validate-template-sync-marker-valid-examples
+            run_sha256: 96dd4e4390860bc089ce191b042df34a3bc537da9ef0787880d5854bd069f721
+          - name: Run validate-template-sync-instruction-contracts-valid-examples
+            run_sha256: bde5a87b1b4525a9717ae4038ceed756a4f9560d1ef2cdbdbbdce81e1f65e04a
+          - name: Run validate-first-adoption-quality-suppressions-valid-examples
+            run_sha256: 25da40f654e1e1b4d6ee4c958ea587ae0f81d1734b45e637a9740e8f22641eb6
+          - name: Run validate-template-sync-manifest-schema
+            run_sha256: 14861e273e774ff30342085b3cd8ddad20bd8ee19ad25d740b9baccc38403b6f
+          - name: Run validate-template-sync-marker-schema
+            run_sha256: c659f8e58a5b716a77e3d6bed1e7cb3e512829af0dfbb24e856a620281cd15a8
+          - name: Run validate-template-sync-instruction-contracts-schema
+            run_sha256: 54edc9028e4cb49de606c642c50283419e0b70722609df59fb11be8241a48eaf
+          - name: Run validate-first-adoption-quality-suppressions-schema
+            run_sha256: bd06b951a4db226fa2a8a42c077da6d0168202bc722fa17b14f5b4f32e881ed6
+          - name: Run validate-template-sync-manifest
+            run_sha256: ce6772879127c5c1940830733ccdf0986bdecbc100c25ab448a1218435a8b552
+          - name: Run validate-template-sync-marker
+            run_sha256: fb2c9e9eac25c704938176e204939f91f19b5fa5f792444785679bea08407e6a
+          - name: Run validate-template-sync-instruction-contracts
+            run_sha256: 1f48d81d8f7f15fcc93dc818a443a58f3a2429dade7d2f8d83e811ea7e131fb7
+          - name: Run validate-first-adoption-quality-suppressions
+            run_sha256: 4f26ccce8ec4f6ac3e51d1c35c6412a403bfa608f507d48d6cbcd1c1d3f28ec3
+          - name: Run validate-instruction-contracts-upstream
+            run_sha256: 2d4af7656b4d36ca34bce40e966fd5136d7de7580ecb457a4d43cc1b3ab6687a
+          - name: Run validate-instruction-contracts-downstream
+            run_sha256: eaeef35a428407622d4fdd309e4d9b3aae139bc4f9ef82b87d5a66088d7d9d80
+          - name: Run validate-dependabot-config
+            run_sha256: 873c18665561dc5799cba7a7cb9505999b76a5993f5898c7311a63e381a2d807
+          - name: Run validate-dependabot-config-valid-examples
+            run_sha256: f674595cf0967989eabe8547438ef3ff0659a26ae53b769b739919fdb2ec0eba
+          - name: Run validate-workflow-security
+            run_sha256: d3acbdb315ae6060e5e91cf50ae449d92a948fc43c4692ffff31fa4d466d854b
+  .github/workflows/markdownlint.yml:
+    events:
+      push:
+        branches:
+          - '**'
+      pull_request:
+        branches:
+          - '**'
+    defaults: {}
+    env: {}
+    jobs:
+      markdownlint:
+        controls:
+          runs-on: ubuntu-latest
+        steps:
+          - name: Checkout repository
+            with:
+              persist-credentials: false
+            action: actions/checkout
+          - name: Setup Node.js
+            with:
+              node-version: '24'
+              cache: npm
+              cache-dependency-path: package-lock.json
+            action: actions/setup-node
+          - name: Install dependencies
+            run_sha256: e568f48e4564d1ada4a272f93f6e94a1db7c70212a765c414a6ec92d2a889e21
+          - name: Setup Python
+            if: "${{\n  github.repository == 'franklesniak/copilot-repo-template' ||\n  (hashFiles('pyproject.toml') != ''\
+              \ &&\n  hashFiles('tests/test_materialize_downstream_adoption.py') != '')\n}}"
+            with:
+              python-version: '3.13'
+              cache: pip
+            action: actions/setup-python
+          - name: Install Python dependencies
+            if: "${{\n  github.repository == 'franklesniak/copilot-repo-template' ||\n  (hashFiles('pyproject.toml') != ''\
+              \ &&\n  hashFiles('tests/test_materialize_downstream_adoption.py') != '')\n}}"
+            run_sha256: 654ca2e16c9cedde0732ae5655ac4bd34408a18c9ddd91896d5082d5912f4207
+          - name: Install pinned pre-commit runner
+            if: ${{ github.repository == 'franklesniak/copilot-repo-template' }}
+            run_sha256: 55ad594cb727d927918abbed17d7ea5727821aad76ce2386cd220edac0540668
+          - name: Lint materialized generated output (nested Markdown)
+            id: lint-generated
+            if: "${{\n  hashFiles('pyproject.toml') != '' &&\n  hashFiles('tests/test_materialize_downstream_adoption.py')\
+              \ != ''\n}}"
+            continue-on-error: true
+            run_sha256: dd05815ea25ef134c81a0ee87f7050bbf8df709fcc382a9c15119d4abef0fecd
+          - name: Run actual nested Markdown hook regression
+            id: test-nested-hook
+            if: ${{ github.repository == 'franklesniak/copilot-repo-template' }}
+            continue-on-error: true
+            run_sha256: 4364c36faaa1aef0ace31664032748097e1432f037ca081e4eff58918567bf3c
+          - name: Run markdownlint on outer files
+            id: lint-outer
+            continue-on-error: true
+            run_sha256: 771ae43c4e1d00c1e2b51414a8f0b0c54c6f6df8f05db2a712c8d1ffe8f1e9c2
+          - name: Run markdownlint on nested Markdown code fences
+            id: lint-nested
+            continue-on-error: true
+            run_sha256: af92f0d1245dfb101cf31f650a978af740fb086051ec826b1c654093e8aefe7a
+          - name: Validate Markdown links
+            id: lint-links
+            continue-on-error: true
+            run_sha256: 745e4a60b95e7481fce0f99610c343c317229cd42fa0a37d9e34e1c8dfaa42db
+          - name: Run toolchain EOL regression tests
+            id: test-toolchain
+            continue-on-error: true
+            run_sha256: 53e60898f75182de0b337c47aac7d236f75da7eea1ccfea513df30f508926a57
+          - name: Run nested Markdown regression tests
+            id: test-nested
+            continue-on-error: true
+            run_sha256: 9e775f2469f666758da5c2c0a356ed92e4fdf4094dc953b1a70ce275453385f4
+          - name: Check source-template regression results
+            if: steps.lint-generated.outcome == 'failure' || steps.test-nested-hook.outcome == 'failure'
+            run_sha256: 3cc5dd452471e3ab1bc1d0f96b8678a70f5f690b5a2686f01a878369d19369e7
+          - name: Check validation results
+            if: steps.lint-outer.outcome == 'failure' || steps.lint-nested.outcome == 'failure' || steps.lint-links.outcome
+              == 'failure' || steps.test-nested.outcome == 'failure' || steps.test-toolchain.outcome == 'failure'
+            run_sha256: 9551b1b07e3d5841b1854daf35fd4469bf583cc2922822f564ab785657262ab1
+  .github/workflows/powershell-ci.yml:
+    events:
+      push:
+        branches:
+          - '**'
+      pull_request:
+        branches:
+          - '**'
+    defaults: {}
+    env: {}
+    jobs:
+      powershell-lint:
+        controls:
+          env:
+            PSSCRIPTANALYZER_GATE_MODE: strict
+          runs-on: ubuntu-latest
+        steps:
+          - name: Checkout repository
+            with:
+              persist-credentials: false
+            action: actions/checkout
+          - name: Run PSScriptAnalyzer
+            shell: pwsh
+            run_sha256: f168eb769e522c9162abc443fed491f3429fc5ad2f9c55f86f938698db0dd43c
+      test:
+        controls:
+          env:
+            PESTER_TEST_ROOT: tests/
+          runs-on: ${{ matrix.os }}
+          strategy:
+            matrix:
+              os:
+                - ubuntu-latest
+                - windows-latest
+                - macos-latest
+        steps:
+          - name: Checkout repository
+            with:
+              persist-credentials: false
+            action: actions/checkout
+          - name: Find Pester test files
+            id: find-tests
+            shell: pwsh
+            run_sha256: 16153aeb9d2634ea19fef5f68fb65275e2f3e18d98bd290ce7de56f27fbe48a3
+          - name: Install Pester
+            if: steps.find-tests.outputs.found == 'true'
+            shell: pwsh
+            run_sha256: 1b13520807aa457f6006e2fb4de54923c3b2c31b9d9167942937c1cb499995f6
+          - name: Run Pester tests
+            if: steps.find-tests.outputs.found == 'true'
+            shell: pwsh
+            run_sha256: 03a9713b8b53d91f178587224f561a4660e8eb3332aa1cb595d456f27fb480f4
+          - name: Skip - No Pester tests
+            if: steps.find-tests.outputs.found != 'true'
+            run_sha256: 4a372ac175a15d7196eb999e0c8e5179fd52c9eb6b0252eec73db86dcf2e2544
+  .github/workflows/precommit-ci.yml:
+    events:
+      push:
+        branches:
+          - '**'
+      pull_request:
+        branches:
+          - '**'
+      workflow_dispatch: null
+    defaults: {}
+    env: {}
+    jobs:
+      pre-commit:
+        controls:
+          runs-on: ubuntu-latest
+        steps:
+          - name: Checkout repository
+            with:
+              persist-credentials: false
+            action: actions/checkout
+          - name: Setup Python
+            with:
+              python-version: '3.14'
+              cache: pip
+              cache-dependency-path: requirements-pre-commit.txt
+            action: actions/setup-python
+          - name: Setup Node.js for nested Markdown
+            with:
+              node-version: '24'
+              cache: npm
+              cache-dependency-path: package-lock.json
+            action: actions/setup-node
+          - name: Install root Markdown dependencies
+            run_sha256: e568f48e4564d1ada4a272f93f6e94a1db7c70212a765c414a6ec92d2a889e21
+          - name: Setup Terraform
+            with:
+              terraform_version: 1.14.4
+            action: hashicorp/setup-terraform
+          - name: Setup TFLint
+            with:
+              tflint_version: v0.51.1
+            action: terraform-linters/setup-tflint
+          - name: Cache pre-commit hooks
+            with:
+              path: ~/.cache/pre-commit
+              key: pre-commit-${{ hashFiles('.pre-commit-config.yaml', 'requirements-pre-commit.txt') }}
+            action: actions/cache
+          - name: Install pre-commit
+            shell: python
+            run_sha256: 7acffd8be7b89e167121a560bbd121fed99e81f35f4af5f84fec046e3c513a82
+          - name: Run pre-commit hooks
+            run_sha256: 9c50397b2dff987d3cb136ca3719d90de28d06c817843f12b46675c840fc9f4c
+  .github/workflows/python-ci.yml:
+    events:
+      push:
+        branches:
+          - '**'
+      pull_request:
+        branches:
+          - '**'
+      workflow_dispatch:
+        inputs:
+          run_slow_tests:
+            description: Run slow template tests in addition to the default non-slow suite.
+            required: false
+            default: false
+            type: boolean
+    defaults: {}
+    env:
+      PYTEST_DEFAULT_MARKER_EXPRESSION: ${{ github.repository == 'franklesniak/copilot-repo-template' && 'not slow' || 'not
+        slow and not upstream_template_only' }}
+      PYTEST_SLOW_MARKER_EXPRESSION: ${{ github.repository == 'franklesniak/copilot-repo-template' && 'slow' || 'slow and
+        not upstream_template_only' }}
+    jobs:
+      type-check:
+        controls:
+          runs-on: ubuntu-latest
+        steps:
+          - name: Checkout repository
+            with:
+              persist-credentials: false
+            action: actions/checkout
+          - name: Setup Python
+            with:
+              python-version: '3.13'
+              cache: pip
+            action: actions/setup-python
+          - name: Install dependencies
+            run_sha256: 223c4b18a8ce8504b32aeff944d1a8a216e6536abc107afbe87e893523b2c92c
+          - name: Run mypy
+            shell: bash
+            continue-on-error: ${{ github.repository != 'franklesniak/copilot-repo-template' }}
+            run_sha256: d421f9f18c8d39687680e3c2a4091185d0b3f7a32bac2db5fbf70ef0e0f0ae6d
+          - name: Run Pyright
+            continue-on-error: ${{ github.repository != 'franklesniak/copilot-repo-template' }}
+            run_sha256: 83a643d03d5b5caf4b81a6bfdf9fc582c25e38d622fe7dad6ff86c62cae7a1ac
+      test:
+        controls:
+          runs-on: ${{ matrix.os }}
+          strategy:
+            matrix:
+              os:
+                - ubuntu-latest
+                - windows-latest
+                - macos-latest
+              python-version:
+                - '3.13'
+                - '3.14'
+        steps:
+          - name: Checkout repository
+            with:
+              persist-credentials: false
+            action: actions/checkout
+          - name: Setup Python ${{ matrix.python-version }}
+            with:
+              python-version: ${{ matrix.python-version }}
+              cache: pip
+            action: actions/setup-python
+          - name: Install dependencies
+            run_sha256: 223c4b18a8ce8504b32aeff944d1a8a216e6536abc107afbe87e893523b2c92c
+          - name: Run non-slow tests with coverage
+            shell: bash
+            run_sha256: e0b03ad4dd3b51fe7fc6729cf39bea4597fdfa07c60d539c93d658a619b59c17
+          - name: Run slow template tests
+            if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_slow_tests }}
+            shell: bash
+            run_sha256: 13cfe73984a4b9c37fa950846f52e717a065081870dbd85e3ab921154f1e2f95
+  .github/workflows/terraform-ci.yml:
+    events:
+      push:
+        branches:
+          - '**'
+      pull_request:
+        branches:
+          - '**'
+      workflow_dispatch: null
+    defaults: {}
+    env: {}
+    jobs:
+      format:
+        controls:
+          runs-on: ubuntu-latest
+        steps:
+          - name: Checkout repository
+            with:
+              persist-credentials: false
+            action: actions/checkout
+          - name: Setup Terraform
+            with:
+              terraform_version: 1.14.4
+            action: hashicorp/setup-terraform
+          - name: Terraform Format Check
+            run_sha256: 4faf21577ac0bb9fb922c5e0f8e590141808a082ccfd8c397aa4f945c396cdb5
+      validate:
+        controls:
+          needs: format
+          runs-on: ubuntu-latest
+        steps:
+          - name: Checkout repository
+            with:
+              persist-credentials: false
+            action: actions/checkout
+          - name: Setup Terraform
+            with:
+              terraform_version: 1.14.4
+            action: hashicorp/setup-terraform
+          - name: Cache Terraform Providers
+            with:
+              path: ~/.terraform.d/plugin-cache
+              key: terraform-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
+              restore-keys: 'terraform-providers-
+
+                '
+            action: actions/cache
+          - name: Configure Provider Cache
+            run_sha256: 411ef925d28c1702fb271e0c32a45a83bc0c2048406e3802a8cb56f74ab9e244
+          - name: Find Terraform directories
+            id: find-tf-dirs
+            run_sha256: 7187fd3cad88a815bdafad7468d08cb8e533cfcc2ec80070acc05f4769698bb8
+          - name: Terraform Init and Validate
+            run_sha256: ac20a834f684ef3487cb7edd2fefde33ee5944f3ea8417ca2b8fe2555bf6585a
+      lint:
+        controls:
+          needs: validate
+          runs-on: ubuntu-latest
+        steps:
+          - name: Checkout repository
+            with:
+              persist-credentials: false
+            action: actions/checkout
+          - name: Cache TFLint Plugins
+            with:
+              path: ~/.tflint.d/plugins
+              key: tflint-plugins-${{ hashFiles('.tflint.hcl') }}
+              restore-keys: 'tflint-plugins-
+
+                '
+            action: actions/cache
+          - name: Setup TFLint
+            with:
+              tflint_version: v0.51.1
+            action: terraform-linters/setup-tflint
+          - name: Init TFLint
+            run_sha256: 46f73e3bdd91b9ce21b19e852dd0076eb56edd3f6a4d8166bf724ab55e2e3302
+          - name: Run TFLint
+            run_sha256: eef5cdd0b6c1c3f5e1cce6bbc60eefc302745f2c0d4420ffd16d58ea520f20a8
+      test:
+        controls:
+          needs: validate
+          runs-on: ubuntu-latest
+        steps:
+          - name: Checkout repository
+            with:
+              persist-credentials: false
+            action: actions/checkout
+          - name: Setup Terraform
+            with:
+              terraform_version: 1.14.4
+            action: hashicorp/setup-terraform
+          - name: Cache Terraform Providers
+            with:
+              path: ~/.terraform.d/plugin-cache
+              key: terraform-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
+              restore-keys: 'terraform-providers-
+
+                '
+            action: actions/cache
+          - name: Configure Provider Cache
+            run_sha256: 411ef925d28c1702fb271e0c32a45a83bc0c2048406e3802a8cb56f74ab9e244
+          - name: Check for test files
+            id: check-tests
+            run_sha256: eb73ee406f0a68779fe7f9cfd13bb329ae7d0f1ff07e1026f5ab6ba0a498f0a9
+          - name: Find Terraform directories with tests
+            id: find-test-dirs
+            if: steps.check-tests.outputs.has_tests == 'true'
+            run_sha256: 45a82a976b55c154129a0c8fc92f2ac84fde7db517d3c586c0a1b11cb84fa69c
+          - name: Run Terraform Tests
+            if: steps.check-tests.outputs.has_tests == 'true'
+            run_sha256: 62fbed8c933e0d5a385006499ce93c53dd9bab15409370a816984ca992ed2238
+          - name: Skip tests (no test files found)
+            if: steps.check-tests.outputs.has_tests == 'false'
+            run_sha256: 5a3f754b7717053a3d21b675d32b3d23ab62e6f4110b8ba0c1369047296c3376
+  .github/workflows/toolchain-eol.yml:
+    events:
+      schedule:
+        - cron: 23 7 1 * *
+      workflow_dispatch:
+        inputs:
+          warning-window-days:
+            description: Days before EOL that should fail the check. Leave blank to use the TOOLCHAIN_EOL_WARNING_DAYS default.
+            required: false
+    defaults: {}
+    env:
+      NODE_RELEASE_SCHEDULE_URL: https://raw.githubusercontent.com/nodejs/Release/main/schedule.json
+      TOOLCHAIN_EOL_WARNING_DAYS: '180'
+    jobs:
+      node-eol:
+        controls:
+          runs-on: ubuntu-latest
+        steps:
+          - name: Checkout repository
+            with:
+              persist-credentials: false
+            action: actions/checkout
+          - name: Setup Node.js
+            with:
+              node-version: '24'
+              cache: npm
+              cache-dependency-path: package-lock.json
+            action: actions/setup-node
+          - name: Install Node.js dependencies
+            run_sha256: e568f48e4564d1ada4a272f93f6e94a1db7c70212a765c414a6ec92d2a889e21
+          - name: Check monitored Node.js selectors
+            env:
+              WARNING_WINDOW_DAYS: ${{ inputs['warning-window-days'] || env.TOOLCHAIN_EOL_WARNING_DAYS }}
+            run_sha256: 1558152316f9507f5a3d6b9503fe2e05ca2e800c5278310804e15f4fa87b9563
+  .github/workflows/workflow-security.yml:
+    events:
+      push: null
+      pull_request: null
+      workflow_dispatch: null
+    defaults: {}
+    env: {}
+    jobs:
+      validate:
+        controls:
+          runs-on: ubuntu-latest
+        steps:
+          - name: Checkout repository
+            with:
+              persist-credentials: false
+            action: actions/checkout
+          - name: Set up Python
+            with:
+              python-version: '3.13'
+            action: actions/setup-python
+          - name: Install validator dependencies
+            run_sha256: a789f19adf728f77afad280f08cbc2c77514d08e85ec1dfa3d8bfb22a486e165
+          - name: Validate workflow security
+            run_sha256: 787ad3997854fb62536c9858830d679b9c7121bb27a610dcf39ee0d6fdf72775
+examples:
+  - .github/instructions/yaml.instructions.md
+  - OPTIONAL_CONFIGURATIONS.md
+  - docs/terraform/TERRAFORM_COPILOT_INSTRUCTIONS_GUIDE.md
+  - docs/terraform/TERRAFORM_LINTING_GUIDE.md
+  - docs/terraform/TERRAFORM_TESTING_GUIDE.md

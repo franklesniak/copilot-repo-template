@@ -1,12 +1,12 @@
 # Terraform Unit Testing Implementation Guide
 
-**Version:** 1.0.20260510.0
+**Version:** 1.0.20260919.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-10
+- **Last Updated:** 2026-09-19
 - **Scope:** This document provides comprehensive guidance for implementing Terraform unit testing in CI for the `franklesniak/copilot-repo-template` repository. It serves two purposes: (1) CI/Infrastructure Implementation Guide for setting up Terraform testing in GitHub Actions, and (2) Content Specification for what testing guidance should be embedded in `terraform.instructions.md`. This is a **guidance-only** document—it does not modify workflows or configurations directly.
 - **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md), [Terraform Instructions](../../.github/instructions/terraform.instructions.md), [Terraform Linting Guide](./TERRAFORM_LINTING_GUIDE.md)
 
@@ -957,10 +957,9 @@ test:
 
   steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
-
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
     - name: Setup Terraform
-      uses: hashicorp/setup-terraform@v3
+      uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
       with:
         terraform_version: "1.6.0"
 
@@ -1010,9 +1009,8 @@ test:
     fail-fast: false
 
   steps:
-    - uses: actions/checkout@v4
-
-    - uses: hashicorp/setup-terraform@v3
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+    - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
       with:
         terraform_version: ${{ matrix.terraform }}
 
@@ -1041,7 +1039,7 @@ When integration tests are required:
 
 ```yaml
 - name: Configure AWS Credentials
-  uses: aws-actions/configure-aws-credentials@v4
+  uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
   with:
     role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
     aws-region: us-east-1
@@ -1089,7 +1087,7 @@ steps:
 
 - name: Upload Test Results
   if: always()
-  uses: actions/upload-artifact@v4
+  uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
   with:
     name: terraform-test-results
     path: test-output.txt
@@ -1689,8 +1687,8 @@ jobs:
   integration-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
       - run: terraform test  # Full suite
 ```
 
@@ -1747,7 +1745,7 @@ Provider caching reduces initialization time:
 
 ```yaml
 - name: Cache Terraform Providers
-  uses: actions/cache@v4
+  uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
   with:
     path: ~/.terraform.d/plugin-cache
     key: terraform-providers-${{ hashFiles('**/.terraform.lock.hcl') }}

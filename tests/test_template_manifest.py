@@ -592,6 +592,7 @@ SKIPPED_DISCOVERY_DIRS = {
     ".ruff_cache",
     ".venv",
     "node_modules",
+    "work",  # Untracked durable agent evidence is not template documentation.
 }
 ONBOARDING_ONLY_REFERENCE_TOKENS = (
     "OPTIONAL_CONFIGURATIONS.md",

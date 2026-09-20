@@ -1051,11 +1051,7 @@ instruction_contracts:
         next_heading: '### Tool versions passed as action inputs or shell arguments'
         required_paragraphs:
           - >-
-            When immutable GitHub Action identity is selected, use a full commit SHA verified against the
-            upstream action repository. A same-line release tag or release link managed by Dependabot MAY
-            annotate that `uses:` reference; it is descriptive, not a second authoritative pin. Other version
-            mirrors remain prohibited. Navigation comments above `uses:` lines remain versionless under the
-            YAML writing guide when retained.
+            Template-owned executable external GitHub Actions and reusable workflows MUST use full lowercase 40-character commit SHAs verified against the upstream repository, with a same-line `# vMAJOR.MINOR.PATCH` release annotation. Commented workflow examples and copyable YAML documentation examples follow the same rule. The release annotation follows the `uses:` reference; it is descriptive, not a second authoritative pin. Other version mirrors remain prohibited. Navigation comments above `uses:` lines remain versionless under the YAML writing guide when retained.
           - >-
             Dependabot supports version updates for SHA references and their same-line release comments, but
             does not create vulnerability alerts for SHA-pinned actions. Maintainers MUST account for that

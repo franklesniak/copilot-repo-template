@@ -1972,7 +1972,7 @@ The workflow uses Node.js 24 by default:
 
 ```yaml
 - name: Setup Node.js
-  uses: actions/setup-node@v6
+  uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
   with:
     node-version: '24'
 ```
@@ -1981,7 +1981,7 @@ The workflow uses Node.js 24 by default:
 
 ```yaml
 - name: Setup Node.js
-  uses: actions/setup-node@v6
+  uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
   with:
     node-version: '22'
 ```
@@ -2925,7 +2925,7 @@ Uncomment the Codecov step to enable code coverage reporting:
 
 ```yaml
 - name: Upload coverage to Codecov
-  uses: codecov/codecov-action@v4
+  uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
   with:
     token: ${{ secrets.CODECOV_TOKEN }}  # Required for private repos only
     files: ./coverage.xml
@@ -4070,3 +4070,17 @@ If your project uses Python, periodically review your Python support window:
 - **[Design Decisions](.github/TEMPLATE_DESIGN_DECISIONS.md)**: Rationale behind template design choices (for maintainers and code reviewers)
 
 > **Note:** The Design Decisions document (`.github/TEMPLATE_DESIGN_DECISIONS.md`) is internal documentation for understanding WHY the template was designed a certain way. It is NOT an instruction guide—use the getting started guides above for setup instructions.
+
+<!-- template-sync: begin github-actions-only -->
+
+## Workflow Security Governance
+
+The `github-actions` module retains a self-contained workflow security contract, validator, schema, and standalone CI gate. The manifest owns selection; materialization validates the reviewed source before rendering the retained workflow controls. Baseline selections also retain the always-running pre-commit hook and Data CI invocation. Language-specific requirements disappear with their owning modules.
+
+Authorize `.github/workflow-security-contract.yml` explicitly as a protected policy path before first adoption or replacement. Record permitted local customization and the reviewed update decision. Adopter-created workflows remain outside baseline policy unless the owner explicitly enables `--strict`; synchronization preserves their bytes. Run `python .github/scripts/validate_workflow_security.py` after adoption and updates, and add `--verify-releases` when verifying changed action pins against upstream.
+
+Removing GitHub Actions requires reviewed cleanup of excluded standalone files and replacement of retained shared files with their pruned forms. Materialization never silently deletes those files. Validate the final downstream tree for excluded-module leftovers, including hooks, updater entries, schema, documentation, and policy references. Dependabot's Actions updater survives only when both GitHub platform automation and Actions are retained; otherwise action updates need manual review.
+
+See the [workflow security guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/workflow-security.md) for the baseline/strict boundary, required authorization, exact command fingerprints, intentional failure-aggregation exceptions, and the SHA-pin vulnerability-alert limitation. Copilot setup and action-free acquisition remain future opt-in profiles; this module does not implement them.
+
+<!-- template-sync: end github-actions-only -->

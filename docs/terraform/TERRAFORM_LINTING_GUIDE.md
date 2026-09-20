@@ -1,12 +1,12 @@
 # Terraform Linting Implementation Guide
 
-**Version:** 1.0.20260918.0
+**Version:** 1.0.20260919.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-18
+- **Last Updated:** 2026-09-19
 - **Scope:** This document provides comprehensive guidance for implementing Terraform linting in CI for the `franklesniak/copilot-repo-template` repository. It covers tool selection, workflow design, configuration, pre-commit integration, and best practices. This is a **guidance-only** document—it does not modify workflows or configurations directly.
 - **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md), [Terraform Instructions](../../.github/instructions/terraform.instructions.md)
 
@@ -597,8 +597,8 @@ jobs:
     name: Format Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: "1.6.0"
       - name: Terraform Format Check
@@ -609,8 +609,8 @@ jobs:
     needs: format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: "1.6.0"
       - name: Find Terraform Directories
@@ -633,8 +633,8 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: terraform-linters/setup-tflint@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: terraform-linters/setup-tflint@90f302c255ef959cbfb4bd10581afecdb7ece3e6 # v4.1.1
         with:
           tflint_version: v0.51.1  # Pin version for reproducibility
       - name: Init TFLint
@@ -648,8 +648,8 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true  # Advisory, not blocking
     steps:
-      - uses: actions/checkout@v4
-      - uses: aquasecurity/tfsec-action@v1.0.3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: aquasecurity/tfsec-action@b466648d6e39e7c75324f25d83891162a721f2d6 # v1.0.3
         with:
           soft_fail: true
 ```
@@ -691,7 +691,7 @@ validate
 Use `hashicorp/setup-terraform` for consistent Terraform installation:
 
 ```yaml
-- uses: hashicorp/setup-terraform@v3
+- uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
   with:
     terraform_version: "1.6.0"  # Pin specific version
     terraform_wrapper: true      # Enables output capturing
@@ -745,7 +745,7 @@ strategy:
     terraform-version: ['1.5.0', '1.6.0', '1.7.0']
 
 steps:
-  - uses: hashicorp/setup-terraform@v3
+  - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
     with:
       terraform_version: ${{ matrix.terraform-version }}
 ```
@@ -760,7 +760,7 @@ Cache the Terraform plugin directory to avoid repeated provider downloads:
 
 ```yaml
 - name: Cache Terraform Providers
-  uses: actions/cache@v4
+  uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
   with:
     path: ~/.terraform.d/plugin-cache
     key: terraform-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
@@ -779,7 +779,7 @@ Cache TFLint plugins to avoid repeated downloads:
 
 ```yaml
 - name: Cache TFLint Plugins
-  uses: actions/cache@v4
+  uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
   with:
     path: ~/.tflint.d/plugins
     key: tflint-plugins-${{ hashFiles('.tflint.hcl') }}
@@ -817,17 +817,16 @@ security:
   needs: validate
   runs-on: ubuntu-latest
   steps:
-    - uses: actions/checkout@v4
-
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
     # Primary scanner (required)
     - name: Run tfsec
-      uses: aquasecurity/tfsec-action@v1.0.3
+      uses: aquasecurity/tfsec-action@b466648d6e39e7c75324f25d83891162a721f2d6 # v1.0.3
       with:
         soft_fail: false  # Fail on findings
 
     # Advisory scanner (optional)
     - name: Run Checkov (Advisory)
-      uses: bridgecrewio/checkov-action@v12
+      uses: bridgecrewio/checkov-action@444c9db6fa75e2d9c19ebf1fde7322089be9009e # v12.3125.0
       continue-on-error: true  # Don't fail workflow
       with:
         directory: .
@@ -1289,11 +1288,10 @@ Every workflow file **SHOULD** include a comprehensive header comment explaining
 ```yaml
 # Primary security scan - MUST pass
 - name: Run tfsec
-  uses: aquasecurity/tfsec-action@v1.0.3
-
+  uses: aquasecurity/tfsec-action@b466648d6e39e7c75324f25d83891162a721f2d6 # v1.0.3
 # Advisory scan - informational only
 - name: Run Checkov (Advisory)
-  uses: bridgecrewio/checkov-action@v12
+  uses: bridgecrewio/checkov-action@444c9db6fa75e2d9c19ebf1fde7322089be9009e # v12.3125.0
   continue-on-error: true
 ```
 
@@ -1527,7 +1525,7 @@ tflint --init && tflint --recursive
 **SHOULD** pin Terraform version for reproducibility:
 
 ```yaml
-- uses: hashicorp/setup-terraform@v3
+- uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
   with:
     terraform_version: "1.6.0"  # Pin specific version
 ```
@@ -1560,7 +1558,7 @@ Using `latest` is **NOT** acceptable for:
 Avoid `latest` for reproducible CI runs:
 
 ```yaml
-- uses: terraform-linters/setup-tflint@v6
+- uses: terraform-linters/setup-tflint@1cf010d3c7aef302051ccdb68c14c5dc2efa34ef # v6.3.1
   with:
     tflint_version: latest
 ```
@@ -1568,7 +1566,7 @@ Avoid `latest` for reproducible CI runs:
 **Recommendation:** Pin to specific version for reproducibility:
 
 ```yaml
-- uses: terraform-linters/setup-tflint@v6
+- uses: terraform-linters/setup-tflint@1cf010d3c7aef302051ccdb68c14c5dc2efa34ef # v6.3.1
   with:
     tflint_version: v0.51.1
 ```

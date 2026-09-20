@@ -675,6 +675,7 @@ def materialize_module_fixture(
     included_modules: tuple[str, ...],
     *,
     authorize_protected_files: bool = False,
+    authorize_workflow_contract: bool = True,
 ) -> Path:
     """Materialize a real downstream fixture from the requested module set."""
     target_root = tmp_path / "downstream"
@@ -685,6 +686,12 @@ def materialize_module_fixture(
         marker_fields["protected_file_decisions"] = protected_take_decisions_for_modules(
             included_modules
         )
+    elif authorize_workflow_contract and "github-actions" in included_modules:
+        marker_fields["protected_file_decisions"] = [
+            decision
+            for decision in protected_take_decisions_for_modules(included_modules)
+            if decision["path"] == ".github/workflow-security-contract.yml"
+        ]
     write_yaml(
         target_root / "decisions.yml",
         marker_document(list(included_modules), **marker_fields),
@@ -831,7 +838,10 @@ def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -
         decision["path"] == INSTRUCTION_CONTRACTS_PATH for decision in decisions
     ), "support-retaining profiles must explicitly authorize the protected catalog"
     if profile == "neither":
-        assert {decision["path"] for decision in decisions} == {INSTRUCTION_CONTRACTS_PATH}
+        assert {decision["path"] for decision in decisions} == {
+            INSTRUCTION_CONTRACTS_PATH,
+            ".github/workflow-security-contract.yml",
+        }
     run_git(target, "init", "-q")
     run_git(target, "add", ".")
     finish_review_profile_link_cleanup(target, profile)
@@ -2416,12 +2426,12 @@ def test_materialized_all_modules_except_baseline_has_no_dangling_references(
     [
         pytest.param(
             ("github-platform", "python"),
-            {"github-actions", "npm", "pip"},
+            {"npm", "pip"},
             id="python-without-baseline",
         ),
         pytest.param(
             ("github-platform",),
-            {"github-actions", "npm"},
+            {"npm"},
             id="neither-baseline-nor-python",
         ),
     ],
@@ -6352,7 +6362,7 @@ def test_materialized_workflows_keep_all_checkout_credentials_disabled(
     if profile == "no-github":
         assert not paths
         return
-    assert len(paths) == 9
+    assert len(paths) == 10
     checkout_count = 0
     for path in paths:
         workflow = yaml.safe_load(read_file(path))

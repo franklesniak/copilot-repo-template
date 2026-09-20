@@ -139,6 +139,7 @@ def assert_candidate_hook_checkout(workflow_text: str) -> None:
     """Require credential-free checkout before actual candidate pre-commit steps."""
     assert_credential_free_checkouts(workflow_text)
     workflow = yaml.safe_load(workflow_text)
+    assert workflow.get("permissions") == {"contents": "read"}
     hook_jobs = 0
     for job in workflow["jobs"].values():
         steps = job.get("steps", [])
@@ -150,7 +151,7 @@ def assert_candidate_hook_checkout(workflow_text: str) -> None:
         if not hook_indexes:
             continue
         hook_jobs += 1
-        assert job.get("permissions", workflow.get("permissions")) == {"contents": "read"}
+        assert job.get("permissions") == {"contents": "read"}
         for hook_index in hook_indexes:
             checkouts = [
                 step

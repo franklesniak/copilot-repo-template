@@ -198,7 +198,10 @@ VALIDATION_COMMANDS_BY_MODULE: dict[str, tuple[str, ...]] = {
         "pre-commit run --all-files",
         "placeholder and repository-identity review",
     ),
-    "github-actions": ("pre-commit run actionlint --all-files",),
+    "github-actions": (
+        "pre-commit run actionlint --all-files",
+        "python .github/scripts/validate_workflow_security.py",
+    ),
     "github-platform": (
         "pre-commit run validate-dependabot-config --all-files",
         "pre-commit run validate-dependabot-config-valid-examples --all-files",

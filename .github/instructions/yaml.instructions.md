@@ -199,15 +199,15 @@ This section is limited to GitHub Actions setup actions and Azure Pipelines lang
 **Compliant:**
 
 ```yaml
-- uses: actions/setup-python@v6
+- uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
   with:
     python-version: "3.13"
 
-- uses: actions/setup-node@v6
+- uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
   with:
     node-version: "24"
 
-- uses: actions/setup-dotnet@v4
+- uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
   with:
     dotnet-version: "10.0.x"
 ```
@@ -252,15 +252,15 @@ steps:
 **Non-compliant:**
 
 ```yaml
-- uses: actions/setup-python@v6
+- uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
   with:
     python-version: '3.x'
 
-- uses: actions/setup-python@v6
+- uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
   with:
     python-version: 'latest'
 
-- uses: actions/setup-dotnet@v4
+- uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
   with:
     dotnet-version: '10.x'
 ```
@@ -318,10 +318,10 @@ Compliant example: this tracked `package.json` declares only `engines.node` as t
 The following step sequence uses Bash for the verification step. It reads the same JSON field, rejects a non-exact value, and stops before `npm ci` on mismatch.
 
 ```yaml
-- uses: actions/checkout@v7
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
   with:
     persist-credentials: false
-- uses: actions/setup-node@v7
+- uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
   with:
     node-version-file: package.json
     package-manager-cache: false
@@ -364,20 +364,18 @@ Pinned documentation URLs go stale because Dependabot updates `uses:` references
 
 ```yaml
 # See: https://github.com/actions/checkout/releases/latest
-- uses: actions/checkout@v6
-
+- uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 # Documentation: https://github.com/actions/setup-python#readme
-- uses: actions/setup-python@v6
+- uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
 ```
 
 **Non-compliant:**
 
 ```yaml
 # See: https://github.com/actions/checkout/releases/tag/v6.0.2
-- uses: actions/checkout@v6
-
+- uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 # Documentation: https://github.com/actions/setup-python/tree/v6
-- uses: actions/setup-python@v6
+- uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
 ```
 
 <!-- RATIONALE: github-actions-documentation-comment-urls -->
@@ -399,7 +397,7 @@ This guidance applies to comments in workflow files under `.github/workflows/` a
 ```yaml
 # Keep this tflint_version aligned with every other tflint_version input
 # passed to terraform-linters/setup-tflint under .github/workflows/.
-- uses: terraform-linters/setup-tflint@v6
+- uses: terraform-linters/setup-tflint@1cf010d3c7aef302051ccdb68c14c5dc2efa34ef # v6.3.1
   with:
     tflint_version: "v0.51.1"
 ```
@@ -408,7 +406,7 @@ This guidance applies to comments in workflow files under `.github/workflows/` a
 
 ```yaml
 # This tflint_version must match terraform-ci.yml and auto-fix-precommit.yml.
-- uses: terraform-linters/setup-tflint@v6
+- uses: terraform-linters/setup-tflint@1cf010d3c7aef302051ccdb68c14c5dc2efa34ef # v6.3.1
   with:
     tflint_version: "v0.51.1"
 ```

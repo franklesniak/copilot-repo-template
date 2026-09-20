@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Workflow security contract",
+  "description": "Reviewed execution controls; manifest-derived selection, no action version mirrors.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "workflows",
+    "examples"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "workflows": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^\\.github/workflows/[A-Za-z0-9_.-]+\\.ya?ml$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/workflow"
+      }
+    },
+    "examples": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^(?!.*\\.\\.)[A-Za-z0-9_./-]+\\.md$"
+      }
+    }
+  },
+  "$defs": {
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "events",
+        "defaults",
+        "env",
+        "jobs"
+      ],
+      "properties": {
+        "events": {
+          "type": [
+            "object",
+            "array",
+            "string"
+          ]
+        },
+        "defaults": {
+          "type": "object"
+        },
+        "env": {
+          "type": "object"
+        },
+        "jobs": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "controls",
+              "steps"
+            ],
+            "properties": {
+              "controls": {
+                "type": "object"
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "name": {},
+                    "id": {},
+                    "if": {},
+                    "shell": {},
+                    "continue-on-error": {},
+                    "working-directory": {},
+                    "env": {},
+                    "run_sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "action": {
+                      "type": "string"
+                    },
+                    "with": {
+                      "type": "object"
+                    },
+                    "timeout-minutes": {
+                      "type": [
+                        "number",
+                        "string"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$id": "https://raw.githubusercontent.com/franklesniak/copilot-repo-template/HEAD/schemas/workflow-security-contract.schema.json"
+}

@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.6.20260918.0
+**Version:** 1.6.20260919.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-18
+- **Last Updated:** 2026-09-19
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
@@ -31,6 +31,9 @@ Instruction files, style guides, and the retained instruction-contract catalog a
 - Cursor project rules under `.cursor/rules/`
 - Modular instruction files under `.github/instructions/`
 - The retained instruction-contract catalog: `.template-sync/instruction-contracts.yml`
+<!-- template-sync: begin github-actions-only -->
+- The retained workflow security contract: `.github/workflow-security-contract.yml`
+<!-- template-sync: end github-actions-only -->
 
 Agents **MUST NOT** create, edit, delete, rename, or otherwise change these protected governance files unless the repository owner or maintainer has directly and explicitly authorized the specific protected-content change in the current task. Implied consent is insufficient.
 
@@ -204,7 +207,7 @@ For the rationale, see the **Workflow Version Pinning and Dependabot Coherence**
 
 ### Action versions in `uses:` references
 
-- Third-party action versions **MUST** remain directly visible in `uses:` references (for example, `actions/checkout@v6`, `actions/setup-node@v6`) so Dependabot's `github-actions` ecosystem can update them.
+- Third-party action versions **MUST** remain directly visible in `uses:` references (for example, `actions/checkout`, `actions/setup-node`) so Dependabot's `github-actions` ecosystem can update them.
 - Repeated `uses:` references to the same action across jobs and steps are acceptable when each occurrence is a normal Dependabot-managed `uses:` reference. Dependabot updates each `uses:` line directly.
 - Do **NOT** store an action version in a workflow-level `env:` variable, unmanaged comment, cache key, file path, shell literal, manually constructed image tag, or any other secondary location as a mirror of a `uses:` version. The `uses:` line **MUST** be the only authoritative source for the action version because Dependabot rewrites `uses:` references and will leave unrelated literals stale.
 - Do **NOT** copy a Dependabot-managed action version into secondary workflow locations that Dependabot will not reliably rewrite (for example, cache keys, file paths, shell commands, manually constructed image tags, or comments presented as authoritative version state).
@@ -212,7 +215,7 @@ For the rationale, see the **Workflow Version Pinning and Dependabot Coherence**
 
 ### Immutable action pins and release comments
 
-When immutable GitHub Action identity is selected, use a full commit SHA verified against the upstream action repository. A same-line release tag or release link managed by Dependabot MAY annotate that `uses:` reference; it is descriptive, not a second authoritative pin. Other version mirrors remain prohibited. Navigation comments above `uses:` lines remain versionless under the YAML writing guide when retained.
+Template-owned executable external GitHub Actions and reusable workflows MUST use full lowercase 40-character commit SHAs verified against the upstream repository, with a same-line `# vMAJOR.MINOR.PATCH` release annotation. Commented workflow examples and copyable YAML documentation examples follow the same rule. The release annotation follows the `uses:` reference; it is descriptive, not a second authoritative pin. Other version mirrors remain prohibited. Navigation comments above `uses:` lines remain versionless under the YAML writing guide when retained.
 
 Dependabot supports version updates for SHA references and their same-line release comments, but does not create vulnerability alerts for SHA-pinned actions. Maintainers MUST account for that alert limitation when selecting and maintaining pins, including reviewing upstream releases and advisories. A SHA identifies action code; it does not lock everything that action downloads or establish trust in its source.
 
@@ -220,7 +223,7 @@ See [GitHub's action security guidance](https://docs.github.com/en/actions/refer
 
 ### Tool versions passed as action inputs or shell arguments
 
-Tool versions that are not managed by Dependabot — for example, the value of the `node-version` input passed to `actions/setup-node@v6` — **SHOULD** still avoid unnecessary duplication. If the same tool version is required in multiple workflow jobs or steps, prefer a single source of truth where GitHub Actions supports one, such as a workflow-level `env:` value for the CLI/tool version.
+Tool versions that are not managed by Dependabot — for example, the value of the `node-version` input passed to `actions/setup-node` — **SHOULD** still avoid unnecessary duplication. If the same tool version is required in multiple workflow jobs or steps, prefer a single source of truth where GitHub Actions supports one, such as a workflow-level `env:` value for the CLI/tool version.
 
 ### Asymmetry: workflow-level `env:` for action versions vs. tool versions
 
@@ -233,7 +236,7 @@ The two categories are **not** symmetric, and the difference is the entire point
 
 Action wrapper versions and the tool versions they install are **separate pins** that travel through different channels:
 
-- `actions/setup-node@v6` is the setup action version (managed by Dependabot via `uses:`).
+- `actions/setup-node` is the setup action version (managed by Dependabot via `uses:`).
 - The `node-version` input's value is the Node.js version installed by that setup action (not managed by Dependabot; manually maintained).
 
 Both pins exist in the same workflow step, but they update on different cadences and through different mechanisms. Do not conflate them.
@@ -244,8 +247,8 @@ If a Dependabot-managed dependency genuinely cannot be represented only through 
 
 ### Concrete examples in this repository
 
-- Pinned action majors such as `actions/checkout@v6`, `actions/setup-python@v6`, `actions/cache@v5`, and `actions/setup-node@v6` appear repeatedly in workflow `uses:` lines. These are acceptable because each occurrence is a normal Dependabot-managed `uses:` reference.
-- In the upstream template's Markdown CI, the value of the `node-version` input in [`.github/workflows/markdownlint.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/markdownlint.yml) is the source of truth for the Node.js version installed by `actions/setup-node@v6`. This is a Node.js version (not the `actions/setup-node` action version), so it is **not** a Dependabot `uses:` desynchronization case. It is a useful candidate for a future single source of truth (such as a workflow-level `env:` value) if duplication grows; refactoring existing workflows to that shape is out of scope for this rule.
+- Pinned actions such as `actions/checkout`, `actions/setup-python`, `actions/cache`, and `actions/setup-node` appear repeatedly in workflow `uses:` lines. These are acceptable because each occurrence is a normal Dependabot-managed `uses:` reference.
+- In the upstream template's Markdown CI, the value of the `node-version` input in [`.github/workflows/markdownlint.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/markdownlint.yml) is the source of truth for the Node.js version installed by `actions/setup-node`. This is a Node.js version (not the `actions/setup-node` action version), so it is **not** a Dependabot `uses:` desynchronization case. It is a useful candidate for a future single source of truth (such as a workflow-level `env:` value) if duplication grows; refactoring existing workflows to that shape is out of scope for this rule.
 
 ## Repository Self-Containment
 

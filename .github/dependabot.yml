@@ -83,6 +83,7 @@ updates:
     open-pull-requests-limit: 10
   # template-sync: end pip-dependencies-only
 
+  # template-sync: begin github-actions-only
   # GitHub Actions (workflows)
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -98,6 +99,8 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     open-pull-requests-limit: 10
+
+  # template-sync: end github-actions-only
 
   # template-sync: begin baseline-only
   # Pre-commit hooks (.pre-commit-config.yaml); the runner uses pip above.

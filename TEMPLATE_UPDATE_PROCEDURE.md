@@ -753,6 +753,15 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `.azuredevops/platform/**` | `azure-devops-platform` |
 | `docs/azure-devops-support.md` | one of `azure-devops-platform`, `azure-pipelines`, `azure-devops-collaboration` |
 | `tests/test_dependabot_schema.py`, `tests/fixtures/dependabot/auto-assignment.yml` | `github-platform`, `schema` |
+| `docs/workflow-security.md` | `github-actions` |
+| `.github/workflow-security-contract.yml` | `github-actions` |
+| `.github/scripts/validate_workflow_security.py` | `github-actions` |
+| `schemas/workflow-security-contract.schema.json` | `github-actions` |
+| `.github/workflows/workflow-security.yml` | `github-actions` |
+| `schemas/examples/workflow-security-contract/**` | `github-actions`, `template-sync-support` |
+| `tests/test_workflow_security_contract.py` | `github-actions`, `template-sync-support` |
+| `tests/test_contract_wiring.py` | `template-sync-support` |
+| `tests/test_workflow_security_lifecycle.py` | `github-actions`, `template-sync-support` |
 | `.github/workflows/markdownlint.yml` | `markdown`, `github-actions` |
 | `.github/workflows/toolchain-eol.yml` | `markdown`, `github-actions` |
 | `.github/workflows/powershell-ci.yml` | `powershell`, `github-actions` |
@@ -1800,3 +1809,17 @@ Future automation MAY add:
 - a higher-level dry-run reporter that combines the candidate table with validation planning without applying changes
 
 `.template-sync/manifest.yml` is authoritative for the taxonomy. `.template-sync/marker.yml` is authoritative for included modules, local overrides, protected-file decisions, and deferred protected candidates. The candidate generator and generated adoption ledger are intentionally read-only review aids; this document remains the authoritative manual procedure.
+
+<!-- template-sync: begin github-actions-only -->
+
+## Workflow Security Governance
+
+The `github-actions` module retains a self-contained workflow security contract, validator, schema, and standalone CI gate. The manifest owns selection; materialization validates the reviewed source before rendering the retained workflow controls. Baseline selections also retain the always-running pre-commit hook and Data CI invocation. Language-specific requirements disappear with their owning modules.
+
+Authorize `.github/workflow-security-contract.yml` explicitly as a protected policy path before first adoption or replacement. Record permitted local customization and the reviewed update decision. Adopter-created workflows remain outside baseline policy unless the owner explicitly enables `--strict`; synchronization preserves their bytes. Run `python .github/scripts/validate_workflow_security.py` after adoption and updates, and add `--verify-releases` when verifying changed action pins against upstream.
+
+Removing GitHub Actions requires reviewed cleanup of excluded standalone files and replacement of retained shared files with their pruned forms. Materialization never silently deletes those files. Validate the final downstream tree for excluded-module leftovers, including hooks, updater entries, schema, documentation, and policy references. Dependabot's Actions updater survives only when both GitHub platform automation and Actions are retained; otherwise action updates need manual review.
+
+See the [workflow security guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/workflow-security.md) for the baseline/strict boundary, required authorization, exact command fingerprints, intentional failure-aggregation exceptions, and the SHA-pin vulnerability-alert limitation. Copilot setup and action-free acquisition remain future opt-in profiles; this module does not implement them.
+
+<!-- template-sync: end github-actions-only -->

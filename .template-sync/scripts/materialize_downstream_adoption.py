@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -2405,9 +2406,57 @@ def write_staged_candidate(
                 included_modules,
                 relative_path=relative_path,
             )
+            if relative_path == ".github/workflow-security-contract.yml":
+                filtered_text = render_workflow_contract(template_root, mappings, included_modules)
             destination.write_bytes(filtered_text.encode("utf-8"))
         staged_paths.append(relative_path)
     return tuple(sorted(staged_paths))
+
+
+def render_workflow_contract(
+    template_root: Path,
+    mappings: tuple[ManifestMapping, ...],
+    included_modules: Collection[str],
+) -> str:
+    """Prune reviewed workflow controls using only manifest and inline-marker ownership.
+
+    Validate the complete source before deriving fingerprints of pruned shell bodies.
+    This is essential: unchecked regeneration would bless altered validation commands.
+    The resulting runtime contract has no dependency on template-sync support.
+    """
+    validator_path = resolve_safe_repository_target_path(
+        template_root, ".github/scripts/validate_workflow_security.py", field_name="validator"
+    )
+    spec = importlib.util.spec_from_file_location("workflow_policy_renderer", validator_path)
+    if spec is None or spec.loader is None:
+        raise MaterializationError("Cannot load workflow security validator")
+    validator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(validator)
+    try:
+        validator.validate_repository(template_root)
+        contract = validator.load_contract(template_root)
+        rendered: dict[str, Any] = {}
+        for path in contract["workflows"]:
+            relation = selected_relation_for_path(path, mappings)
+            if relation is None:
+                raise MaterializationError(f"Unmapped workflow contract path: {path}")
+            if relation.is_retained_by(included_modules):
+                text = remove_inline_blocks_for_modules(
+                    validator.read_text(template_root, path),
+                    included_modules,
+                    relative_path=path,
+                )
+                rendered[path] = validator.validate_workflow(text)
+        examples = []
+        for path in contract["examples"]:
+            relation = selected_relation_for_path(path, mappings)
+            if relation is None:
+                raise MaterializationError(f"Unmapped workflow example: {path}")
+            if relation.is_retained_by(included_modules):
+                examples.append(path)
+        return format_marker_yaml({"version": 1, "workflows": rendered, "examples": examples})
+    except (ValueError, OSError, KeyError, TypeError) as error:
+        raise MaterializationError(f"Workflow contract rendering failed: {error}") from error
 
 
 def placeholder_requested(args: argparse.Namespace) -> bool:

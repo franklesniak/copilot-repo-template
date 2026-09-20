@@ -315,6 +315,36 @@ template_manifest:
       requires_all:
         - github-platform
         - schema
+    - pattern: 'docs/workflow-security.md'
+      requires_all:
+        - github-actions
+    - pattern: '.github/workflow-security-contract.yml'
+      requires_all:
+        - github-actions
+    - pattern: '.github/scripts/validate_workflow_security.py'
+      requires_all:
+        - github-actions
+    - pattern: 'schemas/workflow-security-contract.schema.json'
+      requires_all:
+        - github-actions
+    - pattern: '.github/workflows/workflow-security.yml'
+      requires_all:
+        - github-actions
+    - pattern: 'schemas/examples/workflow-security-contract/**'
+      requires_all:
+        - github-actions
+        - template-sync-support
+    - pattern: 'tests/test_workflow_security_contract.py'
+      requires_all:
+        - github-actions
+        - template-sync-support
+    - pattern: 'tests/test_contract_wiring.py'
+      requires_all:
+        - template-sync-support
+    - pattern: 'tests/test_workflow_security_lifecycle.py'
+      requires_all:
+        - github-actions
+        - template-sync-support
     - pattern: '.github/workflows/markdownlint.yml'
       requires_all:
         - markdown

@@ -29,6 +29,8 @@ concurrency:
 
 jobs:
   fix-preview:
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # Scope the preview to Copilot pushes; the actor is not a trust boundary.

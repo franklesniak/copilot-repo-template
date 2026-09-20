@@ -43,8 +43,10 @@ AGENT_INSTRUCTION_EXACT_PATHS = frozenset(
         "GEMINI.md",
     }
 )
-PROTECTED_EXACT_PATHS = AGENT_INSTRUCTION_EXACT_PATHS | frozenset(
-    {".template-sync/instruction-contracts.yml"}
+PROTECTED_EXACT_PATHS = (
+    AGENT_INSTRUCTION_EXACT_PATHS
+    | frozenset({".template-sync/instruction-contracts.yml"})
+    | frozenset({".github/workflow-security-contract.yml"})
 )
 PROTECTED_GLOB_PATTERNS = (
     ".github/instructions/**",

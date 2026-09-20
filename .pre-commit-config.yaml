@@ -110,6 +110,15 @@ repos:
     rev: v1.7.12
     hooks:
       - id: actionlint
+  - repo: local
+    hooks:
+      - id: validate-workflow-security
+        name: Validate workflow security contract
+        entry: python .github/scripts/validate_workflow_security.py
+        language: python
+        additional_dependencies: [PyYAML==6.0.3, jsonschema==4.26.0]
+        pass_filenames: false
+        always_run: true
   # template-sync: end github-actions-only
 
   # template-sync: begin python-only

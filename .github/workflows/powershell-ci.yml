@@ -45,6 +45,8 @@ permissions:
 
 jobs:
   powershell-lint:
+    permissions:
+      contents: read
     name: Lint (PSScriptAnalyzer)
     runs-on: ubuntu-latest
     env:
@@ -55,7 +57,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -176,6 +178,8 @@ jobs:
   #   - Tests should be placed in tests/PowerShell/ or tests/ directory
   #   - See templates/powershell/Example.Tests.ps1 for test template
   test:
+    permissions:
+      contents: read
     name: PowerShell Tests (Pester)
     runs-on: ${{ matrix.os }}
     env:
@@ -186,7 +190,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 

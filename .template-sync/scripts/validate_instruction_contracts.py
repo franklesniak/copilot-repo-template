@@ -2307,11 +2307,14 @@ def validate_contracts(
                 missing_anchors.append(MissingAnchor(contract.path, "section content", anchor))
 
     if included_modules is not None:
+        excluded_contract_paths = {item.path for item in skipped_contracts}
         missing_file_paths = {missing_file.path for missing_file in missing_files}
         authorized_removal_paths = {
             authorized_removal.path for authorized_removal in authorized_removals
         }
         for obligation in protected_guide_section_obligations:
+            if obligation.path in excluded_contract_paths:
+                continue
             if not protected_guide_obligation_applies(
                 obligation.target_modules,
                 included_modules,

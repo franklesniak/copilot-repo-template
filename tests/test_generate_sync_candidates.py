@@ -66,6 +66,8 @@ def test_validation_commands_keep_actionlint_github_actions_scoped() -> None:
     azure_pipeline_commands = sync_candidates.VALIDATION_COMMANDS_BY_MODULE["azure-pipelines"]
 
     assert any("actionlint" in command for command in github_actions_commands)
+    assert "python .github/scripts/validate_workflow_security.py" in github_actions_commands
+    assert not any("validate_workflow_security" in command for command in azure_pipeline_commands)
     assert not any("actionlint" in command for command in azure_pipeline_commands)
     assert any("Azure Pipelines" in command for command in azure_pipeline_commands)
 
