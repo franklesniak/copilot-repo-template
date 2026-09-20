@@ -268,7 +268,8 @@ template_manifest:
         - agent-instructions
       notes: >-
         The session-start hook has a baseline-only pre-commit provisioning
-        block. Strip it when baseline is excluded.
+        block and a markdown-only locked Node dependency installation block.
+        Strip each block when its module is excluded.
     - pattern: '.github/ISSUE_TEMPLATE/**'
       requires_all:
         - github-templates
@@ -322,8 +323,11 @@ template_manifest:
       requires_all:
         - github-actions
     - pattern: '.github/scripts/validate_workflow_security.py'
-      requires_all:
+      requires_any:
         - github-actions
+        - template-sync-support
+      notes: >-
+        Shared trusted parser for the Actions runtime and the running materializer.
     - pattern: 'schemas/workflow-security-contract.schema.json'
       requires_all:
         - github-actions
@@ -402,15 +406,19 @@ template_manifest:
         excluded. Retain this workflow only when baseline and github-actions
         are adopted, so its pre-commit configuration and runner are present.
     - pattern: '.github/template-placeholders.json'
-      requires_all:
+      requires_any:
         - baseline
+        - template-sync-support
     - pattern: '.github/workflows/check-placeholders.yml'
       requires_all:
         - baseline
         - github-actions
     - pattern: '.github/scripts/replace-template-placeholders.py'
-      requires_all:
+      requires_any:
         - baseline
+        - template-sync-support
+      notes: >-
+        Shared trusted replacement helper for baseline setup and materialization.
     - pattern: '.github/scripts/validate-placeholder-schema-examples.py'
       requires_all:
         - baseline
@@ -596,8 +604,9 @@ template_manifest:
       requires_all:
         - template-sync-support
     - pattern: 'schemas/template-placeholders.schema.json'
-      requires_all:
+      requires_any:
         - baseline
+        - template-sync-support
     - pattern: 'schemas/examples/template-sync-marker/**'
       requires_all:
         - template-sync-support

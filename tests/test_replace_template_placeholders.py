@@ -1260,8 +1260,8 @@ def test_placeholder_manifest_paths_resolve_through_template_manifest() -> None:
         mappings,
     )
     assert schema_relation is not None
-    assert schema_relation.requires_all == frozenset({"baseline"})
-    assert schema_relation.requires_any == frozenset()
+    assert schema_relation.requires_all == frozenset()
+    assert schema_relation.requires_any == frozenset({"baseline", "template-sync-support"})
 
     data_ci_relation = placeholder_helper.selected_relation_for_path(
         ".github/workflows/data-ci.yml",

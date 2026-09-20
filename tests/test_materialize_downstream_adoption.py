@@ -4121,7 +4121,7 @@ def test_materializer_failure_cleans_temporary_worktree(tmp_path: Path) -> None:
     )
 
     assert result.returncode == 1
-    assert "placeholder helper is unavailable" in result.stderr
+    assert "Placeholder helper failed" in result.stderr
     assert git_worktree_paths(template_repo) == before_paths
 
 
@@ -4266,8 +4266,8 @@ def test_materialization_failure_plus_cleanup_failure_preserves_primary_error(
     captured = capsys.readouterr()
 
     assert exit_code == materializer.EXIT_RUNTIME_FAILURE
-    assert "placeholder helper is unavailable" in captured.err
-    assert captured.err.index("placeholder helper is unavailable") < captured.err.index(
+    assert "Placeholder helper failed" in captured.err
+    assert captured.err.index("Placeholder helper failed") < captured.err.index(
         "Temporary source checkout cleanup also failed"
     )
 
@@ -5434,10 +5434,23 @@ def test_materializer_args_file_decisions_path_traversal_is_rejected(
     assert "--decisions-file must not contain traversal segments" in result.stderr
 
 
-def test_placeholder_replacement_reuses_helper_and_missing_helper_fails(
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize("markdown", [True, False])
+def test_claude_bootstrap_tracks_markdown_without_baseline(tmp_path: Path, markdown: bool) -> None:
+    """Materialized agent hooks retain Markdown setup independently of baseline setup."""
+    modules = ("agent-instructions", "markdown") if markdown else ("agent-instructions",)
+    target = materialize_module_fixture(tmp_path, modules, authorize_protected_files=True)
+    hook = read_file(target / ".claude/hooks/session-start.sh")
+    assert ("npm ci --ignore-scripts" in hook) is markdown
+    assert ("markdown_repository_root" in hook) is markdown
+    assert "ensure_pre_commit" not in hook
+
+
+def test_placeholder_replacement_ignores_selected_helper(
     tmp_path: Path,
+    monkeypatch: Any,
 ) -> None:
-    """Placeholder inputs trigger the template-root helper and require it to exist."""
+    """Placeholder replacement uses trusted code even if selected code is hostile or absent."""
     template_root = tmp_path / "template"
     target_root = tmp_path / "target"
     target_root.mkdir()
@@ -5449,6 +5462,12 @@ def test_placeholder_replacement_reuses_helper_and_missing_helper_fails(
     write_file(
         template_root / "SECURITY.md",
         "Report at https://github.com/OWNER/REPO/security\nEmail [security contact email]\n",
+    )
+    write_file(
+        template_root / ".github/scripts/replace-template-placeholders.py",
+        "from pathlib import Path\n"
+        "Path(__file__).parents[2].joinpath('candidate-executed.txt').write_text('executed')\n"
+        "raise RuntimeError('candidate placeholder helper executed')\n",
     )
 
     result = run_materialize(
@@ -5465,10 +5484,35 @@ def test_placeholder_replacement_reuses_helper_and_missing_helper_fails(
     )
 
     assert result.returncode == 0, result.stderr
+    assert not (template_root / "candidate-executed.txt").exists()
     security_text = read_file(target_root / "SECURITY.md")
     assert "https://github.com/octo/widget/security" in security_text
     assert "security@example.com" in security_text
     assert "SECURITY.md" in result.stdout
+
+    # Restoring the selected source as the execution anchor must trip the sentinel.
+    mutant_target = tmp_path / "mutant-target"
+    mutant_target.mkdir()
+    with monkeypatch.context() as patch:
+        patch.setattr(materializer, "TRUSTED_TOOL_ROOT", template_root)
+        failed = materializer.main(
+            [
+                "--template-root",
+                str(template_root),
+                "--target-root",
+                str(mutant_target),
+                "--source-repo",
+                SOURCE_REPO,
+                "--included-module",
+                "baseline",
+                "--repository",
+                "octo/widget",
+                "--security-contact",
+                "security@example.com",
+            ]
+        )
+    assert failed == 1
+    assert read_file(template_root / "candidate-executed.txt") == "executed"
 
     missing_helper_template = tmp_path / "missing-helper-template"
     missing_helper_target = tmp_path / "missing-helper-target"
@@ -5476,7 +5520,9 @@ def test_placeholder_replacement_reuses_helper_and_missing_helper_fails(
     prepare_template(
         missing_helper_template,
         [{"pattern": "SECURITY.md", "requires_all": ["baseline"]}],
+        include_placeholder_helper=True,
     )
+    (missing_helper_template / ".github/scripts/replace-template-placeholders.py").unlink()
     write_file(missing_helper_template / "SECURITY.md", "Email [security contact email]\n")
 
     missing_result = run_materialize(
@@ -5492,8 +5538,8 @@ def test_placeholder_replacement_reuses_helper_and_missing_helper_fails(
         "security@example.com",
     )
 
-    assert missing_result.returncode == 1
-    assert "placeholder helper is unavailable" in missing_result.stderr
+    assert missing_result.returncode == 0, missing_result.stdout + missing_result.stderr
+    assert "security@example.com" in read_file(missing_helper_target / "SECURITY.md")
 
 
 @pytest.mark.upstream_template_only

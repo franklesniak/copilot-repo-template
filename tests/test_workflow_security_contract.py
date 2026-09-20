@@ -127,6 +127,74 @@ def test_required_execution_controls(tmp_path: Path, mutation: str) -> None:
         policy.validate_repository(tmp_path)
 
 
+@pytest.mark.parametrize("scope", ["workflow", "job"])
+def test_required_permissions_drift(tmp_path: Path, scope: str) -> None:
+    """Removing reviewed contents access is drift even though empty permissions are safe."""
+    copy_policy(tmp_path)
+    path = tmp_path / ".github/workflows/workflow-security.yml"
+    text = path.read_text(encoding="utf-8")
+    before, after = (
+        ("permissions:\n  contents: read\n", "permissions: {}\n")
+        if scope == "workflow"
+        else ("    permissions:\n      contents: read\n", "    permissions: {}\n")
+    )
+    assert before in text
+    changed = text.replace(before, after, 1)
+    policy.validate_workflow(changed)
+    path.write_text(changed, encoding="utf-8")
+    with pytest.raises(policy.PolicyError, match="execution controls"):
+        policy.validate_repository(tmp_path)
+
+
+@pytest.mark.parametrize("changed", ["  print(1)\n", "print(1)  \n", "print(1)\n\n"])
+def test_run_fingerprint_preserves_whitespace(changed: str) -> None:
+    """Preserve shell-significant scalar whitespace while allowing CRLF transport."""
+    document = policy.parse_yaml(
+        "on: push\npermissions: {}\njobs:\n  check:\n    permissions: {}\n"
+        "    steps:\n      - shell: python\n        run: |\n          print(1)\n"
+    )
+    original = policy.describe_workflow(document)
+    step = document["jobs"]["check"]["steps"][0]
+    step["run"] = "print(1)\r\n"
+    assert policy.describe_workflow(document) == original
+    step["run"] = changed
+    assert policy.describe_workflow(document) != original
+
+
+@pytest.mark.parametrize("guard", ["workflow_permissions", "job_permissions", "run_whitespace"])
+def test_descriptor_guard_removal(tmp_path: Path, guard: str) -> None:
+    """Independent inputs expose restored permission omission or whitespace stripping."""
+    source = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
+    before, after = {
+        "workflow_permissions": ('        "permissions": document["permissions"],\n', ""),
+        "job_permissions": ('                    "permissions",\n', ""),
+        "run_whitespace": (
+            'step["run"].replace("\\r\\n", "\\n").encode("utf-8")',
+            'step["run"].replace("\\r\\n", "\\n").strip().encode("utf-8")',
+        ),
+    }[guard]
+    assert source.count(before) == 1
+    mutant_path = tmp_path / "descriptor_mutant.py"
+    mutant_path.write_text(source.replace(before, after), encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("descriptor_mutant", mutant_path)
+    assert spec is not None and spec.loader is not None
+    mutant = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mutant)
+    original = policy.parse_yaml(
+        "on: push\npermissions: {contents: read}\njobs:\n  check:\n"
+        "    permissions: {contents: read}\n    steps:\n      - run: print(1)\n"
+    )
+    changed = copy.deepcopy(original)
+    if guard == "workflow_permissions":
+        changed["permissions"] = {}
+    elif guard == "job_permissions":
+        changed["jobs"]["check"]["permissions"] = {}
+    else:
+        changed["jobs"]["check"]["steps"][0]["run"] = "  print(1)"
+    assert policy.describe_workflow(original) != policy.describe_workflow(changed)
+    assert mutant.describe_workflow(original) == mutant.describe_workflow(changed)
+
+
 def test_misleading_annotation_uses_upstream_resolution() -> None:
     """A valid-looking release comment must match the independently resolved commit."""
     ref = "owner/action@" + "a" * 40

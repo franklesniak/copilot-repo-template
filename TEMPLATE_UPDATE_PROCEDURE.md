@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.3.20260919.0
+**Version:** 1.3.20260920.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-19
+- **Last Updated:** 2026-09-20
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the first-adoption bootstrap command, the read-only first-adoption preflight/questionnaire mode, raw first-adoption state reporting, first-adoption quality-debt reports and suppressions, the adoption difficulties journal, one-shot first-adoption materialization, shell-safe first-adoption args files, package identity and collaboration-policy materialization, first-adoption structural convention assessment, first-adoption working-tree validation and doctor diagnostics, downstream local path ownership records, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -755,7 +755,7 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `tests/test_dependabot_schema.py`, `tests/fixtures/dependabot/auto-assignment.yml` | `github-platform`, `schema` |
 | `docs/workflow-security.md` | `github-actions` |
 | `.github/workflow-security-contract.yml` | `github-actions` |
-| `.github/scripts/validate_workflow_security.py` | `github-actions` |
+| `.github/scripts/validate_workflow_security.py` | one of `github-actions`, `template-sync-support` |
 | `schemas/workflow-security-contract.schema.json` | `github-actions` |
 | `.github/workflows/workflow-security.yml` | `github-actions` |
 | `schemas/examples/workflow-security-contract/**` | `github-actions`, `template-sync-support` |
@@ -769,9 +769,9 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `.github/workflows/precommit-ci.yml` | `baseline`, `github-actions` |
 | `.github/workflows/terraform-ci.yml` | `terraform`, `github-actions` |
 | `.github/workflows/data-ci.yml` | `baseline`, `github-actions` |
-| `.github/template-placeholders.json` | `baseline` |
+| `.github/template-placeholders.json` | one of `baseline`, `template-sync-support` |
 | `.github/workflows/check-placeholders.yml` | `baseline`, `github-actions` |
-| `.github/scripts/replace-template-placeholders.py` | `baseline` |
+| `.github/scripts/replace-template-placeholders.py` | one of `baseline`, `template-sync-support` |
 | `.github/scripts/validate-placeholder-schema-examples.py` | `baseline` |
 | `.github/workflows/auto-fix-precommit.yml` | `baseline`, `github-actions` |
 | `.azuredevops/pipelines/README.md` | `azure-pipelines` |
@@ -797,7 +797,7 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `templates/json/**` | `json` |
 | `templates/yaml/**` | `yaml` |
 | `schemas/template-sync-manifest.schema.json`, `schemas/template-sync-marker.schema.json`, `schemas/template-sync-instruction-contracts.schema.json`, `schemas/first-adoption-quality-suppressions.schema.json` | `template-sync-support` |
-| `schemas/template-placeholders.schema.json` | `baseline` |
+| `schemas/template-placeholders.schema.json` | one of `baseline`, `template-sync-support` |
 | `schemas/examples/template-sync-marker/**`, `schemas/examples/template-sync-instruction-contracts/**`, `schemas/examples/first-adoption-quality-suppressions/**` | `template-sync-support` |
 | `schemas/examples/template-placeholders/**` | `baseline` |
 | `schemas/**` | `schema` |
@@ -1421,6 +1421,8 @@ When first-adoption materialization is used, inspect the command surface first:
 ```bash
 python .template-sync/scripts/materialize_downstream_adoption.py --help
 ```
+
+The running materializer loads executable helpers only from its own reviewed installation. Selected template validators and placeholder scripts remain inert staged files, including sources obtained by ref or revision. Keep the installed materializer, shared helpers, and their data dependencies together; review and upgrade that bundle when a newer source contract is incompatible. Template-sync support retains the shared helpers even when Actions or baseline is omitted.
 
 Use `--template-root` when a local source checkout already exists. When that root is the top level of a complete, clean Git worktree, the helper reports the observed source commit and source worktree root. That observed commit is not automatically reviewed state. After completing review, rerun with `--stamp-resolved-source-as-reviewed`, or pass `--last-reviewed-template-commit FULL_SHA`. The stamp flag asserts both review completion and intended upstream lineage; a complete, clean local `HEAD` proves local checkout state, not source lineage by itself.
 

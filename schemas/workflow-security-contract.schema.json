@@ -38,6 +38,7 @@
       "additionalProperties": false,
       "required": [
         "events",
+        "permissions",
         "defaults",
         "env",
         "jobs"
@@ -49,6 +50,9 @@
             "array",
             "string"
           ]
+        },
+        "permissions": {
+          "$ref": "#/$defs/permissions"
         },
         "defaults": {
           "type": "object"
@@ -68,7 +72,15 @@
             ],
             "properties": {
               "controls": {
-                "type": "object"
+                "type": "object",
+                "required": [
+                  "permissions"
+                ],
+                "properties": {
+                  "permissions": {
+                    "$ref": "#/$defs/permissions"
+                  }
+                }
               },
               "steps": {
                 "type": "array",
@@ -106,6 +118,14 @@
           }
         }
       }
+    },
+    "permissions": {
+      "enum": [
+        {},
+        {
+          "contents": "read"
+        }
+      ]
     }
   },
   "$id": "https://raw.githubusercontent.com/franklesniak/copilot-repo-template/HEAD/schemas/workflow-security-contract.schema.json"

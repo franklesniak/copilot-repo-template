@@ -54,6 +54,8 @@ npm ci --ignore-scripts
 ```
 
 This keeps normal setup aligned with `package-lock.json` and reports a mismatch instead of rewriting the lock. For intentional dependency maintenance, use the appropriate `npm install --ignore-scripts` or `npm update --ignore-scripts` command, review the package and lockfile changes, and run validation. Later lint and test commands execute tools; disabling install scripts does not prevent that execution.
+
+Nested Markdown validation limits each input to 1 MiB, 64 nested Markdown fences, 1,024 extracted blocks, and 8 MiB of cumulative extracted content. Exceeding a limit fails with a diagnostic; split unusually large examples into smaller files. Claude hosted sessions install the same locked dependencies automatically when Markdown is retained.
 <!-- template-sync: end markdown-reference-only -->
 
 Git hooks are managed by pre-commit.

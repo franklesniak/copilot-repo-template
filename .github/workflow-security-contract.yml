@@ -5,11 +5,15 @@ workflows:
       push:
         branches:
           - copilot/**
+    permissions:
+      contents: read
     defaults: {}
     env: {}
     jobs:
       fix-preview:
         controls:
+          permissions:
+            contents: read
           if: github.actor == 'copilot-swe-agent[bot]'
           runs-on: ubuntu-latest
           timeout-minutes: 30
@@ -41,18 +45,18 @@ workflows:
             action: terraform-linters/setup-tflint
           - name: Install pre-commit
             shell: python
-            run_sha256: 7acffd8be7b89e167121a560bbd121fed99e81f35f4af5f84fec046e3c513a82
+            run_sha256: 4e102e51f301a44aeecd7ef2a0b785af5b55fac946de50ff0af97b2d0b98d9a7
           - name: Run pre-commit hooks
             id: hooks
             continue-on-error: true
-            run_sha256: 3397a95d1b40ee4e35cec2ac32ab99a649893be3f90a114dcfcb2ea2c6bb77ac
+            run_sha256: 3a508515202e1483711ae9e33717698b422ce16d807bfede969024e9bb21813f
           - name: Capture untrusted fix preview
             id: preview
             if: ${{ !cancelled() && (steps.hooks.outcome == 'success' || steps.hooks.outcome == 'failure') }}
             shell: python
             env:
               HOOK_EXIT: ${{ steps.hooks.outputs.exit_code }}
-            run_sha256: 5ce4a9f59d5fc0781a3e10cdd61c812bc375cb954fad110a6d1eb5f39d5098ff
+            run_sha256: 839ede9c7ea73d30212f8ea063cc5c41e213614ddc117abbdae6a0e350bebbe1
           - name: Upload untrusted fix preview
             if: ${{ !cancelled() && steps.preview.outcome == 'success' }}
             with:
@@ -69,17 +73,21 @@ workflows:
             action: actions/upload-artifact
           - name: Preserve pre-commit failure
             if: ${{ !cancelled() && steps.hooks.outcome == 'failure' }}
-            run_sha256: e7d5230aa171477a4fa8816af18e815d13dd67a42cfced049f526a49be04c427
+            run_sha256: ed3783be593491be6511f963ec29a422e74ed8d891b2570a61f5ba78e825c4e7
   .github/workflows/check-placeholders.yml:
     events:
       push: null
       pull_request: null
       workflow_dispatch: null
+    permissions:
+      contents: read
     defaults: {}
     env: {}
     jobs:
       check-placeholders:
         controls:
+          permissions:
+            contents: read
           if: github.repository != 'franklesniak/copilot-repo-template'
           runs-on: ubuntu-latest
         steps:
@@ -94,7 +102,7 @@ workflows:
           - name: Check for unresolved placeholders
             run_sha256: 7efe5a89e1aec8a8ee74f66fb5b5b7b19e633bc078035621f7e3cc88069112e5
           - name: Additional placeholder patterns check
-            run_sha256: d51fe7e959d1452d33ff7169a3cf9ddab150cfcb64ec1123edda0a5913139ebb
+            run_sha256: 5e492cafcf48f5914ac0165a660209fe204bbf3750e28f1431884c0ae33b60a1
   .github/workflows/data-ci.yml:
     events:
       push:
@@ -104,11 +112,15 @@ workflows:
         branches:
           - '**'
       workflow_dispatch: null
+    permissions:
+      contents: read
     defaults: {}
     env: {}
     jobs:
       data-file-linting:
         controls:
+          permissions:
+            contents: read
           runs-on: ubuntu-latest
         steps:
           - name: Checkout repository
@@ -128,7 +140,7 @@ workflows:
             action: actions/cache
           - name: Install pre-commit
             shell: python
-            run_sha256: 7acffd8be7b89e167121a560bbd121fed99e81f35f4af5f84fec046e3c513a82
+            run_sha256: 4e102e51f301a44aeecd7ef2a0b785af5b55fac946de50ff0af97b2d0b98d9a7
           - name: Run check-json
             run_sha256: a99b6d241dfd79866ec4644b1f9c628027d2afa33742a408e685ccc98609c29f
           - name: Run check-toml
@@ -191,11 +203,15 @@ workflows:
       pull_request:
         branches:
           - '**'
+    permissions:
+      contents: read
     defaults: {}
     env: {}
     jobs:
       markdownlint:
         controls:
+          permissions:
+            contents: read
           runs-on: ubuntu-latest
         steps:
           - name: Checkout repository
@@ -220,7 +236,7 @@ workflows:
           - name: Install Python dependencies
             if: "${{\n  github.repository == 'franklesniak/copilot-repo-template' ||\n  (hashFiles('pyproject.toml') != ''\
               \ &&\n  hashFiles('tests/test_materialize_downstream_adoption.py') != '')\n}}"
-            run_sha256: 654ca2e16c9cedde0732ae5655ac4bd34408a18c9ddd91896d5082d5912f4207
+            run_sha256: eb339bea1e849c914467ba67999f6f044146f7f7ad70bde582844917420d154e
           - name: Install pinned pre-commit runner
             if: ${{ github.repository == 'franklesniak/copilot-repo-template' }}
             run_sha256: 55ad594cb727d927918abbed17d7ea5727821aad76ce2386cd220edac0540668
@@ -257,11 +273,11 @@ workflows:
             run_sha256: 9e775f2469f666758da5c2c0a356ed92e4fdf4094dc953b1a70ce275453385f4
           - name: Check source-template regression results
             if: steps.lint-generated.outcome == 'failure' || steps.test-nested-hook.outcome == 'failure'
-            run_sha256: 3cc5dd452471e3ab1bc1d0f96b8678a70f5f690b5a2686f01a878369d19369e7
+            run_sha256: 14eb0d9bd49bb8bc296be8588451ffe6c13a1ea0442234987d1eddc43889ae4d
           - name: Check validation results
             if: steps.lint-outer.outcome == 'failure' || steps.lint-nested.outcome == 'failure' || steps.lint-links.outcome
               == 'failure' || steps.test-nested.outcome == 'failure' || steps.test-toolchain.outcome == 'failure'
-            run_sha256: 9551b1b07e3d5841b1854daf35fd4469bf583cc2922822f564ab785657262ab1
+            run_sha256: 3207fda8e828274127545fc578655eeb4bd26981854e2c24d853da65cdab0a55
   .github/workflows/powershell-ci.yml:
     events:
       push:
@@ -270,11 +286,15 @@ workflows:
       pull_request:
         branches:
           - '**'
+    permissions:
+      contents: read
     defaults: {}
     env: {}
     jobs:
       powershell-lint:
         controls:
+          permissions:
+            contents: read
           env:
             PSSCRIPTANALYZER_GATE_MODE: strict
           runs-on: ubuntu-latest
@@ -285,9 +305,11 @@ workflows:
             action: actions/checkout
           - name: Run PSScriptAnalyzer
             shell: pwsh
-            run_sha256: f168eb769e522c9162abc443fed491f3429fc5ad2f9c55f86f938698db0dd43c
+            run_sha256: 7a383c8ad5375162d9763d16b8a705f147044487b2f9c73996cc8072eb7d0b16
       test:
         controls:
+          permissions:
+            contents: read
           env:
             PESTER_TEST_ROOT: tests/
           runs-on: ${{ matrix.os }}
@@ -305,15 +327,15 @@ workflows:
           - name: Find Pester test files
             id: find-tests
             shell: pwsh
-            run_sha256: 16153aeb9d2634ea19fef5f68fb65275e2f3e18d98bd290ce7de56f27fbe48a3
+            run_sha256: 3d0998fddd5fab89aff388fa789463659aa872ff3bdbbb102827352cbe765f60
           - name: Install Pester
             if: steps.find-tests.outputs.found == 'true'
             shell: pwsh
-            run_sha256: 1b13520807aa457f6006e2fb4de54923c3b2c31b9d9167942937c1cb499995f6
+            run_sha256: 89207db30c3ac05a18ba3e9cfcde976b27a4fee5c91dd0d5f8ca4ca602dbe4ac
           - name: Run Pester tests
             if: steps.find-tests.outputs.found == 'true'
             shell: pwsh
-            run_sha256: 03a9713b8b53d91f178587224f561a4660e8eb3332aa1cb595d456f27fb480f4
+            run_sha256: b1739375a0feccfe1b85a6c1354ce42a35937766f7ef9adae91dcece2e36c2f1
           - name: Skip - No Pester tests
             if: steps.find-tests.outputs.found != 'true'
             run_sha256: 4a372ac175a15d7196eb999e0c8e5179fd52c9eb6b0252eec73db86dcf2e2544
@@ -326,11 +348,15 @@ workflows:
         branches:
           - '**'
       workflow_dispatch: null
+    permissions:
+      contents: read
     defaults: {}
     env: {}
     jobs:
       pre-commit:
         controls:
+          permissions:
+            contents: read
           runs-on: ubuntu-latest
         steps:
           - name: Checkout repository
@@ -366,7 +392,7 @@ workflows:
             action: actions/cache
           - name: Install pre-commit
             shell: python
-            run_sha256: 7acffd8be7b89e167121a560bbd121fed99e81f35f4af5f84fec046e3c513a82
+            run_sha256: 4e102e51f301a44aeecd7ef2a0b785af5b55fac946de50ff0af97b2d0b98d9a7
           - name: Run pre-commit hooks
             run_sha256: 9c50397b2dff987d3cb136ca3719d90de28d06c817843f12b46675c840fc9f4c
   .github/workflows/python-ci.yml:
@@ -384,6 +410,8 @@ workflows:
             required: false
             default: false
             type: boolean
+    permissions:
+      contents: read
     defaults: {}
     env:
       PYTEST_DEFAULT_MARKER_EXPRESSION: ${{ github.repository == 'franklesniak/copilot-repo-template' && 'not slow' || 'not
@@ -393,6 +421,8 @@ workflows:
     jobs:
       type-check:
         controls:
+          permissions:
+            contents: read
           runs-on: ubuntu-latest
         steps:
           - name: Checkout repository
@@ -405,16 +435,18 @@ workflows:
               cache: pip
             action: actions/setup-python
           - name: Install dependencies
-            run_sha256: 223c4b18a8ce8504b32aeff944d1a8a216e6536abc107afbe87e893523b2c92c
+            run_sha256: bcb2a271e0b6b55234d4e205f927aeac61b7257bb575952f266de22497d41457
           - name: Run mypy
             shell: bash
             continue-on-error: ${{ github.repository != 'franklesniak/copilot-repo-template' }}
-            run_sha256: d421f9f18c8d39687680e3c2a4091185d0b3f7a32bac2db5fbf70ef0e0f0ae6d
+            run_sha256: a176bc6e092a80a2bca18ef4a18c7e999949d2a287385eceda21a05906a96b99
           - name: Run Pyright
             continue-on-error: ${{ github.repository != 'franklesniak/copilot-repo-template' }}
             run_sha256: 83a643d03d5b5caf4b81a6bfdf9fc582c25e38d622fe7dad6ff86c62cae7a1ac
       test:
         controls:
+          permissions:
+            contents: read
           runs-on: ${{ matrix.os }}
           strategy:
             matrix:
@@ -436,7 +468,7 @@ workflows:
               cache: pip
             action: actions/setup-python
           - name: Install dependencies
-            run_sha256: 223c4b18a8ce8504b32aeff944d1a8a216e6536abc107afbe87e893523b2c92c
+            run_sha256: bcb2a271e0b6b55234d4e205f927aeac61b7257bb575952f266de22497d41457
           - name: Run non-slow tests with coverage
             shell: bash
             run_sha256: e0b03ad4dd3b51fe7fc6729cf39bea4597fdfa07c60d539c93d658a619b59c17
@@ -453,11 +485,15 @@ workflows:
         branches:
           - '**'
       workflow_dispatch: null
+    permissions:
+      contents: read
     defaults: {}
     env: {}
     jobs:
       format:
         controls:
+          permissions:
+            contents: read
           runs-on: ubuntu-latest
         steps:
           - name: Checkout repository
@@ -472,6 +508,8 @@ workflows:
             run_sha256: 4faf21577ac0bb9fb922c5e0f8e590141808a082ccfd8c397aa4f945c396cdb5
       validate:
         controls:
+          permissions:
+            contents: read
           needs: format
           runs-on: ubuntu-latest
         steps:
@@ -492,14 +530,16 @@ workflows:
                 '
             action: actions/cache
           - name: Configure Provider Cache
-            run_sha256: 411ef925d28c1702fb271e0c32a45a83bc0c2048406e3802a8cb56f74ab9e244
+            run_sha256: 8706b8a7002a4d41caf7bce460cf1ef4efeb388f9dbc436fbc65394445674ad8
           - name: Find Terraform directories
             id: find-tf-dirs
-            run_sha256: 7187fd3cad88a815bdafad7468d08cb8e533cfcc2ec80070acc05f4769698bb8
+            run_sha256: ada546ae02f19be079bc97e1461484ce2e580d2490f1e70d339a82c73e245bac
           - name: Terraform Init and Validate
-            run_sha256: ac20a834f684ef3487cb7edd2fefde33ee5944f3ea8417ca2b8fe2555bf6585a
+            run_sha256: 54266b55d8e1e13f59e64b3f1970bb1f59175f33e1bf5b7fcbe9c5d38d670ffb
       lint:
         controls:
+          permissions:
+            contents: read
           needs: validate
           runs-on: ubuntu-latest
         steps:
@@ -525,6 +565,8 @@ workflows:
             run_sha256: eef5cdd0b6c1c3f5e1cce6bbc60eefc302745f2c0d4420ffd16d58ea520f20a8
       test:
         controls:
+          permissions:
+            contents: read
           needs: validate
           runs-on: ubuntu-latest
         steps:
@@ -545,17 +587,17 @@ workflows:
                 '
             action: actions/cache
           - name: Configure Provider Cache
-            run_sha256: 411ef925d28c1702fb271e0c32a45a83bc0c2048406e3802a8cb56f74ab9e244
+            run_sha256: 8706b8a7002a4d41caf7bce460cf1ef4efeb388f9dbc436fbc65394445674ad8
           - name: Check for test files
             id: check-tests
-            run_sha256: eb73ee406f0a68779fe7f9cfd13bb329ae7d0f1ff07e1026f5ab6ba0a498f0a9
+            run_sha256: 3673d0ec14a80f812afa306683a3e306de7d064a63fb592518ddac77c83bc1ba
           - name: Find Terraform directories with tests
             id: find-test-dirs
             if: steps.check-tests.outputs.has_tests == 'true'
-            run_sha256: 45a82a976b55c154129a0c8fc92f2ac84fde7db517d3c586c0a1b11cb84fa69c
+            run_sha256: a42d347ad905f7e737caf31aba05b2f37b2f664783325b0d697a23169c822362
           - name: Run Terraform Tests
             if: steps.check-tests.outputs.has_tests == 'true'
-            run_sha256: 62fbed8c933e0d5a385006499ce93c53dd9bab15409370a816984ca992ed2238
+            run_sha256: 94af92470762d488e0e2e33d51248ba86c6b1d3a3ca1d4cd04881c75b9d8ede3
           - name: Skip tests (no test files found)
             if: steps.check-tests.outputs.has_tests == 'false'
             run_sha256: 5a3f754b7717053a3d21b675d32b3d23ab62e6f4110b8ba0c1369047296c3376
@@ -568,6 +610,8 @@ workflows:
           warning-window-days:
             description: Days before EOL that should fail the check. Leave blank to use the TOOLCHAIN_EOL_WARNING_DAYS default.
             required: false
+    permissions:
+      contents: read
     defaults: {}
     env:
       NODE_RELEASE_SCHEDULE_URL: https://raw.githubusercontent.com/nodejs/Release/main/schedule.json
@@ -575,6 +619,8 @@ workflows:
     jobs:
       node-eol:
         controls:
+          permissions:
+            contents: read
           runs-on: ubuntu-latest
         steps:
           - name: Checkout repository
@@ -592,17 +638,21 @@ workflows:
           - name: Check monitored Node.js selectors
             env:
               WARNING_WINDOW_DAYS: ${{ inputs['warning-window-days'] || env.TOOLCHAIN_EOL_WARNING_DAYS }}
-            run_sha256: 1558152316f9507f5a3d6b9503fe2e05ca2e800c5278310804e15f4fa87b9563
+            run_sha256: 2c611b71bcfddadc495811fa341a3c1c8818f3f0276e8495018cefb34b449e8a
   .github/workflows/workflow-security.yml:
     events:
       push: null
       pull_request: null
       workflow_dispatch: null
+    permissions:
+      contents: read
     defaults: {}
     env: {}
     jobs:
       validate:
         controls:
+          permissions:
+            contents: read
           runs-on: ubuntu-latest
         steps:
           - name: Checkout repository

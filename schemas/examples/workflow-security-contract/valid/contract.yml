@@ -3,10 +3,12 @@ workflows:
   .github/workflows/example.yml:
     events:
       - push
+    permissions: {}
     defaults: {}
     env: {}
     jobs:
       check:
-        controls: {}
+        controls:
+          permissions: {}
         steps: []
 examples: []

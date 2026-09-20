@@ -146,6 +146,20 @@ ensure_pre_commit() {
 ensure_pre_commit
 # template-sync: end baseline-only
 
+# template-sync: begin markdown-only
+# Hosted Claude environments provide Node.js and npm; install the root lockfile
+# dependencies before any Terraform idempotency exit can skip this setup.
+if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+  echo "Markdown validation requires Node.js 22 or newer and npm on PATH." >&2
+  exit 1
+fi
+markdown_repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+(
+  cd -- "$markdown_repository_root"
+  npm ci --ignore-scripts
+)
+# template-sync: end markdown-only
+
 # Persist INSTALL_DIR via CLAUDE_ENV_FILE so the terraform we install below
 # resolves first in subsequent shells, even if a different `terraform` is
 # earlier on the base image's PATH. Reuse persist_path_prepend to match the

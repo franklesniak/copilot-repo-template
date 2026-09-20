@@ -78,6 +78,100 @@ def snapshot(root: Path) -> dict[str, bytes]:
     }
 
 
+def test_selected_validator_is_inert_and_trust_anchor_failure_is_detected(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Selected Python bytes never execute; restoring that trust boundary trips a marker."""
+    from tests.test_workflow_security_contract import copy_policy
+
+    source = tmp_path / "source"
+    copy_policy(source)
+    sentinel = source / "candidate-executed.txt"
+    selected_script = source / ".github/scripts/validate_workflow_security.py"
+    selected_script.parent.mkdir(parents=True, exist_ok=True)
+    selected_script.write_text(
+        "from pathlib import Path\n"
+        "Path(__file__).parents[2].joinpath('candidate-executed.txt').write_text('executed')\n"
+        "raise RuntimeError('candidate execution sentinel')\n",
+        encoding="utf-8",
+    )
+    _, _, mappings = lifecycle.materializer.load_validated_manifest_context(ROOT)
+    rendered = lifecycle.materializer.render_workflow_contract(
+        source, mappings, ("github-actions",)
+    )
+    assert ".github/workflows/workflow-security.yml" in rendered
+    assert not sentinel.exists()
+    monkeypatch.setattr(lifecycle.materializer, "TRUSTED_TOOL_ROOT", source)
+    with pytest.raises(RuntimeError, match="candidate execution sentinel"):
+        lifecycle.materializer.render_workflow_contract(source, mappings, ("github-actions",))
+    assert sentinel.read_text(encoding="utf-8") == "executed"
+
+
+def test_installed_support_tools_can_add_actions_and_require_shared_helpers(tmp_path: Path) -> None:
+    """A support-only installation carries its trusted executable and data closure."""
+    target = lifecycle.materialize_module_fixture(
+        tmp_path, ("template-sync-support",), authorize_protected_files=True
+    )
+    shared = [
+        ".github/scripts/validate_workflow_security.py",
+        ".github/scripts/replace-template-placeholders.py",
+        ".github/template-placeholders.json",
+        "schemas/template-placeholders.schema.json",
+    ]
+    for relative in shared:
+        assert (target / relative).is_file(), relative
+    assert not (target / policy.CONTRACT).exists()
+    assert not (target / policy.SCHEMA).exists()
+    modules = ("template-sync-support", "github-actions")
+    write_decisions(
+        target,
+        modules,
+        protected_file_decisions=lifecycle.protected_take_decisions_for_modules(modules),
+        local_overrides=[
+            {
+                "path": path,
+                "default_decision": "TAKE",
+                "reason": "Fixture owner approves added Actions wiring.",
+            }
+            for path in ("TEMPLATE_UPDATE_PROCEDURE.md", "tests/test_contract_wiring.py")
+        ],
+    )
+    command = [
+        sys.executable,
+        str(target / ".template-sync/scripts/materialize_downstream_adoption.py"),
+        "--template-root",
+        str(ROOT),
+        "--target-root",
+        str(target),
+        "--decisions-file",
+        "decisions.yml",
+        "--repository",
+        "octo/widget",
+        "--security-contact",
+        "security@example.com",
+    ]
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert policy.validate_repository(target) == 1
+    installed = subprocess.run(
+        [sys.executable, str(target / shared[0]), "--repo-root", str(target)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+    for relative in shared[:2]:
+        helper = target / relative
+        original = helper.read_bytes()
+        helper.unlink()
+        try:
+            failed = subprocess.run(command, capture_output=True, text=True, check=False)
+            assert failed.returncode == 1, failed.stdout + failed.stderr
+            assert "trusted helper is unavailable" in failed.stderr
+        finally:
+            helper.write_bytes(original)
+
+
 def write_decisions(target: Path, modules: tuple[str, ...], **fields: Any) -> None:
     """Record explicit fixture authorization using the normal marker schema."""
     reviewed = fields.pop("reviewed_commit", None)
@@ -293,8 +387,8 @@ def test_omission_and_reviewed_removal_leave_no_policy_orphans(tmp_path: Path) -
     }
     assert not (target / policy.CONTRACT).exists()
     assert not (target / policy.SCHEMA).exists()
+    assert (target / ".github/scripts/validate_workflow_security.py").is_file()
     for relative in [
-        ".github/scripts/validate_workflow_security.py",
         ".github/workflows/workflow-security.yml",
         "docs/workflow-security.md",
         "schemas/examples/workflow-security-contract/valid/contract.yml",

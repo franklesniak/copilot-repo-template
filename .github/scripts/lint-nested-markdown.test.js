@@ -9,6 +9,64 @@ const linterPath = path.resolve(__dirname, 'lint-nested-markdown.js');
 const repoRoot = path.resolve(__dirname, '../..');
 const linter = require(linterPath);
 
+function nestedDocument(depth, body = 'text\n') {
+    for (let level = 0; level < depth; level++) {
+        const fence = '`'.repeat(level + 3);
+        body = `${fence}markdown\n${body}${fence}\n`;
+    }
+    return body;
+}
+
+test('nested Markdown budgets accept boundaries and reject excessive work', () => {
+    assert.deepEqual(linter.extractMarkdownFencesRecursive('x'.repeat(1024 * 1024), 'bytes.md'), []);
+    assert.throws(() => linter.extractMarkdownFencesRecursive('x'.repeat(1024 * 1024 + 1), 'bytes.md'), /source bytes limit/);
+    assert.equal(linter.extractMarkdownFencesRecursive(nestedDocument(64), 'depth.md').length, 64);
+    assert.throws(() => linter.extractMarkdownFencesRecursive(nestedDocument(65), 'depth.md'), /nesting depth limit/);
+    const block = '```md\nx\n```\n';
+    assert.equal(linter.extractMarkdownFencesRecursive(block.repeat(1024), 'blocks.md').length, 1024);
+    assert.throws(() => linter.extractMarkdownFencesRecursive(block.repeat(1025), 'blocks.md'), /block count limit/);
+    assert.equal(linter.extractMarkdownFencesRecursive(block, 'total.md', 0, 0, '', { blocks: 0, bytes: 8 * 1024 * 1024 - 2 }).length, 1);
+    assert.throws(() => linter.extractMarkdownFencesRecursive(block, 'total.md', 0, 0, '', { blocks: 0, bytes: 8 * 1024 * 1024 - 1 }), /extracted bytes limit/);
+    assert.throws(() => linter.extractMarkdownFencesRecursive(nestedDocument(16, 'x'.repeat(600000) + '\n'), 'overlap.md'), /extracted bytes limit/);
+});
+
+test('oversized file is rejected before reading and CLI reports budget failure', (t) => {
+    const isolated = makeIsolatedCliRepository(t, 'nested-markdown-budget-');
+    const input = writeFile(isolated.root, 'large.md', 'x'.repeat(1024 * 1024 + 1));
+    let reads = 0;
+    assert.throws(() => linter.extractMarkdownFences(input, isolated.root, {
+        ...fs,
+        readFileSync: () => { reads++; throw new Error('must not read'); }
+    }), /source bytes limit/);
+    assert.equal(reads, 0);
+    const result = spawnSync(process.execPath, [isolated.executable, input], {
+        cwd: isolated.root, encoding: 'utf8', timeout: 30000,
+        env: { ...process.env, NODE_PATH: path.join(repoRoot, 'node_modules') }
+    });
+    assert.ifError(result.error);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Markdown budget exceeded.*source bytes limit/);
+});
+
+test('removing each extraction budget is caught by independent negative inputs', (t) => {
+    const cases = [
+        ['Buffer.byteLength(content, \'utf8\') > MAX_MARKDOWN_BYTES', "'x'.repeat(1048577)", 'source bytes'],
+        ['depth >= MAX_NESTING_DEPTH', 'nestedDocument(65)', 'nesting depth'],
+        ['budget.blocks > MAX_EXTRACTED_BLOCKS', "'```md\\nx\\n```\\n'.repeat(1025)", 'block count'],
+        ['budget.bytes > MAX_TOTAL_EXTRACTED_BYTES', "nestedDocument(16, 'x'.repeat(600000) + '\\n')", 'extracted bytes']
+    ];
+    for (const [predicate, input, label] of cases) {
+        const mutant = createMutant(t, predicate, 'false', label.replaceAll(' ', '-'));
+        const script = [
+            "const assert = require('node:assert/strict');",
+            'const subject = require(process.argv[1]);',
+            nestedDocument.toString(),
+            `assert.throws(() => subject.extractMarkdownFencesRecursive(${input}, 'fixture.md'), /${label} limit/);`
+        ].join('\n');
+        assertMutantDetected(runMutant(mutant, script), label);
+    }
+});
+
 function makeTempDir(t, prefix = 'nested-markdown-') {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
     t.after(() => fs.rmSync(directory, { force: true, recursive: true }));

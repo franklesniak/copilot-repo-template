@@ -164,13 +164,14 @@ def describe_workflow(document: dict[str, Any]) -> dict[str, Any]:
                 record["action"] = step["uses"].split("@", 1)[0]
             if "run" in step:
                 record["run_sha256"] = hashlib.sha256(
-                    step["run"].replace("\r\n", "\n").strip().encode("utf-8")
+                    step["run"].replace("\r\n", "\n").encode("utf-8")
                 ).hexdigest()
             steps.append(record)
         jobs[key] = {
             "controls": {
                 field: job[field]
                 for field in (
+                    "permissions",
                     "if",
                     "continue-on-error",
                     "needs",
@@ -193,6 +194,7 @@ def describe_workflow(document: dict[str, Any]) -> dict[str, Any]:
             jobs[key]["controls"]["action"] = job["uses"].split("@", 1)[0]
     return {
         "events": document["on"],
+        "permissions": document["permissions"],
         "defaults": document.get("defaults", {}),
         "env": document.get("env", {}),
         "jobs": jobs,

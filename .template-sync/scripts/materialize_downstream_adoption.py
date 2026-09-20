@@ -17,9 +17,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
+import jsonschema
 import yaml  # type: ignore[import-untyped]
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+TRUSTED_TOOL_ROOT = SCRIPT_DIR.parent.parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
@@ -2413,6 +2415,19 @@ def write_staged_candidate(
     return tuple(sorted(staged_paths))
 
 
+def trusted_tool_path(relative_path: str) -> Path:
+    """Resolve executable helpers only from the running materializer's tool bundle."""
+    path = resolve_safe_repository_target_path(
+        TRUSTED_TOOL_ROOT, relative_path, field_name="trusted tool path"
+    )
+    if not path.is_file():
+        raise MaterializationError(
+            f"Running materializer's trusted helper is unavailable: {relative_path}; "
+            "review and update the installed tool bundle."
+        )
+    return path
+
+
 def render_workflow_contract(
     template_root: Path,
     mappings: tuple[ManifestMapping, ...],
@@ -2424,9 +2439,7 @@ def render_workflow_contract(
     This is essential: unchecked regeneration would bless altered validation commands.
     The resulting runtime contract has no dependency on template-sync support.
     """
-    validator_path = resolve_safe_repository_target_path(
-        template_root, ".github/scripts/validate_workflow_security.py", field_name="validator"
-    )
+    validator_path = trusted_tool_path(".github/scripts/validate_workflow_security.py")
     spec = importlib.util.spec_from_file_location("workflow_policy_renderer", validator_path)
     if spec is None or spec.loader is None:
         raise MaterializationError("Cannot load workflow security validator")
@@ -2455,8 +2468,18 @@ def render_workflow_contract(
             if relation.is_retained_by(included_modules):
                 examples.append(path)
         return format_marker_yaml({"version": 1, "workflows": rendered, "examples": examples})
-    except (ValueError, OSError, KeyError, TypeError) as error:
-        raise MaterializationError(f"Workflow contract rendering failed: {error}") from error
+    except (
+        ValueError,
+        OSError,
+        KeyError,
+        TypeError,
+        jsonschema.ValidationError,
+        jsonschema.SchemaError,
+    ) as error:
+        raise MaterializationError(
+            f"Workflow contract rendering failed: {error}; if the source format is newer, "
+            "review and update the installed materializer tool bundle."
+        ) from error
 
 
 def placeholder_requested(args: argparse.Namespace) -> bool:
@@ -2511,16 +2534,7 @@ def run_placeholder_helper(
     if not placeholder_requested(args):
         summary.placeholder_notes.append("skipped: no placeholder inputs supplied")
         return
-    helper_path = resolve_safe_repository_target_path(
-        template_root,
-        PLACEHOLDER_HELPER_PATH,
-        field_name="placeholder helper path",
-    )
-    if not helper_path.is_file():
-        raise MaterializationError(
-            "Placeholder inputs were supplied, but the template-root placeholder "
-            f"helper is unavailable at {PLACEHOLDER_HELPER_PATH}."
-        )
+    helper_path = trusted_tool_path(PLACEHOLDER_HELPER_PATH)
 
     command = [
         sys.executable,
@@ -2609,7 +2623,7 @@ def run_placeholder_helper(
         try:
             result = subprocess.run(
                 command,
-                cwd=template_root,
+                cwd=TRUSTED_TOOL_ROOT,
                 check=False,
                 capture_output=True,
                 text=True,

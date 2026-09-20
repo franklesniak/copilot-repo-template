@@ -473,6 +473,51 @@ def make_executable(path: Path, text: str) -> None:
     path.chmod(0o755)
 
 
+@pytest.mark.parametrize(
+    "mode", ["success", "missing-node", "missing-npm", "install-failure", "mutant"]
+)
+def test_claude_markdown_bootstrap(tmp_path: Path, mode: str) -> None:
+    """Actual setup installs locked packages from the root and preserves prerequisite failures."""
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("Bash is required to exercise the actual Claude hook")
+    assert bash is not None
+    text = HOOK_PATH.read_text(encoding="utf-8")
+    block = text.split("# template-sync: begin markdown-only\n", 1)[1].split(
+        "# template-sync: end markdown-only", 1
+    )[0]
+    if mode == "mutant":
+        assert "npm ci --ignore-scripts" in block
+        block = block.replace("npm ci --ignore-scripts", ":")
+    repo = tmp_path / "repo"
+    hook = repo / ".claude/hooks/session-start.sh"
+    hook.parent.mkdir(parents=True)
+    missing = mode.removeprefix("missing-") if mode.startswith("missing-") else "none"
+    fixture = (
+        "#!/bin/bash\nset -euo pipefail\n"
+        f'command() {{ if [ "${{2:-}}" = {shlex.quote(missing)} ]; then return 1; fi; builtin command "$@"; }}\n'
+        "node() { return 0; }\n"
+        'npm() { printf \'%s\\n\' "$PWD" "$*" > npm-invocation.txt; '
+        f"return {23 if mode == 'install-failure' else 0}; }}\n" + block
+    )
+    make_executable(hook, fixture)
+    result = subprocess.run(
+        [bash, bash_path(bash, hook)], cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+    log = repo / "npm-invocation.txt"
+    if mode.startswith("missing-"):
+        assert result.returncode == 1
+        assert "requires Node.js 22 or newer and npm" in result.stderr
+        assert not log.exists()
+    elif mode == "mutant":
+        assert result.returncode == 0
+        assert not log.exists(), "Removing installation must violate the success-case oracle"
+    else:
+        assert result.returncode == (23 if mode == "install-failure" else 0), result.stderr
+        lines = log.read_text(encoding="utf-8").splitlines()
+        assert lines == [bash_path(bash, repo), "ci --ignore-scripts"]
+
+
 def bash_path(bash: str, path: Path) -> str:
     """Return a path usable by Bash on both native POSIX and Git for Windows."""
     if os.name != "nt":

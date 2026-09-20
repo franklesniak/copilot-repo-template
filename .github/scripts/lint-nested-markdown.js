@@ -23,6 +23,11 @@ const path = require('path');
 const REPO_ROOT = path.resolve(__dirname, '../..');
 
 const MARKDOWN_GLOB = '**/*.{md,mdc}';
+// Per-file budgets bound repeated parsing and linting of overlapping nested bodies.
+const MAX_MARKDOWN_BYTES = 1024 * 1024;
+const MAX_NESTING_DEPTH = 64;
+const MAX_EXTRACTED_BLOCKS = 1024;
+const MAX_TOTAL_EXTRACTED_BYTES = 8 * 1024 * 1024;
 const MARKDOWN_IGNORE = [
     'node_modules/**',
     '**/node_modules/**',
@@ -178,9 +183,13 @@ function loadMarkdownlintConfig(repoRoot = REPO_ROOT, fileSystem = fs, parser = 
  * @param {number} baseLine - Line number offset in the original file
  * @param {number} depth - Current nesting depth
  * @param {string} parentPath - Path description for nested blocks
+ * @param {object} budget - Shared counters for the entire original input
  * @returns {Array} Array of extracted blocks with metadata
  */
-function extractMarkdownFencesRecursive(content, filePath, baseLine = 0, depth = 0, parentPath = '') {
+function extractMarkdownFencesRecursive(content, filePath, baseLine = 0, depth = 0, parentPath = '', budget = { blocks: 0, bytes: 0 }) {
+    if (Buffer.byteLength(content, 'utf8') > MAX_MARKDOWN_BYTES) {
+        throw new Error(`Markdown budget exceeded in ${filePath}: source bytes limit ${MAX_MARKDOWN_BYTES}`);
+    }
     const tokens = md.parse(content, {});
     const blocks = [];
 
@@ -191,6 +200,18 @@ function extractMarkdownFencesRecursive(content, filePath, baseLine = 0, depth =
         if (token.type === 'fence' &&
             (token.info.trim().toLowerCase() === 'markdown' ||
              token.info.trim().toLowerCase() === 'md')) {
+
+            if (depth >= MAX_NESTING_DEPTH) {
+                throw new Error(`Markdown budget exceeded in ${filePath}: nesting depth limit ${MAX_NESTING_DEPTH}`);
+            }
+            budget.blocks += 1;
+            budget.bytes += Buffer.byteLength(token.content, 'utf8');
+            if (budget.blocks > MAX_EXTRACTED_BLOCKS) {
+                throw new Error(`Markdown budget exceeded in ${filePath}: block count limit ${MAX_EXTRACTED_BLOCKS}`);
+            }
+            if (budget.bytes > MAX_TOTAL_EXTRACTED_BYTES) {
+                throw new Error(`Markdown budget exceeded in ${filePath}: extracted bytes limit ${MAX_TOTAL_EXTRACTED_BYTES}`);
+            }
 
             const blockLine = baseLine + (token.map ? token.map[0] + 1 : 0);
             const blockPath = parentPath ? `${parentPath} > block at line ${blockLine}` : `line ${blockLine}`;
@@ -213,7 +234,8 @@ function extractMarkdownFencesRecursive(content, filePath, baseLine = 0, depth =
                     filePath,
                     blockLine,
                     depth + 1,
-                    blockPath
+                    blockPath,
+                    budget
                 );
                 blocks.push(...nestedBlocks);
             }
@@ -232,6 +254,9 @@ function extractMarkdownFencesRecursive(content, filePath, baseLine = 0, depth =
  */
 function extractMarkdownFences(filePath, repoRoot = REPO_ROOT, fileSystem = fs) {
     const safeInputPath = validateMarkdownInput(repoRoot, filePath, fileSystem);
+    if (fileSystem.lstatSync(safeInputPath).size > MAX_MARKDOWN_BYTES) {
+        throw new Error(`Markdown budget exceeded in ${filePath}: source bytes limit ${MAX_MARKDOWN_BYTES}`);
+    }
     let content;
     try {
         content = fileSystem.readFileSync(safeInputPath, 'utf8');
