@@ -2420,7 +2420,11 @@ def write_staged_candidate(
                 "and at least one retained workflow; review the source contract and manifest."
             )
         rendered_contract = render_workflow_contract(
-            template_root, mappings, included_modules, expected_workflows=expected_workflows
+            template_root,
+            mappings,
+            included_modules,
+            template_paths=template_paths,
+            expected_workflows=expected_workflows,
         )
 
     staged_paths: list[str] = []
@@ -2500,6 +2504,7 @@ def render_workflow_contract(
     mappings: tuple[ManifestMapping, ...],
     included_modules: Collection[str],
     *,
+    template_paths: Collection[str] | None = None,
     expected_workflows: set[str] | None = None,
 ) -> str:
     """Prune reviewed workflow controls using only manifest and inline-marker ownership.
@@ -2522,8 +2527,9 @@ def render_workflow_contract(
     validator = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(validator)
     trusted_tool_path(validator.SCHEMA)
-    if expected_workflows is None:
+    if template_paths is None:
         template_paths, _ = iter_safe_repository_files(template_root)
+    if expected_workflows is None:
         expected_workflows = retained_workflow_paths(template_paths, mappings, included_modules)
     if not expected_workflows:
         raise MaterializationError("Cannot render a workflow contract without retained workflows")
@@ -2549,13 +2555,35 @@ def render_workflow_contract(
                 f"unexpected: {', '.join(sorted(set(rendered) - expected_workflows)) or 'none'}. "
                 "Review the source contract and manifest together."
             )
-        examples = []
+        expected_examples: set[str] = set()
+        for path in template_paths:
+            if PurePosixPath(path).suffix != ".md":
+                continue
+            relation = selected_relation_for_path(path, mappings)
+            if relation is None or not relation.is_retained_by(included_modules):
+                continue
+            text = remove_inline_blocks_for_modules(
+                validator.read_text(template_root, path),
+                included_modules,
+                relative_path=path,
+            )
+            if validator.check_examples(text):
+                expected_examples.add(path)
+
+        examples: list[str] = []
         for path in contract["examples"]:
             relation = selected_relation_for_path(path, mappings)
             if relation is None:
                 raise MaterializationError(f"Unmapped workflow example: {path}")
             if relation.is_retained_by(included_modules):
                 examples.append(path)
+        if set(examples) != expected_examples:
+            raise MaterializationError(
+                "Retained workflow example inventory differs from the reviewed contract; "
+                f"missing: {', '.join(sorted(expected_examples - set(examples))) or 'none'}; "
+                f"unexpected: {', '.join(sorted(set(examples) - expected_examples)) or 'none'}. "
+                "Review the source contract and manifest together."
+            )
         return format_marker_yaml({"version": 1, "workflows": rendered, "examples": examples})
     except (
         ValueError,

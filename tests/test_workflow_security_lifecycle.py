@@ -19,21 +19,40 @@ from tests.test_contract_wiring import assert_ci, assert_hook
 from tests.test_workflow_security_contract import ROOT, policy
 
 pytestmark = pytest.mark.upstream_template_only
+YAML_EXAMPLE = ".github/instructions/yaml.instructions.md"
+ONBOARDING_EXAMPLE = "OPTIONAL_CONFIGURATIONS.md"
+TERRAFORM_EXAMPLES = (
+    "docs/terraform/TERRAFORM_COPILOT_INSTRUCTIONS_GUIDE.md",
+    "docs/terraform/TERRAFORM_LINTING_GUIDE.md",
+    "docs/terraform/TERRAFORM_TESTING_GUIDE.md",
+)
 
 
 @pytest.mark.parametrize(
-    "modules",
+    ("modules", "expected_examples"),
     [
-        ("github-actions",),
-        ("baseline", "github-actions", "github-platform"),
-        ("baseline", "github-actions", "markdown"),
-        ("github-actions", "python"),
-        ("github-actions", "powershell", "terraform"),
-        ("baseline", "github-actions", "template-sync-support", "agent-instructions", "yaml"),
+        (("github-actions",), ()),
+        (("baseline", "github-actions", "github-platform"), ()),
+        (("baseline", "github-actions", "markdown"), ()),
+        (("github-actions", "python"), ()),
+        (("github-actions", "powershell", "terraform"), TERRAFORM_EXAMPLES),
+        (
+            (
+                "baseline",
+                "github-actions",
+                "template-sync-support",
+                "agent-instructions",
+                "yaml",
+            ),
+            (YAML_EXAMPLE,),
+        ),
+        (("github-actions", "template-onboarding"), (ONBOARDING_EXAMPLE,)),
     ],
 )
 def test_retained_profiles_pass_without_unrelated_stacks(
-    tmp_path: Path, modules: tuple[str, ...]
+    tmp_path: Path,
+    modules: tuple[str, ...],
+    expected_examples: tuple[str, ...],
 ) -> None:
     """Selected language workflows and policy runtime survive real materialization."""
     target = lifecycle.materialize_module_fixture(tmp_path, modules, authorize_protected_files=True)
@@ -50,6 +69,7 @@ def test_retained_profiles_pass_without_unrelated_stacks(
         and relation.is_retained_by(modules)
     }
     assert set(contract["workflows"]) == expected
+    assert contract["examples"] == list(expected_examples)
     for module, filename in [
         ("markdown", "markdownlint"),
         ("python", "python-ci"),
@@ -119,6 +139,122 @@ def test_retained_workflow_inventory_fails_before_staging(tmp_path: Path, mutati
             summary=lifecycle.materializer.Summary(list(modules), [], "copy"),
         )
     assert snapshot(stage) == {}
+
+
+@pytest.mark.parametrize(
+    ("floating", "message"),
+    [(False, "Retained workflow example inventory"), (True, "full SHA")],
+)
+def test_retained_example_inventory_fails_before_staging(
+    tmp_path: Path, floating: bool, message: str
+) -> None:
+    """A retained governed document cannot escape the rendered contract."""
+    from tests.test_workflow_security_contract import copy_policy
+
+    source, stage = tmp_path / "source", tmp_path / "stage"
+    contract = copy_policy(source)
+    contract["examples"].remove(YAML_EXAMPLE)
+    (source / policy.CONTRACT).write_text(
+        yaml.safe_dump(contract, sort_keys=False), encoding="utf-8"
+    )
+    if floating:
+        with (source / YAML_EXAMPLE).open("a", encoding="utf-8") as stream:
+            stream.write("\n```yaml\n- uses: actions/checkout@v7 # v7.0.1\n```\n")
+    stage.mkdir()
+    _, _, mappings = lifecycle.materializer.load_validated_manifest_context(ROOT)
+    with pytest.raises(lifecycle.materializer.MaterializationError, match=message):
+        lifecycle.materializer.write_staged_candidate(
+            template_root=source,
+            staging_root=stage,
+            mappings=mappings,
+            included_modules=("github-actions", "agent-instructions", "yaml"),
+            summary=lifecycle.materializer.Summary(
+                ["github-actions", "agent-instructions", "yaml"], [], "copy"
+            ),
+        )
+    assert snapshot(stage) == {}
+
+
+def test_stale_retained_example_entry_fails_before_staging(tmp_path: Path) -> None:
+    """A declared retained document cannot overstate governed example coverage."""
+    from tests.test_workflow_security_contract import copy_policy
+
+    source, stage = tmp_path / "source", tmp_path / "stage"
+    copy_policy(source)
+    (source / YAML_EXAMPLE).write_text(
+        "# Fixture document with no governed action references.\n", encoding="utf-8"
+    )
+    stage.mkdir()
+    _, _, mappings = lifecycle.materializer.load_validated_manifest_context(ROOT)
+    with pytest.raises(
+        lifecycle.materializer.MaterializationError,
+        match=r"unexpected: \.github/instructions/yaml\.instructions\.md",
+    ):
+        lifecycle.materializer.write_staged_candidate(
+            template_root=source,
+            staging_root=stage,
+            mappings=mappings,
+            included_modules=("github-actions", "agent-instructions", "yaml"),
+            summary=lifecycle.materializer.Summary(
+                ["github-actions", "agent-instructions", "yaml"], [], "copy"
+            ),
+        )
+    assert snapshot(stage) == {}
+
+
+@pytest.mark.parametrize("guard", ["comparison", "semantic-discovery"])
+def test_example_inventory_guard_removal(tmp_path: Path, monkeypatch: Any, guard: str) -> None:
+    """Independent mutants restore safe and floating omitted-example bypasses."""
+    from tests.test_workflow_security_contract import copy_policy
+
+    source, stage = tmp_path / "source", tmp_path / "stage"
+    contract = copy_policy(source)
+    contract["examples"].remove(YAML_EXAMPLE)
+    (source / policy.CONTRACT).write_text(
+        yaml.safe_dump(contract, sort_keys=False), encoding="utf-8"
+    )
+    if guard == "semantic-discovery":
+        with (source / YAML_EXAMPLE).open("a", encoding="utf-8") as stream:
+            stream.write("\n```yaml\n- uses: actions/checkout@v7 # v7.0.1\n```\n")
+        message = "full SHA"
+        predicate = "if validator.check_examples(text):"
+    else:
+        message = "Retained workflow example inventory"
+        predicate = "if set(examples) != expected_examples:"
+    modules = ("github-actions", "agent-instructions", "yaml")
+    _, _, mappings = lifecycle.materializer.load_validated_manifest_context(ROOT)
+    arguments = {
+        "template_root": source,
+        "staging_root": stage,
+        "mappings": mappings,
+        "included_modules": modules,
+        "summary": lifecycle.materializer.Summary(list(modules), [], "copy"),
+    }
+    stage.mkdir()
+    with pytest.raises(lifecycle.materializer.MaterializationError, match=message):
+        lifecycle.materializer.write_staged_candidate(**arguments)
+    assert snapshot(stage) == {}
+
+    code = (ROOT / ".template-sync/scripts/materialize_downstream_adoption.py").read_text(
+        encoding="utf-8"
+    )
+    assert code.count(predicate) == 1
+    mutant_path = tmp_path / "example_inventory_mutant.py"
+    mutant_path.write_text(code.replace(predicate, "if False:"), encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("example_inventory_mutant", mutant_path)
+    assert spec is not None and spec.loader is not None
+    mutant = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, mutant.__name__, mutant)
+    spec.loader.exec_module(mutant)
+    monkeypatch.setattr(mutant, "TRUSTED_TOOL_ROOT", ROOT)
+    arguments["summary"] = mutant.Summary(list(modules), [], "copy")
+    mutant.write_staged_candidate(**arguments)
+    rendered = policy.load_contract(stage)
+    assert YAML_EXAMPLE not in rendered["examples"]
+    assert (stage / YAML_EXAMPLE).is_file()
+    if guard == "semantic-discovery":
+        assert "actions/checkout@v7" in (stage / YAML_EXAMPLE).read_text(encoding="utf-8")
+    assert policy.validate_repository(stage) >= 1
 
 
 @pytest.mark.parametrize("explicit", [False, True])

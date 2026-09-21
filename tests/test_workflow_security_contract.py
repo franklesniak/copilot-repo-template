@@ -35,6 +35,78 @@ def copy_policy(root: Path) -> dict[str, Any]:
     return cast(dict[str, Any], contract)
 
 
+@pytest.mark.parametrize(
+    ("relative", "safe"),
+    [
+        ("README.md", True),
+        ("docs/guide.md", True),
+        (".github/instructions/yaml.instructions.md", True),
+        ("docs/.hidden/guide.md", True),
+        ("docs/a-b_2.md", True),
+        ("/tmp/example.md", False),
+        ("./guide.md", False),
+        ("docs//guide.md", False),
+        ("docs/./guide.md", False),
+        ("docs/../guide.md", False),
+        ("C:/guide.md", False),
+        ("docs\\guide.md", False),
+    ],
+)
+def test_example_path_schema_matches_reader(tmp_path: Path, relative: str, safe: bool) -> None:
+    """Schema path components agree with the reader on independently labeled boundaries."""
+    schema = policy.parse_yaml(policy.read_text(ROOT, policy.SCHEMA))
+    contract = copy.deepcopy(policy.load_contract(ROOT))
+    contract["examples"] = [relative]
+    if safe:
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("example\n", encoding="utf-8")
+        policy.jsonschema.validate(contract, schema)
+        assert policy.read_text(tmp_path, relative) == "example\n"
+    else:
+        with pytest.raises(policy.jsonschema.ValidationError):
+            policy.jsonschema.validate(contract, schema)
+        with pytest.raises(policy.PolicyError, match="Unsafe repository path"):
+            policy.read_text(tmp_path, relative)
+
+
+@pytest.mark.parametrize(
+    "relative", ["/tmp/example.md", "./guide.md", "docs//guide.md", "docs/./guide.md"]
+)
+def test_example_path_pattern_regression(relative: str) -> None:
+    """Restoring the previous pattern admits fixed unsafe cases rejected by the current schema."""
+    schema = policy.parse_yaml(policy.read_text(ROOT, policy.SCHEMA))
+    contract = copy.deepcopy(policy.load_contract(ROOT))
+    contract["examples"] = [relative]
+    with pytest.raises(policy.jsonschema.ValidationError):
+        policy.jsonschema.validate(contract, schema)
+    schema["properties"]["examples"]["items"]["pattern"] = r"^(?!.*\.\.)[A-Za-z0-9_./-]+\.md$"
+    policy.jsonschema.validate(contract, schema)
+
+
+@pytest.mark.parametrize(
+    ("text", "count"),
+    [
+        ("Ordinary documentation without action examples.", 0),
+        ("```yaml\n- uses: owner/action@" + "a" * 40 + " # v1.2.3\n```", 1),
+        ('- {"uses": "owner/action@' + "a" * 40 + '"} # v1.2.3', 1),
+        ("# - uses: owner/action@" + "a" * 40 + " # v1.2.3", 1),
+        (
+            "- uses: owner/action@"
+            + "a" * 40
+            + " # v1.2.3\n"
+            + "- uses: owner/other@"
+            + "b" * 40
+            + " # v2.3.4",
+            2,
+        ),
+    ],
+)
+def test_example_reference_count(text: str, count: int) -> None:
+    """Discovery counts semantic references once across fences, fragments and comments."""
+    assert policy.check_examples(text) == count
+
+
 @pytest.mark.parametrize("path", sorted(policy.load_contract(ROOT)["workflows"]))
 def test_each_owned_workflow_passes(path: str) -> None:
     """Every declared workflow passes universal and required-control validation."""

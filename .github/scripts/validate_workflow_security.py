@@ -379,8 +379,8 @@ def example_references(text: str) -> list[tuple[int, str]]:
     return references
 
 
-def check_examples(text: str, resolver: Callable[[str, str], str] | None = None) -> None:
-    """Check semantic YAML fragments and fences while preserving literal legacy coverage."""
+def check_examples(text: str, resolver: Callable[[str, str], str] | None = None) -> int:
+    """Validate examples and return the number of governed action references."""
     lines = [markdown_example_content(line) for line in text.splitlines()]
     references: set[tuple[int, str]] = set()
     fenced_lines: set[int] = set()
@@ -440,6 +440,7 @@ def check_examples(text: str, resolver: Callable[[str, str], str] | None = None)
             references.add((number, match[1]))
     for number, reference in sorted(references):
         check_reference(reference, lines[number], resolver)
+    return len(references)
 
 
 def check_commented_examples(
