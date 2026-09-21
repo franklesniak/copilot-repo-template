@@ -121,7 +121,7 @@ repos:
 
   # Python linting
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.7
+    rev: v0.16.8
     hooks:
       - id: ruff-check
         # Ruff 0.16 enlarged its default rule set and removed the E4 and E7
