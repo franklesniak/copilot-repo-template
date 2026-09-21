@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.6.20260919.0
+**Version:** 1.6.20260921.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-19
+- **Last Updated:** 2026-09-21
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
@@ -431,7 +431,7 @@ For each distinct real finding, agents MUST complete these steps in order. Do no
 6. Select the highest-supported eligible option. Resolve technical ties with primary evidence, a focused test, or bounded independent review. If equally safe and correct options remain, choose the simpler reversible option within authority. A small margin, general uncertainty, recent provenance, adjacent deferral, available prompt tool, or cumbersome documented fallback alone is not a reason to ask the owner. Ask only for a decisive owner preference, new authority, or an explicit scope or intended-outcome change; continue independent work while that answer is pending.
 7. Record the complete evaluation before editing. For a PR finding, publish it on the native thread or an attributable PR comment. Apply the [local selected-action writing rule](#selected-action-writing-rule). Include source links and relevant commands, results, and environment details. For non-review findings or work before a PR exists, the existing task decision record is sufficient.
 8. Check protected-file content authority separately from branch placement authority. Keep the selected option fixed. Implement already-authorized work without repeated approval. Test the fix, retain native failure exits, run required checks before committing, and audit every outgoing commit and path. Record the resulting PR-head SHA and fix reachability after placement.
-9. Read the full applicable style guide before evaluating prevention. Implement an in-scope authorized guide change. Otherwise post a ready-to-file issue prompt in a Markdown code fence with the proposed rule, rationale, scope, acceptance tests, and narrow authorization question. Do not change a protected guide without authority; continue independent work.
+9. Read the full applicable style guide before evaluating prevention. Implement an in-scope authorized guide change. Otherwise, post a ready-to-file issue prompt in a Markdown code fence with the proposed rule, rationale, scope, acceptance tests, and narrow authorization question. For a GitHub PR finding, post an inline finding's prompt in the same native review thread. For a GitHub body-only finding, post its prompt as a standalone PR comment that records its synthetic finding key, source review identity, reviewed commit, and location when available. Record the prompt comment's native identity and keep the secondary guide action pending until it has an attributable disposition. Do not change a protected guide without authority; continue independent work.
 10. Reply with implementation or refutation evidence. Resolve the native thread when the finding is complete and no pending guide action requires it to stay open. Close body-only findings by attributable disposition. A resolved flag is not proof. If resolution tooling is absent, identify the manual action; do not claim it occurred. Remove temporary processing reactions when supported.
 
 After a real fix and before closing the finding or requesting another review, agents MUST perform a bounded search for the same root cause in relevant helpers and callers, copies of the same policy or configuration, and retained platform or module variants. Record the searched paths or symbols and the result. A materially different concern needs its own finding and decision; discovery does not expand task or protected-content authority. A bounded search does not establish the absence of unrelated defects.

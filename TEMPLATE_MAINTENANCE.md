@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-20
+- **Last Updated:** 2026-09-21
 - **Scope:** Periodic maintenance procedures for the `franklesniak/copilot-repo-template` repository, including dependency review cadence, pre-commit hook upkeep, Terraform/TFLint version reviews, schema and worked-example reviews, template sync taxonomy upkeep, and validation steps for template-only changes. Does not cover repositories created FROM this template; consumers of the template should follow [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md#ongoing-maintenance) instead.
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [upstream Contributing](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/CONTRIBUTING.md)
 
@@ -27,6 +27,7 @@ This guide is for **maintainers of the `franklesniak/copilot-repo-template` repo
 - [Reviewing Terraform and TFLint Version Requirements](#reviewing-terraform-and-tflint-version-requirements)
 - [Reviewing Terraform Provider Versions](#reviewing-terraform-provider-versions)
 - [Reviewing Instruction File Versions](#reviewing-instruction-file-versions)
+- [Refreshing Imported Style Guides](#refreshing-imported-style-guides)
 - [Reviewing Agent Instruction Files](#reviewing-agent-instruction-files)
 - [Testing Template Changes](#testing-template-changes)
 
@@ -57,11 +58,13 @@ To keep the template current and functional, maintainers **SHOULD** review templ
 
 ---
 
-### Reviewing the Pinned Review-Support Actions
+### Reviewing Pinned GitHub Actions References
 
-The GitHub pre-commit aggregate, data-CI and fix-preview workflows use upstream-verified full action commit SHAs with same-line release comments. Keep the direct `uses:` declarations and `github-actions` Dependabot updates. For each update, verify the new commit against its upstream repository and release, review changes and advisories, confirm supported inputs and runner requirements, and run the affected gates. Preserve the fix-preview permissions and failure boundary.
+Every template-owned external action and reusable workflow reference uses an upstream-verified full commit SHA with a same-line release annotation. Keep the direct `uses:` declarations and applicable `github-actions` Dependabot updates. For each changed pin, verify the release-to-commit mapping in its upstream repository, review release changes and advisories, confirm supported inputs and runner requirements, and run the affected gates. Preserve workflow-specific controls, including the fix-preview permissions and failure boundary.
 
-[Dependabot version updates](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories#github-actions) support these pins and same-line comments. [Vulnerability alerts for actions](https://docs.github.com/en/actions/reference/security/secure-use#monitoring-the-actions-in-your-workflows) do not cover SHA references, so do not rely on that alert channel for these workflows. The remaining workflows retain their existing reference policy. A SHA does not lock downloaded tools or make an action compatible with unsupported runners or GitHub Enterprise Server.
+[Dependabot version updates](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories#github-actions) support these pins and same-line comments. [Vulnerability alerts for actions](https://docs.github.com/en/actions/reference/security/secure-use#monitoring-the-actions-in-your-workflows) do not cover SHA references, so maintainers must review upstream advisories separately. A SHA does not lock downloaded tools or make an action compatible with unsupported runners or GitHub Enterprise Server.
+
+Ordinary workflow-security validation checks pin syntax offline. The explicit `--verify-releases` mode checks upstream release mappings through network access; an unavailable lookup is not verified. Adopter-created workflows remain outside the default contract unless the owner deliberately enables the documented `--strict` profile. See the [upstream workflow-security guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/workflow-security.md) for both modes.
 
 ## Updating Pre-commit Hook Versions
 
@@ -378,6 +381,21 @@ The instruction files in `.github/instructions/` include version numbers in the 
 - `.github/instructions/python.instructions.md`
 - `.github/instructions/powershell.instructions.md`
 - `.github/instructions/terraform.instructions.md`
+
+---
+
+## Refreshing Imported Style Guides
+
+Template maintainers own refreshes from the external style-guide repositories. The retained origin record at `docs/upstream-style-guides.md` identifies each imported generated consumer by repository, immutable commit, path, and Git blob. It remains useful after adopters remove onboarding or template-sync support. See the [upstream copy of the origin record](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/upstream-style-guides.md) when that file is not retained locally.
+
+1. Select an immutable upstream commit. Inspect that revision's normative source, generated consumer, and generation instructions. Import the consumer instruction file; do not substitute the normative source's blob identity.
+2. Retrieve the exact consumer snapshot and verify its Git blob ID. Compare the complete snapshot with the destination, including any newer local content or deliberate deviations. Source instructions are comparison evidence, not permission to edit either repository.
+3. Obtain explicit authorization for the bounded protected-content import. Review the exact hunks and preserve destination-specific authority, module selection, host behavior, and local extensions. Preserve upstream version/date for an exact upstream import; identify and govern any local extension separately.
+4. Apply the authorized changes and update the origin record in the same change. Record the imported consumer's repository, commit, path, blob, generated status, destination, and deliberate local differences. An upstream blob is not a checksum claim for later customized destination content.
+5. Validate the complete guide diffs, Markdown and nested Markdown, instruction contracts, and required pre-commit hooks. Exercise affected retained/excluded language and agent profiles. Confirm the origin record survives onboarding/support omission, preserves local update decisions, and prunes excluded-language references.
+6. Publish the reviewed template update through the normal review process. Downstream owners normally consume it through their existing selective template-update process. Preserve their local ownership, overrides, and explicit protected-file decisions; do not turn an upstream refresh into automatic replacement or deletion.
+
+This process adds no generator, scheduled updater, live-fetch validation gate, or direct-source tracking duty for adopters. A downstream owner can choose a separate direct refresh under that repository's governance. The provenance record supplements, rather than replaces, retained marker ownership and decision records.
 
 ---
 

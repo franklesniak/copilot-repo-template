@@ -34,6 +34,9 @@ NESTED_MARKDOWN_LINT_PATH = REPO_ROOT / ".github" / "scripts" / "lint-nested-mar
 SOURCE_REPO = "https://github.com/franklesniak/copilot-repo-template.git"
 FULL_SHA = "0123456789abcdef0123456789abcdef01234567"
 INSTRUCTION_CONTRACTS_PATH = ".template-sync/instruction-contracts.yml"
+UPSTREAM_STYLE_GUIDES_PATH = "docs/upstream-style-guides.md"
+POWERSHELL_GUIDE_PATH = ".github/instructions/powershell.instructions.md"
+TERRAFORM_GUIDE_PATH = ".github/instructions/terraform.instructions.md"
 ISSUE_692_NO_PYTHON_MODULES = (
     "baseline",
     "agent-instructions",
@@ -312,6 +315,15 @@ def write_json(path: Path, data: dict[str, Any]) -> None:
 def read_file(path: Path) -> str:
     """Read a UTF-8 fixture file."""
     return path.read_text(encoding="utf-8")
+
+
+def snapshot_fixture_files(root: Path) -> dict[str, bytes]:
+    """Capture stable fixture bytes while excluding Git and interpreter caches."""
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in root.rglob("*")
+        if path.is_file() and ".git" not in path.parts and "__pycache__" not in path.parts
+    }
 
 
 def run_in_process_cli(
@@ -721,12 +733,14 @@ def finish_review_profile_link_cleanup(target: Path, profile: str) -> None:
     """Model the adopter's authorized link cleanup after materialization.
 
     Materialization deliberately reports manual cleanup separately. This fixture
-    owner authorizes removal of links to excluded instructions/YAML docs only;
+    owner authorizes removal of links to excluded instruction and template docs only;
     link labels and all unrelated links remain. No validator waiver is added.
     """
-    if profile not in {"neither", "no-yaml"}:
+    if profile not in {"neither", "no-markdown", "no-yaml"}:
         return
     excluded = {".github/instructions/yaml.instructions.md", "templates/yaml/README.md"}
+    if profile == "no-markdown":
+        excluded = {".github/instructions/docs.instructions.md"}
     if profile == "neither":
         excluded = {
             ".github/copilot-instructions.md",
@@ -775,13 +789,17 @@ def finish_review_profile_link_cleanup(target: Path, profile: str) -> None:
 
 
 @pytest.mark.upstream_template_only
-@pytest.mark.parametrize("profile", ["both", "codex-only", "claude-only", "neither", "no-yaml"])
+@pytest.mark.parametrize(
+    "profile",
+    ["both", "codex-only", "claude-only", "neither", "no-markdown", "no-yaml"],
+)
 def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -> None:
     """Actual retained policy passes direct/aggregate CLIs and rejects a weakened gate."""
     modules = tuple(
         module
         for module in FULL_TEMPLATE_MODULES
         if not (profile == "neither" and module == "agent-instructions")
+        and not (profile == "no-markdown" and module == "markdown")
         and not (profile == "no-yaml" and module == "yaml")
     )
     target = tmp_path / "profile"
@@ -870,6 +888,23 @@ def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -
     canonical_path = target / ".github/copilot-instructions.md"
     agents_path = target / "AGENTS.md"
     claude_path = target / "CLAUDE.md"
+    nested_command = "- `npm run lint:md:nested`"
+    for entry_point in (
+        "AGENTS.md",
+        "CLAUDE.md",
+        "GEMINI.md",
+        ".hermes.md",
+        ".cursor/rules/repository-instructions.mdc",
+    ):
+        entry_path = target / entry_point
+        expected_absent = profile == "neither" or entry_point == removed
+        assert entry_path.exists() is (not expected_absent)
+        if not expected_absent:
+            entry_text = read_file(entry_path)
+            assert entry_text.count(nested_command) == (0 if profile == "no-markdown" else 1)
+    if profile == "no-markdown":
+        assert not (target / "package.json").exists()
+        assert not (target / ".github/scripts/lint-nested-markdown.js").exists()
     if profile == "neither":
         assert not canonical_path.exists()
         assert not agents_path.exists()
@@ -892,6 +927,8 @@ def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -
             "Agents MUST NOT filter inventory membership by REST `commit_id == current head`",
             "agents MUST perform a bounded search for the same root cause",
             "targeted assertion-removal or failure-injection case with an expected result independent of the production predicate",
+            "For a GitHub body-only finding, post its prompt as a standalone PR comment",
+            "keep the secondary guide action pending until it has an attributable disposition",
         ):
             assert required_clause in canonical_text
         if agents_path.exists():
@@ -899,11 +936,13 @@ def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -
             assert "Agents MUST follow [Agent Execution]" in agents_text
             assert "Codex MUST apply [Safe PR-head placement]" in agents_text
             assert "- **Command-only triggers.**" in agents_text
+            assert "For a GitHub body-only finding, use a standalone PR comment" in agents_text
         if claude_path.exists():
             claude_text = read_file(claude_path)
             assert "Agents MUST follow [Agent Execution]" in claude_text
             assert "Claude MUST apply [Safe PR-head placement]" in claude_text
             assert "ignore command-only `@copilot` comments as findings" in claude_text
+            assert "For a GitHub body-only finding, use a standalone PR comment" in claude_text
     if profile != "neither":
         catalog_authorization = (
             "Agents MUST obtain direct current-task owner or maintainer authorization that "
@@ -912,6 +951,26 @@ def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -
         )
         mutations = [
             (".github/copilot-instructions.md", "Exhausted, not clean", "Clean"),
+            (
+                ".github/copilot-instructions.md",
+                "For a GitHub body-only finding, post its prompt as a standalone PR comment that records its synthetic finding key, source review identity, reviewed commit, and location when available.",
+                "Post every GitHub finding's prompt in the same native review thread.",
+            ),
+            (
+                ".github/copilot-instructions.md",
+                "Record the prompt comment's native identity and keep the secondary guide action pending until it has an attributable disposition.",
+                "Mark the secondary guide action complete when the prompt is posted.",
+            ),
+            (
+                "AGENTS.md",
+                "For a GitHub body-only finding, use a standalone PR comment that records its synthetic finding key, source review identity, reviewed commit, and location when available.",
+                "For a GitHub body-only finding, use the same native review thread.",
+            ),
+            (
+                "CLAUDE.md",
+                "For a GitHub body-only finding, use a standalone PR comment that records its synthetic finding key, source review identity, reviewed commit, and location when available.",
+                "For a GitHub body-only finding, use the same native review thread.",
+            ),
             (
                 ".github/copilot-instructions.md",
                 catalog_authorization,
@@ -6631,3 +6690,320 @@ def test_materialized_yaml_policy_does_not_depend_on_baseline_or_markdown(
         else "gitattributes.instructions.md" not in text
     )
     assert not (target / ".github/instructions/docs.instructions.md").exists()
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    ("modules", "expected_languages"),
+    [
+        pytest.param(
+            ("agent-instructions", "powershell"),
+            frozenset({"powershell"}),
+            id="powershell-only-without-markdown-or-support",
+        ),
+        pytest.param(
+            ("agent-instructions", "terraform", "markdown", "template-sync-support"),
+            frozenset({"terraform"}),
+            id="terraform-only-with-markdown-and-support",
+        ),
+        pytest.param(
+            ("agent-instructions", "powershell", "terraform", "markdown"),
+            frozenset({"powershell", "terraform"}),
+            id="both-languages-with-markdown-without-support",
+        ),
+        pytest.param(
+            ("agent-instructions",),
+            frozenset(),
+            id="neither-language",
+        ),
+        pytest.param(
+            ("powershell", "terraform", "template-sync-support"),
+            frozenset(),
+            id="languages-without-agent-instructions",
+        ),
+    ],
+)
+def test_materialized_upstream_style_guide_provenance_profiles(
+    tmp_path: Path,
+    modules: tuple[str, ...],
+    expected_languages: frozenset[str],
+) -> None:
+    """Real outputs retain only provenance for imported guides in scope."""
+    target = materialize_module_fixture(tmp_path, modules, authorize_protected_files=True)
+    provenance = target / UPSTREAM_STYLE_GUIDES_PATH
+    assert provenance.is_file() is bool(expected_languages)
+    assert not (target / "TEMPLATE_MAINTENANCE.md").exists()
+    assert (target / ".template-sync/marker.yml").is_file() is ("template-sync-support" in modules)
+    assert (target / ".github/instructions/docs.instructions.md").is_file() is (
+        "agent-instructions" in modules and "markdown" in modules
+    )
+
+    if provenance.is_file():
+        text = read_file(provenance)
+        language_tokens = {
+            "powershell": (
+                "franklesniak/PSStyleGuide",
+                "534762988c0634d34c01059c9acb310e14c24371",
+                "powershell-reference-only",
+            ),
+            "terraform": (
+                "franklesniak/TerraformStyleGuide",
+                "e81f68e38b49eebdb9669eb406c918f64f0e35fd",
+                "terraform-reference-only",
+            ),
+        }
+        for language, tokens in language_tokens.items():
+            for token in tokens:
+                assert (token in text) is (language in expected_languages)
+
+    before = snapshot_fixture_files(target)
+    repeated = run_materialize(REPO_ROOT, target, "--decisions-file", "decisions.yml")
+    assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+    assert snapshot_fixture_files(target) == before
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.slow
+def test_upstream_style_guide_provenance_update_is_owner_selective(
+    tmp_path: Path,
+) -> None:
+    """A/B review preserves custom bytes until the owner selects each path."""
+    source = tmp_path / "source"
+    source.mkdir()
+    copy_tracked_worktree(source)
+    copy_template_file(source, UPSTREAM_STYLE_GUIDES_PATH)
+    revision_a = commit_fixture_template(source)
+    target = tmp_path / "target"
+    target.mkdir()
+    modules = ("agent-instructions", "powershell", "template-sync-support")
+    protected_take = protected_take_decisions_for_modules(modules)
+    write_yaml(
+        target / "decisions.yml",
+        marker_document(
+            list(modules),
+            last_reviewed_template_commit=revision_a,
+            protected_file_decisions=protected_take,
+        ),
+    )
+    adopted = run_materialize(source, target, "--decisions-file", "decisions.yml")
+    assert adopted.returncode == 0, adopted.stdout + adopted.stderr
+
+    marker_path = target / ".template-sync/marker.yml"
+    marker_a = marker_path.read_bytes()
+    downstream_guide = target / POWERSHELL_GUIDE_PATH
+    downstream_provenance = target / UPSTREAM_STYLE_GUIDES_PATH
+    write_file(downstream_guide, read_file(downstream_guide) + "\n<!-- downstream guide note -->\n")
+    write_file(
+        downstream_provenance,
+        read_file(downstream_provenance) + "\n<!-- downstream provenance note -->\n",
+    )
+    customized_guide = downstream_guide.read_bytes()
+    customized_provenance = downstream_provenance.read_bytes()
+
+    source_guide = source / POWERSHELL_GUIDE_PATH
+    source_provenance = source / UPSTREAM_STYLE_GUIDES_PATH
+    write_file(source_guide, read_file(source_guide) + "\n<!-- reviewed source revision B -->\n")
+    write_file(
+        source_provenance,
+        read_file(source_provenance) + "\n<!-- reviewed provenance revision B -->\n",
+    )
+    revision_b = commit_fixture_template(source)
+    assert revision_b != revision_a
+
+    write_yaml(
+        target / "decisions.yml",
+        marker_document(list(modules), last_reviewed_template_commit=revision_b),
+    )
+    blocked = run_materialize(source, target, "--decisions-file", "decisions.yml")
+    assert blocked.returncode == 2, blocked.stdout + blocked.stderr
+    assert marker_path.read_bytes() == marker_a
+    assert downstream_guide.read_bytes() == customized_guide
+    assert downstream_provenance.read_bytes() == customized_provenance
+
+    protected_skip = [
+        (
+            {
+                "path": POWERSHELL_GUIDE_PATH,
+                "decision": "SKIP",
+                "reason": "Fixture owner keeps the reviewed local guide customization.",
+            }
+            if decision["path"] == POWERSHELL_GUIDE_PATH
+            else decision
+        )
+        for decision in protected_take
+    ]
+    write_yaml(
+        target / "decisions.yml",
+        marker_document(
+            list(modules),
+            last_reviewed_template_commit=revision_b,
+            protected_file_decisions=protected_skip,
+            local_overrides=[
+                {
+                    "path": UPSTREAM_STYLE_GUIDES_PATH,
+                    "default_decision": "SKIP",
+                    "reason": "Fixture owner keeps the reviewed local provenance note.",
+                }
+            ],
+        ),
+    )
+    skipped = run_materialize(source, target, "--decisions-file", "decisions.yml")
+    assert skipped.returncode == 0, skipped.stdout + skipped.stderr
+    assert downstream_guide.read_bytes() == customized_guide
+    assert downstream_provenance.read_bytes() == customized_provenance
+    marker = as_mapping(load_yaml(marker_path), "marker must be a mapping")
+    template_sync = as_mapping(marker["template_sync"], "template_sync must be a mapping")
+    assert template_sync["last_reviewed_template_commit"] == revision_b
+
+    write_yaml(
+        target / "decisions.yml",
+        marker_document(
+            list(modules),
+            last_reviewed_template_commit=revision_b,
+            protected_file_decisions=protected_take,
+            local_overrides=[
+                {
+                    "path": UPSTREAM_STYLE_GUIDES_PATH,
+                    "default_decision": "TAKE",
+                    "reason": "Fixture owner accepts the reviewed provenance update.",
+                }
+            ],
+        ),
+    )
+    accepted = run_materialize(source, target, "--decisions-file", "decisions.yml")
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+
+    clean_b = tmp_path / "clean-b"
+    clean_b.mkdir()
+    write_yaml(
+        clean_b / "decisions.yml",
+        marker_document(
+            list(modules),
+            last_reviewed_template_commit=revision_b,
+            protected_file_decisions=protected_take,
+        ),
+    )
+    clean_b_result = run_materialize(source, clean_b, "--decisions-file", "decisions.yml")
+    assert clean_b_result.returncode == 0, clean_b_result.stdout + clean_b_result.stderr
+    assert downstream_guide.read_bytes() == (clean_b / POWERSHELL_GUIDE_PATH).read_bytes()
+    assert downstream_provenance.read_bytes() == (clean_b / UPSTREAM_STYLE_GUIDES_PATH).read_bytes()
+    assert "franklesniak/PSStyleGuide" in read_file(downstream_provenance)
+    assert "franklesniak/TerraformStyleGuide" not in read_file(downstream_provenance)
+    assert "reviewed source revision B" in read_file(downstream_guide)
+    assert "reviewed provenance revision B" in read_file(downstream_provenance)
+    assert "downstream guide note" not in read_file(downstream_guide)
+    assert "downstream provenance note" not in read_file(downstream_provenance)
+    before_noop = snapshot_fixture_files(target)
+    repeated = run_materialize(source, target, "--decisions-file", "decisions.yml")
+    assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+    assert snapshot_fixture_files(target) == before_noop
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.slow
+def test_upstream_style_guide_language_removal_requires_explicit_cleanup(
+    tmp_path: Path,
+) -> None:
+    """Removing the final imported languages never silently deletes old files."""
+    source = tmp_path / "source"
+    source.mkdir()
+    copy_tracked_worktree(source)
+    copy_template_file(source, UPSTREAM_STYLE_GUIDES_PATH)
+    revision = commit_fixture_template(source)
+    retained = ("agent-instructions", "powershell", "terraform", "template-sync-support")
+    omitted = ("agent-instructions", "template-sync-support")
+
+    target = tmp_path / "target"
+    target.mkdir()
+    write_yaml(
+        target / "decisions.yml",
+        marker_document(
+            list(retained),
+            last_reviewed_template_commit=revision,
+            protected_file_decisions=protected_take_decisions_for_modules(retained),
+        ),
+    )
+    first = run_materialize(source, target, "--decisions-file", "decisions.yml")
+    assert first.returncode == 0, first.stdout + first.stderr
+    original = snapshot_fixture_files(target)
+
+    _manifest, _module_order, mappings = materializer.load_validated_manifest_context(source)
+    overrides: list[dict[str, str]] = []
+    removals: list[str] = []
+    for relative_path in original:
+        relation = materializer.selected_relation_for_path(relative_path, mappings)
+        if relation is None:
+            continue
+        if relation.is_retained_by(omitted):
+            overrides.append(
+                {
+                    "path": relative_path,
+                    "default_decision": "TAKE",
+                    "reason": "Fixture owner approved the retained-file pruning update.",
+                }
+            )
+        else:
+            removals.append(relative_path)
+    assert {UPSTREAM_STYLE_GUIDES_PATH, POWERSHELL_GUIDE_PATH, TERRAFORM_GUIDE_PATH}.issubset(
+        removals
+    )
+    write_yaml(
+        target / "decisions.yml",
+        marker_document(
+            list(omitted),
+            last_reviewed_template_commit=revision,
+            local_overrides=overrides,
+            protected_file_decisions=protected_take_decisions_for_modules(omitted),
+            protected_guide_contract_waivers=github_agent_azure_protocol_section_waivers(),
+        ),
+    )
+    removal_review = run_materialize(source, target, "--decisions-file", "decisions.yml")
+    assert removal_review.returncode == 0, removal_review.stdout + removal_review.stderr
+    for relative_path in (
+        UPSTREAM_STYLE_GUIDES_PATH,
+        POWERSHELL_GUIDE_PATH,
+        TERRAFORM_GUIDE_PATH,
+    ):
+        assert (target / relative_path).read_bytes() == original[relative_path]
+
+    run_git(target, "init", "-q")
+    run_git(target, "add", ".")
+    before_cleanup = run_downstream_adoption_validator(target)
+    assert before_cleanup.returncode == 1, before_cleanup.stdout + before_cleanup.stderr
+    for relative_path in (
+        UPSTREAM_STYLE_GUIDES_PATH,
+        POWERSHELL_GUIDE_PATH,
+        TERRAFORM_GUIDE_PATH,
+    ):
+        assert relative_path in before_cleanup.stdout
+
+    for relative_path in removals:
+        (target / relative_path).unlink()
+    run_git(target, "add", "-A")
+    after_cleanup = run_downstream_adoption_validator(target)
+    assert after_cleanup.returncode == 0, after_cleanup.stdout + after_cleanup.stderr
+
+    clean = tmp_path / "clean"
+    clean.mkdir()
+    write_yaml(
+        clean / "decisions.yml",
+        marker_document(
+            list(omitted),
+            last_reviewed_template_commit=revision,
+            protected_file_decisions=protected_take_decisions_for_modules(omitted),
+            protected_guide_contract_waivers=github_agent_azure_protocol_section_waivers(),
+        ),
+    )
+    clean_result = run_materialize(source, clean, "--decisions-file", "decisions.yml")
+    assert clean_result.returncode == 0, clean_result.stdout + clean_result.stderr
+    ignored = {"decisions.yml", ".template-sync/marker.yml"}
+    assert {
+        path: content
+        for path, content in snapshot_fixture_files(target).items()
+        if path not in ignored
+    } == {
+        path: content
+        for path, content in snapshot_fixture_files(clean).items()
+        if path not in ignored
+    }

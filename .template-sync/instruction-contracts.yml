@@ -131,11 +131,16 @@ instruction_contracts:
             placement. After implementation, reply with the resulting PR-head SHA and validation evidence.
           - 7. **Implement the fix.** Apply the selected option, commit, and push. Apply the Protected
             content and placement section below before editing or placing the fix.
-          - 8. **Evaluate style guide impact.** Read the full applicable guide and follow the shared
-            prevention and deferral rules. Implement a secondary guide change when explicit current-task
-            authority covers it. Otherwise post a ready-to-file issue prompt in a Markdown code fence
-            in the same thread, with the rule, rationale, scope, acceptance tests, and narrow authorization
-            question. Keep the pending guide action visible; continue independent authorized work.
+          - >-
+            8. **Evaluate style guide impact.** Read the full applicable guide and follow
+            the shared prevention and deferral rules. Implement a secondary guide change
+            when explicit current-task authority covers it. Otherwise, post the required
+            ready-to-file fenced prompt. For a GitHub inline finding, use the same native
+            review thread. For a GitHub body-only finding, use a standalone PR comment
+            that records its synthetic finding key, source review identity, reviewed
+            commit, and location when available. Record the prompt comment's native
+            identity, keep the guide action pending until attributable disposition, and
+            continue independent authorized work.
           - 9. **Resolve or leave open.** Reply with the fix or refutation evidence and close a complete
             finding when no guide action remains pending. For body-only findings, record an attributable
             disposition. Inspect the runtime's actual reaction and thread-resolution capabilities;
@@ -870,11 +875,16 @@ instruction_contracts:
           - 7. **Implement the fix.** Apply the selected option locally, commit, and push to the agent's
             working branch using local `git`. Apply the Protected content and placement section below
             before editing or placing the fix.
-          - 8. **Evaluate style guide impact.** Read the full applicable guide and follow the shared
-            prevention and deferral rules. Implement a secondary guide change when explicit current-task
-            authority covers it. Otherwise post a ready-to-file issue prompt in a Markdown code fence
-            in the same thread, with the rule, rationale, scope, acceptance tests, and narrow authorization
-            question. Keep the pending guide action visible; continue independent authorized work.
+          - >-
+            8. **Evaluate style guide impact.** Read the full applicable guide and follow
+            the shared prevention and deferral rules. Implement a secondary guide change
+            when explicit current-task authority covers it. Otherwise, post the required
+            ready-to-file fenced prompt. For a GitHub inline finding, use the same native
+            review thread. For a GitHub body-only finding, use a standalone PR comment
+            that records its synthetic finding key, source review identity, reviewed
+            commit, and location when available. Record the prompt comment's native
+            identity, keep the guide action pending until attributable disposition, and
+            continue independent authorized work.
           - 9. **Resolve or leave open.** Reply with the fix or refutation evidence and close a complete
             finding when no guide action remains pending. For body-only findings, record an attributable
             disposition. Inspect the runtime's actual reaction and thread-resolution capabilities;
@@ -1296,10 +1306,17 @@ instruction_contracts:
             fix, retain native failure exits, run required checks before committing, and audit every
             outgoing commit and path. Record the resulting PR-head SHA and fix reachability after placement.
           - >-
-            9. Read the full applicable style guide before evaluating prevention. Implement an in-scope
-            authorized guide change. Otherwise post a ready-to-file issue prompt in a Markdown code fence
-            with the proposed rule, rationale, scope, acceptance tests, and narrow authorization question.
-            Do not change a protected guide without authority; continue independent work.
+            9. Read the full applicable style guide before evaluating prevention.
+            Implement an in-scope authorized guide change. Otherwise, post a ready-to-file
+            issue prompt in a Markdown code fence with the proposed rule, rationale,
+            scope, acceptance tests, and narrow authorization question. For a GitHub PR
+            finding, post an inline finding's prompt in the same native review thread. For
+            a GitHub body-only finding, post its prompt as a standalone PR comment that
+            records its synthetic finding key, source review identity, reviewed commit,
+            and location when available. Record the prompt comment's native identity and
+            keep the secondary guide action pending until it has an attributable
+            disposition. Do not change a protected guide without authority; continue
+            independent work.
           - >-
             10. Reply with implementation or refutation evidence. Resolve the native thread when the finding
             is complete and no pending guide action requires it to stay open. Close body-only findings by

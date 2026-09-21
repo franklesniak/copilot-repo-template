@@ -319,6 +319,18 @@ template_manifest:
     - pattern: 'docs/workflow-security.md'
       requires_all:
         - github-actions
+    - pattern: 'docs/upstream-style-guides.md'
+      requires_all:
+        - agent-instructions
+      requires_any:
+        - powershell
+        - terraform
+      notes: >-
+        Contains Markdown-safe *-reference-only inline blocks for imported
+        PowerShell and Terraform guide provenance. Remove each delimited
+        reference-only block when its module is excluded. Omit the whole file
+        unless agent-instructions and at least one imported language guide are
+        retained.
     - pattern: '.github/workflow-security-contract.yml'
       requires_all:
         - github-actions

@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.7.20260919.0
+**Version:** 1.7.20260921.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-19
+- **Last Updated:** 2026-09-21
 - **Scope:** Agent-specific entry point for Claude Code and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
@@ -59,6 +59,7 @@ During downstream template adoption and stack selection, perform non-protected c
   - Use the repository's existing validation commands as needed:
     <!-- template-sync: begin markdown-reference-only -->
     - `npm run lint:md`
+    - `npm run lint:md:nested`
     <!-- template-sync: end markdown-reference-only -->
     <!-- template-sync: begin python-reference-only -->
     - `python -m pyright --project pyrightconfig.json`
@@ -189,7 +190,7 @@ These terms apply to the review-comment workflow below and defer to the canonica
 
 7. **Implement the fix.** Apply the selected option, commit, and push. Apply the Protected content and placement section below before editing or placing the fix.
 
-8. **Evaluate style guide impact.** Read the full applicable guide and follow the shared prevention and deferral rules. Implement a secondary guide change when explicit current-task authority covers it. Otherwise post a ready-to-file issue prompt in a Markdown code fence in the same thread, with the rule, rationale, scope, acceptance tests, and narrow authorization question. Keep the pending guide action visible; continue independent authorized work.
+8. **Evaluate style guide impact.** Read the full applicable guide and follow the shared prevention and deferral rules. Implement a secondary guide change when explicit current-task authority covers it. Otherwise, post the required ready-to-file fenced prompt. For a GitHub inline finding, use the same native review thread. For a GitHub body-only finding, use a standalone PR comment that records its synthetic finding key, source review identity, reviewed commit, and location when available. Record the prompt comment's native identity, keep the guide action pending until attributable disposition, and continue independent authorized work.
 
 9. **Resolve or leave open.** Reply with the fix or refutation evidence and close a complete finding when no guide action remains pending. For body-only findings, record an attributable disposition. Inspect the runtime's actual reaction and thread-resolution capabilities; retrieve the GraphQL thread ID through an authenticated equivalent when needed. If resolution is unavailable, state the manual owner action and leave it incomplete. Remove the temporary `eyes` reaction when supported. A resolved flag alone is not proof that the finding is complete.
 

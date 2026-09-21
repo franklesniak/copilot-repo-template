@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.3.20260920.0
+**Version:** 1.3.20260921.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-20
+- **Last Updated:** 2026-09-21
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the first-adoption bootstrap command, the read-only first-adoption preflight/questionnaire mode, raw first-adoption state reporting, first-adoption quality-debt reports and suppressions, the adoption difficulties journal, one-shot first-adoption materialization, shell-safe first-adoption args files, package identity and collaboration-policy materialization, first-adoption structural convention assessment, first-adoption working-tree validation and doctor diagnostics, downstream local path ownership records, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -754,6 +754,7 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `docs/azure-devops-support.md` | one of `azure-devops-platform`, `azure-pipelines`, `azure-devops-collaboration` |
 | `tests/test_dependabot_schema.py`, `tests/fixtures/dependabot/auto-assignment.yml` | `github-platform`, `schema` |
 | `docs/workflow-security.md` | `github-actions` |
+| `docs/upstream-style-guides.md` | `agent-instructions` plus one of `powershell`, `terraform` |
 | `.github/workflow-security-contract.yml` | `github-actions` |
 | `.github/scripts/validate_workflow_security.py` | one of `github-actions`, `template-sync-support` |
 | `schemas/workflow-security-contract.schema.json` | one of `github-actions`, `template-sync-support` |
@@ -987,6 +988,7 @@ The current `markdown-reference-only`, `powershell-reference-only`, `python-refe
 - `.github/pull_request_template.md` for removable Python, PowerShell, and schema checklist sections in the retained PR template.
 - `.github/instructions/json.instructions.md`, `.github/instructions/yaml.instructions.md`, `schemas/README.md`, `GETTING_STARTED_NEW_REPO.md`, and `GETTING_STARTED_EXISTING_REPO.md` for optional companion-guide links.
 - `OPTIONAL_CONFIGURATIONS.md` for optional Python guidance and YAML starter links.
+- `docs/upstream-style-guides.md` for the provenance record of each retained imported PowerShell or Terraform instruction guide.
 
 The current `github-actions-reference-only` inline blocks live in:
 

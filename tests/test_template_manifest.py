@@ -43,6 +43,7 @@ COPY_READY_REFERENCE_FILES = (
     REPO_ROOT / ".github" / "instructions" / "docs.instructions.md",
     REPO_ROOT / ".github" / "instructions" / "json.instructions.md",
     REPO_ROOT / ".github" / "instructions" / "yaml.instructions.md",
+    REPO_ROOT / "docs" / "upstream-style-guides.md",
 )
 
 if str(TEMPLATE_SYNC_SCRIPT_DIR) not in sys.path:
@@ -326,6 +327,7 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "CLAUDE.md": 2,
         "GEMINI.md": 2,
         ".github/pull_request_template.md": 1,
+        "docs/upstream-style-guides.md": 1,
     },
     "python-reference-only": {
         "OPTIONAL_CONFIGURATIONS.md": 1,
@@ -348,6 +350,7 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "GEMINI.md": 2,
         "README.md": 6,
         "CONTRIBUTING.md": 6,
+        "docs/upstream-style-guides.md": 1,
     },
     "json-reference-only": {
         ".github/instructions/yaml.instructions.md": 1,
@@ -494,6 +497,7 @@ REFERENCE_ONLY_MANIFEST_PATTERNS = {
     "OPTIONAL_CONFIGURATIONS.md": "OPTIONAL_CONFIGURATIONS.md",
     "COPILOT_CHAT_PROMPTS.md": "COPILOT_CHAT_PROMPTS.md",
     "docs/PR_REVIEW_PROMPTS.md": "docs/PR_REVIEW_PROMPTS.md",
+    "docs/upstream-style-guides.md": "docs/upstream-style-guides.md",
     "schemas/README.md": "schemas/**",
 }
 REFERENCE_ONLY_FORBIDDEN_ENTRY_POINT_TOKENS = {
@@ -2105,6 +2109,69 @@ def test_template_manifest_azure_support_guide_uses_any_azure_module_relation() 
     assert _path_mapping_matches_modules(guide_mapping, set(AZURE_DEVOPS_GUIDE_MODULES))
     assert not _path_mapping_matches_modules(guide_mapping, {"github-platform"})
     assert not _path_mapping_matches_modules(guide_mapping, {"baseline"})
+
+
+@pytest.mark.parametrize(
+    ("included_modules", "expected_languages"),
+    [
+        pytest.param(
+            {"agent-instructions", "powershell"},
+            {"powershell"},
+            id="powershell-only",
+        ),
+        pytest.param(
+            {"agent-instructions", "terraform"},
+            {"terraform"},
+            id="terraform-only",
+        ),
+        pytest.param(
+            {"agent-instructions", "powershell", "terraform"},
+            {"powershell", "terraform"},
+            id="both-languages",
+        ),
+        pytest.param({"agent-instructions"}, set(), id="neither-language"),
+        pytest.param(
+            {"powershell", "terraform"},
+            set(),
+            id="agent-instructions-excluded",
+        ),
+    ],
+)
+def test_upstream_style_guide_provenance_relation_and_pruning(
+    included_modules: set[str], expected_languages: set[str]
+) -> None:
+    """The provenance record follows agent-plus-language ownership exactly."""
+    relative_path = "docs/upstream-style-guides.md"
+    mapping = _path_mapping_by_pattern()[relative_path]
+    assert _relation_modules(mapping, "requires_all") == ("agent-instructions",)
+    assert _relation_modules(mapping, "requires_any") == ("powershell", "terraform")
+    retained = _path_mapping_matches_modules(mapping, included_modules)
+    assert retained is bool(expected_languages)
+    if not retained:
+        return
+
+    rendered = _strip_reference_only_blocks_for_modules(relative_path, included_modules)
+    expected_tokens = {
+        "powershell": (
+            "franklesniak/PSStyleGuide",
+            "986a78cfad02abe9698ee258735d8451abeb9249",
+            "534762988c0634d34c01059c9acb310e14c24371",
+        ),
+        "terraform": (
+            "franklesniak/TerraformStyleGuide",
+            "71202772d69689ffc0336bd3532e711b27e633bf",
+            "e81f68e38b49eebdb9669eb406c918f64f0e35fd",
+        ),
+    }
+    for language, tokens in expected_tokens.items():
+        for token in tokens:
+            assert (token in rendered) is (language in expected_languages)
+
+    # The exact relation does not acquire Markdown, host, onboarding, or
+    # template-sync-support dependencies from broader documentation concerns.
+    assert _path_mapping_matches_modules(mapping, included_modules | {"markdown"})
+    assert _path_mapping_matches_modules(mapping, included_modules | {"github-actions"})
+    assert _path_mapping_matches_modules(mapping, included_modules | {"template-sync-support"})
 
 
 def test_template_manifest_maps_azure_pipelines_to_ci_host_and_stack_modules() -> None:
