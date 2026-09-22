@@ -1,4 +1,10 @@
-# Register this selected route as Azure Repos branch-policy build validation.
+# Azure Pipelines instruction-contract validation.
+#
+# Azure Repos pull request validation is configured through branch policy build
+# validation. This YAML intentionally omits a `pr:` trigger.
+
+name: "$(Date:yyyyMMdd).$(Rev:r)"
+
 trigger:
   branches:
     include:

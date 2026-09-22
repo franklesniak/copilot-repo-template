@@ -621,6 +621,7 @@ AZURE_PIPELINE_YAML_PATHS = (
     ".azuredevops/pipelines/check-placeholders.yml",
     ".azuredevops/pipelines/markdownlint.yml",
     ".azuredevops/pipelines/data-ci.yml",
+    ".azuredevops/pipelines/instruction-contracts.yml",
     ".azuredevops/pipelines/powershell-ci.yml",
     ".azuredevops/pipelines/python-ci.yml",
     ".azuredevops/pipelines/terraform-ci.yml",
