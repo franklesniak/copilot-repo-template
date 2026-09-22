@@ -184,6 +184,21 @@ def selected_content_root(
     return (target_root if local_path.exists() else staging_root), False
 
 
+def report_failure_keys(report: core.InstructionContractReport) -> set[tuple[str, str]]:
+    """Return the exact failure keys that a standalone declaration can address."""
+    failures = {(item.path, item.anchor) for item in report.missing_anchors}
+    failures.update((item.path, "file:absent") for item in report.missing_files)
+    failures.update(
+        (item.path, f"stale:{item.contract_key}:{item.anchor_type}:{item.anchor}")
+        for item in report.stale_protected_guide_sections
+    )
+    failures.update(
+        (item.path, f"reference:{item.contract_key}:{item.reference_kind}:{item.target}")
+        for item in report.stale_protected_guide_references
+    )
+    return failures
+
+
 def render_instruction_profile(
     *,
     staging_root: Path,
@@ -277,32 +292,40 @@ def render_instruction_profile(
                 protected_guide_section_obligations=section_obligations,
                 protected_guide_reference_obligations=reference_obligations,
             )
+        failure_keys = {root: report_failure_keys(report) for root, report in reports.items()}
+        content_digests: dict[tuple[Path, str], str] = {}
+        for declaration in exceptions:
+            if not declaration_applies(
+                declaration, contracts, section_obligations, modules, reference_obligations
+            ):
+                continue
+            path, anchor = declaration["path"], declaration["anchor"]
+            content_root, _ = selected_content_root(path, staging_root, target_root, marker)
+            content_key = (content_root, path)
+            if content_key not in content_digests:
+                content_digests[content_key] = core.file_digest(content_root, path)
+            digest = content_digests[content_key]
+            original_digest = declaration["content_sha256"]
+            if (path, anchor) not in failure_keys[content_root] or original_digest != digest:
+                raise TemplateSyncMaterializationError(
+                    f"Existing standalone exception conflicts with selected content: {path}: {anchor}. "
+                    "Review or remove the declaration; its content hash is not renewed automatically."
+                )
         for waiver in marker.get("instruction_contract_waivers", []):
             content_root, taken = selected_content_root(
                 waiver["path"], staging_root, target_root, marker
             )
-            if taken and declaration_applies(
-                waiver, contracts, section_obligations, modules, reference_obligations
+            if (
+                taken
+                and declaration_applies(
+                    waiver, contracts, section_obligations, modules, reference_obligations
+                )
+                and (waiver["path"], waiver["anchor"]) not in failure_keys[content_root]
             ):
-                report = reports[content_root]
-                failures = {(item.path, item.anchor) for item in report.missing_anchors}
-                failures.update((item.path, "file:absent") for item in report.missing_files)
-                failures.update(
-                    (item.path, f"stale:{item.contract_key}:{item.anchor_type}:{item.anchor}")
-                    for item in report.stale_protected_guide_sections
+                raise TemplateSyncMaterializationError(
+                    f"Instruction waiver conflicts with selected TAKE content: "
+                    f"{waiver['path']}: {waiver['anchor']}. Review or remove the waiver."
                 )
-                failures.update(
-                    (
-                        item.path,
-                        f"reference:{item.contract_key}:{item.reference_kind}:{item.target}",
-                    )
-                    for item in report.stale_protected_guide_references
-                )
-                if (waiver["path"], waiver["anchor"]) not in failures:
-                    raise TemplateSyncMaterializationError(
-                        f"Instruction waiver conflicts with selected TAKE content: "
-                        f"{waiver['path']}: {waiver['anchor']}. Review or remove the waiver."
-                    )
             exceptions.append(
                 {**waiver, "content_sha256": core.file_digest(content_root, waiver["path"])}
             )

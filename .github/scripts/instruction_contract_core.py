@@ -2206,6 +2206,134 @@ def markdown_link_opening_is_image(text: str, opening: int) -> bool:
     return backslashes % 2 == 0
 
 
+def markdown_code_span_ends(text: str) -> dict[int, int]:
+    """Index equal-width backtick closers without repeated suffix searches.
+
+    Closing runs remain eligible after a backslash inside code. Outside code,
+    escaping the first tick of a longer run leaves a shorter opening run.
+    """
+    nearest: dict[int, int] = {}
+    ends: dict[int, int] = {}
+    for match in reversed(list(re.finditer(r"`+", text))):
+        start, end = match.span()
+        width = end - start
+        if width in nearest:
+            ends[start] = nearest[width]
+        if width > 1 and width - 1 in nearest:
+            ends[start + 1] = nearest[width - 1]
+        nearest[width] = end
+    return ends
+
+
+def markdown_link_component(
+    text: str,
+    opening: int,
+    closing: int,
+    closes: dict[int, int],
+    whitespace: list[int],
+    line_start: int,
+) -> tuple[int, int, int] | None:
+    """Return consumed end and raw target indices for a complete link component."""
+    component = closing + 1
+    if component >= len(text) or text[component] not in "(:":
+        return None
+    is_reference = text[component] == ":"
+    if is_reference and (
+        opening - line_start > 3 or text[line_start:opening] not in ("", " ", "  ", "   ")
+    ):
+        return None
+    index = markdown_link_space(text, component + 1)
+    if index < 0:
+        return None
+    destination = markdown_link_destination(text, index, closes, whitespace)
+    if destination is None:
+        return None
+    end, target_start, target_end = destination
+    after_space = markdown_link_space(text, end)
+    if after_space < 0:
+        return None
+    if not is_reference and after_space < len(text) and text[after_space] == ")":
+        return after_space + 1, target_start, target_end
+    title_end = markdown_link_title_end(text, after_space) if after_space > end else -1
+    if is_reference:
+        line_end = text.find("\n", end)
+        line_end = len(text) if line_end < 0 else line_end
+        if title_end >= 0:
+            suffix_end = text.find("\n", title_end)
+            suffix_end = len(text) if suffix_end < 0 else suffix_end
+            if text[title_end:suffix_end].strip(" \t"):
+                title_end = -1
+        if title_end >= 0 or not text[end:line_end].strip(" \t"):
+            return title_end if title_end >= 0 else end, target_start, target_end
+    elif title_end >= 0:
+        final = markdown_link_space(text, title_end)
+        if final >= 0 and final < len(text) and text[final] == ")":
+            return final + 1, target_start, target_end
+    return None
+
+
+def markdown_link_candidates(
+    text: str, starts: list[int], whitespace: list[int]
+) -> list[tuple[int, int, int, int]]:
+    """Scan inline labels while keeping destinations and definitions literal.
+
+    Each accepted candidate records its opening, consumed end and raw target
+    bounds. Raw parentheses retain their destination grammar. Code spans only
+    control brackets in inline text, never backticks inside accepted components.
+    """
+    raw_labels, closes = markdown_delimiter_pairs(text)
+    definitions = {
+        opening: closing
+        for opening, closing in raw_labels
+        if text[closing + 1 : closing + 2] == ":"
+    }
+    code_ends = markdown_code_span_ends(text)
+    brackets: list[int] = []
+    candidates: list[tuple[int, int, int, int]] = []
+    index = 0
+    while index < len(text):
+        character = text[index]
+        if character == "\\" and index + 1 < len(text) and text[index + 1] in ASCII_PUNCTUATION:
+            index += 2
+            continue
+        if character == "`":
+            if index in code_ends:
+                index = code_ends[index]
+            else:
+                index += 1
+                while index < len(text) and text[index] == "`":
+                    index += 1
+            continue
+        opening = index
+        closing = definitions.get(index) if character == "[" else None
+        if closing is not None:
+            line_start = starts[bisect_right(starts, opening) - 1]
+            component = markdown_link_component(
+                text, opening, closing, closes, whitespace, line_start
+            )
+            if component is not None:
+                end, target_start, target_end = component
+                candidates.append((opening, end, target_start, target_end))
+                index = end
+                continue
+        if character == "[":
+            brackets.append(index)
+        elif character == "]" and brackets:
+            opening = brackets.pop()
+            if text[index + 1 : index + 2] == "(":
+                line_start = starts[bisect_right(starts, opening) - 1]
+                component = markdown_link_component(
+                    text, opening, index, closes, whitespace, line_start
+                )
+                if component is not None:
+                    end, target_start, target_end = component
+                    candidates.append((opening, end, target_start, target_end))
+                    index = end
+                    continue
+        index += 1
+    return candidates
+
+
 def markdown_span_link_targets(span: list[tuple[int, str]]) -> list[tuple[int, str]]:
     """Extract the supported link surface from one contiguous live text span."""
     text = "\n".join(line for _, line in span)
@@ -2214,62 +2342,25 @@ def markdown_span_link_targets(span: list[tuple[int, str]]) -> list[tuple[int, s
     for _, line in span:
         starts.append(offset)
         offset += len(line) + 1
-    labels, closes = markdown_delimiter_pairs(text)
     whitespace = [
         index
         for index, character in enumerate(text)
         if ord(character) <= 32 or ord(character) == 127
     ]
     whitespace.append(len(text))
-    targets: list[tuple[int, int, str]] = []
+    targets: list[tuple[int, str]] = []
     consumed_until = 0
-    for opening, closing in sorted(labels):
+    for opening, end, target_start, target_end in sorted(
+        markdown_link_candidates(text, starts, whitespace)
+    ):
         if opening < consumed_until:
             continue
         if markdown_link_opening_is_image(text, opening):
             continue
-        component = closing + 1
-        if component >= len(text) or text[component] not in "(:":
-            continue
-        is_reference = text[component] == ":"
         line_index = bisect_right(starts, opening) - 1
-        if is_reference and (
-            opening - starts[line_index] > 3
-            or text[starts[line_index] : opening] not in ("", " ", "  ", "   ")
-        ):
-            continue
-        index = markdown_link_space(text, component + 1)
-        if index < 0:
-            continue
-        destination = markdown_link_destination(text, index, closes, whitespace)
-        if destination is None:
-            continue
-        end, target_start, target_end = destination
-        after_space = markdown_link_space(text, end)
-        if after_space < 0:
-            continue
-        if not is_reference and after_space < len(text) and text[after_space] == ")":
-            targets.append((opening, span[line_index][0], text[target_start:target_end]))
-            consumed_until = after_space + 1
-            continue
-        title_end = markdown_link_title_end(text, after_space) if after_space > end else -1
-        if is_reference:
-            line_end = text.find("\n", end)
-            line_end = len(text) if line_end < 0 else line_end
-            if title_end >= 0:
-                suffix_end = text.find("\n", title_end)
-                suffix_end = len(text) if suffix_end < 0 else suffix_end
-                if text[title_end:suffix_end].strip(" \t"):
-                    title_end = -1
-            if title_end >= 0 or not text[end:line_end].strip(" \t"):
-                targets.append((opening, span[line_index][0], text[target_start:target_end]))
-                consumed_until = title_end if title_end >= 0 else end
-        elif title_end >= 0:
-            final = markdown_link_space(text, title_end)
-            if final >= 0 and final < len(text) and text[final] == ")":
-                targets.append((opening, span[line_index][0], text[target_start:target_end]))
-                consumed_until = final + 1
-    return [(line, target) for _, line, target in sorted(targets)]
+        targets.append((span[line_index][0], text[target_start:target_end]))
+        consumed_until = end
+    return targets
 
 
 def markdown_link_targets_from_text(

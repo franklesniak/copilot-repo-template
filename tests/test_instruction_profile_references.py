@@ -428,6 +428,25 @@ def test_multiline_link_destinations_have_independent_fixed_oracles(
     assert core.markdown_link_targets_from_text(text) == expected
 
 
+def restore_raw_link_candidate_scanner(source: str) -> str:
+    """Restore pre-code-context bracket enumeration in an isolated mutant only."""
+    candidate_start = source.index("def markdown_link_candidates(")
+    candidate_stop = source.index("\ndef markdown_span_link_targets(", candidate_start)
+    raw_candidates = """def markdown_link_candidates(text, starts, whitespace):
+    labels, closes = markdown_delimiter_pairs(text)
+    candidates = []
+    for opening, closing in labels:
+        component = markdown_link_component(
+            text, opening, closing, closes, whitespace,
+            starts[bisect_right(starts, opening) - 1])
+        if component is not None:
+            candidates.append((opening, *component))
+    return candidates
+
+"""
+    return source[:candidate_start] + raw_candidates + source[candidate_stop:]
+
+
 def test_multiline_link_output_is_bounded_and_guard_mutant_is_caught(tmp_path: Path) -> None:
     """Near-limit accepted nesting emits one target; removing consumption breaks it."""
     reference_fixture(tmp_path, "markdown-relative-link")
@@ -453,7 +472,10 @@ def test_multiline_link_output_is_bounded_and_guard_mutant_is_caught(tmp_path: P
     source = path.read_text(encoding="utf-8")
     guard = "        if opening < consumed_until:\n            continue\n"
     assert source.count(guard) == 1
-    path.write_text(source.replace(guard, ""), encoding="utf-8", newline="\n")
+    # The forward scan independently excludes accepted destinations. Restore
+    # raw enumeration before removing the final guard to reproduce old overlap.
+    restored = restore_raw_link_candidate_scanner(source)
+    path.write_text(restored.replace(guard, ""), encoding="utf-8", newline="\n")
     mutant = subprocess.run(
         [sys.executable, "-c", program, "20"],
         capture_output=True,
@@ -488,6 +510,163 @@ BANG_PARITY_CASES = (
     (5, True),
     (6, False),
 )
+
+
+CODE_SPAN_LINK_CASES = (
+    ("[a `]`](target.md)", ((1, "target.md"),)),
+    ("[a `[`](target.md)", ((1, "target.md"),)),
+    ("[a `[]`](target.md)", ((1, "target.md"),)),
+    ("[a ``]``](target.md)", ((1, "target.md"),)),
+    ("[a ``]`[``](target.md)", ((1, "target.md"),)),
+    (r"[a `\]`](target.md)", ((1, "target.md"),)),
+    (r"[a `]\`](target.md)", ((1, "target.md"),)),
+    (r"[a \``]`](target.md)", ((1, "target.md"),)),
+    ("[a `](target.md)", ((1, "target.md"),)),
+    ("[a ``]`](target.md)", ()),
+    ("[a `]\nx`](target.md)", ((1, "target.md"),)),
+    ("[a\n `[`](target.md)", ((1, "target.md"),)),
+    ("[a `) [`](target.md)", ((1, "target.md"),)),
+    ("[a `[z](hidden.md)`](target.md)", ((1, "target.md"),)),
+    ("`[a](hidden.md)` [b](target.md)", ((1, "target.md"),)),
+    ("``[a](hidden.md)``", ()),
+    ("[a `](hidden.md) and `tail", ()),
+    (r"[a \`]`](hidden.md)", ()),
+    ("![a `]`](hidden.md)", ()),
+    (r"\![a `]`](target.md)", ((1, "target.md"),)),
+    (r"\\![a `]`](hidden.md)", ()),
+    ("[a `]`](first.md) [b](second.md)", ((1, "first.md"), (1, "second.md"))),
+    ("[a](a`b.md) [b](second.md) and `tail", ((1, "a`b.md"), (1, "second.md"))),
+    ('[a](first.md "`title") [b](second.md) and `tail', ((1, "first.md"), (1, "second.md"))),
+    ("[a](a`(b).md) and `z`", ((1, "a`(b).md"),)),
+    ("[a `x`]: target.md", ((1, "target.md"),)),
+    ("[a `x]: target.md", ((1, "target.md"),)),
+    ("[a `]`]: hidden.md", ()),
+    ("`\n[a]: hidden.md\n`", ()),
+    ("[a `]\n\nx`](hidden.md)", ()),
+    ("```markdown\n[a `]`](hidden.md)\n```", ()),
+    ("[a `]\n```text\nx\n```\n`](hidden.md)", ()),
+)
+
+
+@pytest.mark.parametrize(("body", "expected"), CODE_SPAN_LINK_CASES)
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
+def test_code_span_link_contexts_have_fixed_targets_and_lines(
+    body: str, expected: tuple[tuple[int, str], ...], ending: str
+) -> None:
+    """CommonMark-derived expectations preserve raw targets and outer label lines."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.markdown_link_targets_from_text(body.replace("\n", ending)) == expected
+
+
+@pytest.mark.parametrize("width", [1, 2, 7, 257])
+def test_code_span_delimiter_width_is_exact(width: int) -> None:
+    """Different-width inner runs cannot terminate the enclosing code span."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    delimiter = "`" * width
+    inner = "`" * (width + 1)
+    text = f"[a {delimiter}] {inner} [ {delimiter}](target.md)"
+    assert core.markdown_link_targets_from_text(text) == ((1, "target.md"),)
+
+
+@pytest.mark.parametrize(
+    ("body", "expected_exit"),
+    [
+        ("[a `]`](docs/azure-devops-support.md)", 1),
+        ("[a\n `[`](docs/azure-devops-support.md)", 1),
+        ("[a ``]`[``](docs/azure-devops-support.md)", 1),
+        (r"\![a `]`](docs/azure-devops-support.md)", 1),
+        ("`[a](docs/azure-devops-support.md)`", 0),
+        ("![a `]`](docs/azure-devops-support.md)", 0),
+    ],
+)
+def test_deployed_code_span_link_has_native_outcome_without_sync(
+    tmp_path: Path, body: str, expected_exit: int
+) -> None:
+    """Only live links fail in the physically deployed standalone runtime."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    append_reference(tmp_path, body)
+    assert not (tmp_path / ".template-sync").exists()
+    result = run(tmp_path)
+    assert result.returncode == expected_exit, result.stdout + result.stderr
+    assert ("Stale protected-guide references" in result.stdout) is (expected_exit == 1)
+    if expected_exit == 1:
+        assert "AGENTS.md:3:" in result.stdout
+
+
+def test_code_span_link_exception_and_retained_module_remain_scoped(tmp_path: Path) -> None:
+    """Code in a label does not change exact exception or applicability rules."""
+    body = "[a `]`](docs/azure-devops-support.md)"
+    test_deployed_multiline_reference_fails_without_sync_and_exact_exception_passes(
+        tmp_path / "excepted", body
+    )
+    retained = tmp_path / "retained"
+    document, _ = reference_fixture(retained, "markdown-relative-link")
+    document["modules"].append("azure-devops-platform")
+    write(retained, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    append_reference(retained, body)
+    result = run(retained)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("mutation", ["remove-code-context", "restore-raw-scanner"])
+def test_code_span_skip_removal_has_independent_native_oracles(
+    tmp_path: Path, mutation: str
+) -> None:
+    """Removing code context restores both a missed live link and a false link."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    path = tmp_path / ".github/scripts/instruction_contract_core.py"
+    source = path.read_text(encoding="utf-8")
+    guard = "    code_ends = markdown_code_span_ends(text)\n"
+    assert source.count(guard) == 1
+    for body, expected, mutated in (
+        ("[a `]`](docs/azure-devops-support.md)", 1, 0),
+        ("`[a](docs/azure-devops-support.md)`", 0, 1),
+    ):
+        write(
+            tmp_path,
+            "AGENTS.md",
+            "Agents MUST validate.\nAgents MUST preserve authority.\n" + body,
+        )
+        path.write_text(source, encoding="utf-8", newline="\n")
+        normal = run(tmp_path)
+        assert normal.returncode == expected, normal.stdout + normal.stderr
+        mutated_source = (
+            source.replace(guard, "    code_ends = {}\n")
+            if mutation == "remove-code-context"
+            else restore_raw_link_candidate_scanner(source)
+        )
+        path.write_text(mutated_source, encoding="utf-8", newline="\n")
+        mutant = run(tmp_path)
+        assert mutant.returncode == mutated, mutant.stdout + mutant.stderr
+        assert ("Stale protected-guide references" in mutant.stdout) is (mutated == 1)
+
+
+def test_code_span_near_limit_runs_remain_bounded() -> None:
+    """Indexed closers bound unmatched runs and skip large code literals once."""
+    program = "\n".join(
+        [
+            "import sys",
+            f"sys.path.insert(0, {str(ROOT / '.github/scripts')!r})",
+            "import instruction_contract_core as c",
+            "cases=[(' '.join('`'*n for n in range(1,1400)),0),",
+            "       ('`'+('[x](hidden.md) '*65000)+'` [y](live.md)',1),",
+            "       (('[a `]`](live.md) '*55000),55000),",
+            "       ('[a '+('`'*500000)+'] '+('`'*500000)+'](live.md)',1)]",
+            "for text, count in cases:",
+            "    assert len(text.encode()) <= c.MAXIMUM_INPUT_BYTES",
+            "    targets=c.markdown_link_targets_from_text(text)",
+            "    assert len(targets) == count, (len(targets),count)",
+            "    assert sum(len(target) for _,target in targets) <= len(text)",
+        ]
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", program], capture_output=True, text=True, check=False, timeout=15
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 @pytest.mark.parametrize(("backslashes", "is_link"), BANG_PARITY_CASES)
@@ -832,8 +1011,9 @@ def test_destination_decoder_removal_is_caught_by_native_oracle(
 
 
 @pytest.mark.parametrize("target", ENCODED_AZURE_DESTINATIONS[:2])
+@pytest.mark.parametrize("label", ["Guide", "a `]`", "a\n `[` "])
 def test_encoded_destination_marker_and_reporter_share_raw_findings(
-    tmp_path: Path, target: str
+    tmp_path: Path, target: str, label: str
 ) -> None:
     """Marker validation and cleanup reporting compare decoded paths consistently."""
     sys.path.insert(0, str(ROOT / ".template-sync/scripts"))
@@ -847,7 +1027,7 @@ def test_encoded_destination_marker_and_reporter_share_raw_findings(
             "docs/azure-devops-support.md", frozenset({"azure-devops-platform"}), frozenset()
         ),
     )
-    write(tmp_path, "AGENTS.md", f"Heading\n\n[Guide]({target})\n")
+    write(tmp_path, "AGENTS.md", f"Heading\n\n[{label}]({target})\n")
     failures = adoption.validate_retained_markdown_links(
         tmp_path, ("AGENTS.md",), mappings, {"agent-instructions"}, ()
     )

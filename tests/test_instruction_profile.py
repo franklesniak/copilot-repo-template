@@ -479,11 +479,21 @@ def run_migration_schema_control(
     restore_prior_path_prefilter: bool = False,
     reverse_section_precedence: bool = False,
     restore_content_preference: bool = False,
+    omit_retained_check: str | None = None,
     marker_document: dict[str, Any] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run the real migration or an exact schema-provenance mutant natively."""
     source_path = ROOT / ".template-sync/scripts/instruction_profile_migration.py"
     source = source_path.read_text(encoding="utf-8")
+    if omit_retained_check is not None:
+        guards = {
+            "anchor": "(path, anchor) not in failure_keys[content_root]",
+            "digest": "original_digest != digest",
+        }
+        for key, guard in guards.items():
+            if omit_retained_check in (key, "both"):
+                assert source.count(guard) == 1
+                source = source.replace(guard, "False")
     if restore_content_preference:
         guard = '    """Select reconciled bytes without granting authority to unresolved decisions."""\n'
         assert source.count(guard) == 1
@@ -876,10 +886,14 @@ def test_migration_retires_scoped_section_declaration_and_detects_mutant(
     mutant = run_migration_schema_control(
         stage, target, marker_document=marker, omit_scoped_retirement=True
     )
-    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
-    rejected = run(stage)
-    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
-    assert "does not match a current failure" in rejected.stderr
+    if source == "standalone":
+        assert mutant.returncode == 1, mutant.stdout + mutant.stderr
+        assert "Existing standalone exception conflicts" in mutant.stderr
+    else:
+        assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+        rejected = run(stage)
+        assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+        assert "does not match a current failure" in rejected.stderr
     restored = run_migration_schema_control(stage, target, marker_document=marker)
     assert restored.returncode == 0, restored.stdout + restored.stderr
     before_bytes = destination.read_bytes()
@@ -912,15 +926,20 @@ def test_migration_keeps_active_and_unrecognized_declarations(tmp_path: Path, co
     }
     document["exceptions"] = [declaration]
     write(target, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    before = (stage / ".github/instruction-profile.yml").read_bytes()
     migrated = run_migration_schema_control(stage, target)
+    if control != "active":
+        assert migrated.returncode == 1, migrated.stdout + migrated.stderr
+        assert "Existing standalone exception conflicts" in migrated.stderr
+        assert (stage / ".github/instruction-profile.yml").read_bytes() == before
+        assert yaml.safe_load((target / ".github/instruction-profile.yml").read_text()) == document
+        return
     assert migrated.returncode == 0, migrated.stdout + migrated.stderr
     generated = yaml.safe_load((stage / ".github/instruction-profile.yml").read_text())
     assert generated["exceptions"] == [declaration]
     assert "retired_exceptions" not in generated["source_decisions"]
     validated = run(stage)
-    assert validated.returncode == (0 if control == "active" else 1), (
-        validated.stdout + validated.stderr
-    )
+    assert validated.returncode == 0, validated.stdout + validated.stderr
 
 
 def test_migration_retires_stale_section_declaration_when_module_returns(tmp_path: Path) -> None:
@@ -1182,13 +1201,12 @@ def test_migration_preserves_unknown_path_failure_and_detects_false_success_muta
     write(target, ".github/instruction-profile.yml", yaml.safe_dump(document))
     before = run(target)
     assert before.returncode == 1, before.stdout + before.stderr
+    before_profile = (stage / ".github/instruction-profile.yml").read_bytes()
     migrated = run_migration_schema_control(stage, target)
-    assert migrated.returncode == 0, migrated.stdout + migrated.stderr
-    generated = yaml.safe_load((stage / ".github/instruction-profile.yml").read_text())
-    assert generated["exceptions"] == [declaration]
-    rejected = run(stage)
-    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
-    assert "does not match a current failure" in rejected.stderr
+    assert migrated.returncode == 1, migrated.stdout + migrated.stderr
+    assert "Existing standalone exception conflicts" in migrated.stderr
+    assert (stage / ".github/instruction-profile.yml").read_bytes() == before_profile
+    assert yaml.safe_load((target / ".github/instruction-profile.yml").read_text()) == document
     mutant = run_migration_schema_control(stage, target, restore_prior_path_prefilter=True)
     assert mutant.returncode == 0, mutant.stdout + mutant.stderr
     false_success = run(stage)
@@ -1480,16 +1498,21 @@ def test_migration_selection_preserves_absence_and_old_bindings(
             }
         ]
     write(target, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    before_profile = (stage / ".github/instruction-profile.yml").read_bytes()
     migrated = run_migration_schema_control(stage, target, marker_document=marker)
+    if selection == "TAKE":
+        assert migrated.returncode == 1, migrated.stdout + migrated.stderr
+        assert "Existing standalone exception conflicts" in migrated.stderr
+        assert (stage / ".github/instruction-profile.yml").read_bytes() == before_profile
+        assert yaml.safe_load((target / ".github/instruction-profile.yml").read_text()) == document
+        return
     assert migrated.returncode == 0, migrated.stdout + migrated.stderr
     generated = yaml.safe_load((stage / ".github/instruction-profile.yml").read_text())
     assert generated["exceptions"] == document["exceptions"]
     if selection == "SKIP":
         (stage / "AGENTS.md").unlink()
     validated = run(stage)
-    assert validated.returncode == (0 if selection == "SKIP" else 1), (
-        validated.stdout + validated.stderr
-    )
+    assert validated.returncode == 0, validated.stdout + validated.stderr
 
 
 @pytest.mark.parametrize(
@@ -1668,3 +1691,268 @@ def test_selected_content_keeps_absence_and_path_guards(tmp_path: Path, case: st
         (stage / "AGENTS.md").symlink_to(outside)
         with pytest.raises(TemplateSyncMaterializationError, match="escapes the repository root"):
             selected_content_root("AGENTS.md", stage, target, marker)
+
+
+@pytest.mark.parametrize("guard", ["anchor", "digest", "both"])
+def test_retained_declaration_guards_reject_before_candidate_write(
+    tmp_path: Path, guard: str
+) -> None:
+    """Removing each compatibility condition restores a false migration success."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    profile(stage)
+    document = profile(target)
+    text = "Agents MUST preserve authority.\n"
+    for root in (stage, target):
+        write(root, "AGENTS.md", text)
+    declaration = {
+        "path": "AGENTS.md",
+        "anchor": "Agents MUST validate.",
+        "content_sha256": hashlib.sha256(text.encode()).hexdigest(),
+        "reason": "Reviewed local text",
+        "authorization_basis": "Fixture owner",
+    }
+    if guard == "anchor":
+        declaration["anchor"] = "Agents MUST preserve authority."
+    else:
+        declaration["content_sha256"] = "0" * 64
+    document["exceptions"] = [declaration]
+    write(target, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    destination = stage / ".github/instruction-profile.yml"
+    before = destination.read_bytes()
+    retained = (target / ".github/instruction-profile.yml").read_bytes()
+    rejected = run_migration_schema_control(stage, target)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert (
+        "Existing standalone exception conflicts with selected content: AGENTS.md:"
+        in rejected.stderr
+    )
+    assert "Review or remove the declaration" in rejected.stderr
+    assert destination.read_bytes() == before
+    assert (target / ".github/instruction-profile.yml").read_bytes() == retained
+    mutant = run_migration_schema_control(stage, target, omit_retained_check=guard)
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    assert destination.read_bytes() != before
+    with pytest.raises(AssertionError):
+        assert mutant.returncode == 1
+    with pytest.raises(AssertionError):
+        assert destination.read_bytes() == before
+
+
+def test_retained_declarations_fail_before_real_materializer_writes(tmp_path: Path) -> None:
+    """Real adoption rejects stale retained bindings without changing the target."""
+    sys.path.insert(0, str(ROOT / ".template-sync/scripts"))
+    from template_sync_materialization_helpers import (
+        is_protected_instruction_path,
+        iter_safe_repository_files,
+        parse_manifest_mappings,
+        selected_relation_for_path,
+    )
+
+    modules = {
+        "baseline",
+        "agent-instructions",
+        "instruction-enforcement",
+        "agent-codex",
+        "github-actions",
+    }
+    manifest = yaml.safe_load((ROOT / ".template-sync/manifest.yml").read_text(encoding="utf-8"))
+    _, mappings = parse_manifest_mappings(manifest)
+    decisions = []
+    for relative in iter_safe_repository_files(ROOT)[0]:
+        relation = selected_relation_for_path(relative, mappings)
+        if (
+            relation is not None
+            and relation.is_retained_by(modules)
+            and is_protected_instruction_path(relative)
+        ):
+            decisions.append(
+                {
+                    "path": relative,
+                    "decision": "TAKE",
+                    "adoption_mode": "minimal-preservation",
+                    "authorization_basis": "Fixture owner selects this exact path",
+                    "authorized_scope": relative,
+                    "reason": "Retained declaration lifecycle",
+                }
+            )
+    marker: dict[str, Any] = {
+        "template_sync": {
+            "source_repo": "https://github.com/franklesniak/copilot-repo-template",
+            "included_modules": sorted(modules),
+            "protected_file_decisions": decisions,
+            "protected_guide_contract_waivers": [
+                {
+                    "path": "AGENTS.md",
+                    "contract_key": "agents-azure-devops-pr-review-protocol",
+                    "target_module": "azure-devops-collaboration",
+                    "reason": "Reviewed fixture protocol",
+                    "authorization_basis": "Fixture owner retains protocol",
+                }
+            ],
+        }
+    }
+
+    def adopt(target: Path, *, omit_guard: bool = False) -> subprocess.CompletedProcess[str]:
+        arguments = [
+            str(ROOT / ".template-sync/scripts/materialize_downstream_adoption.py"),
+            "--template-root",
+            str(ROOT),
+            "--target-root",
+            str(target),
+            "--decisions-file",
+            "decisions.yml",
+        ]
+        command = [sys.executable, "-B", *arguments]
+        if omit_guard:
+            # Change only the reviewed migration module in this child process.
+            guard = "(path, anchor) not in failure_keys[content_root] or original_digest != digest"
+            code = (
+                "import sys, runpy\n"
+                f"sys.path.insert(0, {str(ROOT / '.template-sync/scripts')!r})\n"
+                "import instruction_profile_migration as migration\n"
+                "source = migration.Path(migration.__file__).read_text(encoding='utf-8')\n"
+                f"assert source.count({guard!r}) == 1\n"
+                f"source = source.replace({guard!r}, 'False')\n"
+                "exec(compile(source, migration.__file__, 'exec'), migration.__dict__)\n"
+                f"sys.argv = {arguments!r}\n"
+                "runpy.run_path(sys.argv[0], run_name='__main__')\n"
+            )
+            command = [sys.executable, "-B", "-c", code]
+        return subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=60,
+        )
+
+    def snapshot(target: Path) -> dict[str, bytes]:
+        files, skipped = iter_safe_repository_files(target, skipped_dirs=())
+        assert not skipped
+        return {relative: (target / relative).read_bytes() for relative in files}
+
+    seed = tmp_path / "seed"
+    write(seed, "decisions.yml", yaml.safe_dump(marker))
+    initial = adopt(seed)
+    assert initial.returncode == 0, initial.stdout + initial.stderr
+    validated = run(seed)
+    assert validated.returncode == 0, validated.stdout + validated.stderr
+    for case in (
+        "take-changed",
+        "skip-changed",
+        "take-same",
+        "take-absent",
+        "override-absent",
+        "skip-stale",
+    ):
+        target = tmp_path / case
+        shutil.copytree(seed, target)
+        selection = yaml.safe_load(yaml.safe_dump(marker))
+        del selection["template_sync"]["protected_guide_contract_waivers"]
+        profile_path = target / ".github/instruction-profile.yml"
+        document = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+        relative = "docs/PR_REVIEW_PROMPTS.md" if case == "override-absent" else "AGENTS.md"
+        if case in ("take-changed", "skip-changed", "skip-stale"):
+            text = "<!-- Reviewed local annotation. -->\n" + (target / relative).read_text(
+                encoding="utf-8"
+            )
+            write(target, relative, text)
+            if case != "skip-stale":
+                for declaration in document["exceptions"]:
+                    if declaration["path"] == relative:
+                        declaration["content_sha256"] = hashlib.sha256(text.encode()).hexdigest()
+        if "absent" in case:
+            (target / relative).unlink()
+            document["exceptions"] = [
+                item for item in document["exceptions"] if item["path"] != relative
+            ]
+            document["exceptions"].append(
+                {
+                    "path": relative,
+                    "anchor": "file:absent",
+                    "content_sha256": "absent",
+                    "reason": "Explicit fixture absence",
+                    "authorization_basis": "Fixture owner declaration",
+                }
+            )
+        if case.startswith("skip"):
+            next(
+                item
+                for item in selection["template_sync"]["protected_file_decisions"]
+                if item["path"] == relative
+            )["decision"] = "SKIP"
+        if case == "override-absent":
+            selection["template_sync"]["local_overrides"] = [
+                {
+                    "path": relative,
+                    "default_decision": "TAKE",
+                    "reason": "Reviewed staged documentation",
+                }
+            ]
+        write(target, ".github/instruction-profile.yml", yaml.safe_dump(document, sort_keys=False))
+        write(target, "decisions.yml", yaml.safe_dump(selection))
+        before_validation = run(target)
+        assert before_validation.returncode == (
+            1 if case == "skip-stale" else 0
+        ), before_validation.stderr
+        before = snapshot(target)
+        result = adopt(target)
+        assert not (target / ".template-sync").exists()
+        if case in ("skip-changed", "take-same"):
+            assert result.returncode == 0, result.stdout + result.stderr
+            retained = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
+            assert retained["exceptions"] == document["exceptions"]
+            after_validation = run(target)
+            assert after_validation.returncode == 0, (
+                after_validation.stdout + after_validation.stderr
+            )
+            before_repeat = snapshot(target)
+            repeated = adopt(target)
+            assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+            assert snapshot(target) == before_repeat
+        else:
+            assert result.returncode == 1, result.stdout + result.stderr
+            assert (
+                f"Existing standalone exception conflicts with selected content: {relative}:"
+                in result.stderr
+            )
+            assert snapshot(target) == before
+            if case == "take-changed":
+                mutant = adopt(target, omit_guard=True)
+                assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+                assert snapshot(target) != before
+                after_mutation = run(target)
+                assert after_mutation.returncode == 1, after_mutation.stderr
+                with pytest.raises(AssertionError):
+                    assert mutant.returncode == 1
+                with pytest.raises(AssertionError):
+                    assert snapshot(target) == before
+
+
+def test_excluded_scope_retires_prior_declaration_before_digest_check(tmp_path: Path) -> None:
+    """Known module retirement does not require renewing an obsolete content hash."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    profile(stage)
+    document = profile(target)
+    for root in (stage, target):
+        catalog_path = root / ".github/instruction-contracts.yml"
+        catalog = yaml.safe_load(catalog_path.read_text(encoding="utf-8"))
+        catalog["instruction_contracts"][0]["requires_modules"] = ["python"]
+        write(root, ".github/instruction-contracts.yml", yaml.safe_dump(catalog))
+    declaration = {
+        "path": "AGENTS.md",
+        "anchor": "Agents MUST validate.",
+        "content_sha256": "0" * 64,
+        "reason": "Old declaration for removed scope",
+        "authorization_basis": "Fixture owner",
+    }
+    document["exceptions"] = [declaration]
+    write(target, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    migrated = run_migration_schema_control(stage, target)
+    assert migrated.returncode == 0, migrated.stdout + migrated.stderr
+    destination = stage / ".github/instruction-profile.yml"
+    generated = yaml.safe_load(destination.read_text(encoding="utf-8"))
+    assert generated["exceptions"] == []
+    assert generated["source_decisions"]["retired_exceptions"] == [declaration]
+    validated = run(stage)
+    assert validated.returncode == 0, validated.stdout + validated.stderr

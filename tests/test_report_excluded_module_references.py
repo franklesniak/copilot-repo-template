@@ -825,6 +825,42 @@ def test_reporter_multiline_markdown_links_have_original_lines(tmp_path: Path) -
     )
 
 
+def test_reporter_code_span_labels_keep_live_links_and_literal_examples(tmp_path: Path) -> None:
+    """The native reporter shares code context, raw destinations and opening lines."""
+    _write_common_repo(tmp_path, include_reference_content=False)
+    _write_text(
+        tmp_path,
+        "README.md",
+        "# Downstream\n\n"
+        "[JSON `]`](templates/json/example.json)\n"
+        "[Schema\n `[`](schemas/example-config.schema.json)\n"
+        "`[Literal](templates/json/example.json)`\n"
+        "![Image `]`](templates/json/example.json)\n"
+        "[First](literal`target.md) [JSON](templates/json/example.json) and `tail\n"
+        '[First](other.md "`title") [Schema](schemas/example-config.schema.json) and `tail\n',
+    )
+    result = _run_report(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    links = [
+        line
+        for line in _finding_lines(result.stdout)
+        if line.startswith("markdown-link.") and " | README.md:" in line
+    ]
+    assert len(links) == 4, links
+    for number, module, target in (
+        (3, "json", "templates/json/example.json"),
+        (4, "schema", "schemas/example-config.schema.json"),
+        (8, "json", "templates/json/example.json"),
+        (9, "schema", "schemas/example-config.schema.json"),
+    ):
+        assert any(
+            f"markdown-link.excluded-target | required_cleanup | {module} | README.md:{number} |"
+            in line
+            and target in line
+            for line in links
+        ), links
+
+
 @pytest.mark.parametrize("multiline", [False, True], ids=["single-line", "multiline"])
 def test_yaml_embedded_fenced_links_are_skipped(tmp_path: Path, multiline: bool) -> None:
     """Links inside fenced code blocks in YAML-embedded Markdown are ignored."""
