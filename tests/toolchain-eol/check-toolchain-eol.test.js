@@ -1108,3 +1108,410 @@ test('documented Node verifier executes and rejects mismatched or non-exact valu
         }
     }
 });
+
+
+function azureNode(version, task = 'UseNode@1') {
+    return { steps: [{ task, inputs: { [task === 'UseNode@1' ? 'version' : 'versionSpec']: version } }] };
+}
+
+function writeAzure(repoRoot, filename, value) {
+    writeFile(repoRoot, filename, yaml.stringify(value));
+}
+
+function azureCli(repoRoot, paths = [], executable) {
+    const schedule = path.join(repoRoot, 'fixed-schedule.json');
+    fs.writeFileSync(schedule, JSON.stringify({ v18: { end: '2025-04-30' }, v24: { end: '2030-04-30' } }));
+    const child = spawnSync(process.execPath, [
+        executable || path.resolve(__dirname, '../../.github/scripts/check-toolchain-eol.js'),
+        '--repo-root', repoRoot, '--schedule-file', schedule, '--as-of', '2026-09-22', '--json',
+        ...paths.flatMap((filename) => ['--azure-pipeline', filename]),
+    ], { cwd: repoRoot, encoding: 'utf8', timeout: 30000,
+        env: { ...process.env, NODE_PATH: path.resolve(__dirname, '../../node_modules') } });
+    assert.ifError(child.error);
+    assert.equal(child.stderr, '');
+    return { status: child.status, report: JSON.parse(child.stdout) };
+}
+
+function parameterizedAzure(defaultVersion) {
+    return { parameters: [{ name: 'node', type: 'string', default: defaultVersion }],
+        ...azureNode('${{ parameters.node }}') };
+}
+
+for (const [name, caller, target] of [
+    ['extends', { extends: { template: 'ci/build.yml' } }, azureNode('18')],
+    ['steps', { steps: [{ template: 'ci/build.yml' }] }, azureNode('18')],
+    ['jobs', { jobs: [{ template: 'ci/build.yml' }] }, { jobs: [{ job: 'build', ...azureNode('18', 'NodeTool@0') }] }],
+    ['stages', { stages: [{ template: 'ci/build.yml' }] }, { stages: [{ stage: 'build', jobs: [{ job: 'build', ...azureNode('18') }] }] }],
+]) {
+    test(`Azure local ${name} templates retain actual path and EOL native failure`, () => {
+        const repoRoot = makeTempRepo();
+        writeAzure(repoRoot, 'azure-pipelines.yml', caller);
+        writeAzure(repoRoot, 'ci/build.yml', target);
+        const result = azureCli(repoRoot);
+        assert.equal(result.status, 1);
+        assert.deepEqual(result.report.problems, []);
+        assert.deepEqual(result.report.findings.map((item) => [item.path, item.rawValue, item.status]), [['ci/build.yml', '18', 'eol']]);
+        writeFile(repoRoot, 'ci/build.yml', yaml.stringify(target).replace(/18/g, '24'));
+        const positive = azureCli(repoRoot);
+        assert.equal(positive.status, 0);
+        assert.deepEqual(positive.report.problems, []);
+        assert.deepEqual(positive.report.findings.map((item) => [item.path, item.rawValue, item.status]), [['ci/build.yml', '24', 'supported']]);
+    });
+}
+
+for (const template of ['../shared/node.yml', '/shared/node.yml', '../shared/node.yml@self']) {
+    test(`Azure template path resolves from the including file: ${template}`, () => {
+        const repoRoot = makeTempRepo();
+        writeAzure(repoRoot, 'azure-pipelines.yml', { steps: [{ template: 'ci/build.yml' }] });
+        writeAzure(repoRoot, 'ci/build.yml', { steps: [{ template }] });
+        writeAzure(repoRoot, 'shared/node.yml', azureNode('24'));
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        assert.deepEqual(inventory.problems, []);
+        assert.deepEqual(inventory.selectors.map((item) => [item.path, item.rawValue]), [['shared/node.yml', '24']]);
+    });
+}
+
+test('Azure implicit template defaults are not separate entrypoint invocations', () => {
+    for (const [defaultVersion, overrideVersion] of [['24', '18'], ['18', '24']]) {
+        const repoRoot = makeTempRepo();
+        writeAzure(repoRoot, 'azure-pipelines.yml', { extends: {
+            template: '.azuredevops/pipelines/build.yml', parameters: { node: overrideVersion },
+        } });
+        writeAzure(repoRoot, '.azuredevops/pipelines/build.yml', parameterizedAzure(defaultVersion));
+        const result = azureCli(repoRoot);
+        assert.equal(result.status, overrideVersion === '18' ? 1 : 0);
+        assert.deepEqual(result.report.problems, []);
+        assert.deepEqual(result.report.selectors.map((item) => item.rawValue), [overrideVersion]);
+        const dual = azureCli(repoRoot, ['.azuredevops/pipelines/build.yml']);
+        assert.equal(dual.status, 1);
+        assert.deepEqual(dual.report.problems, []);
+        assert.deepEqual(dual.report.selectors.map((item) => item.rawValue).sort(), ['18', '24']);
+    }
+});
+
+test('Azure conventional root names remain independent roots when also called', () => {
+    const repoRoot = makeTempRepo();
+    writeAzure(repoRoot, 'azure-pipelines.yml', parameterizedAzure('18'));
+    writeAzure(repoRoot, 'azure-pipelines.yaml', { extends: { template: 'azure-pipelines.yml', parameters: { node: '24' } } });
+    const result = azureCli(repoRoot);
+    assert.equal(result.status, 1);
+    assert.deepEqual(result.report.problems, []);
+    assert.deepEqual(result.report.selectors.map((item) => item.rawValue).sort(), ['18', '24']);
+});
+
+test('Azure repeated template calls and nested forwarding preserve distinct bindings', () => {
+    for (const versions of [['18', '24'], ['24', '18']]) {
+        const repoRoot = makeTempRepo();
+        writeAzure(repoRoot, 'azure-pipelines.yml', { steps: versions.map((node) => ({ template: 'ci/outer.yml', parameters: { node } })) });
+        writeAzure(repoRoot, 'ci/outer.yml', { parameters: [{ name: 'node', type: 'string' }],
+            steps: [{ template: 'inner.yml', parameters: { node: '${{ parameters.node }}' } }] });
+        writeAzure(repoRoot, 'ci/inner.yml', parameterizedAzure('24'));
+        const result = azureCli(repoRoot);
+        assert.equal(result.status, 1);
+        assert.deepEqual(result.report.problems, []);
+        assert.deepEqual(result.report.selectors.map((item) => [item.path, item.rawValue]), versions.map((node) => ['ci/inner.yml', node]));
+    }
+});
+
+test('Azure variable templates resolve parameter scope and keep sibling overrides isolated', () => {
+    const repoRoot = makeTempRepo();
+    writeAzure(repoRoot, 'azure-pipelines.yml', { variables: [{ template: 'ci/vars.yml', parameters: { chosen: '24' } }],
+        jobs: [{ job: 'old', variables: { node: '18' }, ...azureNode('$(node)') },
+            { job: 'new', ...azureNode('$(node)') }] });
+    writeAzure(repoRoot, 'ci/vars.yml', { parameters: [{ name: 'chosen', type: 'string', default: '18' }],
+        variables: { node: '${{   parameters.chosen }}' } });
+    const result = azureCli(repoRoot);
+    assert.equal(result.status, 1);
+    assert.deepEqual(result.report.problems, []);
+    assert.deepEqual(result.report.selectors.map((item) => item.rawValue), ['18', '24']);
+});
+
+test('Azure template NodeTool version files retain workspace-relative paths', () => {
+    const repoRoot = makeTempRepo();
+    writeAzure(repoRoot, 'azure-pipelines.yml', { steps: [{ template: 'ci/node.yml' }] });
+    writeAzure(repoRoot, 'ci/node.yml', { steps: [{ task: 'NodeTool@0', inputs: { versionSource: 'fromFile', versionFilePath: '.nvmrc' } }] });
+    writeFile(repoRoot, '.nvmrc', '24\n');
+    writeFile(repoRoot, 'ci/.nvmrc', '18\n');
+    const inventory = scanner.collectNodeSelectors(repoRoot);
+    assert.deepEqual(inventory.problems, []);
+    assert.deepEqual(inventory.selectors.map((item) => [item.path, item.referencedPath, item.rawValue]), [['ci/node.yml', '.nvmrc', '24']]);
+});
+
+test('Azure custom entrypoints are additive, repeatable and explicit', () => {
+    const repoRoot = makeTempRepo();
+    writeAzure(repoRoot, 'azure-pipelines.yml', azureNode('24'));
+    writeAzure(repoRoot, 'ci/one.yml', azureNode('18'));
+    writeAzure(repoRoot, 'ci/two.yml', azureNode('24'));
+    writeAzure(repoRoot, 'examples/unselected.yml', azureNode('18'));
+    assert.deepEqual(scanner.collectNodeSelectors(repoRoot).selectors.map((item) => item.path), ['azure-pipelines.yml']);
+    const result = azureCli(repoRoot, ['ci/one.yml', 'ci/two.yml', 'ci/one.yml']);
+    assert.equal(result.status, 1);
+    assert.deepEqual(result.report.problems, []);
+    assert.deepEqual(result.report.selectors.map((item) => [item.path, item.rawValue]), [
+        ['azure-pipelines.yml', '24'], ['ci/one.yml', '18'], ['ci/two.yml', '24'],
+    ]);
+    for (const args of [['--azure-pipeline'], ['--azure-pipeline', ''], ['--azure-pipeline', '--json']]) {
+        assert.throws(() => scanner.parseArgs(args), /requires a repository-relative YAML path/);
+    }
+    const missing = azureCli(repoRoot, ['ci/missing.yml']);
+    assert.equal(missing.status, 1);
+    assert.match(missing.report.problems[0].message, /ENOENT/);
+});
+
+for (const [name, reference, body, diagnostic] of [
+    ['missing', 'ci/missing.yml', null, /ENOENT/],
+    ['malformed', 'ci/node.yml', 'steps: [\n', /Invalid Azure YAML/],
+    ['remote', 'node.yml@elsewhere', null, /external template/],
+    ['dynamic', '${{ parameters.filename }}', null, /literal local YAML path/],
+    ['escaping', '../outside.yml', null, /escapes repository root/],
+    ['role', 'ci/node.yml', 'jobs: []\n', /steps template has no steps/],
+    ['conditional', 'ci/node.yml', 'steps:\n- ${{ if true }}:\n  - task: UseNode@1\n    inputs: {version: "18"}\n', /conditional or structural/],
+    ['structural', 'ci/node.yml', 'steps: ${{ parameters.steps }}\n', /static list/],
+]) {
+    test(`Azure unverifiable ${name} references fail without hiding valid siblings`, () => {
+        const repoRoot = makeTempRepo();
+        writeAzure(repoRoot, 'azure-pipelines.yml', { steps: [{ template: reference }, ...azureNode('24').steps] });
+        if (body !== null) writeFile(repoRoot, reference, body);
+        const result = azureCli(repoRoot);
+        assert.equal(result.status, 1);
+        assert(result.report.problems.some((item) => diagnostic.test(item.message)));
+        assert.deepEqual(result.report.selectors.map((item) => item.rawValue), ['24']);
+    });
+}
+
+test('Azure rootless template cycles remain failures after implicit-root filtering', () => {
+    const repoRoot = makeTempRepo();
+    writeAzure(repoRoot, '.azuredevops/pipelines/a.yml', { extends: { template: 'b.yml' } });
+    writeAzure(repoRoot, '.azuredevops/pipelines/b.yml', { extends: { template: 'a.yml' } });
+    const result = azureCli(repoRoot);
+    assert.equal(result.status, 1);
+    assert(result.report.problems.some((item) => /cycle/.test(item.message)));
+    assert.deepEqual(result.report.selectors, []);
+});
+
+test('Azure task input and script template text never causes file reads', () => {
+    const repoRoot = makeTempRepo();
+    writeAzure(repoRoot, 'azure-pipelines.yml', { steps: [
+        { script: 'template: missing.yml' }, { task: 'Other@1', inputs: { template: 'missing.yml' } }, ...azureNode('24').steps,
+    ] });
+    const result = azureCli(repoRoot);
+    assert.equal(result.status, 0);
+    assert.deepEqual(result.report.problems, []);
+    assert.deepEqual(result.report.selectors.map((item) => item.rawValue), ['24']);
+});
+
+test('Azure required, dynamic, cyclic and structural bindings do not fall back to defaults', () => {
+    for (const argument of [undefined, '${{ parameters.absent }}', '$(absent)', { version: '24' }, ['24']]) {
+        const repoRoot = makeTempRepo();
+        writeAzure(repoRoot, 'azure-pipelines.yml', { extends: { template: 'ci/node.yml',
+            parameters: argument === undefined ? {} : { node: argument } } });
+        writeAzure(repoRoot, 'ci/node.yml', { parameters: [{ name: 'node', type: 'string' }], ...azureNode('${{ parameters.node }}') });
+        const result = azureCli(repoRoot);
+        assert.equal(result.status, 1);
+        assert(result.report.problems.length > 0);
+        assert.deepEqual(result.report.selectors, []);
+    }
+    const repoRoot = makeTempRepo();
+    writeAzure(repoRoot, 'azure-pipelines.yml', { variables: { node: '$(node)' }, ...azureNode('$(node)') });
+    const result = azureCli(repoRoot);
+    assert.equal(result.status, 1);
+    assert.match(result.report.problems[0].message, /cyclic/);
+});
+
+test('Azure template files enforce real containment while allowing contained directory links', () => {
+    const repoRoot = makeTempRepo();
+    const outside = makeTempRepo();
+    writeAzure(outside, 'node.yml', azureNode('24'));
+    writeAzure(repoRoot, 'inside/node.yml', azureNode('24'));
+    for (const [name, target, succeeds] of [['external', outside, false], ['internal', path.join(repoRoot, 'inside'), true]]) {
+        fs.symlinkSync(target, path.join(repoRoot, name), process.platform === 'win32' ? 'junction' : 'dir');
+        writeAzure(repoRoot, 'azure-pipelines.yml', { steps: [{ template: `${name}/node.yml` }] });
+        const result = azureCli(repoRoot);
+        assert.equal(result.status, succeeds ? 0 : 1);
+        if (succeeds) assert.deepEqual(result.report.problems, []);
+        else assert(result.report.problems.some((item) => /escapes repository root/.test(item.message)));
+    }
+});
+
+function azureMutant(repoRoot, replacements) {
+    let source = fs.readFileSync(path.resolve(__dirname, '../../.github/scripts/check-toolchain-eol.js'), 'utf8');
+    for (const [before, after, occurrences = 1] of replacements) {
+        assert.equal(source.split(before).length - 1, occurrences, `Mutation anchor: ${before}`);
+        source = source.split(before).join(after);
+    }
+    const file = path.join(repoRoot, 'mutant.js');
+    fs.writeFileSync(file, source);
+    return file;
+}
+
+test('Azure fixed CLI oracles detect traversal, binding and incomplete-result guard removal', () => {
+    const fixtures = [
+        ['traversal', [['return visit(selected, templateRole, argumentsMap, caller, budget, ancestry, discovery);', 'return new Map(caller.variables);']], '24', '18', 1, ['18']],
+        ['binding', [['if (overrides !== null && !discovery)', 'if (false)']], '18', '24', 0, ['24']],
+        ['problem', [['const addProblem = (source, error) => problems.push({ path: source, message: error.message });', 'const addProblem = () => {};']], '24', undefined, 1, []],
+    ];
+    for (const [name, replacements, defaultVersion, override, status, expected] of fixtures) {
+        const repoRoot = makeTempRepo();
+        writeAzure(repoRoot, 'azure-pipelines.yml', { extends: { template: name === 'problem' ? 'absent.yml' : 'ci/node.yml',
+            parameters: { node: override } } });
+        writeAzure(repoRoot, 'ci/node.yml', parameterizedAzure(defaultVersion));
+        const fixed = (result) => {
+            assert.equal(result.status, status, `${name} native failure oracle`);
+            assert.deepEqual(result.report.selectors.map((item) => item.rawValue), expected, `${name} selected-value oracle`);
+            if (name === 'problem') assert(result.report.problems.some((item) => /ENOENT/.test(item.message)));
+            else assert.deepEqual(result.report.problems, []);
+        };
+        fixed(azureCli(repoRoot));
+        assert.throws(() => fixed(azureCli(repoRoot, [], azureMutant(repoRoot, replacements))), assert.AssertionError);
+    }
+});
+
+test('Azure independent containment oracle detects removal before reading an outside template', () => {
+    const repoRoot = makeTempRepo();
+    const outside = makeTempRepo();
+    writeAzure(outside, 'node.yml', azureNode('24'));
+    fs.symlinkSync(outside, path.join(repoRoot, 'linked'), process.platform === 'win32' ? 'junction' : 'dir');
+    writeAzure(repoRoot, 'azure-pipelines.yml', { steps: [{ template: 'linked/node.yml' }] });
+    const fixed = (result) => {
+        assert.equal(result.status, 1);
+        assert(result.report.problems.some((item) => /escapes repository root/.test(item.message)));
+        assert.deepEqual(result.report.selectors, []);
+    };
+    fixed(azureCli(repoRoot));
+    const mutant = azureMutant(repoRoot, [['assertPathWithinRepo(realRoot, real);', '// removed containment']]);
+    assert.throws(() => fixed(azureCli(repoRoot, [], mutant)), assert.AssertionError);
+});
+
+for (const [kind, good, bad, diagnostic] of [
+    ['files', 100, 101, /100-file/], ['depth', 100, 101, /100-level/],
+    ['invocations', 4096, 4097, /4096-invocation/],
+]) {
+    test(`Azure ${kind} budget accepts its boundary and rejects overflow`, () => {
+        for (const count of [good, bad]) {
+            const repoRoot = makeTempRepo();
+            if (kind === 'depth') {
+                for (let index = 0; index < count; index += 1) {
+                    writeAzure(repoRoot, index === 0 ? 'azure-pipelines.yml' : `ci/${index}.yml`, index + 1 === count ? { steps: [] }
+                        : { extends: { template: index === 0 ? 'ci/1.yml' : `${index + 1}.yml` } });
+                }
+            } else {
+                writeAzure(repoRoot, 'azure-pipelines.yml', { steps: Array.from({ length: count - 1 }, (_, index) => ({
+                    template: `ci/${kind === 'files' ? index : 0}.yml`,
+                })) });
+                for (let index = 0; index < (kind === 'files' ? count - 1 : 1); index += 1) writeAzure(repoRoot, `ci/${index}.yml`, { steps: [] });
+            }
+            const result = azureCli(repoRoot);
+            assert.equal(result.status, count === good ? 0 : 1);
+            if (count === good) assert.deepEqual(result.report.problems, []);
+            else assert(result.report.problems.some((item) => diagnostic.test(item.message)));
+        }
+    });
+}
+
+test('Azure byte and syntax-tree budgets have exact fixed boundaries', () => {
+    for (const [bytes, succeeds] of [[2 * 1024 * 1024, true], [2 * 1024 * 1024 + 1, false]]) {
+        const repoRoot = makeTempRepo();
+        const prefix = 'steps: []\n#';
+        writeFile(repoRoot, 'azure-pipelines.yml', prefix + 'x'.repeat(bytes - prefix.length));
+        const result = azureCli(repoRoot);
+        assert.equal(result.status, succeeds ? 0 : 1);
+        if (succeeds) assert.deepEqual(result.report.problems, []);
+        else assert(result.report.problems.some((item) => /2 MiB file/.test(item.message)));
+    }
+    for (const [count, succeeds] of [[199997, true], [199998, false]]) {
+        const repoRoot = makeTempRepo();
+        writeFile(repoRoot, 'azure-pipelines.yml', `steps: []\nunused: [${Array(count).fill('null').join(',')}]\n`);
+        const result = azureCli(repoRoot);
+        assert.equal(result.status, succeeds ? 0 : 1);
+        if (succeeds) assert.deepEqual(result.report.problems, []);
+        else assert(result.report.problems.some((item) => /200000-node/.test(item.message)));
+    }
+});
+
+test('Azure cumulative bytes account for unique files and fail above twenty MiB', () => {
+    for (const overflow of [false, true]) {
+        const repoRoot = makeTempRepo();
+        const files = Array.from({ length: 9 }, (_, index) => `ci/${index}.yml`);
+        if (overflow) files.push('ci/overflow.yml');
+        const entry = yaml.stringify({ steps: files.map((template) => ({ template })) }) + '#';
+        writeFile(repoRoot, 'azure-pipelines.yml', entry + 'x'.repeat(2 * 1024 * 1024 - entry.length));
+        for (const filename of files) {
+            const prefix = 'steps: []\n#';
+            writeFile(repoRoot, filename, filename.includes('overflow') ? 'steps: []\n' : prefix + 'x'.repeat(2 * 1024 * 1024 - prefix.length));
+        }
+        const result = azureCli(repoRoot);
+        assert.equal(result.status, overflow ? 1 : 0);
+        if (overflow) assert(result.report.problems.some((item) => /20 MiB cumulative/.test(item.message)));
+        else assert.deepEqual(result.report.problems, []);
+    }
+});
+
+test('Azure invocation-limit mutant fails a fixed overflow oracle', () => {
+    const repoRoot = makeTempRepo();
+    writeAzure(repoRoot, 'azure-pipelines.yml', { steps: Array.from({ length: 4096 }, () => ({ template: 'ci/empty.yml' })) });
+    writeAzure(repoRoot, 'ci/empty.yml', { steps: [] });
+    const fixed = (result) => {
+        assert.equal(result.status, 1);
+        assert(result.report.problems.some((item) => /4096-invocation/.test(item.message)));
+    };
+    fixed(azureCli(repoRoot));
+    const mutant = azureMutant(repoRoot, [['budget.invocations > AZURE_INVENTORY_LIMITS.invocations', 'false']]);
+    assert.throws(() => fixed(azureCli(repoRoot, [], mutant)), assert.AssertionError);
+});
+
+test('Azure inventory executes from an installed scratch tree without repository support files', () => {
+    const repoRoot = makeTempRepo();
+    const executable = path.join(repoRoot, 'check-toolchain-eol.js');
+    fs.copyFileSync(path.resolve(__dirname, '../../.github/scripts/check-toolchain-eol.js'), executable);
+    writeAzure(repoRoot, 'azure-pipelines.yml', { extends: { template: 'ci/build.yml' } });
+    writeAzure(repoRoot, 'ci/build.yml', azureNode('24'));
+    for (const absent of ['.template-sync', '.github/scripts/instruction_contract_core.py', '.github/instructions', 'pyproject.toml']) assert(!fs.existsSync(path.join(repoRoot, absent)));
+    const result = azureCli(repoRoot, [], executable);
+    assert.equal(result.status, 0);
+    assert.deepEqual(result.report.problems, []);
+    assert.deepEqual(result.report.selectors.map((item) => item.rawValue), ['24']);
+});
+
+
+test('Azure compile-time variables retain declaration scope across template calls', () => {
+    for (const listed of [false, true]) {
+        for (const [caller, callee] of [['18', '24'], ['24', '18']]) {
+            const repoRoot = makeTempRepo();
+            const declarations = { selected: '${{ parameters.node }}', alias: '${{ variables.selected }}',
+                deferred: '$(runtime)', unrelated: '${{ unsupported.expression }}', literal: 'keep # meaningful text' };
+            writeAzure(repoRoot, 'azure-pipelines.yml', {
+                parameters: [{ name: 'node', type: 'string', default: caller }],
+                variables: listed ? Object.entries(declarations).map(([name, value]) => ({ name, value })) : declarations,
+                jobs: [{ job: 'first', variables: { runtime: '18' }, steps: [{ template: 'ci/build.yml' }] },
+                    { job: 'second', variables: { runtime: '24' }, ...azureNode('$(deferred)') }],
+            });
+            writeAzure(repoRoot, 'ci/build.yml', {
+                parameters: [{ name: 'node', type: 'string', default: callee }], ...azureNode('$(alias)'),
+            });
+            const fixed = (result) => {
+                assert.equal(result.status, caller === '18' ? 1 : 0);
+                assert.deepEqual(result.report.problems, []);
+                assert.deepEqual(result.report.findings.map((item) => [item.path, item.rawValue, item.status]), [
+                    ['ci/build.yml', caller, caller === '18' ? 'eol' : 'supported'],
+                    ['azure-pipelines.yml', '24', 'supported'],
+                ]);
+            };
+            fixed(azureCli(repoRoot));
+            const mutant = azureMutant(repoRoot, [["if (!discovery && typeof value === 'string' &&", "if (false && typeof value === 'string' &&"]]);
+            assert.throws(() => fixed(azureCli(repoRoot, [], mutant)), assert.AssertionError);
+        }
+    }
+});
+
+test('Azure unresolved compile-time declarations cannot capture callee defaults', () => {
+    for (const selected of ['${{ parameters.absent }}', '${{ variables.absent }}', '${{ unsupported.expression }}']) {
+        const repoRoot = makeTempRepo();
+        writeAzure(repoRoot, 'azure-pipelines.yml', { variables: { selected }, steps: [{ template: 'ci/build.yml' }] });
+        writeAzure(repoRoot, 'ci/build.yml', { parameters: [{ name: 'absent', default: '24' }],
+            variables: { absent: '24' }, ...azureNode('$(selected)') });
+        const result = azureCli(repoRoot);
+        assert.equal(result.status, 1);
+        assert(result.report.problems.length > 0);
+        assert.deepEqual(result.report.selectors, []);
+    }
+});

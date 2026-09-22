@@ -432,7 +432,7 @@ def restore_raw_link_candidate_scanner(source: str) -> str:
     """Restore pre-code-context bracket enumeration in an isolated mutant only."""
     candidate_start = source.index("def markdown_link_candidates(")
     candidate_stop = source.index("\ndef markdown_span_link_targets(", candidate_start)
-    raw_candidates = """def markdown_link_candidates(text, starts, whitespace):
+    raw_candidates = """def markdown_link_candidates(text, starts, whitespace, reference_labels=None):
     labels, closes = markdown_delimiter_pairs(text)
     candidates = []
     for opening, closing in labels:
@@ -1298,7 +1298,7 @@ def test_indented_code_context_removal_and_blanket_skip_mutants(tmp_path: Path) 
         assert positive.returncode == expected_exit, positive.stdout + positive.stderr
         mutant = (
             source[:start]
-            + "def markdown_indented_code_lines(text, definition_ends=None, *, include_indented=True):\n    "
+            + "def markdown_indented_code_lines(text, definition_ends=None, *, include_indented=True, active_definitions=None):\n    "
             + replacement
             + "\n\n"
             + source[stop:]
@@ -1612,3 +1612,222 @@ def test_html_opacity_and_overbroad_element_mutants_keep_live_native_oracles(
         assert incorrect.returncode == 0, incorrect.stdout + incorrect.stderr
         with pytest.raises(AssertionError):
             assert incorrect.returncode == 1
+
+
+NESTED_LINK_CASES = (
+    ("[outer [inner](target.md)](literal.md)", ((1, "target.md"),)),
+    ("[a [b [inner](target.md)](middle.md)](literal.md)", ((1, "target.md"),)),
+    (
+        "[outer [a](target.md) [b](second.md)](literal.md) [c](after.md)",
+        ((1, "target.md"), (1, "second.md"), (1, "after.md")),
+    ),
+    ("[outer [ordinary text]](target.md)", ((1, "target.md"),)),
+    ("[outer [bad](not valid)](target.md)", ((1, "target.md"),)),
+    ("[outer ![image](image.png)](target.md)", ((1, "target.md"),)),
+    ("![outer [inner](target.md)](image.png)", ()),
+    ("![outer ![inner](target.md)](image.png)", ()),
+    ("[outer ![image [inner](literal.md)](image.png)](target.md)", ((1, "target.md"),)),
+    ("![outer [inner](target.md)](not valid)", ((1, "target.md"),)),
+    (r"\![outer [inner](target.md)](literal.md)", ((1, "target.md"),)),
+    (r"\\![outer [inner](literal.md)](image.png)", ()),
+    (r"[outer \[inner](target.md)](literal.md)", ((1, "target.md"),)),
+    ("[outer `[fake](literal.md)`](target.md)", ((1, "target.md"),)),
+    ("[outer [a `]`](target.md)](literal.md)", ((1, "target.md"),)),
+    ("[outer <!-- [fake](literal.md) -->](target.md)", ((1, "target.md"),)),
+    ("[outer [a <!-- ] --> b](target.md)](literal.md)", ((1, "target.md"),)),
+    ("[outer <span>[inner](target.md)</span>](literal.md)", ((1, "target.md"),)),
+    ("[outer](folder/[inner](literal.md))", ((1, "folder/[inner](literal.md)"),)),
+    ('[outer](target.md "[inner](literal.md)")', ((1, "target.md"),)),
+    ('[outer\n [inner](target.md\n "title")](literal.md)', ((2, "target.md"),)),
+    ("> [outer [inner](target.md)](literal.md)", ((1, "target.md"),)),
+    ("- [outer [inner](target.md)](literal.md)", ((1, "target.md"),)),
+    ("[outer <https://example.invalid/>](target.md)", ((1, "target.md"),)),
+)
+
+
+@pytest.mark.parametrize(("body", "expected"), NESTED_LINK_CASES)
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
+def test_nested_link_activity_preserves_images_components_and_physical_lines(
+    body: str, expected: tuple[tuple[int, str], ...], ending: str
+) -> None:
+    """Fixed targets distinguish live inner labels from raw component nesting."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.markdown_link_targets_from_text(body.replace("\n", ending)) == expected
+
+
+REFERENCE_ACTIVITY_CASES = (
+    ("[outer [inner][ref]](literal.md)\n\n[ref]: target.md", ((3, "target.md"),)),
+    ("[outer [ref][]](literal.md)\n\n[ref]: target.md", ((3, "target.md"),)),
+    ("[outer [ref]](literal.md)\n\n[ref]: target.md", ((3, "target.md"),)),
+    ("[outer [missing]](target.md)", ((1, "target.md"),)),
+    ("[outer [inner][missing]](target.md)", ((1, "target.md"),)),
+    (
+        "[outer [inner][missing]](target.md)\n\n[inner]: unused.md",
+        ((1, "target.md"), (3, "unused.md")),
+    ),
+    ("[outer ![ref]](target.md)\n\n[ref]: image.png", ((1, "target.md"), (3, "image.png"))),
+    ("![outer [inner](literal.md)][ref]\n\n[ref]: image.png", ((3, "image.png"),)),
+    (
+        "[outer ![image [inner](literal.md)][ref]](target.md)\n\n[ref]: image.png",
+        ((1, "target.md"), (3, "image.png")),
+    ),
+    ("[outer [ẞ]](literal.md)\n\n[SS]: target.md", ((3, "target.md"),)),
+    ("[outer [Foo\t bar]](literal.md)\n\n[foo bar]: target.md", ((3, "target.md"),)),
+    ("[outer [Foo\n bar]](literal.md)\n\n[foo bar]: target.md", ((4, "target.md"),)),
+    (r"[outer [ref\[]](literal.md)" + "\n\n" + r"[ref\[]: target.md", ((3, "target.md"),)),
+    ("[outer [ref]](target.md)\n\n```\n[ref]: ignored.md\n```", ((1, "target.md"),)),
+    ("[outer [ref]](target.md)\n\n<!--\n[ref]: ignored.md\n-->", ((1, "target.md"),)),
+    ("[outer [ref]](target.md)\n\n    [ref]: ignored.md", ((1, "target.md"),)),
+    (
+        "[outer [ref]](target.md)\n\nParagraph\n[ref]: inventory.md",
+        ((1, "target.md"), (4, "inventory.md")),
+    ),
+    (
+        "[outer [ref]](literal.md)\n\n[ref]: first.md\n[REF]: second.md",
+        ((3, "first.md"), (4, "second.md")),
+    ),
+    ("[unused]: target.md", ((1, "target.md"),)),
+)
+
+
+@pytest.mark.parametrize(("body", "expected"), REFERENCE_ACTIVITY_CASES)
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
+def test_reference_activity_is_separate_from_existing_definition_inventory(
+    body: str, expected: tuple[tuple[int, str], ...], ending: str
+) -> None:
+    """Only actual definitions activate inner references; inventory stays unchanged."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.markdown_link_targets_from_text(body.replace("\n", ending)) == expected
+
+
+@pytest.mark.parametrize("length", [999, 1000])
+def test_reference_activity_bounds_label_length_before_normalization(length: int) -> None:
+    """Oversized labels do not deactivate outer links or lose raw inventory."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    label = "a" * length
+    body = f"[outer [{label}]](outer.md)\n\n[{label}]: inventory.md"
+    expected = ((3, "inventory.md"),) if length == 999 else ((1, "outer.md"), (3, "inventory.md"))
+    assert core.markdown_link_targets_from_text(body) == expected
+
+
+@pytest.mark.parametrize(
+    ("body", "expected_exit"),
+    [
+        ("[outer [Guide](target.md)](kept.md)", 1),
+        ("[outer [Guide](kept.md)](target.md)", 0),
+        ("![outer [Guide](target.md)](image.png)", 0),
+        ("[outer ![image [Guide](target.md)](image.png)](kept.md)", 0),
+        ("[outer ![image](image.png)](target.md)", 1),
+        ("[outer [Guide][ref]](target.md)\n\n[ref]: kept.md", 0),
+        ("[outer [Guide][missing]](target.md)", 1),
+    ],
+)
+def test_deployed_nested_link_outcomes_without_sync(
+    tmp_path: Path, body: str, expected_exit: int
+) -> None:
+    """The native standalone route distinguishes nested labels and image alt text."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    write(
+        tmp_path,
+        "AGENTS.md",
+        "Agents MUST validate.\nAgents MUST preserve authority.\n\n"
+        + body.replace("target.md", TOKENS["markdown-relative-link"]),
+    )
+    result = run(tmp_path)
+    assert result.returncode == expected_exit, result.stdout + result.stderr
+    if expected_exit:
+        assert "Stale protected-guide references" in result.stdout
+    assert not (tmp_path / ".template-sync").exists()
+
+
+def test_nested_link_activity_image_and_reference_mutants_have_native_oracles(
+    tmp_path: Path,
+) -> None:
+    """Three independent semantic guards are necessary for the fixed native cases."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    path = tmp_path / ".github/scripts/instruction_contract_core.py"
+    source = path.read_text(encoding="utf-8")
+    activity = "            if not is_image and visible_links != link_checkpoint:\n"
+    image = "                    del candidates[candidate_checkpoint:]\n"
+    reference = "    reference_labels = reference_labels or set()\n"
+    for guard in (activity, image, reference):
+        assert source.count(guard) == 1
+    cases = (
+        (
+            "[outer [Guide](target.md)](kept.md)",
+            1,
+            source.replace(activity, "            if False:\n"),
+        ),
+        (
+            "[outer [Guide](kept.md)](target.md)",
+            0,
+            source.replace(activity, "            if False:\n"),
+        ),
+        ("![outer [Guide](target.md)](image.png)", 0, source.replace(image, "")),
+        (
+            "[outer [Guide][ref]](target.md)\n\n[ref]: kept.md",
+            0,
+            source.replace(reference, "    reference_labels = set()\n"),
+        ),
+    )
+    for body, expected_exit, mutant in cases:
+        write(
+            tmp_path,
+            "AGENTS.md",
+            "Agents MUST validate.\nAgents MUST preserve authority.\n\n"
+            + body.replace("target.md", TOKENS["markdown-relative-link"]),
+        )
+        path.write_text(source, encoding="utf-8", newline="\n")
+        correct = run(tmp_path)
+        assert correct.returncode == expected_exit, correct.stdout + correct.stderr
+        path.write_text(mutant, encoding="utf-8", newline="\n")
+        incorrect = run(tmp_path)
+        assert incorrect.returncode == 1 - expected_exit, incorrect.stdout + incorrect.stderr
+        assert "Traceback" not in incorrect.stderr
+        if incorrect.returncode:
+            assert "Stale protected-guide references" in incorrect.stdout
+        with pytest.raises(AssertionError):
+            assert incorrect.returncode == expected_exit
+
+
+def test_nested_link_and_image_frames_remain_bounded_near_input_limit() -> None:
+    """Deep labels and images avoid ancestor rescans and preserve output bounds."""
+    program = "\n".join(
+        [
+            "import sys",
+            f"sys.path.insert(0, {str(ROOT / '.github/scripts')!r})",
+            "import instruction_contract_core as c",
+            "cases = [",
+            "('['*70000+'[x](target.md)'+'](literal.md)'*70000, ((1,'target.md'),)),",
+            "('!['*100000+'[x](ignored.md)'+'](i)'*100000+' [x](target.md)', ((1,'target.md'),)),",
+            "('![image '+'[x](ignored.md) '*60000+'](i) [x](target.md)', ((1,'target.md'),)),",
+            "('[outer '+'[ref] '*150000+'](literal.md)\\n\\n[ref]: target.md', ((3,'target.md'),)),",
+            "]",
+            "for text, expected in cases:",
+            "    assert len(text.encode('utf-8')) < c.MAXIMUM_INPUT_BYTES",
+            "    result=c.markdown_link_targets_from_text(text)",
+            "    assert result == expected, (len(result), result[:2])",
+            "    assert sum(len(target) for _,target in result) <= len(text)",
+        ]
+    )
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", program],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_nested_live_reference_preserves_exact_exception_digest(tmp_path: Path) -> None:
+    """Nested syntax preserves the existing exact target and content-bound authority."""
+    test_deployed_multiline_reference_fails_without_sync_and_exact_exception_passes(
+        tmp_path, "[outer [Guide](docs/azure-devops-support.md)](kept.md)"
+    )

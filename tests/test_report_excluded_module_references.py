@@ -1095,3 +1095,43 @@ def test_reporter_html_context_preserves_fixed_targets_and_embedded_behavior(
         assert len(links) == 1, links
         assert f"{relative_path}:{line_number} |" in links[0]
         assert "templates/json/example.json" in links[0]
+
+
+@pytest.mark.parametrize(
+    ("suffix", "body", "line_number"),
+    [
+        ("md", "[outer [JSON](templates/json/example.json)](kept.md)", 1),
+        ("md", "[outer [kept](kept.md)](templates/json/example.json)", None),
+        ("mdc", "![outer [JSON](templates/json/example.json)](image.png)", None),
+        ("md", "[outer ![image](image.png)](templates/json/example.json)", 1),
+        ("md", "[outer\n [JSON](templates/json/example.json)](kept.md)", 2),
+        ("md", "[outer [Guide][ref]](templates/json/example.json)\n\n[ref]: kept.md", None),
+        ("md", "[outer [Guide][missing]](templates/json/example.json)", 1),
+        ("yaml", "value: |\n    [outer [JSON](templates/json/example.json)](kept.md)", 2),
+    ],
+)
+def test_reporter_nested_link_activity_has_fixed_targets_and_lines(
+    tmp_path: Path, suffix: str, body: str, line_number: int | None
+) -> None:
+    """The cleanup report follows live nested links without reporting literal parents."""
+    _write_common_repo(tmp_path, include_reference_content=False)
+    relative_path = f"example.{suffix}"
+    manifest = _manifest()
+    manifest["template_manifest"]["path_mappings"].append(
+        {"pattern": relative_path, "requires_all": ["baseline"]}
+    )
+    _write_yaml(tmp_path, ".template-sync/manifest.yml", manifest)
+    _write_text(tmp_path, relative_path, body + "\n")
+    result = _run_report(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    links = [
+        line
+        for line in _finding_lines(result.stdout)
+        if line.startswith("markdown-link.excluded-target") and f" | {relative_path}:" in line
+    ]
+    if line_number is None:
+        assert links == []
+    else:
+        assert len(links) == 1, links
+        assert f"{relative_path}:{line_number} |" in links[0]
+        assert "templates/json/example.json" in links[0]

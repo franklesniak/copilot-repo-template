@@ -1012,3 +1012,32 @@ def test_marker_html_literals_and_live_links_have_native_boundary_controls(
         )
     else:
         assert "Retained Markdown relative link targets excluded module(s)" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("body", "line_number"),
+    [
+        ("[outer [JSON](templates/json/example.json)](kept.md)", 3),
+        ("[outer [kept](kept.md)](templates/json/example.json)", None),
+        ("![outer [JSON](templates/json/example.json)](image.png)", None),
+        ("[outer ![image [JSON](templates/json/example.json)](image.png)](kept.md)", None),
+        ("[outer ![image](image.png)](templates/json/example.json)", 3),
+        ("[outer\n [JSON](templates/json/example.json)](kept.md)", 4),
+        ("[outer [Guide][ref]](templates/json/example.json)\n\n[ref]: kept.md", None),
+        ("[outer [Guide][missing]](templates/json/example.json)", 3),
+    ],
+)
+def test_marker_nested_link_activity_has_fixed_native_findings(
+    tmp_path: Path, body: str, line_number: int | None
+) -> None:
+    """Nested ordinary links and image descriptions preserve the public route."""
+    _write_common_downstream_repo(tmp_path, readme_text="# Downstream\n\n" + body + "\n")
+    result = _run_validator(tmp_path, "--require-marker")
+    assert result.returncode == (1 if line_number is not None else 0), result.stdout + result.stderr
+    if line_number is not None:
+        assert (
+            f"README.md:{line_number}: templates/json/example.json -> templates/json/example.json"
+            in result.stdout
+        )
+    else:
+        assert "Retained Markdown relative link targets excluded module(s)" not in result.stdout

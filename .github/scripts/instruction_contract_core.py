@@ -2237,6 +2237,7 @@ def markdown_indented_code_lines(
     definition_ends: dict[int, int] | None = None,
     *,
     include_indented: bool = True,
+    active_definitions: set[int] | None = None,
 ) -> set[int]:
     """Locate literal blocks using container margins and paragraph context.
 
@@ -2356,6 +2357,8 @@ def markdown_indented_code_lines(
             continue
         if definition_ends is not None and line_number in definition_ends:
             definition_end = definition_ends[line_number]
+            if active_definitions is not None:
+                active_definitions.add(line_number)
             continue
         html_end = markdown_link_html_block_end(content, paragraph_active=False)
         if html_end is not None:
@@ -2407,14 +2410,25 @@ def markdown_reference_definition_ends(spans: list[list[tuple[int, str]]]) -> di
     return ends
 
 
-def markdown_link_spans(text: str, fence_context: str) -> list[list[tuple[int, str]]]:
+def markdown_link_spans(
+    text: str, fence_context: str, reference_labels: set[str] | None = None
+) -> list[list[tuple[int, str]]]:
     """Preserve definition inventory while removing contextual literal blocks."""
     if fence_context != MARKDOWN_FENCE_CONTEXT:
-        return markdown_live_link_spans(text, fence_context, set())
+        spans = markdown_live_link_spans(text, fence_context, set())
+        if reference_labels is not None:
+            definition_lines = set(markdown_reference_definition_ends(spans))
+            reference_labels.update(markdown_definition_labels(spans, definition_lines))
+        return spans
     literal_lines = markdown_indented_code_lines(text, include_indented=False)
     spans = markdown_live_link_spans(text, fence_context, literal_lines)
     definition_ends = markdown_reference_definition_ends(spans)
-    code_lines = markdown_indented_code_lines(text, definition_ends)
+    active_definitions: set[int] = set()
+    code_lines = markdown_indented_code_lines(
+        text, definition_ends, active_definitions=active_definitions
+    )
+    if reference_labels is not None:
+        reference_labels.update(markdown_definition_labels(spans, active_definitions))
     return markdown_live_link_spans(text, fence_context, code_lines)
 
 
@@ -2642,8 +2656,83 @@ def markdown_link_component(
     return None
 
 
+def markdown_reference_label(text: str, opening: int, closing: int) -> str | None:
+    """Normalize a bounded label, preserving literal escapes and rejecting brackets."""
+    if not 1 <= closing - opening - 1 <= 999:
+        return None
+    index = opening + 1
+    while index < closing:
+        if text[index] == "\\" and index + 1 < closing and text[index + 1] in ASCII_PUNCTUATION:
+            index += 2
+            continue
+        if text[index] in "[]":
+            return None
+        index += 1
+    label = re.sub(r"[ \t\r\n]+", " ", text[opening + 1 : closing].casefold()).strip(" ")
+    return label or None
+
+
+def markdown_definition_labels(
+    spans: list[list[tuple[int, str]]], active_lines: set[int]
+) -> set[str]:
+    """Collect lookup labels only from contextual definitions, not raw inventory."""
+    labels: set[str] = set()
+    for span in spans:
+        if not any(line_number in active_lines for line_number, _line in span):
+            continue
+        text = "\n".join(line for _, line in span)
+        starts: list[int] = []
+        offset = 0
+        for _, line in span:
+            starts.append(offset)
+            offset += len(line) + 1
+        pairs, _closes = markdown_delimiter_pairs(text)
+        for opening, closing in pairs:
+            if text[closing + 1 : closing + 2] != ":":
+                continue
+            line_index = bisect_right(starts, opening) - 1
+            line_start = starts[line_index]
+            if (
+                span[line_index][0] not in active_lines
+                or opening - line_start > 3
+                or text[line_start:opening] not in ("", " ", "  ", "   ")
+            ):
+                continue
+            label = markdown_reference_label(text, opening, closing)
+            if label is not None:
+                labels.add(label)
+    return labels
+
+
+def markdown_reference_use_end(
+    text: str,
+    opening: int,
+    closing: int,
+    bracket_closes: dict[int, int],
+    reference_labels: set[str],
+) -> int | None:
+    """Recognize reference activity without duplicating definition target emission."""
+    if not reference_labels:
+        return None
+    following = closing + 1
+    if text[following : following + 2] == "[]":
+        label = markdown_reference_label(text, opening, closing)
+        return following + 2 if label in reference_labels else None
+    if following in bracket_closes:
+        label_end = bracket_closes[following]
+        label = markdown_reference_label(text, following, label_end)
+        if label is not None:
+            # A valid explicit label blocks shortcut fallback even when unknown.
+            return label_end + 1 if label in reference_labels else None
+    label = markdown_reference_label(text, opening, closing)
+    return following if label in reference_labels else None
+
+
 def markdown_link_candidates(
-    text: str, starts: list[int], whitespace: list[int]
+    text: str,
+    starts: list[int],
+    whitespace: list[int],
+    reference_labels: set[str] | None = None,
 ) -> list[tuple[int, int, int, int]]:
     """Scan inline labels while keeping destinations and definitions literal.
 
@@ -2659,8 +2748,13 @@ def markdown_link_candidates(
     }
     code_ends = markdown_code_span_ends(text)
     html_ends = markdown_html_token_ends(text)
-    brackets: list[int] = []
+    bracket_closes = dict(raw_labels)
+    # Each frame records its candidate and visible-link checkpoints. Successful
+    # images contain label links; no child needs to rescan all ancestor frames.
+    brackets: list[tuple[int, int, int, bool]] = []
     candidates: list[tuple[int, int, int, int]] = []
+    visible_links = 0
+    reference_labels = reference_labels or set()
     index = 0
     while index < len(text):
         character = text[index]
@@ -2691,24 +2785,47 @@ def markdown_link_candidates(
                 index = end
                 continue
         if character == "[":
-            brackets.append(index)
+            brackets.append(
+                (index, len(candidates), visible_links, markdown_link_opening_is_image(text, index))
+            )
         elif character == "]" and brackets:
-            opening = brackets.pop()
+            opening, candidate_checkpoint, link_checkpoint, is_image = brackets.pop()
+            if not is_image and visible_links != link_checkpoint:
+                # A rendered link in this label leaves the outer syntax literal.
+                index += 1
+                continue
+            component = None
             if text[index + 1 : index + 2] == "(":
                 line_start = starts[bisect_right(starts, opening) - 1]
                 component = markdown_link_component(
                     text, opening, index, closes, whitespace, line_start
                 )
+            reference_end = (
+                markdown_reference_use_end(text, opening, index, bracket_closes, reference_labels)
+                if component is None
+                else None
+            )
+            if component is not None or reference_end is not None:
+                if is_image:
+                    del candidates[candidate_checkpoint:]
+                    visible_links = link_checkpoint
+                else:
+                    visible_links += 1
                 if component is not None:
                     end, target_start, target_end = component
                     candidates.append((opening, end, target_start, target_end))
                     index = end
-                    continue
+                else:
+                    assert reference_end is not None
+                    index = reference_end
+                continue
         index += 1
     return candidates
 
 
-def markdown_span_link_targets(span: list[tuple[int, str]]) -> list[tuple[int, str]]:
+def markdown_span_link_targets(
+    span: list[tuple[int, str]], reference_labels: set[str] | None = None
+) -> list[tuple[int, str]]:
     """Extract the supported link surface from one contiguous live text span."""
     text = "\n".join(line for _, line in span)
     starts: list[int] = []
@@ -2725,7 +2842,7 @@ def markdown_span_link_targets(span: list[tuple[int, str]]) -> list[tuple[int, s
     targets: list[tuple[int, str]] = []
     consumed_until = 0
     for opening, end, target_start, target_end in sorted(
-        markdown_link_candidates(text, starts, whitespace)
+        markdown_link_candidates(text, starts, whitespace, reference_labels)
     ):
         if opening < consumed_until:
             continue
@@ -2741,10 +2858,10 @@ def markdown_link_targets_from_text(
     text: str, *, fence_context: str = MARKDOWN_FENCE_CONTEXT
 ) -> tuple[tuple[int, str], ...]:
     """Extract bounded multiline links, not a general CommonMark rendering tree."""
+    reference_labels: set[str] = set()
+    spans = markdown_link_spans(text, fence_context, reference_labels)
     return tuple(
-        target
-        for span in markdown_link_spans(text, fence_context)
-        for target in markdown_span_link_targets(span)
+        target for span in spans for target in markdown_span_link_targets(span, reference_labels)
     )
 
 

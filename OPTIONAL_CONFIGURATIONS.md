@@ -2094,6 +2094,20 @@ The scanner inventories checked-in Node.js selectors from live CI and package co
 
 The scanner intentionally ignores GitHub Actions wrapper versions such as `actions/setup-node@v6`; the runtime selector is the `node-version` or `node-version-file` input. It also ignores transitive `package-lock.json` package descriptors under `node_modules/**`, because those describe dependency constraints rather than this repository's support policy.
 
+Azure discovery starts with `azure-pipelines.yml`, `azure-pipelines.yaml`, and YAML files under `.azuredevops/pipelines/`. The scanner follows local `extends`, step, job, stage and variable templates. Relative template paths resolve from the including file; a leading `/` resolves from the repository root. Local `@self` references are supported. The scanner applies supported scalar caller arguments instead of treating a called template's unused default as an independent runtime. A default-folder file referenced as a template is not also an implicit entrypoint. Conventional root filenames and explicitly selected paths remain entrypoints, including when another pipeline calls them.
+
+Azure DevOps can register a custom YAML path outside those defaults. Local files cannot reveal service-only registration. Supply each custom path with repeatable `--azure-pipeline` arguments, using repository-relative paths with `/` separators. Also supply a default-folder template explicitly if Azure registers that file as a separate pipeline. For example, this command adds two entrypoints to default discovery:
+
+```bash
+node .github/scripts/check-toolchain-eol.js --azure-pipeline ci/build.yml --azure-pipeline release/pipeline.yml
+```
+
+Add the same arguments to the committed scanner invocation in the scheduled workflow or another retained runner. A selected local template that installs an EOL Node line produces a finding attributed to that template and a nonzero exit. Unselected files elsewhere in the tree remain outside the inventory; a successful local run does not prove that every service-registered pipeline was supplied.
+
+The scanner supports literal scalar bindings, exact checked-in parameter or variable references, declared root parameter defaults and values, and existing matrix/version-file selectors. It reports missing or malformed selected files, unsafe paths, reference cycles, unresolved bindings, external repository templates, dynamic filenames, conditional/iterative assembly and structural parameter insertion as inventory problems. Those problems fail the check rather than becoming an empty successful inventory. It does not download templates or replace Azure's pipeline compiler. See [Microsoft's template path rules](https://learn.microsoft.com/en-us/azure/devops/pipelines/process/templates?view=azure-devops#reference-template-paths) and [custom YAML registration](https://learn.microsoft.com/en-us/azure/devops/pipelines/get-started/clone-import-pipeline?view=azure-devops#clone-or-copy-a-pipeline).
+
+Each entrypoint has local limits of 100 distinct YAML files, 100 nesting levels, 4096 file invocations, 2 MiB per YAML file, 20 MiB cumulative distinct-file input, and 200000 syntax-tree/selector visits. The entrypoint counts toward the file, invocation and depth limits. Discovery and context-aware collection each use these limits. A limit failure is an incomplete inventory, not a clean partial result. These limits bound local work; they do not describe Azure's in-memory compilation limits.
+
 Documentation and example scanning is not implemented. Documentation snippets are therefore out of scope for required live-policy failures unless a downstream repository extends the scanner and declares those findings as monitored policy.
 
 ### Warning Window

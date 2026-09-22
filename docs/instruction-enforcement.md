@@ -41,6 +41,8 @@ Raw HTML blocks, including comments, contain literal examples rather than Markdo
 
 Matched code spans inside an inline link label do not supply label brackets. For example, ``[a `]`](target.md)`` still checks `target.md`; the bracket inside code does not end the label. Link-shaped text wholly inside a code span is literal and produces no target. Unmatched backticks remain literal. Destinations, titles and reference-definition labels retain their own syntax, so a backtick in those components does not hide a later link.
 
+When an ordinary link label contains another live link, the inner link wins: `[outer [Guide](inner.md)](outer.md)` checks `inner.md`, while the outer destination is literal text. Image descriptions remain non-anchor text, including links inside their descriptions; an image inside a real link does not hide that enclosing link. Recognized full, collapsed and shortcut reference links also affect enclosing link activity. Definition destinations remain part of the existing target inventory even when unused, without adding duplicate targets at each reference use.
+
 Before comparing a destination with a catalog path, the checker decodes Markdown punctuation escapes and valid character references in one pass. For example, `target\.md` and `target&#46;md` both compare as `target.md`. Replacements are not decoded again, and ordinary URL percent decoding follows afterward. Reports and exception anchors keep the exact original destination spelling; equivalent rendered paths do not share an exception automatically.
 
 ## Local exceptions and migration

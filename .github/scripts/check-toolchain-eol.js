@@ -577,69 +577,42 @@ function collectAzureMatrixValues(strategy, key) {
     return uniqueValues(values);
 }
 
-function resolveAzureSelectorValue(value, context, sourcePath, problems) {
-    if (typeof value !== 'string') {
+function resolveAzureSelectorValue(value, context, sourcePath, problems, active = []) {
+    if (context.inventoryBudget && ++context.inventoryBudget.nodes > AZURE_INVENTORY_LIMITS.nodes) {
+        throw new Error('Azure inventory exceeds the 200000-node work limit.');
+    }
+    const fail = (message) => { problems.push({ path: sourcePath, message }); return []; };
+    if (Array.isArray(value)) {
+        return value.flatMap((entry) => resolveAzureSelectorValue(entry, context, sourcePath, problems, active));
+    }
+    if (value === null || value === undefined || typeof value === 'object') {
+        return fail('Azure Node selector or template argument must resolve to a checked-in scalar.');
+    }
+    if (typeof value !== 'string') return [{ rawValue: value, origin: 'literal' }];
+    const parameterMatch = value.match(/^\s*\$\{\{\s*parameters\.([A-Za-z0-9_.-]+)\s*\}\}\s*$/);
+    const variableMatch = value.match(/^\s*\$\(([A-Za-z0-9_.-]+)\)\s*$/) ||
+        value.match(/^\s*\$\{\{\s*variables\.([A-Za-z0-9_.-]+)\s*\}\}\s*$/);
+    let values;
+    let origin;
+    if (parameterMatch) {
+        const parameter = context.parameters.get(parameterMatch[1]);
+        values = parameter ? uniqueValues([parameter.defaultValue, ...parameter.values]) : [];
+        origin = `parameters.${parameterMatch[1]} ${parameter && parameter.values.length ? 'default-or-values' : 'default'}`;
+    } else if (variableMatch) {
+        const name = variableMatch[1];
+        values = uniqueValues([
+            ...asArray(context.variables.get(name)), ...collectAzureMatrixValues(context.strategy, name),
+        ]);
+        origin = `variable-or-matrix.${name}`;
+    } else {
+        if (/\$\{|\$\(|\$\[/.test(value)) return fail(`Azure selector expression cannot be verified from checked-in YAML: ${value}`);
         return [{ rawValue: value, origin: 'literal' }];
     }
-
-    const parameterMatch = value.match(
-        /^\s*\$\{\{\s*parameters\.([A-Za-z0-9_.-]+)\s*\}\}\s*$/,
-    );
-    if (parameterMatch) {
-        const parameterName = parameterMatch[1];
-        const parameter = context.parameters.get(parameterName);
-        if (!parameter) {
-            problems.push({
-                path: sourcePath,
-                message:
-                    `Azure Pipelines parameter "${parameterName}" referenced by ${value.trim()} is not ` +
-                    'declared in this file, so its Node.js selector cannot be verified from checked-in YAML.',
-            });
-            return [];
-        }
-        const values = uniqueValues([parameter.defaultValue, ...parameter.values]);
-        if (values.length === 0) {
-            problems.push({
-                path: sourcePath,
-                message:
-                    `Azure Pipelines parameter "${parameterName}" has no checked-in default or values, ` +
-                    'so its Node.js selector cannot be verified from checked-in YAML.',
-            });
-        }
-        return values.map((rawValue) => ({
-            rawValue,
-            origin:
-                parameter.values.length > 0
-                    ? `parameters.${parameterName} default-or-values`
-                    : `parameters.${parameterName} default`,
-        }));
-    }
-
-    const macroMatch = value.match(/^\s*\$\(([A-Za-z0-9_.-]+)\)\s*$/);
-    if (macroMatch) {
-        const variableName = macroMatch[1];
-        const values = [];
-        if (context.variables.has(variableName)) {
-            values.push(context.variables.get(variableName));
-        }
-        values.push(...collectAzureMatrixValues(context.strategy, variableName));
-        const resolvedValues = uniqueValues(values);
-        if (resolvedValues.length === 0) {
-            problems.push({
-                path: sourcePath,
-                message:
-                    `Azure Pipelines variable "${variableName}" referenced by ${value.trim()} is not defined ` +
-                    'by a checked-in variable or matrix, so its Node.js selector cannot be verified from ' +
-                    'checked-in YAML (it may be provided only at queue time).',
-            });
-        }
-        return resolvedValues.map((rawValue) => ({
-            rawValue,
-            origin: `variable-or-matrix.${variableName}`,
-        }));
-    }
-
-    return [{ rawValue: value, origin: 'literal' }];
+    if (values.length === 0) return fail(`Azure selector ${value.trim()} cannot be verified from checked-in YAML; no checked-in value is available.`);
+    const identity = parameterMatch ? `parameter:${parameterMatch[1]}` : `variable:${variableMatch[1]}`;
+    if (active.includes(identity) || active.length >= 100) return fail('Azure selector references are cyclic or exceed the 100-level nesting limit.');
+    return values.flatMap((rawValue) => resolveAzureSelectorValue(rawValue, context, sourcePath, problems, [...active, identity]))
+        .map((resolved) => ({ ...resolved, origin }));
 }
 
 function isAzureNodeTask(step) {
@@ -711,92 +684,280 @@ function collectAzureStepSelectors(repoRoot, relativePipelinePath, steps, contex
     }
 }
 
-function collectAzureJobSelectors(repoRoot, relativePipelinePath, job, context, selectors, problems) {
-    if (!job || typeof job !== 'object') {
-        return;
-    }
-    const jobContext = {
-        parameters: context.parameters,
-        variables: mergeMaps(context.variables, collectVariables(job.variables)),
-        strategy: job.strategy,
-    };
-    collectAzureStepSelectors(repoRoot, relativePipelinePath, job.steps, jobContext, selectors, problems);
-}
+// These are local inventory limits, not Azure's complete compiler contract.
+const AZURE_INVENTORY_LIMITS = Object.freeze({
+    files: 100, depth: 100, invocations: 4096,
+    fileBytes: 2 * 1024 * 1024, totalBytes: 20 * 1024 * 1024, nodes: 200000,
+});
 
-function collectAzurePipelineSelectors(repoRoot, selectors, problems) {
-    for (const relativePipelinePath of getAzurePipelineFiles(repoRoot)) {
-        const pipelinePath = path.join(repoRoot, relativePipelinePath);
-        for (const pipeline of readYamlFile(pipelinePath)) {
-            if (!pipeline || typeof pipeline !== 'object') {
-                continue;
-            }
-
-            const rootContext = {
-                parameters: collectParameters(pipeline.parameters),
-                variables: collectVariables(pipeline.variables),
-                strategy: pipeline.strategy,
-            };
-
-            collectAzureStepSelectors(
-                repoRoot,
-                relativePipelinePath,
-                pipeline.steps,
-                rootContext,
-                selectors,
-                problems,
-            );
-
-            for (const job of asArray(pipeline.jobs)) {
-                collectAzureJobSelectors(
-                    repoRoot,
-                    relativePipelinePath,
-                    job,
-                    rootContext,
-                    selectors,
-                    problems,
-                );
-            }
-
-            for (const stage of asArray(pipeline.stages)) {
-                if (!stage || typeof stage !== 'object') {
-                    continue;
-                }
-                const stageContext = {
-                    parameters: rootContext.parameters,
-                    variables: mergeMaps(rootContext.variables, collectVariables(stage.variables)),
-                    strategy: stage.strategy || rootContext.strategy,
-                };
-                collectAzureStepSelectors(
-                    repoRoot,
-                    relativePipelinePath,
-                    stage.steps,
-                    stageContext,
-                    selectors,
-                    problems,
-                );
-                for (const job of asArray(stage.jobs)) {
-                    collectAzureJobSelectors(
-                        repoRoot,
-                        relativePipelinePath,
-                        job,
-                        stageContext,
-                        selectors,
-                        problems,
-                    );
-                }
-            }
+function azureDocumentSize(documents) {
+    let nodes = 0;
+    const active = new Set();
+    const stack = documents.map((value) => ({ value, exit: false }));
+    while (stack.length > 0) {
+        const { value, exit } = stack.pop();
+        if (exit) {
+            active.delete(value);
+            continue;
+        }
+        nodes += 1;
+        if (nodes > AZURE_INVENTORY_LIMITS.nodes) {
+            throw new Error('Azure inventory exceeds the 200000-node work limit.');
+        }
+        if (value && typeof value === 'object') {
+            if (active.has(value)) throw new Error('Azure YAML contains a cyclic alias.');
+            active.add(value);
+            stack.push({ value, exit: true });
+            for (const child of Object.values(value)) stack.push({ value: child, exit: false });
         }
     }
+    return nodes;
 }
 
-function collectNodeSelectors(repoRoot = process.cwd()) {
+function collectAzurePipelineSelectors(repoRoot, selectors, problems, explicitPaths = []) {
+    if (!Array.isArray(explicitPaths)) throw new Error('Azure pipeline paths must be an array.');
+    const realRoot = fs.realpathSync(repoRoot);
+    const cache = new Map();
+    const referenced = new Set();
+    const addProblem = (source, error) => problems.push({ path: source, message: error.message });
+    const newBudget = () => ({ files: new Set(), bytes: 0, nodes: 0, invocations: 0 });
+    const pathName = (absolute) => repoRelativePath(repoRoot, absolute);
+
+    function localPath(value, including, entrypoint = false) {
+        if (typeof value !== 'string' || !value.trim() || value !== value.trim() ||
+            /[\x00-\x1f*?{}$\\]/.test(value)) {
+            throw new Error('Azure template or pipeline path must be a nonblank literal local YAML path.');
+        }
+        let filename = value;
+        if (filename.includes('@')) {
+            if (entrypoint || !filename.endsWith('@self') || filename.slice(0, -5).includes('@')) {
+                throw new Error(`Azure external template cannot be verified locally: ${value}`);
+            }
+            filename = filename.slice(0, -5);
+        }
+        if (entrypoint && (filename.startsWith('/') || path.isAbsolute(filename))) {
+            throw new Error('An explicit Azure pipeline path must be repository-relative.');
+        }
+        if (!/\.ya?ml$/i.test(filename) || /^[A-Za-z]:/.test(filename)) {
+            throw new Error('Azure template or pipeline source must be a local .yml or .yaml file.');
+        }
+        const absolute = filename.startsWith('/')
+            ? path.resolve(repoRoot, filename.slice(1))
+            : path.resolve(including ? path.dirname(including) : repoRoot, filename);
+        assertPathWithinRepo(repoRoot, absolute);
+        const real = fs.realpathSync(absolute);
+        assertPathWithinRepo(realRoot, real);
+        if (!fs.statSync(real).isFile()) throw new Error('Azure YAML source must be a regular file.');
+        return { absolute, real };
+    }
+
+    function load(file, budget, active) {
+        budget.invocations += 1;
+        if (budget.invocations > AZURE_INVENTORY_LIMITS.invocations) {
+            throw new Error('Azure inventory exceeds the 4096-invocation work limit.');
+        }
+        if (active.includes(file.real)) throw new Error('Azure template references form a cycle.');
+        if (active.length >= AZURE_INVENTORY_LIMITS.depth) {
+            throw new Error('Azure inventory exceeds the 100-level nesting limit.');
+        }
+        if (!cache.has(file.real)) {
+            if (fs.statSync(file.real).size > AZURE_INVENTORY_LIMITS.fileBytes) {
+                throw new Error('Azure YAML source exceeds the 2 MiB file limit.');
+            }
+            const bytes = fs.readFileSync(file.real);
+            if (bytes.length > AZURE_INVENTORY_LIMITS.fileBytes) {
+                throw new Error('Azure YAML source exceeds the 2 MiB file limit.');
+            }
+            const documents = yaml.parseAllDocuments(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+            const invalid = documents.flatMap((document) => document.errors);
+            if (invalid.length > 0) throw new Error(`Invalid Azure YAML: ${invalid.map((error) => error.message).join('; ')}`);
+            const values = documents.filter((document) => document.contents !== null).map((document) => document.toJSON());
+            if (values.length === 0 || !values.every(isMapping)) {
+                throw new Error('Azure YAML source must contain a pipeline or template mapping.');
+            }
+            cache.set(file.real, { documents: values, bytes: bytes.length, nodes: azureDocumentSize(values) });
+        }
+        const loaded = cache.get(file.real);
+        if (!budget.files.has(file.real)) {
+            budget.files.add(file.real);
+            budget.bytes += loaded.bytes;
+        }
+        if (budget.files.size > AZURE_INVENTORY_LIMITS.files) {
+            throw new Error('Azure inventory exceeds the 100-file limit.');
+        }
+        if (budget.bytes > AZURE_INVENTORY_LIMITS.totalBytes) {
+            throw new Error('Azure inventory exceeds the 20 MiB cumulative input limit.');
+        }
+        budget.nodes += loaded.nodes;
+        if (budget.nodes > AZURE_INVENTORY_LIMITS.nodes) {
+            throw new Error('Azure inventory exceeds the 200000-node work limit.');
+        }
+        return loaded.documents;
+    }
+
+    function visit(file, role, overrides, inherited, budget, active, discovery) {
+        const source = pathName(file.absolute);
+        const documents = load(file, budget, active);
+        const ancestry = [...active, file.real];
+        let returnedVariables = inherited.variables;
+        for (const document of documents) {
+            const parameters = collectParameters(document.parameters);
+            if (overrides !== null && !discovery) {
+                // Allowed parameter values are not invocations of a called template.
+                for (const parameter of parameters.values()) parameter.values = [];
+                for (const [name, value] of Object.entries(overrides)) {
+                    if (!parameters.has(name)) {
+                        addProblem(source, new Error(`Azure template argument "${name}" has no declaration.`));
+                        continue;
+                    }
+                    if (value === null || typeof value === 'object') {
+                        addProblem(source, new Error(`Azure template argument "${name}" requires a supported scalar binding.`));
+                        parameters.set(name, { defaultValue: undefined, values: [] });
+                        continue;
+                    }
+                    const resolved = resolveAzureSelectorValue(value, inherited, source, problems)
+                        .map((entry) => entry.rawValue);
+                    parameters.set(name, { defaultValue: resolved[0], values: resolved.slice(1) });
+                }
+            }
+            const context = { parameters, variables: new Map(inherited.variables), strategy: inherited.strategy, inventoryBudget: budget };
+
+            function template(reference, templateRole, caller) {
+                try {
+                    if (!isMapping(reference) || !Object.hasOwn(reference, 'template')) {
+                        throw new Error('Azure template reference must contain a literal template path.');
+                    }
+                    const selected = localPath(reference.template, file.absolute);
+                    if (discovery) referenced.add(selected.real);
+                    const argumentsMap = reference.parameters === undefined ? {} : reference.parameters;
+                    if (!isMapping(argumentsMap)) throw new Error('Azure template parameters must be a mapping.');
+                    return visit(selected, templateRole, argumentsMap, caller, budget, ancestry, discovery);
+                } catch (error) {
+                    addProblem(source, error);
+                    return new Map(caller.variables);
+                }
+            }
+
+            function variables(raw, caller) {
+                const result = new Map(caller.variables);
+                if (raw === undefined) return result;
+                const declaredValue = (value) => {
+                    if (!discovery && typeof value === 'string' &&
+                        /^\s*\$\{\{\s*(?:parameters|variables)\.[A-Za-z0-9_.-]+\s*\}\}\s*$/.test(value)) {
+                        // Compile-time expressions belong to this declaration, not a callee's parameters.
+                        return resolveAzureSelectorValue(value, { ...caller, variables: result }, source, [])
+                            .map((entry) => entry.rawValue);
+                    }
+                    return value;
+                };
+                if (!Array.isArray(raw)) {
+                    if (!isMapping(raw)) {
+                        addProblem(source, new Error('Azure variables require a static mapping or list.'));
+                        return result;
+                    }
+                    for (const [name, value] of collectVariables(raw)) {
+                        if (name.includes('${{')) addProblem(source, new Error('Azure conditional variable assembly cannot be verified locally.'));
+                        else result.set(name, declaredValue(value));
+                    }
+                    return result;
+                }
+                for (const entry of raw) {
+                    if (!isMapping(entry)) {
+                        addProblem(source, new Error('Azure variable entry cannot be verified locally.'));
+                    } else if (Object.hasOwn(entry, 'template')) {
+                        for (const [name, value] of template(entry, 'variables', { ...caller, variables: result })) result.set(name, value);
+                    } else if (Object.keys(entry).some((key) => key.includes('${{'))) {
+                        addProblem(source, new Error('Azure conditional variable assembly cannot be verified locally.'));
+                    } else if (entry.name && Object.hasOwn(entry, 'value')) {
+                        result.set(String(entry.name), declaredValue(entry.value));
+                    } else if (!Object.hasOwn(entry, 'group')) {
+                        addProblem(source, new Error('Azure variable entry cannot be verified locally.'));
+                    }
+                    // External variable groups never supply checked-in values.
+                }
+                return result;
+            }
+
+            function scope(value, caller) {
+                const local = { ...caller, variables: variables(value.variables, caller), strategy: value.strategy || caller.strategy };
+                if (Object.hasOwn(value, 'extends')) template(value.extends, 'pipeline', local);
+                for (const childRole of ['steps', 'jobs', 'stages']) {
+                    if (Object.hasOwn(value, childRole)) sequence(value[childRole], childRole, local);
+                }
+                return local.variables;
+            }
+
+            function sequence(raw, childRole, caller) {
+                if (!Array.isArray(raw)) {
+                    addProblem(source, new Error(`Azure ${childRole} assembly requires a static list; expressions cannot be verified locally.`));
+                    return;
+                }
+                for (const entry of raw) {
+                    if (!isMapping(entry) || Object.keys(entry).some((key) => key.includes('${{'))) {
+                        addProblem(source, new Error(`Azure conditional or structural ${childRole} assembly cannot be verified locally.`));
+                    } else if (Object.hasOwn(entry, 'template')) {
+                        template(entry, childRole, caller);
+                    } else if (childRole === 'steps') {
+                        if (!discovery) collectAzureStepSelectors(repoRoot, source, [entry], caller, selectors, problems);
+                    } else {
+                        if (Object.hasOwn(entry, 'deployment')) {
+                            addProblem(source, new Error('Azure deployment strategy assembly cannot be verified locally.'));
+                        }
+                        scope(entry, caller);
+                    }
+                }
+            }
+
+            if (role !== 'pipeline' && !Object.hasOwn(document, role)) {
+                addProblem(source, new Error(`Azure ${role} template has no ${role} declaration.`));
+                continue;
+            }
+            if (role === 'variables') {
+                returnedVariables = variables(document.variables, context);
+            } else {
+                returnedVariables = scope(document, context);
+            }
+        }
+        return returnedVariables;
+    }
+
+    const candidates = new Map();
+    const forcedRoots = new Set();
+    for (const value of [...getAzurePipelineFiles(repoRoot).map(toPosixPath), ...explicitPaths]) {
+        try {
+            const file = localPath(value, null, true);
+            candidates.set(file.real, file);
+            if (explicitPaths.includes(value) || /^azure-pipelines\.ya?ml$/.test(value)) forcedRoots.add(file.real);
+        } catch (error) {
+            addProblem(String(value), error);
+        }
+    }
+    const emptyContext = () => ({ parameters: new Map(), variables: new Map(), strategy: undefined });
+    // Discover roles first so an unused template default is not a separate runtime.
+    // Discovery errors, including rootless cycles, cannot disappear with role filtering.
+    for (const file of candidates.values()) {
+        try { visit(file, 'pipeline', null, emptyContext(), newBudget(), [], true); }
+        catch (error) { addProblem(pathName(file.absolute), error); }
+    }
+    for (const file of candidates.values()) {
+        if (!forcedRoots.has(file.real) && referenced.has(file.real)) continue;
+        try { visit(file, 'pipeline', null, emptyContext(), newBudget(), [], false); }
+        catch (error) { addProblem(pathName(file.absolute), error); }
+    }
+    for (const records of [selectors, problems]) {
+        const unique = new Map(records.map((record) => [JSON.stringify(record), record]));
+        records.splice(0, records.length, ...unique.values());
+    }
+}
+
+function collectNodeSelectors(repoRoot = process.cwd(), options = {}) {
     const resolvedRepoRoot = path.resolve(repoRoot);
     const selectors = [];
     const problems = [];
 
     collectPackageSelectors(resolvedRepoRoot, selectors, problems);
     collectGithubWorkflowSelectors(resolvedRepoRoot, selectors, problems);
-    collectAzurePipelineSelectors(resolvedRepoRoot, selectors, problems);
+    collectAzurePipelineSelectors(resolvedRepoRoot, selectors, problems, options.azurePipelinePaths || []);
 
     return { selectors, problems };
 }
@@ -924,12 +1085,19 @@ function parseArgs(argv) {
             process.env.TOOLCHAIN_EOL_WARNING_DAYS || DEFAULT_WARNING_WINDOW_DAYS,
         ),
         json: false,
+        azurePipelinePaths: [],
     };
 
     for (let index = 0; index < argv.length; index++) {
         const arg = argv[index];
         if (arg === '--repo-root') {
             options.repoRoot = argv[++index];
+        } else if (arg === '--azure-pipeline') {
+            const selected = argv[++index];
+            if (!selected || !selected.trim() || selected.startsWith('--')) {
+                throw new Error('--azure-pipeline requires a repository-relative YAML path.');
+            }
+            options.azurePipelinePaths.push(selected);
         } else if (arg === '--schedule-file') {
             options.scheduleFile = argv[++index];
         } else if (arg === '--schedule-url') {
@@ -959,6 +1127,7 @@ function printHelp() {
 
 Options:
   --repo-root PATH             Repository root to scan. Defaults to cwd.
+  --azure-pipeline PATH        Add a custom Azure entrypoint (repeatable).
   --schedule-file PATH         Read Node.js release schedule JSON from a fixture file.
   --schedule-url URL           Fetch Node.js release schedule JSON from URL.
   --warning-window-days DAYS   Warn/fail when EOL is within DAYS. Default: 180.
@@ -1048,7 +1217,7 @@ async function runCli(argv = process.argv.slice(2)) {
         return 0;
     }
 
-    const inventory = collectNodeSelectors(options.repoRoot);
+    const inventory = collectNodeSelectors(options.repoRoot, options);
     const schedule = await loadSchedule(options);
     const evaluation = evaluateSelectors(inventory.selectors, schedule, options);
     const result = {
