@@ -44,6 +44,8 @@ def copy_policy(root: Path) -> dict[str, Any]:
         (".github/instructions/yaml.instructions.md", True),
         ("docs/.hidden/guide.md", True),
         ("docs/a-b_2.md", True),
+        (".cursor/rules/example.mdc", True),
+        (".cursor/rules/nested/a-b_2.mdc", True),
         ("/tmp/example.md", False),
         ("./guide.md", False),
         ("docs//guide.md", False),
@@ -51,6 +53,13 @@ def copy_policy(root: Path) -> dict[str, Any]:
         ("docs/../guide.md", False),
         ("C:/guide.md", False),
         ("docs\\guide.md", False),
+        ("/tmp/example.mdc", False),
+        ("./guide.mdc", False),
+        (".cursor//guide.mdc", False),
+        (".cursor/./guide.mdc", False),
+        (".cursor/../guide.mdc", False),
+        ("C:/guide.mdc", False),
+        (".cursor\\guide.mdc", False),
     ],
 )
 def test_example_path_schema_matches_reader(tmp_path: Path, relative: str, safe: bool) -> None:
@@ -83,6 +92,29 @@ def test_example_path_pattern_regression(relative: str) -> None:
         policy.jsonschema.validate(contract, schema)
     schema["properties"]["examples"]["items"]["pattern"] = r"^(?!.*\.\.)[A-Za-z0-9_./-]+\.md$"
     policy.jsonschema.validate(contract, schema)
+
+
+@pytest.mark.parametrize("relative", ["guide.mdx", "guide.MDC", "guide.mdcc", "guide.mdc.yml"])
+def test_example_path_schema_rejects_unsupported_suffixes(relative: str) -> None:
+    """Only the two declared Markdown formats enter the explicit contract."""
+    schema = policy.parse_yaml(policy.read_text(ROOT, policy.SCHEMA))
+    contract = copy.deepcopy(policy.load_contract(ROOT))
+    contract["examples"] = [relative]
+    with pytest.raises(policy.jsonschema.ValidationError):
+        policy.jsonschema.validate(contract, schema)
+
+
+def test_cursor_example_schema_old_suffix_mutant() -> None:
+    """The old suffix predicate breaks the fixed safe Cursor declaration oracle."""
+    schema = policy.parse_yaml(policy.read_text(ROOT, policy.SCHEMA))
+    contract = copy.deepcopy(policy.load_contract(ROOT))
+    contract["examples"] = [".cursor/rules/example.mdc"]
+    policy.jsonschema.validate(contract, schema)
+    schema["properties"]["examples"]["items"][
+        "pattern"
+    ] = r"^(?!.*\.\.)(?:(?!\./)[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.md$"
+    with pytest.raises(policy.jsonschema.ValidationError):
+        policy.jsonschema.validate(contract, schema)
 
 
 @pytest.mark.parametrize(
@@ -553,11 +585,12 @@ def test_bounds_and_yaml_shape(tmp_path: Path) -> None:
     assert "on" in policy.parse_yaml("on: [push]")
 
 
-def test_symlink_is_rejected(tmp_path: Path) -> None:
+@pytest.mark.parametrize("suffix", [".yml", ".md", ".mdc"])
+def test_symlink_is_rejected(tmp_path: Path, suffix: str) -> None:
     """A symlink must not provide a policy input even inside the repository."""
-    source = tmp_path / "real.yml"
+    source = tmp_path / f"real{suffix}"
     source.write_text("name: test", encoding="utf-8")
-    link = tmp_path / "link.yml"
+    link = tmp_path / f"link{suffix}"
     try:
         link.symlink_to(source)
     except OSError:

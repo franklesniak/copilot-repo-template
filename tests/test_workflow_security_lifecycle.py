@@ -26,6 +26,175 @@ TERRAFORM_EXAMPLES = (
     "docs/terraform/TERRAFORM_LINTING_GUIDE.md",
     "docs/terraform/TERRAFORM_TESTING_GUIDE.md",
 )
+CURSOR_EXAMPLE = ".cursor/rules/repository-instructions.mdc"
+
+
+def cursor_example_source(source: Path, *, declared: bool, floating: bool = False) -> None:
+    """Copy reviewed policy inputs and add one private Cursor documentation example."""
+    from tests.test_workflow_security_contract import copy_policy
+
+    contract = copy_policy(source)
+    for relative in (CURSOR_EXAMPLE, ".github/scripts/validate_workflow_security.py"):
+        destination = source / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / relative, destination)
+    reference = "actions/checkout@" + ("v7" if floating else "a" * 40)
+    with (source / CURSOR_EXAMPLE).open("a", encoding="utf-8", newline="\n") as stream:
+        stream.write(f"\n```yaml\n- uses: {reference} # v7.0.1\n```\n")
+    if declared:
+        contract["examples"].append(CURSOR_EXAMPLE)
+    lifecycle.write_yaml(source / policy.CONTRACT, contract)
+
+
+@pytest.mark.parametrize("floating", [False, True])
+def test_cursor_example_discovery_and_old_suffix_mutant(
+    tmp_path: Path, monkeypatch: Any, floating: bool
+) -> None:
+    """The fixed unlisted Cursor oracle detects restoration of the old suffix filter."""
+    source, stage = tmp_path / "source", tmp_path / "stage"
+    cursor_example_source(source, declared=False, floating=floating)
+    stage.mkdir()
+    _, _, mappings = lifecycle.materializer.load_validated_manifest_context(ROOT)
+    modules = ("github-actions", "agent-instructions", "agent-cursor")
+    arguments = {
+        "template_root": source,
+        "staging_root": stage,
+        "mappings": mappings,
+        "included_modules": modules,
+        "summary": lifecycle.materializer.Summary(list(modules), [], "copy"),
+    }
+    with pytest.raises(
+        lifecycle.materializer.MaterializationError,
+        match="full SHA" if floating else "Retained workflow example inventory",
+    ):
+        lifecycle.materializer.write_staged_candidate(**arguments)
+    assert snapshot(stage) == {}
+    code = (ROOT / ".template-sync/scripts/materialize_downstream_adoption.py").read_text(
+        encoding="utf-8"
+    )
+    guard = 'if PurePosixPath(path).suffix not in {".md", ".mdc"}:'
+    assert code.count(guard) == 1
+    mutant_path = tmp_path / "cursor_discovery_mutant.py"
+    mutant_path.write_text(
+        code.replace(guard, 'if PurePosixPath(path).suffix != ".md":'), encoding="utf-8"
+    )
+    spec = importlib.util.spec_from_file_location("cursor_discovery_mutant", mutant_path)
+    assert spec is not None and spec.loader is not None
+    mutant = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, mutant.__name__, mutant)
+    spec.loader.exec_module(mutant)
+    monkeypatch.setattr(mutant, "TRUSTED_TOOL_ROOT", ROOT)
+    arguments["summary"] = mutant.Summary(list(modules), [], "copy")
+    mutant.write_staged_candidate(**arguments)
+    assert (stage / CURSOR_EXAMPLE).is_file()
+    assert CURSOR_EXAMPLE not in policy.load_contract(stage)["examples"]
+    assert policy.validate_repository(stage) >= 1
+
+
+@pytest.mark.parametrize("omitted", ["agent-cursor", "agent-instructions"])
+@pytest.mark.parametrize("declared", [False, True])
+def test_cursor_example_exclusion_and_source_validation(
+    tmp_path: Path, omitted: str, declared: bool
+) -> None:
+    """Omitted agents stay inactive; declared source examples remain checked first."""
+    source, stage = tmp_path / "source", tmp_path / "stage"
+    cursor_example_source(source, declared=declared)
+    modules = {"github-actions", "agent-instructions", "agent-cursor"} - {omitted}
+    _, _, mappings = lifecycle.materializer.load_validated_manifest_context(ROOT)
+    lifecycle.materializer.write_staged_candidate(
+        template_root=source,
+        staging_root=stage,
+        mappings=mappings,
+        included_modules=modules,
+        summary=lifecycle.materializer.Summary(sorted(modules), [], "copy"),
+    )
+    assert not (stage / CURSOR_EXAMPLE).exists()
+    assert CURSOR_EXAMPLE not in policy.load_contract(stage)["examples"]
+    assert policy.validate_repository(stage) >= 1
+    path = source / CURSOR_EXAMPLE
+    path.write_text(path.read_text(encoding="utf-8").replace("a" * 40, "v7"), encoding="utf-8")
+    if declared:
+        with pytest.raises(lifecycle.materializer.MaterializationError, match="full SHA"):
+            lifecycle.materializer.render_workflow_contract(source, mappings, modules)
+    else:
+        assert lifecycle.materializer.render_workflow_contract(source, mappings, modules)
+
+
+def test_cursor_example_actual_adoption_and_standalone_failures(tmp_path: Path) -> None:
+    """Reviewed Cursor examples survive real adoption, no-op and sync-free validation."""
+    source, target = tmp_path / "source", tmp_path / "target"
+    _, _, mappings = lifecycle.materializer.load_validated_manifest_context(ROOT)
+    paths, skipped = lifecycle.materializer.iter_safe_repository_files(ROOT)
+    assert not skipped
+    for relative in paths:
+        if lifecycle.materializer.selected_relation_for_path(relative, mappings) is not None:
+            destination = source / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / relative, destination)
+    cursor_example_source(source, declared=True)
+    target.mkdir()
+    modules = ("github-actions", "agent-instructions", "agent-cursor", "yaml")
+    write_decisions(
+        target,
+        modules,
+        protected_file_decisions=lifecycle.protected_take_decisions_for_modules(modules),
+    )
+    command = [
+        sys.executable,
+        str(ROOT / ".template-sync/scripts/materialize_downstream_adoption.py"),
+        "--template-root",
+        str(source),
+        "--target-root",
+        str(target),
+        "--decisions-file",
+        "decisions.yml",
+    ]
+    adopted = subprocess.run(command, check=False, capture_output=True, text=True, timeout=60)
+    assert adopted.returncode == 0, adopted.stdout + adopted.stderr
+    assert not (target / ".template-sync").exists()
+    assert policy.load_contract(target)["examples"] == [YAML_EXAMPLE, CURSOR_EXAMPLE]
+    assert (target / CURSOR_EXAMPLE).read_text(encoding="utf-8").startswith("---\n")
+    validate = [
+        sys.executable,
+        str(target / ".github/scripts/validate_workflow_security.py"),
+        "--repo-root",
+        str(target),
+    ]
+    accepted = subprocess.run(validate, check=False, capture_output=True, text=True, timeout=20)
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+    before = snapshot(target)
+    repeated = subprocess.run(command, check=False, capture_output=True, text=True, timeout=60)
+    assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+    assert snapshot(target) == before
+    path = target / CURSOR_EXAMPLE
+    original = path.read_text(encoding="utf-8")
+    path.write_text(original.replace("a" * 40, "v7"), encoding="utf-8")
+    rejected = subprocess.run(validate, check=False, capture_output=True, text=True, timeout=20)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert "full SHA" in rejected.stderr
+    path.unlink()
+    missing = subprocess.run(validate, check=False, capture_output=True, text=True, timeout=20)
+    assert missing.returncode == 1, missing.stdout + missing.stderr
+    path.write_text(original, encoding="utf-8", newline="\n")
+    remaining = tuple(module for module in modules if module != "agent-cursor")
+    decisions = lifecycle.protected_take_decisions_for_modules(remaining)
+    decisions.append(
+        {
+            "path": CURSOR_EXAMPLE,
+            "decision": "REMOVE-LOCAL",
+            "authorization_basis": "Fixture owner approves later Cursor cleanup",
+            "authorized_scope": CURSOR_EXAMPLE,
+            "reason": "Cursor module omitted",
+        }
+    )
+    write_decisions(target, remaining, protected_file_decisions=decisions)
+    removed = subprocess.run(command, check=False, capture_output=True, text=True, timeout=60)
+    assert removed.returncode == 0, removed.stdout + removed.stderr
+    assert policy.load_contract(target)["examples"] == [YAML_EXAMPLE]
+    # Exclusion updates the contract; reviewed protected cleanup remains explicit.
+    assert path.read_text(encoding="utf-8") == original
+    checked = subprocess.run(validate, check=False, capture_output=True, text=True, timeout=20)
+    assert checked.returncode == 0, checked.stdout + checked.stderr
 
 
 @pytest.mark.parametrize(

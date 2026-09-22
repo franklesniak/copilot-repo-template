@@ -2587,7 +2587,7 @@ def render_workflow_contract(
             )
         expected_examples: set[str] = set()
         for path in template_paths:
-            if PurePosixPath(path).suffix != ".md":
+            if PurePosixPath(path).suffix not in {".md", ".mdc"}:
                 continue
             relation = selected_relation_for_path(path, mappings)
             if relation is None or not relation.is_retained_by(included_modules):
