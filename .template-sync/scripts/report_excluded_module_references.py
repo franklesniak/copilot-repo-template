@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
-import posixpath
 import re
 import sys
 from collections import Counter, defaultdict
@@ -791,25 +790,13 @@ def normalize_markdown_target(target: str) -> str:
     return target
 
 
-def resolve_relative_markdown_target(source_path: str, target: str) -> str | None:
-    """Resolve a local Markdown target to a repository-relative path."""
-    parsed = urlsplit(target)
-    if parsed.scheme or parsed.netloc or target.startswith("#") or not parsed.path:
-        return None
-    decoded_path = unquote(parsed.path)
-    if decoded_path.startswith("/"):
-        return None
-    source_dir = posixpath.dirname(source_path)
-    normalized_path = posixpath.normpath(posixpath.join(source_dir, decoded_path))
-    if normalized_path in {".", ".."} or normalized_path.startswith("../"):
-        return None
-    return normalized_path
+resolve_relative_markdown_target = instruction_contract_core.resolve_relative_markdown_target
 
 
 def resolve_upstream_blob_target(target: str) -> str | None:
     """Return the repo path from an upstream template blob URL, if present."""
     try:
-        parsed = urlsplit(target)
+        parsed = instruction_contract_core.split_markdown_destination(target)
     except ValueError:
         return None
     if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() != "github.com":

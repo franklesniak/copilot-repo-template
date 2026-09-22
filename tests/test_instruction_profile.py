@@ -478,11 +478,20 @@ def run_migration_schema_control(
     omit_reference_validation: bool = False,
     restore_prior_path_prefilter: bool = False,
     reverse_section_precedence: bool = False,
+    restore_content_preference: bool = False,
     marker_document: dict[str, Any] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run the real migration or an exact schema-provenance mutant natively."""
     source_path = ROOT / ".template-sync/scripts/instruction_profile_migration.py"
     source = source_path.read_text(encoding="utf-8")
+    if restore_content_preference:
+        guard = '    """Select reconciled bytes without granting authority to unresolved decisions."""\n'
+        assert source.count(guard) == 1
+        source = source.replace(
+            guard,
+            guard
+            + "    return (target_root if (target_root / relative_path).exists() else staging_root), False\n",
+        )
     if redirect_trust:
         guard = "TRUSTED_TOOL_ROOT = Path(__file__).resolve().parents[2]"
         assert source.count(guard) == 1
@@ -1307,3 +1316,355 @@ def test_migration_uses_longest_overlapping_colon_heading_and_detects_mutant(
     assert mutant.returncode == 0, mutant.stdout + mutant.stderr
     rejected = run(stage)
     assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+
+
+@pytest.mark.parametrize("path", ["AGENTS.md", "docs/review.md"])
+@pytest.mark.parametrize("kind", ["direct", "section", "reference"])
+@pytest.mark.parametrize("decision", ["TAKE", "SKIP"])
+@pytest.mark.parametrize("candidate_failure", [True, False])
+def test_migration_binds_only_selected_content(
+    tmp_path: Path, path: str, kind: str, decision: str, candidate_failure: bool
+) -> None:
+    """Scoped declarations describe reconciled bytes, not a replaced local file."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    profile(stage)
+    document = profile(target)
+    intact = "Agents MUST validate.\nAgents MUST preserve authority.\n"
+    damaged = intact.replace("Agents MUST validate.\n", "") if kind == "direct" else intact
+    if kind == "section":
+        damaged += "\n## Azure review\n"
+    elif kind == "reference":
+        damaged += "\nUse Azure workflow.\n"
+    for root in (stage, target):
+        catalog = yaml.safe_load((root / ".github/instruction-contracts.yml").read_text())
+        catalog["instruction_contracts"][0]["path"] = path
+        if kind == "section":
+            catalog["protected_guide_section_obligations"] = [
+                {
+                    "path": path,
+                    "key": "azure-section",
+                    "stale_headings": ["## Azure review"],
+                    "target_modules": ["azure-devops-collaboration"],
+                }
+            ]
+        elif kind == "reference":
+            catalog["protected_guide_reference_obligations"] = [
+                {
+                    "path": path,
+                    "key": "azure-reference",
+                    "reference_kind": "prose-reference",
+                    "tokens": ["Azure workflow"],
+                    "target_modules": ["azure-devops-collaboration"],
+                }
+            ]
+        write(root, ".github/instruction-contracts.yml", yaml.safe_dump(catalog))
+    write(target, path, "<!-- Local bytes. -->\n" + damaged)
+    write(stage, path, damaged if candidate_failure else intact)
+    marker: dict[str, Any] = {"template_sync": {"included_modules": document["modules"]}}
+    fields = marker["template_sync"]
+    if path == "AGENTS.md":
+        fields["protected_file_decisions"] = [
+            {
+                "path": path,
+                "decision": decision,
+                "adoption_mode": "minimal-preservation",
+                "authorization_basis": "Fixture owner",
+                "authorized_scope": path,
+                "reason": "Reviewed content selection",
+            }
+        ]
+    else:
+        fields["local_overrides"] = [
+            {"path": path, "default_decision": decision, "reason": "Owner selection"}
+        ]
+    waiver = {
+        "path": path,
+        "reason": "Exact reviewed failure",
+        "authorization_basis": "Fixture owner",
+    }
+    if kind == "direct":
+        waiver["anchor"] = "Agents MUST validate."
+        fields["instruction_contract_waivers"] = [waiver]
+    else:
+        waiver.update(
+            {"contract_key": "azure-" + kind, "target_module": "azure-devops-collaboration"}
+        )
+        fields["protected_guide_contract_waivers"] = [waiver]
+    before = (stage / ".github/instruction-profile.yml").read_bytes()
+    selected = (stage if decision == "TAKE" else target) / path
+    selected_text = selected.read_text(encoding="utf-8")
+    migrated = run_migration_schema_control(stage, target, marker_document=marker)
+    if kind == "direct" and decision == "TAKE" and not candidate_failure:
+        assert migrated.returncode == 1, migrated.stdout + migrated.stderr
+        assert "Instruction waiver conflicts with selected TAKE content" in migrated.stderr
+        assert (stage / ".github/instruction-profile.yml").read_bytes() == before
+        assert (target / path).read_text(encoding="utf-8").startswith("<!-- Local bytes.")
+        return
+    assert migrated.returncode == 0, migrated.stdout + migrated.stderr
+    generated = yaml.safe_load((stage / ".github/instruction-profile.yml").read_text())
+    expected_count = int(decision == "SKIP" or candidate_failure)
+    assert len(generated["exceptions"]) == expected_count
+    if expected_count:
+        assert (
+            generated["exceptions"][0]["content_sha256"]
+            == hashlib.sha256(selected_text.encode()).hexdigest()
+        )
+    # Reconcile the one fixture guide, then exercise the real installed CLI.
+    write(stage, path, selected_text)
+    validated = run(stage)
+    assert validated.returncode == 0, validated.stdout + validated.stderr
+    assert not (stage / ".template-sync").exists()
+    if decision == "TAKE" and candidate_failure:
+        mutant = run_migration_schema_control(
+            stage, target, marker_document=marker, restore_content_preference=True
+        )
+        assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+        rejected = run(stage)
+        assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+        assert "Exception does not match" in rejected.stderr
+        restored = run_migration_schema_control(stage, target, marker_document=marker)
+        assert restored.returncode == 0, restored.stdout + restored.stderr
+    write(
+        stage, path, selected_text.replace("Agents MUST preserve authority.", "Unreviewed removal.")
+    )
+    unrelated = run(stage)
+    assert unrelated.returncode == 1, unrelated.stdout + unrelated.stderr
+
+
+@pytest.mark.parametrize("selection", ["SKIP", "TAKE"])
+def test_migration_selection_preserves_absence_and_old_bindings(
+    tmp_path: Path, selection: str
+) -> None:
+    """SKIP absence stays absent; TAKE never renews prior standalone declarations."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    profile(stage)
+    document = profile(target)
+    marker = {
+        "template_sync": {
+            "included_modules": document["modules"],
+            "protected_file_decisions": [
+                {
+                    "path": "AGENTS.md",
+                    "decision": selection,
+                    "adoption_mode": "minimal-preservation",
+                    "authorization_basis": "Fixture owner",
+                    "authorized_scope": "AGENTS.md",
+                    "reason": "Reviewed selection",
+                }
+            ],
+        }
+    }
+    if selection == "SKIP":
+        (target / "AGENTS.md").unlink()
+        document["exceptions"] = [
+            {
+                "path": "AGENTS.md",
+                "anchor": "file:absent",
+                "content_sha256": "absent",
+                "reason": "Reviewed absence",
+                "authorization_basis": "Owner",
+            }
+        ]
+    else:
+        write(target, "AGENTS.md", "Agents MUST preserve authority.\n")
+        write(
+            stage, "AGENTS.md", "<!-- Selected replacement. -->\nAgents MUST preserve authority.\n"
+        )
+        document["exceptions"] = [
+            {
+                "path": "AGENTS.md",
+                "anchor": "Agents MUST validate.",
+                "content_sha256": hashlib.sha256((target / "AGENTS.md").read_bytes()).hexdigest(),
+                "reason": "Old local binding",
+                "authorization_basis": "Owner",
+            }
+        ]
+    write(target, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    migrated = run_migration_schema_control(stage, target, marker_document=marker)
+    assert migrated.returncode == 0, migrated.stdout + migrated.stderr
+    generated = yaml.safe_load((stage / ".github/instruction-profile.yml").read_text())
+    assert generated["exceptions"] == document["exceptions"]
+    if selection == "SKIP":
+        (stage / "AGENTS.md").unlink()
+    validated = run(stage)
+    assert validated.returncode == (0 if selection == "SKIP" else 1), (
+        validated.stdout + validated.stderr
+    )
+
+
+@pytest.mark.parametrize(
+    "overrides,expected",
+    [
+        ([("docs/", "SKIP"), ("docs/review.md", "TAKE")], "TAKE"),
+        ([("docs/review.md", "TAKE"), ("docs/", "SKIP")], "TAKE"),
+        ([("docs/review.md", "TAKE"), ("docs/review.md", "SKIP")], "SKIP"),
+        ([("docs/review.md", "SKIP"), ("docs/review.md", "TAKE")], "TAKE"),
+        ([("docs/", "SKIP"), ("other/", "TAKE")], "SKIP"),
+        ([("docs/review.md/", "SKIP"), ("docs/review.md", "TAKE")], "TAKE"),
+    ],
+)
+def test_migration_override_selection_matches_reconciliation(
+    tmp_path: Path, overrides: list[tuple[str, str]], expected: str
+) -> None:
+    """Fixed precedence expectations independently match the real caller selector."""
+    sys.path.insert(0, str(ROOT / ".template-sync/scripts"))
+    from instruction_profile_migration import selected_content_root
+    from materialize_downstream_adoption import most_specific_local_override
+    from template_sync_materialization_helpers import parse_marker_decision_data
+
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    for root in (stage, target):
+        write(root, "docs/review.md", "Reviewed guide\n")
+        write(root, "AGENTS.md", "Reviewed agent\n")
+    marker = {
+        "included_modules": ["baseline"],
+        "local_overrides": [
+            {"path": path, "default_decision": decision, "reason": "Reviewed selection"}
+            for path, decision in overrides
+        ],
+    }
+    parsed = parse_marker_decision_data({"template_sync": marker})
+    actual = most_specific_local_override("docs/review.md", parsed.local_overrides)
+    assert actual is not None and actual.default_decision == expected
+    chosen, taken = selected_content_root("docs/review.md", stage, target, marker)
+    assert chosen == (stage if expected == "TAKE" else target)
+    assert taken == (expected == "TAKE")
+    protected_marker = {
+        **marker,
+        "local_overrides": [
+            {
+                "path": "AGENTS.md",
+                "default_decision": "TAKE",
+                "reason": "Cannot override protected SKIP",
+            }
+        ],
+        "protected_file_decisions": [{"path": "AGENTS.md", "decision": "SKIP"}],
+    }
+    assert selected_content_root("AGENTS.md", stage, target, protected_marker) == (target, False)
+
+
+def test_materialized_protected_waivers_follow_take_skip_and_noop(tmp_path: Path) -> None:
+    """Actual reconciliation and installed validation agree on selected guide bytes."""
+    sys.path.insert(0, str(ROOT / ".template-sync/scripts"))
+    from template_sync_materialization_helpers import (
+        is_protected_instruction_path,
+        iter_safe_repository_files,
+        parse_manifest_mappings,
+        selected_relation_for_path,
+    )
+
+    modules = {
+        "baseline",
+        "agent-instructions",
+        "instruction-enforcement",
+        "agent-codex",
+        "github-actions",
+    }
+    manifest = yaml.safe_load((ROOT / ".template-sync/manifest.yml").read_text(encoding="utf-8"))
+    _, mappings = parse_manifest_mappings(manifest)
+    protected = []
+    for relative in iter_safe_repository_files(ROOT)[0]:
+        relation = selected_relation_for_path(relative, mappings)
+        if (
+            relation is not None
+            and relation.is_retained_by(modules)
+            and is_protected_instruction_path(relative)
+        ):
+            protected.append(relative)
+    for case in ("empty-take", "existing-take", "existing-skip"):
+        target = tmp_path / case
+        previous_text = ""
+        if case != "empty-take":
+            previous_text = "<!-- Local annotation. -->\n" + (
+                tmp_path / "empty-take/AGENTS.md"
+            ).read_text(encoding="utf-8")
+            write(target, "AGENTS.md", previous_text)
+        decisions = [
+            {
+                "path": path,
+                "decision": "SKIP" if case == "existing-skip" and path == "AGENTS.md" else "TAKE",
+                "adoption_mode": "minimal-preservation",
+                "authorization_basis": "Fixture owner selects this exact path",
+                "authorized_scope": path,
+                "reason": "Native content binding control",
+            }
+            for path in protected
+        ]
+        marker = {
+            "template_sync": {
+                "source_repo": "https://github.com/franklesniak/copilot-repo-template",
+                "included_modules": sorted(modules),
+                "protected_file_decisions": decisions,
+                "protected_guide_contract_waivers": [
+                    {
+                        "path": "AGENTS.md",
+                        "contract_key": "agents-azure-devops-pr-review-protocol",
+                        "target_module": "azure-devops-collaboration",
+                        "reason": "Retain reviewed protocol",
+                        "authorization_basis": "Fixture owner retains this protocol",
+                    }
+                ],
+            }
+        }
+        write(target, "decisions.yml", yaml.safe_dump(marker))
+        command = [
+            sys.executable,
+            str(ROOT / ".template-sync/scripts/materialize_downstream_adoption.py"),
+            "--template-root",
+            str(ROOT),
+            "--target-root",
+            str(target),
+            "--decisions-file",
+            "decisions.yml",
+        ]
+        adopted = subprocess.run(command, check=False, capture_output=True, text=True, timeout=60)
+        assert adopted.returncode == 0, adopted.stdout + adopted.stderr
+        validated = run(target)
+        assert validated.returncode == 0, validated.stdout + validated.stderr
+        assert not (target / ".template-sync").exists()
+        selected_text = (target / "AGENTS.md").read_text(encoding="utf-8")
+        assert selected_text == (
+            previous_text
+            if case == "existing-skip"
+            else (tmp_path / "empty-take/AGENTS.md").read_text(encoding="utf-8")
+        )
+        generated_path = target / ".github/instruction-profile.yml"
+        before = generated_path.read_bytes()
+        generated = yaml.safe_load(before)
+        assert (
+            generated["exceptions"][0]["content_sha256"]
+            == hashlib.sha256(selected_text.encode()).hexdigest()
+        )
+        repeated = subprocess.run(command, check=False, capture_output=True, text=True, timeout=60)
+        assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+        assert generated_path.read_bytes() == before
+
+
+@pytest.mark.parametrize("case", ["absent-skip", "missing-candidate", "external-candidate"])
+def test_selected_content_keeps_absence_and_path_guards(tmp_path: Path, case: str) -> None:
+    """Neither candidate absence nor an escaping symlink invents selected authority."""
+    sys.path.insert(0, str(ROOT / ".template-sync/scripts"))
+    from instruction_profile_migration import selected_content_root
+    from template_sync_materialization_helpers import TemplateSyncMaterializationError
+
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    stage.mkdir()
+    target.mkdir()
+    marker = {
+        "included_modules": ["baseline"],
+        "protected_file_decisions": [
+            {"path": "AGENTS.md", "decision": "SKIP" if case == "absent-skip" else "TAKE"}
+        ],
+    }
+    if case == "absent-skip":
+        write(stage, "AGENTS.md", "Candidate must not fill absent SKIP\n")
+        assert selected_content_root("AGENTS.md", stage, target, marker) == (target, False)
+    elif case == "missing-candidate":
+        write(target, "AGENTS.md", "Retained local bytes\n")
+        assert selected_content_root("AGENTS.md", stage, target, marker) == (target, False)
+    else:
+        outside = tmp_path / "outside.md"
+        outside.write_text("External bytes\n", encoding="utf-8")
+        (stage / "AGENTS.md").symlink_to(outside)
+        with pytest.raises(TemplateSyncMaterializationError, match="escapes the repository root"):
+            selected_content_root("AGENTS.md", stage, target, marker)

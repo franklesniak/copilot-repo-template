@@ -18,6 +18,8 @@ if str(_SHARED_SCRIPTS) not in sys.path:
 import instruction_contract_core as core
 from template_sync_materialization_helpers import (
     TemplateSyncMaterializationError,
+    is_protected_instruction_path,
+    parse_marker_decision_data,
 )
 
 PROFILE_PATH = ".github/instruction-profile.yml"
@@ -142,6 +144,46 @@ def declaration_applies(
     return True
 
 
+def selected_content_root(
+    relative_path: str,
+    staging_root: Path,
+    target_root: Path,
+    marker: dict[str, Any],
+) -> tuple[Path, bool]:
+    """Select reconciled bytes without granting authority to unresolved decisions."""
+    decision = None
+    if is_protected_instruction_path(relative_path):
+        decision = next(
+            (
+                item["decision"]
+                for item in marker.get("protected_file_decisions", [])
+                if item["path"] == relative_path
+            ),
+            None,
+        )
+    else:
+        local_overrides = parse_marker_decision_data(
+            {
+                "template_sync": {
+                    "included_modules": marker["included_modules"],
+                    "local_overrides": marker.get("local_overrides", []),
+                }
+            }
+        ).local_overrides
+        matches = [item for item in local_overrides if item.matches(relative_path)]
+        if matches:
+            # Match reconciliation: longest path, exact file, then last-listed tie.
+            decision = max(
+                reversed(matches), key=lambda item: (len(item.path), not item.is_directory)
+            ).default_decision
+    if decision == "SKIP":
+        return target_root, False
+    if decision == "TAKE" and core.support.resolve_repo_path(staging_root, relative_path).is_file():
+        return staging_root, True
+    local_path = core.support.resolve_repo_path(target_root, relative_path)
+    return (target_root if local_path.exists() else staging_root), False
+
+
 def render_instruction_profile(
     *,
     staging_root: Path,
@@ -225,8 +267,42 @@ def render_instruction_profile(
                 source_decisions = {**local.get("source_decisions", {}), **source_decisions}
                 retired_exceptions.extend(source_decisions.get("retired_exceptions", []))
                 exceptions.extend(local.get("exceptions", []))
+        reports = {}
+        for content_root in (target_root, staging_root):
+            reports[content_root] = core.validate_contracts(
+                mode="migration",
+                repo_root=content_root,
+                contracts=contracts,
+                included_modules=modules,
+                protected_guide_section_obligations=section_obligations,
+                protected_guide_reference_obligations=reference_obligations,
+            )
         for waiver in marker.get("instruction_contract_waivers", []):
-            content_root = target_root if (target_root / waiver["path"]).exists() else staging_root
+            content_root, taken = selected_content_root(
+                waiver["path"], staging_root, target_root, marker
+            )
+            if taken and declaration_applies(
+                waiver, contracts, section_obligations, modules, reference_obligations
+            ):
+                report = reports[content_root]
+                failures = {(item.path, item.anchor) for item in report.missing_anchors}
+                failures.update((item.path, "file:absent") for item in report.missing_files)
+                failures.update(
+                    (item.path, f"stale:{item.contract_key}:{item.anchor_type}:{item.anchor}")
+                    for item in report.stale_protected_guide_sections
+                )
+                failures.update(
+                    (
+                        item.path,
+                        f"reference:{item.contract_key}:{item.reference_kind}:{item.target}",
+                    )
+                    for item in report.stale_protected_guide_references
+                )
+                if (waiver["path"], waiver["anchor"]) not in failures:
+                    raise TemplateSyncMaterializationError(
+                        f"Instruction waiver conflicts with selected TAKE content: "
+                        f"{waiver['path']}: {waiver['anchor']}. Review or remove the waiver."
+                    )
             exceptions.append(
                 {**waiver, "content_sha256": core.file_digest(content_root, waiver["path"])}
             )
@@ -243,17 +319,12 @@ def render_instruction_profile(
                         "authorization_basis": decision["authorization_basis"],
                     }
                 )
-        for content_root in (target_root, staging_root):
-            report = core.validate_contracts(
-                mode="migration",
-                repo_root=content_root,
-                contracts=contracts,
-                included_modules=modules,
-                protected_guide_section_obligations=section_obligations,
-                protected_guide_reference_obligations=reference_obligations,
-            )
+        for content_root, report in reports.items():
             for stale in report.stale_protected_guide_sections:
-                if content_root == staging_root and (target_root / stale.path).exists():
+                if (
+                    content_root
+                    != selected_content_root(stale.path, staging_root, target_root, marker)[0]
+                ):
                     continue
                 for waiver in marker.get("protected_guide_contract_waivers", []):
                     if waiver["path"] != stale.path or waiver["contract_key"] != stale.contract_key:
@@ -270,7 +341,10 @@ def render_instruction_profile(
                         }
                     )
             for reference in report.stale_protected_guide_references:
-                if content_root == staging_root and (target_root / reference.path).exists():
+                if (
+                    content_root
+                    != selected_content_root(reference.path, staging_root, target_root, marker)[0]
+                ):
                     continue
                 waiver = core.find_protected_guide_waiver(
                     guide_waivers,

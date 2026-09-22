@@ -14,10 +14,12 @@ import threading
 import time
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, replace
+from html import unescape
+from html.entities import html5
 from itertools import pairwise
 from pathlib import Path
 from typing import Any, NoReturn, cast
-from urllib.parse import unquote, urlsplit
+from urllib.parse import SplitResult, unquote, urlsplit
 
 import instruction_contract_support as support
 from instruction_contract_support import (
@@ -2288,9 +2290,53 @@ def normalize_markdown_target(target: str) -> str:
     return target
 
 
+MARKDOWN_DESTINATION_ESCAPE_RE = re.compile(
+    r"\\["
+    + re.escape(ASCII_PUNCTUATION)
+    + r"]|&(?:#[xX][0-9a-fA-F]{1,6}|#[0-9]{1,7}|[A-Za-z][A-Za-z0-9]{1,31});"
+)
+
+
+def decode_markdown_destination(target: str) -> str:
+    """Decode one layer of destination escapes without changing source identities.
+
+    Match bounded, complete references before URL parsing. Substitutions are not
+    rescanned: escaped ampersands, entity-produced backslashes and nested entities
+    remain literal. Percent decoding belongs to the later URI/path layer.
+    """
+
+    def decode_match(match: re.Match[str]) -> str:
+        """Decode one punctuation escape or strict character reference."""
+        token = match.group(0)
+        if token.startswith("\\"):
+            return token[1:]
+        if not token.startswith("&#"):
+            return html5.get(token[1:], token)
+        numeric = token[2:-1]
+        codepoint = int(numeric[1:], 16) if numeric[:1] in {"x", "X"} else int(numeric)
+        if codepoint == 0 or codepoint > 0x10FFFF or 0xD800 <= codepoint <= 0xDFFF:
+            return "\ufffd"
+        # HTML numeric replacements include C1 mappings. Python's HTML decoder
+        # also drops some valid scalars; destinations must preserve those scalars.
+        return unescape(token) or chr(codepoint)
+
+    return MARKDOWN_DESTINATION_ESCAPE_RE.sub(decode_match, target)
+
+
+def split_markdown_destination(target: str) -> SplitResult:
+    """Parse one decoded destination without losing literal whitespace characters."""
+    target = decode_markdown_destination(target)
+    # urlsplit removes these literal characters. Protect them until path decoding
+    # so a distinct destination cannot collapse to an ordinary repository path.
+    protected_target = re.sub(
+        r"[\x00-\x20\x7f]", lambda match: f"%{ord(match.group(0)):02X}", target
+    )
+    return urlsplit(protected_target)
+
+
 def resolve_relative_markdown_target(source_path: str, target: str) -> str | None:
     """Resolve a Markdown link target to a repository-relative path when local."""
-    parsed = urlsplit(target)
+    parsed = split_markdown_destination(target)
     if parsed.scheme or parsed.netloc or target.startswith("#"):
         return None
     if parsed.path == "":

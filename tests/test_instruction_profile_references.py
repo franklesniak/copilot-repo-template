@@ -618,3 +618,407 @@ def test_escaped_bang_near_limit_runs_remain_bounded() -> None:
         [sys.executable, "-c", program], capture_output=True, text=True, check=False, timeout=15
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+DESTINATION_DECODING_CASES = (
+    (r"docs/a\.md", "docs/a.md"),
+    (r"docs\/a\(b\).md", "docs/a(b).md"),
+    (r"docs/a\\.md", r"docs/a\.md"),
+    (r"docs/a\z.md", r"docs/a\z.md"),
+    (r"\ ", r"\ "),
+    ("docs/a&period;md", "docs/a.md"),
+    ("docs/a&#46;md", "docs/a.md"),
+    ("docs/a&#x2E;md", "docs/a.md"),
+    ("docs/a&#X2e;md", "docs/a.md"),
+    ("docs/a&NotEqualTilde;md", "docs/a\u2242\u0338md"),
+    (r"docs/a\&period;md", "docs/a&period;md"),
+    ("docs/a&bsol;.md", r"docs/a\.md"),
+    ("docs/a&#92;.md", r"docs/a\.md"),
+    ("docs/a&amp;period;md", "docs/a&period;md"),
+    ("docs/a%2Emd", "docs/a%2Emd"),
+    ("docs/a%5C.md", "docs/a%5C.md"),
+    ("docs/a%26period;md", "docs/a%26period;md"),
+    ("&period", "&period"),
+    ("&notAnEntity;", "&notAnEntity;"),
+    ("&#00000046;", "&#00000046;"),
+    ("&#x000002e;", "&#x000002e;"),
+    ("&#46", "&#46"),
+    ("&#x;", "&#x;"),
+    ("&#0;", "\ufffd"),
+    ("&#xD800;", "\ufffd"),
+    ("&#x110000;", "\ufffd"),
+    ("&#128;", "\u20ac"),
+    ("&#11;", "\x0b"),
+    ("&#xFFFF;", "\uffff"),
+)
+
+
+@pytest.mark.parametrize(("target", "expected"), DESTINATION_DECODING_CASES)
+def test_destination_decoding_has_fixed_single_pass_oracles(target: str, expected: str) -> None:
+    """Strict references and literal negatives follow fixed CommonMark expectations."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.decode_markdown_destination(target) == expected
+
+
+@pytest.mark.parametrize("punctuation", "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~")
+def test_destination_decoding_accepts_each_ascii_punctuation(punctuation: str) -> None:
+    """Every punctuation escape loses exactly its leading backslash."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.decode_markdown_destination("\\" + punctuation) == punctuation
+
+
+@pytest.mark.parametrize(
+    ("target", "expected"),
+    [
+        (r"docs/a\.md?view=1#part", "docs/a.md"),
+        ("docs/a&period;md&#63;view=1&#35;part", "docs/a.md"),
+        ("docs/a%2Emd", "docs/a.md"),
+        ("docs/a%252Emd", "docs/a%2Emd"),
+        ("docs/a%23part.md", "docs/a#part.md"),
+        ("docs/a%5C.md", r"docs/a\.md"),
+        (r"docs/a\&period;md", "docs/a&period;md"),
+        ("https&colon;//example.invalid/docs/a.md", None),
+        (r"https\://example.invalid/docs/a.md", None),
+        ("&sol;&sol;example.invalid/docs/a.md", None),
+        ("&#35;part", None),
+        ("&period;&period;/outside.md", None),
+        ("%2e%2e/outside.md", None),
+        ("&sol;absolute.md", None),
+    ],
+)
+def test_destination_resolution_preserves_uri_boundaries(target: str, expected: str | None) -> None:
+    """Markdown decoding precedes URI parsing and once-only path percent decoding."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.resolve_relative_markdown_target("AGENTS.md", target) == expected
+
+
+ENCODED_AZURE_DESTINATIONS = (
+    r"docs/azure-devops-support\.md",
+    "docs/azure-devops-support&period;md",
+    "docs/azure-devops-support&#46;md",
+    "docs/azure-devops-support&#x2e;md",
+)
+
+
+@pytest.mark.parametrize("target", ENCODED_AZURE_DESTINATIONS)
+@pytest.mark.parametrize("form", ["inline", "angle", "multiline", "definition"])
+def test_deployed_encoded_destination_fails_with_original_identity(
+    tmp_path: Path, target: str, form: str
+) -> None:
+    """Equivalent live links fail natively while extraction retains source spelling."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    clean = run(tmp_path)
+    assert clean.returncode == 0, clean.stdout + clean.stderr
+    if form == "definition":
+        body = f"[Guide]: {target}\n\n[Guide]"
+    elif form == "angle":
+        body = f"[Guide](<{target}>)"
+    elif form == "multiline":
+        body = f'[Guide](\n {target}\n "Azure guide")'
+    else:
+        body = f"[Guide]({target})"
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.markdown_link_targets_from_text("Heading\n\n" + body) == ((3, target),)
+    append_reference(tmp_path, "\n" + body)
+    result = run(tmp_path)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Stale protected-guide references" in result.stdout
+    assert target in result.stdout
+    assert not (tmp_path / ".template-sync").exists()
+    assert not (tmp_path / "pyproject.toml").exists()
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        r"docs/azure-devops-support.\md",
+        r"docs/azure-devops-support\\.md",
+        r"docs/azure-devops-support\&period;md",
+        "docs/azure-devops-support&bsol;.md",
+        "docs/azure-devops-support&amp;period;md",
+        "docs/azure-devops-support%5C.md",
+        "docs/azure-devops-support%26period;md",
+        "docs/azure-devops-support&periodmd",
+    ],
+)
+def test_deployed_destination_literal_negatives_remain_distinct(
+    tmp_path: Path, target: str
+) -> None:
+    """A second decode or a non-punctuation escape must not invent an excluded path."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    append_reference(tmp_path, f"[Guide]({target})")
+    result = run(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("control", ["fence", "retained-target", "excluded-source"])
+def test_encoded_destination_preserves_module_and_fence_scope(tmp_path: Path, control: str) -> None:
+    """Decoding changes destination comparison, not obligation applicability."""
+    document, _ = reference_fixture(tmp_path, "markdown-relative-link")
+    body = r"[Guide](docs/azure-devops-support\.md)"
+    if control == "fence":
+        body = "\n```markdown\n" + body + "\n```\n"
+    append_reference(tmp_path, body)
+    if control == "retained-target":
+        document["modules"].append("azure-devops-platform")
+        write(tmp_path, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    elif control == "excluded-source":
+        path = tmp_path / ".github/instruction-contracts.yml"
+        catalog = yaml.safe_load(path.read_text(encoding="utf-8"))
+        catalog["instruction_contracts"][0]["requires_modules"] = ["agent-codex"]
+        write(tmp_path, ".github/instruction-contracts.yml", yaml.safe_dump(catalog))
+        (tmp_path / "AGENTS.md").unlink()
+    result = run(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("target", ENCODED_AZURE_DESTINATIONS[:2])
+def test_encoded_destination_exception_keeps_raw_identity_and_exact_content(
+    tmp_path: Path, target: str
+) -> None:
+    """Semantic path equivalence does not widen an exact source-target exception."""
+    document, _ = reference_fixture(tmp_path, "markdown-relative-link")
+    append_reference(tmp_path, f"[Guide]({target})")
+    require_reference_failure(tmp_path)
+    prefix = "reference:azure-reference:markdown-relative-link:"
+    declaration = {
+        "path": "AGENTS.md",
+        "anchor": prefix + "docs/azure-devops-support.md",
+        "content_sha256": hashlib.sha256((tmp_path / "AGENTS.md").read_bytes()).hexdigest(),
+        "reason": "Exact destination fixture",
+        "authorization_basis": "Explicit fixture authorization",
+    }
+    document["exceptions"] = [declaration]
+    write(tmp_path, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    decoded_identity = run(tmp_path)
+    assert decoded_identity.returncode == 1, decoded_identity.stdout + decoded_identity.stderr
+    assert "Exception does not match" in decoded_identity.stderr
+    declaration["anchor"] = prefix + target
+    write(tmp_path, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    accepted = run(tmp_path)
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+    assert prefix + target in accepted.stdout
+    append_reference(tmp_path, "changed content")
+    changed = run(tmp_path)
+    assert changed.returncode == 1, changed.stdout + changed.stderr
+    assert "Exception does not match" in changed.stderr
+
+
+@pytest.mark.parametrize("target", ENCODED_AZURE_DESTINATIONS[:2])
+def test_destination_decoder_removal_is_caught_by_native_oracle(
+    tmp_path: Path, target: str
+) -> None:
+    """Removing one comparison guard restores the independently observed false pass."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    append_reference(tmp_path, f"[Guide]({target})")
+    require_reference_failure(tmp_path)
+    path = tmp_path / ".github/scripts/instruction_contract_core.py"
+    source = path.read_text(encoding="utf-8")
+    guard = "    target = decode_markdown_destination(target)\n"
+    assert source.count(guard) == 1
+    path.write_text(source.replace(guard, ""), encoding="utf-8", newline="\n")
+    mutant = run(tmp_path)
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    with pytest.raises(AssertionError):
+        require_reference_failure(tmp_path)
+
+
+@pytest.mark.parametrize("target", ENCODED_AZURE_DESTINATIONS[:2])
+def test_encoded_destination_marker_and_reporter_share_raw_findings(
+    tmp_path: Path, target: str
+) -> None:
+    """Marker validation and cleanup reporting compare decoded paths consistently."""
+    sys.path.insert(0, str(ROOT / ".template-sync/scripts"))
+    import report_excluded_module_references as reporter
+    import validate_downstream_adoption as adoption
+    from template_sync_materialization_helpers import ManifestMapping
+
+    mappings = (
+        ManifestMapping("AGENTS.md", frozenset({"agent-instructions"}), frozenset()),
+        ManifestMapping(
+            "docs/azure-devops-support.md", frozenset({"azure-devops-platform"}), frozenset()
+        ),
+    )
+    write(tmp_path, "AGENTS.md", f"Heading\n\n[Guide]({target})\n")
+    failures = adoption.validate_retained_markdown_links(
+        tmp_path, ("AGENTS.md",), mappings, {"agent-instructions"}, ()
+    )
+    assert len(failures) == 1
+    assert (failures[0].line_number, failures[0].target, failures[0].target_path) == (
+        3,
+        target,
+        "docs/azure-devops-support.md",
+    )
+    state = reporter.ReportState(
+        source="explicit fixture",
+        manifest_modules=frozenset({"agent-instructions", "azure-devops-platform"}),
+        mappings=mappings,
+        included_modules=frozenset({"agent-instructions"}),
+        excluded_modules=frozenset({"azure-devops-platform"}),
+        local_overrides=(),
+        deferred_candidates=(),
+        protected_decisions=(),
+        present_files=frozenset({"AGENTS.md"}),
+        safe_files=("AGENTS.md",),
+    )
+    findings = reporter.reference_link_findings(tmp_path, state)
+    assert len(findings) == 1
+    assert (findings[0].rule_id, findings[0].category, findings[0].line_number) == (
+        "markdown-link.excluded-target",
+        "protected_file_authorization_needed",
+        3,
+    )
+    assert target in findings[0].detail
+    upstream = "https://github.com/franklesniak/copilot-repo-template/blob/HEAD/" + target
+    assert reporter.resolve_upstream_blob_target(upstream) == "docs/azure-devops-support.md"
+    # contact_links are raw URL fields, so they must not decode Markdown syntax.
+    assert reporter.resolve_github_blob_target(upstream) == target
+
+
+@pytest.mark.parametrize("target", ENCODED_AZURE_DESTINATIONS[:2])
+def test_encoded_reference_migration_preserves_raw_exception_and_noop(
+    tmp_path: Path, target: str
+) -> None:
+    """Existing marker waivers translate without normalizing exception identities."""
+    stage, previous = tmp_path / "stage", tmp_path / "previous"
+    for root in (stage, previous):
+        document, _ = reference_fixture(root, "markdown-relative-link")
+        append_reference(root, f"[Guide]({target})")
+    marker = {
+        "template_sync": {
+            "included_modules": document["modules"],
+            "protected_guide_contract_waivers": [
+                {
+                    "path": "AGENTS.md",
+                    "contract_key": "azure-reference",
+                    "target_path": "docs/azure-devops-support.md",
+                    "reason": "Exact encoded link",
+                    "authorization_basis": "Fixture authorization",
+                }
+            ],
+        }
+    }
+    migrated = run_migration_schema_control(stage, previous, marker_document=marker)
+    assert migrated.returncode == 0, migrated.stdout + migrated.stderr
+    path = stage / ".github/instruction-profile.yml"
+    before = path.read_bytes()
+    generated = yaml.safe_load(before)
+    assert generated["exceptions"][0]["anchor"] == (
+        "reference:azure-reference:markdown-relative-link:" + target
+    )
+    accepted = run(stage)
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+    write(previous, ".github/instruction-profile.yml", before.decode())
+    repeated = run_migration_schema_control(stage, previous, marker_document=marker)
+    assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+    assert path.read_bytes() == before
+
+
+def test_destination_decoder_near_limit_input_remains_bounded() -> None:
+    """Bounded entities and escapes finish without recursively expanding replacements."""
+    program = "\n".join(
+        [
+            "import sys",
+            f"sys.path.insert(0, {str(ROOT / '.github/scripts')!r})",
+            "import instruction_contract_core as c",
+            r"cases=[('a\\.'*300000,'a.'*300000),('&amp;period;'*80000,'&period;'*80000),",
+            "       ('&notAnEntity;'*80000,'&notAnEntity;'*80000),",
+            "       ('&#12345678;'*90000,'&#12345678;'*90000)]",
+            "for text,expected in cases:",
+            "    assert len(text.encode()) <= c.MAXIMUM_INPUT_BYTES",
+            "    actual=c.decode_markdown_destination(text)",
+            "    assert actual == expected",
+            "    assert len(actual) <= len(text)",
+        ]
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", program], capture_output=True, text=True, check=False, timeout=15
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+WHITESPACE_DESTINATIONS = (
+    ("docs/azure&Tab;-devops-support.md", "docs/azure\t-devops-support.md"),
+    ("docs/azure&#10;-devops-support.md", "docs/azure\n-devops-support.md"),
+    ("docs/azure&#13;-devops-support.md", "docs/azure\r-devops-support.md"),
+    ("&Tab;docs/azure-devops-support.md", "\tdocs/azure-devops-support.md"),
+    ("&#32;docs/azure-devops-support.md", " docs/azure-devops-support.md"),
+    ("&#11;docs/azure-devops-support.md", "\x0bdocs/azure-devops-support.md"),
+    ("&#13;docs/azure-devops-support.md", "\rdocs/azure-devops-support.md"),
+    ("docs/azure&#127;-devops-support.md", "docs/azure\x7f-devops-support.md"),
+    ("docs/azure%09-devops-support.md", "docs/azure\t-devops-support.md"),
+)
+
+
+@pytest.mark.parametrize(("target", "expected_path"), WHITESPACE_DESTINATIONS)
+def test_destination_whitespace_survives_url_component_parsing(
+    target: str, expected_path: str
+) -> None:
+    """URL parser cleanup must not silently change a Markdown destination's path."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    sys.path.insert(0, str(ROOT / ".template-sync/scripts"))
+    import instruction_contract_core as core
+    import report_excluded_module_references as reporter
+
+    assert core.resolve_relative_markdown_target("AGENTS.md", target) == expected_path
+    assert reporter.resolve_relative_markdown_target("AGENTS.md", target) == expected_path
+    upstream = "https://github.com/franklesniak/copilot-repo-template/blob/HEAD/" + target
+    assert reporter.resolve_upstream_blob_target(upstream) == expected_path
+
+
+@pytest.mark.parametrize(("target", "expected_path"), WHITESPACE_DESTINATIONS)
+def test_deployed_whitespace_destination_has_exact_target_identity(
+    tmp_path: Path, target: str, expected_path: str
+) -> None:
+    """Distinct whitespace paths preserve matching and catalog-schema boundaries."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    append_reference(tmp_path, f"[Guide]({target})")
+    distinct = run(tmp_path)
+    assert distinct.returncode == 0, distinct.stdout + distinct.stderr
+    path = tmp_path / ".github/instruction-contracts.yml"
+    catalog = yaml.safe_load(path.read_text(encoding="utf-8"))
+    catalog["protected_guide_reference_obligations"][0]["target_path"] = expected_path
+    write(tmp_path, ".github/instruction-contracts.yml", yaml.safe_dump(catalog))
+    if expected_path == "docs/azure\n-devops-support.md":
+        # The existing target_path schema rejects LF before reference matching.
+        invalid = run(tmp_path)
+        assert invalid.returncode == 1, invalid.stdout + invalid.stderr
+        assert "Schema validation failed" in invalid.stderr
+    else:
+        require_reference_failure(tmp_path)
+    assert not (tmp_path / ".template-sync").exists()
+
+
+@pytest.mark.parametrize(
+    "target", ["docs/azure&Tab;-devops-support.md", "&#32;docs/azure-devops-support.md"]
+)
+def test_destination_whitespace_guard_removal_breaks_native_positive(
+    tmp_path: Path, target: str
+) -> None:
+    """Removing percent protection makes a distinct path trigger the wrong obligation."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    append_reference(tmp_path, f"[Guide]({target})")
+    correct = run(tmp_path)
+    assert correct.returncode == 0, correct.stdout + correct.stderr
+    path = tmp_path / ".github/scripts/instruction_contract_core.py"
+    source = path.read_text(encoding="utf-8")
+    guard = "return urlsplit(protected_target)"
+    assert source.count(guard) == 1
+    path.write_text(
+        source.replace(guard, "return urlsplit(target)"), encoding="utf-8", newline="\n"
+    )
+    mutant = run(tmp_path)
+    assert mutant.returncode == 1, mutant.stdout + mutant.stderr
+    assert "Stale protected-guide references" in mutant.stdout
+    with pytest.raises(AssertionError):
+        assert (
+            mutant.returncode == 0
+        ), "A distinct whitespace path must not trigger this obligation."
