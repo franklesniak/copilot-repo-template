@@ -20,6 +20,11 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+_SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / ".github" / "scripts"
+if str(_SHARED_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SHARED_SCRIPTS))
+
+import instruction_contract_core  # noqa: E402
 from template_sync_materialization_helpers import (  # noqa: E402
     DEFAULT_MANIFEST_PATH,
     DEFAULT_MANIFEST_SCHEMA_PATH,
@@ -42,7 +47,6 @@ from template_sync_materialization_helpers import (  # noqa: E402
     is_protected_instruction_path,
     is_protected_prose_path,
     iter_safe_repository_files,
-    lines_outside_markdown_fences,
     live_inline_marker_lines,
     load_json_mapping,
     load_validated_marker_decision_data,
@@ -59,10 +63,6 @@ from template_sync_materialization_helpers import (  # noqa: E402
 )
 
 REFERENCE_LINK_FILE_SUFFIXES = frozenset({".md", ".mdc", ".yml", ".yaml"})
-MARKDOWN_INLINE_LINK_RE = re.compile(
-    r"(?<!!)\[[^\]\n]+\]\((?P<target><[^>\n]+>|[^)\s\n]+)(?:\s+[^)\n]*)?\)"
-)
-MARKDOWN_REFERENCE_DEFINITION_RE = re.compile(r"^ {0,3}\[[^\]\n]+\]:\s+(?P<target><[^>\n]+>|\S+)")
 PRE_COMMIT_HOOK_FIELD_RE = re.compile(r"^\s+(?:-\s+)?(?P<field>id|alias):\s*(?P<value>[^#\n]+)")
 WORKFLOW_RUN_RE = re.compile(r"^\s*run:\s*(?P<command>.+?)\s*$")
 # Capture the contact-link ``url:`` value as a quoted scalar (kept intact, so a
@@ -774,27 +774,14 @@ def extract_workflow_run_commands(lines: tuple[str, ...]) -> tuple[str, ...]:
 
 def link_targets_outside_fences(path: Path) -> tuple[tuple[int, str], ...]:
     """Return Markdown-style link targets outside fenced code blocks."""
-    targets: list[tuple[int, str]] = []
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
         return ()
 
-    # Reference links can live in Markdown files or YAML issue forms; select the
-    # fence context by file type so deeply-indented YAML block-scalar fences are
-    # recognized too (see ``fence_context_for_path``).
-    for line_number, line in lines_outside_markdown_fences(
-        text,
-        fence_context=fence_context_for_path(path.name),
-    ):
-        for match in MARKDOWN_INLINE_LINK_RE.finditer(line):
-            targets.append((line_number, normalize_markdown_target(match.group("target"))))
-        reference_match = MARKDOWN_REFERENCE_DEFINITION_RE.match(line)
-        if reference_match is not None:
-            targets.append(
-                (line_number, normalize_markdown_target(reference_match.group("target")))
-            )
-    return tuple(targets)
+    return instruction_contract_core.markdown_link_targets_from_text(
+        text, fence_context=fence_context_for_path(path.name)
+    )
 
 
 def normalize_markdown_target(target: str) -> str:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+import json
 import os
 import re
 import shlex
@@ -496,7 +497,7 @@ def test_claude_markdown_bootstrap(tmp_path: Path, mode: str) -> None:
     fixture = (
         "#!/bin/bash\nset -euo pipefail\n"
         f'command() {{ if [ "${{2:-}}" = {shlex.quote(missing)} ]; then return 1; fi; builtin command "$@"; }}\n'
-        "node() { return 0; }\n"
+        "node() { printf 'v22.0.0\\n'; }\n"
         'npm() { printf \'%s\\n\' "$PWD" "$*" > npm-invocation.txt; '
         f"return {23 if mode == 'install-failure' else 0}; }}\n" + block
     )
@@ -516,6 +517,175 @@ def test_claude_markdown_bootstrap(tmp_path: Path, mode: str) -> None:
         assert result.returncode == (23 if mode == "install-failure" else 0), result.stderr
         lines = log.read_text(encoding="utf-8").splitlines()
         assert lines == [bash_path(bash, repo), "ci --ignore-scripts"]
+
+
+def run_claude_node_fixture(
+    tmp_path: Path,
+    *,
+    version: str,
+    node_exit: int = 0,
+    npm_exit: int = 0,
+    hook_source: str | None = None,
+) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
+    """Run the actual Markdown block with observable, deterministic runtime wrappers."""
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("Bash is required to exercise the actual Claude hook")
+    assert bash is not None
+    if hook_source is None:
+        text = HOOK_PATH.read_text(encoding="utf-8")
+        hook_source = text.split("# template-sync: begin markdown-only\n", 1)[1].split(
+            "# template-sync: end markdown-only", 1
+        )[0]
+    repo = tmp_path / "repo"
+    hook = repo / ".claude/hooks/session-start.sh"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    fixture = (
+        "#!/bin/bash\nset -euo pipefail\n"
+        "node() { printf '%s\\n' \"$*\" >> node-invocation.txt; "
+        f"printf '%s\\n' {shlex.quote(version)}; return {node_exit}; }}\n"
+        'npm() { printf \'%s\\n\' "$PWD" "$*" > npm-invocation.txt; '
+        f"return {npm_exit}; }}\n" + hook_source
+    )
+    make_executable(hook, fixture)
+    result = subprocess.run(
+        [bash, bash_path(bash, hook)], cwd=tmp_path, capture_output=True, text=True, check=False
+    )
+    return result, repo / "npm-invocation.txt", tmp_path / "node-invocation.txt"
+
+
+def assert_claude_node_rejected(result: subprocess.CompletedProcess[str], npm_log: Path) -> None:
+    """Reject unsupported or unknown runtimes before any package installation."""
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert (
+        result.stderr.strip() == "Markdown validation requires Node.js 22 or newer and npm on PATH."
+    )
+    assert not npm_log.exists()
+
+
+@pytest.mark.parametrize("version", ["v22.0.0", "v24.0.0"])
+def test_claude_node_floor_accepts_supported_stable_runtime(tmp_path: Path, version: str) -> None:
+    """Both the minimum and a newer stable runtime reach the unchanged locked install."""
+    result, npm_log, node_log = run_claude_node_fixture(tmp_path, version=version)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert node_log.read_text(encoding="utf-8").splitlines() == ["--version"]
+    bash = shutil.which("bash")
+    assert bash is not None
+    assert npm_log.read_text(encoding="utf-8").splitlines() == [
+        bash_path(bash, tmp_path / "repo"),
+        "ci --ignore-scripts",
+    ]
+    first_install_log = npm_log.read_bytes()
+    # The same supported environment remains valid on repeated setup.
+    repeated, repeated_npm, _ = run_claude_node_fixture(tmp_path, version=version)
+    assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+    assert repeated_npm.read_bytes() == first_install_log
+
+
+@pytest.mark.parametrize(
+    ("version", "node_exit"),
+    [
+        ("v18.20.8", 0),
+        ("v20.19.0", 0),
+        ("v21.7.3", 0),
+        ("", 0),
+        ("not-a-version", 0),
+        ("v22", 0),
+        ("v22.0.0-rc.1", 0),
+        ("v022.0.0", 0),
+        ("v22.00.0", 0),
+        ("v22.0.00", 0),
+        ("v22.0.0\nextra", 0),
+        ("v" + "9" * 80 + ".0.0", 0),
+        ("v24.0.0", 7),
+    ],
+)
+def test_claude_node_floor_rejects_unsupported_or_unknown_runtime(
+    tmp_path: Path, version: str, node_exit: int
+) -> None:
+    """Fixed native negative cases do not depend on the implementation's predicate."""
+    result, npm_log, node_log = run_claude_node_fixture(
+        tmp_path, version=version, node_exit=node_exit
+    )
+    assert_claude_node_rejected(result, npm_log)
+    assert node_log.read_text(encoding="utf-8").splitlines() == ["--version"]
+
+
+def test_claude_node_floor_preserves_native_npm_failure(tmp_path: Path) -> None:
+    """A supported Node runtime does not hide a subsequent installation failure."""
+    result, npm_log, _ = run_claude_node_fixture(tmp_path, version="v22.0.0", npm_exit=23)
+    assert result.returncode == 23, result.stdout + result.stderr
+    assert npm_log.exists()
+    assert result.stderr == ""
+
+
+def test_claude_node_floor_oracle_detects_presence_only_mutant(tmp_path: Path) -> None:
+    """Restoring the actual old gate defeats the unchanged Node20 rejection oracle."""
+    text = HOOK_PATH.read_text(encoding="utf-8")
+    block = text.split("# template-sync: begin markdown-only\n", 1)[1].split(
+        "# template-sync: end markdown-only", 1
+    )[0]
+    version_clauses = (
+        ' \\\n  || ! node_version="$(node --version 2>/dev/null)"'
+        ' \\\n  || [[ ! "$node_version" =~ ^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$ ]]'
+        ' \\\n  || ! [ "${BASH_REMATCH[1]}" -ge 22 ] 2>/dev/null'
+    )
+    assert block.count(version_clauses) == 1
+    original, original_npm, _ = run_claude_node_fixture(
+        tmp_path / "original", version="v20.19.0", hook_source=block
+    )
+    assert_claude_node_rejected(original, original_npm)
+    mutant, mutant_npm, mutant_node = run_claude_node_fixture(
+        tmp_path / "mutant",
+        version="v20.19.0",
+        hook_source=block.replace(version_clauses, ""),
+    )
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    assert mutant_npm.exists()
+    assert not mutant_node.exists()
+    with pytest.raises(AssertionError):
+        assert_claude_node_rejected(mutant, mutant_npm)
+
+
+def test_claude_node_floor_matches_both_package_manifests() -> None:
+    """A deliberate package support-floor change must update the bootstrap boundary."""
+    package = json.loads((REPO_ROOT / "package.json").read_text(encoding="utf-8"))
+    lock = json.loads((REPO_ROOT / "package-lock.json").read_text(encoding="utf-8"))
+    assert package["engines"]["node"] == ">=22.0.0"
+    assert lock["packages"][""]["engines"]["node"] == ">=22.0.0"
+
+
+def test_claude_local_session_exits_before_runtime_checks(tmp_path: Path) -> None:
+    """The full hook leaves local workstation runtime management unchanged."""
+    source = "export CLAUDE_CODE_REMOTE=false\n" + HOOK_PATH.read_text(encoding="utf-8")
+    result, npm_log, node_log = run_claude_node_fixture(
+        tmp_path, version="v18.20.8", hook_source=source
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not npm_log.exists()
+    assert not node_log.exists()
+
+
+@pytest.mark.parametrize("markdown", [True, False])
+def test_claude_node_gate_follows_materialized_markdown_selection(
+    tmp_path: Path, markdown: bool
+) -> None:
+    """Normal selection removes the version check along with all Markdown setup."""
+    from tests.test_materialize_downstream_adoption import materialize_module_fixture
+
+    modules = (
+        ("agent-instructions", "agent-claude", "markdown")
+        if markdown
+        else ("agent-instructions", "agent-claude")
+    )
+    target = materialize_module_fixture(tmp_path, modules, authorize_protected_files=True)
+    hook = (target / ".claude/hooks/session-start.sh").read_text(encoding="utf-8")
+    for token in ("node --version", "node_version", "BASH_REMATCH", "npm ci --ignore-scripts"):
+        assert (token in hook) is markdown
+    assert "ensure_pre_commit" not in hook
+    if markdown:
+        assert hook.index("node --version") < hook.index("npm ci --ignore-scripts")
+        assert hook.index("npm ci --ignore-scripts") < hook.index("# Idempotency:")
 
 
 def bash_path(bash: str, path: Path) -> str:

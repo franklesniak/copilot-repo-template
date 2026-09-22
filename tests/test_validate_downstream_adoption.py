@@ -566,13 +566,23 @@ def test_azure_guide_or_group_inline_block_is_valid_when_one_azure_module_retain
     assert "azure-devops-guide-reference-only" not in result.stdout
 
 
+@pytest.mark.parametrize(
+    "link",
+    [
+        "[Azure guide](docs/azure-devops-support.md)",
+        '[Azure guide](docs/azure-devops-support.md\n "Azure guide")',
+        '[Azure guide](docs/azure-devops-support.md "Azure\nguide")',
+        '[Azure guide]:\n docs/azure-devops-support.md\n "Azure guide"',
+    ],
+)
 def test_github_only_downstream_adoption_reports_unguarded_azure_guide_link(
     tmp_path: Path,
+    link: str,
 ) -> None:
     """GitHub-only adopters cannot keep unguarded relative links to the Azure guide."""
     _write_common_downstream_repo(
         tmp_path,
-        readme_text="# Downstream\n\nSee [Azure guide](docs/azure-devops-support.md).\n",
+        readme_text="# Downstream\n\n" + link + "\n",
     )
 
     result = _run_validator(tmp_path, "--require-marker")
@@ -755,8 +765,17 @@ def test_protected_guide_reference_obligation_flags_excluded_modules_when_target
     assert "AGENTS.md:7: agents-azure-devops-retained-target-reference" in result.stdout
 
 
+@pytest.mark.parametrize(
+    ("reference_kind", "body"),
+    [
+        ("prose-reference", "Use docs/azure-devops-support.md when the guide is retained."),
+        ("markdown-relative-link", '[Azure](docs/azure-devops-support.md\n "Azure guide")'),
+    ],
+)
 def test_protected_guide_reference_waiver_passes_and_is_reported(
     tmp_path: Path,
+    reference_kind: str,
+    body: str,
 ) -> None:
     """A matching protected-guide waiver turns the reference finding into a visible waiver."""
     contracts = _contracts()
@@ -764,7 +783,7 @@ def test_protected_guide_reference_waiver_passes_and_is_reported(
         {
             "key": "agents-azure-devops-support-guide-path",
             "path": "AGENTS.md",
-            "reference_kind": "prose-reference",
+            "reference_kind": reference_kind,
             "target_path": "docs/azure-devops-support.md",
             "target_modules": [
                 "azure-devops-platform",
@@ -774,6 +793,8 @@ def test_protected_guide_reference_waiver_passes_and_is_reported(
             "tokens": ["docs/azure-devops-support.md"],
         }
     ]
+    if reference_kind == "markdown-relative-link":
+        contracts["protected_guide_reference_obligations"][0].pop("tokens")
     _write_common_downstream_repo(
         tmp_path,
         marker=_marker(
@@ -785,20 +806,30 @@ def test_protected_guide_reference_waiver_passes_and_is_reported(
                     "reason": "GitHub-only fixture keeps the protected guide reference.",
                     "authorization_basis": "Owner authorized this protected-guide waiver.",
                 }
-            ]
+            ],
+            local_overrides=(
+                [
+                    {
+                        "path": "AGENTS.md",
+                        "reason": "Protected instruction references use the exact waiver below.",
+                        "default_decision": "SKIP",
+                    }
+                ]
+                if reference_kind == "markdown-relative-link"
+                else None
+            ),
         ),
         agents_text=(
             "# Agent Instructions\n\n"
             "## Protected Instruction Files\n\n"
-            "## GitHub Plugin Usage\n\n"
-            "Use docs/azure-devops-support.md when the guide is retained.\n"
+            "## GitHub Plugin Usage\n\n" + body + "\n"
         ),
     )
     _write_yaml(tmp_path, ".template-sync/instruction-contracts.yml", contracts)
 
     result = _run_validator(tmp_path, "--require-marker")
 
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
     assert "Downstream adoption validation passed with waivers." in result.stdout
     assert "Protected guide contract waiver: AGENTS.md: agents-azure-devops-support-guide-path" in (
         result.stdout

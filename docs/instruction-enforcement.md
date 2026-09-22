@@ -31,6 +31,8 @@ Run `python .github/scripts/validate_instruction_profile.py` after installing it
 
 Do not activate both modes. Standalone performs only an existence check for a conflicting marker; it never reads or requires that marker, and removing all support files does not prevent validation. The marker adapter rejects a standalone profile, and a standalone profile cannot select sync support. When changing modes, use reviewed materialization and resolve protected-file decisions before applying the resulting candidate.
 
+Relative-link checks recognize multiline labels and titles, including reference definitions whose destination starts on the next line. They preserve the opening line number and do not combine fragments across fenced examples or blank lines. This is bounded target extraction for static checks, not a complete Markdown renderer.
+
 ## Local exceptions and migration
 
 Each standalone exception names one exact `path`, one exact reported `anchor`, the file's `content_sha256`, a `reason`, and an `authorization_basis` declaration. The content digest is SHA-256 over strict UTF-8 text with CRLF/CR normalized to LF. `file:absent` uses the literal digest `absent`. Paths cannot name directories or traversal. An unrelated content edit invalidates the declaration; one exception cannot excuse another file or anchor. Active Claude imports and tracked local memory remain failures and cannot be excepted.

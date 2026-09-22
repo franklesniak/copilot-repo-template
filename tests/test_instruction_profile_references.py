@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 import hashlib
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
 from tests._pytest_compat import pytest
-from tests.test_instruction_profile import ROOT, profile, run, write
+from tests.test_instruction_profile import (
+    ROOT,
+    profile,
+    run,
+    run_migration_schema_control,
+    write,
+)
 from tests.test_instruction_profile import (
     test_standalone_runs_after_sync_owned_files_are_physically_deleted as deploy_without_sync,
 )
@@ -202,3 +210,270 @@ def test_azure_reference_fails_after_all_sync_files_are_deleted(tmp_path: Path) 
     assert "copilot-instructions-azure-devops-support-guide-path" in result.stdout
     assert "Stale protected-guide references" in result.stdout
     assert not (tmp_path / ".template-sync").exists()
+
+
+MULTILINE_LINK_CASES = (
+    '[Guide](docs/azure-devops-support.md\n "Azure guide")',
+    '[Guide](docs/azure-devops-support.md "Azure\nguide")',
+    "[Azure\nguide](docs/azure-devops-support.md)",
+    '[Guide](\n docs/azure-devops-support.md\n "Azure guide"\n)',
+    '[Guide](<docs/azure-devops-support.md>\n "Azure guide")',
+    '[Guide]:\n docs/azure-devops-support.md\n "Azure guide"\n\n[Guide]',
+    "[Azure\nguide]: docs/azure-devops-support.md\n\n[Azure guide]",
+    "[Guide](docs/azure-devops-support.md\n 'Azure\nguide')",
+    "[Guide](docs/azure-devops-support.md\n (Azure\nguide))",
+    '[Guide](docs/azure-devops-support.md\n "Azure \\"guide\\" title")',
+    '> [Guide](docs/azure-devops-support.md\n> "Azure guide")',
+    '- [Guide](docs/azure-devops-support.md\n  "Azure guide")',
+)
+NON_LINK_CASES = (
+    '```markdown\n[Guide](docs/azure-devops-support.md\n "Azure guide")\n```',
+    '[Guide](docs/azure-devops-support.md\n```text\nexample\n```\n "Azure guide")',
+    '[Guide](docs/azure-devops-support.md "Azure\n\nguide")',
+    "[Azure\n\nguide](docs/azure-devops-support.md)",
+    "[Guide](<docs/azure-devops-\nsupport.md>)",
+    '[Guide](docs/azure-devops-support.md "unfinished)',
+    "[Guide](docs/azure-devops-support.md \"wrong title')",
+    '[Guide](docs/azure-devops-support.md\n# Boundary\n "Azure guide")',
+    '- [Guide](docs/azure-devops-support.md\n- "Azure guide")',
+    '[Guide](docs/azure-devops-support.md\n> "Azure guide")',
+)
+
+
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
+@pytest.mark.parametrize("body", MULTILINE_LINK_CASES)
+def test_multiline_links_preserve_exact_target_and_physical_line(body: str, ending: str) -> None:
+    """Fixed expected tuples independently cover the supported multiline grammar."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    text = "```text\nexample\n```\n\n" + body + "\n"
+    assert core.markdown_link_targets_from_text(text.replace("\n", ending)) == (
+        (5, "docs/azure-devops-support.md"),
+    )
+
+
+@pytest.mark.parametrize("body", NON_LINK_CASES)
+def test_multiline_link_boundaries_do_not_synthesize_targets(body: str) -> None:
+    """Removed fences, blank lines and distinct blocks cannot create a live link."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.markdown_link_targets_from_text(body) == ()
+
+
+@pytest.mark.parametrize("body", MULTILINE_LINK_CASES[:7])
+def test_deployed_multiline_reference_fails_without_sync_and_exact_exception_passes(
+    tmp_path: Path, body: str
+) -> None:
+    """Use the deployed CLI, then preserve existing exact declaration semantics."""
+    document, _ = reference_fixture(tmp_path, "markdown-relative-link")
+    append_reference(tmp_path, "\n" + body)
+    require_reference_failure(tmp_path)
+    assert not (tmp_path / ".template-sync").exists()
+    declaration = {
+        "path": "AGENTS.md",
+        "anchor": "reference:azure-reference:markdown-relative-link:docs/azure-devops-support.md",
+        "content_sha256": hashlib.sha256((tmp_path / "AGENTS.md").read_bytes()).hexdigest(),
+        "reason": "Exact multiline fixture declaration",
+        "authorization_basis": "Fixture owner approval",
+    }
+    document["exceptions"] = [declaration]
+    write(tmp_path, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    accepted = run(tmp_path)
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+    assert "Applied local exception" in accepted.stdout
+    append_reference(tmp_path, "changed content")
+    rejected = run(tmp_path)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert "Exception does not match" in rejected.stderr
+
+
+def test_multiline_link_parser_mutations_have_independent_native_oracles(tmp_path: Path) -> None:
+    """Restore the previous parser and remove each boundary separately."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    body = MULTILINE_LINK_CASES[0]
+    append_reference(tmp_path, body)
+    require_reference_failure(tmp_path)
+    path = tmp_path / ".github/scripts/instruction_contract_core.py"
+    source = path.read_text(encoding="utf-8")
+    start = source.index("def markdown_link_targets_from_text(")
+    stop = source.index("\ndef normalize_markdown_target(", start)
+    old = r"""def markdown_link_targets_from_text(text, *, fence_context=MARKDOWN_FENCE_CONTEXT):
+    targets = []
+    inline = re.compile(r'(?<!!)\[[^\]\n]+\]\((?P<target><[^>\n]+>|[^)\s\n]+)(?:\s+[^)\n]*)?\)')
+    reference = re.compile(r'^ {0,3}\[[^\]\n]+\]:\s+(?P<target><[^>\n]+>|\S+)')
+    for number, line in lines_outside_markdown_fences(text, fence_context=fence_context):
+        for match in inline.finditer(line):
+            targets.append((number, normalize_markdown_target(match.group("target"))))
+        match = reference.match(line)
+        if match is not None:
+            targets.append((number, normalize_markdown_target(match.group("target"))))
+    return tuple(targets)
+
+"""
+    path.write_text(source[:start] + old + source[stop:], encoding="utf-8", newline="\n")
+    missed = run(tmp_path)
+    assert missed.returncode == 0, missed.stdout + missed.stderr
+    for guard, replacement, fragment in (
+        ("line_number != previous_line + 1", "False", NON_LINK_CASES[1]),
+        (r'if not content.strip(" \t"):', "if False:", NON_LINK_CASES[2]),
+    ):
+        boundary_start = source.index("def markdown_link_spans(")
+        boundary_stop = source.index("def markdown_delimiter_pairs(", boundary_start)
+        boundaries = source[boundary_start:boundary_stop]
+        assert boundaries.count(guard) == 1
+        write(
+            tmp_path,
+            "AGENTS.md",
+            "Agents MUST validate.\nAgents MUST preserve authority.\n" + fragment,
+        )
+        path.write_text(source, encoding="utf-8", newline="\n")
+        positive = run(tmp_path)
+        assert positive.returncode == 0, positive.stdout + positive.stderr
+        mutant = (
+            source[:boundary_start]
+            + boundaries.replace(guard, replacement)
+            + source[boundary_stop:]
+        )
+        path.write_text(mutant, encoding="utf-8", newline="\n")
+        synthetic = run(tmp_path)
+        assert synthetic.returncode == 1, synthetic.stdout + synthetic.stderr
+        assert "Stale protected-guide references" in synthetic.stdout
+
+
+def test_multiline_reference_migration_keeps_exact_identity_and_noop(tmp_path: Path) -> None:
+    """Newly recognized links use the existing exact marker waiver translation."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    for root in (stage, target):
+        document, _ = reference_fixture(root, "markdown-relative-link")
+        append_reference(root, MULTILINE_LINK_CASES[0])
+    waiver = {
+        "path": "AGENTS.md",
+        "contract_key": "azure-reference",
+        "target_path": "docs/azure-devops-support.md",
+        "reason": "Exact retained link",
+        "authorization_basis": "Fixture owner approval",
+    }
+    marker = {
+        "template_sync": {
+            "included_modules": document["modules"],
+            "protected_guide_contract_waivers": [waiver],
+        }
+    }
+    migrated = run_migration_schema_control(stage, target, marker_document=marker)
+    assert migrated.returncode == 0, migrated.stdout + migrated.stderr
+    accepted = run(stage)
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+    profile_path = stage / ".github/instruction-profile.yml"
+    before = profile_path.read_bytes()
+    generated = yaml.safe_load(before)
+    assert generated["exceptions"][0]["anchor"] == (
+        "reference:azure-reference:markdown-relative-link:docs/azure-devops-support.md"
+    )
+    write(target, ".github/instruction-profile.yml", before.decode())
+    repeated = run_migration_schema_control(stage, target, marker_document=marker)
+    assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+    assert profile_path.read_bytes() == before
+
+
+def test_multiline_link_parser_near_limit_malformed_input_finishes(tmp_path: Path) -> None:
+    """Repeated unmatched delimiters must not rescan a near-limit suffix quadratically."""
+    for name, text in {
+        "labels": "[" * 1_040_000,
+        "destinations": "[x](<" * 170_000 + "tail",
+        "parentheses": "[x](" * 200_000 + "tail",
+        "titles": '[x](target "' + "x" * 1_039_000,
+        "reference-prefixes": "prefix " + "[x]:a " * 170_000,
+    }.items():
+        candidate = tmp_path / (name + ".md")
+        candidate.write_text(text, encoding="utf-8")
+        program = (
+            "import sys; from pathlib import Path; "
+            f"sys.path.insert(0, {str(ROOT / '.github/scripts')!r}); "
+            "import instruction_contract_core as c; "
+            "assert c.markdown_link_targets_from_text(Path(sys.argv[1]).read_text()) == ()"
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", program, str(candidate)],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=15,
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("[x]([x]([x](target)))", ((1, "[x]([x](target))"),)),
+        ('[x](first "[nested](not-a-target)") [y](second)', ((1, "first"), (1, "second"))),
+        ('[x]: first "[nested](not-a-target)"\n\n[y](second)', ((1, "first"), (3, "second"))),
+        (
+            '[x](<docs/azure%2Ddevops-support.md#section>\n "title")',
+            ((1, "docs/azure%2Ddevops-support.md#section"),),
+        ),
+        (r"[x](docs/a\(b\).md)", ((1, r"docs/a\(b\).md"),)),
+        ("[x](a(b(c)).md) [y](other.md)", ((1, "a(b(c)).md"), (1, "other.md"))),
+    ],
+)
+def test_multiline_link_destinations_have_independent_fixed_oracles(
+    text: str, expected: tuple[tuple[int, str], ...]
+) -> None:
+    """Accepted destinations and titles cannot be reinterpreted as nested links."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.markdown_link_targets_from_text(text) == expected
+
+
+def test_multiline_link_output_is_bounded_and_guard_mutant_is_caught(tmp_path: Path) -> None:
+    """Near-limit accepted nesting emits one target; removing consumption breaks it."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    script_root = tmp_path / ".github/scripts"
+    program = (
+        "import sys; "
+        f"sys.path.insert(0, {str(script_root)!r}); "
+        "import instruction_contract_core as c; "
+        "n=int(sys.argv[1]); text='[x]('*n+'target'+')'*n; "
+        "targets=c.markdown_link_targets_from_text(text); "
+        "assert targets == ((1, text[4:-1]),), (len(targets), len(text)); "
+        "assert sum(len(target) for _,target in targets) <= len(text)"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", program, "200000"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    path = script_root / "instruction_contract_core.py"
+    source = path.read_text(encoding="utf-8")
+    guard = "        if opening < consumed_until:\n            continue\n"
+    assert source.count(guard) == 1
+    path.write_text(source.replace(guard, ""), encoding="utf-8", newline="\n")
+    mutant = subprocess.run(
+        [sys.executable, "-c", program, "20"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+    assert mutant.returncode == 1, mutant.stdout + mutant.stderr
+    assert "AssertionError: (20, 106)" in mutant.stderr
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    ["", " ", "  ", "   ", "prefix ", " " * 100000],
+    ids=["zero", "one", "two", "three", "inline", "long"],
+)
+def test_multiline_reference_definition_prefix_remains_bounded(prefix: str) -> None:
+    """Only zero through three literal spaces qualify as definition indentation."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    expected = ((1, "target.md"),) if len(prefix) <= 3 else ()
+    assert core.markdown_link_targets_from_text(prefix + "[x]:\n target.md") == expected

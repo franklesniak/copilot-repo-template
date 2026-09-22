@@ -10,6 +10,8 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
+from tests._pytest_compat import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "report_excluded_module_references.py"
 MARKER_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-marker.schema.json"
@@ -799,9 +801,41 @@ def test_dependabot_github_actions_directory_surface_is_detected(tmp_path: Path)
     )
 
 
-def test_yaml_embedded_fenced_links_are_skipped(tmp_path: Path) -> None:
+def test_reporter_multiline_markdown_links_have_original_lines(tmp_path: Path) -> None:
+    """The native reporter recognizes multiline links and keeps fence gaps inert."""
+    _write_common_repo(tmp_path, include_reference_content=False)
+    _write_text(
+        tmp_path,
+        "README.md",
+        '# Downstream\n\n[JSON](templates/json/example.json\n "JSON\nexample")\n'
+        '\n[Schema]:\n schemas/example-config.schema.json\n "Schema"\n'
+        '\n[Not live](templates/json/example.json\n```text\nexample\n```\n "title")\n',
+    )
+    result = _run_report(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    links = [
+        line
+        for line in _finding_lines(result.stdout)
+        if line.startswith("markdown-link.") and " | README.md:" in line
+    ]
+    assert len(links) == 2, links
+    assert any("README.md:3 |" in line and "templates/json/example.json" in line for line in links)
+    assert any(
+        "README.md:7 |" in line and "schemas/example-config.schema.json" in line for line in links
+    )
+
+
+@pytest.mark.parametrize("multiline", [False, True], ids=["single-line", "multiline"])
+def test_yaml_embedded_fenced_links_are_skipped(tmp_path: Path, multiline: bool) -> None:
     """Links inside fenced code blocks in YAML-embedded Markdown are ignored."""
     _write_common_repo(tmp_path)
+    schema_link = "[schema](../../schemas/example-config.schema.json)."
+    json_link = "[json](../../templates/json/example.json)."
+    if multiline:
+        schema_link = (
+            '[schema](../../schemas/example-config.schema.json\n          "Schema title").'
+        )
+        json_link = '[json](../../templates/json/example.json\n          "JSON title").'
     _write_text(
         tmp_path,
         ".github/ISSUE_TEMPLATE/fenced_example.yml",
@@ -812,9 +846,9 @@ def test_yaml_embedded_fenced_links_are_skipped(tmp_path: Path) -> None:
             "  - type: markdown\n"
             "    attributes:\n"
             "      value: |\n"
-            "        Outside fence: [schema](../../schemas/example-config.schema.json).\n"
+            f"        Outside fence: {schema_link}\n"
             "        ```\n"
-            "        Inside fence: [json](../../templates/json/example.json).\n"
+            f"        Inside fence: {json_link}\n"
             "        ```\n"
         ),
     )
@@ -833,7 +867,10 @@ def test_yaml_embedded_fenced_links_are_skipped(tmp_path: Path) -> None:
     )
     # The link inside the fenced block must be ignored even though the file is
     # YAML and the fence is indented inside a ``value: |`` block.
-    assert not any(".github/ISSUE_TEMPLATE/fenced_example.yml:9" in line for line in findings)
+    hidden_line = 10 if multiline else 9
+    assert not any(
+        f".github/ISSUE_TEMPLATE/fenced_example.yml:{hidden_line}" in line for line in findings
+    )
 
 
 def test_markdown_blockquote_fenced_links_use_standard_fence_context(tmp_path: Path) -> None:

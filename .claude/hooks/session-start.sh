@@ -149,7 +149,11 @@ ensure_pre_commit
 # template-sync: begin markdown-only
 # Hosted Claude environments provide Node.js and npm; install the root lockfile
 # dependencies before any Terraform idempotency exit can skip this setup.
-if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+if ! command -v node >/dev/null 2>&1 \
+  || ! command -v npm >/dev/null 2>&1 \
+  || ! node_version="$(node --version 2>/dev/null)" \
+  || [[ ! "$node_version" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] \
+  || ! [ "${BASH_REMATCH[1]}" -ge 22 ] 2>/dev/null; then
   echo "Markdown validation requires Node.js 22 or newer and npm on PATH." >&2
   exit 1
 fi

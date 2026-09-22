@@ -12,7 +12,7 @@ import subprocess
 import sys
 import threading
 import time
-from bisect import bisect_left
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass, replace
 from itertools import pairwise
 from pathlib import Path
@@ -33,11 +33,6 @@ from instruction_contract_support import (
     parse_markdown_fence_open,
     read_repository_text,
 )
-
-MARKDOWN_INLINE_LINK_RE = re.compile(
-    r"(?<!!)\[[^\]\n]+\]\((?P<target><[^>\n]+>|[^)\s\n]+)(?:\s+[^)\n]*)?\)"
-)
-MARKDOWN_REFERENCE_DEFINITION_RE = re.compile(r"^ {0,3}\[[^\]\n]+\]:\s+(?P<target><[^>\n]+>|\S+)")
 
 MAXIMUM_INPUT_BYTES = 1024 * 1024
 
@@ -2060,21 +2055,217 @@ def section_failures(
     return list(dict.fromkeys(failures))
 
 
-def markdown_link_targets_from_text(text: str) -> tuple[tuple[int, str], ...]:
-    """Return Markdown link targets outside fenced code blocks."""
-    targets: list[tuple[int, str]] = []
-    for line_number, line in lines_outside_markdown_fences(
-        text,
-        fence_context=MARKDOWN_FENCE_CONTEXT,
-    ):
-        for match in MARKDOWN_INLINE_LINK_RE.finditer(line):
-            targets.append((line_number, normalize_markdown_target(match.group("target"))))
-        reference_match = MARKDOWN_REFERENCE_DEFINITION_RE.match(line)
-        if reference_match is not None:
-            targets.append(
-                (line_number, normalize_markdown_target(reference_match.group("target")))
-            )
-    return tuple(targets)
+def markdown_link_spans(text: str, fence_context: str) -> list[list[tuple[int, str]]]:
+    """Partition live inline text without bridging fences, blank lines or blocks."""
+    spans: list[list[tuple[int, str]]] = []
+    current: list[tuple[int, str]] = []
+    previous_line = 0
+    quote_depth = 0
+    for line_number, line in lines_outside_markdown_fences(text, fence_context=fence_context):
+        depth, offset = consume_blockquote_prefix(
+            line, allow_arbitrary_indent=fence_context != MARKDOWN_FENCE_CONTEXT
+        )
+        content = line[offset:]
+        list_match = LIST_MARKER_RE.match(content)
+        heading = re.match(r"^ {0,3}#{1,6}(?:[ \t]|$)", content) is not None
+        separator = re.fullmatch(r" {0,3}(?:[-*_][ \t]*){3,}| {0,3}=+[ \t]*", content) is not None
+        # A plain unprefixed line can lazily continue a quote/list paragraph.
+        new_container = depth != quote_depth and depth != 0
+        if current and (
+            line_number != previous_line + 1 or new_container or list_match or heading or separator
+        ):
+            spans.append(current)
+            current = []
+        if not content.strip(" \t"):
+            if current:
+                spans.append(current)
+                current = []
+            quote_depth = 0
+        else:
+            if list_match:
+                content = list_match.group("rest")
+            current.append((line_number, content))
+            if heading or separator:
+                spans.append(current)
+                current = []
+            quote_depth = depth or quote_depth
+        previous_line = line_number
+    if current:
+        spans.append(current)
+    return spans
+
+
+def markdown_delimiter_pairs(text: str) -> tuple[list[tuple[int, int]], dict[int, int]]:
+    """Index bracket candidates and balanced parentheses in one bounded pass."""
+    brackets: list[int] = []
+    parentheses: list[int] = []
+    labels: list[tuple[int, int]] = []
+    closes: dict[int, int] = {}
+    index = 0
+    while index < len(text):
+        character = text[index]
+        if character == "\\" and index + 1 < len(text) and text[index + 1] in ASCII_PUNCTUATION:
+            index += 2
+            continue
+        if character == "[":
+            brackets.append(index)
+        elif character == "]" and brackets:
+            labels.append((brackets.pop(), index))
+        elif character == "(":
+            parentheses.append(index)
+        elif character == ")" and parentheses:
+            closes[parentheses.pop()] = index
+        index += 1
+    return labels, closes
+
+
+ASCII_PUNCTUATION = r"!\"#$%&'()*+,-./:;<=>?@[\]^_`{|}~"
+
+
+def markdown_link_space(text: str, index: int) -> int:
+    """Skip component whitespace, returning -1 if it includes multiple newlines."""
+    endings = 0
+    while index < len(text) and text[index] in " \t\n":
+        endings += text[index] == "\n"
+        if endings > 1:
+            return -1
+        index += 1
+    return index
+
+
+def markdown_link_destination(
+    text: str, index: int, closes: dict[int, int], whitespace: list[int]
+) -> tuple[int, int, int] | None:
+    """Read a destination without rescanning nested or unmatched parentheses."""
+    if index >= len(text):
+        return None
+    start = index
+    if text[index] == "<":
+        index += 1
+        while index < len(text):
+            character = text[index]
+            if character == "\\" and index + 1 < len(text) and text[index + 1] in ASCII_PUNCTUATION:
+                index += 2
+                continue
+            if character == ">":
+                return index + 1, start + 1, index
+            if character in "<\n":
+                return None
+            index += 1
+        return None
+    next_space = whitespace[bisect_left(whitespace, start)]
+    while index < next_space:
+        character = text[index]
+        if character == "\\" and index + 1 < next_space and text[index + 1] in ASCII_PUNCTUATION:
+            index += 2
+            continue
+        if character == ")":
+            break
+        if character == "(":
+            closing = closes.get(index)
+            if closing is None or closing >= next_space:
+                return None
+            index = closing + 1
+        else:
+            index += 1
+    return (index, start, index) if index > start else None
+
+
+def markdown_link_title_end(text: str, index: int) -> int:
+    """Read one nonblank multiline quoted title, returning -1 when incomplete."""
+    if index >= len(text) or text[index] not in "\"'(":
+        return -1
+    opening = text[index]
+    closing = ")" if opening == "(" else opening
+    index += 1
+    while index < len(text):
+        character = text[index]
+        if character == "\\" and index + 1 < len(text) and text[index + 1] in ASCII_PUNCTUATION:
+            index += 2
+            continue
+        if character == closing:
+            return index + 1
+        if opening == "(" and character == "(":
+            return -1
+        index += 1
+    return -1
+
+
+def markdown_span_link_targets(span: list[tuple[int, str]]) -> list[tuple[int, str]]:
+    """Extract the supported link surface from one contiguous live text span."""
+    text = "\n".join(line for _, line in span)
+    starts: list[int] = []
+    offset = 0
+    for _, line in span:
+        starts.append(offset)
+        offset += len(line) + 1
+    labels, closes = markdown_delimiter_pairs(text)
+    whitespace = [
+        index
+        for index, character in enumerate(text)
+        if ord(character) <= 32 or ord(character) == 127
+    ]
+    whitespace.append(len(text))
+    targets: list[tuple[int, int, str]] = []
+    consumed_until = 0
+    for opening, closing in sorted(labels):
+        if opening < consumed_until:
+            continue
+        if opening > 0 and text[opening - 1] == "!":
+            continue
+        component = closing + 1
+        if component >= len(text) or text[component] not in "(:":
+            continue
+        is_reference = text[component] == ":"
+        line_index = bisect_right(starts, opening) - 1
+        if is_reference and (
+            opening - starts[line_index] > 3
+            or text[starts[line_index] : opening] not in ("", " ", "  ", "   ")
+        ):
+            continue
+        index = markdown_link_space(text, component + 1)
+        if index < 0:
+            continue
+        destination = markdown_link_destination(text, index, closes, whitespace)
+        if destination is None:
+            continue
+        end, target_start, target_end = destination
+        after_space = markdown_link_space(text, end)
+        if after_space < 0:
+            continue
+        if not is_reference and after_space < len(text) and text[after_space] == ")":
+            targets.append((opening, span[line_index][0], text[target_start:target_end]))
+            consumed_until = after_space + 1
+            continue
+        title_end = markdown_link_title_end(text, after_space) if after_space > end else -1
+        if is_reference:
+            line_end = text.find("\n", end)
+            line_end = len(text) if line_end < 0 else line_end
+            if title_end >= 0:
+                suffix_end = text.find("\n", title_end)
+                suffix_end = len(text) if suffix_end < 0 else suffix_end
+                if text[title_end:suffix_end].strip(" \t"):
+                    title_end = -1
+            if title_end >= 0 or not text[end:line_end].strip(" \t"):
+                targets.append((opening, span[line_index][0], text[target_start:target_end]))
+                consumed_until = title_end if title_end >= 0 else end
+        elif title_end >= 0:
+            final = markdown_link_space(text, title_end)
+            if final >= 0 and final < len(text) and text[final] == ")":
+                targets.append((opening, span[line_index][0], text[target_start:target_end]))
+                consumed_until = final + 1
+    return [(line, target) for _, line, target in sorted(targets)]
+
+
+def markdown_link_targets_from_text(
+    text: str, *, fence_context: str = MARKDOWN_FENCE_CONTEXT
+) -> tuple[tuple[int, str], ...]:
+    """Extract bounded multiline links, not a general CommonMark rendering tree."""
+    return tuple(
+        target
+        for span in markdown_link_spans(text, fence_context)
+        for target in markdown_span_link_targets(span)
+    )
 
 
 def normalize_markdown_target(target: str) -> str:
