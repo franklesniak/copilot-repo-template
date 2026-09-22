@@ -1,5 +1,91 @@
 version: 1
 workflows:
+  .github/workflows/copilot-setup-steps.yml:
+    events:
+      pull_request:
+        branches:
+          - '**'
+      workflow_dispatch: null
+    permissions:
+      contents: read
+    defaults: {}
+    env: {}
+    jobs:
+      copilot-setup-steps:
+        controls:
+          permissions:
+            contents: read
+          runs-on: ubuntu-latest
+          timeout-minutes: 30
+        steps:
+          - name: Checkout repository
+            with:
+              persist-credentials: false
+            action: actions/checkout
+          - name: Setup Python for retained validation tools
+            with:
+              python-version: '3.14'
+            action: actions/setup-python
+          - name: Install shared validator dependencies
+            run_sha256: a789f19adf728f77afad280f08cbc2c77514d08e85ec1dfa3d8bfb22a486e165
+          - name: Install Python project validation dependencies
+            run_sha256: ae73e34563cb1615cce077a49541fd1be889f4341ff9455ef585ae4387d81c6b
+          - name: Install pre-commit
+            shell: python
+            run_sha256: 4e102e51f301a44aeecd7ef2a0b785af5b55fac946de50ff0af97b2d0b98d9a7
+          - name: Setup Node.js for Markdown
+            with:
+              node-version: '24'
+              cache: npm
+              cache-dependency-path: package-lock.json
+            action: actions/setup-node
+          - name: Install root Markdown dependencies
+            run_sha256: e568f48e4564d1ada4a272f93f6e94a1db7c70212a765c414a6ec92d2a889e21
+          - name: Verify root Markdown dependencies
+            run_sha256: 3ae59cb6aa7db05fee83c7d81ea20bf3e888e3f4f334061790a0051f49fe60cd
+          - name: Setup Terraform
+            with:
+              terraform_version: 1.14.4
+            action: hashicorp/setup-terraform
+          - name: Setup TFLint
+            with:
+              tflint_version: v0.51.1
+            action: terraform-linters/setup-tflint
+          - name: Verify Terraform tools
+            shell: bash
+            run_sha256: 570cf10242a241a17e00930b3a987f6f6f86f1fb46f1289930f2f528f9222d23
+          - name: Install PowerShell validation modules
+            shell: pwsh
+            run_sha256: 1bc2e8aee62dfcc8333c1912c9ead1b047891c879dfc1ed0de93a36376831640
+  .github/workflows/instruction-contracts.yml:
+    events:
+      push: null
+      pull_request: null
+      workflow_dispatch: null
+    permissions:
+      contents: read
+    defaults: {}
+    env: {}
+    jobs:
+      validate:
+        controls:
+          permissions:
+            contents: read
+          runs-on: ubuntu-latest
+          timeout-minutes: 10
+        steps:
+          - name: Checkout repository
+            with:
+              persist-credentials: false
+            action: actions/checkout
+          - name: Set up Python
+            with:
+              python-version: '3.13'
+            action: actions/setup-python
+          - name: Install validator dependencies
+            run_sha256: a789f19adf728f77afad280f08cbc2c77514d08e85ec1dfa3d8bfb22a486e165
+          - name: Validate instruction contracts
+            run_sha256: ceaf6773a5dbe08c5cb2f00901ac622ff1d36dba6f3457f3172c5c3ef3676073
   .github/workflows/auto-fix-precommit.yml:
     concurrency:
       group: auto-fix-precommit-${{ github.ref }}
@@ -200,6 +286,8 @@ workflows:
             run_sha256: f674595cf0967989eabe8547438ef3ff0659a26ae53b769b739919fdb2ec0eba
           - name: Run validate-workflow-security
             run_sha256: d3acbdb315ae6060e5e91cf50ae449d92a948fc43c4692ffff31fa4d466d854b
+          - name: Run validate-instruction-profile
+            run_sha256: 0b61c9436dc5a3fb2951a83b61ed0dde27714c6735264718945017d8ff7a41af
   .github/workflows/markdownlint.yml:
     events:
       push:

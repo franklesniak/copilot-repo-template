@@ -1,6 +1,20 @@
 template_manifest:
   version: 3
   modules:
+    - name: instruction-enforcement
+      description: Explicit optional instruction-enforcement selection.
+    - name: agent-copilot
+      description: Explicit optional agent-copilot selection.
+    - name: agent-codex
+      description: Explicit optional agent-codex selection.
+    - name: agent-claude
+      description: Explicit optional agent-claude selection.
+    - name: agent-cursor
+      description: Explicit optional agent-cursor selection.
+    - name: agent-gemini
+      description: Explicit optional agent-gemini selection.
+    - name: agent-hermes
+      description: Explicit optional agent-hermes selection.
     - name: baseline
       description: >-
         Core repository scaffolding, community files, starter identity files,
@@ -121,6 +135,84 @@ template_manifest:
             - azure-devops-collaboration
       mixed_hosts: allowed
   path_mappings:
+    - pattern: '.claude/commands/review-loop.md'
+      requires_all:
+        - agent-instructions
+        - agent-claude
+        - github-actions
+      notes: >-
+        Local Claude GitHub review wrapper; remove with either the agent or host.
+    - pattern: '.github/workflows/copilot-setup-steps.yml'
+      requires_all:
+        - agent-instructions
+        - agent-copilot
+        - github-actions
+      notes: >-
+        Selected validation prerequisites only. Inline blocks follow baseline,
+        python, markdown, powershell, and terraform selections. Omit this file
+        for non-Copilot or Azure-only profiles.
+    - pattern: 'docs/copilot-setup.md'
+      requires_all:
+        - agent-instructions
+        - agent-copilot
+        - github-actions
+    - pattern: 'tests/test_copilot_setup.py'
+      requires_all:
+        - template-sync-support
+        - github-actions
+    - pattern: '.github/scripts/instruction_contract_core.py'
+      requires_any:
+        - instruction-enforcement
+        - template-sync-support
+    - pattern: '.github/scripts/instruction_contract_support.py'
+      requires_any:
+        - instruction-enforcement
+        - template-sync-support
+    - pattern: '.github/scripts/validate_instruction_profile.py'
+      requires_all:
+        - agent-instructions
+        - instruction-enforcement
+    - pattern: '.github/instruction-profile.yml'
+      requires_all:
+        - agent-instructions
+        - instruction-enforcement
+    - pattern: '.github/instruction-contracts.yml'
+      requires_all:
+        - agent-instructions
+        - instruction-enforcement
+    - pattern: 'schemas/instruction-profile.schema.json'
+      requires_any:
+        - instruction-enforcement
+        - template-sync-support
+    - pattern: 'schemas/instruction-contracts.schema.json'
+      requires_any:
+        - instruction-enforcement
+        - template-sync-support
+    - pattern: 'schemas/examples/instruction-contracts/**'
+      requires_all:
+        - agent-instructions
+        - instruction-enforcement
+    - pattern: 'schemas/examples/instruction-profile/**'
+      requires_all:
+        - agent-instructions
+        - instruction-enforcement
+    - pattern: 'docs/instruction-enforcement.md'
+      requires_all:
+        - agent-instructions
+        - instruction-enforcement
+    - pattern: 'tests/test_instruction_profile.py'
+      requires_all:
+        - template-sync-support
+    - pattern: '.github/workflows/instruction-contracts.yml'
+      requires_all:
+        - agent-instructions
+        - instruction-enforcement
+        - github-actions
+    - pattern: '.azuredevops/pipelines/instruction-contracts.yml'
+      requires_all:
+        - agent-instructions
+        - instruction-enforcement
+        - azure-pipelines
     - pattern: '.template-sync/marker.yml'
       requires_all:
         - template-sync-support
@@ -200,6 +292,7 @@ template_manifest:
     - pattern: '.cursor/rules/**'
       requires_all:
         - agent-instructions
+        - agent-cursor
       notes: >-
         Contains Markdown-safe *-reference-only inline blocks for optional stack
         references in the protected Cursor entry point. Remove each delimited
@@ -208,6 +301,7 @@ template_manifest:
     - pattern: '.hermes.md'
       requires_all:
         - agent-instructions
+        - agent-hermes
       notes: >-
         Contains Markdown-safe *-reference-only inline blocks for optional stack
         references in the protected Hermes entry point. Remove each delimited
@@ -216,6 +310,7 @@ template_manifest:
     - pattern: 'AGENTS.md'
       requires_all:
         - agent-instructions
+        - agent-codex
       notes: >-
         Contains Markdown-safe *-reference-only inline blocks for optional stack
         references in the protected Codex entry point. Baseline commands and
@@ -226,6 +321,7 @@ template_manifest:
     - pattern: 'CLAUDE.md'
       requires_all:
         - agent-instructions
+        - agent-claude
       notes: >-
         Contains Markdown-safe *-reference-only inline blocks for optional stack
         references in the protected Claude entry point. Baseline commands and
@@ -236,6 +332,7 @@ template_manifest:
     - pattern: 'GEMINI.md'
       requires_all:
         - agent-instructions
+        - agent-gemini
       notes: >-
         Contains Markdown-safe *-reference-only inline blocks for optional stack
         references in the protected Gemini entry point. Remove each delimited
@@ -263,9 +360,11 @@ template_manifest:
     - pattern: '.codex/**'
       requires_all:
         - agent-instructions
+        - agent-codex
     - pattern: '.claude/**'
       requires_all:
         - agent-instructions
+        - agent-claude
       notes: >-
         The session-start hook has a baseline-only pre-commit provisioning
         block and a markdown-only locked Node dependency installation block.

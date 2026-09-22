@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.7.20260921.0
+**Version:** 1.7.20260922.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-21
+- **Last Updated:** 2026-09-22
 - **Scope:** Agent-specific entry point for Claude Code and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)
@@ -22,6 +22,10 @@ The authoritative source of truth for all repository rules is **`.github/copilot
 This file intentionally keeps only a minimal inline summary of the highest-priority shared rules so that Claude receives critical guidance immediately, but it does not replace reading the canonical instructions above.
 
 **Thin entry point classification:** A thin entry point keeps shared repository rules brief; it does not mean platform-specific or required protocol sections may be discarded. Sections explicitly labeled as platform protocol or required protocol must be preserved unless the repository owner explicitly waives that protocol for the retained agent platform.
+
+<!-- template-sync: begin github-actions-reference-only -->
+For supported Copilot request interfaces and observed effort, use the [shared Copilot review recipe](docs/PR_REVIEW_PROMPTS.md#requesting-copilot-review-and-recording-effort). The canonical review policy and this entry point's platform protocol remain authoritative.
+<!-- template-sync: end github-actions-reference-only -->
 
 ## Execution
 

@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.3.20260921.0
+**Version:** 1.3.20260922.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-21
+- **Last Updated:** 2026-09-22
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the first-adoption bootstrap command, the read-only first-adoption preflight/questionnaire mode, raw first-adoption state reporting, first-adoption quality-debt reports and suppressions, the adoption difficulties journal, one-shot first-adoption materialization, shell-safe first-adoption args files, package identity and collaboration-policy materialization, first-adoption structural convention assessment, first-adoption working-tree validation and doctor diagnostics, downstream local path ownership records, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -285,7 +285,7 @@ This step decides which upstream template changes need review during this sync. 
 
 - **Marker path:** Downstream repositories use `.template-sync/marker.yml` as the sync marker path. The marker lives inside `.template-sync/` so the directory can hold committed template-sync support files: the sync marker and the sync manifest are committed today, while additional items such as review artifacts are only added if a later issue explicitly defines them as committed outputs.
 - **Marker:** Short name for `.template-sync/marker.yml`.
-- **Marker authority:** The marker file is authoritative regardless of whether the downstream repository adopts `template-sync-support`. Module adoption controls only whether sync-procedure and marker-related upstream updates are reviewed in future syncs.
+- **Marker authority:** The marker is authoritative for marker-backed adoption and template sync while `template-sync-support` is retained. Standalone instruction enforcement uses the protected `.github/instruction-profile.yml` instead and rejects a conflicting marker. Before removing sync support, deliberately migrate relevant declarations and review the protected profile candidate; see the [upstream instruction-enforcement guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/instruction-enforcement.md). A local exception declaration does not independently prove owner authorization.
 - **`template_sync.last_reviewed_template_commit`:** The marker field that stores the newest upstream template commit already reviewed in a prior sync. The durable marker value MUST be a resolved upstream template commit SHA, not a branch name, tag name, or other moving ref. Always store the full 40-character SHA; short SHAs are ambiguous and are not durable marker values. See the [Step 5 example marker](#step-5-initialize-or-update-the-sync-marker) for the field in context.
 - **Range mode:** The review path for this sync: normal delta sync, first sync from known lineage, timestamp-proxy delta sync, or full reconciliation.
 - **Range base SHA:** The older endpoint of a delta reviewed range. Changes after this commit are candidates for review.
@@ -692,10 +692,23 @@ The machine-readable `.template-sync/manifest.yml` file is authoritative for mod
 
 When changing the taxonomy, update `.template-sync/manifest.yml` first, then update or regenerate the rendered tables below.
 
+Select `agent-instructions` for shared guidance and each desired agent explicitly through `agent-copilot`, `agent-codex`, `agent-claude`, `agent-cursor`, `agent-gemini`, or `agent-hermes`. Agent modules require `agent-instructions`. A legacy selection must explicitly identify retained agents before reviewed cleanup; the new taxonomy does not authorize silent removal of existing agent files.
+
+`instruction-enforcement` additionally requires `agent-instructions` and at least one execution route: `baseline`, `github-actions`, or `azure-pipelines`. Baseline retains the local pre-commit hook; each selected host retains its dedicated instruction-validation route, including when baseline is omitted. The Python project module is not required. Omitting enforcement is an explicit policy-only choice. The shared validation core remains available to the marker adapter when sync support is retained; this does not implicitly select standalone enforcement. See the [upstream instruction-enforcement guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/instruction-enforcement.md) for mode selection, exact exceptions and migration.
+
+The Copilot setup workflow requires `agent-instructions`, `agent-copilot` and `github-actions`; the local Claude review command requires `agent-instructions`, `agent-claude` and `github-actions`. Removing an agent or host uses ordinary reviewed cleanup for the file and its conditioned references. Setup completion does not replace the validation gates, and a branch test does not establish default-branch Copilot activation.
+
 ### Module Definitions
 
 | Module | Scope |
 | --- | --- |
+| `instruction-enforcement` | Explicit optional instruction-enforcement selection. |
+| `agent-copilot` | Explicit optional agent-copilot selection. |
+| `agent-codex` | Explicit optional agent-codex selection. |
+| `agent-claude` | Explicit optional agent-claude selection. |
+| `agent-cursor` | Explicit optional agent-cursor selection. |
+| `agent-gemini` | Explicit optional agent-gemini selection. |
+| `agent-hermes` | Explicit optional agent-hermes selection. |
 | `baseline` | Core repository scaffolding, community files, starter identity files, and repository-level configuration not owned by a narrower module. |
 | `git-lfs` | Opt-in Git LFS-managed attributes for selected opaque authoring and project formats in the baseline root `.gitattributes`. |
 | `agent-instructions` | Agent entry points, Copilot instructions, Cursor rules, reusable prompt guidance, and modular instruction docs. |
@@ -725,12 +738,17 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 
 | Path pattern | Module(s) |
 | --- | --- |
-| `.template-sync/marker.yml` | `template-sync-support` |
-| `.template-sync/manifest.yml` | `template-sync-support` |
-| `.template-sync/instruction-contracts.yml` | `template-sync-support` |
-| `.template-sync/first-adoption/**` | `template-sync-support` |
-| `.template-sync/scripts/**` | `template-sync-support` |
-| `templates/adoption/**` | `template-sync-support` |
+| `.claude/commands/review-loop.md` | `agent-instructions`, `agent-claude`, `github-actions` |
+| `.github/workflows/copilot-setup-steps.yml`, `docs/copilot-setup.md` | `agent-instructions`, `agent-copilot`, `github-actions` |
+| `tests/test_copilot_setup.py` | `template-sync-support`, `github-actions` |
+| `.github/scripts/instruction_contract_core.py`, `.github/scripts/instruction_contract_support.py` | one of `instruction-enforcement`, `template-sync-support` |
+| `.github/scripts/validate_instruction_profile.py`, `.github/instruction-profile.yml`, `.github/instruction-contracts.yml` | `agent-instructions`, `instruction-enforcement` |
+| `schemas/instruction-profile.schema.json`, `schemas/instruction-contracts.schema.json` | one of `instruction-enforcement`, `template-sync-support` |
+| `schemas/examples/instruction-contracts/**`, `schemas/examples/instruction-profile/**`, `docs/instruction-enforcement.md` | `agent-instructions`, `instruction-enforcement` |
+| `tests/test_instruction_profile.py` | `template-sync-support` |
+| `.github/workflows/instruction-contracts.yml` | `agent-instructions`, `instruction-enforcement`, `github-actions` |
+| `.azuredevops/pipelines/instruction-contracts.yml` | `agent-instructions`, `instruction-enforcement`, `azure-pipelines` |
+| `.template-sync/marker.yml`, `.template-sync/manifest.yml`, `.template-sync/instruction-contracts.yml`, `.template-sync/first-adoption/**`, `.template-sync/scripts/**`, `templates/adoption/**` | `template-sync-support` |
 | `.github/copilot-instructions.md` | `agent-instructions` |
 | `.github/instructions/docs.instructions.md` | `markdown`, `agent-instructions` |
 | `.github/instructions/gitattributes.instructions.md` | `baseline`, `agent-instructions` |
@@ -739,15 +757,16 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `.github/instructions/python.instructions.md` | `python`, `agent-instructions` |
 | `.github/instructions/terraform.instructions.md` | `terraform`, `agent-instructions` |
 | `.github/instructions/yaml.instructions.md` | `yaml`, `agent-instructions` |
-| `.github/instructions/*.instructions.md` not otherwise listed | `agent-instructions`; surface for owner to confirm or add additional module mappings |
-| `.cursor/rules/**` | `agent-instructions` |
-| `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md` | `agent-instructions` |
+| `.github/instructions/*.instructions.md` | `agent-instructions` |
+| `.cursor/rules/**` | `agent-instructions`, `agent-cursor` |
+| `.hermes.md` | `agent-instructions`, `agent-hermes` |
+| `AGENTS.md` | `agent-instructions`, `agent-codex` |
+| `CLAUDE.md` | `agent-instructions`, `agent-claude` |
+| `GEMINI.md` | `agent-instructions`, `agent-gemini` |
 | `COPILOT_CHAT_PROMPTS.md`, `docs/ISSUE_EVALUATION_PROMPT.md`, `docs/PR_REVIEW_PROMPTS.md` | `agent-instructions` |
-| `.codex/**` | `agent-instructions` |
-| `.claude/**` | `agent-instructions` |
-| `.github/ISSUE_TEMPLATE/**` | `github-templates` |
-| `.github/pull_request_template.md` | `github-templates` |
-| `.github/CODEOWNERS` | `github-templates` |
+| `.codex/**` | `agent-instructions`, `agent-codex` |
+| `.claude/**` | `agent-instructions`, `agent-claude` |
+| `.github/ISSUE_TEMPLATE/**`, `.github/pull_request_template.md`, `.github/CODEOWNERS` | `github-templates` |
 | `.azuredevops/pull_request_template.*`, `.azuredevops/pull_request_template/**` | `azure-devops-collaboration` |
 | `.github/dependabot.yml` | `github-platform` |
 | `.azuredevops/platform/**` | `azure-devops-platform` |
@@ -756,15 +775,12 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `docs/workflow-security.md` | `github-actions` |
 | `docs/upstream-style-guides.md` | `agent-instructions` plus one of `powershell`, `terraform` |
 | `.github/workflow-security-contract.yml` | `github-actions` |
-| `.github/scripts/validate_workflow_security.py` | one of `github-actions`, `template-sync-support` |
-| `schemas/workflow-security-contract.schema.json` | one of `github-actions`, `template-sync-support` |
+| `.github/scripts/validate_workflow_security.py`, `schemas/workflow-security-contract.schema.json` | one of `github-actions`, `template-sync-support` |
 | `.github/workflows/workflow-security.yml` | `github-actions` |
-| `schemas/examples/workflow-security-contract/**` | `github-actions`, `template-sync-support` |
-| `tests/test_workflow_security_contract.py` | `github-actions`, `template-sync-support` |
+| `schemas/examples/workflow-security-contract/**`, `tests/test_workflow_security_contract.py` | `github-actions`, `template-sync-support` |
 | `tests/test_contract_wiring.py` | `template-sync-support` |
 | `tests/test_workflow_security_lifecycle.py` | `github-actions`, `template-sync-support` |
-| `.github/workflows/markdownlint.yml` | `markdown`, `github-actions` |
-| `.github/workflows/toolchain-eol.yml` | `markdown`, `github-actions` |
+| `.github/workflows/markdownlint.yml`, `.github/workflows/toolchain-eol.yml` | `markdown`, `github-actions` |
 | `.github/workflows/powershell-ci.yml` | `powershell`, `github-actions` |
 | `.github/workflows/python-ci.yml` | `python`, `github-actions` |
 | `.github/workflows/precommit-ci.yml` | `baseline`, `github-actions` |
@@ -784,16 +800,12 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `.azuredevops/pipelines/data-ci.yml` | `baseline`, `azure-pipelines` |
 | `.azuredevops/pipelines/**` | `azure-pipelines` |
 | `.yamllint.yml` | `yaml` |
-| `.pre-commit-config.yaml` | `baseline` |
-| `requirements-pre-commit.txt` | `baseline` |
+| `.pre-commit-config.yaml`, `requirements-pre-commit.txt` | `baseline` |
 | `.markdownlint.jsonc`, `.remarkignore`, `.remarkrc.mjs`, `package.json`, `package-lock.json`, `.github/scripts/lint-nested-markdown.js`, `.github/scripts/lint-nested-markdown.test.js` | `markdown` |
 | `.github/scripts/lint_nested_markdown_hook.py` | `baseline`, `markdown` |
 | `.github/scripts/check-toolchain-eol.js`, `.github/scripts/check-prohibited-placeholders.py` | `markdown` |
 | `tests/test_replace_template_placeholders.py` | `baseline` |
-| `tests/test_check_prohibited_placeholders.py` | `markdown` |
-| `tests/toolchain-eol/check-toolchain-eol.test.js` | `markdown` |
-| `tests/toolchain-eol/fixtures/**` | `markdown` |
-| `templates/markdown/**` | `markdown` |
+| `tests/test_check_prohibited_placeholders.py`, `tests/toolchain-eol/check-toolchain-eol.test.js`, `tests/toolchain-eol/fixtures/**`, `templates/markdown/**` | `markdown` |
 | `templates/powershell/**`, `tests/PowerShell/**`, `.github/linting/PSScriptAnalyzerSettings.psd1`, `src/tools/*.ps1` | `powershell` |
 | `templates/json/**` | `json` |
 | `templates/yaml/**` | `yaml` |
@@ -803,17 +815,14 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `schemas/examples/template-placeholders/**` | `baseline` |
 | `schemas/**` | `schema` |
 | `tests/test_schema_examples.py` | one of `schema`, `template-sync-support` |
-| `tests/test_generate_sync_candidates.py`, `tests/test_bootstrap_first_adoption.py`, `tests/test_first_adoption_state.*`, `tests/test_initialize_adoption_journal.*`, `tests/test_report_excluded_module_references.py`, `tests/test_materialize_downstream_adoption.*` | `template-sync-support` |
-| `tests/test_run_first_adoption_checks.*`, `tests/test_first_adoption_quality_reports.*` | `template-sync-support` |
-| `tests/test_template_manifest.py`, `tests/test_template_sync_materialization_helpers.py`, `tests/test_validate_marker.py`, `tests/test_validate_downstream_adoption.py`, `tests/test_validate_instruction_contracts.py`, `tests/test_instruction_input_limits.py`, `tests/test_precommit_runner.py` | `template-sync-support` |
+| `tests/test_generate_sync_candidates.py`, `tests/test_bootstrap_first_adoption.py`, `tests/test_first_adoption_state.*`, `tests/test_initialize_adoption_journal.*`, `tests/test_report_excluded_module_references.py`, `tests/test_materialize_downstream_adoption.*`, `tests/test_run_first_adoption_checks.*`, `tests/test_first_adoption_quality_reports.*`, `tests/test_template_manifest.py`, `tests/test_template_sync_materialization_helpers.py`, `tests/test_validate_marker.py`, `tests/test_validate_downstream_adoption.py`, `tests/test_validate_instruction_contracts.py`, `tests/test_instruction_input_limits.py`, `tests/test_precommit_runner.py` | `template-sync-support` |
 | `.github/scripts/terraform_hooks.py`, `tests/test_terraform_hooks.py` | `terraform` |
 | `templates/python/**`, `pyproject.toml`, `pyrightconfig.json`, `src/copilot_repo_template/**`, `tests/*.py`, `tests/**/*.py` | `python` |
 | `templates/terraform/**`, `docs/terraform/**`, `modules/**`, `tests/**/*.tftest.hcl`, `.tflint.hcl`, `*.tf`, `*.tfvars`, `*.tftpl`, `*.tfbackend` | `terraform` |
 | `README.md` | `baseline` |
 | `TEMPLATE_UPDATE_PROCEDURE.md` | `template-sync-support` |
 | `GETTING_STARTED_NEW_REPO.md`, `GETTING_STARTED_EXISTING_REPO.md`, `OPTIONAL_CONFIGURATIONS.md`, `TEMPLATE_MAINTENANCE.md`, `.github/TEMPLATE_DESIGN_DECISIONS.md` | `template-onboarding` |
-| `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE` | `baseline` |
-| `.gitignore`, `.gitattributes`, `.vscode/**` | `baseline` |
+| `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `LICENSE`, `.gitignore`, `.gitattributes`, `.vscode/**` | `baseline` |
 
 ### Manifest Version Migration
 
@@ -930,6 +939,8 @@ The current `*-reference-only` marker forms are Markdown-safe HTML comments:
 
 Most markers in both families use AND-retention; a single-module marker requires that module. The `schema-template-sync-support-only` marker requires both `schema` and `template-sync-support`. The `github-data-ci-reference-only` marker requires both `baseline` and `github-actions`, matching the data workflow's dependencies. Its delimiters are `<!-- template-sync: begin github-data-ci-reference-only -->` and `<!-- template-sync: end github-data-ci-reference-only -->`. The `baseline-reference-only` and `baseline-only` markers require `baseline`; the reference delimiters are `<!-- template-sync: begin baseline-reference-only -->` and `<!-- template-sync: end baseline-reference-only -->`.
 
+The `instruction-enforcement-only` and `instruction-enforcement-reference-only` markers require both `agent-instructions` and `instruction-enforcement`. The former guards the local `validate-instruction-profile` hook inside the baseline-owned pre-commit configuration; the latter guards optional enforcement guidance in retained documents. The `copilot-setup-reference-only` marker requires `agent-instructions`, `agent-copilot` and `github-actions`. The `claude-review-command-reference-only` marker requires `agent-instructions`, `agent-claude` and `github-actions` and guards the command section in `docs/PR_REVIEW_PROMPTS.md`. All use AND-retention.
+
 Two marker families use OR-retention: `azure-devops-guide-reference-only` requires any of `azure-devops-platform`, `azure-pipelines`, or `azure-devops-collaboration`; `pip-dependencies-only` requires `baseline` or `python`. Each is retained when at least one named module is adopted and stripped only when all are excluded.
 
 These inline blocks let a downstream repository keep the containing baseline or cross-module file while removing toolchain assumptions for a module it did not adopt. During Step 6, after path mapping decides whether the containing file itself is in scope, apply these rules:
@@ -993,6 +1004,7 @@ The current `markdown-reference-only`, `powershell-reference-only`, `python-refe
 The current `github-actions-reference-only` inline blocks live in:
 
 - `README.md` for GitHub Actions-specific `actionlint` validation prose.
+- `AGENTS.md`, `CLAUDE.md`, and `docs/PR_REVIEW_PROMPTS.md` for the shared Copilot review recipe and its entry-point references.
 - `.github/pull_request_template.md` for the GitHub Actions checklist section in the retained PR template.
 
 The current `github-platform-reference-only` inline blocks live in:
@@ -1019,9 +1031,10 @@ The current `azure-devops-guide-reference-only` inline blocks live in:
 
 - `README.md`, `CONTRIBUTING.md`, `OPTIONAL_CONFIGURATIONS.md`, `COPILOT_CHAT_PROMPTS.md`, `docs/PR_REVIEW_PROMPTS.md`, and `schemas/README.md` for optional links to `docs/azure-devops-support.md`, retained when any of `azure-devops-platform`, `azure-pipelines`, or `azure-devops-collaboration` is adopted and removed only when all three are excluded.
 
-The current `python-only` inline block lives in:
+The current `python-only` inline blocks live in:
 
 - `.pre-commit-config.yaml` for the `black` and `ruff-check` Python project hooks.
+- `.github/workflows/copilot-setup-steps.yml` for Python project prerequisites.
 
 The current `markdown-only` inline blocks live in:
 
@@ -1063,6 +1076,8 @@ The current `git-lfs-only` inline block lives in:
 
 - `.gitattributes` for optional Git LFS-managed opaque authoring and project format patterns.
 
+The Copilot setup workflow also uses `baseline-only`, `markdown-only`, `terraform-only`, and `powershell-only` blocks to install only retained prerequisites. Its baseline block reads the direct pin from `requirements-pre-commit.txt`, and its Markdown block uses the committed root lockfile with lifecycle scripts disabled.
+
 The current `terraform-only` inline blocks live in:
 
 - `.pre-commit-config.yaml` for the `terraform-fmt`, `terraform-validate`, and `terraform-tflint` repo-local hooks.
@@ -1080,7 +1095,7 @@ After stripping `yaml-only` blocks, a downstream repository that excludes `yaml`
 
 After stripping `schema-only` blocks, a downstream repository that excludes `schema` should be able to run `pre-commit run --all-files` and the retained data-file workflow without retaining worked-example schema validators or the worked-example `check-metaschema` hook.
 
-After stripping `template-sync-support-only` blocks, a downstream repository that excludes `template-sync-support` should be able to run `pre-commit run --all-files` and the retained data-file workflow without invoking template sync schema example validators, first-adoption quality suppression validators, runtime schema self-validation hooks, manifest validators, marker validators, or instruction-contract validators.
+After stripping `template-sync-support-only` blocks, a downstream repository that excludes `template-sync-support` should be able to run `pre-commit run --all-files` and the retained data-file workflow without invoking template sync schema example validators, first-adoption quality suppression validators, runtime schema self-validation hooks, manifest validators, marker validators, or marker-backed instruction-contract validators. Independently selected `instruction-enforcement` retains its standalone profile check, local hook when baseline is selected, and dedicated selected-host routes; removing sync support does not remove that enforcement.
 
 After stripping `github-platform-only` blocks, a downstream repository that excludes `github-platform` should be able to run `pre-commit run --all-files` and the retained data-file workflow without retaining Dependabot validation hooks or invoking a missing `validate-dependabot-config` hook.
 
@@ -1814,7 +1829,7 @@ Future automation MAY add:
 - a helper script that regenerates the Module Definitions and Path Mapping tables from `.template-sync/manifest.yml`
 - a higher-level dry-run reporter that combines the candidate table with validation planning without applying changes
 
-`.template-sync/manifest.yml` is authoritative for the taxonomy. `.template-sync/marker.yml` is authoritative for included modules, local overrides, protected-file decisions, and deferred protected candidates. The candidate generator and generated adoption ledger are intentionally read-only review aids; this document remains the authoritative manual procedure.
+`.template-sync/manifest.yml` is authoritative for the taxonomy. During marker-backed sync, `.template-sync/marker.yml` is authoritative for included modules, local overrides, protected-file decisions, and deferred protected candidates. The candidate generator and generated adoption ledger are intentionally read-only review aids; this document remains the authoritative manual procedure.
 
 <!-- template-sync: begin github-actions-only -->
 
@@ -1826,6 +1841,6 @@ Authorize `.github/workflow-security-contract.yml` explicitly as a protected pol
 
 Removing GitHub Actions requires reviewed cleanup of excluded standalone files and replacement of retained shared files with their pruned forms. Materialization never silently deletes those files. Validate the final downstream tree for excluded-module leftovers, including hooks, updater entries, documentation, and policy references. Remove the shared validator and schema only when neither Actions nor template-sync support remains. Dependabot's Actions updater survives only when both GitHub platform automation and Actions are retained; otherwise action updates need manual review.
 
-See the [workflow security guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/workflow-security.md) for the baseline/strict boundary, required authorization, exact command fingerprints, intentional failure-aggregation exceptions, and the SHA-pin vulnerability-alert limitation. Copilot setup and action-free acquisition remain future opt-in profiles; this module does not implement them.
+See the [workflow security guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/workflow-security.md) for the baseline/strict boundary, required authorization, exact command fingerprints, intentional failure-aggregation exceptions, and the SHA-pin vulnerability-alert limitation. Copilot prerequisite setup is available when `agent-instructions`, `agent-copilot`, and `github-actions` are selected together. Action-free acquisition remains a future opt-in profile.
 
 <!-- template-sync: end github-actions-only -->

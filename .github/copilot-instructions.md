@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Repository Copilot Instructions (Repo-Wide Constitution)
 
-**Version:** 1.6.20260921.0
+**Version:** 1.6.20260922.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-21
+- **Last Updated:** 2026-09-22
 - **Scope:** Repo-wide canonical instructions ("constitution") that govern all changes in this repository. This file is the authoritative source of truth for repository rules; all language-specific instruction files and agent entry points defer to it.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Documentation Writing Style](instructions/docs.instructions.md)
@@ -31,6 +31,9 @@ Instruction files, style guides, and the retained instruction-contract catalog a
 - Cursor project rules under `.cursor/rules/`
 - Modular instruction files under `.github/instructions/`
 - The retained instruction-contract catalog: `.template-sync/instruction-contracts.yml`
+<!-- template-sync: begin instruction-enforcement-only -->
+- The standalone instruction catalog and local profile: `.github/instruction-contracts.yml` and `.github/instruction-profile.yml`, with `schemas/instruction-contracts.schema.json` and `schemas/instruction-profile.schema.json`
+<!-- template-sync: end instruction-enforcement-only -->
 <!-- template-sync: begin github-actions-only -->
 - The retained workflow security contract: `.github/workflow-security-contract.yml`
 <!-- template-sync: end github-actions-only -->

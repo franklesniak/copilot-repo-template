@@ -285,3 +285,8 @@ jobs:
 
       - name: Run validate-workflow-security
         run: pre-commit run validate-workflow-security --all-files
+
+      # template-sync: begin instruction-enforcement-only
+      - name: Run validate-instruction-profile
+        run: pre-commit run validate-instruction-profile --all-files
+      # template-sync: end instruction-enforcement-only

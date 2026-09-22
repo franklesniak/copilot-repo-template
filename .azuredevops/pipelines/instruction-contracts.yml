@@ -1,0 +1,21 @@
+# Register this selected route as Azure Repos branch-policy build validation.
+trigger:
+  branches:
+    include:
+      - '*'
+pool:
+  vmImage: ubuntu-latest
+jobs:
+  - job: instruction_contracts
+    timeoutInMinutes: 10
+    steps:
+      - checkout: self
+        persistCredentials: false
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.13'
+        displayName: Set up Python
+      - script: python -m pip install PyYAML==6.0.3 jsonschema==4.26.0
+        displayName: Install validator dependencies
+      - script: python .github/scripts/validate_instruction_profile.py
+        displayName: Validate instruction contracts

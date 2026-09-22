@@ -17,6 +17,7 @@ from tests._pytest_compat import pytest
 
 pytestmark = pytest.mark.upstream_template_only
 ROOT = Path(__file__).resolve().parents[1]
+OWNED_WORKFLOW_COUNT = len(list((ROOT / ".github/workflows").glob("*.yml")))
 SPEC = importlib.util.spec_from_file_location(
     "workflow_security_tests", ROOT / ".github/scripts/validate_workflow_security.py"
 )
@@ -334,7 +335,7 @@ def test_existing_concurrency_cancellation_change_is_rejected(tmp_path: Path) ->
     text = path.read_text(encoding="utf-8")
     expected = {"group": "auto-fix-precommit-${{ github.ref }}", "cancel-in-progress": False}
     assert policy.validate_workflow(text)["concurrency"] == expected
-    assert policy.validate_repository(tmp_path) == 10
+    assert policy.validate_repository(tmp_path) == OWNED_WORKFLOW_COUNT
     path.write_text(
         text.replace("cancel-in-progress: false", "cancel-in-progress: true"), encoding="utf-8"
     )
@@ -373,7 +374,7 @@ def test_workflow_display_label_is_not_a_required_check_identity(tmp_path: Path)
     text = path.read_text(encoding="utf-8")
     assert text.count("name: Pre-commit CI") == 1
     path.write_text(text.replace("name: Pre-commit CI", "name: Renamed workflow"), encoding="utf-8")
-    assert policy.validate_repository(tmp_path) == 10
+    assert policy.validate_repository(tmp_path) == OWNED_WORKFLOW_COUNT
 
 
 @pytest.mark.parametrize("coordinate", ["actions/checkout", "Actions/Checkout", "ACTIONS/CHECKOUT"])
@@ -417,14 +418,14 @@ def test_strict_adopter_checkout_casing_and_guard_mutant(tmp_path: Path) -> None
         .replace("persist-credentials: false", "persist-credentials: true")
     )
     (tmp_path / ".github/workflows/adopter.yml").write_text(bad, encoding="utf-8")
-    assert policy.validate_repository(tmp_path) == 10
+    assert policy.validate_repository(tmp_path) == OWNED_WORKFLOW_COUNT
     with pytest.raises(policy.PolicyError, match="persist-credentials"):
         policy.validate_repository(tmp_path, strict=True)
     source = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
     guard = 'reference.split("@", 1)[0].casefold()'
     assert source.count(guard) == 1
     mutant = load_policy_mutant(tmp_path, source.replace(guard, 'reference.split("@", 1)[0]'))
-    assert mutant.validate_repository(tmp_path, strict=True) == 10
+    assert mutant.validate_repository(tmp_path, strict=True) == OWNED_WORKFLOW_COUNT
 
 
 def load_policy_mutant(root: Path, source: str) -> Any:
@@ -456,7 +457,7 @@ def test_quoted_document_action_policy(tmp_path: Path, prefix: str, reference: s
     with path.open("a", encoding="utf-8") as stream:
         stream.write("\n> [!NOTE]\n>\n> ```yaml\n" + prefix + "uses: " + line + "\n> ```\n")
     if reference == "pinned":
-        assert policy.validate_repository(tmp_path) == 10
+        assert policy.validate_repository(tmp_path) == OWNED_WORKFLOW_COUNT
     else:
         with pytest.raises(policy.PolicyError, match="full SHA"):
             policy.validate_repository(tmp_path)
@@ -493,7 +494,7 @@ def test_quoted_document_guard_removal(tmp_path: Path, mutation: str) -> None:
     )
     assert source.count(before) == 1
     mutant = load_policy_mutant(tmp_path, source.replace(before, after))
-    assert mutant.validate_repository(tmp_path) == 10
+    assert mutant.validate_repository(tmp_path) == OWNED_WORKFLOW_COUNT
 
 
 def test_quoted_example_release_resolution() -> None:
@@ -571,7 +572,7 @@ def test_owned_scope_and_strict_opt_in(tmp_path: Path) -> None:
     local = tmp_path / ".github/workflows/adopter.yml"
     local.write_text("on: pull_request_target\njobs: {}\n", encoding="utf-8")
     before = local.read_bytes()
-    assert policy.validate_repository(tmp_path) == 10
+    assert policy.validate_repository(tmp_path) == OWNED_WORKFLOW_COUNT
     with pytest.raises(policy.PolicyError, match="privileged"):
         policy.validate_repository(tmp_path, strict=True)
     assert local.read_bytes() == before

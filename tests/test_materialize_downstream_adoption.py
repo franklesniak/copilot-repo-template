@@ -47,12 +47,25 @@ ISSUE_692_NO_PYTHON_MODULES = (
     "markdown",
     "powershell",
 )
-GITHUB_POWERSHELL_PROFILE_MODULES = ISSUE_692_NO_PYTHON_MODULES
+AGENT_PLATFORM_MODULES = (
+    "agent-copilot",
+    "agent-codex",
+    "agent-claude",
+    "agent-cursor",
+    "agent-gemini",
+    "agent-hermes",
+)
+GITHUB_POWERSHELL_PROFILE_MODULES = (
+    *ISSUE_692_NO_PYTHON_MODULES,
+    *AGENT_PLATFORM_MODULES,
+)
 ISSUE_693_PARTIAL_DOC_MODULES = ISSUE_692_NO_PYTHON_MODULES
 FULL_TEMPLATE_MODULES = (
     "baseline",
     "git-lfs",
     "agent-instructions",
+    "instruction-enforcement",
+    *AGENT_PLATFORM_MODULES,
     "github-platform",
     "azure-devops-platform",
     "github-actions",
@@ -77,7 +90,15 @@ GITHUB_HOST_TEMPLATE_MODULES = frozenset(("github-platform", "github-actions", "
 DOWNSTREAM_PYTEST_MODULES = tuple(
     module_name
     for module_name in FULL_TEMPLATE_MODULES
-    if module_name not in {"agent-instructions", "git-lfs", "powershell", "terraform"}
+    if module_name
+    not in {
+        "agent-instructions",
+        "instruction-enforcement",
+        *AGENT_PLATFORM_MODULES,
+        "git-lfs",
+        "powershell",
+        "terraform",
+    }
 )
 OPTIONAL_PRUNING_FIXTURES: tuple[Any, ...] = (
     pytest.param(
@@ -94,6 +115,12 @@ OPTIONAL_PRUNING_FIXTURES: tuple[Any, ...] = (
         FULL_TEMPLATE_MODULES,
         True,
         id="full-upstream-module-set",
+        marks=pytest.mark.upstream_template_only,
+    ),
+    pytest.param(
+        DOWNSTREAM_PYTEST_MODULES,
+        True,
+        id="complete-downstream-pytest-module-set",
     ),
 )
 AZURE_PROVIDER_BASE_FIELDS: dict[str, str] = {
@@ -345,6 +372,15 @@ def run_in_process_cli(
         stdout=stdout.getvalue(),
         stderr=stderr.getvalue(),
     )
+
+
+@pytest.mark.upstream_template_only
+def test_full_template_fixture_matches_manifest_inventory() -> None:
+    """Keep full-adoption coverage explicit and complete when modules are added."""
+    _manifest, module_order, _mappings = materializer.load_validated_manifest_context(REPO_ROOT)
+
+    assert len(FULL_TEMPLATE_MODULES) == len(set(FULL_TEMPLATE_MODULES))
+    assert set(FULL_TEMPLATE_MODULES) == set(module_order)
 
 
 def test_materializer_script_entrypoint_help_smoke() -> None:
@@ -798,7 +834,15 @@ def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -
     modules = tuple(
         module
         for module in FULL_TEMPLATE_MODULES
-        if not (profile == "neither" and module == "agent-instructions")
+        if not (
+            profile == "neither"
+            and module in {"agent-instructions", "instruction-enforcement", *AGENT_PLATFORM_MODULES}
+        )
+        and not (
+            profile in {"codex-only", "claude-only"}
+            and module in AGENT_PLATFORM_MODULES
+            and module != f"agent-{profile.removesuffix('-only')}"
+        )
         and not (profile == "no-markdown" and module == "markdown")
         and not (profile == "no-yaml" and module == "yaml")
     )
@@ -806,33 +850,8 @@ def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -
     target.mkdir()
     decisions = protected_take_decisions_for_modules(modules)
     removed = {"codex-only": "CLAUDE.md", "claude-only": "AGENTS.md"}.get(profile)
-    if removed is not None:
-        decisions = [decision for decision in decisions if decision["path"] != removed]
-        decisions.append(
-            {
-                "path": removed,
-                "decision": "REMOVE-LOCAL",
-                "authorization_basis": f"Fixture owner explicitly removes {removed}.",
-                "authorized_scope": f"{removed} only.",
-                "reason": "This profile retains the other agent platform.",
-            }
-        )
     fields: dict[str, Any] = azure_provider_fields_for_modules(modules)
     fields["protected_file_decisions"] = decisions
-    if removed is not None:
-        runtime = ".claude/" if profile == "codex-only" else ".codex/"
-        fields["local_overrides"] = [
-            {
-                "path": removed,
-                "default_decision": "REMOVE-LOCAL",
-                "reason": "The fixture owner removes this unselected peer entry point.",
-            },
-            {
-                "path": runtime,
-                "default_decision": "SKIP",
-                "reason": "The fixture does not retain this peer runtime.",
-            },
-        ]
     write_yaml(target / "decisions.yml", marker_document(list(modules), **fields))
     result = run_materialize(
         REPO_ROOT,
@@ -859,7 +878,18 @@ def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -
         assert {decision["path"] for decision in decisions} == {
             INSTRUCTION_CONTRACTS_PATH,
             ".github/workflow-security-contract.yml",
+            "schemas/instruction-contracts.schema.json",
+            "schemas/instruction-profile.schema.json",
         }
+        for relative_path in (
+            ".github/instruction-profile.yml",
+            ".github/instruction-contracts.yml",
+            ".github/scripts/validate_instruction_profile.py",
+            ".github/workflows/instruction-contracts.yml",
+            ".azuredevops/pipelines/instruction-contracts.yml",
+            "docs/instruction-enforcement.md",
+        ):
+            assert not (target / relative_path).exists(), relative_path
     run_git(target, "init", "-q")
     run_git(target, "add", ".")
     finish_review_profile_link_cleanup(target, profile)
@@ -889,15 +919,15 @@ def test_materialized_review_governance_profiles(tmp_path: Path, profile: str) -
     agents_path = target / "AGENTS.md"
     claude_path = target / "CLAUDE.md"
     nested_command = "- `npm run lint:md:nested`"
-    for entry_point in (
-        "AGENTS.md",
-        "CLAUDE.md",
-        "GEMINI.md",
-        ".hermes.md",
-        ".cursor/rules/repository-instructions.mdc",
-    ):
+    for entry_point, agent_module in {
+        "AGENTS.md": "agent-codex",
+        "CLAUDE.md": "agent-claude",
+        "GEMINI.md": "agent-gemini",
+        ".hermes.md": "agent-hermes",
+        ".cursor/rules/repository-instructions.mdc": "agent-cursor",
+    }.items():
         entry_path = target / entry_point
-        expected_absent = profile == "neither" or entry_point == removed
+        expected_absent = agent_module not in modules
         assert entry_path.exists() is (not expected_absent)
         if not expected_absent:
             entry_text = read_file(entry_path)
@@ -1192,6 +1222,10 @@ def materialize_downstream_pytest_fixture(tmp_path: Path) -> Path:
     assert (target_root / INSTRUCTION_CONTRACTS_PATH).read_bytes() == (
         REPO_ROOT / INSTRUCTION_CONTRACTS_PATH
     ).read_bytes()
+    marker = as_mapping(load_yaml(target_root / ".template-sync/marker.yml"), "fixture marker")
+    template_sync = as_mapping(marker["template_sync"], "fixture template_sync")
+    recorded_modules = as_string_list(template_sync["included_modules"], "fixture modules")
+    assert set(recorded_modules) == set(DOWNSTREAM_PYTEST_MODULES)
     run_git(target_root, "init", "-q")
     run_git(target_root, "add", ".")
     return target_root
@@ -1202,6 +1236,14 @@ def run_downstream_pytest_gate(
     *pytest_args: str,
 ) -> subprocess.CompletedProcess[str]:
     """Run the official downstream pytest gate in a materialized tree."""
+    installed_node_modules = REPO_ROOT / "node_modules"
+    target_node_modules = target_root / "node_modules"
+    if (
+        (target_root / "package.json").is_file()
+        and installed_node_modules.is_dir()
+        and not target_node_modules.exists()
+    ):
+        shutil.copytree(installed_node_modules, target_node_modules)
     env = os.environ.copy()
     src_path = str(target_root / "src")
     existing_pythonpath = env.get("PYTHONPATH")
@@ -2213,6 +2255,7 @@ def test_materialized_agent_without_baseline_does_not_adopt_local_precommit_conf
     """A downstream-local config cannot activate excluded template provisioning."""
     included_modules = (
         "agent-instructions",
+        *AGENT_PLATFORM_MODULES,
         "github-platform",
         "github-actions",
         "github-templates",
@@ -2305,6 +2348,7 @@ def test_materialized_no_baseline_profile_requires_only_explicit_protocol_decisi
     """The affected profile has no dangling links and discloses retained protocols."""
     included_modules = (
         "agent-instructions",
+        *AGENT_PLATFORM_MODULES,
         "github-platform",
         "github-actions",
         "github-templates",
@@ -3772,6 +3816,19 @@ def test_stampability_backstop_runs_before_status_probe(
     assert calls == ["partial", "fsmonitor", "completeness"]
 
 
+def copy_materializer_runtime_for_mutation(root: Path) -> Path:
+    """Copy the real split runtime into an isolated repository-shaped tool tree."""
+    script_dir = root / ".template-sync/scripts"
+    script_dir.mkdir(parents=True)
+    for source in SCRIPT_DIR.glob("*.py"):
+        shutil.copyfile(source, script_dir / source.name)
+    shared_dir = root / ".github/scripts"
+    shared_dir.mkdir(parents=True)
+    for name in ("instruction_contract_core.py", "instruction_contract_support.py"):
+        shutil.copyfile(REPO_ROOT / ".github/scripts" / name, shared_dir / name)
+    return script_dir
+
+
 @pytest.mark.parametrize("entry", ["detect", "verify", "completeness-mutant"])
 def test_source_index_queries_disable_native_fsmonitor(
     tmp_path: Path, monkeypatch: Any, entry: str
@@ -3813,10 +3870,7 @@ def test_source_index_queries_disable_native_fsmonitor(
     assert not sentinel.exists()
     if entry == "completeness-mutant":
         # Remove only completeness protection from an isolated copy; leave status intact.
-        mutant_dir = tmp_path / "mutant"
-        mutant_dir.mkdir()
-        for source_path in SCRIPT_DIR.glob("*.py"):
-            shutil.copyfile(source_path, mutant_dir / source_path.name)
+        mutant_dir = copy_materializer_runtime_for_mutation(tmp_path / "mutant")
         mutant = mutant_dir / SCRIPT_PATH.name
         source = mutant.read_text(encoding="utf-8")
         guard = '[*git_args_prefix, "ls-files",'
@@ -5160,22 +5214,34 @@ def test_materialized_baseline_without_python_retains_runner_dependabot_ecosyste
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize(
+    "included_modules",
+    [
+        pytest.param(
+            FULL_TEMPLATE_MODULES,
+            id="full-upstream-module-set",
+            marks=pytest.mark.upstream_template_only,
+        ),
+        pytest.param(DOWNSTREAM_PYTEST_MODULES, id="complete-downstream-pytest-module-set"),
+    ],
+)
 def test_materialized_full_adoption_keeps_all_dependabot_ecosystems(
     tmp_path: Path,
+    included_modules: tuple[str, ...],
 ) -> None:
-    """Full materialization keeps every default Dependabot ecosystem."""
+    """Complete upstream and portable downstream profiles keep every ecosystem."""
     target_root = tmp_path / "full"
     target_root.mkdir()
     write_yaml(
         target_root / "decisions.yml",
         marker_document(
-            list(FULL_TEMPLATE_MODULES),
-            protected_file_decisions=protected_take_decisions_for_modules(FULL_TEMPLATE_MODULES),
+            list(included_modules),
+            protected_file_decisions=protected_take_decisions_for_modules(included_modules),
         ),
     )
     module_args = [
         argument
-        for module_name in FULL_TEMPLATE_MODULES
+        for module_name in included_modules
         for argument in ("--included-module", module_name)
     ]
 
@@ -5192,6 +5258,10 @@ def test_materialized_full_adoption_keeps_all_dependabot_ecosystems(
     )
 
     assert result.returncode == 0, result.stderr
+    marker = as_mapping(load_yaml(target_root / ".template-sync/marker.yml"), "adopted marker")
+    template_sync = as_mapping(marker["template_sync"], "adopted template_sync")
+    recorded_modules = as_string_list(template_sync["included_modules"], "adopted modules")
+    assert set(recorded_modules) == set(included_modules)
     dependabot_path = target_root / ".github" / "dependabot.yml"
     assert dependabot_path.is_file(), result.stdout
     assert dependabot_update_ecosystems(dependabot_path) == DEPENDABOT_FULL_ECOSYSTEMS
@@ -5605,12 +5675,141 @@ def test_materializer_args_file_decisions_path_traversal_is_rejected(
 @pytest.mark.parametrize("markdown", [True, False])
 def test_claude_bootstrap_tracks_markdown_without_baseline(tmp_path: Path, markdown: bool) -> None:
     """Materialized agent hooks retain Markdown setup independently of baseline setup."""
-    modules = ("agent-instructions", "markdown") if markdown else ("agent-instructions",)
+    modules: tuple[str, ...] = ("agent-instructions", "agent-claude")
+    if markdown:
+        modules += ("markdown",)
     target = materialize_module_fixture(tmp_path, modules, authorize_protected_files=True)
     hook = read_file(target / ".claude/hooks/session-start.sh")
     assert ("npm ci --ignore-scripts" in hook) is markdown
     assert ("markdown_repository_root" in hook) is markdown
     assert "ensure_pre_commit" not in hook
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize(
+    ("modules", "retained"),
+    [
+        (("agent-instructions", "agent-claude", "github-actions"), True),
+        (("agent-instructions", "github-actions"), False),
+        (("agent-instructions", "agent-claude"), False),
+        (("github-actions",), False),
+        (("agent-instructions", "agent-claude", "azure-pipelines"), False),
+        (("agent-instructions", "agent-claude", "github-actions", "azure-pipelines"), True),
+    ],
+)
+def test_claude_review_command_selection(
+    tmp_path: Path, modules: tuple[str, ...], retained: bool
+) -> None:
+    """The command and its discoverability text follow the selected agent and host."""
+    target = materialize_module_fixture(tmp_path, modules, authorize_protected_files=True)
+    command = target / ".claude/commands/review-loop.md"
+    assert command.is_file() is retained
+    prompts = target / "docs/PR_REVIEW_PROMPTS.md"
+    if prompts.is_file():
+        text = read_file(prompts)
+        assert ("## Local Claude Review Command" in text) is retained
+        assert ("## Requesting Copilot Review and Recording Effort" in text) is (
+            "github-actions" in modules
+        )
+    if retained:
+        assert (target / "CLAUDE.md").is_file()
+        assert (target / ".github/copilot-instructions.md").is_file()
+        assert not (target / ".template-sync/scripts").exists()
+    before = snapshot_fixture_files(target)
+    repeated = run_materialize(
+        REPO_ROOT,
+        target,
+        "--decisions-file",
+        "decisions.yml",
+        *azure_provider_cli_args_for_modules(modules),
+    )
+    assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+    assert snapshot_fixture_files(target) == before
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize("removed_module", ["agent-claude", "github-actions"])
+def test_claude_review_command_removal_requires_reviewed_cleanup(
+    tmp_path: Path, removed_module: str
+) -> None:
+    """Later selection changes prune references and leave excluded files for reviewed cleanup."""
+    retained = ("agent-instructions", "agent-claude", "github-actions", "template-sync-support")
+    target = materialize_module_fixture(tmp_path, retained, authorize_protected_files=True)
+    command = target / ".claude/commands/review-loop.md"
+    original = command.read_bytes()
+    omitted = tuple(module for module in retained if module != removed_module)
+    protected_decisions = protected_take_decisions_for_modules(omitted)
+    if removed_module == "agent-claude":
+        protected_decisions.append(
+            {
+                "path": "CLAUDE.md",
+                "decision": "REMOVE-LOCAL",
+                "reason": "The fixture owner retires the existing Claude entry point.",
+                "authorization_basis": "Fixture owner explicitly authorizes Claude removal.",
+                "authorized_scope": "CLAUDE.md only.",
+            }
+        )
+    write_yaml(
+        target / "decisions.yml",
+        marker_document(
+            list(omitted),
+            protected_file_decisions=protected_decisions,
+            local_overrides=[
+                {
+                    "path": relative_path,
+                    "default_decision": "TAKE",
+                    "reason": "Fixture owner authorizes the reviewed command-reference pruning.",
+                }
+                for relative_path in (
+                    "docs/PR_REVIEW_PROMPTS.md",
+                    "TEMPLATE_UPDATE_PROCEDURE.md",
+                    "tests/test_contract_wiring.py",
+                )
+            ],
+        ),
+    )
+    result = run_materialize(REPO_ROOT, target, "--decisions-file", "decisions.yml")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert command.read_bytes() == original
+    assert "## Local Claude Review Command" not in read_file(target / "docs/PR_REVIEW_PROMPTS.md")
+    assert ".claude/commands/review-loop.md" in result.stdout
+    # Normal module removal requires deliberate cleanup of the reported excluded file.
+    command.unlink()
+    repeated = run_materialize(REPO_ROOT, target, "--decisions-file", "decisions.yml")
+    assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+    assert not command.exists()
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize("markdown", [True, False])
+def test_copilot_recipe_contract_without_claude(tmp_path: Path, markdown: bool) -> None:
+    """The materialized recipe skips its absent optional successor without Markdown tooling."""
+    modules: tuple[str, ...] = (
+        "agent-instructions",
+        "agent-codex",
+        "github-actions",
+        "template-sync-support",
+    )
+    if markdown:
+        modules += ("markdown",)
+    target = materialize_module_fixture(tmp_path, modules, authorize_protected_files=True)
+    record_github_agent_azure_protocol_section_waivers(target)
+    text = read_file(target / "docs/PR_REVIEW_PROMPTS.md")
+    assert "## Requesting Copilot Review and Recording Effort" in text
+    assert "## Local Claude Review Command" not in text
+    assert not (target / ".claude/commands/review-loop.md").exists()
+    command = [
+        sys.executable,
+        str(target / ".template-sync/scripts/validate_instruction_contracts.py"),
+        "--mode",
+        "downstream",
+        "--require-marker",
+        "--repo-root",
+        str(target),
+    ]
+    result = subprocess.run(command, check=False, capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "validation passed" in result.stdout
 
 
 def test_placeholder_replacement_ignores_selected_helper(
@@ -6195,10 +6394,7 @@ def test_instruction_contract_catalog_protection_guard_requires_take_before_writ
         # The separate ordinary-overwrite guard still rejects a replacement.
         # Initial creation isolates the catalog's protected-classification guard.
         return
-    mutant_dir = tmp_path / "mutant"
-    mutant_dir.mkdir()
-    for source in SCRIPT_DIR.glob("*.py"):
-        shutil.copyfile(source, mutant_dir / source.name)
+    mutant_dir = copy_materializer_runtime_for_mutation(tmp_path / "mutant")
     helper = mutant_dir / "template_sync_materialization_helpers.py"
     code = helper.read_text(encoding="utf-8")
     protected_catalog = '{".template-sync/instruction-contracts.yml"}'
@@ -6558,15 +6754,18 @@ def test_materialized_markdown_ci_closes_source_regression_prerequisites(
 
 
 @pytest.mark.upstream_template_only
-@pytest.mark.parametrize("profile", ["full", "github-only", "no-support", "no-github"])
+@pytest.mark.parametrize(
+    "profile", ["full", "github-only", "no-support", "no-policy-engine", "no-github"]
+)
 def test_materialized_workflows_keep_all_checkout_credentials_disabled(
     tmp_path: Path, profile: str
 ) -> None:
-    """Generated workflows preserve explicit checkout intent without a retained policy engine."""
+    """Generated workflows preserve checkout intent with and without policy enforcement."""
     excluded = {
         "full": set(),
         "github-only": set(AZURE_TEMPLATE_MODULES),
         "no-support": {"template-sync-support"},
+        "no-policy-engine": {"template-sync-support", "instruction-enforcement"},
         "no-github": set(GITHUB_HOST_TEMPLATE_MODULES),
     }[profile]
     modules = tuple(module for module in FULL_TEMPLATE_MODULES if module not in excluded)
@@ -6575,7 +6774,22 @@ def test_materialized_workflows_keep_all_checkout_credentials_disabled(
     if profile == "no-github":
         assert not paths
         return
-    assert len(paths) == 10
+    expected_workflows = {
+        "auto-fix-precommit.yml",
+        "check-placeholders.yml",
+        "copilot-setup-steps.yml",
+        "data-ci.yml",
+        "markdownlint.yml",
+        "powershell-ci.yml",
+        "precommit-ci.yml",
+        "python-ci.yml",
+        "terraform-ci.yml",
+        "toolchain-eol.yml",
+        "workflow-security.yml",
+    }
+    if "instruction-enforcement" in modules:
+        expected_workflows.add("instruction-contracts.yml")
+    assert {path.name for path in paths} == expected_workflows
     checkout_count = 0
     for path in paths:
         workflow = yaml.safe_load(read_file(path))
@@ -6590,8 +6804,8 @@ def test_materialized_workflows_keep_all_checkout_credentials_disabled(
                     assert value is False or (
                         isinstance(value, str) and value.strip(" \t\r\n").lower() == "false"
                     ), str(path)
-    assert checkout_count >= 14
-    if profile == "no-support":
+    assert checkout_count >= 15 + ("instruction-enforcement" in modules)
+    if "template-sync-support" not in modules:
         assert not (target / "tests/test_precommit_runner.py").exists()
 
 
@@ -6621,6 +6835,29 @@ def test_materialized_contributor_node_setup_matches_retained_tooling(
         assert "Install Node.js Dependencies" not in text
         assert "npm " not in text
     assert "Git hooks are managed by pre-commit." in text
+
+
+@pytest.mark.upstream_template_only
+def test_onboarding_locked_setup_matches_selected_ci() -> None:
+    """Ordinary setup preserves the root lock; optional Node guidance is conditional."""
+    sections = (
+        ("GETTING_STARTED_NEW_REPO.md", "### Confirm Local Validation Prerequisites"),
+        ("GETTING_STARTED_EXISTING_REPO.md", "### Local Validation Prerequisites"),
+    )
+    for relative, heading in sections:
+        text = read_file(REPO_ROOT / relative)
+        section = text.split(heading, 1)[1].split("\n### ", 1)[0]
+        assert "npm ci --ignore-scripts" in section
+        assert "root lockfile are retained" in section
+        assert "Profiles that omit Markdown do not need Node" in section
+        assert "`npm install` or `npm ci`" not in section
+    optional = read_file(REPO_ROOT / "OPTIONAL_CONFIGURATIONS.md")
+    guidance = optional.split("> **Node availability requirement.**", 1)[1].split("\n\n", 1)[0]
+    assert "When Markdown is selected" in guidance
+    assert "GitHub and Azure pre-commit CI routes already install Node" in guidance
+    assert "Profiles that omit Markdown do not retain those setup steps" in guidance
+    assert "npm ci --ignore-scripts" in guidance
+    assert "default CI workflows do not install Node" not in guidance
 
 
 @pytest.mark.upstream_template_only

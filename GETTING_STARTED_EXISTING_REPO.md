@@ -1579,7 +1579,7 @@ Markdown linting enforces consistent formatting across your documentation. The t
 
 If your project doesn't have a `package.json`:
 
-1. Copy `package.json` from the template
+1. Copy `package.json` and its matching `package-lock.json` from the template
 
 2. Update the metadata for your project, either manually or by passing package identity fields such as `package_name`, `package_description`, and `package_author` through the placeholder helper's `--args-file`:
 
@@ -1596,7 +1596,7 @@ If your project doesn't have a `package.json`:
    **Windows (PowerShell) / macOS / Linux:**
 
    ```bash
-   npm install
+   npm ci --ignore-scripts
    ```
 
    When the helper changes `package_name`, it also updates the root `name` fields in `package-lock.json` when that lockfile is present. It updates lockfile version fields only when `package_version` is explicitly supplied.
@@ -1620,7 +1620,7 @@ If your project already has a `package.json`:
 
    > **Note:** If adopting the nested markdown linting script, also add the package entries it uses, such as `glob`, `jsonc-parser`, and `markdown-it`.
 
-3. Run `npm install` to install the new dependencies
+3. Run `npm install --ignore-scripts` to intentionally update dependencies and the lockfile. Review both files and validate the merged tooling. Subsequent ordinary setup uses `npm ci --ignore-scripts` with that committed lockfile.
 
 ### Copying the Configuration
 
@@ -1677,9 +1677,13 @@ Pre-commit hooks run automated checks before each commit, catching issues early 
 
 ### Local Validation Prerequisites
 
+<!-- template-sync: begin copilot-setup-reference-only -->
+When retaining Copilot with GitHub Actions, follow [Copilot validation setup](docs/copilot-setup.md) to prepare the selected tools. The setup workflow activates for Copilot only after it reaches the default branch. A branch check does not prove that integration, and failed setup can still leave the agent running; verify prerequisites and run the retained validation gates.
+<!-- template-sync: end copilot-setup-reference-only -->
+
 Before running adopted validation commands:
 
-- Run `npm install` or `npm ci` before npm-backed Markdown checks such as `npm run lint:md:nested`.
+- When Markdown tooling and the root lockfile are retained, run `npm ci --ignore-scripts` before npm-backed Markdown checks such as `npm run lint:md:nested`. Profiles that omit Markdown do not need Node for these checks.
 - Install `pre-commit` in the active Python environment before running `pre-commit run --all-files`, or use the `python -m pre_commit` / `python3 -m pre_commit` form documented below.
 - Treat `pre-commit install` as a local developer action. Automation should usually run `pre-commit run --all-files` directly unless the workflow explicitly needs Git hooks installed.
 - Keep Python available for Python-based development tooling such as `pre-commit`, `check-jsonschema`, `check-metaschema`, and repo-local hook wrappers, even if you do not adopt Python project CI.
@@ -2742,10 +2746,10 @@ Instead, update your existing README to document any new development requirement
 
 ### Setup
 
-Install markdown linting tools:
+Install retained Markdown linting tools from the committed root lockfile:
 
 ```bash
-npm install
+npm ci --ignore-scripts
 ```
 
 Install pre-commit hooks:
@@ -3028,6 +3032,12 @@ Authorize `.github/workflow-security-contract.yml` explicitly as a protected pol
 
 Removing GitHub Actions requires reviewed cleanup of excluded standalone files and replacement of retained shared files with their pruned forms. Materialization never silently deletes those files. Validate the final downstream tree for excluded-module leftovers, including hooks, updater entries, documentation, and policy references. Remove the shared validator and schema only when neither Actions nor template-sync support remains. Dependabot's Actions updater survives only when both GitHub platform automation and Actions are retained; otherwise action updates need manual review.
 
-See the [workflow security guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/workflow-security.md) for the baseline/strict boundary, required authorization, exact command fingerprints, intentional failure-aggregation exceptions, and the SHA-pin vulnerability-alert limitation. Copilot setup and action-free acquisition remain future opt-in profiles; this module does not implement them.
+See the [workflow security guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/workflow-security.md) for the baseline/strict boundary, required authorization, exact command fingerprints, intentional failure-aggregation exceptions, and the SHA-pin vulnerability-alert limitation. Copilot prerequisite setup is available when `agent-instructions`, `agent-copilot`, and `github-actions` are selected together. Action-free acquisition remains a future opt-in profile.
 
 <!-- template-sync: end github-actions-only -->
+
+<!-- template-sync: begin instruction-enforcement-reference-only -->
+
+Retain `instruction-enforcement` with `agent-instructions` for portable static checks, even when future template sync and the Python project are omitted. Select baseline or a host CI route and explicitly select retained agent modules. Instructions without enforcement are a policy-only choice. See [static instruction enforcement](docs/instruction-enforcement.md) for mode migration and scoped local declarations.
+
+<!-- template-sync: end instruction-enforcement-reference-only -->

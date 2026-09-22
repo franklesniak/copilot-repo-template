@@ -585,10 +585,15 @@ def test_pre_adoption_catalog_is_protected_data_not_stale_prose(tmp_path: Path) 
         for line in findings
     ), findings
 
-    mutant_dir = tmp_path / "mutant"
-    mutant_dir.mkdir()
-    for source in SCRIPT_PATH.parent.glob("*.py"):
-        shutil.copyfile(source, mutant_dir / source.name)
+    mutant_root = tmp_path / "mutant"
+    mutant_dir = mutant_root / ".template-sync/scripts"
+    # Preserve the deployed dependency layout so the mutant executes the real
+    # shared primitives before exercising the independent catalog/prose oracle.
+    for relative in (".template-sync/scripts", ".github/scripts"):
+        destination = mutant_root / relative
+        destination.mkdir(parents=True)
+        for source in (REPO_ROOT / relative).glob("*.py"):
+            shutil.copyfile(source, destination / source.name)
     mutant = mutant_dir / SCRIPT_PATH.name
     source_text = mutant.read_text(encoding="utf-8")
     original = "if not is_protected_prose_path(relative_path):"

@@ -24,6 +24,7 @@ TRUSTED_TOOL_ROOT = SCRIPT_DIR.parent.parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from instruction_profile_migration import render_instruction_profile  # noqa: E402
 from template_sync_materialization_helpers import (  # noqa: E402
     DEFAULT_MANIFEST_PATH,
     DEFAULT_MANIFEST_SCHEMA_PATH,
@@ -54,6 +55,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     selected_relation_for_path,
     validate_inline_block_markers,
     validate_marker_yaml_text,
+    validate_module_compatibility,
     validate_protected_file_decisions,
     validate_schema,
     write_repository_file_bytes,
@@ -2074,6 +2076,10 @@ def load_decisions(
             "Selected module(s) are not defined by the manifest: "
             + ", ".join(sorted(unknown_modules))
         )
+    selection_errors = validate_module_compatibility(module_set, ())
+    if selection_errors:
+        raise MaterializationError(" ".join(selection_errors))
+    validate_agent_selection_migration(target_root, module_set, marker_data)
 
     raw_marker_fields: dict[str, Any] = {}
     if marker_document is not None:
@@ -2111,6 +2117,36 @@ MARKER_PLACEHOLDER_FIELDS = (
     "discussions_policy",
     "collaboration_policy_follow_up_status",
 ) + tuple(sorted(AZURE_DEVOPS_PLACEHOLDER_FIELDS))
+
+
+def validate_agent_selection_migration(
+    target_root: Path, modules: set[str], marker_data: MarkerDecisionData | None
+) -> None:
+    """Require an explicit retention/removal decision for legacy all-agent profiles."""
+    if marker_data is None or "agent-instructions" not in modules:
+        return
+    agents = {
+        "AGENTS.md": "agent-codex",
+        "CLAUDE.md": "agent-claude",
+        "GEMINI.md": "agent-gemini",
+        ".hermes.md": "agent-hermes",
+        ".cursor/rules/repository-instructions.mdc": "agent-cursor",
+    }
+    if any(name in marker_data.included_modules for name in agents.values()):
+        return
+    removals = {
+        item.path for item in marker_data.protected_decisions if item.decision == REMOVAL_DECISION
+    }
+    undecided = [
+        path
+        for path, module in agents.items()
+        if (target_root / path).exists() and module not in modules and path not in removals
+    ]
+    if undecided:
+        raise MaterializationError(
+            "Legacy agent selection requires explicit agent modules or reviewed protected "
+            "removal decisions before cleanup: " + ", ".join(undecided)
+        )
 
 
 def apply_marker_placeholder_values(args: argparse.Namespace, decisions: Decisions) -> None:
@@ -3298,6 +3334,11 @@ def materialize(args: argparse.Namespace) -> Summary:
                 staging_root=staging_root,
                 decisions=decisions,
                 summary=summary,
+            )
+            render_instruction_profile(
+                staging_root=staging_root,
+                target_root=target_root,
+                marker_document=marker_document,
             )
             if license_preservation is not None:
                 staged_paths = apply_license_preservation(

@@ -150,6 +150,13 @@ DISCOVERY_SKIP_DIRS = frozenset(
 ADOPTION_MODE_MODULES = frozenset(
     {
         "agent-instructions",
+        "agent-copilot",
+        "agent-codex",
+        "agent-claude",
+        "agent-cursor",
+        "agent-gemini",
+        "agent-hermes",
+        "instruction-enforcement",
         "azure-devops-collaboration",
         "azure-devops-platform",
         "azure-pipelines",
@@ -185,9 +192,16 @@ TODO_DECISION_SECTIONS = frozenset(
 )
 TODO_LINK_LIMIT = 3
 VALIDATION_COMMANDS_BY_MODULE: dict[str, tuple[str, ...]] = {
-    "agent-instructions": (
-        "npm run lint:md",
-        "manual protected-file authorization review",
+    "agent-instructions": ("manual protected-file authorization review",),
+    "agent-copilot": ("manual Copilot instructions and retained setup-workflow review",),
+    "agent-codex": ("manual Codex entry-point and required protocol review",),
+    "agent-claude": ("manual Claude entry-point, imports, and required protocol review",),
+    "agent-cursor": ("manual Cursor rule applicability and required protocol review",),
+    "agent-gemini": ("manual Gemini entry-point and required protocol review",),
+    "agent-hermes": ("manual Hermes entry-point and required protocol review",),
+    "instruction-enforcement": (
+        "python .github/scripts/validate_instruction_profile.py",
+        "review explicit profile mode, selected modules, and local exception declarations",
     ),
     "azure-devops-collaboration": ("manual Azure DevOps collaboration template and policy review",),
     "azure-devops-platform": (

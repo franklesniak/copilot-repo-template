@@ -65,6 +65,7 @@ from template_sync_materialization_helpers import (  # noqa: E402
     parse_manifest_compatibility_groups,
     remove_inline_block_family,
     remove_inline_blocks_for_modules,
+    selected_relation_for_path,
     validate_module_compatibility,
 )
 
@@ -559,6 +560,12 @@ AZURE_DEVOPS_GUIDE_REFERENCE_PATHS = (
 ISSUE_694_PARTIAL_PROTECTED_DOC_MODULES = {
     "baseline",
     "agent-instructions",
+    "agent-copilot",
+    "agent-codex",
+    "agent-claude",
+    "agent-cursor",
+    "agent-gemini",
+    "agent-hermes",
     "github-platform",
     "github-actions",
     "github-templates",
@@ -3353,6 +3360,8 @@ def test_partial_reference_stripping_leaves_protected_docs_clean() -> None:
     failures: list[str] = []
 
     for relative_path in ISSUE_694_PROTECTED_DOC_PATHS:
+        relation = selected_relation_for_path(relative_path, state.mappings)
+        assert relation is not None and relation.is_retained_by(included_modules), relative_path
         stripped_text = _strip_inline_blocks_for_modules(relative_path, included_modules)
         findings = EXCLUDED_MODULE_REPORTER.protected_document_prose_reference_findings_for_text(
             relative_path,

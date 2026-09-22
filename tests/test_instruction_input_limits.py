@@ -205,7 +205,10 @@ def test_independent_input_oracles_kill_removed_guards(tmp_path: Path, guard: st
     for source in SCRIPT_DIR.iterdir():
         if source.suffix == ".py" and source.is_file() and not source.is_symlink():
             shutil.copyfile(source, mutant_dir / source.name)
-    helper = mutant_dir / "template_sync_materialization_helpers.py"
+    shared = SCRIPT_DIR.parents[1] / ".github" / "scripts"
+    for name in ("instruction_contract_core.py", "instruction_contract_support.py"):
+        shutil.copyfile(shared / name, mutant_dir / name)
+    helper = mutant_dir / "instruction_contract_support.py"
     source_text = helper.read_text(encoding="utf-8")
     substitutions = {
         "size": ("if len(data) > maximum_bytes:", "if False:"),

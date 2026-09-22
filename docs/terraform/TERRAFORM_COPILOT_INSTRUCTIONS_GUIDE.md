@@ -1,12 +1,12 @@
 # Guide: Writing Terraform Copilot Instructions
 
-**Version:** 1.0.20260919.0
+**Version:** 1.0.20260922.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-19
+- **Last Updated:** 2026-09-22
 - **Scope:** This document provides comprehensive guidance for creating a `.github/instructions/terraform.instructions.md` file that matches the depth, structure, and quality of the PowerShell instructions file (~143KB). It covers best practices, recommendations, rationale, and implementation guidance for Terraform-specific Copilot instructions.
 - **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md)
 

@@ -2,6 +2,13 @@ template_sync:
   source_repo: https://github.com/franklesniak/copilot-repo-template.git
   last_reviewed_template_commit: 0123456789abcdef0123456789abcdef01234567
   included_modules:
+    - instruction-enforcement
+    - agent-copilot
+    - agent-codex
+    - agent-claude
+    - agent-cursor
+    - agent-gemini
+    - agent-hermes
     - baseline
     - git-lfs
     - agent-instructions

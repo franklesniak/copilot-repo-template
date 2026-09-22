@@ -458,3 +458,17 @@ repos:
         pass_filenames: false
         files: '(^|/)([^/]+\.tf(\.json)?|\.tflint\.hcl)$'
   # template-sync: end terraform-only
+
+  # template-sync: begin instruction-enforcement-only
+  - repo: local
+    hooks:
+      - id: validate-instruction-profile
+        name: Validate retained instruction profile
+        entry: python .github/scripts/validate_instruction_profile.py
+        language: python
+        pass_filenames: false
+        always_run: true
+        additional_dependencies:
+          - PyYAML==6.0.3
+          - jsonschema==4.26.0
+  # template-sync: end instruction-enforcement-only

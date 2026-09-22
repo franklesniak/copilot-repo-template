@@ -1490,7 +1490,7 @@ If the project already runs Prettier from `package.json` scripts, a `repo: local
 
 The `files:` regex scopes the hook so pre-commit only invokes it on commits that touch `.json` or `.jsonc` files; without that filter, `pass_filenames: false` would cause the hook to run (and re-scan the repo's JSON/JSONC globs) on every commit. `pass_filenames: false` lets the glob in `entry:` decide which files Prettier inspects, which keeps the hook consistent with the `lint:json:format` script. The `--no-install` flag tells `npx` to fail rather than fetch an unpinned Prettier on demand, so the hook always uses the version recorded in `package.json` / `package-lock.json`.
 
-> **Node availability requirement.** Because this hook shells out to `npx`, every environment that runs `pre-commit` MUST have Node.js installed and the project's npm dependencies installed (typically via `npm ci`). The template's default CI workflows do not install Node, so adopters who add this hook MUST also add a Node setup step (for example, `actions/setup-node` followed by `npm ci`) to any workflow that runs `pre-commit run --all-files`, and ensure the same is true on contributor workstations.
+> **Node availability requirement.** Because this hook shells out to `npx`, every environment that runs it MUST have Node.js and the project's locked npm dependencies installed. Ordinary setup with the root lockfile retained uses `npm ci --ignore-scripts`. When Markdown is selected, the retained GitHub and Azure pre-commit CI routes already install Node and the locked root packages. Profiles that omit Markdown do not retain those setup steps: adopters who add this optional hook MUST provision Node and the locked dependencies in each affected CI route and on contributor workstations. Adding Prettier is intentional dependency maintenance; review and commit the updated manifest and lockfile before using locked setup.
 
 <!-- -->
 
@@ -1731,7 +1731,7 @@ If your project needs external URL checking, add it as a separate opt-in command
 
 ### Pre-commit Integration (Optional)
 
-The template intentionally does not run the Markdown link checker in default pre-commit hooks. If your downstream repository wants local pre-commit enforcement, first ensure contributors have Node.js, npm, and installed project dependencies (`npm install` or `npm ci`), then add a local hook:
+The template intentionally does not run the Markdown link checker in default pre-commit hooks. If your downstream repository wants local pre-commit enforcement, first ensure contributors have Node.js, npm, and installed project dependencies (`npm ci --ignore-scripts` with the retained root lockfile), then add a local hook:
 
 ```yaml
 - repo: local
@@ -4081,6 +4081,12 @@ Authorize `.github/workflow-security-contract.yml` explicitly as a protected pol
 
 Removing GitHub Actions requires reviewed cleanup of excluded standalone files and replacement of retained shared files with their pruned forms. Materialization never silently deletes those files. Validate the final downstream tree for excluded-module leftovers, including hooks, updater entries, documentation, and policy references. Remove the shared validator and schema only when neither Actions nor template-sync support remains. Dependabot's Actions updater survives only when both GitHub platform automation and Actions are retained; otherwise action updates need manual review.
 
-See the [workflow security guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/workflow-security.md) for the baseline/strict boundary, required authorization, exact command fingerprints, intentional failure-aggregation exceptions, and the SHA-pin vulnerability-alert limitation. Copilot setup and action-free acquisition remain future opt-in profiles; this module does not implement them.
+See the [workflow security guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/workflow-security.md) for the baseline/strict boundary, required authorization, exact command fingerprints, intentional failure-aggregation exceptions, and the SHA-pin vulnerability-alert limitation. Copilot prerequisite setup is available when `agent-instructions`, `agent-copilot`, and `github-actions` are selected together. Action-free acquisition remains a future opt-in profile.
 
 <!-- template-sync: end github-actions-only -->
+
+<!-- template-sync: begin instruction-enforcement-reference-only -->
+
+Retain `instruction-enforcement` with `agent-instructions` for portable static checks, even when future template sync and the Python project are omitted. Select baseline or a host CI route and explicitly select retained agent modules. Instructions without enforcement are a policy-only choice. See [static instruction enforcement](docs/instruction-enforcement.md) for mode migration and scoped local declarations.
+
+<!-- template-sync: end instruction-enforcement-reference-only -->

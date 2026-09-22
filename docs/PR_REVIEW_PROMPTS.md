@@ -4,7 +4,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-18
+- **Last Updated:** 2026-09-22
 - **Scope:** Ready-to-use prompts for responding to PR comments, code review
   feedback, branch management, and common false positives during code review.
 - **Related:** [Copilot Chat Prompts for Template Adoption](../COPILOT_CHAT_PROMPTS.md)
@@ -16,6 +16,26 @@ workflows. These prompts are designed to be copied directly into GitHub PR
 comments or Copilot Chat conversations.
 
 To refine a proposed issue without filing it, use the [Issue Evaluation Prompt](ISSUE_EVALUATION_PROMPT.md).
+
+<!-- template-sync: begin github-actions-reference-only -->
+## Requesting Copilot Review and Recording Effort
+
+Use this GitHub recipe with the local canonical Shared Review Governance and the retained agent's platform protocol. Prefer the GitHub plugin for capabilities it exposes; use a documented CLI/API fallback only for a missing capability. Before requesting, reconcile the current head and material PR description with existing requests and results. An accepted pending or unchanged clean request must not be duplicated.
+
+1. When a supported interface exposes effort selection, choose **Balanced** before requesting review. GitHub's web UI places this selector under **Reviewers**, next to Copilot. If the available interface cannot select effort, send one supported request and accept Lite. Do not resend an accepted Lite request merely to change effort. See [GitHub's effort selection instructions](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review#choosing-a-review-effort-level).
+2. For an authenticated GitHub CLI fallback, use `gh pr edit PR-NUMBER --repo OWNER/REPO --add-reviewer '@copilot'`, replacing the PR number and repository. Quote `'@copilot'` in PowerShell so it remains a literal argument rather than a splatting expression. This is a reviewer request, not an assignee change. The [CLI manual](https://cli.github.com/manual/gh_pr_edit) documents this special reviewer value; it is not supported on GitHub Enterprise Server.
+3. For a supported REST fallback, send `POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers` with the JSON `reviewers` array containing `copilot-pull-request-reviewer[bot]`. The CLI alias and REST bot login are different interfaces. See [GitHub's supported Copilot REST identity](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review) and [review-request API](https://docs.github.com/en/rest/pulls/review-requests#request-reviewers-for-a-pull-request). The documented CLI and REST request parameters do not expose an effort selector; do not invent one or claim they requested Balanced.
+4. Confirm delivery through fresh authenticated native request/review/run evidence before requesting the separate remote reviewer. A successful command or HTTP response alone does not establish a completed clean review. Reconcile uncertain delivery before retrying; apply the canonical per-service limits and complete finding inventory.
+5. Read the effort shown in the returned review's overview comment and record it separately from requested effort, alongside the native review link, identity and reviewed head. If the result does not disclose effort, record **unknown**, not an inference from timing or request method. GitHub documents [where actual effort is displayed](https://docs.github.com/en/copilot/concepts/agents/code-review#review-effort-level). Verify the authenticated actor, request linkage, timing and stable input before accepting a result.
+
+If an interface, entitlement, or authenticated readback is unavailable, record the native failure and the required operator action; keep that gate incomplete. Do not store or replay browser cookies, CSRF tokens, nonces, credentials, or private internal form fields. This recipe supplies operating details, not new authority or altered retry/round limits. Recheck the linked primary documentation when interface behavior changes.
+<!-- template-sync: end github-actions-reference-only -->
+
+<!-- template-sync: begin claude-review-command-reference-only -->
+## Local Claude Review Command
+
+When `agent-claude`, `agent-instructions`, and `github-actions` are retained, invoke `/review-loop PR-URL` in Claude Code using the intended pull request URL. The local command at `.claude/commands/review-loop.md` loads the retained local protocol. It supplies no standing content, push, or merge authority. Removing the agent or GitHub host module removes the command and this reference through normal reviewed materialization; baseline, Markdown, Python project, and template-sync support are not runtime prerequisites for the command.
+<!-- template-sync: end claude-review-command-reference-only -->
 
 ## Responding to Code Review Comments
 

@@ -445,7 +445,7 @@ function collectGithubStepSelectors(repoRoot, sourcePath, stepWith, matrix, sele
                 if (resolved.missingProperty) {
                     throw new Error(`Node.js direct matrix input ${resolved.origin} is missing and has no version-file fallback; no checked-in runtime can be inventoried.`);
                 }
-                continue;
+                throw new Error('Node.js setup input has no nonblank node-version or version-file fallback; no checked-in runtime can be inventoried.');
             }
             const selectedFile = resolveGithubExpression(file, combination);
             if (!selectedFile.rawValue.trim()) {
@@ -657,6 +657,16 @@ function collectAzureStepSelectors(repoRoot, relativePipelinePath, steps, contex
 
         const taskName = step.task.trim();
         const inputs = step.inputs || {};
+        const selectedInput = /^UseNode@1$/i.test(taskName) ? 'version'
+            : /^fromFile$/i.test(String(inputs.versionSource || '').trim())
+                ? 'versionFilePath' : 'versionSpec';
+        if (!Object.hasOwn(inputs, selectedInput)) {
+            problems.push({
+                path: relativePipelinePath,
+                message: `Azure Pipelines ${taskName} has no checked-in ${selectedInput} input; no runtime can be inventoried.`,
+            });
+            continue;
+        }
         if (/^UseNode@1$/i.test(taskName) && Object.prototype.hasOwnProperty.call(inputs, 'version')) {
             for (const resolved of resolveAzureSelectorValue(inputs.version, context, relativePipelinePath, problems)) {
                 addSelector(selectors, {

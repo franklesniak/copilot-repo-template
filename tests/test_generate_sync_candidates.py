@@ -2935,3 +2935,47 @@ def test_invalid_marker_schema_is_rejected(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert "Schema validation failed for .template-sync/marker.yml" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "agent_module",
+    [
+        "agent-copilot",
+        "agent-codex",
+        "agent-claude",
+        "agent-cursor",
+        "agent-gemini",
+        "agent-hermes",
+    ],
+)
+def test_agent_selection_guidance_does_not_require_optional_enforcement(agent_module: str) -> None:
+    """Policy-only agents require review without silently selecting optional tooling."""
+    modules = frozenset({"agent-instructions", agent_module})
+    guidance = sync_candidates.validation_commands_for_modules(modules)
+    assert "manual" in guidance
+    for unrelated in ("python ", "pytest ", "npm ", "pre-commit ", "validate_instruction_profile"):
+        assert unrelated not in guidance
+    assert (
+        sync_candidates.adoption_mode_for_modules(
+            frozenset({agent_module}), (), False, "minimal-preservation"
+        )
+        == "minimal-preservation"
+    )
+
+
+def test_enforcement_guidance_uses_portable_profile_dispatcher() -> None:
+    """Selected enforcement names its portable CLI independently of project/host modules."""
+    guidance = sync_candidates.validation_commands_for_modules(
+        frozenset({"instruction-enforcement"})
+    )
+    assert "python .github/scripts/validate_instruction_profile.py" in guidance
+    assert "selected modules" in guidance
+    assert "local exception declarations" in guidance
+    for unrelated in (".template-sync/", "pytest ", "npm ", "pre-commit "):
+        assert unrelated not in guidance
+    assert (
+        sync_candidates.adoption_mode_for_modules(
+            frozenset({"instruction-enforcement"}), (), False, "tailored"
+        )
+        == "tailored"
+    )

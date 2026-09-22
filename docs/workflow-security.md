@@ -4,7 +4,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-21
+- **Last Updated:** 2026-09-22
 - **Scope:** Documents the retained workflow contract, validation commands, security limits, and module lifecycle.
 
 The `github-actions` module owns the workflow contract, this guide, and the standalone Workflow Security job. The validator and its schema are shared with `template-sync-support` as trusted materializer dependencies. Actions validation remains usable without the Markdown, Python project, baseline, or template-sync-support modules. Install the validator dependencies declared in the standalone workflow before running the direct command:

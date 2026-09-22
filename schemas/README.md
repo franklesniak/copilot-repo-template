@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-18
+- **Last Updated:** 2026-09-22
 - **Scope:** Conventions for JSON Schemas that describe load-bearing JSON and YAML files in this repository, the baseline placeholder manifest schema, the template sync manifest, marker, instruction-contract, and first-adoption quality suppression schemas, plus a clearly removable worked example (`example-config.schema.json` with valid and invalid example data) wired into pre-commit and data CI to demonstrate the schema-validation pipeline end to end.
 - **Related:** [Repository Copilot Instructions](../.github/copilot-instructions.md), [Template Design Decisions — Schema Location at Repository Root](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-location-at-repository-root), [Template Design Decisions — Schema Validation Tiers](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-validation-tiers), [Template Design Decisions — Built-in Schema Validation for Real Load-Bearing Configuration Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files), [Template Design Decisions — `additionalProperties` Policy](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-additionalproperties-policy), [Template Design Decisions — Testing Beyond Linting for JSON/YAML](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-testing-beyond-linting-for-jsonyaml)
 <!-- template-sync: begin json-reference-only -->
@@ -441,3 +441,11 @@ This directory ships one worked example schema and production schemas for the te
 - Any JSONC, JSON5, or TOML schema validation tooling.
 
 Additional schema-backed file families will be added in follow-up changes when concrete contracts are introduced or when downstream consumers decide to adopt them.
+
+<!-- template-sync: begin instruction-enforcement-reference-only -->
+
+## Optional Instruction Enforcement Schemas
+
+`instruction-profile.schema.json` validates the protected explicit applicability and content-scoped local declarations. `instruction-contracts.schema.json` validates the retained standalone catalog. Both are retained with `agent-instructions` and `instruction-enforcement`, independently of the optional schema examples or Python project modules. The `validate-instruction-profile` hook and dedicated selected-host routes validate real inputs; schema examples and independent native failures are covered by `tests/test_instruction_profile.py`. See [static instruction enforcement](../docs/instruction-enforcement.md) before migrating modes or removing these files.
+
+<!-- template-sync: end instruction-enforcement-reference-only -->

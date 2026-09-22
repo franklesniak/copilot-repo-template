@@ -576,19 +576,21 @@ ls -la
 
 ### Step 2: Install Node.js Dependencies
 
-Run the following command to install the Node.js dependencies defined in `package.json`:
+When Markdown tooling and the root `package-lock.json` are retained, install the locked Node.js dependencies:
 
 **All platforms:**
 
 ```bash
-npm install
+npm ci --ignore-scripts
 ```
 
 This command:
 
-- Reads the `package.json` file to determine which packages are needed
+- Checks that `package.json` and `package-lock.json` agree
 - Downloads and installs those packages into a `node_modules` folder
-- Creates or updates `package-lock.json` to lock dependency versions
+- Preserves the committed lockfile and disables dependency lifecycle scripts during installation
+
+Use `npm install --ignore-scripts` or `npm update --ignore-scripts` only for intentional dependency maintenance, then review the manifest and lockfile changes. Later lint and test commands still execute installed tools.
 
 **What gets installed:** The Node.js dependencies are primarily for **markdown linting** (markdownlint-cli2). This ensures your documentation follows consistent formatting rules.
 
@@ -2340,9 +2342,13 @@ Before committing your changes, validate that everything is configured correctly
 
 ### Confirm Local Validation Prerequisites
 
+<!-- template-sync: begin copilot-setup-reference-only -->
+When retaining Copilot with GitHub Actions, follow [Copilot validation setup](docs/copilot-setup.md) to prepare the selected tools. The setup workflow activates for Copilot only after it reaches the default branch. A branch check does not prove that integration, and failed setup can still leave the agent running; verify prerequisites and run the retained validation gates.
+<!-- template-sync: end copilot-setup-reference-only -->
+
 Before running validation commands, confirm the tool runtime for each check is installed:
 
-- Run `npm install` or `npm ci` before `npm run lint:md`, `npm run lint:md:nested`, or other npm-backed Markdown lint commands.
+- When Markdown tooling and the root lockfile are retained, run `npm ci --ignore-scripts` before `npm run lint:md`, `npm run lint:md:nested`, or other npm-backed Markdown lint commands. Profiles that omit Markdown do not need Node for these checks.
 - Install `pre-commit` in the active Python environment, or use `python -m pre_commit` / `python3 -m pre_commit` if the `pre-commit` executable is not on `PATH`.
 - Treat `pre-commit install` as a local developer setup step. Automation should usually run `pre-commit run --all-files` directly unless your workflow explicitly needs to install Git hooks.
 - Keep Python available for Python-based hooks such as `check-jsonschema`, `check-metaschema`, and repo-local hook wrappers, even if your repository has no Python project source.
@@ -2595,16 +2601,16 @@ pre-commit --version
 
 ### Node.js/npm Errors
 
-**Problem:** `npm install` fails with permission errors.
+**Problem:** `npm ci --ignore-scripts` fails with permission errors.
 
 **Solution:**
 
 - **Windows:** Run PowerShell as Administrator
-- **macOS/Linux:** Don't use `sudo npm install`. Instead, fix npm permissions or use a version manager like nvm.
+- **macOS/Linux:** Don't run npm setup with `sudo`. Instead, fix npm permissions or use a version manager like nvm.
 
 **Problem:** `npm run lint:md` fails with "command not found".
 
-**Solution:** Run `npm install` first to install dependencies.
+**Solution:** With the retained root lockfile, run `npm ci --ignore-scripts` first to install dependencies.
 
 ### Placeholder Check CI Failures
 
@@ -2771,3 +2777,9 @@ After completing the initial setup, you may want to explore additional customiza
 ---
 
 **Congratulations!** 🎉 Your repository is now fully configured and ready for development. Happy coding!
+
+<!-- template-sync: begin instruction-enforcement-reference-only -->
+
+Retain `instruction-enforcement` with `agent-instructions` for portable static checks, even when future template sync and the Python project are omitted. Select baseline or a host CI route and explicitly select retained agent modules. Instructions without enforcement are a policy-only choice. See [static instruction enforcement](docs/instruction-enforcement.md) for mode migration and scoped local declarations.
+
+<!-- template-sync: end instruction-enforcement-reference-only -->

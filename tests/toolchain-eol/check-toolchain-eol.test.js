@@ -483,6 +483,76 @@ function writeNodeWorkflow(repoRoot, inputs, matrix) {
     }));
 }
 
+test('Azure Node tasks report missing selectors and preserve explicit siblings', () => {
+    const cases = [
+        ['UseNode@1', undefined, 'version'],
+        ['UseNode@1', {}, 'version'],
+        ['NodeTool@0', undefined, 'versionSpec'],
+        ['NodeTool@0', {}, 'versionSpec'],
+        ['NodeTool@0', { versionSource: 'fromFile' }, 'versionFilePath'],
+        ['NodeTool@0', { versionSource: 'fromFile', versionSpec: '24' }, 'versionFilePath'],
+    ];
+    for (const [task, inputs, missing] of cases) {
+        const repoRoot = makeTempRepo();
+        writeFile(repoRoot, '.azuredevops/pipelines/node.yml', yaml.stringify({ steps: [
+            { task, inputs },
+            { task: 'UseNode@1', inputs: { version: '24' } },
+        ] }));
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        assert.deepEqual(inventory.selectors.map((item) => item.rawValue), ['24']);
+        assert.equal(inventory.problems.length, 1);
+        assert(inventory.problems[0].message.includes(`no checked-in ${missing} input`));
+    }
+});
+
+test('missing Azure selector oracle detects guard removal', () => {
+    const repoRoot = makeTempRepo();
+    writeFile(repoRoot, '.azuredevops/pipelines/node.yml', yaml.stringify({ steps: [
+        { task: 'UseNode@1' },
+    ] }));
+    assert.equal(scanner.collectNodeSelectors(repoRoot).problems.length, 1);
+    const original = fs.readFileSync(path.resolve(__dirname, '../../.github/scripts/check-toolchain-eol.js'), 'utf8');
+    const guard = 'if (!Object.hasOwn(inputs, selectedInput))';
+    assert.equal(original.split(guard).length - 1, 1);
+    const mutant = path.join(repoRoot, 'scanner-mutant.js');
+    fs.writeFileSync(mutant, original.replace(guard, 'if (false)'));
+    const child = spawnSync(process.execPath, ['-e', `
+        const assert = require('assert/strict');
+        const inventory = require(process.argv[1]).collectNodeSelectors(process.argv[2]);
+        assert.equal(inventory.problems.length, 1, 'An implicit Azure task default must not pass inventory.');
+    `, mutant, repoRoot], {
+        encoding: 'utf8', timeout: 30000,
+        env: { ...process.env, NODE_PATH: path.resolve(__dirname, '../../node_modules') },
+    });
+    assert.ifError(child.error);
+    assert.equal(child.status, 1);
+    assert.match(child.stderr, /AssertionError/);
+    assert.match(child.stderr, /An implicit Azure task default must not pass inventory/);
+});
+
+test('CLI returns native failure for missing GitHub and Azure Node selectors', () => {
+    for (const host of ['github', 'azure']) {
+        const repoRoot = makeTempRepo();
+        if (host === 'github') {
+            writeNodeWorkflow(repoRoot, {});
+        } else {
+            writeFile(repoRoot, '.azuredevops/pipelines/node.yml', yaml.stringify({ steps: [
+                { task: 'NodeTool@0' },
+            ] }));
+        }
+        const child = spawnSync(process.execPath, [
+            path.resolve(__dirname, '../../.github/scripts/check-toolchain-eol.js'),
+            '--repo-root', repoRoot, '--schedule-file',
+            path.join(__dirname, 'fixtures/node-schedule.json'), '--json',
+        ], { encoding: 'utf8', timeout: 30000 });
+        assert.ifError(child.error);
+        assert.equal(child.status, 1, child.stderr);
+        const report = JSON.parse(child.stdout);
+        assert.equal(report.problems.length, 1);
+        assert.deepEqual(report.selectors, []);
+    }
+});
+
 const nodeVersionFileCases = [
     ['.nvmrc', '24.18.0\n', '24.18.0'],
     ['.node-version', '24.18.0\n', '24.18.0'],
@@ -768,19 +838,52 @@ test('setup-node preserves missing-property fallback and excluded combinations',
     assert.deepEqual(scanner.collectNodeSelectors(repoRoot), { selectors: [], problems: [] });
 });
 
-test('setup-node preserves explicit empty matrix and auth-only inputs', () => {
+test('setup-node reports blank and auth-only inputs without losing valid siblings', () => {
     for (const empty of ['', ' ', null]) {
         const repoRoot = makeTempRepo();
         writeNodeWorkflow(repoRoot, { 'node-version': '${{ matrix.node }}' }, { node: [empty, '24'] });
         const inventory = scanner.collectNodeSelectors(repoRoot);
-        assert.deepEqual(inventory.problems, []);
+        assert.equal(inventory.problems.length, 1);
+        assert.match(inventory.problems[0].message, /no nonblank node-version or version-file fallback/);
         assert.deepEqual(inventory.selectors.map((item) => item.rawValue), ['24']);
         writeNodeWorkflow(repoRoot, { 'node-version': empty });
-        assert.deepEqual(scanner.collectNodeSelectors(repoRoot), { selectors: [], problems: [] });
+        const blank = scanner.collectNodeSelectors(repoRoot);
+        assert.deepEqual(blank.selectors, []);
+        assert.equal(blank.problems.length, 1);
+        assert.match(blank.problems[0].message, /no checked-in runtime can be inventoried/);
     }
+    for (const inputs of [undefined, {}, { 'registry-url': 'https://registry.npmjs.org' }]) {
+        const repoRoot = makeTempRepo();
+        writeNodeWorkflow(repoRoot, inputs);
+        const inventory = scanner.collectNodeSelectors(repoRoot);
+        assert.deepEqual(inventory.selectors, []);
+        assert.equal(inventory.problems.length, 1);
+        assert.match(inventory.problems[0].message, /no nonblank node-version or version-file fallback/);
+        assert.equal(inventory.problems[0].path.split(path.sep).join('/'), '.github/workflows/node.yml');
+    }
+});
+
+test('missing literal selector oracle detects diagnostic removal', () => {
     const repoRoot = makeTempRepo();
-    writeNodeWorkflow(repoRoot, { 'registry-url': 'https://registry.npmjs.org' });
-    assert.deepEqual(scanner.collectNodeSelectors(repoRoot), { selectors: [], problems: [] });
+    writeNodeWorkflow(repoRoot, {});
+    assert.equal(scanner.collectNodeSelectors(repoRoot).problems.length, 1);
+    const original = fs.readFileSync(path.resolve(__dirname, '../../.github/scripts/check-toolchain-eol.js'), 'utf8');
+    const diagnostic = "throw new Error('Node.js setup input has no nonblank node-version or version-file fallback; no checked-in runtime can be inventoried.');";
+    assert.equal(original.split(diagnostic).length - 1, 1);
+    const mutant = path.join(repoRoot, 'scanner-mutant.js');
+    fs.writeFileSync(mutant, original.replace(diagnostic, 'continue;'));
+    const child = spawnSync(process.execPath, ['-e', `
+        const assert = require('assert/strict');
+        const inventory = require(process.argv[1]).collectNodeSelectors(process.argv[2]);
+        assert.equal(inventory.problems.length, 1, 'An implicit PATH runtime must not pass inventory.');
+    `, mutant, repoRoot], {
+        encoding: 'utf8', timeout: 30000,
+        env: { ...process.env, NODE_PATH: path.resolve(__dirname, '../../node_modules') },
+    });
+    assert.ifError(child.error);
+    assert.equal(child.status, 1);
+    assert.match(child.stderr, /AssertionError/);
+    assert.match(child.stderr, /An implicit PATH runtime must not pass inventory/);
 });
 
 test('missing matrix diagnostic oracle detects assertion removal', () => {
@@ -800,6 +903,8 @@ test('missing matrix diagnostic oracle detects assertion removal', () => {
         const inventory = require(process.argv[1]).collectNodeSelectors(process.argv[2]);
         assert.deepEqual(inventory.selectors.map((item) => item.rawValue), ['24']);
         assert.equal(inventory.problems.length, 1, 'A valid sibling must not hide missing selection.');
+        assert.match(inventory.problems[0].message, /direct matrix input matrix.node is missing/,
+            'Missing matrix properties need their specific diagnostic.');
     `, mutant, repoRoot], {
         encoding: 'utf8', timeout: 30000,
         env: { ...process.env, NODE_PATH: path.resolve(__dirname, '../../node_modules') },
@@ -807,7 +912,7 @@ test('missing matrix diagnostic oracle detects assertion removal', () => {
     assert.ifError(child.error);
     assert.equal(child.status, 1);
     assert.match(child.stderr, /AssertionError/);
-    assert.match(child.stderr, /A valid sibling must not hide missing selection/);
+    assert.match(child.stderr, /Missing matrix properties need their specific diagnostic/);
 });
 
 test('setup-node static matrix diagnostics retain unknown and malformed inputs', () => {

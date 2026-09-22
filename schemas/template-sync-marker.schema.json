@@ -326,6 +326,13 @@
     "moduleName": {
       "type": "string",
       "enum": [
+        "instruction-enforcement",
+        "agent-copilot",
+        "agent-codex",
+        "agent-claude",
+        "agent-cursor",
+        "agent-gemini",
+        "agent-hermes",
         "baseline",
         "git-lfs",
         "agent-instructions",

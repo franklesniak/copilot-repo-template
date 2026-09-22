@@ -195,3 +195,8 @@ steps:
     displayName: "Run validate-dependabot-config-valid-examples"
     workingDirectory: "$(Build.SourcesDirectory)"
   # template-sync: end github-platform-only
+
+  # template-sync: begin instruction-enforcement-only
+  - script: pre-commit run validate-instruction-profile --all-files
+    displayName: Run validate-instruction-profile
+  # template-sync: end instruction-enforcement-only
