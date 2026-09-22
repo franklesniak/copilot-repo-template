@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import posixpath
 import re
 import stat
 import subprocess
@@ -16,6 +17,7 @@ from dataclasses import dataclass, replace
 from itertools import pairwise
 from pathlib import Path
 from typing import Any, NoReturn, cast
+from urllib.parse import unquote, urlsplit
 
 import instruction_contract_support as support
 from instruction_contract_support import (
@@ -31,6 +33,11 @@ from instruction_contract_support import (
     parse_markdown_fence_open,
     read_repository_text,
 )
+
+MARKDOWN_INLINE_LINK_RE = re.compile(
+    r"(?<!!)\[[^\]\n]+\]\((?P<target><[^>\n]+>|[^)\s\n]+)(?:\s+[^)\n]*)?\)"
+)
+MARKDOWN_REFERENCE_DEFINITION_RE = re.compile(r"^ {0,3}\[[^\]\n]+\]:\s+(?P<target><[^>\n]+>|\S+)")
 
 MAXIMUM_INPUT_BYTES = 1024 * 1024
 
@@ -173,6 +180,19 @@ class ProtectedGuideReferenceObligation:
 
 
 @dataclass(frozen=True)
+class ProtectedGuideReferenceFinding:
+    """A declared reference that remains after its target module is excluded."""
+
+    path: str
+    line_number: int
+    contract_key: str
+    reference_kind: str
+    target: str
+    target_path: str | None
+    target_modules: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class InstructionContractWaiver:
     """A marker waiver for one missing instruction-contract anchor."""
 
@@ -269,6 +289,7 @@ class InstructionContractReport:
     active_claude_imports: tuple[ActiveClaudeImport, ...] = ()
     tracked_claude_local_memory: tuple[TrackedClaudeLocalMemory, ...] = ()
     tracked_claude_local_memory_inventory_applicable: bool = True
+    stale_protected_guide_references: tuple[ProtectedGuideReferenceFinding, ...] = ()
 
     @property
     def has_failures(self) -> bool:
@@ -281,6 +302,7 @@ class InstructionContractReport:
             self.missing_files
             or self.missing_anchors
             or self.stale_protected_guide_sections
+            or self.stale_protected_guide_references
             or self.active_claude_imports
             or self.tracked_claude_local_memory
         )
@@ -2038,12 +2060,102 @@ def section_failures(
     return list(dict.fromkeys(failures))
 
 
+def markdown_link_targets_from_text(text: str) -> tuple[tuple[int, str], ...]:
+    """Return Markdown link targets outside fenced code blocks."""
+    targets: list[tuple[int, str]] = []
+    for line_number, line in lines_outside_markdown_fences(
+        text,
+        fence_context=MARKDOWN_FENCE_CONTEXT,
+    ):
+        for match in MARKDOWN_INLINE_LINK_RE.finditer(line):
+            targets.append((line_number, normalize_markdown_target(match.group("target"))))
+        reference_match = MARKDOWN_REFERENCE_DEFINITION_RE.match(line)
+        if reference_match is not None:
+            targets.append(
+                (line_number, normalize_markdown_target(reference_match.group("target")))
+            )
+    return tuple(targets)
+
+
+def normalize_markdown_target(target: str) -> str:
+    """Strip Markdown angle brackets from a link target."""
+    if target.startswith("<") and target.endswith(">"):
+        return target[1:-1]
+    return target
+
+
+def resolve_relative_markdown_target(source_path: str, target: str) -> str | None:
+    """Resolve a Markdown link target to a repository-relative path when local."""
+    parsed = urlsplit(target)
+    if parsed.scheme or parsed.netloc or target.startswith("#"):
+        return None
+    if parsed.path == "":
+        return None
+
+    decoded_path = unquote(parsed.path)
+    if decoded_path.startswith("/"):
+        return None
+
+    source_dir = posixpath.dirname(source_path)
+    normalized_path = posixpath.normpath(posixpath.join(source_dir, decoded_path))
+    if normalized_path == "." or normalized_path.startswith("../") or normalized_path == "..":
+        return None
+    return normalized_path
+
+
+def protected_guide_reference_findings(
+    *, repo_root: Path, obligation: ProtectedGuideReferenceObligation
+) -> tuple[ProtectedGuideReferenceFinding, ...]:
+    """Match declared references with bounded input and the shared fence grammar."""
+    try:
+        path = support.resolve_repo_path(repo_root, obligation.path)
+        text = read_repository_text(path, repo_root, maximum_bytes=MAXIMUM_INPUT_BYTES)
+    except support.TemplateSyncMaterializationError as error:
+        if not isinstance(error.__cause__, OSError):
+            raise
+        io_error = error.__cause__
+        return (
+            ProtectedGuideReferenceFinding(
+                path=obligation.path,
+                line_number=0,
+                contract_key=obligation.key,
+                reference_kind=obligation.reference_kind,
+                target=f"Unable to read protected guide: {support.os_error_summary(io_error)}",
+                target_path=obligation.target_path,
+                target_modules=obligation.target_modules,
+            ),
+        )
+    matches: list[tuple[int, str]] = []
+    if obligation.reference_kind == "markdown-relative-link":
+        for line_number, target in markdown_link_targets_from_text(text):
+            if resolve_relative_markdown_target(obligation.path, target) == obligation.target_path:
+                matches.append((line_number, target))
+    else:
+        for line_number, line in lines_outside_markdown_fences(
+            text, fence_context=MARKDOWN_FENCE_CONTEXT
+        ):
+            matches.extend((line_number, token) for token in obligation.tokens if token in line)
+    return tuple(
+        ProtectedGuideReferenceFinding(
+            path=obligation.path,
+            line_number=line_number,
+            contract_key=obligation.key,
+            reference_kind=obligation.reference_kind,
+            target=target,
+            target_path=obligation.target_path,
+            target_modules=obligation.target_modules,
+        )
+        for line_number, target in matches
+    )
+
+
 def validate_contracts(
     *,
     mode: str,
     repo_root: Path,
     contracts: tuple[InstructionContract, ...],
     protected_guide_section_obligations: tuple[ProtectedGuideSectionObligation, ...] = (),
+    protected_guide_reference_obligations: tuple[ProtectedGuideReferenceObligation, ...] = (),
     included_modules: set[str] | None = None,
     protected_decisions: tuple[support.ProtectedFileDecision, ...] = (),
     waivers: tuple[InstructionContractWaiver, ...] = (),
@@ -2056,6 +2168,7 @@ def validate_contracts(
     missing_files: list[MissingFile] = []
     missing_anchors: list[MissingAnchor] = []
     stale_protected_guide_sections: list[StaleProtectedGuideSection] = []
+    stale_protected_guide_references: list[ProtectedGuideReferenceFinding] = []
     applied_waivers: list[InstructionContractWaiver] = []
     applied_protected_guide_waivers: list[support.ProtectedGuideContractWaiver] = []
     authorized_removals: list[AuthorizedRemoval] = []
@@ -2195,6 +2308,40 @@ def validate_contracts(
             else:
                 stale_protected_guide_sections.extend(stale_sections)
 
+        for reference_obligation in protected_guide_reference_obligations:
+            if reference_obligation.path in excluded_contract_paths:
+                continue
+            if not protected_guide_obligation_applies(
+                reference_obligation.target_modules, included_modules
+            ):
+                continue
+            if read_instruction_file(repo_root, reference_obligation.path) is None:
+                removal = authorized_removal_for(protected_decisions, reference_obligation.path)
+                if removal is not None:
+                    if removal.path not in authorized_removal_paths:
+                        authorized_removals.append(removal)
+                        authorized_removal_paths.add(removal.path)
+                elif reference_obligation.path not in missing_file_paths:
+                    missing_files.append(MissingFile(path=reference_obligation.path))
+                    missing_file_paths.add(reference_obligation.path)
+                continue
+            reference_findings = protected_guide_reference_findings(
+                repo_root=repo_root, obligation=reference_obligation
+            )
+            if not reference_findings:
+                continue
+            reference_waiver = find_protected_guide_waiver(
+                protected_guide_waivers,
+                path=reference_obligation.path,
+                contract_key=reference_obligation.key,
+                target_modules=reference_obligation.target_modules,
+                target_path=reference_obligation.target_path,
+            )
+            if reference_waiver is not None:
+                applied_protected_guide_waivers.append(reference_waiver)
+            else:
+                stale_protected_guide_references.extend(reference_findings)
+
     return InstructionContractReport(
         mode=mode,
         contracts_checked=tuple(checked_contracts),
@@ -2202,6 +2349,7 @@ def validate_contracts(
         missing_files=tuple(missing_files),
         missing_anchors=tuple(missing_anchors),
         stale_protected_guide_sections=tuple(stale_protected_guide_sections),
+        stale_protected_guide_references=tuple(stale_protected_guide_references),
         applied_waivers=tuple(dict.fromkeys(applied_waivers)),
         applied_protected_guide_waivers=tuple(dict.fromkeys(applied_protected_guide_waivers)),
         authorized_removals=tuple(authorized_removals),
@@ -2255,6 +2403,15 @@ def print_report(report: InstructionContractReport) -> None:
                 f"  - {stale_section.path}: {stale_section.contract_key}: stale "
                 f"{stale_section.anchor_type}: {stale_section.anchor} "
                 f"(target modules: {', '.join(stale_section.target_modules)})"
+            )
+
+    if report.stale_protected_guide_references:
+        print("\nStale protected-guide references requiring owner review:")
+        for reference in report.stale_protected_guide_references:
+            print(
+                f"  - {reference.path}:{reference.line_number}: {reference.contract_key}: "
+                f"{reference.reference_kind}: {reference.target} "
+                f"(target modules: {', '.join(reference.target_modules)})"
             )
 
     if report.active_claude_imports:

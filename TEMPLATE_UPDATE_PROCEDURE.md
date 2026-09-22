@@ -745,7 +745,7 @@ Manifest version 2 and version 3 rows MAY also use `requires_any`: the path is i
 | `.github/scripts/validate_instruction_profile.py`, `.github/instruction-profile.yml`, `.github/instruction-contracts.yml` | `agent-instructions`, `instruction-enforcement` |
 | `schemas/instruction-profile.schema.json`, `schemas/instruction-contracts.schema.json` | one of `instruction-enforcement`, `template-sync-support` |
 | `schemas/examples/instruction-contracts/**`, `schemas/examples/instruction-profile/**`, `docs/instruction-enforcement.md` | `agent-instructions`, `instruction-enforcement` |
-| `tests/test_instruction_profile.py` | `template-sync-support` |
+| `tests/test_instruction_profile.py`, `tests/test_instruction_profile_output.py`, `tests/test_instruction_profile_references.py` | `template-sync-support` |
 | `.github/workflows/instruction-contracts.yml` | `agent-instructions`, `instruction-enforcement`, `github-actions` |
 | `.azuredevops/pipelines/instruction-contracts.yml` | `agent-instructions`, `instruction-enforcement`, `azure-pipelines` |
 | `.template-sync/marker.yml`, `.template-sync/manifest.yml`, `.template-sync/instruction-contracts.yml`, `.template-sync/first-adoption/**`, `.template-sync/scripts/**`, `templates/adoption/**` | `template-sync-support` |

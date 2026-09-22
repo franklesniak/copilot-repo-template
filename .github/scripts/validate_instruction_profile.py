@@ -65,6 +65,9 @@ def validate_standalone(root: Path, profile: dict[str, Any]) -> core.Instruction
         protected_guide_section_obligations=core.parse_protected_guide_section_obligations(
             catalog, known_modules
         ),
+        protected_guide_reference_obligations=core.parse_protected_guide_reference_obligations(
+            catalog, known_modules
+        ),
     )
     failures = {(item.path, item.anchor) for item in report.missing_anchors}
     failures.update((item.path, "file:absent") for item in report.missing_files)
@@ -73,6 +76,10 @@ def validate_standalone(root: Path, profile: dict[str, Any]) -> core.Instruction
         for item in report.stale_protected_guide_sections
     )
     applied: set[tuple[str, str]] = set()
+    failures.update(
+        (item.path, f"reference:{item.contract_key}:{item.reference_kind}:{item.target}")
+        for item in report.stale_protected_guide_references
+    )
     for declaration in profile["exceptions"]:
         path, directory = support.normalize_repository_path(declaration["path"], "exception.path")
         if directory:
@@ -104,6 +111,12 @@ def validate_standalone(root: Path, profile: dict[str, Any]) -> core.Instruction
             item
             for item in report.stale_protected_guide_sections
             if (item.path, f"stale:{item.contract_key}:{item.anchor_type}:{item.anchor}")
+            not in applied
+        ),
+        stale_protected_guide_references=tuple(
+            item
+            for item in report.stale_protected_guide_references
+            if (item.path, f"reference:{item.contract_key}:{item.reference_kind}:{item.target}")
             not in applied
         ),
     )

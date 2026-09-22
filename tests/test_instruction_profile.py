@@ -469,7 +469,16 @@ def test_current_decision_authorizes_legacy_agent_removal(tmp_path: Path) -> Non
 
 
 def run_migration_schema_control(
-    stage: Path, target: Path, *, redirect_trust: bool = False
+    stage: Path,
+    target: Path,
+    *,
+    redirect_trust: bool = False,
+    omit_root_normalization: bool = False,
+    omit_scoped_retirement: bool = False,
+    omit_reference_validation: bool = False,
+    restore_prior_path_prefilter: bool = False,
+    reverse_section_precedence: bool = False,
+    marker_document: dict[str, Any] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run the real migration or an exact schema-provenance mutant natively."""
     source_path = ROOT / ".template-sync/scripts/instruction_profile_migration.py"
@@ -478,6 +487,40 @@ def run_migration_schema_control(
         guard = "TRUSTED_TOOL_ROOT = Path(__file__).resolve().parents[2]"
         assert source.count(guard) == 1
         source = source.replace(guard, "TRUSTED_TOOL_ROOT = Path(sys.argv[1])")
+    if omit_root_normalization:
+        for name in ("staging_root", "target_root"):
+            guard = f"    {name} = {name}.resolve()\n"
+            assert source.count(guard) == 1
+            source = source.replace(guard, "")
+    if omit_scoped_retirement:
+        guard = "return core.section_applies(section, modules)"
+        assert source.count(guard) == 1
+        source = source.replace(guard, "return True")
+    if omit_reference_validation:
+        guard = "                protected_guide_reference_obligations=reference_obligations,\n"
+        assert source.count(guard) == 1
+        source = source.replace(guard, "")
+    if restore_prior_path_prefilter:
+        guard = '                exceptions.extend(local.get("exceptions", []))'
+        assert source.count(guard) == 1
+        source = source.replace(
+            guard,
+            "                active_paths = {item.path for item in contracts if set(item.requires_modules) <= modules}\n"
+            '                for declaration in local.get("exceptions", []):\n'
+            '                    if declaration["path"] in active_paths:\n'
+            "                        exceptions.append(declaration)\n"
+            "                    else:\n"
+            "                        retired_exceptions.append(declaration)",
+        )
+    if reverse_section_precedence:
+        guard = "key=lambda item: len(item.heading), reverse=True"
+        assert source.count(guard) == 1
+        source = source.replace(guard, "key=lambda item: len(item.heading), reverse=False")
+    marker_document = marker_document or {
+        "template_sync": {
+            "included_modules": ["agent-instructions", "instruction-enforcement", "baseline"]
+        }
+    }
     program = (
         "import sys\n"
         "from pathlib import Path\n"
@@ -486,8 +529,7 @@ def run_migration_schema_control(
         f"exec(compile({source!r}, {str(source_path)!r}, 'exec'), namespace)\n"
         "namespace['render_instruction_profile'](\n"
         "    staging_root=Path(sys.argv[1]), target_root=Path(sys.argv[2]),\n"
-        "    marker_document={'template_sync': {'included_modules': [\n"
-        "        'agent-instructions', 'instruction-enforcement', 'baseline']}})\n"
+        f"    marker_document={marker_document!r})\n"
     )
     return subprocess.run(
         [sys.executable, "-c", program, str(stage), str(target)],
@@ -686,3 +728,582 @@ def test_installed_support_only_tool_later_enables_standalone_enforcement(tmp_pa
     assert not (target / ".template-sync").exists()
     validated = run(target)
     assert validated.returncode == 0, validated.stdout + validated.stderr
+
+
+@pytest.mark.parametrize("root_form", ["canonical", "parent", "symlink"])
+@pytest.mark.parametrize("aliased_root", ["stage", "target"])
+def test_migration_normalizes_caller_roots_without_changing_profile(
+    tmp_path: Path, root_form: str, aliased_root: str
+) -> None:
+    """Trusted caller roots may use aliases while input containment stays enforced."""
+    real = tmp_path / "real"
+    stage, target = real / "stage", real / "target"
+    profile(stage)
+    document = profile(target)
+    roots = {"stage": stage, "target": target}
+    if root_form == "parent":
+        (real / "unused").mkdir()
+        roots[aliased_root] = real / "unused" / ".." / aliased_root
+    elif root_form == "symlink":
+        alias = tmp_path / "alias"
+        try:
+            alias.symlink_to(real, target_is_directory=True)
+        except OSError as error:
+            pytest.skip(f"Directory symlink creation unavailable: {type(error).__name__}")
+        roots[aliased_root] = alias / aliased_root
+    accepted = run_migration_schema_control(roots["stage"], roots["target"])
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+    generated = yaml.safe_load(
+        (stage / ".github/instruction-profile.yml").read_text(encoding="utf-8")
+    )
+    assert generated["mode"] == "standalone"
+    assert set(generated["modules"]) == set(document["modules"])
+    assert generated["exceptions"] == []
+    if root_form != "canonical":
+        mutant = run_migration_schema_control(
+            roots["stage"], roots["target"], omit_root_normalization=True
+        )
+        assert mutant.returncode == 1, mutant.stdout + mutant.stderr
+        assert "Path escapes the repository root" in mutant.stderr
+
+
+@pytest.mark.parametrize("escaped_input", ["catalog", "previous-profile"])
+@pytest.mark.parametrize("root_form", ["canonical", "parent", "symlink"])
+def test_migration_root_normalization_keeps_external_symlink_escape_rejected(
+    tmp_path: Path, escaped_input: str, root_form: str
+) -> None:
+    """Normalizing trusted roots never makes sibling-prefix input targets trusted."""
+    real = tmp_path / "real"
+    stage, target = real / "stage", real / "target"
+    profile(stage)
+    profile(target)
+    destination = stage / ".github/instruction-profile.yml"
+    before = destination.read_bytes()
+    escaped_path = (
+        stage / ".github/instruction-contracts.yml"
+        if escaped_input == "catalog"
+        else target / ".github/instruction-profile.yml"
+    )
+    outside = real / ("stage-outside" if escaped_input == "catalog" else "target-outside")
+    outside.mkdir()
+    outside_file = outside / escaped_path.name
+    outside_file.write_bytes(escaped_path.read_bytes())
+    escaped_path.unlink()
+    try:
+        escaped_path.symlink_to(outside_file)
+        if root_form == "symlink":
+            alias = tmp_path / "alias"
+            alias.symlink_to(real, target_is_directory=True)
+            stage, target = alias / "stage", alias / "target"
+    except OSError as error:
+        pytest.skip(f"Symlink creation unavailable: {type(error).__name__}")
+    if root_form == "parent":
+        (real / "unused").mkdir()
+        stage, target = real / "unused/../stage", real / "unused/../target"
+    rejected = run_migration_schema_control(stage, target)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert "Path escapes the repository root" in rejected.stderr
+    assert destination.read_bytes() == before
+
+
+@pytest.mark.parametrize("source", ["standalone", "marker"])
+@pytest.mark.parametrize("heading", ["## Azure review", "## Azure: review"])
+def test_migration_retires_scoped_section_declaration_and_detects_mutant(
+    tmp_path: Path, source: str, heading: str
+) -> None:
+    """A retained file cannot keep a declaration for an excluded section scope."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    profile(stage)
+    document = profile(target)
+    document["modules"].append("azure-devops-collaboration")
+    paragraph = "Owner MUST review Azure changes."
+    anchor = f"section:{heading}:paragraph:{hashlib.sha256(paragraph.encode()).hexdigest()}"
+    for root in (stage, target):
+        catalog_path = root / ".github/instruction-contracts.yml"
+        catalog = yaml.safe_load(catalog_path.read_text())
+        catalog["instruction_contracts"][0]["required_sections"] = [
+            {
+                "heading": heading,
+                "next_heading": None,
+                "required_paragraphs": [paragraph],
+                "requires_modules": ["azure-devops-collaboration"],
+            }
+        ]
+        write(root, ".github/instruction-contracts.yml", yaml.safe_dump(catalog))
+        with (root / "AGENTS.md").open("a", encoding="utf-8") as stream:
+            stream.write(f"\n{heading}\n")
+    declaration = {
+        "path": "AGENTS.md",
+        "anchor": anchor,
+        "content_sha256": hashlib.sha256(
+            (target / "AGENTS.md").read_text(encoding="utf-8").encode()
+        ).hexdigest(),
+        "reason": "Owner retains local section",
+        "authorization_basis": "Fixture owner approval",
+    }
+    document["exceptions"] = [declaration]
+    write(target, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    before = run(target)
+    assert before.returncode == 0, before.stdout + before.stderr
+    marker: dict[str, Any] = {
+        "template_sync": {
+            "included_modules": ["baseline", "agent-instructions", "instruction-enforcement"]
+        }
+    }
+    if source == "marker":
+        document["exceptions"] = []
+        write(target, ".github/instruction-profile.yml", yaml.safe_dump(document))
+        marker["template_sync"]["instruction_contract_waivers"] = [
+            {key: value for key, value in declaration.items() if key != "content_sha256"}
+        ]
+    migrated = run_migration_schema_control(stage, target, marker_document=marker)
+    assert migrated.returncode == 0, migrated.stdout + migrated.stderr
+    destination = stage / ".github/instruction-profile.yml"
+    generated = yaml.safe_load(destination.read_text())
+    assert generated["exceptions"] == []
+    assert generated["source_decisions"]["retired_exceptions"] == [declaration]
+    validated = run(stage)
+    assert validated.returncode == 0, validated.stdout + validated.stderr
+    mutant = run_migration_schema_control(
+        stage, target, marker_document=marker, omit_scoped_retirement=True
+    )
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    rejected = run(stage)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert "does not match a current failure" in rejected.stderr
+    restored = run_migration_schema_control(stage, target, marker_document=marker)
+    assert restored.returncode == 0, restored.stdout + restored.stderr
+    before_bytes = destination.read_bytes()
+    write(target, ".github/instruction-profile.yml", before_bytes.decode())
+    repeated = run_migration_schema_control(stage, target, marker_document=marker)
+    assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+    assert destination.read_bytes() == before_bytes
+
+
+@pytest.mark.parametrize("control", ["active", "unknown", "changed-content"])
+def test_migration_keeps_active_and_unrecognized_declarations(tmp_path: Path, control: str) -> None:
+    """Retirement must not hide invalid declarations by inspecting current failures."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    profile(stage)
+    document = profile(target)
+    for root in (stage, target):
+        write(root, "AGENTS.md", "Agents MUST preserve authority.\n")
+    declaration = {
+        "path": "AGENTS.md",
+        "anchor": "unknown-anchor" if control == "unknown" else "Agents MUST validate.",
+        "content_sha256": (
+            "0" * 64
+            if control == "changed-content"
+            else hashlib.sha256(
+                (target / "AGENTS.md").read_text(encoding="utf-8").encode()
+            ).hexdigest()
+        ),
+        "reason": "Owner retains local text",
+        "authorization_basis": "Fixture owner approval",
+    }
+    document["exceptions"] = [declaration]
+    write(target, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    migrated = run_migration_schema_control(stage, target)
+    assert migrated.returncode == 0, migrated.stdout + migrated.stderr
+    generated = yaml.safe_load((stage / ".github/instruction-profile.yml").read_text())
+    assert generated["exceptions"] == [declaration]
+    assert "retired_exceptions" not in generated["source_decisions"]
+    validated = run(stage)
+    assert validated.returncode == (0 if control == "active" else 1), (
+        validated.stdout + validated.stderr
+    )
+
+
+def test_migration_retires_stale_section_declaration_when_module_returns(tmp_path: Path) -> None:
+    """Restoring the target module retires its previously permitted stale section."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    profile(stage)
+    document = profile(target)
+    for root in (stage, target):
+        catalog_path = root / ".github/instruction-contracts.yml"
+        catalog = yaml.safe_load(catalog_path.read_text())
+        catalog["protected_guide_section_obligations"] = [
+            {
+                "key": "azure-section",
+                "path": "AGENTS.md",
+                "target_modules": ["azure-devops-collaboration"],
+                "stale_headings": ["## Azure review"],
+            }
+        ]
+        write(root, ".github/instruction-contracts.yml", yaml.safe_dump(catalog))
+        with (root / "AGENTS.md").open("a", encoding="utf-8") as stream:
+            stream.write("\n## Azure review\n")
+    declaration = {
+        "path": "AGENTS.md",
+        "anchor": "stale:azure-section:heading:## Azure review",
+        "content_sha256": hashlib.sha256(
+            (target / "AGENTS.md").read_text(encoding="utf-8").encode()
+        ).hexdigest(),
+        "reason": "Owner retains local text",
+        "authorization_basis": "Fixture owner approval",
+    }
+    document["exceptions"] = [declaration]
+    write(target, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    before = run(target)
+    assert before.returncode == 0, before.stdout + before.stderr
+    marker = {
+        "template_sync": {"included_modules": document["modules"] + ["azure-devops-collaboration"]}
+    }
+    migrated = run_migration_schema_control(stage, target, marker_document=marker)
+    assert migrated.returncode == 0, migrated.stdout + migrated.stderr
+    generated = yaml.safe_load((stage / ".github/instruction-profile.yml").read_text())
+    assert generated["exceptions"] == []
+    assert generated["source_decisions"]["retired_exceptions"] == [declaration]
+    after = run(stage)
+    assert after.returncode == 0, after.stdout + after.stderr
+
+
+@pytest.mark.parametrize(
+    "kind,target_text,content",
+    [
+        ("prose-reference", "Azure workflow", "Use Azure workflow."),
+        ("absolute-url", "https://example.invalid/azure", "Read https://example.invalid/azure."),
+        (
+            "markdown-relative-link",
+            "docs/azure%20guide.md#review",
+            "Read [Azure](docs/azure%20guide.md#review).",
+        ),
+    ],
+)
+@pytest.mark.parametrize("selector", ["matching", "wrong-key", "wrong-module", "wrong-path"])
+def test_migration_reference_waiver_scope_and_module_return(
+    tmp_path: Path, kind: str, target_text: str, content: str, selector: str
+) -> None:
+    """Only exact reviewed reference failures migrate; later scope changes retire them."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    profile(stage)
+    document = profile(target)
+    obligation: dict[str, Any] = {
+        "key": "azure-reference",
+        "path": "AGENTS.md",
+        "reference_kind": kind,
+        "target_modules": ["azure-devops-collaboration"],
+    }
+    if kind == "markdown-relative-link":
+        obligation["target_path"] = "docs/azure guide.md"
+    else:
+        obligation["tokens"] = [target_text]
+    for root in (stage, target):
+        catalog_path = root / ".github/instruction-contracts.yml"
+        catalog = yaml.safe_load(catalog_path.read_text())
+        catalog["protected_guide_reference_obligations"] = [obligation]
+        write(root, ".github/instruction-contracts.yml", yaml.safe_dump(catalog))
+        old_text = (root / "AGENTS.md").read_text(encoding="utf-8")
+        write(root, "AGENTS.md", old_text + content + "\n")
+    waiver: dict[str, str] = {
+        "path": "CLAUDE.md" if selector == "wrong-path" else "AGENTS.md",
+        "contract_key": "wrong-key" if selector == "wrong-key" else "azure-reference",
+        "target_module": "python" if selector == "wrong-module" else "azure-devops-collaboration",
+        "reason": "Owner retains exact reference",
+        "authorization_basis": "Fixture owner approval",
+    }
+    # Relative-link declarations may use the reviewed target-path selector.
+    if kind == "markdown-relative-link" and selector == "matching":
+        waiver.pop("target_module")
+        waiver["target_path"] = "docs/azure guide.md"
+    marker = {
+        "template_sync": {
+            "included_modules": document["modules"],
+            "protected_guide_contract_waivers": [waiver],
+        }
+    }
+    before = run(stage)
+    assert before.returncode == 1, before.stdout + before.stderr
+    migrated = run_migration_schema_control(stage, target, marker_document=marker)
+    assert migrated.returncode == 0, migrated.stdout + migrated.stderr
+    destination = stage / ".github/instruction-profile.yml"
+    generated = yaml.safe_load(destination.read_text())
+    assert generated["source_decisions"]["protected_guide_contract_waivers"] == [waiver]
+    if selector != "matching":
+        assert generated["exceptions"] == []
+        rejected = run(stage)
+        assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+        return
+    declaration = {
+        "path": "AGENTS.md",
+        "anchor": f"reference:azure-reference:{kind}:{target_text}",
+        "content_sha256": hashlib.sha256(
+            (target / "AGENTS.md").read_text(encoding="utf-8").encode()
+        ).hexdigest(),
+        "reason": waiver["reason"],
+        "authorization_basis": waiver["authorization_basis"],
+    }
+    assert generated["exceptions"] == [declaration]
+    validated = run(stage)
+    assert validated.returncode == 0, validated.stdout + validated.stderr
+    mutant = run_migration_schema_control(
+        stage, target, marker_document=marker, omit_reference_validation=True
+    )
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    rejected = run(stage)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    restored = run_migration_schema_control(stage, target, marker_document=marker)
+    assert restored.returncode == 0, restored.stdout + restored.stderr
+    before_bytes = destination.read_bytes()
+    write(target, ".github/instruction-profile.yml", before_bytes.decode())
+    repeated = run_migration_schema_control(stage, target, marker_document=marker)
+    assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+    assert destination.read_bytes() == before_bytes
+    marker["template_sync"]["included_modules"] = document["modules"] + [
+        "azure-devops-collaboration"
+    ]
+    retired = run_migration_schema_control(stage, target, marker_document=marker)
+    assert retired.returncode == 0, retired.stdout + retired.stderr
+    generated = yaml.safe_load(destination.read_text())
+    assert generated["exceptions"] == []
+    assert generated["source_decisions"]["retired_exceptions"] == [declaration]
+    validated = run(stage)
+    assert validated.returncode == 0, validated.stdout + validated.stderr
+
+
+@pytest.mark.parametrize("kind", ["section", "reference"])
+@pytest.mark.parametrize("declaration_source", ["profile", "instruction-waiver", "removal"])
+def test_migration_preserves_obligation_only_paths_and_retires_only_known_scope(
+    tmp_path: Path, kind: str, declaration_source: str
+) -> None:
+    """Catalog obligations do not require a parallel instruction-contract row."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    profile(stage)
+    document = profile(target)
+    obligation: dict[str, Any] = {
+        "key": "azure-only",
+        "path": "REFERENCE.md",
+        "target_modules": ["azure-devops-collaboration"],
+    }
+    if kind == "section":
+        obligation["stale_headings"] = ["## Azure"]
+        anchor = "stale:azure-only:heading:## Azure"
+        content = "## Azure\n"
+    else:
+        obligation.update(reference_kind="prose-reference", tokens=["Azure workflow"])
+        anchor = "reference:azure-only:prose-reference:Azure workflow"
+        content = "Azure workflow\n"
+    for root in (stage, target):
+        catalog_path = root / ".github/instruction-contracts.yml"
+        catalog = yaml.safe_load(catalog_path.read_text())
+        catalog[f"protected_guide_{kind}_obligations"] = [obligation]
+        write(root, ".github/instruction-contracts.yml", yaml.safe_dump(catalog))
+        if declaration_source != "removal":
+            write(root, "REFERENCE.md", content)
+    declaration = {
+        "path": "REFERENCE.md",
+        "anchor": "file:absent" if declaration_source == "removal" else anchor,
+        "content_sha256": (
+            "absent"
+            if declaration_source == "removal"
+            else hashlib.sha256(content.encode()).hexdigest()
+        ),
+        "reason": "Owner retains exact local decision",
+        "authorization_basis": "Fixture owner approval",
+    }
+    document["exceptions"] = [declaration]
+    write(target, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    before = run(target)
+    assert before.returncode == 0, before.stdout + before.stderr
+    marker: dict[str, Any] = {"template_sync": {"included_modules": document["modules"]}}
+    if declaration_source != "profile":
+        document["exceptions"] = []
+        write(target, ".github/instruction-profile.yml", yaml.safe_dump(document))
+        if declaration_source == "instruction-waiver":
+            marker["template_sync"]["instruction_contract_waivers"] = [
+                {key: value for key, value in declaration.items() if key != "content_sha256"}
+            ]
+        else:
+            marker["template_sync"]["protected_file_decisions"] = [
+                {
+                    "path": "REFERENCE.md",
+                    "decision": "REMOVE-LOCAL",
+                    "authorized_scope": "REFERENCE.md",
+                    "reason": declaration["reason"],
+                    "authorization_basis": declaration["authorization_basis"],
+                }
+            ]
+    migrated = run_migration_schema_control(stage, target, marker_document=marker)
+    assert migrated.returncode == 0, migrated.stdout + migrated.stderr
+    destination = stage / ".github/instruction-profile.yml"
+    generated = yaml.safe_load(destination.read_text())
+    assert generated["exceptions"] == [declaration]
+    validated = run(stage)
+    assert validated.returncode == 0, validated.stdout + validated.stderr
+    saved = destination.read_bytes()
+    write(target, ".github/instruction-profile.yml", saved.decode())
+    repeated = run_migration_schema_control(stage, target, marker_document=marker)
+    assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+    assert destination.read_bytes() == saved
+    if declaration_source == "profile":
+        mutant = run_migration_schema_control(
+            stage, target, marker_document=marker, restore_prior_path_prefilter=True
+        )
+        assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+        rejected = run(stage)
+        assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    marker["template_sync"]["included_modules"] = document["modules"] + [
+        "azure-devops-collaboration"
+    ]
+    retired = run_migration_schema_control(stage, target, marker_document=marker)
+    assert retired.returncode == 0, retired.stdout + retired.stderr
+    generated = yaml.safe_load(destination.read_text())
+    assert generated["exceptions"] == []
+    assert generated["source_decisions"]["retired_exceptions"] == [declaration]
+    validated = run(stage)
+    assert validated.returncode == 0, validated.stdout + validated.stderr
+
+
+@pytest.mark.parametrize("anchor", ["unknown-anchor", "file:absent"])
+def test_migration_preserves_unknown_path_failure_and_detects_false_success_mutant(
+    tmp_path: Path, anchor: str
+) -> None:
+    """An unknown path is not evidence that its declaration is legitimately retired."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    profile(stage)
+    document = profile(target)
+    declaration = {
+        "path": "UNKNOWN.md",
+        "anchor": anchor,
+        "content_sha256": "absent",
+        "reason": "Unknown fixture declaration",
+        "authorization_basis": "Fixture owner approval",
+    }
+    document["exceptions"] = [declaration]
+    write(target, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    before = run(target)
+    assert before.returncode == 1, before.stdout + before.stderr
+    migrated = run_migration_schema_control(stage, target)
+    assert migrated.returncode == 0, migrated.stdout + migrated.stderr
+    generated = yaml.safe_load((stage / ".github/instruction-profile.yml").read_text())
+    assert generated["exceptions"] == [declaration]
+    rejected = run(stage)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert "does not match a current failure" in rejected.stderr
+    mutant = run_migration_schema_control(stage, target, restore_prior_path_prefilter=True)
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    false_success = run(stage)
+    assert false_success.returncode == 0, false_success.stdout + false_success.stderr
+
+
+def test_migration_does_not_invent_exception_for_unknown_protected_removal(tmp_path: Path) -> None:
+    """Ordinary protected removal history does not manufacture an instruction failure."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    profile(stage)
+    document = profile(target)
+    removal = {
+        "path": "UNKNOWN.md",
+        "decision": "REMOVE-LOCAL",
+        "authorized_scope": "UNKNOWN.md",
+        "authorization_basis": "Fixture owner approval",
+        "reason": "Ordinary file removal",
+    }
+    marker = {
+        "template_sync": {
+            "included_modules": document["modules"],
+            "protected_file_decisions": [removal],
+        }
+    }
+    migrated = run_migration_schema_control(stage, target, marker_document=marker)
+    assert migrated.returncode == 0, migrated.stdout + migrated.stderr
+    generated = yaml.safe_load((stage / ".github/instruction-profile.yml").read_text())
+    assert generated["exceptions"] == []
+    assert generated["source_decisions"]["protected_file_decisions"] == [removal]
+    validated = run(stage)
+    assert validated.returncode == 0, validated.stdout + validated.stderr
+
+
+def test_migration_direct_phrase_can_resemble_excluded_structured_section(tmp_path: Path) -> None:
+    """A direct phrase takes precedence over a syntactically identical section key."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    profile(stage)
+    document = profile(target)
+    anchor = "section:## Azure: review"
+    for root in (stage, target):
+        catalog_path = root / ".github/instruction-contracts.yml"
+        catalog = yaml.safe_load(catalog_path.read_text())
+        contract = catalog["instruction_contracts"][0]
+        contract["required_phrases"].append(anchor)
+        contract["required_sections"] = [
+            {
+                "heading": "## Azure: review",
+                "next_heading": None,
+                "required_paragraphs": ["Owner MUST review."],
+                "requires_modules": ["azure-devops-collaboration"],
+            }
+        ]
+        write(root, ".github/instruction-contracts.yml", yaml.safe_dump(catalog))
+    declaration = {
+        "path": "AGENTS.md",
+        "anchor": anchor,
+        "content_sha256": hashlib.sha256((target / "AGENTS.md").read_bytes()).hexdigest(),
+        "reason": "Fixture direct phrase",
+        "authorization_basis": "Fixture owner approval",
+    }
+    document["exceptions"] = [declaration]
+    write(target, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    migrated = run_migration_schema_control(stage, target)
+    assert migrated.returncode == 0, migrated.stdout + migrated.stderr
+    generated = yaml.safe_load((stage / ".github/instruction-profile.yml").read_text())
+    assert generated["exceptions"] == [declaration]
+    validated = run(stage)
+    assert validated.returncode == 0, validated.stdout + validated.stderr
+
+
+def test_migration_uses_longest_overlapping_colon_heading_and_detects_mutant(
+    tmp_path: Path,
+) -> None:
+    """A full heading must outrank a shorter heading with a plausible suffix."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    profile(stage)
+    document = profile(target)
+    heading = "## Azure:paragraph:" + "a" * 64
+    anchor = "section:" + heading
+    for root in (stage, target):
+        catalog_path = root / ".github/instruction-contracts.yml"
+        catalog = yaml.safe_load(catalog_path.read_text())
+        catalog["instruction_contracts"][0]["required_sections"] = [
+            {
+                "heading": "## Azure",
+                "next_heading": heading,
+                "required_paragraphs": ["Owner MUST review."],
+                "requires_modules": ["azure-devops-collaboration"],
+            },
+            {
+                "heading": heading,
+                "next_heading": None,
+                "required_paragraphs": ["Owner MUST validate."],
+                "requires_modules": ["baseline"],
+            },
+        ]
+        write(root, ".github/instruction-contracts.yml", yaml.safe_dump(catalog))
+    declaration = {
+        "path": "AGENTS.md",
+        "anchor": anchor,
+        "content_sha256": hashlib.sha256((target / "AGENTS.md").read_bytes()).hexdigest(),
+        "reason": "Fixture missing long heading",
+        "authorization_basis": "Fixture owner approval",
+    }
+    # Fixed missing-heading, boundary and paragraph identities are independently
+    # asserted; do not derive expected failures from the validator under test.
+    declarations = [declaration] + [
+        {**declaration, "anchor": anchor + suffix}
+        for suffix in (
+            ":boundary:66d48f215ef64df932d7f6213bfe29d3276997c3455f54ab40955aa9938c7a78",
+            ":paragraph:1ae271af103a21057c05f2d53240e5694f34b8b461031f30c47b38619fa4f995",
+        )
+    ]
+    document["exceptions"] = declarations
+    write(target, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    before = run(target)
+    assert before.returncode == 0, before.stdout + before.stderr
+    migrated = run_migration_schema_control(stage, target)
+    assert migrated.returncode == 0, migrated.stdout + migrated.stderr
+    generated = yaml.safe_load((stage / ".github/instruction-profile.yml").read_text())
+    assert generated["exceptions"] == declarations
+    validated = run(stage)
+    assert validated.returncode == 0, validated.stdout + validated.stderr
+    mutant = run_migration_schema_control(stage, target, reverse_section_precedence=True)
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    rejected = run(stage)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
