@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import importlib.util
+import re
 import shlex
 import shutil
 import subprocess
@@ -29,7 +30,13 @@ SPEC.loader.exec_module(policy)
 def copy_policy(root: Path) -> dict[str, Any]:
     """Copy the real policy surface, including copyable documentation examples."""
     contract = policy.load_contract(ROOT)
-    for relative in [policy.CONTRACT, policy.SCHEMA, *contract["workflows"], *contract["examples"]]:
+    for relative in [
+        policy.CONTRACT,
+        policy.SCHEMA,
+        ".github/scripts/instruction_contract_support.py",
+        *contract["workflows"],
+        *contract["examples"],
+    ]:
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / relative, target)
@@ -462,6 +469,10 @@ def test_strict_adopter_checkout_casing_and_guard_mutant(tmp_path: Path) -> None
 
 def load_policy_mutant(root: Path, source: str) -> Any:
     """Load an isolated deliberately weakened validator for an independent input oracle."""
+    shutil.copyfile(
+        ROOT / ".github/scripts/instruction_contract_support.py",
+        root / "instruction_contract_support.py",
+    )
     path = root / "policy_mutant.py"
     path.write_text(source, encoding="utf-8")
     spec = importlib.util.spec_from_file_location("policy_mutant", path)
@@ -1036,3 +1047,264 @@ def test_optional_control_schema_guard_removal(scope: str, field: str, invalid: 
     }[scope]
     properties[field] = {}
     policy.jsonschema.validate(contract, schema)
+
+
+@pytest.mark.parametrize("language", ["text", "bash", "json", "markdown", "python"])
+@pytest.mark.parametrize(
+    "body",
+    [
+        "uses: owner/action@v1",
+        "# uses: owner/action@v1",
+        "- 'uses': owner/action@v1",
+        "- {uses: owner/action@v1}",
+        "uses:owner/action@v1",
+    ],
+)
+def test_non_yaml_fences_are_literal(language: str, body: str) -> None:
+    """Literal samples neither fail pin policy nor contribute governed references."""
+    calls: list[tuple[str, str]] = []
+
+    def resolver(repository: str, release: str) -> str:
+        calls.append((repository, release))
+        return "a" * 40
+
+    assert policy.check_examples(f"```{language}\n{body}\n```", resolver) == 0
+    assert policy.check_examples(f"```{language}\nuses: owner/action@{'a' * 40} # v1.2.3\n```") == 0
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "```text\nuses: owner/action@v1",
+        "````text\n```yaml\nuses: owner/action@v1\n```\n````",
+        "~~~text\n```\nuses: owner/action@v1\n~~~~",
+        "> ```text\n> uses: owner/action@v1\n> ```",
+        "- ```text\n  uses: owner/action@v1\n  ```",
+        "- > ```text\n  > uses: owner/action@v1\n  > ```",
+        "> 1. > ```text\n>    > uses: owner/action@v1\n>    > ```",
+        "- > " * 80 + "```text\n" + "  > " * 80 + "uses: owner/action@v1\n",
+    ],
+)
+def test_literal_fence_container_boundaries(text: str) -> None:
+    """Matched or unfinished literal fences preserve ordered containing blocks."""
+    assert policy.check_examples(text) == 0
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "```te`xt\n",
+        "> ```text\n> literal\n",
+        "- ```text\n  literal\n\n",
+        "- > ```text\n  > literal\n",
+        "> 1. > ```text\n>    > literal\n",
+        "- > " * 80 + "```text\n" + "  > " * 80 + "literal\n",
+        "```text\nuses: owner/action@v1\n```\n",
+    ],
+)
+def test_literal_fences_do_not_hide_live_following_examples(prefix: str) -> None:
+    """Invalid openers, ended containers and closed literals grant no exemption."""
+    with pytest.raises(policy.PolicyError, match="full SHA"):
+        policy.check_examples(prefix + "uses: owner/action@v1\n")
+
+
+@pytest.mark.parametrize("language", ["yaml title=example", "YML extra", "yaml", "yml", ""])
+@pytest.mark.parametrize("ending", ["closed", "unclosed", "malformed"])
+def test_governed_multiline_fences_with_info_metadata(language: str, ending: str) -> None:
+    """The first info token retains complete YAML and unfinished-block enforcement."""
+    body = '- {name: Checkout,\n "u\\u0073es": "owner/action@' + "a" * 40
+    body += '", # v1.2.3\n with: {}}\n'
+    text = f"```{language}\n" + body
+    if ending == "closed":
+        text += "```\n"
+        assert policy.check_examples(text) == 1
+        with pytest.raises(policy.PolicyError, match="full SHA"):
+            policy.check_examples(text.replace("a" * 40, "v1"))
+    else:
+        if ending == "malformed":
+            text = text.replace("with: {}}", "with: {") + "```\n"
+        with pytest.raises(policy.PolicyError, match="Unclosed|Invalid YAML"):
+            policy.check_examples(text)
+
+
+@pytest.mark.parametrize("guard", ["semantic", "literal", "quote", "list", "pin"])
+def test_non_yaml_opacity_guard_mutations(tmp_path: Path, guard: str) -> None:
+    """Independent literal-count and live-failure oracles detect each restored defect."""
+    source = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
+    before, after, text, literal = {
+        "semantic": (
+            "        if number in opaque_lines:\n            continue\n        if number in fenced_lines",
+            "        if number in fenced_lines",
+            "```text\n- 'uses': owner/action@v1\n```",
+            True,
+        ),
+        "literal": (
+            "number not in opaque_lines\n            and number not in semantic_lines",
+            "number not in semantic_lines",
+            "```text\nuses:owner/action@v1\n```",
+            True,
+        ),
+        "quote": (
+            "if depth < width:",
+            "if False:",
+            "> ```text\n> harmless\nuses: owner/action@v1",
+            False,
+        ),
+        "list": (
+            "if line_is_outside_list_item(line[offset:], width):",
+            "if False:",
+            "- ```text\n  harmless\nuses: owner/action@v1",
+            False,
+        ),
+        "pin": (
+            "check_reference(reference, lines[number], resolver)",
+            "pass",
+            "uses: owner/action@v1",
+            False,
+        ),
+    }[guard]
+    assert source.count(before) == 1
+    mutant = load_policy_mutant(tmp_path, source.replace(before, after))
+    if literal:
+        assert policy.check_examples(text) == 0
+        with pytest.raises(mutant.PolicyError, match="full SHA"):
+            mutant.check_examples(text)
+    else:
+        with pytest.raises(policy.PolicyError, match="full SHA"):
+            policy.check_examples(text)
+        assert mutant.check_examples(text) == (1 if guard == "pin" else 0)
+
+
+def test_non_yaml_blank_continuation_resource_mutant(tmp_path: Path) -> None:
+    """Near-limit nested lists and blanks cannot cause repeated full-stack scans."""
+    source = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
+    fixture = tmp_path / "literal.md"
+    fixture.write_text(
+        "- " * 300_000 + "```text\n" + "\n" * 300_000, encoding="utf-8", newline="\n"
+    )
+    assert 850_000 < fixture.stat().st_size < policy.LIMIT
+    code = (
+        "import importlib.util,sys; from pathlib import Path; "
+        "spec=importlib.util.spec_from_file_location('resource_policy',sys.argv[1]); "
+        "module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module); "
+        "count=module.check_examples(Path(sys.argv[2]).read_text(encoding='utf-8')); "
+        "assert count == 0, count; print(count)"
+    )
+    command = [sys.executable, "-E", "-c", code]
+    current = ROOT / ".github/scripts/validate_workflow_security.py"
+    result = subprocess.run(
+        [*command, str(current), str(fixture)],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == "0"
+    start = source.index(
+        '    if not line.strip(" \\t"):', source.index("def example_fence_content(")
+    )
+    end = source.index("\n\ndef opaque_example_lines", start)
+    restored = """    content = line
+    for kind, width in containers:
+        if kind == "quote":
+            depth, offset = consume_blockquote_prefix(content, max_depth=width)
+            if depth < width:
+                return None
+            content = content[offset:]
+        else:
+            if line_is_outside_list_item(content, width):
+                return None
+            content = content[width:]
+    return active_fence_content(content, fence)
+"""
+    mutant = tmp_path / "resource_mutant.py"
+    mutant.write_text(source[:start] + restored + source[end:], encoding="utf-8")
+    shutil.copyfile(
+        ROOT / ".github/scripts/instruction_contract_support.py",
+        tmp_path / "instruction_contract_support.py",
+    )
+    with pytest.raises(subprocess.TimeoutExpired):
+        subprocess.run(
+            [*command, str(mutant), str(fixture)],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+
+
+@pytest.mark.parametrize("info", ["te`xt", "text`"])
+def test_non_yaml_invalid_opener_guard_mutation(tmp_path: Path, info: str) -> None:
+    """Permitting backticks in an info string would hide a fixed live reference."""
+    source = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
+    anchor = "parse_markdown_fence_open(line[offset:], MARKDOWN_FENCE_CONTEXT)"
+    assert source.count(anchor) == 1
+    mutant = load_policy_mutant(
+        tmp_path,
+        source.replace(
+            anchor,
+            f'parse_markdown_fence_open(line[offset:].replace({info!r}, "text"), MARKDOWN_FENCE_CONTEXT)',
+        ),
+    )
+    text = f"```{info}\nuses: owner/action@v1\n"
+    with pytest.raises(policy.PolicyError, match="full SHA"):
+        policy.check_examples(text)
+    assert mutant.check_examples(text) == 0
+
+
+def test_non_yaml_large_literal_preserves_live_pin_check(tmp_path: Path) -> None:
+    """A large literal remains inert without excusing an adjacent actual example."""
+    literal = "```text\n" + "uses: owner/action@v1\n" * 40_000 + "```\n"
+    assert 800_000 < len(literal.encode("utf-8")) < policy.LIMIT
+    path = tmp_path / "literal.md"
+    path.write_text(literal, encoding="utf-8", newline="\n")
+    assert policy.check_examples(policy.read_text(tmp_path, "literal.md")) == 0
+    with pytest.raises(policy.PolicyError, match="full SHA"):
+        policy.check_examples(literal + "uses: owner/action@v1\n")
+    pinned = "uses: owner/action@" + "a" * 40 + " # v1.2.3\n"
+    assert policy.check_examples(literal + pinned) == 1
+    path.write_bytes(b"x" * (policy.LIMIT + 1))
+    with pytest.raises(policy.PolicyError, match="1 MiB"):
+        policy.read_text(tmp_path, "literal.md")
+
+
+@pytest.mark.parametrize("which", [0, 1])
+def test_real_terraform_authoring_examples_remain_governed(which: int) -> None:
+    """Both intentionally copyable workflow snippets retain their fixed pin obligations."""
+    path = "docs/terraform/TERRAFORM_COPILOT_INSTRUCTIONS_GUIDE.md"
+    text = (ROOT / path).read_text(encoding="utf-8")
+    assert path in policy.load_contract(ROOT)["examples"]
+    assert policy.check_examples(text) == 10
+    anchor = "```yaml\n# .github/workflows/terraform-ci.yml\n"
+    starts = [match.start() for match in re.finditer(re.escape(anchor), text)]
+    assert len(starts) == 2
+    start = starts[which]
+    end = text.index("\n```", start + len(anchor))
+    block = text[start:end]
+    assert policy.check_examples(block + "\n```") == (2 if which == 0 else 8)
+    floating = re.sub(r"(?<=@)[0-9a-f]{40}", "v1", block, count=1)
+    assert floating != block
+    with pytest.raises(policy.PolicyError, match="full SHA"):
+        policy.check_examples(text[:start] + floating + text[end:])
+
+
+def test_old_terraform_literal_wrapping_breaks_fixed_coverage_oracle() -> None:
+    """Restoring the old outer text fences loses all ten intentional references."""
+    text = (ROOT / "docs/terraform/TERRAFORM_COPILOT_INSTRUCTIONS_GUIDE.md").read_text(
+        encoding="utf-8"
+    )
+    assert policy.check_examples(text) == 10
+    anchor = "\n```\n\n```yaml\n# .github/workflows/terraform-ci.yml\n"
+    assert text.count(anchor) == 2
+    for _block in range(2):
+        start = text.index(anchor)
+        end = text.index("\n```", start + len(anchor))
+        body = text[start:end].replace(
+            anchor, "\n\\`\\`\\`yaml\n# .github/workflows/terraform-ci.yml\n"
+        )
+        text = text[:start] + body + "\n\\`\\`\\`" + text[end:]
+    assert policy.check_examples(text) == 0

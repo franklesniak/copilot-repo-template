@@ -1079,3 +1079,143 @@ def test_omission_and_reviewed_removal_leave_no_policy_orphans(tmp_path: Path) -
     assert "workflow-security" not in (target / "tests/test_contract_wiring.py").read_text(
         encoding="utf-8"
     )
+
+
+@pytest.mark.parametrize("relative", ["docs/workflow-security.md", CURSOR_EXAMPLE])
+def test_literal_fence_materializer_inventory(tmp_path: Path, relative: str) -> None:
+    """Opaque Markdown and Cursor samples never acquire governed inventory entries."""
+    from tests.test_workflow_security_contract import copy_policy
+
+    source = tmp_path / "source"
+    contract = copy_policy(source)
+    path = source / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    literal = "```text\nuses: owner/action@v1\n```\n"
+    path.write_text(literal, encoding="utf-8")
+    _, _, mappings = lifecycle.materializer.load_validated_manifest_context(ROOT)
+    modules = {"github-actions", "agent-instructions", "agent-cursor", "yaml"}
+
+    def stage(name: str) -> Path:
+        destination = tmp_path / name
+        lifecycle.materializer.write_staged_candidate(
+            template_root=source,
+            staging_root=destination,
+            mappings=mappings,
+            included_modules=modules,
+            summary=lifecycle.materializer.Summary(sorted(modules), [], "copy"),
+        )
+        return destination
+
+    first = stage("literal")
+    assert relative not in policy.load_contract(first)["examples"]
+    assert (first / relative).read_text(encoding="utf-8") == literal
+    assert snapshot(stage("repeat")) == snapshot(first)
+    pinned = f"```yaml\nuses: owner/action@{'a' * 40} # v1.2.3\n```\n"
+    path.write_text(literal + pinned, encoding="utf-8")
+    with pytest.raises(
+        lifecycle.materializer.MaterializationError, match="Retained workflow example"
+    ):
+        stage("undeclared")
+    assert snapshot(tmp_path / "undeclared") == {}
+    contract["examples"].append(relative)
+    lifecycle.write_yaml(source / policy.CONTRACT, contract)
+    mixed = stage("mixed")
+    assert relative in policy.load_contract(mixed)["examples"]
+    assert policy.validate_repository(mixed) >= 1
+    path.write_text(literal, encoding="utf-8")
+    with pytest.raises(
+        lifecycle.materializer.MaterializationError, match="Retained workflow example"
+    ):
+        stage("stale")
+    assert snapshot(tmp_path / "stale") == {}
+    # Source validation remains authoritative even if this document is omitted.
+    path.write_text(pinned.replace("a" * 40, "v1"), encoding="utf-8")
+    with pytest.raises(lifecycle.materializer.MaterializationError, match="full SHA"):
+        lifecycle.materializer.render_workflow_contract(source, mappings, {"github-actions"})
+
+
+def test_actions_only_literal_examples_and_shared_helper_closure(tmp_path: Path) -> None:
+    """An isolated deployed CLI needs only Actions assets and fails if its helper vanishes."""
+    target = lifecycle.materialize_module_fixture(
+        tmp_path, ("github-actions",), authorize_protected_files=True
+    )
+    for omitted in (
+        ".template-sync",
+        ".pre-commit-config.yaml",
+        "pyproject.toml",
+        "AGENTS.md",
+        ".github/scripts/instruction_contract_core.py",
+        ".github/scripts/validate_instruction_profile.py",
+        ".github/instruction-profile.yml",
+        "schemas/instruction-profile.schema.json",
+    ):
+        assert not (target / omitted).exists(), omitted
+    helper = target / ".github/scripts/instruction_contract_support.py"
+    assert helper.is_file()
+    script = target / ".github/scripts/validate_workflow_security.py"
+    command = [sys.executable, "-E", str(script), "--repo-root", str(target)]
+
+    def invoke(expected: int, message: str = "") -> None:
+        result = subprocess.run(command, cwd=tmp_path, text=True, capture_output=True, check=False)
+        assert result.returncode == expected, result.stdout + result.stderr
+        assert message in result.stdout + result.stderr
+
+    invoke(0)
+    contract = policy.load_contract(target)
+    contract["examples"].append("docs/literal.md")
+    lifecycle.write_yaml(target / policy.CONTRACT, contract)
+    example = target / "docs/literal.md"
+    example.parent.mkdir(parents=True, exist_ok=True)
+    literal = "```text\nuses: owner/action@v1\n```\n"
+    example.write_text(literal, encoding="utf-8")
+    invoke(0)
+    example.write_text(literal.replace("```text", "```yaml"), encoding="utf-8")
+    invoke(1, "full SHA")
+    example.write_text(literal + "uses: owner/action@v1\n", encoding="utf-8")
+    invoke(1, "full SHA")
+    example.write_text(literal, encoding="utf-8")
+    helper.unlink()
+    invoke(1, "instruction_contract_support")
+
+
+def test_actions_helper_previous_mapping_mutant(tmp_path: Path) -> None:
+    """The old relation produces an actual incomplete Actions-only runtime."""
+    from template_sync_materialization_helpers import parse_manifest_mappings
+
+    manifest = yaml.safe_load((ROOT / ".template-sync/manifest.yml").read_text(encoding="utf-8"))
+    relation = next(
+        item
+        for item in manifest["template_manifest"]["path_mappings"]
+        if item["pattern"] == ".github/scripts/instruction_contract_support.py"
+    )
+    assert set(relation["requires_any"]) == {
+        "instruction-enforcement",
+        "template-sync-support",
+        "github-actions",
+    }
+    relation["requires_any"].remove("github-actions")
+    _, mappings = parse_manifest_mappings(manifest)
+    stage = tmp_path / "old-mapping"
+    lifecycle.materializer.write_staged_candidate(
+        template_root=ROOT,
+        staging_root=stage,
+        mappings=mappings,
+        included_modules={"github-actions"},
+        summary=lifecycle.materializer.Summary(["github-actions"], [], "copy"),
+    )
+    assert not (stage / ".github/scripts/instruction_contract_support.py").exists()
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-E",
+            str(stage / ".github/scripts/validate_workflow_security.py"),
+            "--repo-root",
+            str(stage),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    assert "instruction_contract_support" in result.stderr

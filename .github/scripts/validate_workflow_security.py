@@ -16,6 +16,21 @@ from typing import Any
 import jsonschema
 import yaml  # type: ignore[import-untyped]
 
+_SHARED_SCRIPTS = str(Path(__file__).resolve().parent)
+if _SHARED_SCRIPTS not in sys.path:
+    sys.path.insert(0, _SHARED_SCRIPTS)
+
+from instruction_contract_support import (  # noqa: E402
+    LIST_MARKER_RE,
+    MARKDOWN_FENCE_CONTEXT,
+    MarkdownFence,
+    active_fence_content,
+    consume_blockquote_prefix,
+    line_is_outside_list_item,
+    parse_fence_close_from_content,
+    parse_markdown_fence_open,
+)
+
 CONTRACT = ".github/workflow-security-contract.yml"
 SCHEMA = "schemas/workflow-security-contract.schema.json"
 LIMIT = 1024 * 1024
@@ -326,6 +341,87 @@ def markdown_example_content(line: str) -> str:
     return line[offset:]
 
 
+def example_fence_open(line: str) -> tuple[MarkdownFence, list[tuple[str, int]], int] | None:
+    """Recognize a fence while retaining ordered quote/list continuation requirements."""
+    containers: list[tuple[str, int]] = []
+    last_quote = -1
+    offset = 0
+    while offset < len(line):
+        depth, consumed = consume_blockquote_prefix(line[offset : offset + 5], max_depth=1)
+        if depth:
+            containers.append(("quote", 1))
+            last_quote = len(containers) - 1
+            offset += consumed
+            continue
+        # The shared grammar's longest prefix is 3 spaces + 9 digits + delimiter
+        # + 4 spaces. One more character suffices without copying a long suffix.
+        match = LIST_MARKER_RE.match(line[offset : offset + 18])
+        if match is None:
+            opened = parse_markdown_fence_open(line[offset:], MARKDOWN_FENCE_CONTEXT)
+            return (opened, containers, last_quote) if opened is not None else None
+        indent = (
+            len(match.group("indent")) + len(match.group("marker")) + len(match.group("spaces"))
+        )
+        containers.append(("list", indent))
+        offset += indent
+    return None
+
+
+def example_fence_content(
+    line: str, fence: MarkdownFence, containers: list[tuple[str, int]], last_quote: int
+) -> str | None:
+    """Stop a literal range before a line leaves any ordered containing block."""
+    if not line.strip(" \t"):
+        return None if last_quote >= 0 else ""
+    offset = 0
+    for index, (kind, width) in enumerate(containers):
+        if offset >= len(line):
+            return None if last_quote >= index else ""
+        if kind == "quote":
+            depth, consumed = consume_blockquote_prefix(line[offset : offset + 5], max_depth=width)
+            if depth < width:
+                return None
+            offset += consumed
+        else:
+            prefix = line[offset : offset + width]
+            if prefix != " " * width:
+                if line_is_outside_list_item(line[offset:], width):
+                    return None
+                return None if last_quote > index else ""
+            offset += width
+    return active_fence_content(line[offset:], fence)
+
+
+def opaque_example_lines(lines: list[str]) -> set[int]:
+    """Exclude non-YAML literals without granting invalid or ended fences opacity."""
+    opaque: set[int] = set()
+    active: tuple[MarkdownFence, list[tuple[str, int]], int] | None = None
+    is_opaque = False
+    for number, line in enumerate(lines):
+        if active is not None:
+            fence, containers, last_quote = active
+            content = example_fence_content(line, fence, containers, last_quote)
+            if content is not None:
+                if is_opaque:
+                    opaque.add(number)
+                if parse_fence_close_from_content(
+                    content,
+                    fence_character=fence.character,
+                    minimum_length=fence.length,
+                    allow_arbitrary_indent=False,
+                ):
+                    active = None
+                continue
+            active = None
+        active = example_fence_open(line)
+        if active is not None:
+            info = active[0].info.strip().lower().split(maxsplit=1)
+            is_opaque = bool(info) and info[0] not in {"yaml", "yml"}
+            if is_opaque:
+                opaque.add(number)
+    return opaque
+
+
 class ExampleLoader(yaml.BaseLoader):
     """Compose inert documentation nodes with bounded depth and no object construction."""
 
@@ -381,6 +477,7 @@ def example_references(text: str) -> list[tuple[int, str]]:
 
 def check_examples(text: str, resolver: Callable[[str, str], str] | None = None) -> int:
     """Validate examples and return the number of governed action references."""
+    opaque_lines = opaque_example_lines(text.splitlines())
     lines = [markdown_example_content(line) for line in text.splitlines()]
     references: set[tuple[int, str]] = set()
     fenced_lines: set[int] = set()
@@ -404,6 +501,8 @@ def check_examples(text: str, resolver: Callable[[str, str], str] | None = None)
         fenced_lines.update(range(start, end))
 
     for number, candidate in enumerate(lines):
+        if number in opaque_lines:
+            continue
         match = EXAMPLE_FENCE.match(candidate)
         if not match:
             continue
@@ -413,7 +512,7 @@ def check_examples(text: str, resolver: Callable[[str, str], str] | None = None)
                 delimiter[0],
                 len(delimiter),
                 number + 1,
-                info.strip().lower() in {"yaml", "yml", ""},
+                not info.strip() or info.strip().lower().split(maxsplit=1)[0] in {"yaml", "yml"},
             )
         elif delimiter[0] == fence[0] and len(delimiter) >= fence[1] and not info.strip():
             if fence[3]:
@@ -423,6 +522,8 @@ def check_examples(text: str, resolver: Callable[[str, str], str] | None = None)
         collect_block(fence[2], len(lines), unclosed=True)
     block_reference_lines = {number for number, _reference in references}
     for number, candidate in enumerate(lines):
+        if number in opaque_lines:
+            continue
         if number in fenced_lines and (
             number in block_reference_lines or not candidate.lstrip().startswith("#")
         ):
@@ -436,7 +537,11 @@ def check_examples(text: str, resolver: Callable[[str, str], str] | None = None)
             pass  # Complete fences cover multiline YAML; surrounding prose is not YAML.
     semantic_lines = {number for number, _reference in references}
     for number, candidate in enumerate(lines):
-        if number not in semantic_lines and (match := USES_LINE.match(candidate)):
+        if (
+            number not in opaque_lines
+            and number not in semantic_lines
+            and (match := USES_LINE.match(candidate))
+        ):
             references.add((number, match[1]))
     for number, reference in sorted(references):
         check_reference(reference, lines[number], resolver)

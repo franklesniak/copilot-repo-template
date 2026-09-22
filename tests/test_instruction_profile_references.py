@@ -1202,3 +1202,220 @@ def test_destination_whitespace_guard_removal_breaks_native_positive(
         assert (
             mutant.returncode == 0
         ), "A distinct whitespace path must not trigger this obligation."
+
+
+INDENTED_LINK_CASES = (
+    ("    [x](target.md)\n", ()),
+    ("\t[x](target.md)\n", ()),
+    ("   [x](target.md)\n", ((1, "target.md"),)),
+    ("Paragraph\n    [x](target.md)\n", ((2, "target.md"),)),
+    ("Paragraph\n\n    [x](target.md)\n", ()),
+    ("# Heading\n    [x](target.md)\n", ()),
+    ("    [fake](ignored.md)\n[x](target.md)\n", ((2, "target.md"),)),
+    ("- Item\n\n    [x](target.md)\n", ((3, "target.md"),)),
+    ("- Item\n\n      [x](target.md)\n", ()),
+    ("- Item\n      [x](target.md)\n", ((2, "target.md"),)),
+    ("10. Item\n\n        [x](target.md)\n", ()),
+    ("  10.  Item\n\n       [x](target.md)\n", ((3, "target.md"),)),
+    ("  10.  Item\n\n           [x](target.md)\n", ()),
+    ("-     [x](target.md)\n", ()),
+    (">     [x](target.md)\n", ()),
+    ("> Paragraph\n>     [x](target.md)\n", ((2, "target.md"),)),
+    ("> - Item\n>\n>       [x](target.md)\n", ()),
+    ("> - Item\n>\n>     [x](target.md)\n", ((3, "target.md"),)),
+    ("- > Item\n  >\n  >     [x](target.md)\n", ()),
+    ("- outer\n  - inner\n\n        [x](target.md)\n", ()),
+    ("- outer\n  - inner\n\n      [x](target.md)\n", ((4, "target.md"),)),
+    ("- Item\n\n\t[x](target.md)\n", ((3, "target.md"),)),
+    ("- Item\n\n\t\t[x](target.md)\n", ()),
+    ("- ```text\n  literal\n  ```\n\n    [x](target.md)\n", ((5, "target.md"),)),
+    ("- ```text\n  literal\n  ```\n\n      [x](target.md)\n", ()),
+    ("    - literal\n\n    [x](target.md)\n", ()),
+    ("[x](\n\n    ignored.md\n)\n", ()),
+    ("Paragraph\n    [x](<raw\ttarget.md>)\n", ((2, "raw\ttarget.md"),)),
+    ("- - -\n    [x](target.md)\n", ()),
+    ("- - Item\n\n        [x](target.md)\n", ()),
+    ("Paragraph\n2. continues\n    [x](target.md)\n", ((3, "target.md"),)),
+)
+
+
+@pytest.mark.parametrize(("body", "expected"), INDENTED_LINK_CASES)
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
+def test_indented_code_context_preserves_live_links_and_original_lines(
+    body: str, expected: tuple[tuple[int, str], ...], ending: str
+) -> None:
+    """Fixed paired contexts distinguish literal indentation from live continuation."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.markdown_link_targets_from_text(body.replace("\n", ending)) == expected
+
+
+@pytest.mark.parametrize(("body", "expected"), INDENTED_LINK_CASES[:23])
+def test_deployed_indented_code_has_contextual_native_result_without_sync(
+    tmp_path: Path, body: str, expected: tuple[tuple[int, str], ...]
+) -> None:
+    """The installed checker accepts code and rejects live excluded references."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    write(
+        tmp_path,
+        "AGENTS.md",
+        "Agents MUST validate.\nAgents MUST preserve authority.\n\n"
+        + body.replace("target.md", TOKENS["markdown-relative-link"]),
+    )
+    result = run(tmp_path)
+    assert result.returncode == (1 if expected else 0), result.stdout + result.stderr
+    if expected:
+        assert "Stale protected-guide references" in result.stdout
+    assert not (tmp_path / ".template-sync").exists()
+
+
+def test_indented_code_context_removal_and_blanket_skip_mutants(tmp_path: Path) -> None:
+    """Independent native expectations detect both false failures and false success."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    path = tmp_path / ".github/scripts/instruction_contract_core.py"
+    source = path.read_text(encoding="utf-8")
+    start = source.index("def markdown_indented_code_lines(")
+    stop = source.index("\ndef markdown_reference_definition_ends(", start)
+    for body, expected_exit, replacement in (
+        ("    [x](docs/azure-devops-support.md)\n", 0, "return set()"),
+        (
+            "Paragraph\n    [x](docs/azure-devops-support.md)\n",
+            1,
+            (
+                "return {n for n, line in enumerate(markdown_lines(text), 1) "
+                "if line.startswith(('    ', '\\t'))}"
+            ),
+        ),
+    ):
+        write(
+            tmp_path,
+            "AGENTS.md",
+            "Agents MUST validate.\nAgents MUST preserve authority.\n\n" + body,
+        )
+        path.write_text(source, encoding="utf-8", newline="\n")
+        positive = run(tmp_path)
+        assert positive.returncode == expected_exit, positive.stdout + positive.stderr
+        mutant = (
+            source[:start]
+            + "def markdown_indented_code_lines(text, definition_ends=None):\n    "
+            + replacement
+            + "\n\n"
+            + source[stop:]
+        )
+        path.write_text(mutant, encoding="utf-8", newline="\n")
+        negative = run(tmp_path)
+        assert negative.returncode == 1 - expected_exit, negative.stdout + negative.stderr
+        with pytest.raises(AssertionError):
+            assert negative.returncode == expected_exit
+
+
+def test_indented_container_scanning_is_bounded_and_rescan_mutant_times_out(
+    tmp_path: Path,
+) -> None:
+    """Near-limit structural input has fixed output; repeated suffix work is caught."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    scripts = tmp_path / ".github/scripts"
+    program = (
+        "import sys; "
+        f"sys.path.insert(0, {str(scripts)!r}); "
+        "import instruction_contract_core as c; "
+        "body='- '*450000+'[x](target.md)\\n'; "
+        "assert c.markdown_link_targets_from_text(body)==((1,'target.md'),); "
+        "body='- '*100000+'text\\n'+'\\n'*100000+'[x](target.md)\\n'; "
+        "assert c.markdown_link_targets_from_text(body)==((100002,'target.md'),); "
+        "body=' '*900000+'[x](ignored.md)\\n'; "
+        "assert c.markdown_link_targets_from_text(body)==()"
+    )
+    positive = subprocess.run(
+        [sys.executable, "-B", "-c", program],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+    assert positive.returncode == 0, positive.stdout + positive.stderr
+    path = scripts / "instruction_contract_core.py"
+    source = path.read_text(encoding="utf-8")
+    guard = """        while not (
+            thematic_start <= offset <= thematic_end
+            and markdown_prefix_end(line, offset) - offset <= 3
+        ):
+"""
+    assert source.count(guard) == 1
+    old = '        while re.fullmatch(r" {0,3}(?:-[ ]*){3,}", line[offset:]) is None:\n'
+    path.write_text(source.replace(guard, old), encoding="utf-8", newline="\n")
+    with pytest.raises(subprocess.TimeoutExpired):
+        subprocess.run(
+            [sys.executable, "-B", "-c", program],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=3,
+        )
+
+
+REFERENCE_CODE_BOUNDARIES = (
+    ("[ref]: target.md\n    [x](ignored.md)\n", ((1, "target.md"),)),
+    ("[ref]:\n target.md\n    [x](ignored.md)\n", ((1, "target.md"),)),
+    ('[ref]: target.md\n "multiline\n title"\n    [x](ignored.md)\n', ((1, "target.md"),)),
+    ("[ref]: target.md\n[ref]\n", ((1, "target.md"),)),
+    ("> [ref]: target.md\n>     [x](ignored.md)\n", ((1, "target.md"),)),
+    ("- [ref]: target.md\n      [x](ignored.md)\n", ((1, "target.md"),)),
+    (
+        "Paragraph\n[ref]: target.md\n    [x](live.md)\n",
+        ((2, "target.md"), (3, "live.md")),
+    ),
+    ("[ref]: target.md trailing\n    [x](live.md)\n", ((2, "live.md"),)),
+    ("[ref]: <unfinished\n    [x](live.md)\n", ((2, "live.md"),)),
+    ("    [ref]: ignored.md\n    [x](ignored.md)\n", ()),
+)
+
+
+@pytest.mark.parametrize(("body", "expected"), REFERENCE_CODE_BOUNDARIES)
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
+def test_complete_definitions_end_paragraphs_without_losing_target_inventory(
+    body: str, expected: tuple[tuple[int, str], ...], ending: str
+) -> None:
+    """Complete definitions are nonparagraphs, but remain target-bearing inventory."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.markdown_link_targets_from_text(body.replace("\n", ending)) == expected
+
+
+def test_definition_boundary_removal_and_inventory_removal_have_native_oracles(
+    tmp_path: Path,
+) -> None:
+    """Independent CLI checks preserve both code acceptance and live definitions."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    path = tmp_path / ".github/scripts/instruction_contract_core.py"
+    source = path.read_text(encoding="utf-8")
+    anchor = "Agents MUST validate.\nAgents MUST preserve authority.\n\n"
+    write(
+        tmp_path,
+        "AGENTS.md",
+        anchor + "[ref]: safe.md\n    [x](docs/azure-devops-support.md)\n",
+    )
+    positive = run(tmp_path)
+    assert positive.returncode == 0, positive.stdout + positive.stderr
+    guard = "definition_ends = markdown_reference_definition_ends(spans)"
+    assert source.count(guard) == 1
+    path.write_text(source.replace(guard, "definition_ends = {}"), encoding="utf-8", newline="\n")
+    mutant = run(tmp_path)
+    assert mutant.returncode == 1, mutant.stdout + mutant.stderr
+    assert "Stale protected-guide references" in mutant.stdout
+    path.write_text(source, encoding="utf-8", newline="\n")
+    write(tmp_path, "AGENTS.md", anchor + "[ref]: docs/azure-devops-support.md\n[ref]\n")
+    require_reference_failure(tmp_path)
+    guard = "        if line_number in code_lines:\n"
+    assert source.count(guard) == 1
+    path.write_text(
+        source.replace(guard, '        if line_number in code_lines or "]:" in line:\n'),
+        encoding="utf-8",
+        newline="\n",
+    )
+    missing = run(tmp_path)
+    assert missing.returncode == 0, missing.stdout + missing.stderr
+    with pytest.raises(AssertionError):
+        assert missing.returncode == 1

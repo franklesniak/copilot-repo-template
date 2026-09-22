@@ -168,6 +168,7 @@ template_manifest:
       requires_any:
         - instruction-enforcement
         - template-sync-support
+        - github-actions
     - pattern: '.github/scripts/validate_instruction_profile.py'
       requires_all:
         - agent-instructions

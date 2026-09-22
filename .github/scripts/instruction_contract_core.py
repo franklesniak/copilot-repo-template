@@ -2057,13 +2057,230 @@ def section_failures(
     return list(dict.fromkeys(failures))
 
 
+MARKDOWN_LINK_LIST_MARKER = re.compile(r"(?:[-+*]|[0-9]{1,9}[.)])(?= |$)")
+
+
+def markdown_thematic_suffix(line: str) -> tuple[int, int]:
+    """Index a possible final thematic run once, avoiding nested suffix rescans."""
+    index = len(line) - 1
+    while index >= 0 and line[index] == " ":
+        index -= 1
+    if index < 0 or line[index] not in "*_-":
+        return len(line), -1
+    marker = line[index]
+    count = 0
+    third_last = -1
+    while index >= 0 and line[index] in (marker, " "):
+        if line[index] == marker:
+            count += 1
+            if count == 3:
+                third_last = index
+        index -= 1
+    return index + 1, third_last
+
+
+def markdown_prefix_end(line: str, offset: int) -> int:
+    """Count structural spaces without slicing or rescanning the remaining line."""
+    while offset < len(line) and line[offset] == " ":
+        offset += 1
+    return offset
+
+
+def markdown_link_container(
+    line: str, offset: int, *, paragraph_active: bool = False
+) -> tuple[str, int] | None:
+    """Recognize one quote or list prefix in a column-expanded structural view."""
+    start = markdown_prefix_end(line, offset)
+    if start - offset > 3 or start == len(line):
+        return None
+    if line[start] == ">":
+        end = start + 1
+        return "quote", end + (end < len(line) and line[end] == " ")
+    marker = MARKDOWN_LINK_LIST_MARKER.match(line, start)
+    if marker is None:
+        return None
+    end = marker.end()
+    content = markdown_prefix_end(line, end)
+    if paragraph_active and (
+        content == len(line) or (marker.group()[0].isdigit() and int(marker.group()[:-1]) != 1)
+    ):
+        return None
+    padding = content - end
+    return "list", end + (padding if content < len(line) and 1 <= padding <= 4 else 1)
+
+
+def markdown_indented_code_lines(
+    text: str, definition_ends: dict[int, int] | None = None
+) -> set[int]:
+    """Locate code using container margins while preserving lazy paragraphs.
+
+    A structural view expands tabs to four-column stops; callers still scan the
+    original lines, so destinations and their exception identities are untouched.
+    Container steps consume prefixes monotonically. Literal fenced content never
+    creates containers, but its opening line can establish a containing list.
+    """
+    code_lines: set[int] = set()
+    containers: list[tuple[str, int]] = []
+    quote_positions: list[int] = []
+    paragraph_active = False
+    definition_end = 0
+    active_fence: MarkdownFence | None = None
+    for line_number, raw_line in enumerate(markdown_lines(text), 1):
+        if line_number <= definition_end:
+            continue
+        if active_fence is not None:
+            fence_content = active_fence_content(raw_line, active_fence)
+            if fence_content is not None:
+                if parse_fence_close_from_content(
+                    fence_content,
+                    fence_character=active_fence.character,
+                    minimum_length=active_fence.length,
+                    allow_arbitrary_indent=active_fence.allow_arbitrary_indent,
+                ):
+                    active_fence = None
+                paragraph_active = False
+                continue
+            active_fence = None
+        opened_fence = parse_markdown_fence_open(raw_line, MARKDOWN_FENCE_CONTEXT)
+        line = raw_line.expandtabs(4)
+        offset = 0
+        matched = 0
+        space_end = 0
+        for kind, margin in containers:
+            if offset >= space_end:
+                space_end = markdown_prefix_end(line, offset)
+            start = space_end
+            if kind == "quote":
+                if start - offset > 3 or start == len(line) or line[start] != ">":
+                    break
+                offset = start + 1
+                offset += offset < len(line) and line[offset] == " "
+            elif start == len(line):
+                # Blank lines may retain a list without its indentation.
+                offset = start
+                quote_index = bisect_left(quote_positions, matched)
+                matched = (
+                    quote_positions[quote_index]
+                    if quote_index < len(quote_positions)
+                    else len(containers)
+                )
+                break
+            elif start - offset >= margin:
+                offset += margin
+            else:
+                break
+            matched += 1
+        content = line[offset:]
+        blank = not content.strip(" ")
+        heading = is_policy_heading(content)
+        separator = is_policy_thematic_break(content) or (
+            re.fullmatch(r" {0,3}(?:=+|-+)[ ]*", content) is not None
+        )
+        starts_container = markdown_link_container(
+            line,
+            offset,
+            paragraph_active=paragraph_active and matched == len(containers),
+        )
+        if (
+            paragraph_active
+            and not blank
+            and not heading
+            and not separator
+            and starts_container is None
+            and opened_fence is None
+        ):
+            # Indentation alone cannot interrupt an open paragraph, including
+            # lazy continuations that omit a quote or list prefix.
+            continue
+        del containers[matched:]
+        while quote_positions and quote_positions[-1] >= matched:
+            quote_positions.pop()
+        paragraph_active = False
+        if blank:
+            continue
+        thematic_start, thematic_end = markdown_thematic_suffix(line)
+        while not (
+            thematic_start <= offset <= thematic_end
+            and markdown_prefix_end(line, offset) - offset <= 3
+        ):
+            container = markdown_link_container(line, offset)
+            if container is None:
+                break
+            kind, end = container
+            if kind == "quote":
+                quote_positions.append(len(containers))
+            containers.append((kind, end - offset))
+            offset = end
+        content = line[offset:]
+        if markdown_prefix_end(line, offset) - offset >= 4:
+            code_lines.add(line_number)
+            continue
+        if definition_ends is not None and line_number in definition_ends:
+            definition_end = definition_ends[line_number]
+            continue
+        active_fence = opened_fence
+        paragraph_active = bool(content.strip(" ")) and not (
+            active_fence is not None
+            or is_policy_heading(content)
+            or is_policy_thematic_break(content)
+            or re.fullmatch(r" {0,3}(?:=+|-+)[ ]*", content) is not None
+        )
+    return code_lines
+
+
+def markdown_reference_definition_ends(spans: list[list[tuple[int, str]]]) -> dict[int, int]:
+    """Index complete definition boundaries with the existing component grammar."""
+    ends: dict[int, int] = {}
+    for span in spans:
+        text = "\n".join(line for _, line in span)
+        starts: list[int] = []
+        offset = 0
+        for _, line in span:
+            starts.append(offset)
+            offset += len(line) + 1
+        labels, _closes = markdown_delimiter_pairs(text)
+        definitions = {
+            opening for opening, closing in labels if text[closing + 1 : closing + 2] == ":"
+        }
+        if not definitions:
+            continue
+        whitespace = [
+            index
+            for index, character in enumerate(text)
+            if ord(character) <= 32 or ord(character) == 127
+        ]
+        whitespace.append(len(text))
+        for opening, end, _target_start, _target_end in markdown_link_candidates(
+            text, starts, whitespace
+        ):
+            if opening in definitions:
+                first = bisect_right(starts, opening) - 1
+                last = bisect_right(starts, end - 1) - 1
+                ends[span[first][0]] = span[last][0]
+    return ends
+
+
 def markdown_link_spans(text: str, fence_context: str) -> list[list[tuple[int, str]]]:
+    """Preserve definition inventory while removing contextual indented code."""
+    spans = markdown_live_link_spans(text, fence_context, set())
+    if fence_context != MARKDOWN_FENCE_CONTEXT:
+        return spans
+    definition_ends = markdown_reference_definition_ends(spans)
+    code_lines = markdown_indented_code_lines(text, definition_ends)
+    return markdown_live_link_spans(text, fence_context, code_lines)
+
+
+def markdown_live_link_spans(
+    text: str, fence_context: str, code_lines: set[int]
+) -> list[list[tuple[int, str]]]:
     """Partition live inline text without bridging fences, blank lines or blocks."""
     spans: list[list[tuple[int, str]]] = []
     current: list[tuple[int, str]] = []
     previous_line = 0
     quote_depth = 0
     for line_number, line in lines_outside_markdown_fences(text, fence_context=fence_context):
+        if line_number in code_lines:
+            continue
         depth, offset = consume_blockquote_prefix(
             line, allow_arbitrary_indent=fence_context != MARKDOWN_FENCE_CONTEXT
         )

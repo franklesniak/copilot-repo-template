@@ -1354,7 +1354,9 @@ terraform test -filter=tests/basic.tftest.hcl
 
 #### CI Integration Example
 
-\`\`\`yaml
+```
+
+```yaml
 # .github/workflows/terraform-ci.yml
 jobs:
   test:
@@ -1370,7 +1372,6 @@ jobs:
 
       - name: Terraform Test
         run: terraform test -verbose
-\`\`\`
 ```
 
 ### What to Test
@@ -1664,7 +1665,9 @@ rule "terraform_documented_outputs" {
 
 A GitHub Actions workflow for Terraform **SHOULD** include:
 
-\`\`\`yaml
+```
+
+```yaml
 # .github/workflows/terraform-ci.yml
 name: Terraform CI
 
@@ -1737,7 +1740,6 @@ jobs:
         uses: aquasecurity/tfsec-action@b466648d6e39e7c75324f25d83891162a721f2d6 # v1.0.3
         with:
           soft_fail: true  # Set to false to fail on findings
-\`\`\`
 ```
 
 ---
