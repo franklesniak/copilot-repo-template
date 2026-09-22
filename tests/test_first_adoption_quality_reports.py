@@ -1495,8 +1495,11 @@ def _copy_installed_host_report(root: Path) -> Path:
             1,
             "duplicate explicit mapping key",
         ),
-        ("template_sync: [\n", 1, "not valid YAML"),
+        ("template_sync: [\n", 1, "Invalid YAML in .template-sync/marker.yml:"),
         ("[]\n", 1, "must contain a YAML mapping"),
+        ("hello\n", 1, "must contain a YAML mapping"),
+        ("null\n", 1, "must contain a YAML mapping"),
+        ("template_sync: []\n", 1, "must contain template_sync mapping"),
     ],
 )
 def test_installed_host_report_uses_unambiguous_marker(
@@ -1518,7 +1521,55 @@ def test_installed_host_report_uses_unambiguous_marker(
     assert result.returncode == exit_code, result.stderr
     assert message in result.stdout + result.stderr
     if exit_code:
-        assert "No Azure DevOps Services host setup tasks" not in result.stdout
+        assert result.stdout == ""
+        assert result.stderr.count(".template-sync/marker.yml") == 1
+        if message.startswith("must contain"):
+            assert result.stderr == f"ERROR: .template-sync/marker.yml {message}.\n"
+        else:
+            assert result.stderr.startswith("ERROR: Invalid YAML in .template-sync/marker.yml:")
+        assert "is not valid YAML" not in result.stderr
+
+
+@pytest.mark.parametrize("marker", ["[]\n", "template_sync: [\n", "key: 1\nkey: 2\n"])
+def test_host_report_preserves_marker_parser_cause(tmp_path: Path, marker: str) -> None:
+    """Domain translation retains the parser's precise message and original cause."""
+    _write_text(tmp_path, ".template-sync/marker.yml", marker)
+
+    with pytest.raises(quality_reports.FirstAdoptionQualityError) as caught:
+        quality_reports.load_marker_template_sync(tmp_path)
+
+    cause = caught.value.__cause__
+    assert isinstance(cause, quality_reports.TemplateSyncMaterializationError)
+    assert str(caught.value) == str(cause)
+
+
+def test_host_report_old_wrapper_fails_exact_shape_diagnostic(tmp_path: Path) -> None:
+    """A fixed diagnostic oracle catches restoration of the misleading wrapper."""
+    script = _copy_installed_host_report(tmp_path / "installed")
+    source = script.read_text(encoding="utf-8")
+    translation = "raise FirstAdoptionQualityError(str(error)) from error"
+    assert source.count(translation) == 1
+    script.write_text(
+        source.replace(
+            translation,
+            'raise FirstAdoptionQualityError(f"{MARKER_PATH} is not valid YAML: {error}") from error',
+        ),
+        encoding="utf-8",
+    )
+    target = tmp_path / "target"
+    _write_text(target, ".template-sync/marker.yml", "[]\n")
+    result = subprocess.run(
+        [sys.executable, "-B", str(script), "--repo-root", str(target), "host-setup"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+    assert result.returncode == 1, result.stderr
+    assert result.stdout == ""
+    assert "is not valid YAML" in result.stderr
+    with pytest.raises(AssertionError):
+        assert result.stderr == "ERROR: .template-sync/marker.yml must contain a YAML mapping.\n"
 
 
 def test_host_report_duplicate_guard_removal_restores_false_no_tasks(
