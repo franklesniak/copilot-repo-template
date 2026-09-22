@@ -1053,3 +1053,45 @@ def test_reporter_preserves_contextual_code_and_embedded_indentation(
         assert len(links) == 1, links
         assert f"{relative_path}:{line_number} |" in links[0]
         assert "templates/json/example.json" in links[0]
+
+
+@pytest.mark.parametrize(
+    ("suffix", "body", "line_number"),
+    [
+        ("md", "<!-- [JSON](templates/json/example.json) -->\n", None),
+        ("mdc", "<pre>\n[JSON](templates/json/example.json)\n</pre>\n", None),
+        ("md", "Text <!-- [JSON](templates/json/example.json) -->\n", None),
+        ("md", 'Text <span title="[JSON](templates/json/example.json)"> text</span>\n', None),
+        ("md", "<span>[JSON](templates/json/example.json)</span>\n", 1),
+        ("md", "[A <!-- ] --> B](templates/json/example.json)\n", 1),
+        ("md", "<!--\n```\n-->\n[JSON](templates/json/example.json)\n", 4),
+        ("yml", "value: |\n    [JSON](templates/json/example.json)\n", 2),
+        ("yaml", "value: |\n    <!-- [JSON](templates/json/example.json) -->\n", None),
+        ("yaml", "value: |\n    <span>[JSON](templates/json/example.json)</span>\n", 2),
+    ],
+)
+def test_reporter_html_context_preserves_fixed_targets_and_embedded_behavior(
+    tmp_path: Path, suffix: str, body: str, line_number: int | None
+) -> None:
+    """Native reports preserve Markdown literals, inline text and YAML indentation."""
+    _write_common_repo(tmp_path, include_reference_content=False)
+    relative_path = f"example.{suffix}"
+    manifest = _manifest()
+    manifest["template_manifest"]["path_mappings"].append(
+        {"pattern": relative_path, "requires_all": ["baseline"]}
+    )
+    _write_yaml(tmp_path, ".template-sync/manifest.yml", manifest)
+    _write_text(tmp_path, relative_path, body)
+    result = _run_report(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    links = [
+        line
+        for line in _finding_lines(result.stdout)
+        if line.startswith("markdown-link.") and f" | {relative_path}:" in line
+    ]
+    if line_number is None:
+        assert links == []
+    else:
+        assert len(links) == 1, links
+        assert f"{relative_path}:{line_number} |" in links[0]
+        assert "templates/json/example.json" in links[0]

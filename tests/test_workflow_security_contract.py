@@ -526,8 +526,8 @@ def test_quoted_document_guard_removal(tmp_path: Path, mutation: str) -> None:
     source = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
     before, after = (
         (
-            "lines = [markdown_example_content(line) for line in text.splitlines()]",
-            "lines = text.splitlines()",
+            "lines = [markdown_example_content(line) for line in raw_lines]",
+            "lines = raw_lines.copy()",
         )
         if mutation == "bypass"
         else (
@@ -1308,3 +1308,235 @@ def test_old_terraform_literal_wrapping_breaks_fixed_coverage_oracle() -> None:
         )
         text = text[:start] + body + "\n\\`\\`\\`" + text[end:]
     assert policy.check_examples(text) == 0
+
+
+@pytest.mark.parametrize(
+    ("opener", "prefix"),
+    [
+        ("- 1. ", "     "),
+        ("1. - 2. ", "        "),
+        ("> - 1. ", ">      "),
+        ("- > 1. ", "  >    "),
+        ("- > - > ", "  >   > "),
+        ("- " * 80, " " * 160),
+    ],
+)
+@pytest.mark.parametrize("language", ["yaml", "YML metadata", ""])
+def test_governed_nested_container_semantics(opener: str, prefix: str, language: str) -> None:
+    """Nested Markdown containers neither hide YAML nodes nor count as YAML depth."""
+    reference = "owner/action@" + "a" * 40
+    body = f'- {{name: Checkout,\n "uses": {reference}, # v1.2.3\n with: {{}}}}'
+    text = opener + "```" + language + "\n"
+    text += "\n".join(prefix + line for line in body.splitlines()) + "\n" + prefix + "```"
+    calls: list[tuple[str, str]] = []
+
+    def resolve(repository: str, version: str) -> str:
+        """Record each physically bound pin check without network access."""
+        calls.append((repository, version))
+        return "a" * 40
+
+    assert policy.check_examples(text, resolve) == 1
+    assert calls == [("owner/action", "v1.2.3")]
+    with pytest.raises(policy.PolicyError, match="full SHA"):
+        policy.check_examples(text.replace("a" * 40, "v1"))
+    for pinned in (False, True):
+        split = '- {\n ? "uses"\n : owner/action@' + ("a" * 40 if pinned else "v1") + "\n}"
+        split_text = opener + "```" + language + "\n"
+        split_text += "\n".join(prefix + line for line in split.splitlines())
+        with pytest.raises(policy.PolicyError, match="physical line"):
+            policy.check_examples(split_text + "\n" + prefix + "```")
+
+
+@pytest.mark.parametrize(
+    ("before", "prefix"),
+    [
+        ("1. item\n\n", "    "),
+        ("- Outer\n  1. Inner\n\n", "     "),
+        ("123. item\n\n", "     "),
+        ("> - Outer\n>   1. Inner\n>\n", ">      "),
+        ("", "    "),
+    ],
+)
+def test_governed_indented_continuation_compatibility(before: str, prefix: str) -> None:
+    """Existing indented governed examples retain complete-block validation."""
+    body = '- {name: Checkout,\n "uses": owner/action@' + "a" * 40
+    body += ", # v1.2.3\n with: {}}"
+    text = before + prefix + "```yaml\n"
+    text += "\n".join(prefix + line for line in body.splitlines()) + "\n" + prefix + "```"
+    assert policy.check_examples(text) == 1
+    with pytest.raises(policy.PolicyError, match="full SHA"):
+        policy.check_examples(text.replace("a" * 40, "v1"))
+    with pytest.raises(policy.PolicyError, match="Unclosed"):
+        policy.check_examples(text.rsplit("\n", 1)[0])
+
+
+@pytest.mark.parametrize("ending", ["eof", "dedent", "quote-end", "wrong-close", "short-close"])
+def test_governed_nested_unclosed_boundaries(ending: str) -> None:
+    """Container ends and nonmatching closers cannot bless unfinished action examples."""
+    prefix = ">      " if ending == "quote-end" else "     "
+    opener = "> - 1. " if ending == "quote-end" else "- 1. "
+    text = opener + "````yaml\n" + prefix + "uses: owner/action@" + "a" * 40 + " # v1.2.3\n"
+    text += {
+        "eof": "",
+        "dedent": "outside\n",
+        "quote-end": "outside\n",
+        "wrong-close": prefix + "~~~~\n",
+        "short-close": prefix + "```\n",
+    }[ending]
+    with pytest.raises(policy.PolicyError, match="Unclosed|Invalid YAML"):
+        policy.check_examples(text)
+
+
+def test_governed_nested_comments_and_annotation_lines() -> None:
+    """Comments remain governed, and a release annotation cannot move to another line."""
+    text = "- 1. ~~~yaml\n     # uses: owner/action@" + "a" * 40 + " # v1.2.3\n     ~~~~"
+    assert policy.check_examples(text) == 1
+    with pytest.raises(policy.PolicyError, match="full SHA"):
+        policy.check_examples(
+            text.replace("# uses:", "uses:").replace(" # v1.2.3", "\n     # v1.2.3")
+        )
+    with pytest.raises(policy.PolicyError, match="full SHA"):
+        policy.check_examples(text + "\n# uses: owner/action@v1\n")
+
+
+@pytest.mark.parametrize("guard", ["block", "physical", "malformed", "unclosed", "delimiter"])
+def test_governed_nested_guard_removal(tmp_path: Path, guard: str) -> None:
+    """Fixed nested-block failure and count oracles detect precise guard removal."""
+    source = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
+    pin = "owner/action@" + "a" * 40
+    split = '- 1. ```yaml\n     - {"uses"\n     : owner/action@v1}\n     ```'
+    before, after, text, expected = {
+        "block": ("example_references(block)", "[]", split, "Invalid YAML"),
+        "physical": (
+            "or key.start_mark.line != value.start_mark.line",
+            "or False",
+            f"- 1. ```yaml\n     - uses:\n         {pin} # v1.2.3\n     ```",
+            "physical line",
+        ),
+        "malformed": (
+            "if EXAMPLE_ACTION.search(block):",
+            "if False:",
+            '- 1. ```yaml\n     - {"uses"\n     : owner/action@v1\n     ```',
+            "Invalid YAML",
+        ),
+        "unclosed": (
+            "if unclosed and (found or EXAMPLE_ACTION.search(block)):",
+            "if False:",
+            f"- 1. ```yaml\n     uses: {pin} # v1.2.3",
+            "Unclosed",
+        ),
+        "delimiter": (
+            "                fenced_lines.add(number)\n    if fence is not None and governed:",
+            "                pass\n    if fence is not None and governed:",
+            "- " * 80 + "```yaml\n" + " " * 160 + f"uses: {pin} # v1.2.3\n" + " " * 160 + "```",
+            "",
+        ),
+    }[guard]
+    assert source.count(before) == 1
+    mutant = load_policy_mutant(tmp_path, source.replace(before, after))
+    if expected:
+        with pytest.raises(policy.PolicyError, match=expected):
+            policy.check_examples(text)
+        mutant.check_examples(text)
+    else:
+        assert policy.check_examples(text) == 1
+        with pytest.raises(mutant.PolicyError, match="nesting"):
+            mutant.check_examples(text)
+
+
+def test_governed_nested_old_collector_restoration(tmp_path: Path) -> None:
+    """The old single-marker collector fails the unchanged split-key rejection oracle."""
+    source = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
+    start = source.index(
+        "    for number, raw_line in enumerate(raw_lines):", source.index("def check_examples(")
+    )
+    end = source.index("    block_reference_lines =", start)
+    old = """    old_fence = None
+    for number, candidate in enumerate(lines):
+        if number in opaque_lines:
+            continue
+        match = EXAMPLE_FENCE.match(candidate)
+        if not match:
+            continue
+        delimiter, info = match.groups()
+        if old_fence is None:
+            old_fence = (delimiter[0], len(delimiter), number + 1,
+                         not info.strip() or info.strip().lower().split(maxsplit=1)[0] in {"yaml", "yml"})
+        elif delimiter[0] == old_fence[0] and len(delimiter) >= old_fence[1] and not info.strip():
+            if old_fence[3]:
+                collect_block(old_fence[2], number)
+            old_fence = None
+    if old_fence is not None and old_fence[3]:
+        collect_block(old_fence[2], len(lines), unclosed=True)
+"""
+    mutant = load_policy_mutant(tmp_path, source[:start] + old + source[end:])
+    text = '- 1. ```yaml\n     - {"uses"\n     : owner/action@v1}\n     ```'
+    with pytest.raises(policy.PolicyError, match="Invalid YAML"):
+        policy.check_examples(text)
+    assert mutant.check_examples(text) == 0
+
+
+def test_governed_deep_container_resource_bound(tmp_path: Path) -> None:
+    """A near-limit governed block processes deep containers and blank lines once."""
+    fixture = tmp_path / "governed.md"
+    prefix = " " * 240_000
+    fixture.write_text(
+        "- " * 120_000
+        + "```yaml\n"
+        + "\n" * 200_000
+        + prefix
+        + "uses: owner/action@"
+        + "a" * 40
+        + " # v1.2.3\n"
+        + prefix
+        + "```\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    assert 900_000 < fixture.stat().st_size < policy.LIMIT
+    code = (
+        "import importlib.util,sys; from pathlib import Path; "
+        "spec=importlib.util.spec_from_file_location('resource_policy',sys.argv[1]); "
+        "module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module); "
+        "count=module.check_examples(Path(sys.argv[2]).read_text(encoding='utf-8')); "
+        "assert count == 1, count; print(count)"
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-E",
+            "-c",
+            code,
+            str(ROOT / ".github/scripts/validate_workflow_security.py"),
+            str(fixture),
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == "1"
+
+
+@pytest.mark.parametrize("pinned", [False, True])
+def test_governed_nested_malformed_implicit_key(pinned: bool) -> None:
+    """The reported implicit split key fails complete YAML syntax even with a pin."""
+    reference = "owner/action@" + ("a" * 40 if pinned else "v1")
+    text = f'- 1. ```yaml\n     - {{"uses"\n     : {reference}}}\n     ```'
+    with pytest.raises(policy.PolicyError, match="Invalid YAML"):
+        policy.check_examples(text)
+
+
+def test_governed_indented_non_yaml_compatibility_boundary() -> None:
+    """Legacy non-YAML delimiters neither consume following YAML nor gain opacity."""
+    before = "    ```text\n    harmless literal\n    ```\n\n"
+    governed = "```yaml\nuses: owner/action@" + "a" * 40 + " # v1.2.3\n```\n"
+    assert policy.check_examples(before + governed) == 1
+    with pytest.raises(policy.PolicyError, match="full SHA"):
+        policy.check_examples(
+            before.replace("harmless literal", "uses: owner/action@v1") + governed
+        )
+    with pytest.raises(policy.PolicyError, match="full SHA"):
+        policy.check_examples(before + governed.replace("a" * 40, "v1"))

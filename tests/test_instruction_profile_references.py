@@ -1298,7 +1298,7 @@ def test_indented_code_context_removal_and_blanket_skip_mutants(tmp_path: Path) 
         assert positive.returncode == expected_exit, positive.stdout + positive.stderr
         mutant = (
             source[:start]
-            + "def markdown_indented_code_lines(text, definition_ends=None):\n    "
+            + "def markdown_indented_code_lines(text, definition_ends=None, *, include_indented=True):\n    "
             + replacement
             + "\n\n"
             + source[stop:]
@@ -1419,3 +1419,196 @@ def test_definition_boundary_removal_and_inventory_removal_have_native_oracles(
     assert missing.returncode == 0, missing.stdout + missing.stderr
     with pytest.raises(AssertionError):
         assert missing.returncode == 1
+
+
+HTML_LINK_CASES = (
+    ("<!-- [x](target.md) -->\n", ()),
+    ("<!--\n[x](ignored.md)\n-->\n[x](target.md)\n", ((4, "target.md"),)),
+    ("<!--\n\n[x](ignored.md)\n", ()),
+    ("<!--\n--> [x](ignored.md)\n[x](target.md)\n", ((3, "target.md"),)),
+    ("<pre>\n[x](ignored.md)\n</pre>\n[x](target.md)\n", ((4, "target.md"),)),
+    ("<SCRIPT>\n[x](ignored.md)\n</STYLE>\n[x](target.md)\n", ((4, "target.md"),)),
+    ("<style>\n[x](ignored.md)\n</style>\n", ()),
+    ("<textarea>\n[x](ignored.md)\n</textarea>\n", ()),
+    ("<?process\n[x](ignored.md)\n?>\n[x](target.md)\n", ((4, "target.md"),)),
+    ("<!decl\n[x](ignored.md)\n>\n[x](target.md)\n", ((4, "target.md"),)),
+    ("<![CDATA[\n[x](ignored.md)\n]]>\n[x](target.md)\n", ((4, "target.md"),)),
+    ("<div>\n[x](ignored.md)\n</div>\n[x](ignored.md)\n\n[x](target.md)\n", ((6, "target.md"),)),
+    ("<custom key='value'>\n[x](ignored.md)\n\n[x](target.md)\n", ((4, "target.md"),)),
+    ("Paragraph\n<custom>\n[x](target.md)\n", ((3, "target.md"),)),
+    ("Paragraph\n<div>\n[x](ignored.md)\n", ()),
+    ("<span>[x](target.md)</span>\n", ((1, "target.md"),)),
+    ("Text <!-- [x](ignored.md) --> [x](target.md)\n", ((1, "target.md"),)),
+    ('Text <span title="[x](ignored.md)"> [x](target.md)</span>\n', ((1, "target.md"),)),
+    ("Text <? [x](ignored.md) ?> [x](target.md)\n", ((1, "target.md"),)),
+    ("Text <![CDATA[[x](ignored.md)]]> [x](target.md)\n", ((1, "target.md"),)),
+    ("Text <!decl [x](ignored.md)> [x](target.md)\n", ((1, "target.md"),)),
+    ("Text <!--> [x](target.md)\n", ((1, "target.md"),)),
+    ("Text <!---> [x](target.md)\n", ((1, "target.md"),)),
+    ("[A <!-- ] --> B](target.md)\n", ((1, "target.md"),)),
+    ('[A <span title="]"> B](target.md)\n', ((1, "target.md"),)),
+    ('[A <span title="`"> B](target.md) `unclosed\n', ((1, "target.md"),)),
+    ("Text <!-- unclosed [x](target.md)\n", ((1, "target.md"),)),
+    ('Text <span title="unclosed [x](target.md)\n', ((1, "target.md"),)),
+    (r"\<!-- [x](target.md) -->" + "\n", ((1, "target.md"),)),
+    ("[x](raw<!--literal-->target.md)\n", ((1, "raw<!--literal-->target.md"),)),
+    ('[x](target.md "<!-- literal -->")\n', ((1, "target.md"),)),
+    ("`<!-- [x](ignored.md) -->` [x](target.md)\n", ((1, "target.md"),)),
+    ("<!--\n```\n-->\n[x](target.md)\n", ((4, "target.md"),)),
+    ("<pre>\n```\n</pre>\n[x](target.md)\n", ((4, "target.md"),)),
+    ("```\n<!--\n```\n[x](target.md)\n", ((4, "target.md"),)),
+    ("    <!--\n[x](target.md)\n", ((2, "target.md"),)),
+    ("<!--\n[ref]: ignored.md\n-->\n[ref]: target.md\n", ((4, "target.md"),)),
+    ("> <!--\n> [x](ignored.md)\n[x](target.md)\n", ((3, "target.md"),)),
+    ("- <!--\n  [x](ignored.md)\n[x](target.md)\n", ((3, "target.md"),)),
+    ("- > <pre>\n  > [x](ignored.md)\n  > </pre>\n\n[x](target.md)\n", ((5, "target.md"),)),
+    ("   <!-- [x](ignored.md) -->\n", ()),
+    ("Paragraph\n    <!-- [x](ignored.md) --> [x](target.md)\n", ((2, "target.md"),)),
+)
+
+
+@pytest.mark.parametrize(("body", "expected"), HTML_LINK_CASES)
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
+def test_raw_html_preserves_live_links_components_and_original_lines(
+    body: str, expected: tuple[tuple[int, str], ...], ending: str
+) -> None:
+    """Independent fixed targets distinguish opaque tokens from live inline text."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.markdown_link_targets_from_text(body.replace("\n", ending)) == expected
+
+
+@pytest.mark.parametrize(
+    ("body", "expected_exit"),
+    [
+        ("<!-- [x](target.md) -->\n", 0),
+        ("<pre>\n[x](target.md)\n</pre>\n", 0),
+        ("<div>\n[x](target.md)\n\n", 0),
+        ("Text <!-- [x](target.md) -->\n", 0),
+        ('Text <span title="[x](target.md)"> ordinary text</span>\n', 0),
+        ("<span>[x](target.md)</span>\n", 1),
+        ("[A <!-- ] --> B](target.md)\n", 1),
+        ('[A <span title="]"> B](target.md)\n', 1),
+        ("<!--\n```\n-->\n[x](target.md)\n", 1),
+    ],
+)
+def test_deployed_html_context_has_fixed_native_result_without_sync(
+    tmp_path: Path, body: str, expected_exit: int
+) -> None:
+    """The installed checker accepts literals and rejects independently live links."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    write(
+        tmp_path,
+        "AGENTS.md",
+        "Agents MUST validate.\nAgents MUST preserve authority.\n\n"
+        + body.replace("target.md", TOKENS["markdown-relative-link"]),
+    )
+    result = run(tmp_path)
+    assert result.returncode == expected_exit, result.stdout + result.stderr
+    if expected_exit:
+        assert "Stale protected-guide references" in result.stdout
+    assert not (tmp_path / ".template-sync").exists()
+
+
+def test_html_block_and_inline_guard_removal_have_native_oracles(tmp_path: Path) -> None:
+    """Removing either literal boundary violates a fixed deployed success oracle."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    path = tmp_path / ".github/scripts/instruction_contract_core.py"
+    source = path.read_text(encoding="utf-8")
+    start = source.index("def markdown_link_html_block_end(")
+    stop = source.index("\ndef markdown_thematic_suffix(", start)
+    block_mutant = (
+        source[:start]
+        + "def markdown_link_html_block_end(content, *, paragraph_active):\n    return None\n\n"
+        + source[stop:]
+    )
+    inline_guard = '        if character == "<" and index in html_ends:\n'
+    assert source.count(inline_guard) == 1
+    for body, mutant in (
+        ("<div>\n[x](docs/azure-devops-support.md)\n", block_mutant),
+        (
+            "Text <!-- [x](docs/azure-devops-support.md) -->\n",
+            source.replace(inline_guard, "        if False:\n"),
+        ),
+    ):
+        write(
+            tmp_path,
+            "AGENTS.md",
+            "Agents MUST validate.\nAgents MUST preserve authority.\n\n" + body,
+        )
+        path.write_text(source, encoding="utf-8", newline="\n")
+        correct = run(tmp_path)
+        assert correct.returncode == 0, correct.stdout + correct.stderr
+        path.write_text(mutant, encoding="utf-8", newline="\n")
+        incorrect = run(tmp_path)
+        assert incorrect.returncode == 1, incorrect.stdout + incorrect.stderr
+        assert "Stale protected-guide references" in incorrect.stdout
+        with pytest.raises(AssertionError):
+            assert incorrect.returncode == 0
+
+
+def test_html_token_and_block_work_remains_bounded_near_input_limit() -> None:
+    """Malformed prefixes and shared tag suffixes have fixed bounded output."""
+    program = "\n".join(
+        [
+            "import sys",
+            f"sys.path.insert(0, {str(ROOT / '.github/scripts')!r})",
+            "import instruction_contract_core as c",
+            "cases = [",
+            "('Text '+'<!-- '*160000, ()),",
+            "('<!--'+'a'*1000000+'\\n', ()),",
+            "('Text '+'<a q=\\\"'*110000, ()),",
+            "('Text '+'<a '*100000+'q '*300000, ()),",
+            "('Text <!--'+'a'*900000+'--> [x](target.md)', ((1,'target.md'),)),",
+            "('<pre>\\n'+'```\\n'*200000+'</pre>\\n[x](target.md)', ((200003,'target.md'),)),",
+            "]",
+            "for text, expected in cases:",
+            "    assert len(text.encode('utf-8')) < c.MAXIMUM_INPUT_BYTES",
+            "    assert c.markdown_link_targets_from_text(text) == expected",
+        ]
+    )
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", program],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_html_opacity_and_overbroad_element_mutants_keep_live_native_oracles(
+    tmp_path: Path,
+) -> None:
+    """Fixed failures catch leaked fence state and accidental inline-content hiding."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    path = tmp_path / ".github/scripts/instruction_contract_core.py"
+    source = path.read_text(encoding="utf-8")
+    guard = "        tuple(enumerate(markdown_lines(text), 1))\n"
+    assert source.count(guard) == 1
+    leaked_fence = source.replace(
+        guard,
+        "        lines_outside_markdown_fences(text, fence_context=fence_context)\n",
+    )
+    inline_guard = "            index = html_ends[index]\n"
+    assert source.count(inline_guard) == 1
+    hidden_text = source.replace(inline_guard, "            index = len(text)\n")
+    for body, mutant in (
+        ("<!--\n```\n-->\n[x](docs/azure-devops-support.md)\n", leaked_fence),
+        ("<span>[x](docs/azure-devops-support.md)</span>\n", hidden_text),
+    ):
+        write(
+            tmp_path,
+            "AGENTS.md",
+            "Agents MUST validate.\nAgents MUST preserve authority.\n\n" + body,
+        )
+        path.write_text(source, encoding="utf-8", newline="\n")
+        correct = run(tmp_path)
+        assert correct.returncode == 1, correct.stdout + correct.stderr
+        assert "Stale protected-guide references" in correct.stdout
+        path.write_text(mutant, encoding="utf-8", newline="\n")
+        incorrect = run(tmp_path)
+        assert incorrect.returncode == 0, incorrect.stdout + incorrect.stderr
+        with pytest.raises(AssertionError):
+            assert incorrect.returncode == 1

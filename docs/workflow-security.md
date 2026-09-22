@@ -42,6 +42,8 @@ Required workflow and job permissions, job and step controls, order, conditions,
 
 Existing exceptions are narrowly recorded: Markdown checks capture individual failures and aggregate their outcomes; the auto-fix preview restores pre-commit's native failure after collecting its artifact; Python type checks intentionally remain advisory in downstream repositories. Their exact conditions and shell bodies are covered by the contract. Changing these exceptions requires review and passing negative tests.
 
+Governed fences inside nested list and quote containers receive the same complete YAML checks. The scanner removes container prefixes while preserving physical line positions, so splitting a `uses` key from its value cannot bypass validation. Indented governed examples following list prose remain checked. An action-containing block that ends without a matching closing fence fails, including when its containing list or quote ends.
+
 The executable-workflow parser bounds each input to 1 MiB, limits nesting, rejects duplicate keys, anchors, aliases, custom tags, multiple YAML documents, traversal, and symlink inputs. It uses YAML 1.2 boolean behavior so `on` is a string key. Documentation composition uses the same input and nesting bounds with cycle-safe node traversal. Separate prose comments from commented YAML examples with a blank comment line so each example can parse as one fragment. The hook installs its exact Python parser and schema-validator dependencies independently of language scaffolding.
 
 ## Updates and removal

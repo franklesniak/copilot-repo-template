@@ -983,3 +983,32 @@ def test_marker_relative_links_distinguish_indented_code_from_continuation(
         )
     else:
         assert "Retained Markdown relative link targets excluded module(s)" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("body", "line_number"),
+    [
+        ("<!-- [JSON](templates/json/example.json) -->\n", None),
+        ("<pre>\n[JSON](templates/json/example.json)\n</pre>\n", None),
+        ("<div>\n[JSON](templates/json/example.json)\n\n", None),
+        ("Text <!-- [JSON](templates/json/example.json) -->\n", None),
+        ('Text <span title="[JSON](templates/json/example.json)"> prose</span>\n', None),
+        ("<span>[JSON](templates/json/example.json)</span>\n", 3),
+        ("[A <!-- ] --> B](templates/json/example.json)\n", 3),
+        ("<!--\n```\n-->\n[JSON](templates/json/example.json)\n", 6),
+    ],
+)
+def test_marker_html_literals_and_live_links_have_native_boundary_controls(
+    tmp_path: Path, body: str, line_number: int | None
+) -> None:
+    """The marker route neither reports literal HTML nor loses adjacent real links."""
+    _write_common_downstream_repo(tmp_path, readme_text="# Downstream\n\n" + body)
+    result = _run_validator(tmp_path, "--require-marker")
+    assert result.returncode == (1 if line_number is not None else 0), result.stdout + result.stderr
+    if line_number is not None:
+        assert (
+            f"README.md:{line_number}: templates/json/example.json -> templates/json/example.json"
+            in result.stdout
+        )
+    else:
+        assert "Retained Markdown relative link targets excluded module(s)" not in result.stdout

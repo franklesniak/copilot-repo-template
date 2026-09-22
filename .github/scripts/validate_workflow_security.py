@@ -477,11 +477,15 @@ def example_references(text: str) -> list[tuple[int, str]]:
 
 def check_examples(text: str, resolver: Callable[[str, str], str] | None = None) -> int:
     """Validate examples and return the number of governed action references."""
-    opaque_lines = opaque_example_lines(text.splitlines())
-    lines = [markdown_example_content(line) for line in text.splitlines()]
+    raw_lines = text.splitlines()
+    opaque_lines = opaque_example_lines(raw_lines)
+    lines = [markdown_example_content(line) for line in raw_lines]
     references: set[tuple[int, str]] = set()
     fenced_lines: set[int] = set()
-    fence: tuple[str, int, int, bool] | None = None
+    fence: tuple[MarkdownFence, list[tuple[str, int]], int] | None = None
+    block_start = 0
+    indented_compatibility = False
+    governed = False
 
     def collect_block(start: int, end: int, *, unclosed: bool = False) -> None:
         """Give complete YAML blocks authority over misleading isolated flow fragments."""
@@ -500,26 +504,50 @@ def check_examples(text: str, resolver: Callable[[str, str], str] | None = None)
         references.update((start + offset, ref) for offset, ref in found)
         fenced_lines.update(range(start, end))
 
-    for number, candidate in enumerate(lines):
+    for number, raw_line in enumerate(raw_lines):
         if number in opaque_lines:
             continue
-        match = EXAMPLE_FENCE.match(candidate)
-        if not match:
-            continue
-        delimiter, info = match.groups()
-        if fence is None:
-            fence = (
-                delimiter[0],
-                len(delimiter),
-                number + 1,
-                not info.strip() or info.strip().lower().split(maxsplit=1)[0] in {"yaml", "yml"},
+        if fence is not None:
+            opened, containers, last_quote = fence
+            content = (
+                lines[number]
+                if indented_compatibility
+                else example_fence_content(raw_line, opened, containers, last_quote)
             )
-        elif delimiter[0] == fence[0] and len(delimiter) >= fence[1] and not info.strip():
-            if fence[3]:
-                collect_block(fence[2], number)
+            if content is not None:
+                if parse_fence_close_from_content(
+                    content,
+                    fence_character=opened.character,
+                    minimum_length=opened.length,
+                    allow_arbitrary_indent=indented_compatibility,
+                ):
+                    if governed:
+                        collect_block(block_start, number)
+                        fenced_lines.add(number)
+                    fence = None
+                elif governed:
+                    # Removing containers must not change the physical line index.
+                    lines[number] = markdown_example_content(content)
+                continue
+            if governed:
+                collect_block(block_start, number, unclosed=True)
             fence = None
-    if fence is not None and fence[3]:
-        collect_block(fence[2], len(lines), unclosed=True)
+        opened_candidate = example_fence_open(raw_line)
+        indented_compatibility = False
+        if opened_candidate is None and EXAMPLE_FENCE.match(lines[number]):
+            # Keep prior governed coverage for fences after indented list prose.
+            # This compatibility branch does not grant non-YAML literal opacity.
+            opened_candidate = example_fence_open(lines[number].lstrip(" \t"))
+            indented_compatibility = opened_candidate is not None
+        if opened_candidate is not None:
+            info = opened_candidate[0].info.strip().lower().split(maxsplit=1)
+            governed = not info or info[0] in {"yaml", "yml"}
+            fence = opened_candidate
+            block_start = number + 1
+            if governed:
+                fenced_lines.add(number)
+    if fence is not None and governed:
+        collect_block(block_start, len(lines), unclosed=True)
     block_reference_lines = {number for number, _reference in references}
     for number, candidate in enumerate(lines):
         if number in opaque_lines:

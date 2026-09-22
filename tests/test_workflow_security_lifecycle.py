@@ -1173,6 +1173,19 @@ def test_actions_only_literal_examples_and_shared_helper_closure(tmp_path: Path)
     invoke(1, "full SHA")
     example.write_text(literal + "uses: owner/action@v1\n", encoding="utf-8")
     invoke(1, "full SHA")
+    nested = "- 1. ```yaml\n     - {name: Example,\n      uses: owner/action@"
+    nested += "a" * 40 + ", # v1.2.3\n      with: {}}\n     ```\n"
+    example.write_text(nested, encoding="utf-8")
+    invoke(0)
+    example.write_text(
+        '- 1. ```yaml\n     - {"uses"\n     : owner/action@v1}\n     ```\n',
+        encoding="utf-8",
+    )
+    invoke(1, "Invalid YAML")
+    example.write_text(nested.replace("with: {}}", "with: {"), encoding="utf-8")
+    invoke(1, "Invalid YAML")
+    example.write_text(nested.rsplit("     ```", 1)[0], encoding="utf-8")
+    invoke(1, "Unclosed")
     example.write_text(literal, encoding="utf-8")
     helper.unlink()
     invoke(1, "instruction_contract_support")
@@ -1219,3 +1232,56 @@ def test_actions_helper_previous_mapping_mutant(tmp_path: Path) -> None:
     )
     assert result.returncode == 1
     assert "instruction_contract_support" in result.stderr
+
+
+@pytest.mark.parametrize("relative", ["docs/workflow-security.md", CURSOR_EXAMPLE])
+def test_nested_governed_fence_materializer_inventory(tmp_path: Path, relative: str) -> None:
+    """Actual staging preserves nested references and validates source before exclusions."""
+    from tests.test_workflow_security_contract import copy_policy
+
+    source = tmp_path / "source"
+    contract = copy_policy(source)
+    path = source / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pinned = "- 1. ```yaml\n     - {name: Example,\n      uses: owner/action@"
+    pinned += "a" * 40 + ", # v1.2.3\n      with: {}}\n     ```\n"
+    path.write_text(pinned, encoding="utf-8")
+    _, _, mappings = lifecycle.materializer.load_validated_manifest_context(ROOT)
+    modules = {"github-actions", "agent-instructions", "agent-cursor", "yaml"}
+
+    def stage(name: str) -> Path:
+        """Call the installed materializer against privately authored source data."""
+        destination = tmp_path / name
+        lifecycle.materializer.write_staged_candidate(
+            template_root=source,
+            staging_root=destination,
+            mappings=mappings,
+            included_modules=modules,
+            summary=lifecycle.materializer.Summary(sorted(modules), [], "copy"),
+        )
+        return destination
+
+    with pytest.raises(
+        lifecycle.materializer.MaterializationError, match="Retained workflow example"
+    ):
+        stage("undeclared")
+    assert snapshot(tmp_path / "undeclared") == {}
+    contract["examples"].append(relative)
+    lifecycle.write_yaml(source / policy.CONTRACT, contract)
+    first = stage("declared")
+    assert relative in policy.load_contract(first)["examples"]
+    assert policy.check_examples((first / relative).read_text(encoding="utf-8")) == 1
+    assert policy.validate_repository(first) >= 1
+    assert snapshot(stage("repeat")) == snapshot(first)
+    path.write_text("- 1. ```text\n     uses: owner/action@v1\n     ```\n", encoding="utf-8")
+    with pytest.raises(
+        lifecycle.materializer.MaterializationError, match="Retained workflow example"
+    ):
+        stage("stale")
+    assert snapshot(tmp_path / "stale") == {}
+    # Even a soon-excluded Cursor document is checked before selection removes it.
+    path.write_text(
+        '- 1. ```yaml\n     - {"uses"\n     : owner/action@v1}\n     ```\n', encoding="utf-8"
+    )
+    with pytest.raises(lifecycle.materializer.MaterializationError, match="Invalid YAML"):
+        lifecycle.materializer.render_workflow_contract(source, mappings, {"github-actions"})

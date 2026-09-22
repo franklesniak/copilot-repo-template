@@ -2060,6 +2060,129 @@ def section_failures(
 MARKDOWN_LINK_LIST_MARKER = re.compile(r"(?:[-+*]|[0-9]{1,9}[.)])(?= |$)")
 
 
+def markdown_html_token_ends(text: str) -> dict[int, int]:
+    """Index raw HTML tokens without reparsing shared malformed tag suffixes.
+
+    This lexical index does not remove source. The inline scanner consults it
+    only outside accepted Markdown components and matched code spans.
+    """
+    positions = {
+        token: [match.start() for match in re.finditer(re.escape(token), text)]
+        for token in ('"', "'", ">", "-->", "?>", "]]>")
+    }
+    tails: dict[int, int] = {}
+    space = re.compile(r"[ \t\n\f\r]+")
+    attribute = re.compile(r"[A-Za-z_:][A-Za-z0-9_.:-]*")
+    unquoted = re.compile(r"[^ \t\n\f\r\"'=<>`]+")
+
+    def following(token: str, start: int) -> int:
+        """Find a terminator using its once-built ordered index."""
+        offsets = positions[token]
+        index = bisect_left(offsets, start)
+        return offsets[index] + len(token) if index < len(offsets) else -1
+
+    def tag_tail(start: int) -> int:
+        """Memoize deterministic attribute transitions, including invalid tails."""
+        trail: list[int] = []
+        index = start
+        end = -1
+        while index not in tails:
+            trail.append(index)
+            if text.startswith(">", index) or text.startswith("/>", index):
+                end = index + (1 if text[index] == ">" else 2)
+                break
+            spacing = space.match(text, index)
+            if spacing is None:
+                break
+            index = spacing.end()
+            if text.startswith(">", index) or text.startswith("/>", index):
+                end = index + (1 if text[index] == ">" else 2)
+                break
+            name = attribute.match(text, index)
+            if name is None:
+                break
+            index = name.end()
+            spacing = space.match(text, index)
+            equals = spacing.end() if spacing is not None else index
+            if text[equals : equals + 1] != "=":
+                continue
+            index = equals + 1
+            spacing = space.match(text, index)
+            if spacing is not None:
+                index = spacing.end()
+            if index < len(text) and text[index] in "\"'":
+                index = following(text[index], index + 1)
+                if index < 0:
+                    break
+            else:
+                value = unquoted.match(text, index)
+                if value is None:
+                    break
+                index = value.end()
+        else:
+            end = tails[index]
+        for offset in trail:
+            tails[offset] = end
+        return end
+
+    ends: dict[int, int] = {}
+    tag = re.compile(r"</?[A-Za-z][A-Za-z0-9-]*")
+    for opening in re.finditer("<", text):
+        start = opening.start()
+        end = -1
+        if text.startswith("<!--", start):
+            if text.startswith("<!-->", start):
+                end = start + 5
+            elif text.startswith("<!--->", start):
+                end = start + 6
+            else:
+                end = following("-->", start + 4)
+        elif text.startswith("<?", start):
+            end = following("?>", start + 2)
+        elif text.startswith("<![CDATA[", start):
+            end = following("]]>", start + 9)
+        elif re.match(r"<![A-Za-z]", text[start : start + 3]):
+            end = following(">", start + 3)
+        else:
+            name = tag.match(text, start)
+            if name is not None:
+                if text.startswith("</", start):
+                    spacing = space.match(text, name.end())
+                    index = spacing.end() if spacing is not None else name.end()
+                    end = index + 1 if text[index : index + 1] == ">" else -1
+                else:
+                    end = tag_tail(name.end())
+        if end >= 0:
+            ends[start] = end
+    return ends
+
+
+def markdown_link_html_block_end(content: str, *, paragraph_active: bool) -> re.Pattern[str] | None:
+    """Recognize the seven raw block families without changing policy grammar."""
+    if re.match(r"^ {0,3}<!--", content):
+        return re.compile(r"-->")
+    if POLICY_HTML_LITERAL_START.match(content):
+        return POLICY_HTML_LITERAL_END
+    for opening, closing in ((r"<\?", r"\?>"), (r"<![A-Za-z]", ">"), (r"<!\[CDATA\[", r"\]\]>")):
+        if re.match(r"^ {0,3}" + opening, content):
+            return re.compile(closing)
+    if POLICY_HTML_BLOCK_START.match(content):
+        return POLICY_HTML_BLANK_END
+    start = markdown_prefix_end(content, 0)
+    if paragraph_active or start > 3 or content[start : start + 1] != "<":
+        return None
+    name = re.match(r"</?([A-Za-z][A-Za-z0-9-]*)", content[start:])
+    if name is None or (
+        not content.startswith("</", start)
+        and name.group(1).lower() in {"pre", "script", "style", "textarea"}
+    ):
+        return None
+    end = markdown_html_token_ends(content).get(start)
+    if end is not None and not content[end:].strip(" \t"):
+        return POLICY_HTML_BLANK_END
+    return None
+
+
 def markdown_thematic_suffix(line: str) -> tuple[int, int]:
     """Index a possible final thematic run once, avoiding nested suffix rescans."""
     index = len(line) - 1
@@ -2110,9 +2233,12 @@ def markdown_link_container(
 
 
 def markdown_indented_code_lines(
-    text: str, definition_ends: dict[int, int] | None = None
+    text: str,
+    definition_ends: dict[int, int] | None = None,
+    *,
+    include_indented: bool = True,
 ) -> set[int]:
-    """Locate code using container margins while preserving lazy paragraphs.
+    """Locate literal blocks using container margins and paragraph context.
 
     A structural view expands tabs to four-column stops; callers still scan the
     original lines, so destinations and their exception identities are untouched.
@@ -2125,12 +2251,14 @@ def markdown_indented_code_lines(
     paragraph_active = False
     definition_end = 0
     active_fence: MarkdownFence | None = None
+    active_html_end: re.Pattern[str] | None = None
     for line_number, raw_line in enumerate(markdown_lines(text), 1):
         if line_number <= definition_end:
             continue
         if active_fence is not None:
             fence_content = active_fence_content(raw_line, active_fence)
             if fence_content is not None:
+                code_lines.add(line_number)
                 if parse_fence_close_from_content(
                     fence_content,
                     fence_character=active_fence.character,
@@ -2172,6 +2300,15 @@ def markdown_indented_code_lines(
             matched += 1
         content = line[offset:]
         blank = not content.strip(" ")
+        if active_html_end is not None:
+            if matched == len(containers):
+                code_lines.add(line_number)
+                if active_html_end.search(content):
+                    active_html_end = None
+                paragraph_active = False
+                continue
+            active_html_end = None
+        html_end = markdown_link_html_block_end(content, paragraph_active=paragraph_active)
         heading = is_policy_heading(content)
         separator = is_policy_thematic_break(content) or (
             re.fullmatch(r" {0,3}(?:=+|-+)[ ]*", content) is not None
@@ -2188,6 +2325,7 @@ def markdown_indented_code_lines(
             and not separator
             and starts_container is None
             and opened_fence is None
+            and html_end is None
         ):
             # Indentation alone cannot interrupt an open paragraph, including
             # lazy continuations that omit a quote or list prefix.
@@ -2213,12 +2351,21 @@ def markdown_indented_code_lines(
             offset = end
         content = line[offset:]
         if markdown_prefix_end(line, offset) - offset >= 4:
-            code_lines.add(line_number)
+            if include_indented:
+                code_lines.add(line_number)
             continue
         if definition_ends is not None and line_number in definition_ends:
             definition_end = definition_ends[line_number]
             continue
+        html_end = markdown_link_html_block_end(content, paragraph_active=False)
+        if html_end is not None:
+            code_lines.add(line_number)
+            if not html_end.search(content):
+                active_html_end = html_end
+            continue
         active_fence = opened_fence
+        if active_fence is not None:
+            code_lines.add(line_number)
         paragraph_active = bool(content.strip(" ")) and not (
             active_fence is not None
             or is_policy_heading(content)
@@ -2261,10 +2408,11 @@ def markdown_reference_definition_ends(spans: list[list[tuple[int, str]]]) -> di
 
 
 def markdown_link_spans(text: str, fence_context: str) -> list[list[tuple[int, str]]]:
-    """Preserve definition inventory while removing contextual indented code."""
-    spans = markdown_live_link_spans(text, fence_context, set())
+    """Preserve definition inventory while removing contextual literal blocks."""
     if fence_context != MARKDOWN_FENCE_CONTEXT:
-        return spans
+        return markdown_live_link_spans(text, fence_context, set())
+    literal_lines = markdown_indented_code_lines(text, include_indented=False)
+    spans = markdown_live_link_spans(text, fence_context, literal_lines)
     definition_ends = markdown_reference_definition_ends(spans)
     code_lines = markdown_indented_code_lines(text, definition_ends)
     return markdown_live_link_spans(text, fence_context, code_lines)
@@ -2278,7 +2426,12 @@ def markdown_live_link_spans(
     current: list[tuple[int, str]] = []
     previous_line = 0
     quote_depth = 0
-    for line_number, line in lines_outside_markdown_fences(text, fence_context=fence_context):
+    lines = (
+        tuple(enumerate(markdown_lines(text), 1))
+        if fence_context == MARKDOWN_FENCE_CONTEXT
+        else lines_outside_markdown_fences(text, fence_context=fence_context)
+    )
+    for line_number, line in lines:
         if line_number in code_lines:
             continue
         depth, offset = consume_blockquote_prefix(
@@ -2505,6 +2658,7 @@ def markdown_link_candidates(
         if text[closing + 1 : closing + 2] == ":"
     }
     code_ends = markdown_code_span_ends(text)
+    html_ends = markdown_html_token_ends(text)
     brackets: list[int] = []
     candidates: list[tuple[int, int, int, int]] = []
     index = 0
@@ -2520,6 +2674,9 @@ def markdown_link_candidates(
                 index += 1
                 while index < len(text) and text[index] == "`":
                     index += 1
+            continue
+        if character == "<" and index in html_ends:
+            index = html_ends[index]
             continue
         opening = index
         closing = definitions.get(index) if character == "[" else None
