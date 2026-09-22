@@ -2191,6 +2191,19 @@ def markdown_link_title_end(text: str, index: int) -> int:
     return -1
 
 
+def markdown_link_opening_is_image(text: str, opening: int) -> bool:
+    """Return whether a bracket opening follows an unescaped image marker."""
+    if opening == 0 or text[opening - 1] != "!":
+        return False
+    backslashes = 0
+    index = opening - 2
+    while index >= 0 and text[index] == "\\":
+        backslashes += 1
+        index -= 1
+    # Escaped backslashes leave the following bang active; an odd run escapes it.
+    return backslashes % 2 == 0
+
+
 def markdown_span_link_targets(span: list[tuple[int, str]]) -> list[tuple[int, str]]:
     """Extract the supported link surface from one contiguous live text span."""
     text = "\n".join(line for _, line in span)
@@ -2211,7 +2224,7 @@ def markdown_span_link_targets(span: list[tuple[int, str]]) -> list[tuple[int, s
     for opening, closing in sorted(labels):
         if opening < consumed_until:
             continue
-        if opening > 0 and text[opening - 1] == "!":
+        if markdown_link_opening_is_image(text, opening):
             continue
         component = closing + 1
         if component >= len(text) or text[component] not in "(:":

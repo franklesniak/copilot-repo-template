@@ -7,6 +7,7 @@ import importlib.util
 import inspect
 import json
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, cast
@@ -1861,3 +1862,287 @@ def test_live_yaml_placeholders_are_canonical_and_replaced(
     schema = json.loads(read_file(REPO_ROOT / "schemas/template-placeholders.schema.json"))
     with pytest.raises(placeholder_helper.PlaceholderError, match="OWNER/REPO.*was expected"):
         placeholder_helper.validate_placeholder_manifest(manifest, schema=schema)
+
+
+@pytest.mark.parametrize("reader", ["classification", "args"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "key: one\nkey: two\n",
+        "outer: {key: one, key: two}\n",
+        "rows: [{key: one, key: two}]\n",
+        "base: &base {key: one, key: two}\nmerged: {<<: *base}\n",
+        "base: &base {key: one}\nmerged: {<<: *base, <<: *base}\n",
+        "true: one\n1: two\n",
+        "key: one\n'key': one\n",
+    ],
+)
+def test_yaml_readers_reject_duplicate_explicit_keys(
+    tmp_path: Path, reader: str, text: str
+) -> None:
+    """Both public YAML readers reject ambiguity before classification."""
+    path = write_file(tmp_path / "operator.yml", text)
+    with pytest.raises(placeholder_helper.PlaceholderError, match="duplicate explicit mapping key"):
+        if reader == "classification":
+            placeholder_helper.load_yaml_mapping(path, "operator.yml")
+        else:
+            placeholder_helper.load_yaml_args_file(path)
+
+
+@pytest.mark.parametrize("reader", ["classification", "args"])
+def test_yaml_readers_preserve_merge_alias_and_scalar_key_semantics(
+    tmp_path: Path, reader: str
+) -> None:
+    """Original-key checks distinguish inherited overrides and reused aliases."""
+    path = write_file(
+        tmp_path / "operator.yml",
+        "\ufeffbase: &base {key: inherited}\n"
+        "other: &other {key: later, extra: yes}\n"
+        "override: &override {<<: *base, key: explicit}\n"
+        "reuse: {<<: *override}\n"
+        "sequence: {<<: [*base, *other]}\n"
+        "literal: {'<<': literal, =: equals}\n",
+    )
+    if reader == "classification":
+        result = placeholder_helper.load_yaml_mapping(path, "operator.yml")
+    else:
+        result = placeholder_helper.load_yaml_args_file(path)
+    assert result["override"] == {"key": "explicit"}
+    assert result["reuse"] == {"key": "explicit"}
+    assert result["sequence"] == {"key": "inherited", "extra": True}
+    assert result["literal"] == {"<<": "literal", "=": "equals"}
+
+
+@pytest.mark.parametrize("text", ["key: !unknown value\n", "? [a, b]\n: value\n", "[", "[]"])
+def test_yaml_reader_preserves_invalid_input_failures(tmp_path: Path, text: str) -> None:
+    """Unsafe tags, nonhashable keys and malformed shapes remain domain failures."""
+    path = write_file(tmp_path / "operator.yml", text)
+    with pytest.raises(placeholder_helper.PlaceholderError):
+        placeholder_helper.load_yaml_args_file(path)
+
+
+def _copy_standalone_placeholder_tool(root: Path) -> Path:
+    """Copy only the baseline helper and its retained placeholder manifest."""
+    for relative in (
+        ".github/scripts/replace-template-placeholders.py",
+        ".github/template-placeholders.json",
+        "schemas/template-placeholders.schema.json",
+    ):
+        destination = root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPO_ROOT / relative, destination)
+    assert not (root / ".template-sync").exists()
+    assert not (root / ".github/scripts/instruction_contract_support.py").exists()
+    return root / ".github/scripts/replace-template-placeholders.py"
+
+
+def _classification_manifest_fixture(root: Path) -> Path:
+    """Declare fixed module ownership without needing retained sync source files."""
+    return write_file(
+        root / "external-manifest.yml",
+        "template_manifest:\n  modules:\n    - name: baseline\n    - name: github-actions\n"
+        "  path_mappings:\n    - pattern: '**'\n      requires_all: [baseline]\n",
+    )
+
+
+@pytest.mark.parametrize("source", ["marker", "args"])
+@pytest.mark.parametrize("mutate", [False, True])
+def test_native_placeholder_duplicate_yaml_guard(tmp_path: Path, source: str, mutate: bool) -> None:
+    """Native failure depends on the guard, not another schema or lint gate."""
+    script = _copy_standalone_placeholder_tool(tmp_path / "installed")
+    if mutate:
+        text = read_file(script)
+        guard = "return yaml_module.load(text, Loader=UniqueKeySafeLoader)"
+        assert text.count(guard) == 1
+        write_file(script, text.replace(guard, "return yaml_module.safe_load(text)"))
+    target = tmp_path / "target"
+    write_file(target / "CONTRIBUTING.md", "See OWNER/REPO.\n")
+    arguments = ["--scan-mode", "retained-hard"]
+    if source == "marker":
+        write_file(
+            target / ".template-sync/marker.yml",
+            "template_sync:\n  included_modules: [baseline]\n"
+            "  included_modules: [github-actions]\n",
+        )
+    else:
+        path = write_file(
+            tmp_path / "external-args.yml",
+            "retained_modules: [baseline]\nretained_modules: [github-actions]\n",
+        )
+        arguments.extend(["--args-file", str(path)])
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            str(script),
+            "scan",
+            "--repo-root",
+            str(target),
+            "--manifest",
+            str(_classification_manifest_fixture(tmp_path)),
+            *arguments,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+    if mutate:
+        assert result.returncode == 0, result.stderr
+        assert "pruned-informational" in result.stdout
+        with pytest.raises(AssertionError):
+            assert result.returncode == 1
+    else:
+        assert result.returncode == 1, result.stdout
+        assert "duplicate explicit mapping key" in result.stderr
+        assert "--args-file" in result.stderr if source == "args" else "marker.yml" in result.stderr
+
+
+def test_baseline_only_placeholder_json_works_without_site_packages(
+    tmp_path: Path,
+) -> None:
+    """JSON/default scans need neither PyYAML nor instruction/sync runtime files."""
+    script = _copy_standalone_placeholder_tool(tmp_path / "installed")
+    target = tmp_path / "target"
+    write_file(target / "README.md", "Ready.\n")
+    json_args = write_file(tmp_path / "external.json", '\ufeff{"repository": "octo/widget"}\n')
+    command = [
+        sys.executable,
+        "-S",
+        "-B",
+        str(script),
+        "scan",
+        "--repo-root",
+        str(target),
+    ]
+    result = subprocess.run(
+        [*command, "--args-file", str(json_args)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+    assert result.returncode == 0, result.stderr
+    yaml_args = write_file(tmp_path / "external.yml", "repository: octo/widget\n")
+    missing_yaml = subprocess.run(
+        [*command, "--args-file", str(yaml_args)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+    assert missing_yaml.returncode == 1
+    assert "YAML --args-file support is unavailable" in missing_yaml.stderr
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        '{"repository":"a/b","repository":"c/d"}',
+        '{"metadata":{"name":"one","name":"two"}}',
+        '{"repository":"a/b","repos\\u0069tory":"a/b"}',
+    ],
+)
+def test_json_args_reject_duplicate_object_names(tmp_path: Path, text: str) -> None:
+    """Repeated decoded names fail before argument/schema interpretation."""
+    path = write_file(tmp_path / "external.json", text)
+    with pytest.raises(placeholder_helper.PlaceholderError, match="--args-file: duplicate JSON"):
+        placeholder_helper.load_json_args_file(path)
+
+
+def test_json_args_allow_name_reuse_in_separate_objects(tmp_path: Path) -> None:
+    """Uniqueness belongs to each object, not the whole document."""
+    path = write_file(tmp_path / "external.json", '{"one":{"key":1},"two":{"key":2}}')
+    assert placeholder_helper.load_json_args_file(path) == {
+        "one": {"key": 1},
+        "two": {"key": 2},
+    }
+
+
+@pytest.mark.parametrize("mutate", [False, True])
+def test_native_placeholder_duplicate_json_guard(tmp_path: Path, mutate: bool) -> None:
+    """Removing only the JSON hook restores the original false success."""
+    script = _copy_standalone_placeholder_tool(tmp_path / "installed")
+    if mutate:
+        text = read_file(script)
+        guard = "json.loads(text, object_pairs_hook=unique_object)"
+        assert text.count(guard) == 1
+        write_file(script, text.replace(guard, "json.loads(text)"))
+    target = tmp_path / "target"
+    write_file(target / "CONTRIBUTING.md", "See OWNER/REPO.\n")
+    path = write_file(
+        tmp_path / "external.json",
+        '{"retained_modules":["baseline"],"retained_modules":["github-actions"]}',
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            str(script),
+            "scan",
+            "--repo-root",
+            str(target),
+            "--manifest",
+            str(_classification_manifest_fixture(tmp_path)),
+            "--scan-mode",
+            "retained-hard",
+            "--args-file",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+    if mutate:
+        assert result.returncode == 0, result.stderr
+        assert "pruned-informational" in result.stdout
+        with pytest.raises(AssertionError):
+            assert result.returncode == 1
+    else:
+        assert result.returncode == 1, result.stdout
+        assert "--args-file: duplicate JSON object key" in result.stderr
+
+
+@pytest.mark.parametrize("encoding", ["json", "yaml"])
+@pytest.mark.parametrize(
+    ("module", "override", "expected_exit", "disposition"),
+    [
+        ("baseline", False, 1, "retained-hard-failure"),
+        ("github-actions", False, 0, "pruned-informational"),
+        ("github-actions", True, 1, "retained-hard-failure"),
+    ],
+)
+def test_native_placeholder_unique_module_selection_and_cli_precedence(
+    tmp_path: Path,
+    encoding: str,
+    module: str,
+    override: bool,
+    expected_exit: int,
+    disposition: str,
+) -> None:
+    """Valid external arguments retain pruning and explicit CLI precedence."""
+    target = tmp_path / "target"
+    write_file(target / "CONTRIBUTING.md", "See OWNER/REPO.\n")
+    data = {"retained_modules": [module]}
+    text = json.dumps(data) if encoding == "json" else yaml.safe_dump(data)
+    path = write_file(tmp_path / f"external.{encoding}", "\ufeff" + text)
+    command = [
+        sys.executable,
+        "-B",
+        str(SCRIPT_PATH),
+        "scan",
+        "--repo-root",
+        str(target),
+        "--manifest",
+        str(_classification_manifest_fixture(tmp_path)),
+        "--scan-mode",
+        "retained-hard",
+        "--args-file",
+        str(path),
+    ]
+    if override:
+        command.extend(["--retained-module", "baseline"])
+    result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=15)
+    assert result.returncode == expected_exit, result.stderr
+    assert disposition in result.stdout

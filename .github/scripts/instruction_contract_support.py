@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib
 import json
 import re
-from collections.abc import Iterable
+from collections.abc import Hashable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -150,40 +150,117 @@ def read_repository_text(
         ) from error
 
 
+def parse_json_mapping(text: str, display_path: str) -> dict[str, Any]:
+    """Parse one JSON object, rejecting repeated names before dictionary creation."""
+
+    def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        """Preserve object order while rejecting ambiguous decoded names."""
+        document: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in document:
+                raise TemplateSyncMaterializationError(
+                    f"Invalid JSON in {display_path}: duplicate object key {key!r}."
+                )
+            document[key] = value
+        return document
+
+    try:
+        parsed = json.loads(text, object_pairs_hook=unique_object)
+    except json.JSONDecodeError as error:
+        raise TemplateSyncMaterializationError(
+            f"Invalid JSON in {display_path}: {error}"
+        ) from error
+    if not isinstance(parsed, dict):
+        raise TemplateSyncMaterializationError(f"{display_path} must contain a JSON object.")
+    return cast(dict[str, Any], parsed)
+
+
+def mapping_source_display_path(path: Path, repo_root: Path) -> str:
+    """Describe caller-resolved inputs without authorizing access or leaking roots."""
+    if path.is_relative_to(repo_root):
+        return repository_relative_path(path, repo_root)
+    return path.name
+
+
 def load_json_mapping(
     path: Path, repo_root: Path, *, maximum_bytes: int | None = None
 ) -> dict[str, Any]:
-    """Load a JSON mapping with an optional pre-decode byte limit."""
+    """Load a unique-key JSON object with an optional pre-decode byte limit."""
+    return parse_json_mapping(
+        read_repository_text(path, repo_root, maximum_bytes=maximum_bytes),
+        mapping_source_display_path(path, repo_root),
+    )
+
+
+class UniqueKeySafeLoader(yaml.SafeLoader):
+    """Reject repeated explicit keys while preserving safe YAML merge behavior."""
+
+    def __init__(self, stream: str) -> None:
+        """Keep per-document mapping identities without changing global constructors."""
+        super().__init__(stream)
+        self.checked_mapping_nodes: set[int] = set()
+
+    def flatten_mapping(self, node: Any) -> None:
+        """Check original keys once, before merges create intentional overrides."""
+        if id(node) in self.checked_mapping_nodes:
+            return
+        self.checked_mapping_nodes.add(id(node))
+        explicit_keys: dict[Any, Any] = {}
+        merge_key = object()
+        for key_node, _ in node.value:
+            if key_node.tag == "tag:yaml.org,2002:merge":
+                key = merge_key
+            elif key_node.tag == "tag:yaml.org,2002:value":
+                # SafeConstructor normalizes the special '=' key to a string.
+                key = self.construct_scalar(key_node)
+            else:
+                key = self.construct_object(key_node)
+            if not isinstance(key, Hashable):
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping",
+                    node.start_mark,
+                    "found unhashable key",
+                    key_node.start_mark,
+                )
+            if key in explicit_keys:
+                raise yaml.constructor.ConstructorError(
+                    "while constructing a mapping",
+                    explicit_keys[key],
+                    "found duplicate explicit mapping key",
+                    key_node.start_mark,
+                )
+            explicit_keys[key] = key_node.start_mark
+        # Alias nodes can refer to an already-flattened mapping. Checking that
+        # mapping again would mistake inherited overrides for explicit duplicates.
+        super().flatten_mapping(node)
+
+
+def parse_yaml_mapping(text: str, display_path: str) -> dict[str, Any]:
+    """Parse one safe mapping; reject duplicates and wrap YAML errors with context.
+
+    Explicit keys must be unique before merge expansion. Safe aliases and
+    inherited merge overrides retain PyYAML semantics. Callers own file access,
+    decoding and any input-size limit.
+    """
     try:
-        parsed = json.loads(read_repository_text(path, repo_root, maximum_bytes=maximum_bytes))
-    except json.JSONDecodeError as error:
-        relative_path = repository_relative_path(path, repo_root)
+        parsed = yaml.load(text, Loader=UniqueKeySafeLoader)
+    except yaml.YAMLError as error:
         raise TemplateSyncMaterializationError(
-            f"Invalid JSON in {relative_path}: {error}"
+            f"Invalid YAML in {display_path}: {error}"
         ) from error
     if not isinstance(parsed, dict):
-        relative_path = repository_relative_path(path, repo_root)
-        raise TemplateSyncMaterializationError(f"{relative_path} must contain a JSON object.")
+        raise TemplateSyncMaterializationError(f"{display_path} must contain a YAML mapping.")
     return cast(dict[str, Any], parsed)
 
 
 def load_yaml_mapping(
     path: Path, repo_root: Path, *, maximum_bytes: int | None = None
 ) -> dict[str, Any]:
-    """Load a YAML mapping with an optional pre-decode byte limit."""
-    try:
-        parsed = yaml.safe_load(
-            read_repository_text(path, repo_root, encoding="utf-8-sig", maximum_bytes=maximum_bytes)
-        )
-    except yaml.YAMLError as error:
-        relative_path = repository_relative_path(path, repo_root)
-        raise TemplateSyncMaterializationError(
-            f"Invalid YAML in {relative_path}: {error}"
-        ) from error
-    if not isinstance(parsed, dict):
-        relative_path = repository_relative_path(path, repo_root)
-        raise TemplateSyncMaterializationError(f"{relative_path} must contain a YAML mapping.")
-    return cast(dict[str, Any], parsed)
+    """Load a unique-key YAML mapping with an optional pre-decode byte limit."""
+    return parse_yaml_mapping(
+        read_repository_text(path, repo_root, encoding="utf-8-sig", maximum_bytes=maximum_bytes),
+        mapping_source_display_path(path, repo_root),
+    )
 
 
 def validate_schema(

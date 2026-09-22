@@ -611,9 +611,9 @@ def test_installed_support_schema_dependency_is_lazy(tmp_path: Path, mode: str) 
     script = target / ".template-sync/scripts/materialize_downstream_adoption.py"
     if mode == "eager-import-mutant":
         source = script.read_text(encoding="utf-8")
-        anchor = "import yaml  # type: ignore[import-untyped]"
+        anchor = "\nimport sys\n"
         assert source.count(anchor) == 1
-        script.write_text(source.replace(anchor, "import jsonschema\n" + anchor), encoding="utf-8")
+        script.write_text(source.replace(anchor, "\nimport jsonschema" + anchor), encoding="utf-8")
     runner = (
         "import runpy, sys\n"
         "from pathlib import Path\n"

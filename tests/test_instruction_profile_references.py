@@ -477,3 +477,144 @@ def test_multiline_reference_definition_prefix_remains_bounded(prefix: str) -> N
 
     expected = ((1, "target.md"),) if len(prefix) <= 3 else ()
     assert core.markdown_link_targets_from_text(prefix + "[x]:\n target.md") == expected
+
+
+BANG_PARITY_CASES = (
+    (0, False),
+    (1, True),
+    (2, False),
+    (3, True),
+    (4, False),
+    (5, True),
+    (6, False),
+)
+
+
+@pytest.mark.parametrize(("backslashes", "is_link"), BANG_PARITY_CASES)
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
+@pytest.mark.parametrize("title", ["", '\n "Azure guide"'])
+def test_escaped_bang_parity_preserves_exact_target_and_line(
+    backslashes: int, is_link: bool, ending: str, title: str
+) -> None:
+    """Fixed CommonMark cases distinguish escaped bangs from actual image markers."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    body = "\\" * backslashes + f"![Guide](docs/azure-devops-support.md{title})"
+    text = ("Heading\n\n" + body).replace("\n", ending)
+    expected = ((3, "docs/azure-devops-support.md"),) if is_link else ()
+    assert core.markdown_link_targets_from_text(text) == expected
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        (r"!\[Guide](target.md)", ()),
+        (r"\!\[Guide](target.md)", ()),
+        ("! [Guide](target.md)", ((1, "target.md"),)),
+        (r"![Image](image.md) \![Guide](target.md)", ((1, "target.md"),)),
+        (r"\![Guide](target.md) ![Image](image.md)", ((1, "target.md"),)),
+        (r"!\![Guide](target.md)", ((1, "target.md"),)),
+        ("```markdown\n\\![Guide](target.md)\n```", ()),
+    ],
+)
+def test_escaped_bang_boundaries_keep_independent_expected_targets(
+    body: str, expected: tuple[tuple[int, str], ...]
+) -> None:
+    """Escapes do not activate brackets, examples, or adjacent image destinations."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.markdown_link_targets_from_text(body) == expected
+
+
+@pytest.mark.parametrize(("backslashes", "is_link"), BANG_PARITY_CASES)
+def test_deployed_escaped_bang_obligation_uses_native_parity(
+    tmp_path: Path, backslashes: int, is_link: bool
+) -> None:
+    """Only rendered links fail after deployment without sync-support files."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    append_reference(tmp_path, "\\" * backslashes + "![Guide](docs/azure-devops-support.md)")
+    assert not (tmp_path / ".template-sync").exists()
+    result = run(tmp_path)
+    assert result.returncode == (1 if is_link else 0), result.stdout + result.stderr
+    assert ("Stale protected-guide references" in result.stdout) is is_link
+
+
+def test_deployed_escaped_bang_exact_exception_and_retained_target(tmp_path: Path) -> None:
+    """A newly recognized link keeps module applicability and exact declarations."""
+    test_deployed_multiline_reference_fails_without_sync_and_exact_exception_passes(
+        tmp_path / "excepted", '\\![Guide](docs/azure-devops-support.md\n "Azure guide")'
+    )
+    retained = tmp_path / "retained"
+    document, _ = reference_fixture(retained, "markdown-relative-link")
+    document["modules"].append("azure-devops-platform")
+    write(retained, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    append_reference(retained, r"\![Guide](docs/azure-devops-support.md)")
+    result = run(retained)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_escaped_bang_native_mutants_have_independent_oracles(tmp_path: Path) -> None:
+    """Old skipping, no image exclusion, and one-character escapes each fail controls."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    path = tmp_path / ".github/scripts/instruction_contract_core.py"
+    source = path.read_text(encoding="utf-8")
+    cases = (
+        (
+            "if markdown_link_opening_is_image(text, opening):",
+            'if opening > 0 and text[opening - 1] == "!":',
+            r"\![Guide](docs/azure-devops-support.md)",
+            1,
+            0,
+        ),
+        (
+            "if markdown_link_opening_is_image(text, opening):",
+            "if False:",
+            "![Image](docs/azure-devops-support.md)",
+            0,
+            1,
+        ),
+        (
+            "return backslashes % 2 == 0",
+            "return backslashes == 0",
+            r"\\![Image](docs/azure-devops-support.md)",
+            0,
+            1,
+        ),
+    )
+    for guard, replacement, body, expected_exit, mutant_exit in cases:
+        assert source.count(guard) == 1
+        write(
+            tmp_path, "AGENTS.md", "Agents MUST validate.\nAgents MUST preserve authority.\n" + body
+        )
+        path.write_text(source, encoding="utf-8", newline="\n")
+        normal = run(tmp_path)
+        assert normal.returncode == expected_exit, normal.stdout + normal.stderr
+        path.write_text(source.replace(guard, replacement), encoding="utf-8", newline="\n")
+        mutant = run(tmp_path)
+        assert mutant.returncode == mutant_exit, mutant.stdout + mutant.stderr
+        assert ("Stale protected-guide references" in mutant.stdout) is (mutant_exit == 1)
+
+
+def test_escaped_bang_near_limit_runs_remain_bounded() -> None:
+    """Long and repeated parity runs finish without rescanning a growing prefix."""
+    program = "\n".join(
+        [
+            "import sys",
+            f"sys.path.insert(0, {str(ROOT / '.github/scripts')!r})",
+            "import instruction_contract_core as c",
+            "cases=[('\\\\'*1000001+'![x](a)',1),('\\\\'*1000000+'![x](a)',0),",
+            "       (('\\\\'*3+'![x](a) ')*80000,80000),",
+            "       (('\\\\'*2+'![x](a) ')*80000,0)]",
+            "for text, count in cases:",
+            "    assert len(text.encode()) <= c.MAXIMUM_INPUT_BYTES",
+            "    targets = c.markdown_link_targets_from_text(text)",
+            "    assert len(targets) == count",
+            "    assert sum(len(target) for _, target in targets) <= len(text)",
+        ]
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", program], capture_output=True, text=True, check=False, timeout=15
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

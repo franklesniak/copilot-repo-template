@@ -209,6 +209,9 @@ template_manifest:
     - pattern: 'tests/test_instruction_profile_references.py'
       requires_all:
         - template-sync-support
+    - pattern: 'tests/test_instruction_yaml_duplicates.py'
+      requires_all:
+        - template-sync-support
     - pattern: '.github/workflows/instruction-contracts.yml'
       requires_all:
         - agent-instructions

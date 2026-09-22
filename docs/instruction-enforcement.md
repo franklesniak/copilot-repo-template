@@ -26,12 +26,14 @@ The optional Python **project** module is never required. Baseline reuses pre-co
 
 Run `python .github/scripts/validate_instruction_profile.py` after installing its declared PyYAML and jsonschema dependencies. Missing, malformed or contradictory applicability data fails with a nonzero exit.
 
+The shared loaders reject repeated explicit YAML mapping keys and JSON object names before schema validation, including nested mappings and objects. For example, two `modules` keys fail instead of silently retaining the second selection. Supported safe YAML aliases and merge overrides remain valid: an explicit key may override a value inherited from a merge. The same parsers check YAML and JSON argument files supplied to the materializer before adoption.
+
 - **Marker mode:** `.github/instruction-profile.yml` contains `version: 1`, `mode: marker` and an explicit `context`: `upstream-template` in the source template, or `downstream` after adoption. The downstream context requires its marker; absence never falls back to upstream applicability. The marker-aware adapter remains authoritative for retained modules, protected decisions, local ownership and waivers. The upstream template validates every catalog obligation; a downstream marker uses its explicit selection.
 - **Standalone mode:** the protected profile contains `version: 1`, `mode: standalone`, explicit `modules` and `exceptions` lists. It reads the protected `.github/instruction-contracts.yml` catalog and its standalone schema. Its validation engine and bounded helpers live under `.github/scripts/`; the standalone check runs after sync-support files have been physically removed.
 
 Do not activate both modes. Standalone performs only an existence check for a conflicting marker; it never reads or requires that marker, and removing all support files does not prevent validation. The marker adapter rejects a standalone profile, and a standalone profile cannot select sync support. When changing modes, use reviewed materialization and resolve protected-file decisions before applying the resulting candidate.
 
-Relative-link checks recognize multiline labels and titles, including reference definitions whose destination starts on the next line. They preserve the opening line number and do not combine fragments across fenced examples or blank lines. This is bounded target extraction for static checks, not a complete Markdown renderer.
+Relative-link checks recognize multiline labels and titles, including reference definitions whose destination starts on the next line. An escaped exclamation mark before a link does not turn it into an image: `\![Guide](target.md)` checks the link, while `![Image](target.md)` remains an image. They preserve the opening line number and do not combine fragments across fenced examples or blank lines. This is bounded target extraction for static checks, not a complete Markdown renderer.
 
 ## Local exceptions and migration
 

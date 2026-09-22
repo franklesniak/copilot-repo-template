@@ -15,7 +15,7 @@ import os
 import re
 import shlex
 import sys
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -2831,6 +2831,56 @@ def validate_placeholder_manifest_path_scopes(
         )
 
 
+def parse_unique_yaml(text: str, yaml_module: Any) -> Any:
+    """Reject duplicate explicit keys through the caller's lazily loaded parser.
+
+    This baseline helper cannot import the optional instruction runtime. Keep
+    its safe YAML semantics aligned with that runtime's duplicate-key guard,
+    including explicit overrides of inherited values and reused merge aliases.
+    """
+
+    class UniqueKeySafeLoader(yaml_module.SafeLoader):
+        """Check original mapping keys without modifying global constructors."""
+
+        def __init__(self, stream: str) -> None:
+            """Keep mapping identities local to this parse for safe alias reuse."""
+            super().__init__(stream)
+            self.checked_mapping_nodes: set[int] = set()
+
+        def flatten_mapping(self, node: Any) -> None:
+            """Check keys once before safe merge expansion creates overrides."""
+            if id(node) in self.checked_mapping_nodes:
+                return
+            self.checked_mapping_nodes.add(id(node))
+            explicit_keys: dict[Any, Any] = {}
+            merge_key = object()
+            for key_node, _ in node.value:
+                if key_node.tag == "tag:yaml.org,2002:merge":
+                    key = merge_key
+                elif key_node.tag == "tag:yaml.org,2002:value":
+                    key = self.construct_scalar(key_node)
+                else:
+                    key = self.construct_object(key_node)
+                if not isinstance(key, Hashable):
+                    raise yaml_module.constructor.ConstructorError(
+                        "while constructing a mapping",
+                        node.start_mark,
+                        "found unhashable key",
+                        key_node.start_mark,
+                    )
+                if key in explicit_keys:
+                    raise yaml_module.constructor.ConstructorError(
+                        "while constructing a mapping",
+                        explicit_keys[key],
+                        "found duplicate explicit mapping key",
+                        key_node.start_mark,
+                    )
+                explicit_keys[key] = key_node.start_mark
+            super().flatten_mapping(node)
+
+    return yaml_module.load(text, Loader=UniqueKeySafeLoader)
+
+
 def load_yaml_mapping(
     path: Path,
     display_path: str,
@@ -2848,7 +2898,7 @@ def load_yaml_mapping(
             "pre-commit/test environment."
         ) from error
     try:
-        parsed = yaml_module.safe_load(path.read_text(encoding="utf-8-sig"))
+        parsed = parse_unique_yaml(path.read_text(encoding="utf-8-sig"), yaml_module)
     except OSError as error:
         error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
         raise PlaceholderError(f"{display_path}: unable to read file ({error_summary}).") from error
@@ -3571,9 +3621,19 @@ def read_args_file_text(path: Path) -> str:
 
 def load_json_args_file(path: Path) -> dict[str, Any]:
     """Load a JSON args file that must contain an object."""
+
+    def unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        """Reject duplicate names before a mapping loses their earlier values."""
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                raise PlaceholderError(f"--args-file: duplicate JSON object key {key!r}.")
+            result[key] = value
+        return result
+
     text = read_args_file_text(path)
     try:
-        parsed = json.loads(text)
+        parsed = json.loads(text, object_pairs_hook=unique_object)
     except json.JSONDecodeError as error:
         raise PlaceholderError(f"--args-file: invalid JSON ({error}).") from error
     if not isinstance(parsed, dict):
@@ -3597,7 +3657,7 @@ def load_yaml_args_file(
         ) from error
     text = read_args_file_text(path)
     try:
-        parsed = yaml_module.safe_load(text)
+        parsed = parse_unique_yaml(text, yaml_module)
     except yaml_module.YAMLError as error:
         raise PlaceholderError(f"--args-file: invalid YAML ({error}).") from error
     if not isinstance(parsed, dict):

@@ -17,8 +17,6 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
-import yaml  # type: ignore[import-untyped]
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 TRUSTED_TOOL_ROOT = SCRIPT_DIR.parent.parent
 if str(SCRIPT_DIR) not in sys.path:
@@ -48,8 +46,10 @@ from template_sync_materialization_helpers import (  # noqa: E402
     load_json_mapping,
     load_yaml_mapping,
     os_error_summary,
+    parse_json_mapping,
     parse_manifest_mappings,
     parse_marker_decision_data,
+    parse_yaml_mapping,
     remove_inline_blocks_for_modules,
     resolve_safe_repository_target_path,
     selected_relation_for_path,
@@ -547,23 +547,17 @@ def read_args_file_text(path: Path) -> str:
 def load_json_args_file(path: Path) -> dict[str, Any]:
     """Load a JSON args file that must contain an object."""
     try:
-        parsed = json.loads(read_args_file_text(path))
-    except json.JSONDecodeError as error:
-        raise MaterializationError(f"--args-file: invalid JSON ({error}).") from error
-    if not isinstance(parsed, dict):
-        raise MaterializationError("--args-file must contain a JSON object.")
-    return cast(dict[str, Any], parsed)
+        return parse_json_mapping(read_args_file_text(path), "--args-file")
+    except TemplateSyncMaterializationError as error:
+        raise MaterializationError(str(error)) from error
 
 
 def load_yaml_args_file(path: Path) -> dict[str, Any]:
     """Load a YAML args file through the retained YAML parser path."""
     try:
-        parsed = yaml.safe_load(read_args_file_text(path))
-    except yaml.YAMLError as error:
-        raise MaterializationError(f"--args-file: invalid YAML ({error}).") from error
-    if not isinstance(parsed, dict):
-        raise MaterializationError("--args-file must contain a YAML mapping.")
-    return cast(dict[str, Any], parsed)
+        return parse_yaml_mapping(read_args_file_text(path), "--args-file")
+    except TemplateSyncMaterializationError as error:
+        raise MaterializationError(str(error)) from error
 
 
 def load_args_file_mapping(raw_path: str, args_format: str | None) -> dict[str, Any]:
