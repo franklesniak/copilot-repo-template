@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-10
+- **Last Updated:** 2026-09-23
 - **Scope:** Durable adoption guidance for optional Azure DevOps Services host modules in this template. Covers Azure Repos, Azure Pipelines, Azure Boards, Azure DevOps security scanning, dependency-update choices, Copilot code review constraints, and local versus service-backed validation boundaries. Azure DevOps Server is out of scope unless a future change verifies and documents server-specific behavior.
 - **Related:** [Issue #758](https://github.com/franklesniak/copilot-repo-template/issues/758), [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Template Update Procedure](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/TEMPLATE_UPDATE_PROCEDURE.md)
 
@@ -100,6 +100,8 @@ When adopting Azure DevOps security guidance:
 - If Advanced Security status checks or branch policies block pull requests on high or critical findings, document that policy as an Azure DevOps service setting.
 
 ## Dependency Updates
+
+When baseline is retained, `requirements-pre-commit.txt` holds the exact pre-commit runner pin independently of optional Python project metadata. Retained pre-commit pipelines install from it and verify the actual command's version. Azure-only adopters update this requirement manually or with their chosen dependency-update service. This direct pin is not a transitive lock. Aggregate and data-file pre-commit pipelines require baseline plus the host module; data modules without baseline retain content without template-managed pre-commit CI.
 
 GitHub Dependabot configuration in `.github/dependabot.yml` is a GitHub platform surface. Azure DevOps-only adoptions do not retain that file, the `validate-dependabot-config` hook, or the Dependabot schema regression fixture. Mixed-host adoptions that retain `github-platform` together with `azure-pipelines` keep those surfaces, and `.azuredevops/pipelines/data-ci.yml` runs the `validate-dependabot-config` and `validate-dependabot-config-valid-examples` hooks inside a `github-platform-only` inline block so an Azure Repos branch policy that requires the dedicated data pipeline enforces them.
 

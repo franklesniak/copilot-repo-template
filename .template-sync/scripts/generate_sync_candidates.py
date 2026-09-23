@@ -28,11 +28,11 @@ from first_adoption_state import (  # noqa: E402
     inspect_first_adoption_state,
 )
 from template_sync_materialization_helpers import (  # noqa: E402
+    AGENT_INSTRUCTION_EXACT_PATHS,
     DEFAULT_MANIFEST_PATH,
     DEFAULT_MANIFEST_SCHEMA_PATH,
     DEFAULT_MARKER_PATH,
     DEFAULT_MARKER_SCHEMA_PATH,
-    PROTECTED_EXACT_PATHS,
     REMOVAL_DECISION,
     DeferredProtectedCandidate,
     LocalOverride,
@@ -150,6 +150,13 @@ DISCOVERY_SKIP_DIRS = frozenset(
 ADOPTION_MODE_MODULES = frozenset(
     {
         "agent-instructions",
+        "agent-copilot",
+        "agent-codex",
+        "agent-claude",
+        "agent-cursor",
+        "agent-gemini",
+        "agent-hermes",
+        "instruction-enforcement",
         "azure-devops-collaboration",
         "azure-devops-platform",
         "azure-pipelines",
@@ -185,9 +192,16 @@ TODO_DECISION_SECTIONS = frozenset(
 )
 TODO_LINK_LIMIT = 3
 VALIDATION_COMMANDS_BY_MODULE: dict[str, tuple[str, ...]] = {
-    "agent-instructions": (
-        "npm run lint:md",
-        "manual protected-file authorization review",
+    "agent-instructions": ("manual protected-file authorization review",),
+    "agent-copilot": ("manual Copilot instructions and retained setup-workflow review",),
+    "agent-codex": ("manual Codex entry-point and required protocol review",),
+    "agent-claude": ("manual Claude entry-point, imports, and required protocol review",),
+    "agent-cursor": ("manual Cursor rule applicability and required protocol review",),
+    "agent-gemini": ("manual Gemini entry-point and required protocol review",),
+    "agent-hermes": ("manual Hermes entry-point and required protocol review",),
+    "instruction-enforcement": (
+        "python .github/scripts/validate_instruction_profile.py",
+        "review explicit profile mode, selected modules, and local exception declarations",
     ),
     "azure-devops-collaboration": ("manual Azure DevOps collaboration template and policy review",),
     "azure-devops-platform": (
@@ -198,7 +212,10 @@ VALIDATION_COMMANDS_BY_MODULE: dict[str, tuple[str, ...]] = {
         "pre-commit run --all-files",
         "placeholder and repository-identity review",
     ),
-    "github-actions": ("pre-commit run actionlint --all-files",),
+    "github-actions": (
+        "pre-commit run actionlint --all-files",
+        "python .github/scripts/validate_workflow_security.py",
+    ),
     "github-platform": (
         "pre-commit run validate-dependabot-config --all-files",
         "pre-commit run validate-dependabot-config-valid-examples --all-files",
@@ -3391,7 +3408,7 @@ def discover_security_files(repo_root: Path) -> tuple[str, ...]:
 
 def discover_agent_instruction_files(repo_root: Path) -> tuple[str, ...]:
     """Return existing agent-instruction and modular instruction files."""
-    direct_files = list_existing_paths(repo_root, tuple(sorted(PROTECTED_EXACT_PATHS)))
+    direct_files = list_existing_paths(repo_root, tuple(sorted(AGENT_INSTRUCTION_EXACT_PATHS)))
     modular_files = list_directory_files(repo_root, ".github/instructions", (".md",))
     cursor_rules = list_directory_files(repo_root, ".cursor/rules", (".mdc",))
     return tuple(sorted((*direct_files, *modular_files, *cursor_rules)))

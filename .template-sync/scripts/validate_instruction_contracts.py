@@ -1,149 +1,212 @@
-"""Validate required anchors in retained protected instruction files."""
+"""Marker-authoritative adapter for the shared instruction-contract engine."""
+
+# ruff: noqa: E402
 
 from __future__ import annotations
 
 import argparse
 import sys
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NoReturn, cast
+from typing import Any, cast
 
 import validate_marker
-from template_sync_materialization_helpers import (
-    MARKDOWN_FENCE_CONTEXT,
-    lines_outside_markdown_fences,
-    normalize_repository_path,
+from template_sync_materialization_helpers import normalize_repository_path
+
+_SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / ".github" / "scripts"
+if str(_SHARED_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SHARED_SCRIPTS))
+
+from instruction_contract_core import (
+    CLAUDE_IMPORT_PATTERN,
+    GIT_TIMEOUT_SECONDS,
+    MAXIMUM_CLAUDE_CONTAINER_STEPS,
+    MAXIMUM_GIT_OUTPUT_BYTES,
+    MAXIMUM_INPUT_BYTES,
+    POLICY_CELL_PATTERN,
+    POLICY_CELL_WORD,
+    POLICY_HEADING_PATTERN,
+    POLICY_HTML_AMBIGUITY_PREFIX,
+    POLICY_HTML_AMBIGUOUS_START,
+    POLICY_HTML_BLANK_END,
+    POLICY_HTML_BLOCK_START,
+    POLICY_HTML_COMPLETE_TAG,
+    POLICY_HTML_LITERAL_END,
+    POLICY_HTML_LITERAL_START,
+    POLICY_HTML_TEXTAREA_END,
+    ActiveClaudeImport,
+    AuthorizedRemoval,
+    ClaudeContainerStep,
+    ClaudeContinuation,
+    ClaudeImportLine,
+    InstructionContract,
+    InstructionContractReport,
+    InstructionContractValidationError,
+    InstructionContractWaiver,
+    MissingAnchor,
+    MissingFile,
+    PolicyBlock,
+    PolicyLineIndex,
+    ProtectedGuideReferenceObligation,
+    ProtectedGuideSectionObligation,
+    RequiredSection,
+    RequiredTable,
+    SkippedContract,
+    StaleProtectedGuideSection,
+    TrackedClaudeLocalMemory,
+    _required_string_list,
+    active_claude_imports,
+    applicable_section_boundary,
+    authorized_removal_for,
+    classify_claude_paragraphs,
+    claude_container_content,
+    claude_continuation_content_offset,
+    claude_explicit_container,
+    claude_import_lines,
+    claude_paragraph_text,
+    decode_git_output,
+    expected_policy_blocks,
+    fail,
+    find_protected_guide_waiver,
+    find_waiver,
+    git_inventory_safe_prefix,
+    heading_is_present,
+    index_policy_lines,
+    is_policy_heading,
+    is_policy_thematic_break,
+    load_schema_validated_yaml,
+    mask_matched_claude_code_spans,
+    normalize_policy_paragraph,
+    operative_markdown_lines,
+    os_error_diagnostic,
+    parse_contracts,
+    parse_policy_body,
+    parse_protected_guide_reference_obligations,
+    parse_protected_guide_section_obligations,
+    parse_required_sections,
+    policy_code_span_ends,
+    policy_html_block_end,
+    policy_inventory_digest,
+    policy_list_content_indent,
+    print_report,
+    protected_guide_obligation_applies,
+    quoted_policy_paragraph,
+    read_instruction_file,
+    run_bounded_git,
+    sanitized_git_environment,
+    section_applies,
+    section_body,
+    section_boundary_failure,
+    section_failures,
+    serialized_policy_blocks,
+    starts_policy_list,
+    strip_fenced_code_blocks,
+    tracked_claude_local_memory,
+    validate_contracts,
 )
 
+# Explicit re-exports preserve the existing adapter API for sync callers.
+__all__ = [
+    "CLAUDE_IMPORT_PATTERN",
+    "GIT_TIMEOUT_SECONDS",
+    "MAXIMUM_CLAUDE_CONTAINER_STEPS",
+    "MAXIMUM_GIT_OUTPUT_BYTES",
+    "MAXIMUM_INPUT_BYTES",
+    "POLICY_CELL_PATTERN",
+    "POLICY_CELL_WORD",
+    "POLICY_HEADING_PATTERN",
+    "POLICY_HTML_AMBIGUITY_PREFIX",
+    "POLICY_HTML_AMBIGUOUS_START",
+    "POLICY_HTML_BLANK_END",
+    "POLICY_HTML_BLOCK_START",
+    "POLICY_HTML_COMPLETE_TAG",
+    "POLICY_HTML_LITERAL_END",
+    "POLICY_HTML_LITERAL_START",
+    "POLICY_HTML_TEXTAREA_END",
+    "ActiveClaudeImport",
+    "AuthorizedRemoval",
+    "ClaudeContainerStep",
+    "ClaudeContinuation",
+    "ClaudeImportLine",
+    "InstructionContract",
+    "InstructionContractReport",
+    "InstructionContractValidationError",
+    "InstructionContractWaiver",
+    "MissingAnchor",
+    "MissingFile",
+    "PolicyBlock",
+    "PolicyLineIndex",
+    "ProtectedGuideReferenceObligation",
+    "ProtectedGuideSectionObligation",
+    "RequiredSection",
+    "RequiredTable",
+    "SkippedContract",
+    "StaleProtectedGuideSection",
+    "TrackedClaudeLocalMemory",
+    "_required_string_list",
+    "active_claude_imports",
+    "applicable_section_boundary",
+    "authorized_removal_for",
+    "classify_claude_paragraphs",
+    "claude_container_content",
+    "claude_continuation_content_offset",
+    "claude_explicit_container",
+    "claude_import_lines",
+    "claude_paragraph_text",
+    "decode_git_output",
+    "expected_policy_blocks",
+    "fail",
+    "find_protected_guide_waiver",
+    "find_waiver",
+    "git_inventory_safe_prefix",
+    "heading_is_present",
+    "index_policy_lines",
+    "is_policy_heading",
+    "is_policy_thematic_break",
+    "load_schema_validated_yaml",
+    "mask_matched_claude_code_spans",
+    "normalize_policy_paragraph",
+    "operative_markdown_lines",
+    "os_error_diagnostic",
+    "parse_contracts",
+    "parse_policy_body",
+    "parse_protected_guide_reference_obligations",
+    "parse_protected_guide_section_obligations",
+    "parse_required_sections",
+    "policy_code_span_ends",
+    "policy_html_block_end",
+    "policy_inventory_digest",
+    "policy_list_content_indent",
+    "print_report",
+    "protected_guide_obligation_applies",
+    "quoted_policy_paragraph",
+    "read_instruction_file",
+    "run_bounded_git",
+    "sanitized_git_environment",
+    "section_applies",
+    "section_body",
+    "section_boundary_failure",
+    "section_failures",
+    "serialized_policy_blocks",
+    "starts_policy_list",
+    "strip_fenced_code_blocks",
+    "tracked_claude_local_memory",
+    "validate_contracts",
+]
+
 DEFAULT_CONTRACTS_PATH = ".template-sync/instruction-contracts.yml"
+
+
 DEFAULT_CONTRACTS_SCHEMA_PATH = "schemas/template-sync-instruction-contracts.schema.json"
+
+
 VALIDATION_MODES = ("upstream-template", "downstream")
-
-
-class InstructionContractValidationError(Exception):
-    """Raised when instruction contract validation cannot produce a clean result."""
-
-
-@dataclass(frozen=True)
-class InstructionContract:
-    """Required anchors for one protected instruction file."""
-
-    path: str
-    requires_modules: tuple[str, ...]
-    required_headings: tuple[str, ...]
-    required_phrases: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class ProtectedGuideSectionObligation:
-    """Protected-guide headings or phrases that are stale when modules are excluded."""
-
-    key: str
-    path: str
-    target_modules: tuple[str, ...]
-    stale_headings: tuple[str, ...]
-    stale_phrases: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class ProtectedGuideReferenceObligation:
-    """Protected-guide references that are stale when modules are excluded."""
-
-    key: str
-    path: str
-    reference_kind: str
-    target_modules: tuple[str, ...]
-    target_path: str | None
-    tokens: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class InstructionContractWaiver:
-    """A marker waiver for one missing instruction-contract anchor."""
-
-    path: str
-    anchor: str
-    reason: str
-    authorization_basis: str
-
-
-@dataclass(frozen=True)
-class MissingAnchor:
-    """A required heading or phrase that was not found in a retained file."""
-
-    path: str
-    anchor_type: str
-    anchor: str
-
-
-@dataclass(frozen=True)
-class StaleProtectedGuideSection:
-    """A protected-guide heading or phrase that still describes an excluded module."""
-
-    path: str
-    contract_key: str
-    anchor_type: str
-    anchor: str
-    target_modules: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class MissingFile:
-    """A retained instruction contract whose file is absent without removal authorization."""
-
-    path: str
-
-
-@dataclass(frozen=True)
-class AuthorizedRemoval:
-    """A missing protected file skipped because marker authorization removed it."""
-
-    path: str
-    authorization_basis: str
-    authorized_scope: str
-    reason: str
-
-
-@dataclass(frozen=True)
-class SkippedContract:
-    """A downstream contract skipped because its required modules are not retained."""
-
-    path: str
-    requires_modules: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class InstructionContractReport:
-    """Instruction contract validation details to print for the operator."""
-
-    mode: str
-    contracts_checked: tuple[InstructionContract, ...]
-    skipped_contracts: tuple[SkippedContract, ...]
-    missing_files: tuple[MissingFile, ...]
-    missing_anchors: tuple[MissingAnchor, ...]
-    stale_protected_guide_sections: tuple[StaleProtectedGuideSection, ...]
-    applied_waivers: tuple[InstructionContractWaiver, ...]
-    applied_protected_guide_waivers: tuple[validate_marker.ProtectedGuideContractWaiver, ...]
-    authorized_removals: tuple[AuthorizedRemoval, ...]
-    warnings: tuple[str, ...]
-
-    @property
-    def has_failures(self) -> bool:
-        """Return whether validation found unwaived failures.
-
-        A failure is any unwaived missing file, missing anchor, or stale
-        protected-guide section.
-        """
-        return bool(
-            self.missing_files or self.missing_anchors or self.stale_protected_guide_sections
-        )
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
         description=(
-            "Validate required headings and phrases in protected instruction files "
+            "Validate required headings, phrases, and bounded policy sections in protected instruction files "
             "declared by .template-sync/instruction-contracts.yml."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -243,18 +306,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def load_schema_validated_yaml(
-    document_path: Path,
-    schema_path: Path,
-    repo_root: Path,
-) -> dict[str, Any]:
-    """Load a YAML mapping and validate it against a JSON Schema."""
-    document = validate_marker.load_yaml_mapping(document_path, repo_root)
-    schema = validate_marker.load_json_mapping(schema_path, repo_root)
-    validate_marker.validate_schema(document, schema, document_path, repo_root)
-    return document
-
-
 def load_manifest_modules(
     manifest_path: Path,
     manifest_schema_path: Path,
@@ -264,271 +315,6 @@ def load_manifest_modules(
     manifest = load_schema_validated_yaml(manifest_path, manifest_schema_path, repo_root)
     module_names, _mappings = validate_marker.parse_manifest_mappings(manifest)
     return set(module_names)
-
-
-def _required_string_list(
-    raw_contract: dict[str, object],
-    field_name: str,
-) -> tuple[str, ...]:
-    """Return a tuple from an optional schema-validated string list."""
-    values = raw_contract.get(field_name, [])
-    if not isinstance(values, list):
-        path_value = raw_contract.get("path")
-        path = path_value if isinstance(path_value, str) else "<unknown>"
-        raise InstructionContractValidationError(f"{path} {field_name} must be a string list.")
-    string_values: list[str] = []
-    for value in cast(list[object], values):
-        if not isinstance(value, str):
-            path_value = raw_contract.get("path")
-            path = path_value if isinstance(path_value, str) else "<unknown>"
-            raise InstructionContractValidationError(f"{path} {field_name} must be a string list.")
-        string_values.append(value)
-    return tuple(string_values)
-
-
-def parse_contracts(
-    contracts_document: dict[str, Any],
-    manifest_modules: set[str],
-) -> tuple[InstructionContract, ...]:
-    """Extract normalized instruction contracts from a schema-validated document."""
-    raw_contracts = contracts_document.get("instruction_contracts")
-    if not isinstance(raw_contracts, list):
-        raise InstructionContractValidationError("instruction_contracts must be a list.")
-    raw_contracts = cast(list[object], raw_contracts)
-
-    contracts: list[InstructionContract] = []
-    seen_paths: set[str] = set()
-    for raw_contract in raw_contracts:
-        if not isinstance(raw_contract, dict):
-            raise InstructionContractValidationError("Each instruction contract must be a mapping.")
-        raw_contract = cast(dict[str, object], raw_contract)
-
-        raw_path = raw_contract.get("path")
-        if not isinstance(raw_path, str):
-            raise InstructionContractValidationError("Each instruction contract must define path.")
-        path, is_directory = normalize_repository_path(
-            raw_path,
-            "instruction_contracts[].path",
-        )
-        if is_directory:
-            raise InstructionContractValidationError(
-                f"instruction_contracts[].path must reference a file, not a directory: {raw_path}"
-            )
-        if path in seen_paths:
-            raise InstructionContractValidationError(f"Duplicate instruction contract path: {path}")
-        seen_paths.add(path)
-
-        requires_modules = _required_string_list(raw_contract, "requires_modules")
-        if not requires_modules:
-            raise InstructionContractValidationError(f"{path} requires_modules must not be empty.")
-        unknown_modules = set(requires_modules) - manifest_modules
-        if unknown_modules:
-            raise InstructionContractValidationError(
-                f"{path} references unknown manifest module(s): "
-                + ", ".join(sorted(unknown_modules))
-            )
-
-        required_headings = _required_string_list(raw_contract, "required_headings")
-        required_phrases = _required_string_list(raw_contract, "required_phrases")
-        if not required_headings and not required_phrases:
-            raise InstructionContractValidationError(
-                f"{path} must define at least one required heading or phrase."
-            )
-
-        contracts.append(
-            InstructionContract(
-                path=path,
-                requires_modules=requires_modules,
-                required_headings=required_headings,
-                required_phrases=required_phrases,
-            )
-        )
-    return tuple(contracts)
-
-
-def parse_protected_guide_section_obligations(
-    contracts_document: dict[str, Any],
-    manifest_modules: set[str],
-) -> tuple[ProtectedGuideSectionObligation, ...]:
-    """Extract protected-guide stale-section obligations from a contract document."""
-    raw_obligations = contracts_document.get("protected_guide_section_obligations", [])
-    if not isinstance(raw_obligations, list):
-        raise InstructionContractValidationError(
-            "protected_guide_section_obligations must be a list."
-        )
-
-    obligations: list[ProtectedGuideSectionObligation] = []
-    seen_keys: set[tuple[str, str]] = set()
-    duplicate_keys: set[tuple[str, str]] = set()
-    for raw_obligation in cast(list[object], raw_obligations):
-        if not isinstance(raw_obligation, dict):
-            raise InstructionContractValidationError(
-                "Each protected guide section obligation must be a mapping."
-            )
-        raw_obligation = cast(dict[str, object], raw_obligation)
-
-        key = raw_obligation.get("key")
-        raw_path = raw_obligation.get("path")
-        if not isinstance(key, str) or not isinstance(raw_path, str):
-            raise InstructionContractValidationError(
-                "Each protected guide section obligation must define key and path."
-            )
-        path, is_directory = normalize_repository_path(
-            raw_path,
-            "protected_guide_section_obligations[].path",
-        )
-        if is_directory:
-            raise InstructionContractValidationError(
-                "protected_guide_section_obligations[].path must reference a file, "
-                f"not a directory: {raw_path}"
-            )
-
-        obligation_key = (path, key)
-        if obligation_key in seen_keys:
-            duplicate_keys.add(obligation_key)
-        seen_keys.add(obligation_key)
-
-        target_modules = _required_string_list(raw_obligation, "target_modules")
-        if not target_modules:
-            raise InstructionContractValidationError(f"{path} target_modules must not be empty.")
-        unknown_modules = set(target_modules) - manifest_modules
-        if unknown_modules:
-            raise InstructionContractValidationError(
-                f"{path} protected guide section obligation {key} references unknown "
-                "manifest module(s): " + ", ".join(sorted(unknown_modules))
-            )
-
-        stale_headings = _required_string_list(raw_obligation, "stale_headings")
-        stale_phrases = _required_string_list(raw_obligation, "stale_phrases")
-        if not stale_headings and not stale_phrases:
-            raise InstructionContractValidationError(
-                f"{path} protected guide section obligation {key} must define at least "
-                "one stale heading or phrase."
-            )
-
-        obligations.append(
-            ProtectedGuideSectionObligation(
-                key=key,
-                path=path,
-                target_modules=target_modules,
-                stale_headings=stale_headings,
-                stale_phrases=stale_phrases,
-            )
-        )
-
-    if duplicate_keys:
-        formatted_keys = ", ".join(f"({path}, {key})" for path, key in sorted(duplicate_keys))
-        raise InstructionContractValidationError(
-            "Duplicate protected_guide_section_obligations (path, key) pair(s): "
-            f"{formatted_keys}"
-        )
-    return tuple(obligations)
-
-
-def parse_protected_guide_reference_obligations(
-    contracts_document: dict[str, Any],
-    manifest_modules: set[str],
-) -> tuple[ProtectedGuideReferenceObligation, ...]:
-    """Extract protected-guide stale-reference obligations from a contract document."""
-    raw_obligations = contracts_document.get("protected_guide_reference_obligations", [])
-    if not isinstance(raw_obligations, list):
-        raise InstructionContractValidationError(
-            "protected_guide_reference_obligations must be a list."
-        )
-
-    obligations: list[ProtectedGuideReferenceObligation] = []
-    seen_keys: set[tuple[str, str]] = set()
-    duplicate_keys: set[tuple[str, str]] = set()
-    for raw_obligation in cast(list[object], raw_obligations):
-        if not isinstance(raw_obligation, dict):
-            raise InstructionContractValidationError(
-                "Each protected guide reference obligation must be a mapping."
-            )
-        raw_obligation = cast(dict[str, object], raw_obligation)
-
-        key = raw_obligation.get("key")
-        raw_path = raw_obligation.get("path")
-        reference_kind = raw_obligation.get("reference_kind")
-        if (
-            not isinstance(key, str)
-            or not isinstance(raw_path, str)
-            or not isinstance(reference_kind, str)
-        ):
-            raise InstructionContractValidationError(
-                "Each protected guide reference obligation must define key, path, "
-                "and reference_kind."
-            )
-        path, is_directory = normalize_repository_path(
-            raw_path,
-            "protected_guide_reference_obligations[].path",
-        )
-        if is_directory:
-            raise InstructionContractValidationError(
-                "protected_guide_reference_obligations[].path must reference a file, "
-                f"not a directory: {raw_path}"
-            )
-
-        obligation_key = (path, key)
-        if obligation_key in seen_keys:
-            duplicate_keys.add(obligation_key)
-        seen_keys.add(obligation_key)
-
-        target_modules = _required_string_list(raw_obligation, "target_modules")
-        if not target_modules:
-            raise InstructionContractValidationError(f"{path} target_modules must not be empty.")
-        unknown_modules = set(target_modules) - manifest_modules
-        if unknown_modules:
-            raise InstructionContractValidationError(
-                f"{path} protected guide reference obligation {key} references unknown "
-                "manifest module(s): " + ", ".join(sorted(unknown_modules))
-            )
-
-        target_path = None
-        raw_target_path = raw_obligation.get("target_path")
-        if raw_target_path is not None:
-            if not isinstance(raw_target_path, str):
-                raise InstructionContractValidationError(
-                    f"{path} protected guide reference obligation {key} target_path "
-                    "must be a string."
-                )
-            target_path, target_is_directory = normalize_repository_path(
-                raw_target_path,
-                "protected_guide_reference_obligations[].target_path",
-            )
-            if target_is_directory:
-                raise InstructionContractValidationError(
-                    "protected_guide_reference_obligations[].target_path must reference "
-                    f"a file, not a directory: {raw_target_path}"
-                )
-
-        tokens = _required_string_list(raw_obligation, "tokens")
-        if reference_kind == "markdown-relative-link" and target_path is None:
-            raise InstructionContractValidationError(
-                f"{path} protected guide reference obligation {key} must define target_path."
-            )
-        if reference_kind in {"absolute-url", "prose-reference"} and not tokens:
-            raise InstructionContractValidationError(
-                f"{path} protected guide reference obligation {key} must define tokens."
-            )
-
-        obligations.append(
-            ProtectedGuideReferenceObligation(
-                key=key,
-                path=path,
-                reference_kind=reference_kind,
-                target_modules=target_modules,
-                target_path=target_path,
-                tokens=tokens,
-            )
-        )
-
-    if duplicate_keys:
-        formatted_keys = ", ".join(f"({path}, {key})" for path, key in sorted(duplicate_keys))
-        raise InstructionContractValidationError(
-            "Duplicate protected_guide_reference_obligations (path, key) pair(s): "
-            f"{formatted_keys}"
-        )
-    return tuple(obligations)
 
 
 def load_contracts(
@@ -643,361 +429,22 @@ def load_marker_for_downstream(
     )
 
 
-def read_instruction_file(repo_root: Path, relative_path: str) -> str | None:
-    """Return instruction file text, or ``None`` when the file is absent."""
-    path = validate_marker.resolve_repo_path(repo_root, relative_path)
-    if not path.exists():
-        return None
-    if not path.is_file():
-        raise InstructionContractValidationError(f"{relative_path} is not a regular file.")
-    try:
-        return path.read_text(encoding="utf-8")
-    except OSError as error:
-        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
-        raise InstructionContractValidationError(
-            f"Unable to read {relative_path}: {error_summary}"
-        ) from error
-
-
-def find_waiver(
-    waivers: tuple[InstructionContractWaiver, ...],
-    path: str,
-    anchor: str,
-) -> InstructionContractWaiver | None:
-    """Return a waiver that matches ``path`` and ``anchor``, if present."""
-    for waiver in waivers:
-        if waiver.path == path and waiver.anchor == anchor:
-            return waiver
-    return None
-
-
-def find_protected_guide_waiver(
-    waivers: tuple[validate_marker.ProtectedGuideContractWaiver, ...],
-    *,
-    path: str,
-    contract_key: str,
-    target_modules: tuple[str, ...],
-    target_path: str | None = None,
-) -> validate_marker.ProtectedGuideContractWaiver | None:
-    """Return a matching protected-guide waiver, if present."""
-    target_module_set = set(target_modules)
-    for waiver in waivers:
-        if waiver.path != path or waiver.contract_key != contract_key:
-            continue
-        if target_path is not None and waiver.target_path == target_path:
-            return waiver
-        if waiver.target_module is not None and waiver.target_module in target_module_set:
-            return waiver
-    return None
-
-
-def authorized_removal_for(
-    protected_decisions: tuple[validate_marker.ProtectedFileDecision, ...],
-    path: str,
-) -> AuthorizedRemoval | None:
-    """Return authorized removal details for an absent protected file, if present."""
-    for protected_decision in protected_decisions:
-        if (
-            protected_decision.path == path
-            and protected_decision.decision == validate_marker.REMOVAL_DECISION
-        ):
-            return AuthorizedRemoval(
-                path=path,
-                authorization_basis=protected_decision.authorization_basis or "",
-                authorized_scope=protected_decision.authorized_scope or "",
-                reason=protected_decision.reason or "",
-            )
-    return None
-
-
-def protected_guide_obligation_applies(
-    obligation_target_modules: tuple[str, ...],
-    included_modules: set[str],
-) -> bool:
-    """Return whether a protected-guide obligation is stale for retained modules."""
-    return set(obligation_target_modules).isdisjoint(included_modules)
-
-
-def strip_fenced_code_blocks(text: str) -> str:
-    """Return ``text`` with CommonMark fenced code blocks removed.
-
-    Required anchors must appear as live Markdown content; example anchors
-    nested in a fenced code block should not satisfy the contract.
-    """
-    return "\n".join(
-        line
-        for _line_number, line in lines_outside_markdown_fences(
-            text,
-            fence_context=MARKDOWN_FENCE_CONTEXT,
-        )
-    )
-
-
-def heading_is_present(text: str, heading: str) -> bool:
-    """Return whether ``heading`` appears as a CommonMark ATX heading line.
-
-    Per CommonMark, an ATX heading may have 0-3 leading spaces of indentation;
-    lines with 4+ leading spaces or any leading tab character are indented code
-    blocks rather than headings and cannot satisfy the contract.
-    """
-    for line in text.splitlines():
-        leading_spaces = 0
-        has_leading_tab = False
-        for ch in line:
-            if ch == " ":
-                leading_spaces += 1
-            elif ch == "\t":
-                has_leading_tab = True
-                break
-            else:
-                break
-        if has_leading_tab or leading_spaces > 3:
-            continue
-        if line[leading_spaces:].rstrip() == heading:
-            return True
-    return False
-
-
-def validate_contracts(
-    *,
-    mode: str,
-    repo_root: Path,
-    contracts: tuple[InstructionContract, ...],
-    protected_guide_section_obligations: tuple[ProtectedGuideSectionObligation, ...] = (),
-    included_modules: set[str] | None = None,
-    protected_decisions: tuple[validate_marker.ProtectedFileDecision, ...] = (),
-    waivers: tuple[InstructionContractWaiver, ...] = (),
-    protected_guide_waivers: tuple[validate_marker.ProtectedGuideContractWaiver, ...] = (),
-    warnings: tuple[str, ...] = (),
-) -> InstructionContractReport:
-    """Validate selected instruction contracts against the working tree."""
-    checked_contracts: list[InstructionContract] = []
-    skipped_contracts: list[SkippedContract] = []
-    missing_files: list[MissingFile] = []
-    missing_anchors: list[MissingAnchor] = []
-    stale_protected_guide_sections: list[StaleProtectedGuideSection] = []
-    applied_waivers: list[InstructionContractWaiver] = []
-    applied_protected_guide_waivers: list[validate_marker.ProtectedGuideContractWaiver] = []
-    authorized_removals: list[AuthorizedRemoval] = []
-
-    for contract in contracts:
-        if included_modules is not None and not set(contract.requires_modules).issubset(
-            included_modules
-        ):
-            skipped_contracts.append(
-                SkippedContract(
-                    path=contract.path,
-                    requires_modules=contract.requires_modules,
-                )
-            )
-            continue
-
-        text = read_instruction_file(repo_root, contract.path)
-        if text is None:
-            authorized_removal = authorized_removal_for(protected_decisions, contract.path)
-            if authorized_removal is not None:
-                authorized_removals.append(authorized_removal)
-            else:
-                missing_files.append(MissingFile(path=contract.path))
-            continue
-
-        checked_contracts.append(contract)
-        scannable_text = strip_fenced_code_blocks(text)
-        for heading in contract.required_headings:
-            if heading_is_present(scannable_text, heading):
-                continue
-            waiver = find_waiver(waivers, contract.path, heading)
-            if waiver is not None:
-                applied_waivers.append(waiver)
-            else:
-                missing_anchors.append(
-                    MissingAnchor(
-                        path=contract.path,
-                        anchor_type="heading",
-                        anchor=heading,
-                    )
-                )
-        for phrase in contract.required_phrases:
-            if phrase in scannable_text:
-                continue
-            waiver = find_waiver(waivers, contract.path, phrase)
-            if waiver is not None:
-                applied_waivers.append(waiver)
-            else:
-                missing_anchors.append(
-                    MissingAnchor(
-                        path=contract.path,
-                        anchor_type="phrase",
-                        anchor=phrase,
-                    )
-                )
-
-    if included_modules is not None:
-        missing_file_paths = {missing_file.path for missing_file in missing_files}
-        authorized_removal_paths = {
-            authorized_removal.path for authorized_removal in authorized_removals
-        }
-        for obligation in protected_guide_section_obligations:
-            if not protected_guide_obligation_applies(
-                obligation.target_modules,
-                included_modules,
-            ):
-                continue
-
-            text = read_instruction_file(repo_root, obligation.path)
-            if text is None:
-                authorized_removal = authorized_removal_for(
-                    protected_decisions,
-                    obligation.path,
-                )
-                if authorized_removal is not None:
-                    if authorized_removal.path not in authorized_removal_paths:
-                        authorized_removals.append(authorized_removal)
-                        authorized_removal_paths.add(authorized_removal.path)
-                elif obligation.path not in missing_file_paths:
-                    missing_files.append(MissingFile(path=obligation.path))
-                    missing_file_paths.add(obligation.path)
-                continue
-
-            scannable_text = strip_fenced_code_blocks(text)
-            stale_sections: list[StaleProtectedGuideSection] = []
-            for heading in obligation.stale_headings:
-                if heading_is_present(scannable_text, heading):
-                    stale_sections.append(
-                        StaleProtectedGuideSection(
-                            path=obligation.path,
-                            contract_key=obligation.key,
-                            anchor_type="heading",
-                            anchor=heading,
-                            target_modules=obligation.target_modules,
-                        )
-                    )
-            for phrase in obligation.stale_phrases:
-                if phrase in scannable_text:
-                    stale_sections.append(
-                        StaleProtectedGuideSection(
-                            path=obligation.path,
-                            contract_key=obligation.key,
-                            anchor_type="phrase",
-                            anchor=phrase,
-                            target_modules=obligation.target_modules,
-                        )
-                    )
-            if not stale_sections:
-                continue
-            protected_guide_waiver = find_protected_guide_waiver(
-                protected_guide_waivers,
-                path=obligation.path,
-                contract_key=obligation.key,
-                target_modules=obligation.target_modules,
-            )
-            if protected_guide_waiver is not None:
-                applied_protected_guide_waivers.append(protected_guide_waiver)
-            else:
-                stale_protected_guide_sections.extend(stale_sections)
-
-    return InstructionContractReport(
-        mode=mode,
-        contracts_checked=tuple(checked_contracts),
-        skipped_contracts=tuple(skipped_contracts),
-        missing_files=tuple(missing_files),
-        missing_anchors=tuple(missing_anchors),
-        stale_protected_guide_sections=tuple(stale_protected_guide_sections),
-        applied_waivers=tuple(dict.fromkeys(applied_waivers)),
-        applied_protected_guide_waivers=tuple(dict.fromkeys(applied_protected_guide_waivers)),
-        authorized_removals=tuple(authorized_removals),
-        warnings=warnings,
-    )
-
-
-def print_report(report: InstructionContractReport) -> None:
-    """Print a human-readable instruction contract report."""
-    for warning in report.warnings:
-        print(f"WARNING: {warning}")
-
-    if report.has_failures:
-        print("Instruction-contract validation failed.")
-    elif report.applied_waivers or report.applied_protected_guide_waivers:
-        print("Instruction-contract validation passed with waivers.")
-    else:
-        print("Instruction-contract validation passed.")
-
-    print(f"Mode: {report.mode}")
-    print(f"Contracts checked: {len(report.contracts_checked)}")
-
-    if report.skipped_contracts:
-        print("\nContracts skipped by downstream module selection:")
-        for skipped_contract in report.skipped_contracts:
-            print(
-                f"  - {skipped_contract.path} "
-                f"(requires: {', '.join(skipped_contract.requires_modules)})"
-            )
-
-    if report.missing_files:
-        print("\nRequired instruction files absent without authorized removal:")
-        for missing_file in report.missing_files:
-            print(f"  - {missing_file.path}")
-
-    if report.missing_anchors:
-        print("\nMissing required anchors:")
-        for missing_anchor in report.missing_anchors:
-            print(
-                f"  - {missing_anchor.path}: missing required "
-                f"{missing_anchor.anchor_type}: {missing_anchor.anchor}"
-            )
-
-    if report.stale_protected_guide_sections:
-        print("\nStale protected-guide sections requiring owner review:")
-        for stale_section in report.stale_protected_guide_sections:
-            print(
-                f"  - {stale_section.path}: {stale_section.contract_key}: stale "
-                f"{stale_section.anchor_type}: {stale_section.anchor} "
-                f"(target modules: {', '.join(stale_section.target_modules)})"
-            )
-
-    if report.authorized_removals:
-        print("\nAuthorized removals skipped:")
-        for authorized_removal in report.authorized_removals:
-            print(f"  - {authorized_removal.path}")
-            print(f"    authorization_basis: {authorized_removal.authorization_basis}")
-            print(f"    authorized_scope: {authorized_removal.authorized_scope}")
-            print(f"    reason: {authorized_removal.reason}")
-
-    if report.applied_waivers:
-        print("\nInstruction contract waivers applied:")
-        for waiver in report.applied_waivers:
-            print(f"  - {waiver.path}: {waiver.anchor}")
-            print(f"    reason: {waiver.reason}")
-            print(f"    authorization_basis: {waiver.authorization_basis}")
-
-    if report.applied_protected_guide_waivers:
-        print("\nProtected guide contract waivers applied:")
-        for protected_guide_waiver in report.applied_protected_guide_waivers:
-            print(f"  - {protected_guide_waiver.path}: {protected_guide_waiver.contract_key}")
-            if protected_guide_waiver.target_path is not None:
-                print(f"    target_path: {protected_guide_waiver.target_path}")
-            if protected_guide_waiver.target_module is not None:
-                print(f"    target_module: {protected_guide_waiver.target_module}")
-            if protected_guide_waiver.linked_local_override_path is not None:
-                print(
-                    "    linked_local_override_path: "
-                    f"{protected_guide_waiver.linked_local_override_path}"
-                )
-            print(f"    reason: {protected_guide_waiver.reason}")
-            print(f"    authorization_basis: {protected_guide_waiver.authorization_basis}")
-
-
-def fail(message: str) -> NoReturn:
-    """Print an error and exit non-zero."""
-    print(f"ERROR: {message}", file=sys.stderr)
-    raise SystemExit(1)
-
-
 def main(argv: list[str] | None = None) -> int:
     """Run instruction-contract validation."""
     args = parse_args(sys.argv[1:] if argv is None else argv)
     try:
         repo_root = validate_marker.resolve_repo_root(args.repo_root)
+        profile_path = validate_marker.resolve_repo_path(
+            repo_root, ".github/instruction-profile.yml"
+        )
+        if profile_path.exists():
+            profile = validate_marker.load_yaml_mapping(
+                profile_path, repo_root, maximum_bytes=MAXIMUM_INPUT_BYTES
+            )
+            if profile.get("mode") != "marker":
+                raise InstructionContractValidationError(
+                    "Conflicting modes: the marker adapter cannot run an active standalone profile."
+                )
         contracts_path = validate_marker.resolve_repo_path(repo_root, args.contracts)
         contracts_schema_path = validate_marker.resolve_repo_path(repo_root, args.contracts_schema)
         marker_path = validate_marker.resolve_repo_path(repo_root, args.marker)
@@ -1065,6 +512,28 @@ def main(argv: list[str] | None = None) -> int:
                 manifest_modules,
                 repo_root,
             )
+            agent_modules = {
+                module
+                for contract in contracts
+                for module in contract.requires_modules
+                if module.startswith("agent-") and module != "agent-instructions"
+            }
+            if (
+                "agent-instructions" in included_modules
+                and agent_modules
+                and not included_modules.intersection(agent_modules)
+            ):
+                retained_agent_paths = [
+                    contract.path
+                    for contract in contracts
+                    if set(contract.requires_modules).intersection(agent_modules)
+                    and (repo_root / contract.path).exists()
+                ]
+                if retained_agent_paths:
+                    raise InstructionContractValidationError(
+                        "Legacy agent selection requires explicit agent modules before validation: "
+                        + ", ".join(retained_agent_paths)
+                    )
             report = validate_contracts(
                 mode=args.mode,
                 repo_root=repo_root,

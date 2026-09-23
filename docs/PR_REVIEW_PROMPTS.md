@@ -4,7 +4,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-22
+- **Last Updated:** 2026-09-23
 - **Scope:** Ready-to-use prompts for responding to PR comments, code review
   feedback, branch management, and common false positives during code review.
 - **Related:** [Copilot Chat Prompts for Template Adoption](../COPILOT_CHAT_PROMPTS.md)
@@ -14,6 +14,28 @@
 This document captures prompts used during pull request and code review
 workflows. These prompts are designed to be copied directly into GitHub PR
 comments or Copilot Chat conversations.
+
+To refine a proposed issue without filing it, use the [Issue Evaluation Prompt](ISSUE_EVALUATION_PROMPT.md).
+
+<!-- template-sync: begin github-actions-reference-only -->
+## Requesting Copilot Review and Recording Effort
+
+Use this GitHub recipe with the local canonical Shared Review Governance and the retained agent's platform protocol. Prefer the GitHub plugin for capabilities it exposes; use a documented CLI/API fallback only for a missing capability. Before requesting, reconcile the current head and material PR description with existing requests and results. An accepted pending or unchanged clean request must not be duplicated.
+
+1. When a supported interface exposes effort selection, choose **Balanced** before requesting review. GitHub's web UI places this selector under **Reviewers**, next to Copilot. If the available interface cannot select effort, send one supported request and accept Lite. Do not resend an accepted Lite request merely to change effort. See [GitHub's effort selection instructions](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review#choosing-a-review-effort-level).
+2. For an authenticated GitHub CLI fallback, use `gh pr edit PR-NUMBER --repo OWNER/REPO --add-reviewer '@copilot'`, replacing the PR number and repository. Quote `'@copilot'` in PowerShell so it remains a literal argument rather than a splatting expression. This is a reviewer request, not an assignee change. The [CLI manual](https://cli.github.com/manual/gh_pr_edit) documents this special reviewer value; it is not supported on GitHub Enterprise Server.
+3. For a supported REST fallback, send `POST /repos/{owner}/{repo}/pulls/{pull_number}/requested_reviewers` with the JSON `reviewers` array containing `copilot-pull-request-reviewer[bot]`. The CLI alias and REST bot login are different interfaces. See [GitHub's supported Copilot REST identity](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/request-a-code-review/use-code-review) and [review-request API](https://docs.github.com/en/rest/pulls/review-requests#request-reviewers-for-a-pull-request). The documented CLI and REST request parameters do not expose an effort selector; do not invent one or claim they requested Balanced.
+4. Confirm delivery through fresh authenticated native request/review/run evidence before requesting the separate remote reviewer. A successful command or HTTP response alone does not establish a completed clean review. Reconcile uncertain delivery before retrying; apply the canonical per-service limits and complete finding inventory.
+5. Read the effort shown in the returned review's overview comment and record it separately from requested effort, alongside the native review link, identity and reviewed head. If the result does not disclose effort, record **unknown**, not an inference from timing or request method. GitHub documents [where actual effort is displayed](https://docs.github.com/en/copilot/concepts/agents/code-review#review-effort-level). Verify the authenticated actor, request linkage, timing and stable input before accepting a result.
+
+If an interface, entitlement, or authenticated readback is unavailable, record the native failure and the required operator action; keep that gate incomplete. Do not store or replay browser cookies, CSRF tokens, nonces, credentials, or private internal form fields. This recipe supplies operating details, not new authority or altered retry/round limits. Recheck the linked primary documentation when interface behavior changes.
+<!-- template-sync: end github-actions-reference-only -->
+
+<!-- template-sync: begin claude-review-command-reference-only -->
+## Local Claude Review Command
+
+When `agent-claude`, `agent-instructions`, and `github-actions` are retained, invoke `/review-loop PR-URL` in Claude Code using the intended pull request URL. The local command at `.claude/commands/review-loop.md` loads the retained local protocol. It supplies no standing content, push, or merge authority. Removing the agent or GitHub host module removes the command and this reference through normal reviewed materialization; baseline, Markdown, Python project, and template-sync support are not runtime prerequisites for the command.
+<!-- template-sync: end claude-review-command-reference-only -->
 
 ## Responding to Code Review Comments
 
@@ -34,68 +56,67 @@ Please double-check the code reviewer's recommendation. If the gap or concern
 they pointed out is valid, then I agree with the code reviewer's comment.
 ```
 
-### Evaluate, Decide, and Implement (with Style Guide Update)
+### Evaluate, Decide, and Implement — Secondary Guide Prompt Only
 
-Use this to validate the reviewer's concern, evaluate response options with a
-scoring rubric, implement the best option, and determine whether a style guide
-update is warranted:
+Use this when the selected fix should be implemented, but a secondary style-guide change should be proposed for a separate task. This explicit prompt-only restriction applies to the secondary recommendation even when an earlier grant would permit that change.
 
 ```markdown
-Please double-check the code reviewer's recommendation. If the gap or concern
-they pointed out is valid, think hard about possible ways to resolve the
-problem/address their feedback. List the options. Then, develop an evaluation
-rubric to score the options and determine which is best. Apply the evaluation
-rubric to the options and display the results/scores in a table. Then, use the
-table to select the best option. Finally, implement the necessary changes
-corresponding to the selected option.
+Read and follow Shared Review Governance and Protected Instruction Files in
+.github/copilot-instructions.md. Validate this finding and complete the
+finding-specific options, fresh weighted rubric, displayed scores, pre-edit
+evaluation, authorized implementation, tests, guide-impact assessment and
+disposition required there.
 
-If the selected option would create, edit, delete, rename, or otherwise change
-a protected instruction file — any file covered by the canonical Protected
-Instruction Files rule in `.github/copilot-instructions.md`, such as
-`.github/copilot-instructions.md`, the root agent entry points (`.hermes.md`,
-`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`), files under `.github/instructions/`, and
-files under `.cursor/rules/` — keep the selected option fixed and pause before
-editing unless I have already explicitly authorized that specific protected-file
-change in this task. Ask one narrow authorization question that names the
-selected option, exact file, intended change, recommendation, and whether the
-file is already in the PR's scope. Do not treat this prompt, the review comment,
-or generic permission to address feedback as authorization to edit protected
-files.
+Keep the selected option fixed at the protected-content checkpoint. Use
+specific authority already granted for this task; ask one narrow question for
+an uncovered protected-content change and continue independent work. This
+prompt grants no protected-content, branch-placement or merge authority.
 
-Then, determine whether a secondary style guide update should be recommended
-based on your evaluation. If so, please write a prompt in a Markdown code fence
-that I can send to GitHub Copilot's coding agent separately to update and
-clarify the style guide to match the style you determined was best. Don't
-update the style guide for this secondary recommendation; just give me a
-prompt.
+For a secondary style-guide recommendation, return only a ready-to-file
+prompt in a Markdown code fence. Include the proposed rule, rationale, scope
+and acceptance tests. Do not implement that secondary guide change in this
+task, even if earlier authority would allow it.
 ```
 
-### Evaluate, Decide, and Implement (without Style Guide Update)
+### Evaluate, Decide, and Implement — Authorized Secondary Guide Changes
 
-Use this variant when you are already working on the style guide itself, or when
-there is no relevant style guide to update:
+Use this when specific guide changes have already been authorized in the task. Name or link that grant in the request. Copying this variant does not supply missing authorization.
 
 ```markdown
-Please double-check the code reviewer's recommendation. If the gap or concern
-they pointed out is valid, think hard about possible ways to resolve the
-problem/address their feedback. List the options. Then, develop an evaluation
-rubric to score the options and determine which is best. Apply the evaluation
-rubric to the options and display the results/scores in a table. Then, use the
-table to select the best option. Finally, implement the necessary changes
-corresponding to the selected option.
+Read and follow Shared Review Governance and Protected Instruction Files in
+.github/copilot-instructions.md. Validate this finding and complete the
+finding-specific options, fresh weighted rubric, displayed scores, pre-edit
+evaluation, authorized implementation, tests, guide-impact assessment and
+disposition required there.
 
-If the selected option would create, edit, delete, rename, or otherwise change
-a protected instruction file — any file covered by the canonical Protected
-Instruction Files rule in `.github/copilot-instructions.md`, such as
-`.github/copilot-instructions.md`, the root agent entry points (`.hermes.md`,
-`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`), files under `.github/instructions/`, and
-files under `.cursor/rules/` — keep the selected option fixed and pause before
-editing unless I have already explicitly authorized that specific protected-file
-change in this task. Ask one narrow authorization question that names the
-selected option, exact file, intended change, recommendation, and whether the
-file is already in the PR's scope. Do not treat this prompt, the review comment,
-or generic permission to address feedback as authorization to edit protected
-files.
+Implement a selected fix or secondary style-guide change only when specific
+current-task authority covers its content. Keep the selected option fixed.
+Do not ask again for unchanged authority already granted. For an uncovered
+protected-content change, provide the ready-to-file prompt and ask the narrow
+authorization question required by the canonical process. Continue independent
+authorized work while that change is pending.
+
+This prompt grants no protected-content, branch-placement or merge authority.
+```
+
+### Evaluate, Decide, and Implement — No Secondary Guide Proposal
+
+Use this when the guide itself is the selected fix, or when no separate guide proposal is requested. A guide that is part of the selected fix still needs specific protected-content authority.
+
+```markdown
+Read and follow Shared Review Governance and Protected Instruction Files in
+.github/copilot-instructions.md. Validate this finding and complete the
+finding-specific options, fresh weighted rubric, displayed scores, pre-edit
+evaluation, authorized implementation, tests and disposition required there.
+
+Keep the selected option fixed at the protected-content checkpoint. Use
+specific authority already granted for this task; ask one narrow question for
+an uncovered protected-content change and continue independent work. This
+prompt grants no protected-content, branch-placement or merge authority.
+
+Assess guide impact, but do not prepare or implement a separate secondary
+guide proposal. Record any relevant remaining limitation instead of describing
+an unfinished requirement as complete.
 ```
 
 ### Azure DevOps PR Review Protocol Check

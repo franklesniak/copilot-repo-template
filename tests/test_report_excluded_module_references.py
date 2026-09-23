@@ -10,6 +10,8 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
+from tests._pytest_compat import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "report_excluded_module_references.py"
 MARKER_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-marker.schema.json"
@@ -530,6 +532,91 @@ def test_explicit_included_modules_without_marker_matches_marker_findings(
     assert _finding_lines(explicit_result.stdout) == _finding_lines(marker_result.stdout)
 
 
+def test_pre_adoption_catalog_is_protected_data_not_stale_prose(tmp_path: Path) -> None:
+    """A retained catalog keeps excluded obligations while actual prose is reported."""
+    root = tmp_path / "fixture"
+    root.mkdir()
+    _write_common_repo(root, include_marker=False)
+    catalog_path = ".template-sync/instruction-contracts.yml"
+    prose_paths = [".cursor/rules/policy.mdc", ".github/instructions/nested/policy"]
+    manifest = _manifest()
+    manifest["template_manifest"]["path_mappings"].extend(
+        [
+            {"pattern": catalog_path, "requires_all": ["template-sync-support"]},
+            *({"pattern": path, "requires_all": ["baseline"]} for path in prose_paths),
+        ]
+    )
+    _write_yaml(root, ".template-sync/manifest.yml", manifest)
+    _write_yaml(
+        root,
+        catalog_path,
+        {
+            "instruction_contracts": [
+                {
+                    "path": "AGENTS.md",
+                    "requires_modules": ["agent-instructions"],
+                    "required_phrases": ["Preserve review authority."],
+                }
+            ]
+        },
+    )
+    for path in prose_paths:
+        _write_text(root, path, "Use AGENTS.md for agent instructions.\n")
+    _run_git(root, "add", ".")
+    assert (root / "AGENTS.md").is_file()
+    assert not (root / ".template-sync/marker.yml").exists()
+    args = ["--included-module", "baseline", "--included-module", "template-sync-support"]
+    result = _run_report(root, *args)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "State source: explicit --included-module input" in result.stdout
+    findings = _finding_lines(result.stdout)
+    prose_findings = [
+        line for line in findings if line.startswith("protected-document.prose-reference |")
+    ]
+    assert not any(f"| {catalog_path}:" in line for line in prose_findings)
+    for path in prose_paths:
+        assert any(
+            f"| {path}:1 | AGENTS.md references excluded path AGENTS.md." in line
+            for line in prose_findings
+        ), prose_findings
+    assert any(
+        line.startswith(
+            "manifest-owned-path | protected_file_authorization_needed | "
+            "agent-instructions | AGENTS.md |"
+        )
+        for line in findings
+    ), findings
+
+    mutant_root = tmp_path / "mutant"
+    mutant_dir = mutant_root / ".template-sync/scripts"
+    # Preserve the deployed dependency layout so the mutant executes the real
+    # shared primitives before exercising the independent catalog/prose oracle.
+    for relative in (".template-sync/scripts", ".github/scripts"):
+        destination = mutant_root / relative
+        destination.mkdir(parents=True)
+        for source in (REPO_ROOT / relative).glob("*.py"):
+            shutil.copyfile(source, destination / source.name)
+    mutant = mutant_dir / SCRIPT_PATH.name
+    source_text = mutant.read_text(encoding="utf-8")
+    original = "if not is_protected_prose_path(relative_path):"
+    assert source_text.count(original) == 1
+    mutant.write_text(
+        source_text.replace(original, "if not is_protected_instruction_path(relative_path):"),
+        encoding="utf-8",
+    )
+    mutated = subprocess.run(
+        [sys.executable, str(mutant), "--repo-root", str(root), *args],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert mutated.returncode == 0, mutated.stdout + mutated.stderr
+    assert any(
+        line.startswith("protected-document.prose-reference |") and f"| {catalog_path}:" in line
+        for line in _finding_lines(mutated.stdout)
+    ), "Restoring the broad prose predicate must fail the no-catalog-prose oracle."
+
+
 def test_ambiguous_marker_and_explicit_included_modules_fail(tmp_path: Path) -> None:
     """Marker-derived and explicit module state cannot both be supplied."""
     _write_common_repo(tmp_path)
@@ -599,6 +686,32 @@ def test_invalid_explicit_module_is_runtime_failure(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert "not defined by the manifest" in result.stderr
+
+
+def test_reference_reporter_preserves_physical_lines_and_literal_markers() -> None:
+    """Normal and malformed-marker fallback scans keep non-CR/LF characters literal."""
+    program = r"""
+import sys
+sys.path.insert(0, sys.argv[1])
+import report_excluded_module_references as reporter
+for literal in ("\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029", "\u00a0", "\u2003", "\x1f"):
+    begin = literal + "<!-- template-sync: begin python-reference-only -->"
+    end = literal + "<!-- template-sync: end python-reference-only -->"
+    text = begin + "\n[code](src/example.py)\n" + end + "\n"
+    assert reporter.lines_outside_inline_blocks(text, relative_path="README.md") == (
+        (1, begin), (2, "[code](src/example.py)"), (3, end))
+    malformed = "<!-- template-sync: begin unknown-fixture-only -->"
+    text = malformed + "\nleft" + literal + "right\n"
+    assert reporter.lines_outside_inline_blocks(text, relative_path="README.md") == (
+        (1, malformed), (2, "left" + literal + "right"))
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", program, str(SCRIPT_PATH.parent)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_inline_block_invalid_finding_reports_location_once(tmp_path: Path) -> None:
@@ -688,9 +801,77 @@ def test_dependabot_github_actions_directory_surface_is_detected(tmp_path: Path)
     )
 
 
-def test_yaml_embedded_fenced_links_are_skipped(tmp_path: Path) -> None:
+def test_reporter_multiline_markdown_links_have_original_lines(tmp_path: Path) -> None:
+    """The native reporter recognizes multiline links and keeps fence gaps inert."""
+    _write_common_repo(tmp_path, include_reference_content=False)
+    _write_text(
+        tmp_path,
+        "README.md",
+        '# Downstream\n\n[JSON](templates/json/example.json\n "JSON\nexample")\n'
+        '\n[Schema]:\n schemas/example-config.schema.json\n "Schema"\n'
+        '\n[Not live](templates/json/example.json\n```text\nexample\n```\n "title")\n',
+    )
+    result = _run_report(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    links = [
+        line
+        for line in _finding_lines(result.stdout)
+        if line.startswith("markdown-link.") and " | README.md:" in line
+    ]
+    assert len(links) == 2, links
+    assert any("README.md:3 |" in line and "templates/json/example.json" in line for line in links)
+    assert any(
+        "README.md:7 |" in line and "schemas/example-config.schema.json" in line for line in links
+    )
+
+
+def test_reporter_code_span_labels_keep_live_links_and_literal_examples(tmp_path: Path) -> None:
+    """The native reporter shares code context, raw destinations and opening lines."""
+    _write_common_repo(tmp_path, include_reference_content=False)
+    _write_text(
+        tmp_path,
+        "README.md",
+        "# Downstream\n\n"
+        "[JSON `]`](templates/json/example.json)\n"
+        "[Schema\n `[`](schemas/example-config.schema.json)\n"
+        "`[Literal](templates/json/example.json)`\n"
+        "![Image `]`](templates/json/example.json)\n"
+        "[First](literal`target.md) [JSON](templates/json/example.json) and `tail\n"
+        '[First](other.md "`title") [Schema](schemas/example-config.schema.json) and `tail\n',
+    )
+    result = _run_report(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    links = [
+        line
+        for line in _finding_lines(result.stdout)
+        if line.startswith("markdown-link.") and " | README.md:" in line
+    ]
+    assert len(links) == 4, links
+    for number, module, target in (
+        (3, "json", "templates/json/example.json"),
+        (4, "schema", "schemas/example-config.schema.json"),
+        (8, "json", "templates/json/example.json"),
+        (9, "schema", "schemas/example-config.schema.json"),
+    ):
+        assert any(
+            f"markdown-link.excluded-target | required_cleanup | {module} | README.md:{number} |"
+            in line
+            and target in line
+            for line in links
+        ), links
+
+
+@pytest.mark.parametrize("multiline", [False, True], ids=["single-line", "multiline"])
+def test_yaml_embedded_fenced_links_are_skipped(tmp_path: Path, multiline: bool) -> None:
     """Links inside fenced code blocks in YAML-embedded Markdown are ignored."""
     _write_common_repo(tmp_path)
+    schema_link = "[schema](../../schemas/example-config.schema.json)."
+    json_link = "[json](../../templates/json/example.json)."
+    if multiline:
+        schema_link = (
+            '[schema](../../schemas/example-config.schema.json\n          "Schema title").'
+        )
+        json_link = '[json](../../templates/json/example.json\n          "JSON title").'
     _write_text(
         tmp_path,
         ".github/ISSUE_TEMPLATE/fenced_example.yml",
@@ -701,9 +882,9 @@ def test_yaml_embedded_fenced_links_are_skipped(tmp_path: Path) -> None:
             "  - type: markdown\n"
             "    attributes:\n"
             "      value: |\n"
-            "        Outside fence: [schema](../../schemas/example-config.schema.json).\n"
+            f"        Outside fence: {schema_link}\n"
             "        ```\n"
-            "        Inside fence: [json](../../templates/json/example.json).\n"
+            f"        Inside fence: {json_link}\n"
             "        ```\n"
         ),
     )
@@ -722,7 +903,10 @@ def test_yaml_embedded_fenced_links_are_skipped(tmp_path: Path) -> None:
     )
     # The link inside the fenced block must be ignored even though the file is
     # YAML and the fence is indented inside a ``value: |`` block.
-    assert not any(".github/ISSUE_TEMPLATE/fenced_example.yml:9" in line for line in findings)
+    hidden_line = 10 if multiline else 9
+    assert not any(
+        f".github/ISSUE_TEMPLATE/fenced_example.yml:{hidden_line}" in line for line in findings
+    )
 
 
 def test_markdown_blockquote_fenced_links_use_standard_fence_context(tmp_path: Path) -> None:
@@ -829,3 +1013,168 @@ def test_active_contact_link_urls_preserves_fragment_and_quoted_urls() -> None:
         "https://github.com/OWNER/REPO/blob/HEAD/file.md#L1-L5",
         "https://example.com/docs",
     ]
+
+
+@pytest.mark.parametrize(
+    ("suffix", "body", "line_number"),
+    [
+        ("md", "    [JSON](templates/json/example.json)\n", None),
+        ("mdc", "    [JSON](templates/json/example.json)\n", None),
+        ("md", "Paragraph\n    [JSON](templates/json/example.json)\n", 2),
+        ("md", "- Item\n\n      [JSON](templates/json/example.json)\n", None),
+        ("md", "- Item\n\n    [JSON](templates/json/example.json)\n", 3),
+        ("md", ">     [JSON](templates/json/example.json)\n", None),
+        ("yml", "value: |\n    [JSON](templates/json/example.json)\n", 2),
+        ("yaml", "value: |\n    [JSON](templates/json/example.json)\n", 2),
+    ],
+)
+def test_reporter_preserves_contextual_code_and_embedded_indentation(
+    tmp_path: Path, suffix: str, body: str, line_number: int | None
+) -> None:
+    """Markdown code is inert while structural YAML indentation remains live."""
+    _write_common_repo(tmp_path, include_reference_content=False)
+    relative_path = f"example.{suffix}"
+    manifest = _manifest()
+    manifest["template_manifest"]["path_mappings"].append(
+        {"pattern": relative_path, "requires_all": ["baseline"]}
+    )
+    _write_yaml(tmp_path, ".template-sync/manifest.yml", manifest)
+    _write_text(tmp_path, relative_path, body)
+    result = _run_report(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    links = [
+        line
+        for line in _finding_lines(result.stdout)
+        if line.startswith("markdown-link.") and f" | {relative_path}:" in line
+    ]
+    if line_number is None:
+        assert links == []
+    else:
+        assert len(links) == 1, links
+        assert f"{relative_path}:{line_number} |" in links[0]
+        assert "templates/json/example.json" in links[0]
+
+
+@pytest.mark.parametrize(
+    ("suffix", "body", "line_number"),
+    [
+        ("md", "<!-- [JSON](templates/json/example.json) -->\n", None),
+        ("mdc", "<pre>\n[JSON](templates/json/example.json)\n</pre>\n", None),
+        ("md", "Text <!-- [JSON](templates/json/example.json) -->\n", None),
+        ("md", 'Text <span title="[JSON](templates/json/example.json)"> text</span>\n', None),
+        ("md", "<span>[JSON](templates/json/example.json)</span>\n", 1),
+        ("md", "[A <!-- ] --> B](templates/json/example.json)\n", 1),
+        ("md", "<!--\n```\n-->\n[JSON](templates/json/example.json)\n", 4),
+        ("yml", "value: |\n    [JSON](templates/json/example.json)\n", 2),
+        ("yaml", "value: |\n    <!-- [JSON](templates/json/example.json) -->\n", None),
+        ("yaml", "value: |\n    <span>[JSON](templates/json/example.json)</span>\n", 2),
+    ],
+)
+def test_reporter_html_context_preserves_fixed_targets_and_embedded_behavior(
+    tmp_path: Path, suffix: str, body: str, line_number: int | None
+) -> None:
+    """Native reports preserve Markdown literals, inline text and YAML indentation."""
+    _write_common_repo(tmp_path, include_reference_content=False)
+    relative_path = f"example.{suffix}"
+    manifest = _manifest()
+    manifest["template_manifest"]["path_mappings"].append(
+        {"pattern": relative_path, "requires_all": ["baseline"]}
+    )
+    _write_yaml(tmp_path, ".template-sync/manifest.yml", manifest)
+    _write_text(tmp_path, relative_path, body)
+    result = _run_report(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    links = [
+        line
+        for line in _finding_lines(result.stdout)
+        if line.startswith("markdown-link.") and f" | {relative_path}:" in line
+    ]
+    if line_number is None:
+        assert links == []
+    else:
+        assert len(links) == 1, links
+        assert f"{relative_path}:{line_number} |" in links[0]
+        assert "templates/json/example.json" in links[0]
+
+
+@pytest.mark.parametrize(
+    ("suffix", "body", "line_number"),
+    [
+        ("md", "[outer [JSON](templates/json/example.json)](kept.md)", 1),
+        ("md", "[outer [kept](kept.md)](templates/json/example.json)", None),
+        ("mdc", "![outer [JSON](templates/json/example.json)](image.png)", None),
+        ("md", "[outer ![image](image.png)](templates/json/example.json)", 1),
+        ("md", "[outer\n [JSON](templates/json/example.json)](kept.md)", 2),
+        ("md", "[outer [Guide][ref]](templates/json/example.json)\n\n[ref]: kept.md", None),
+        ("md", "[outer [Guide][missing]](templates/json/example.json)", 1),
+        ("yaml", "value: |\n    [outer [JSON](templates/json/example.json)](kept.md)", 2),
+    ],
+)
+def test_reporter_nested_link_activity_has_fixed_targets_and_lines(
+    tmp_path: Path, suffix: str, body: str, line_number: int | None
+) -> None:
+    """The cleanup report follows live nested links without reporting literal parents."""
+    _write_common_repo(tmp_path, include_reference_content=False)
+    relative_path = f"example.{suffix}"
+    manifest = _manifest()
+    manifest["template_manifest"]["path_mappings"].append(
+        {"pattern": relative_path, "requires_all": ["baseline"]}
+    )
+    _write_yaml(tmp_path, ".template-sync/manifest.yml", manifest)
+    _write_text(tmp_path, relative_path, body + "\n")
+    result = _run_report(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    links = [
+        line
+        for line in _finding_lines(result.stdout)
+        if line.startswith("markdown-link.excluded-target") and f" | {relative_path}:" in line
+    ]
+    if line_number is None:
+        assert links == []
+    else:
+        assert len(links) == 1, links
+        assert f"{relative_path}:{line_number} |" in links[0]
+        assert "templates/json/example.json" in links[0]
+
+
+@pytest.mark.parametrize(
+    ("suffix", "body", "line_number"),
+    [
+        ("md", "[Guide]\n[Guide]: templates/json/example.json", None),
+        ("mdc", "> [Guide]\n> [Guide]: templates/json/example.json", None),
+        ("md", "- [Guide]\n  [Guide]: templates/json/example.json", None),
+        ("md", "[Guide]\n\n[Guide]: templates/json/example.json", 3),
+        ("md", 'Paragraph\n[Guide]: kept.md "[live](templates/json/example.json)"', 2),
+        ("md", "# Heading\n[Guide]: templates/json/example.json", 2),
+        ("md", "[kept]: kept.md\n[Guide]: templates/json/example.json", 2),
+        ("yaml", "value: |\n  [Guide]: templates/json/example.json", 2),
+        ("yml", "value: |\n  [Guide]\n  [Guide]: templates/json/example.json", 3),
+        ("yaml", "value: |\n    [Guide]: templates/json/example.json", None),
+        ("yml", "value: |\n    [Guide]\n    [Guide]: templates/json/example.json", None),
+    ],
+)
+def test_reporter_definition_context_preserves_native_findings_and_embedded_yaml(
+    tmp_path: Path, suffix: str, body: str, line_number: int | None
+) -> None:
+    """Reports apply Markdown block context while retaining explicit YAML scanning."""
+    _write_common_repo(tmp_path, include_reference_content=False)
+    relative_path = f"example.{suffix}"
+    manifest = _manifest()
+    manifest["template_manifest"]["path_mappings"].append(
+        {"pattern": relative_path, "requires_all": ["baseline"]}
+    )
+    _write_yaml(tmp_path, ".template-sync/manifest.yml", manifest)
+    _write_text(tmp_path, relative_path, body + "\n")
+    result = _run_report(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    links = [
+        line
+        for line in _finding_lines(result.stdout)
+        if line.startswith("markdown-link.excluded-target") and f" | {relative_path}:" in line
+    ]
+    if line_number is None:
+        assert links == []
+    else:
+        assert len(links) == 1, links
+        assert f"{relative_path}:{line_number} |" in links[0]
+        assert "templates/json/example.json" in links[0]

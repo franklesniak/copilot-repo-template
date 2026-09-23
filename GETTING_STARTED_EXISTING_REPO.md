@@ -758,11 +758,12 @@ Keep these only when the repository has Python project source, Python tests, or 
 - `templates/python/`
 - The `# template-sync: begin python-only` … `# template-sync: end python-only` block in `.pre-commit-config.yaml` (contains the Black and Ruff hooks; template-sync strips it automatically when the `python` module is excluded)
 - `.github/workflows/python-ci.yml` (type-check + tests). Note: `.github/workflows/precommit-ci.yml` is baseline-scoped and stays even when Python project source is removed.
-- The `pip` ecosystem in `.github/dependabot.yml`
 - `.github/instructions/python.instructions.md`
 - Python validation references in `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `README.md`, `CONTRIBUTING.md`, and PR/issue templates
 
 If you remove Python source but keep `pre-commit`, `check-jsonschema`, `check-metaschema`, or repo-local hook wrappers, keep Python installed as development tooling and make that distinction explicit in your docs and CI names.
+
+Keep `requirements-pre-commit.txt` with baseline pre-commit tooling. Keep the Dependabot `pip` ecosystem when baseline or Python is retained, because it updates the runner requirement as well as optional Python project dependencies.
 
 #### Terraform/HCL Stack
 
@@ -1013,7 +1014,7 @@ The [Stack Selection Cleanup Checklist](#stack-selection-cleanup-checklist) call
 | Dependabot ecosystem | Scanned file or surface | Target surface module | Keep by default |
 | --- | --- | --- | --- |
 | `npm` | `package.json` | `markdown` (Markdown tooling, not a Node application) | When the `markdown` module and `package.json` are retained |
-| `pip` | `pyproject.toml` or another Python dependency manifest | `python` | Only when the `python` module or a Python dependency manifest is retained |
+| `pip` | `requirements-pre-commit.txt`, `pyproject.toml`, or another Python dependency manifest | `baseline` or `python` | When baseline runner requirements or Python project dependencies are retained |
 | `github-actions` | `.github/workflows/**` | `github-actions` | When any workflows are retained |
 | `pre-commit` | `.pre-commit-config.yaml` | `baseline` | When `.pre-commit-config.yaml` is retained |
 | `terraform` | Terraform sources | `terraform` | Only when the `terraform` module is retained and a Terraform Dependabot ecosystem is added downstream; this template does not ship one by default |
@@ -1351,7 +1352,7 @@ GitHub Copilot Instructions guide AI-assisted development by providing project-s
 
 ### Protected-File Adoption Step
 
-The template treats `.github/copilot-instructions.md`, `.github/instructions/**`, `.cursor/rules/**`, and root agent instruction files such as `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` as protected governance files. When adopting into an existing repository:
+The template treats `.github/copilot-instructions.md`, `.github/instructions/**`, `.cursor/rules/**`, root agent instruction files such as `.hermes.md`, `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`, and the retained `.template-sync/instruction-contracts.yml` catalog as protected governance files. When adopting into an existing repository:
 
 1. Perform non-protected cleanup first, including unused workflows, source examples, tests, templates, and lint configuration.
 2. Record the adoption mode for the protected files that remain. Use `minimal-preservation` by default; choose `tailored` only when the maintainer explicitly approves broader rewriting for named files.
@@ -1368,6 +1369,14 @@ The template treats `.github/copilot-instructions.md`, `.github/instructions/**`
 Use this copy-ready checklist for step 4 before creating marker records. Maintainer wording MAY use globs for readability, but implementation MUST expand every glob to concrete protected paths before editing, removing, skipping, deferring, or sending files through protected review. Do not write a glob such as `.github/instructions/*.instructions.md` into `template_sync.protected_file_decisions[].path`; expand it to the concrete instruction files for retained modules. For example, include `.github/instructions/docs.instructions.md` only when the Markdown module is retained, `.github/instructions/yaml.instructions.md` only when the YAML module is retained, and so on. The bundle scope is the retained-module instruction files, not every optional language instruction file in the template.
 
 `minimal-preservation` is the default protected-file adoption mode, but it still requires explicit maintainer authorization before any protected path is edited. Under `minimal-preservation`, the authorized edit scope is limited to placeholder substitution, removal of unadopted-module sections, link fixes, and recorded local overrides required by the downstream repository. It does not authorize broad rewriting, new policy, or structural redesign.
+
+When `template-sync-support` is retained, obtain a separate catalog decision even if no agent platform is retained. The selected-agent bundles below do not authorize catalog changes. The catalog stays intact across profiles; `requires_modules` controls which obligations apply. Copy-ready wording for a reviewed, unchanged catalog copy is:
+
+```text
+I authorize minimal-preservation TAKE of .template-sync/instruction-contracts.yml from the reviewed template revision. Authorized scope: create or replace that catalog with the reviewed bytes, without changing or pruning its obligation inventory. This authorization is separate from the selected-agent instruction bundle.
+```
+
+Record that decision under `template_sync.protected_file_decisions` with the exact catalog path, `decision: TAKE`, `adoption_mode: minimal-preservation`, the maintainer's wording as `authorization_basis`, and the stated scope as `authorized_scope`. A substantive catalog `MERGE` needs its own explicitly bounded authorization. Candidate-local validation does not prove that authorization. Excluding `template-sync-support` does not require a catalog decision or retain the catalog.
 
 1. **Full selected-agent bundle (`minimal-preservation`)**
 
@@ -1570,7 +1579,7 @@ Markdown linting enforces consistent formatting across your documentation. The t
 
 If your project doesn't have a `package.json`:
 
-1. Copy `package.json` from the template
+1. Copy `package.json` and its matching `package-lock.json` from the template
 
 2. Update the metadata for your project, either manually or by passing package identity fields such as `package_name`, `package_description`, and `package_author` through the placeholder helper's `--args-file`:
 
@@ -1587,7 +1596,7 @@ If your project doesn't have a `package.json`:
    **Windows (PowerShell) / macOS / Linux:**
 
    ```bash
-   npm install
+   npm ci --ignore-scripts
    ```
 
    When the helper changes `package_name`, it also updates the root `name` fields in `package-lock.json` when that lockfile is present. It updates lockfile version fields only when `package_version` is explicitly supplied.
@@ -1611,7 +1620,7 @@ If your project already has a `package.json`:
 
    > **Note:** If adopting the nested markdown linting script, also add the package entries it uses, such as `glob`, `jsonc-parser`, and `markdown-it`.
 
-3. Run `npm install` to install the new dependencies
+3. Run `npm install --ignore-scripts` to intentionally update dependencies and the lockfile. Review both files and validate the merged tooling. Subsequent ordinary setup uses `npm ci --ignore-scripts` with that committed lockfile.
 
 ### Copying the Configuration
 
@@ -1656,19 +1665,25 @@ If many errors appear, you have three options:
 
 ## Adopting Pre-commit Hooks
 
+Run the installation commands below from the repository root after retaining or copying `requirements-pre-commit.txt` with `.pre-commit-config.yaml`. The baseline module owns both files; Python is the tooling runtime even when the Python language module is excluded. The requirement selects the runner version only, not a full transitive lock. If baseline is excluded, these template pre-commit setup steps do not apply.
+
 Pre-commit hooks run automated checks before each commit, catching issues early in the development process.
 
 **Prerequisites:**
 
 - Python installed (3.13 or 3.14)
-- pre-commit installed (see installation steps below; pipx/Homebrew installs make `pre-commit` available via PATH, pip installs require module invocation)
+- pre-commit installed (see installation steps below; pipx installs make `pre-commit` available via PATH, pip installs require module invocation)
 - HashiCorp Terraform and TFLint installed if you keep the Terraform hooks
 
 ### Local Validation Prerequisites
 
+<!-- template-sync: begin copilot-setup-reference-only -->
+When retaining Copilot with GitHub Actions, follow [Copilot validation setup](docs/copilot-setup.md) to prepare the selected tools. The setup workflow activates for Copilot only after it reaches the default branch. A branch check does not prove that integration, and failed setup can still leave the agent running; verify prerequisites and run the retained validation gates.
+<!-- template-sync: end copilot-setup-reference-only -->
+
 Before running adopted validation commands:
 
-- Run `npm install` or `npm ci` before npm-backed Markdown checks such as `npm run lint:md:nested`.
+- When Markdown tooling and the root lockfile are retained, run `npm ci --ignore-scripts` before npm-backed Markdown checks such as `npm run lint:md:nested`. Profiles that omit Markdown do not need Node for these checks.
 - Install `pre-commit` in the active Python environment before running `pre-commit run --all-files`, or use the `python -m pre_commit` / `python3 -m pre_commit` form documented below.
 - Treat `pre-commit install` as a local developer action. Automation should usually run `pre-commit run --all-files` directly unless the workflow explicitly needs Git hooks installed.
 - Keep Python available for Python-based development tooling such as `pre-commit`, `check-jsonschema`, `check-metaschema`, and repo-local hook wrappers, even if you do not adopt Python project CI.
@@ -1704,7 +1719,7 @@ Then install pre-commit:
 
 ```powershell
 # Use module invocation to ensure it works even if pipx isn't on PATH
-python -m pipx install pre-commit
+python -m pipx install --force (Get-Content -Raw requirements-pre-commit.txt).Trim()
 ```
 
 > **Note:** You need to restart your PowerShell window (or open a new one) before running `pre-commit` directly by name, because PATH changes only apply to new shells. Using `python -m pipx` avoids needing `pipx` on PATH and lets you install packages in the same session, but `pipx run pre-commit` runs from a temporary environment and should not be used for `pre-commit install` (it can create hooks that reference a non-existent interpreter).
@@ -1716,7 +1731,7 @@ python -m pipx install pre-commit
 python -m pip install --upgrade pip
 
 # Then install pre-commit
-python -m pip install pre-commit
+python -m pip install -r requirements-pre-commit.txt
 ```
 
 > **Note:** When using pip, the `pre-commit` command may not be recognized because Python's `Scripts` folder is not always added to PATH. Use `python -m pre_commit` instead of `pre-commit` for all commands.
@@ -1750,15 +1765,18 @@ Then install pre-commit:
 
 ```bash
 # Use module invocation to ensure it works even if pipx isn't on PATH
-python3 -m pipx install pre-commit
+python3 -m pipx install --force "$(cat requirements-pre-commit.txt)"
 ```
 
 > **Note:** You need to restart your terminal (or open a new one) before running `pre-commit` directly by name, because PATH changes only apply to new shells. Using `python3 -m pipx` avoids needing `pipx` on PATH and lets you install packages in the same session, but `pipx run pre-commit` runs from a temporary environment and should not be used for `pre-commit install` (it can create hooks that reference a non-existent interpreter).
 
-**Option 2: Using Homebrew (macOS only):**
+**Option 2: Using Homebrew to install pipx (macOS only):**
 
 ```bash
-brew install pre-commit
+brew install pipx
+pipx ensurepath
+# Restart the terminal if pipx is not on PATH, then run from the repository root.
+pipx install --force "$(cat requirements-pre-commit.txt)"
 ```
 
 **Option 3: Using pip:**
@@ -1769,7 +1787,7 @@ brew install pre-commit
 > - Fedora: `sudo dnf install pipx && pipx ensurepath`
 > - macOS (Homebrew): `brew install pipx && pipx ensurepath`
 >
-> After running `pipx ensurepath`, restart your terminal, then run `pipx install pre-commit`.
+> After running `pipx ensurepath`, restart your terminal, then run `pipx install --force "$(cat requirements-pre-commit.txt)"`.
 
 If pip works on your system:
 
@@ -1778,7 +1796,7 @@ If pip works on your system:
 python3 -m pip install --upgrade pip
 
 # Then install pre-commit
-python3 -m pip install pre-commit
+python3 -m pip install -r requirements-pre-commit.txt
 ```
 
 > **Note:** When using pip, the `pre-commit` command may not be recognized if Python's `bin` folder is not in your PATH. Use `python3 -m pre_commit` instead of `pre-commit` for all commands.
@@ -1787,7 +1805,7 @@ python3 -m pip install pre-commit
 
 If your project doesn't have a `.pre-commit-config.yaml`:
 
-1. Copy `.pre-commit-config.yaml` to your repository root
+1. Copy `.pre-commit-config.yaml` and `requirements-pre-commit.txt` to your repository root
 
 2. If you keep the Terraform hooks, also copy `.github/scripts/terraform_hooks.py`
 
@@ -1822,7 +1840,7 @@ If your project doesn't have a `.pre-commit-config.yaml`:
    pre-commit install
    ```
 
-   **If you installed with pipx or Homebrew (macOS/Linux/FreeBSD):**
+   **If you installed with pipx (including Homebrew-installed pipx) (macOS/Linux/FreeBSD):**
 
    ```bash
    pre-commit install
@@ -1842,7 +1860,7 @@ If your project doesn't have a `.pre-commit-config.yaml`:
 
 5. Run all hooks to verify:
 
-   **If you installed with pipx or Homebrew:**
+   **If you installed with pipx (including Homebrew-installed pipx):**
 
    ```bash
    pre-commit run --all-files
@@ -1892,7 +1910,7 @@ If your project already uses pre-commit:
 
 4. Run all hooks to verify:
 
-   **If you installed with pipx or Homebrew (same command on all platforms/shells):**
+   **If you installed with pipx (including Homebrew-installed pipx) (same command on all platforms/shells):**
 
    ```bash
    pre-commit run --all-files
@@ -1941,7 +1959,7 @@ If your project already uses pre-commit:
 | `pre-commit` command not found | macOS/Linux | Use `python3 -m pre_commit` instead of `pre-commit`, or reinstall using `pipx` or Homebrew |
 | `pip` not recognized | Windows | Use `python -m pip` instead of `pip` |
 | `pip` not found | macOS/Linux | Use `python3 -m pip` instead of `pip` |
-| `externally-managed-environment` error | Linux/macOS | Install pipx via OS package manager (`sudo apt install pipx`, `sudo dnf install pipx`, or `brew install pipx`) then run `pipx ensurepath` and use `pipx install pre-commit` (or `python3 -m pipx install pre-commit`) |
+| `externally-managed-environment` error | Linux/macOS | Install pipx via OS package manager (`sudo apt install pipx`, `sudo dnf install pipx`, or `brew install pipx`) then run `pipx ensurepath` and use `pipx install --force "$(cat requirements-pre-commit.txt)"` (or `python3 -m pipx install --force "$(cat requirements-pre-commit.txt)"`) |
 | Python not found | Windows | Reinstall Python and check "Add Python to PATH" |
 | Hooks fail to initialize | All | See [Hook initialization troubleshooting](#hook-initialization-troubleshooting) below |
 
@@ -1990,7 +2008,15 @@ First, fix your PATH configuration or use module invocation:
 
 If you are adopting the template's JSON/YAML support into an existing repository, work through the following steps. Each step is independent — adopt only the pieces you need.
 
-> **Do not duplicate full JSON/YAML policy here.** The authoritative authoring rules live in [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md) and [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md). Link to those files from your own documentation rather than copying their contents.
+> **Do not duplicate full JSON/YAML policy here.** Follow the retained authoring guides. Link to those files from your own documentation rather than copying their contents.
+
+<!-- template-sync: begin json-reference-only -->
+JSON rules: [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md).
+<!-- template-sync: end json-reference-only -->
+
+<!-- template-sync: begin yaml-reference-only -->
+YAML rules: [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md).
+<!-- template-sync: end yaml-reference-only -->
 
 ### Default Template Behavior
 
@@ -2102,11 +2128,11 @@ Before adopting workflows, understand their requirements:
 | Workflow | Dependencies | Prerequisites |
 | --- | --- | --- |
 | `markdownlint.yml` | `package.json` with markdownlint-cli2 | Node.js |
-| `auto-fix-precommit.yml` | `.pre-commit-config.yaml` | Python |
+| `auto-fix-precommit.yml` | `.pre-commit-config.yaml`, `requirements-pre-commit.txt` | Python |
 | `check-placeholders.yml` | None | Template placeholders in files |
 | `python-ci.yml` | Python project structure, `pyproject.toml` | Python |
 | `powershell-ci.yml` | PowerShell scripts, Pester tests | PowerShell |
-| `data-ci.yml` | `.pre-commit-config.yaml`, `.yamllint.yml` (and, for schema validation, `schemas/`) | Python (for `pre-commit`) |
+| `data-ci.yml` | `.pre-commit-config.yaml`, `requirements-pre-commit.txt`, retained data-hook inputs | Python (for `pre-commit`) |
 
 ### Pre-commit-Only CI Without Python Project CI
 
@@ -2134,16 +2160,17 @@ Name and comment the workflow so it is clearly repository hygiene tooling, not P
 
 **Location:** `.github/workflows/auto-fix-precommit.yml`
 
-**Purpose:** Automatically fixes pre-commit issues on `copilot/**` branches. This is useful for AI-assisted development where the Copilot Coding Agent may push code that doesn't pass pre-commit checks.
+**Purpose:** Produces an untrusted pre-commit fix preview on `copilot/**` branches. The workflow wrapper uses read-only repository permissions and does not commit or push. Hooks and capture share a runner, so the preview is not independent acceptance evidence.
 
 **Prerequisites:**
 
-- `.pre-commit-config.yaml` configured
+- `.pre-commit-config.yaml` configured and `requirements-pre-commit.txt` retained
 
 **Steps:**
 
 1. Copy `.github/workflows/auto-fix-precommit.yml` to your `.github/workflows/` directory
 2. The workflow triggers only on `copilot/**` branches when pushed by `copilot-swe-agent[bot]`
+3. Review or reproduce the preview locally. Include accepted fixes with the substantive change, then run all required checks before committing. Reproduce untracked outputs separately; do not assume the patch contains them.
 
 > **Note:** This workflow is optional but recommended if you use GitHub Copilot Coding Agent. If you don't use the Copilot Coding Agent, you can skip adopting this workflow. If you've already adopted it but later decide to remove it, see [Auto-fix Pre-commit Workflow Configuration](OPTIONAL_CONFIGURATIONS.md#auto-fix-pre-commit-workflow-configuration) for removal instructions.
 
@@ -2321,7 +2348,7 @@ python_functions = ["test_*"]
 **Steps:**
 
 1. Copy `.github/workflows/data-ci.yml` to your `.github/workflows/` directory.
-2. Read the top-of-file comment in `.github/workflows/data-ci.yml` for how it differs from `.github/workflows/auto-fix-precommit.yml` (the auto-fix workflow only runs on `copilot/**` branches and commits fixes; the data CI workflow enforces the hooks on every push and PR without committing).
+2. Read the top-of-file comment in `.github/workflows/data-ci.yml` for how it differs from `.github/workflows/auto-fix-precommit.yml`: the preview workflow runs on matching `copilot/**` branches and produces untrusted proposed fixes for local review; its wrapper does not commit or push. Data CI enforces retained hooks on pushes and PRs without committing.
 3. The workflow runs automatically on push and pull requests; no per-file configuration is required as long as the pre-commit hooks themselves are scoped correctly.
 
 **Caveat — `check-jsonschema` and `check-metaschema` steps run unconditionally.** `data-ci.yml` invokes `pre-commit run check-jsonschema --all-files` and `pre-commit run check-metaschema --all-files` as dedicated steps. If you adopt `data-ci.yml` but do **not** keep both hook IDs configured in `.pre-commit-config.yaml`, those steps will fail with `pre-commit: No hook with id ...`. Two safe paths forward:
@@ -2622,7 +2649,7 @@ If you adopted the template's `CONTRIBUTING.md`, you should:
 ````markdown
 ## Development Setup
 
-Before making changes, install pre-commit hooks:
+Before making changes, run from the repository root containing the reviewed `requirements-pre-commit.txt`, then install pre-commit hooks:
 
 **Option 1: Using pipx (recommended)**
 
@@ -2631,7 +2658,7 @@ Windows (PowerShell):
 ```powershell
 python -m pip install pipx
 python -m pipx ensurepath
-python -m pipx install pre-commit
+python -m pipx install --force (Get-Content -Raw requirements-pre-commit.txt).Trim()
 ```
 
 After running the above, restart your terminal, then run:
@@ -2646,7 +2673,7 @@ macOS/Linux/FreeBSD:
 python3 -m pip install pipx
 # Or use your OS package manager: sudo apt install pipx, brew install pipx, etc.
 python3 -m pipx ensurepath
-python3 -m pipx install pre-commit
+python3 -m pipx install --force "$(cat requirements-pre-commit.txt)"
 ```
 
 After running the above, restart your terminal, then run:
@@ -2660,7 +2687,7 @@ pre-commit install
 Windows (PowerShell):
 
 ```powershell
-python -m pip install pre-commit
+python -m pip install -r requirements-pre-commit.txt
 # Use module invocation (avoids PATH issues):
 python -m pre_commit install
 ```
@@ -2668,7 +2695,7 @@ python -m pre_commit install
 macOS/Linux/FreeBSD:
 
 ```bash
-python3 -m pip install pre-commit
+python3 -m pip install -r requirements-pre-commit.txt
 # Use module invocation (avoids PATH issues):
 python3 -m pre_commit install
 ```
@@ -2719,10 +2746,10 @@ Instead, update your existing README to document any new development requirement
 
 ### Setup
 
-Install markdown linting tools:
+Install retained Markdown linting tools from the committed root lockfile:
 
 ```bash
-npm install
+npm ci --ignore-scripts
 ```
 
 Install pre-commit hooks:
@@ -2734,7 +2761,7 @@ Windows (PowerShell):
 ```powershell
 python -m pip install pipx
 python -m pipx ensurepath
-python -m pipx install pre-commit
+python -m pipx install --force (Get-Content -Raw requirements-pre-commit.txt).Trim()
 ```
 
 After running the above, restart your terminal, then run:
@@ -2749,7 +2776,7 @@ macOS/Linux/FreeBSD:
 python3 -m pip install pipx
 # Or use your OS package manager: sudo apt install pipx, brew install pipx, etc.
 python3 -m pipx ensurepath
-python3 -m pipx install pre-commit
+python3 -m pipx install --force "$(cat requirements-pre-commit.txt)"
 ```
 
 After running the above, restart your terminal, then run:
@@ -2763,7 +2790,7 @@ pre-commit install
 Windows (PowerShell):
 
 ```powershell
-python -m pip install pre-commit
+python -m pip install -r requirements-pre-commit.txt
 # Use module invocation (avoids PATH issues):
 python -m pre_commit install
 ```
@@ -2771,7 +2798,7 @@ python -m pre_commit install
 macOS/Linux/FreeBSD:
 
 ```bash
-python3 -m pip install pre-commit
+python3 -m pip install -r requirements-pre-commit.txt
 # Use module invocation (avoids PATH issues):
 python3 -m pre_commit install
 ```
@@ -2994,3 +3021,23 @@ git push origin feature/adopt-template-features
 4. Merge after CI passes
 
 Congratulations! You've successfully adopted features from the copilot-repo-template into your existing repository.
+
+<!-- template-sync: begin github-actions-only -->
+
+## Workflow Security Governance
+
+The `github-actions` module retains a self-contained workflow security contract, validator, schema, and standalone CI gate. Template-sync support also retains the validator and schema as trusted dependencies for future materialization. The manifest owns selection. Before staging, materialization requires a retained contract and checks that it covers every retained manifest-owned workflow in the source inventory. It then validates the reviewed source and renders the retained controls. Baseline selections also retain the always-running pre-commit hook and Data CI invocation. Language-specific requirements disappear with their owning modules.
+
+Authorize `.github/workflow-security-contract.yml` explicitly as a protected policy path before first adoption or replacement. Record permitted local customization and the reviewed update decision. Adopter-created workflows remain outside baseline policy unless the owner explicitly enables `--strict`; synchronization preserves their bytes. Run `python .github/scripts/validate_workflow_security.py` after adoption and updates, and add `--verify-releases` when verifying changed action pins against upstream.
+
+Removing GitHub Actions requires reviewed cleanup of excluded standalone files and replacement of retained shared files with their pruned forms. Materialization never silently deletes those files. Validate the final downstream tree for excluded-module leftovers, including hooks, updater entries, documentation, and policy references. Remove the shared validator and schema only when neither Actions nor template-sync support remains. Dependabot's Actions updater survives only when both GitHub platform automation and Actions are retained; otherwise action updates need manual review.
+
+See the [workflow security guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/workflow-security.md) for the baseline/strict boundary, required authorization, exact command fingerprints, intentional failure-aggregation exceptions, and the SHA-pin vulnerability-alert limitation. Copilot prerequisite setup is available when `agent-instructions`, `agent-copilot`, and `github-actions` are selected together. Action-free acquisition remains a future opt-in profile.
+
+<!-- template-sync: end github-actions-only -->
+
+<!-- template-sync: begin instruction-enforcement-reference-only -->
+
+Retain `instruction-enforcement` with `agent-instructions` for portable static checks, even when future template sync and the Python project are omitted. Select baseline or a host CI route and explicitly select retained agent modules. Instructions without enforcement are a policy-only choice. See [static instruction enforcement](docs/instruction-enforcement.md) for mode migration and scoped local declarations.
+
+<!-- template-sync: end instruction-enforcement-reference-only -->

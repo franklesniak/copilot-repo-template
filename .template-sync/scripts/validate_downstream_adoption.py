@@ -1,37 +1,35 @@
 """Validate a downstream repository's retained template adoption state."""
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import argparse
-import posixpath
-import re
 import sys
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn
-from urllib.parse import unquote, urlsplit
 
+_SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / ".github" / "scripts"
+if str(_SHARED_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SHARED_SCRIPTS))
+
+import instruction_contract_core
 import validate_instruction_contracts
 import validate_marker
 from template_sync_materialization_helpers import (
     INLINE_BLOCK_ANY_MODULES,
-    MARKDOWN_FENCE_CONTEXT,
     InlineBlockError,
     ManifestMapping,
     PathRelation,
     collect_live_inline_block_spans,
     inline_block_module_requirement,
-    lines_outside_markdown_fences,
 )
 
 DEFAULT_CONTRACTS_PATH = validate_instruction_contracts.DEFAULT_CONTRACTS_PATH
 DEFAULT_CONTRACTS_SCHEMA_PATH = validate_instruction_contracts.DEFAULT_CONTRACTS_SCHEMA_PATH
 MARKDOWN_FILE_SUFFIXES = frozenset({".md", ".mdc"})
-MARKDOWN_INLINE_LINK_RE = re.compile(
-    r"(?<!!)\[[^\]\n]+\]\((?P<target><[^>\n]+>|[^)\s\n]+)(?:\s+[^)\n]*)?\)"
-)
-MARKDOWN_REFERENCE_DEFINITION_RE = re.compile(r"^ {0,3}\[[^\]\n]+\]:\s+(?P<target><[^>\n]+>|\S+)")
 REQUIRED_TEMPLATE_SYNC_SUPPORT_FILES = (
     ".template-sync/scripts/validate_marker.py",
     ".template-sync/scripts/validate_instruction_contracts.py",
@@ -76,17 +74,7 @@ class MarkdownLinkFailure:
     relation: validate_marker.PathRelation
 
 
-@dataclass(frozen=True)
-class ProtectedGuideReferenceFinding:
-    """A declared protected-guide reference that remains after its module is excluded."""
-
-    path: str
-    line_number: int
-    contract_key: str
-    reference_kind: str
-    target: str
-    target_path: str | None
-    target_modules: tuple[str, ...]
+ProtectedGuideReferenceFinding = instruction_contract_core.ProtectedGuideReferenceFinding
 
 
 @dataclass(frozen=True)
@@ -525,47 +513,14 @@ def validate_inline_blocks(
 
 
 def markdown_link_targets_outside_fences(path: Path) -> tuple[tuple[int, str], ...]:
-    """Return Markdown link targets outside fenced code blocks."""
-    targets: list[tuple[int, str]] = []
-    text = path.read_text(encoding="utf-8")
-    for line_number, line in lines_outside_markdown_fences(
-        text,
-        fence_context=MARKDOWN_FENCE_CONTEXT,
-    ):
-        for match in MARKDOWN_INLINE_LINK_RE.finditer(line):
-            targets.append((line_number, normalize_markdown_target(match.group("target"))))
-        reference_match = MARKDOWN_REFERENCE_DEFINITION_RE.match(line)
-        if reference_match is not None:
-            targets.append(
-                (line_number, normalize_markdown_target(reference_match.group("target")))
-            )
-    return tuple(targets)
+    """Return Markdown link targets using the shared fence-aware matcher."""
+    return instruction_contract_core.markdown_link_targets_from_text(
+        path.read_text(encoding="utf-8")
+    )
 
 
-def normalize_markdown_target(target: str) -> str:
-    """Strip Markdown angle brackets from a link target."""
-    if target.startswith("<") and target.endswith(">"):
-        return target[1:-1]
-    return target
-
-
-def resolve_relative_markdown_target(source_path: str, target: str) -> str | None:
-    """Resolve a Markdown link target to a repository-relative path when local."""
-    parsed = urlsplit(target)
-    if parsed.scheme or parsed.netloc or target.startswith("#"):
-        return None
-    if parsed.path == "":
-        return None
-
-    decoded_path = unquote(parsed.path)
-    if decoded_path.startswith("/"):
-        return None
-
-    source_dir = posixpath.dirname(source_path)
-    normalized_path = posixpath.normpath(posixpath.join(source_dir, decoded_path))
-    if normalized_path == "." or normalized_path.startswith("../") or normalized_path == "..":
-        return None
-    return normalized_path
+normalize_markdown_target = instruction_contract_core.normalize_markdown_target
+resolve_relative_markdown_target = instruction_contract_core.resolve_relative_markdown_target
 
 
 def validate_retained_markdown_links(
@@ -657,77 +612,24 @@ def protected_guide_markdown_reference_findings(
     mappings: tuple[ManifestMapping, ...],
     included_modules: set[str],
 ) -> tuple[ProtectedGuideReferenceFinding, ...]:
-    """Return declared relative Markdown references to excluded protected-guide targets."""
+    """Preserve marker path applicability while sharing reference matching."""
     if obligation.target_path is None:
         return ()
-    findings: list[ProtectedGuideReferenceFinding] = []
-    link_failures = validate_retained_markdown_links(
-        repo_root,
-        (obligation.path,),
-        mappings,
-        included_modules,
-        (),
+    if Path(obligation.path).suffix not in MARKDOWN_FILE_SUFFIXES:
+        return ()
+    if retained_relation(obligation.path, mappings, included_modules) is None:
+        return ()
+    target_relation = validate_marker.selected_relation_for_path(obligation.target_path, mappings)
+    if target_relation is None or target_relation.is_retained_by(included_modules):
+        return ()
+    return instruction_contract_core.protected_guide_reference_findings(
+        repo_root=repo_root, obligation=obligation
     )
-    for link_failure in link_failures:
-        if link_failure.target_path != obligation.target_path:
-            continue
-        findings.append(
-            ProtectedGuideReferenceFinding(
-                path=link_failure.path,
-                line_number=link_failure.line_number,
-                contract_key=obligation.key,
-                reference_kind=obligation.reference_kind,
-                target=link_failure.target,
-                target_path=link_failure.target_path,
-                target_modules=obligation.target_modules,
-            )
-        )
-    return tuple(findings)
 
 
-def protected_guide_token_reference_findings(
-    *,
-    repo_root: Path,
-    obligation: validate_instruction_contracts.ProtectedGuideReferenceObligation,
-) -> tuple[ProtectedGuideReferenceFinding, ...]:
-    """Return declared absolute or prose tokens that remain outside fenced code."""
-    path = validate_marker.resolve_repo_path(repo_root, obligation.path)
-    try:
-        lines = lines_outside_markdown_fences(
-            path.read_text(encoding="utf-8"),
-            fence_context=MARKDOWN_FENCE_CONTEXT,
-        )
-    except OSError as error:
-        error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
-        return (
-            ProtectedGuideReferenceFinding(
-                path=obligation.path,
-                line_number=0,
-                contract_key=obligation.key,
-                reference_kind=obligation.reference_kind,
-                target=f"Unable to read protected guide: {error_summary}",
-                target_path=obligation.target_path,
-                target_modules=obligation.target_modules,
-            ),
-        )
-
-    findings: list[ProtectedGuideReferenceFinding] = []
-    for line_number, line in lines:
-        for token in obligation.tokens:
-            if token not in line:
-                continue
-            findings.append(
-                ProtectedGuideReferenceFinding(
-                    path=obligation.path,
-                    line_number=line_number,
-                    contract_key=obligation.key,
-                    reference_kind=obligation.reference_kind,
-                    target=token,
-                    target_path=obligation.target_path,
-                    target_modules=obligation.target_modules,
-                )
-            )
-    return tuple(findings)
+protected_guide_token_reference_findings = (
+    instruction_contract_core.protected_guide_reference_findings
+)
 
 
 def protected_guide_reference_report_items(

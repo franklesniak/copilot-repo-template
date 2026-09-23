@@ -791,7 +791,7 @@ Add checklist sections for your project's technology stack:
 
 ### Adjusting the Data-File-Specific Pull Request Checklist
 
-The default PR template includes a `### Data-File-Specific (if applicable)` section that prompts contributors to verify the data-file definition-of-done items documented in [`.github/instructions/json.instructions.md`](.github/instructions/json.instructions.md), [`.github/instructions/yaml.instructions.md`](.github/instructions/yaml.instructions.md), and the **Data-File Validation** subsection of [`.github/copilot-instructions.md`](.github/copilot-instructions.md). The default checklist covers the baseline pre-commit hooks (`check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, `check-metaschema`), schema-fixture parity, the schema example tests under `tests/test_schema_examples.py`, GitHub Actions workflow linting, `check-jsonschema` hook bookkeeping, and a normative no-secrets/PII/credentials rule.
+When baseline is retained, the default PR template includes a `### Data-File-Specific (if applicable)` section that prompts contributors to verify the data-file definition-of-done items documented in the retained JSON/YAML authoring guides and the **Data-File Validation** subsection of [`.github/copilot-instructions.md`](.github/copilot-instructions.md). The default checklist covers the baseline pre-commit hooks (`check-json`, `check-yaml`, `yamllint`, `actionlint`, `check-jsonschema`, `check-metaschema`), schema-fixture parity, the schema example tests under `tests/test_schema_examples.py`, GitHub Actions workflow linting, `check-jsonschema` hook bookkeeping, and a normative no-secrets/PII/credentials rule. Excluding baseline removes this section; the customization instructions below apply only while the section is present.
 
 The no-secrets/PII/credentials bullet in this section is a high-visibility, data-file-specific reminder. Its secrets and credentials portion echoes the **No secrets in code or repo** rule from [`.github/copilot-instructions.md`](.github/copilot-instructions.md) (the constitution); the PII portion is an additional precaution that this template's PR checklist layers on top of the constitution and is not separately defined as a repo-wide rule in the constitution today. The General checklist carries its own no-secrets/PII/credentials bullet, so even if this Data-File-Specific section is removed downstream, the General-checklist bullet remains in force. When this section is present, the data-file-specific bullet **MUST** remain in the template and **MUST** be checked before the PR is submitted. The other bullets in this section **MAY** be customized as described below.
 
@@ -1226,7 +1226,7 @@ Sample data files that should validate cleanly can be placed in either of two lo
 - **Inside the file family path covered by the family hook** (for example, `config/example.valid.json` for the hook above). The family hook will validate these automatically because they match its `files:` pattern.
 - **Under `schemas/examples/<schema-name>/{valid,invalid}/`** (for example, `schemas/examples/project-config/valid/minimal.json`). This `schemas/examples/<schema-name>/{valid,invalid}/` layout is the convention used by `schemas/README.md` and the pytest tests referenced below, but it does **not** match the family hook's `files:` pattern, so these examples need a separate validation path. Choose one of:
 
-  - Add a dedicated `check-jsonschema` hook scoped to **valid** fixtures under `schemas/examples/` only (for example, `files: ^schemas/examples/project-config/valid/.*\.json$`). Anchor the pattern under the `valid/` directory so the hook does not pick up `invalid/` fixtures (which MUST NOT be wired into a normal `check-jsonschema` hook — see the next subsection). This aligns with the `schemas/examples/<schema-name>/{valid,invalid}/` layout used in `schemas/README.md` § Examples and exercised by both [`tests/test_schema_examples.py`](tests/test_schema_examples.py) and [`templates/python/tests/test_schema_examples.py`](templates/python/tests/test_schema_examples.py).
+  - Add a dedicated `check-jsonschema` hook scoped to **valid** fixtures under `schemas/examples/` only (for example, `files: ^schemas/examples/project-config/valid/.*\.json$`). Anchor the pattern under the `valid/` directory so the hook does not pick up `invalid/` fixtures (which MUST NOT be wired into a normal `check-jsonschema` hook — see the next subsection). This aligns with the `schemas/examples/<schema-name>/{valid,invalid}/` layout used in `schemas/README.md` § Examples and exercised by both [`tests/test_schema_examples.py`](tests/test_schema_examples.py) and [upstream Python starter test](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/templates/python/tests/test_schema_examples.py).
   - Run `check-jsonschema` directly from a CI step or local script:
 
     ```bash
@@ -1243,7 +1243,7 @@ Whichever placement you choose, valid examples MUST exit with code `0`; a non-ze
 
 Invalid examples (intentionally malformed fixtures used to prove that the schema rejects bad input) MUST NOT be wired into a normal `check-jsonschema` pre-commit hook, because the validator's non-zero exit would be reported as a hook failure on every run. Instead, write a test or script that **asserts validation fails**.
 
-A starter pytest template lives at [`templates/python/tests/test_schema_examples.py`](templates/python/tests/test_schema_examples.py); the active, canonical version that this repository runs in CI lives at [`tests/test_schema_examples.py`](tests/test_schema_examples.py). Both auto-discover `(schema, example, expected_to_pass)` triples from `schemas/*.schema.json` and `schemas/examples/<schema-name>/{valid,invalid}/`. To use the starter:
+A starter pytest template lives at [upstream Python starter test](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/templates/python/tests/test_schema_examples.py); the active, canonical version that this repository runs in CI lives at [`tests/test_schema_examples.py`](tests/test_schema_examples.py). Both auto-discover `(schema, example, expected_to_pass)` triples from `schemas/*.schema.json` and `schemas/examples/<schema-name>/{valid,invalid}/`. To use the starter:
 
 1. Copy the file into your project's real `tests/` directory.
 2. Place schemas under `schemas/<name>.schema.json` and examples under `schemas/examples/<name>/{valid,invalid}/`. Discovery is automatic — no per-case configuration is required.
@@ -1289,8 +1289,10 @@ If you remove the `skipif` guard, you MUST ensure `check-jsonschema` is installe
 
 This template ships starter content under `templates/json/` and `templates/yaml/` that downstream consumers MAY copy and adapt to add schema-backed JSON contracts and YAML linting to their own repositories. The starter content is intentionally outside the active hook and test scopes:
 
+<!-- template-sync: begin baseline-reference-only -->
 - The active `Validate example-config valid examples` `check-jsonschema` hook in [`.pre-commit-config.yaml`](.pre-commit-config.yaml) is anchored to `^schemas/examples/example-config/valid/.*\.json$`.
 - The active `check-metaschema` hook is anchored to `^schemas/example-config\.schema\.json$`.
+<!-- template-sync: end baseline-reference-only -->
 - The active root test [`tests/test_schema_examples.py`](tests/test_schema_examples.py) discovers schemas only under `schemas/`, not under `templates/**`.
 
 **Do not broaden these scopes to cover `templates/**`.** The starter content is meant to be lifted into a downstream repository's `schemas/` and `.yamllint.yml`, not exercised as an active schema contract or active linting configuration in place. The starter files are still parsed by the repository's `check-json`, `check-yaml`, and `yamllint` pre-commit hooks like every other JSON/YAML file in the tree; the carve-out is specifically about schema validation (`check-jsonschema`/`check-metaschema`), the schema-example pytest contract, and "active configuration" roles, not about basic JSON/YAML parsing or style enforcement.
@@ -1298,7 +1300,9 @@ This template ships starter content under `templates/json/` and `templates/yaml/
 The two starter directories are described in detail in their own READMEs:
 
 - [`templates/json/README.md`](templates/json/README.md)
+<!-- template-sync: begin yaml-reference-only -->
 - [`templates/yaml/README.md`](templates/yaml/README.md)
+<!-- template-sync: end yaml-reference-only -->
 
 ### Adopting the JSON Starter Schema and Examples
 
@@ -1314,7 +1318,7 @@ To adopt the starter schema in a downstream repository:
 2. Update `$id`, `title`, `description`, `properties`, `required`, and `additionalProperties` to reflect the real shape of your file family.
 3. Copy `templates/json/examples/starter/valid/` to `schemas/examples/<your-name>/valid/` and `templates/json/examples/starter/invalid/` to `schemas/examples/<your-name>/invalid/`.
 4. Add a scoped `check-jsonschema` pre-commit hook for the copied schema, following the pattern in [Schema Validation Configuration](#schema-validation-configuration). Anchor the hook's `files:` regex to the **valid** fixtures under the copied path (for example, `^schemas/examples/<your-name>/valid/.*\.json$`); do **not** wire invalid fixtures into a normal `check-jsonschema` hook.
-5. Optionally, copy [`templates/python/tests/test_schema_examples.py`](templates/python/tests/test_schema_examples.py) into your project's `tests/` directory so that invalid fixtures are exercised by a test that asserts validation fails.
+5. Optionally, copy [upstream Python starter test](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/templates/python/tests/test_schema_examples.py) into your project's `tests/` directory so that invalid fixtures are exercised by a test that asserts validation fails.
 
 ### Adopting the YAML Starter Configurations
 
@@ -1486,7 +1490,7 @@ If the project already runs Prettier from `package.json` scripts, a `repo: local
 
 The `files:` regex scopes the hook so pre-commit only invokes it on commits that touch `.json` or `.jsonc` files; without that filter, `pass_filenames: false` would cause the hook to run (and re-scan the repo's JSON/JSONC globs) on every commit. `pass_filenames: false` lets the glob in `entry:` decide which files Prettier inspects, which keeps the hook consistent with the `lint:json:format` script. The `--no-install` flag tells `npx` to fail rather than fetch an unpinned Prettier on demand, so the hook always uses the version recorded in `package.json` / `package-lock.json`.
 
-> **Node availability requirement.** Because this hook shells out to `npx`, every environment that runs `pre-commit` MUST have Node.js installed and the project's npm dependencies installed (typically via `npm ci`). The template's default CI workflows do not install Node, so adopters who add this hook MUST also add a Node setup step (for example, `actions/setup-node` followed by `npm ci`) to any workflow that runs `pre-commit run --all-files`, and ensure the same is true on contributor workstations.
+> **Node availability requirement.** Because this hook shells out to `npx`, every environment that runs it MUST have Node.js and the project's locked npm dependencies installed. Ordinary setup with the root lockfile retained uses `npm ci --ignore-scripts`. When Markdown is selected, the retained GitHub and Azure pre-commit CI routes already install Node and the locked root packages. Profiles that omit Markdown do not retain those setup steps: adopters who add this optional hook MUST provision Node and the locked dependencies in each affected CI route and on contributor workstations. Adding Prettier is intentional dependency maintenance; review and commit the updated manifest and lockfile before using locked setup.
 
 <!-- -->
 
@@ -1727,7 +1731,7 @@ If your project needs external URL checking, add it as a separate opt-in command
 
 ### Pre-commit Integration (Optional)
 
-The template intentionally does not run the Markdown link checker in default pre-commit hooks. If your downstream repository wants local pre-commit enforcement, first ensure contributors have Node.js, npm, and installed project dependencies (`npm install` or `npm ci`), then add a local hook:
+The template intentionally does not run the Markdown link checker in default pre-commit hooks. If your downstream repository wants local pre-commit enforcement, first ensure contributors have Node.js, npm, and installed project dependencies (`npm ci --ignore-scripts` with the retained root lockfile), then add a local hook:
 
 ```yaml
 - repo: local
@@ -1968,7 +1972,7 @@ The workflow uses Node.js 24 by default:
 
 ```yaml
 - name: Setup Node.js
-  uses: actions/setup-node@v6
+  uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
   with:
     node-version: '24'
 ```
@@ -1977,7 +1981,7 @@ The workflow uses Node.js 24 by default:
 
 ```yaml
 - name: Setup Node.js
-  uses: actions/setup-node@v6
+  uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
   with:
     node-version: '22'
 ```
@@ -2089,6 +2093,20 @@ The scanner inventories checked-in Node.js selectors from live CI and package co
 - `support-floor`: root `package.json` `engines.node`, plus `package-lock.json` `packages[""].engines.node` as the root-package mirror and consistency check.
 
 The scanner intentionally ignores GitHub Actions wrapper versions such as `actions/setup-node@v6`; the runtime selector is the `node-version` or `node-version-file` input. It also ignores transitive `package-lock.json` package descriptors under `node_modules/**`, because those describe dependency constraints rather than this repository's support policy.
+
+Azure discovery starts with `azure-pipelines.yml`, `azure-pipelines.yaml`, and YAML files under `.azuredevops/pipelines/`. The scanner follows local `extends`, step, job, stage and variable templates. Relative template paths resolve from the including file; a leading `/` resolves from the repository root. Local `@self` references are supported. The scanner applies supported scalar caller arguments instead of treating a called template's unused default as an independent runtime. A default-folder file referenced as a template is not also an implicit entrypoint. Conventional root filenames and explicitly selected paths remain entrypoints, including when another pipeline calls them.
+
+Azure DevOps can register a custom YAML path outside those defaults. Local files cannot reveal service-only registration. Supply each custom path with repeatable `--azure-pipeline` arguments, using repository-relative paths with `/` separators. Also supply a default-folder template explicitly if Azure registers that file as a separate pipeline. For example, this command adds two entrypoints to default discovery:
+
+```bash
+node .github/scripts/check-toolchain-eol.js --azure-pipeline ci/build.yml --azure-pipeline release/pipeline.yml
+```
+
+Add the same arguments to the committed scanner invocation in the scheduled workflow or another retained runner. A selected local template that installs an EOL Node line produces a finding attributed to that template and a nonzero exit. Unselected files elsewhere in the tree remain outside the inventory; a successful local run does not prove that every service-registered pipeline was supplied.
+
+The scanner supports literal scalar bindings, exact checked-in parameter or variable references, declared root parameter defaults and values, and existing matrix/version-file selectors. It reports missing or malformed selected files, unsafe paths, reference cycles, unresolved bindings, external repository templates, dynamic filenames, conditional/iterative assembly and structural parameter insertion as inventory problems. Those problems fail the check rather than becoming an empty successful inventory. It does not download templates or replace Azure's pipeline compiler. See [Microsoft's template path rules](https://learn.microsoft.com/en-us/azure/devops/pipelines/process/templates?view=azure-devops#reference-template-paths) and [custom YAML registration](https://learn.microsoft.com/en-us/azure/devops/pipelines/get-started/clone-import-pipeline?view=azure-devops#clone-or-copy-a-pipeline).
+
+Each entrypoint has local limits of 100 distinct YAML files, 100 nesting levels, 4096 file invocations, 2 MiB per YAML file, 20 MiB cumulative distinct-file input, and 200000 syntax-tree/selector visits. The entrypoint counts toward the file, invocation and depth limits. Discovery and context-aware collection each use these limits. A limit failure is an incomplete inventory, not a clean partial result. These limits bound local work; they do not describe Azure's in-memory compilation limits.
 
 Documentation and example scanning is not implemented. Documentation snippets are therefore out of scope for required live-policy failures unless a downstream repository extends the scanner and declares those findings as monitored policy.
 
@@ -2727,7 +2745,7 @@ The default configuration assumes:
    4. Push again
    ```
 
-4. **Different branch patterns for automated fixes:** If you use a different branch naming convention for AI-generated PRs, update the Auto-Fix Workflow section to match (and update the corresponding workflow file).
+4. **Different branch patterns for fix previews:** If you use a different branch naming convention for AI-generated PRs, update the Auto-Fix Workflow section to match (and update the corresponding workflow file).
 
 > **Note:** The pre-commit section should accurately reflect your project's tooling. Incorrect instructions will cause Copilot to suggest wrong commands or skip necessary checks.
 
@@ -2921,7 +2939,7 @@ Uncomment the Codecov step to enable code coverage reporting:
 
 ```yaml
 - name: Upload coverage to Codecov
-  uses: codecov/codecov-action@v4
+  uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
   with:
     token: ${{ secrets.CODECOV_TOKEN }}  # Required for private repos only
     files: ./coverage.xml
@@ -3031,7 +3049,7 @@ If your project uses `requirements.txt` files instead of `pyproject.toml` option
 
 **File:** `.github/workflows/auto-fix-precommit.yml`
 
-The template includes an optional workflow that automatically runs pre-commit hooks and commits any auto-fixes (such as formatting corrections and trailing whitespace removal) for branches created by the GitHub Copilot Coding Agent.
+The template includes an optional workflow that automatically runs pre-commit hooks and publishes an untrusted fix preview for branches created by the GitHub Copilot Coding Agent. It has read-only repository permissions; its wrapper does not commit or push. Review or reproduce the fixes locally, include them with the substantive change, and run required checks on the resulting commit.
 
 ### Understanding the Workflow
 
@@ -3039,22 +3057,24 @@ This workflow:
 
 - Triggers only on `copilot/**` branches when pushed by `copilot-swe-agent[bot]`
 - Runs pre-commit hooks with auto-fix enabled
-- Commits any changes back to the branch automatically
-- Helps AI-assisted development pass pre-commit checks without manual intervention
+- Uses read-only permissions and does not persist checkout credentials into candidate hook execution
+- Configures capture checks for an 8 MiB tracked-file patch and 1 MiB status output, with run/head information and three-day retention
+- Lists untracked outputs separately so the agent or owner can reproduce them locally
+- Reports hook failure after generating the preview; an artifact is not evidence that validation passed
 
-> **Recommendation:** Keep this workflow enabled if you use GitHub Copilot Coding Agent. The safety net significantly reduces the need for manual pre-commit fix commits.
+Hooks and capture share a runner. A hook can affect later executable resolution or shared files, so the capture limits and provenance are candidate-produced checks, not independent guarantees against hostile hooks. Treat the artifact as untrusted proposed data. Review it or rerun pre-commit locally before applying changes. Do not feed it automatically to privileged automation. The ordinary aggregate pre-commit workflow remains the required gate for the final commit.
 
 ### When to Keep This Workflow
 
 Keep this workflow if:
 
 - You plan to use GitHub Copilot Coding Agent for automated PRs
-- You want a safety net that auto-fixes pre-commit issues on `copilot/**` branches
-- You prefer automated fixes over manual intervention
+- You want generated fix previews for pre-commit issues on `copilot/**` branches
+- You will review and apply or reproduce the proposed fixes locally
 
 ### Removing This Workflow
 
-If you don't use GitHub Copilot Coding Agent or prefer to manually commit pre-commit fixes, you can safely remove this workflow.
+If you don't use GitHub Copilot Coding Agent or local pre-commit runs provide enough feedback, you can safely remove this optional preview workflow.
 
 > **Note:** Removing this workflow is safe if another workflow still reports pre-commit failures. If you removed Python project CI but kept pre-commit hooks, keep `.github/workflows/precommit-ci.yml` or another aggregate required check as described in [Aggregate Pre-commit CI](#aggregate-pre-commit-ci).
 
@@ -3292,7 +3312,11 @@ rm -f .github/workflows/powershell-ci.yml
 
 **Directory:** `templates/python/`
 
-This template repository includes reference Python configuration files and scaffolding for projects adopting Python tooling. These files demonstrate how to configure Python tooling to align with the coding standards defined in [`.github/instructions/python.instructions.md`](.github/instructions/python.instructions.md).
+This template repository includes reference Python configuration files and scaffolding for projects adopting Python tooling.
+
+<!-- template-sync: begin python-reference-only -->
+These files demonstrate how to configure Python tooling to align with the retained [Python writing guide](.github/instructions/python.instructions.md).
+<!-- template-sync: end python-reference-only -->
 
 ### Files Included
 
@@ -4060,3 +4084,23 @@ If your project uses Python, periodically review your Python support window:
 - **[Design Decisions](.github/TEMPLATE_DESIGN_DECISIONS.md)**: Rationale behind template design choices (for maintainers and code reviewers)
 
 > **Note:** The Design Decisions document (`.github/TEMPLATE_DESIGN_DECISIONS.md`) is internal documentation for understanding WHY the template was designed a certain way. It is NOT an instruction guide—use the getting started guides above for setup instructions.
+
+<!-- template-sync: begin github-actions-only -->
+
+## Workflow Security Governance
+
+The `github-actions` module retains a self-contained workflow security contract, validator, schema, and standalone CI gate. Template-sync support also retains the validator and schema as trusted dependencies for future materialization. The manifest owns selection. Before staging, materialization requires a retained contract and checks that it covers every retained manifest-owned workflow in the source inventory. It then validates the reviewed source and renders the retained controls. Baseline selections also retain the always-running pre-commit hook and Data CI invocation. Language-specific requirements disappear with their owning modules.
+
+Authorize `.github/workflow-security-contract.yml` explicitly as a protected policy path before first adoption or replacement. Record permitted local customization and the reviewed update decision. Adopter-created workflows remain outside baseline policy unless the owner explicitly enables `--strict`; synchronization preserves their bytes. Run `python .github/scripts/validate_workflow_security.py` after adoption and updates, and add `--verify-releases` when verifying changed action pins against upstream.
+
+Removing GitHub Actions requires reviewed cleanup of excluded standalone files and replacement of retained shared files with their pruned forms. Materialization never silently deletes those files. Validate the final downstream tree for excluded-module leftovers, including hooks, updater entries, documentation, and policy references. Remove the shared validator and schema only when neither Actions nor template-sync support remains. Dependabot's Actions updater survives only when both GitHub platform automation and Actions are retained; otherwise action updates need manual review.
+
+See the [workflow security guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/workflow-security.md) for the baseline/strict boundary, required authorization, exact command fingerprints, intentional failure-aggregation exceptions, and the SHA-pin vulnerability-alert limitation. Copilot prerequisite setup is available when `agent-instructions`, `agent-copilot`, and `github-actions` are selected together. Action-free acquisition remains a future opt-in profile.
+
+<!-- template-sync: end github-actions-only -->
+
+<!-- template-sync: begin instruction-enforcement-reference-only -->
+
+Retain `instruction-enforcement` with `agent-instructions` for portable static checks, even when future template sync and the Python project are omitted. Select baseline or a host CI route and explicitly select retained agent modules. Instructions without enforcement are a policy-only choice. See [static instruction enforcement](docs/instruction-enforcement.md) for mode migration and scoped local declarations.
+
+<!-- template-sync: end instruction-enforcement-reference-only -->

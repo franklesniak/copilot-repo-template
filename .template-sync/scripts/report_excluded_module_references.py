@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import fnmatch
-import posixpath
 import re
 import sys
 from collections import Counter, defaultdict
@@ -20,6 +19,11 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+_SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / ".github" / "scripts"
+if str(_SHARED_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SHARED_SCRIPTS))
+
+import instruction_contract_core  # noqa: E402
 from template_sync_materialization_helpers import (  # noqa: E402
     DEFAULT_MANIFEST_PATH,
     DEFAULT_MANIFEST_SCHEMA_PATH,
@@ -40,13 +44,14 @@ from template_sync_materialization_helpers import (  # noqa: E402
     inline_block_module_requirement,
     is_locally_overridden,
     is_protected_instruction_path,
+    is_protected_prose_path,
     iter_safe_repository_files,
-    lines_outside_markdown_fences,
     live_inline_marker_lines,
     load_json_mapping,
     load_validated_marker_decision_data,
     load_yaml_mapping,
     manifest_pattern_matches_path,
+    markdown_lines,
     os_error_summary,
     parse_manifest_mappings,
     repository_relative_path,
@@ -57,10 +62,6 @@ from template_sync_materialization_helpers import (  # noqa: E402
 )
 
 REFERENCE_LINK_FILE_SUFFIXES = frozenset({".md", ".mdc", ".yml", ".yaml"})
-MARKDOWN_INLINE_LINK_RE = re.compile(
-    r"(?<!!)\[[^\]\n]+\]\((?P<target><[^>\n]+>|[^)\s\n]+)(?:\s+[^)\n]*)?\)"
-)
-MARKDOWN_REFERENCE_DEFINITION_RE = re.compile(r"^ {0,3}\[[^\]\n]+\]:\s+(?P<target><[^>\n]+>|\S+)")
 PRE_COMMIT_HOOK_FIELD_RE = re.compile(r"^\s+(?:-\s+)?(?P<field>id|alias):\s*(?P<value>[^#\n]+)")
 WORKFLOW_RUN_RE = re.compile(r"^\s*run:\s*(?P<command>.+?)\s*$")
 # Capture the contact-link ``url:`` value as a quoted scalar (kept intact, so a
@@ -73,7 +74,16 @@ CONTACT_LINK_URL_RE = re.compile(
 UPSTREAM_BLOB_PREFIX = "/franklesniak/copilot-repo-template/blob/HEAD/"
 DEPENDABOT_ECOSYSTEM_MODULES: dict[str, tuple[str, tuple[str, ...]]] = {
     "npm": ("markdown", ("package.json", "package-lock.json")),
-    "pip": ("python", ("pyproject.toml", "requirements.txt", "setup.py", "setup.cfg")),
+    "pip": (
+        "python",
+        (
+            "requirements-pre-commit.txt",
+            "pyproject.toml",
+            "requirements.txt",
+            "setup.py",
+            "setup.cfg",
+        ),
+    ),
     # Directory surfaces end with "/" so the prefix branch of
     # dependency_file_is_retained_or_present() treats them as directories.
     "github-actions": ("github-actions", (".github/workflows/",)),
@@ -763,27 +773,14 @@ def extract_workflow_run_commands(lines: tuple[str, ...]) -> tuple[str, ...]:
 
 def link_targets_outside_fences(path: Path) -> tuple[tuple[int, str], ...]:
     """Return Markdown-style link targets outside fenced code blocks."""
-    targets: list[tuple[int, str]] = []
     try:
         text = path.read_text(encoding="utf-8")
     except OSError:
         return ()
 
-    # Reference links can live in Markdown files or YAML issue forms; select the
-    # fence context by file type so deeply-indented YAML block-scalar fences are
-    # recognized too (see ``fence_context_for_path``).
-    for line_number, line in lines_outside_markdown_fences(
-        text,
-        fence_context=fence_context_for_path(path.name),
-    ):
-        for match in MARKDOWN_INLINE_LINK_RE.finditer(line):
-            targets.append((line_number, normalize_markdown_target(match.group("target"))))
-        reference_match = MARKDOWN_REFERENCE_DEFINITION_RE.match(line)
-        if reference_match is not None:
-            targets.append(
-                (line_number, normalize_markdown_target(reference_match.group("target")))
-            )
-    return tuple(targets)
+    return instruction_contract_core.markdown_link_targets_from_text(
+        text, fence_context=fence_context_for_path(path.name)
+    )
 
 
 def normalize_markdown_target(target: str) -> str:
@@ -793,25 +790,13 @@ def normalize_markdown_target(target: str) -> str:
     return target
 
 
-def resolve_relative_markdown_target(source_path: str, target: str) -> str | None:
-    """Resolve a local Markdown target to a repository-relative path."""
-    parsed = urlsplit(target)
-    if parsed.scheme or parsed.netloc or target.startswith("#") or not parsed.path:
-        return None
-    decoded_path = unquote(parsed.path)
-    if decoded_path.startswith("/"):
-        return None
-    source_dir = posixpath.dirname(source_path)
-    normalized_path = posixpath.normpath(posixpath.join(source_dir, decoded_path))
-    if normalized_path in {".", ".."} or normalized_path.startswith("../"):
-        return None
-    return normalized_path
+resolve_relative_markdown_target = instruction_contract_core.resolve_relative_markdown_target
 
 
 def resolve_upstream_blob_target(target: str) -> str | None:
     """Return the repo path from an upstream template blob URL, if present."""
     try:
-        parsed = urlsplit(target)
+        parsed = instruction_contract_core.split_markdown_destination(target)
     except ValueError:
         return None
     if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() != "github.com":
@@ -919,7 +904,7 @@ def lines_outside_inline_blocks(
     try:
         live_lines = live_inline_marker_lines(text, relative_path=relative_path)
     except InlineBlockError:
-        return tuple(enumerate(text.splitlines(), 1))
+        return tuple(enumerate(markdown_lines(text), 1))
 
     for line_number, line, marker in live_lines:
         line = line.rstrip("\r\n")
@@ -1063,7 +1048,7 @@ def protected_document_prose_reference_findings(
     findings: list[Finding] = []
     path_tokens = excluded_path_reference_tokens(state)
     for relative_path in state.safe_files:
-        if not is_protected_instruction_path(relative_path):
+        if not is_protected_prose_path(relative_path):
             continue
         if is_locally_overridden(relative_path, state.local_overrides):
             continue

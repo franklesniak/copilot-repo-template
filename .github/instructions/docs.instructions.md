@@ -7,13 +7,13 @@ description: "Documentation standards:  contract-first, traceable, drift-resista
 
 # Documentation Writing Style
 
-**Version:** 1.6.20260623.0
+**Version:** 1.6.20260923.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-23
+- **Last Updated:** 2026-09-23
 - **Scope:** Defines documentation standards for Markdown (`**/*.md`) and Cursor Markdown rule (`**/*.mdc`) files in this repository, including specs, design docs, runbooks, ADRs, instruction files, and developer documentation. Does not cover code comments or inline documentation in source files.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 
@@ -82,13 +82,15 @@ The metadata header block is **REQUIRED** for documents whose primary purpose is
 
 The Tier 1 metadata header block consists of these fields:
 
-- **Status:** Draft | Active | Deprecated **(REQUIRED)**
+- **Status:** Draft | Proposed | Active | Accepted | Superseded | Deprecated **(REQUIRED)**
 - **Owner:** Person or team **(REQUIRED)**
 - **Last Updated:** YYYY-MM-DD **(REQUIRED)**
 - **Scope:** What this doc covers (and does not cover) **(REQUIRED)**
 - **Related:** Links to related docs and relevant requirement IDs / ADR IDs **(RECOMMENDED)**
 
 `Status`, `Owner`, `Last Updated`, and `Scope` MUST be present in every Tier 1 document. `Related` SHOULD be included when useful related documents, requirement IDs, ADR IDs, or policy references exist. It MAY be omitted when no meaningful related target exists. Authors MUST NOT invent placeholder or low-value links solely to populate the field.
+
+Tier 1 documents MUST use a single `Status` metadata field for the document lifecycle; they MUST NOT add a separate narrative status field or section that duplicates that lifecycle. Statuses for individual requirements or tracked work remain distinct from the document lifecycle.
 
 ### Tier 2 — Not Required
 
@@ -127,20 +129,20 @@ This subsection applies to Tier 1 documents and to any other document that inten
 For this subsection:
 
 - The published baseline is the pre-change version already present on the branch the change lands on: the pull request base branch, normally `main`, or, for a direct commit, the branch being committed to.
-- The finalization point is the last author- or agent-controlled update before the change is merged, added to an automated merge queue, or committed directly to that branch. `<revision>` is computed at the finalization point. If automated merge machinery changes the target branch after the finalization point, the landed value is not a violation of this rule; correct any resulting metadata drift in a follow-up change.
+- The finalization point is the last author- or agent-controlled update before the change is merged, added to an automated merge queue, or committed directly to that branch. All three metadata values are evaluated between the published baseline and the finalization point. Internal topic, work-in-progress, and iteration commits are not separate published transitions. If automated merge machinery changes the target branch after the finalization point, the landed value is not a violation of this rule; correct any resulting metadata drift in a follow-up change.
 
-- When a commit modifies the rendered content or documentation meaning of a document that carries the metadata header block, the `Last Updated` field in that document MUST be bumped to the current UTC date in `YYYY-MM-DD` form as part of the same commit.
-- If the document also carries a `**Version:** <major>.<minor>.<YYYYMMDD>.<revision>` line, the embedded `<YYYYMMDD>` segment MUST be updated in the same commit so that it matches the new `Last Updated` value.
+- When the change modifies the rendered content or documentation meaning of a document that carries the metadata header block, `Last Updated` in the final document MUST be the current UTC date in `YYYY-MM-DD` form at the finalization point.
+- If the document also carries a `**Version:** <major>.<minor>.<YYYYMMDD>.<revision>` line, the final embedded `<YYYYMMDD>` segment MUST match the final `Last Updated` value.
 - Revision convention for the `<revision>` segment of `**Version:**`:
   - `<revision>` counts same-day published updates relative to the published baseline. It is evaluated at the finalization point, not per feature-branch, work-in-progress, or iteration commit.
   - After setting `<major>.<minor>` under the document's own conventions and `<YYYYMMDD>` to the current UTC date, `<revision>` MUST be `0` when the resulting `<major>.<minor>.<YYYYMMDD>` differs from the published baseline's `<major>.<minor>.<YYYYMMDD>`, including when no published baseline exists.
   - When the published baseline already carries the same `<major>.<minor>.<YYYYMMDD>` at revision `N`, `<revision>` MUST be `N + 1`.
   - Intra-PR iteration commits target the single correct final revision rather than incrementing once per commit, and the published baseline is re-checked at the finalization point.
-  - Examples:
-    - Same-day published update keeping the same `<major>.<minor>`: published baseline `1.6.20260502.0` → this change `1.6.20260502.1` (same `<major>.<minor>.<YYYYMMDD>`, so `N + 1`).
-    - Next-day update: published baseline `1.6.20260502.1`, change finalized 2026-05-03 UTC → `1.6.20260503.0` (`<YYYYMMDD>` differs, so reset to `0`).
+  - Same-day published update keeping the same `<major>.<minor>`: published baseline `1.6.20260502.0` → this change `1.6.20260502.1` (same `<major>.<minor>.<YYYYMMDD>`, so `N + 1`).
+  - Next-day update: published baseline `1.6.20260502.1`, change finalized 2026-05-03 UTC → `1.6.20260503.0` (`<YYYYMMDD>` differs, so reset to `0`).
+  - Multiple internal commits: published baseline `1.6.20260502.4`, three work-in-progress commits, and finalization on 2026-05-02 UTC → one published transition to `1.6.20260502.5`, not `.7`. Finalization on 2026-05-03 UTC instead yields `1.6.20260503.0`.
   - This synchronization rule does not govern when `<major>` or `<minor>` are incremented; those continue to follow the document's own semantic-versioning conventions. For `<revision>` computation, the `**Version:**` value is treated as an ordered four-segment tuple ranked `<major>`, then `<minor>`, then `<YYYYMMDD>`, then `<revision>` — the same component precedence Microsoft documents for [`System.Version`](https://learn.microsoft.com/dotnet/api/system.version). `<revision>` is the lowest-precedence segment and MUST reset to `0` whenever any higher-order segment changes relative to the published baseline.
-- Exemption for trivial mechanical changes. The bump MAY be omitted for commits that do not alter rendered content or documentation meaning, including pure file-mode changes, line-ending normalization, end-of-file newline fixes, or trailing-whitespace-only fixes produced by pre-commit hooks. The trailing-whitespace exemption MUST NOT be applied when the change removes or alters a Markdown hard line break (two or more trailing spaces, or a trailing backslash, immediately before a newline), because such whitespace is rendering-significant; in that case the change alters rendered content and the bump is required. Automated commits made by the auto-fix workflow (`.github/workflows/auto-fix-precommit.yml`) MAY omit the bump when they only apply those mechanical fixes, subject to the same hard-line-break carve-out.
+- Exemption for trivial mechanical changes. The bump MAY be omitted for changes that do not alter rendered content or documentation meaning, including pure file-mode changes, line-ending normalization, end-of-file newline fixes, or trailing-whitespace-only fixes produced by pre-commit hooks. The trailing-whitespace exemption MUST NOT be applied when the change removes or alters a Markdown hard line break (two or more trailing spaces, or a trailing backslash, immediately before a newline), because such whitespace is rendering-significant; in that case the change alters rendered content and the bump is required. This exemption also applies when an agent or owner reviews and locally applies mechanical fixes from the optional pre-commit fix-preview workflow (`.github/workflows/auto-fix-precommit.yml`), subject to the same hard-line-break carve-out. The preview workflow wrapper does not commit or push fixes.
 - This rule applies to all documents in the repository that carry the metadata header block, including but not limited to `.github/copilot-instructions.md`, `.github/instructions/*.instructions.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.hermes.md`, and `.cursor/rules/*.mdc`.
 
 ### Non-Normative Historical Artifacts
@@ -177,9 +179,11 @@ This file preserves the AI review prompt used while preparing ADR-0003. The pres
 ### Normative Language
 
 - Use **MUST/SHOULD/MAY** for requirements and guarantees.
+- Uppercase requirement keywords have the meanings defined by [BCP 14](https://www.rfc-editor.org/rfc/rfc2119) and its [capitalization clarification](https://www.rfc-editor.org/rfc/rfc8174). Lowercase words retain their ordinary meaning; normative prose can also impose a requirement without a keyword. Examples MUST obey applicable requirements unless clearly labeled as counterexamples.
 - Use **CAN** only for capability, not obligation.
 - Label assumptions explicitly as **Assumption:** and keep them testable.
 - **Scope conditional obligations.** When a normative keyword constrains an action that is itself optional, explicitly scope the obligation to when that action occurs, for example, "When a document cites sources, it MUST cite only inspectable sources." This prevents readers from misreading the requirement as mandating the optional action.
+- **State evaluation point.** When an action can change the state tested by its own condition, the rule MUST identify when and against which state the condition is evaluated. For example: "Before sending a review request, compare the current head with the recorded reviewed head. If they differ, the old clean result does not satisfy the new head's review gate." A new head is the input, an incomplete review gate is the result, and the identity mismatch explains that result.
 - **Cross-instruction-file normative-level alignment.** When a document restates a normative requirement that is also defined in an applicable file under `.github/instructions/*`, the document's requirement level (`MUST`, `SHOULD`, `MAY`, and their negations) MUST match the level used in the instruction file when the scope and context are the same, unless the document explicitly justifies a stricter or weaker level in prose immediately adjacent to the restatement. If the scope or context differs from the instruction file, the document SHOULD note that scope/context difference at the restatement. Implicit divergence (silently using a different level when the scope and context are the same as in the instruction file, with no adjacent justification) MUST NOT occur.
 - **Intra-document normative-level consistency.** Within a single document, the normative requirement level for the same keyword, field, rule, and scope MUST be consistent across sections. If two sections appear to attach different levels to the same item, reconcile the wording or explicitly explain why the scopes differ.
 
@@ -363,6 +367,8 @@ The safer boundary is the whole comment line, so the substituted result is meani
 
 ADRs exist to prevent re-litigating decisions.
 
+ADRs MUST use the ADR-specific status subset below. Each ADR status is also permitted by the general Tier 1 metadata vocabulary.
+
 - File naming pattern: `docs/adr/ADR-0001-short-title.md`
 - ADRs MUST include:
   - **Status:** Proposed | Accepted | Superseded | Deprecated
@@ -371,6 +377,8 @@ ADRs exist to prevent re-litigating decisions.
   - **Consequences:** positive and negative
   - **Alternatives Considered**
   - **Date:** YYYY-MM-DD
+
+The ADR lifecycle belongs in the single Tier 1 `Status` metadata field, not in an additional narrative status field or section. Published legacy ADRs MAY retain their existing status representation until their next substantive edit. That edit MUST migrate the lifecycle status into the Tier 1 metadata field and remove separate narrative status fields or sections. Do not bulk-rewrite untouched historical records.
 
 ADRs MUST be short and specific. If an ADR grows into a design doc, split it.
 
@@ -460,7 +468,7 @@ Before merging, verify:
 
 1. **Mirrored excerpt policy.** When a Markdown document includes a literal excerpt, whether inline or fenced, that mirrors a real load-bearing file in the repository (for example, `.pre-commit-config.yaml`, a JSON schema, a workflow YAML, or a script), the excerpt **MUST** either:
    - Be a verbatim copy of the corresponding source-of-truth lines for the included literal content, without paraphrasing or selectively rewriting copied literals; if the excerpt is intentionally partial, the surrounding prose **MUST** make that scope clear and **MUST NOT** imply the excerpt is the complete file or complete configuration, **OR**
-   - Be replaced with a one-line pointer to the real file (for example, `See [.pre-commit-config.yaml](../../.pre-commit-config.yaml)` from a citing document under `.github/instructions/`; adjust the relative path so it resolves from the citing document's own location) with no inline copy of the excerpt content.
+   - Be replaced with a one-line pointer to the real file, with no inline copy of the excerpt content. Use a repo-relative link when the target is retained with the citing document; otherwise apply the remedies in **Cross-module links in template-managed repositories**.
 
    When the verbatim-copy path is taken for a fenced or multi-line excerpt, authors SHOULD use the file's existing `Source:` citation convention from the `Markdown Conventions` section to anchor the excerpt to its source-of-truth file with a line-range link.
 

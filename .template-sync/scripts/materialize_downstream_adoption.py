@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -13,15 +14,15 @@ import sys
 import tempfile
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
-import yaml  # type: ignore[import-untyped]
-
 SCRIPT_DIR = Path(__file__).resolve().parent
+TRUSTED_TOOL_ROOT = SCRIPT_DIR.parent.parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
+from instruction_profile_migration import render_instruction_profile  # noqa: E402
 from template_sync_materialization_helpers import (  # noqa: E402
     DEFAULT_MANIFEST_PATH,
     DEFAULT_MANIFEST_SCHEMA_PATH,
@@ -45,13 +46,16 @@ from template_sync_materialization_helpers import (  # noqa: E402
     load_json_mapping,
     load_yaml_mapping,
     os_error_summary,
+    parse_json_mapping,
     parse_manifest_mappings,
     parse_marker_decision_data,
+    parse_yaml_mapping,
     remove_inline_blocks_for_modules,
     resolve_safe_repository_target_path,
     selected_relation_for_path,
     validate_inline_block_markers,
     validate_marker_yaml_text,
+    validate_module_compatibility,
     validate_protected_file_decisions,
     validate_schema,
     write_repository_file_bytes,
@@ -543,23 +547,17 @@ def read_args_file_text(path: Path) -> str:
 def load_json_args_file(path: Path) -> dict[str, Any]:
     """Load a JSON args file that must contain an object."""
     try:
-        parsed = json.loads(read_args_file_text(path))
-    except json.JSONDecodeError as error:
-        raise MaterializationError(f"--args-file: invalid JSON ({error}).") from error
-    if not isinstance(parsed, dict):
-        raise MaterializationError("--args-file must contain a JSON object.")
-    return cast(dict[str, Any], parsed)
+        return parse_json_mapping(read_args_file_text(path), "--args-file")
+    except TemplateSyncMaterializationError as error:
+        raise MaterializationError(str(error)) from error
 
 
 def load_yaml_args_file(path: Path) -> dict[str, Any]:
     """Load a YAML args file through the retained YAML parser path."""
     try:
-        parsed = yaml.safe_load(read_args_file_text(path))
-    except yaml.YAMLError as error:
-        raise MaterializationError(f"--args-file: invalid YAML ({error}).") from error
-    if not isinstance(parsed, dict):
-        raise MaterializationError("--args-file must contain a YAML mapping.")
-    return cast(dict[str, Any], parsed)
+        return parse_yaml_mapping(read_args_file_text(path), "--args-file")
+    except TemplateSyncMaterializationError as error:
+        raise MaterializationError(str(error)) from error
 
 
 def load_args_file_mapping(raw_path: str, args_format: str | None) -> dict[str, Any]:
@@ -1262,11 +1260,13 @@ def partial_promisor_guard_reason(repo_root: Path, git_version: GitVersion | Non
     return None
 
 
-def source_completeness_reason(source_worktree: Path) -> str | None:
+def source_completeness_reason(
+    source_worktree: Path, *, git_args_prefix: Sequence[str]
+) -> str | None:
     """Return a reason when tracked source content may be incomplete."""
     result = run_source_git(
         source_worktree,
-        ["ls-files", "-z", "-v", "--full-name"],
+        [*git_args_prefix, "ls-files", "-z", "-v", "--full-name"],
         text=False,
     )
     if result.returncode != 0:
@@ -1283,7 +1283,7 @@ def source_completeness_reason(source_worktree: Path) -> str | None:
 
     stage_result = run_source_git(
         source_worktree,
-        ["ls-files", "-z", "--stage", "--full-name"],
+        [*git_args_prefix, "ls-files", "-z", "--stage", "--full-name"],
         text=False,
     )
     if stage_result.returncode != 0:
@@ -1310,33 +1310,43 @@ def source_completeness_reason(source_worktree: Path) -> str | None:
     return None
 
 
-def status_probe_not_stampable_reason(
+def source_fsmonitor_safety(
     repo_root: Path,
     git_version: GitVersion | None,
-) -> str | None:
-    """Return a not-stampable reason from the clean-status gate."""
-    status_args = [
-        "status",
-        "--porcelain=v1",
-        "--untracked-files=all",
-        "--ignore-submodules=none",
-    ]
+) -> tuple[tuple[str, ...], str | None]:
+    """Choose safe index-query options before completeness or status can run hooks."""
     if git_version_at_least(git_version, 2, 36):
-        result = run_source_git(repo_root, ["-c", "core.fsmonitor=false", *status_args])
-    else:
-        fsmonitor_result = effective_git_config_value(repo_root, "core.fsmonitor")
-        if fsmonitor_result.returncode == 0:
-            return (
-                "core.fsmonitor is configured; stamping this source requires Git to "
-                "be detected as >=2.36 so the status probe can force-disable "
-                "fsmonitor, or an explicit --last-reviewed-template-commit FULL_SHA"
-            )
-        if fsmonitor_result.returncode != 1:
-            return (
-                "unable to determine core.fsmonitor state before status: "
-                f"{command_detail(fsmonitor_result)}"
-            )
-        result = run_source_git(repo_root, status_args)
+        return ("-c", "core.fsmonitor=false"), None
+    # Git <=2.35.1 interprets even Boolean 'false' as a hook pathname.
+    fsmonitor_result = effective_git_config_value(repo_root, "core.fsmonitor")
+    if fsmonitor_result.returncode == 0:
+        return (), (
+            "core.fsmonitor is configured; stamping this source requires Git to "
+            "be detected as >=2.36 so index probes can force-disable "
+            "fsmonitor, or an explicit --last-reviewed-template-commit FULL_SHA"
+        )
+    if fsmonitor_result.returncode != 1:
+        return (), (
+            "unable to determine core.fsmonitor state before index inspection: "
+            f"{command_detail(fsmonitor_result)}"
+        )
+    return (), None
+
+
+def status_probe_not_stampable_reason(
+    repo_root: Path, *, git_args_prefix: Sequence[str]
+) -> str | None:
+    """Return a not-stampable reason using the preselected safe index-query options."""
+    result = run_source_git(
+        repo_root,
+        [
+            *git_args_prefix,
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+            "--ignore-submodules=none",
+        ],
+    )
     if result.returncode != 0:
         return f"unable to inspect source status: {command_detail(result)}"
     if command_output_text(result.stdout):
@@ -1363,13 +1373,23 @@ def verify_source_worktree_stampable(
             raise MaterializationError(partial_reason)
         return False
 
-    completeness_reason = source_completeness_reason(source_worktree)
+    git_args_prefix, fsmonitor_reason = source_fsmonitor_safety(source_worktree, git_version)
+    if fsmonitor_reason is not None:
+        if fatal:
+            raise MaterializationError(fsmonitor_reason)
+        return False
+
+    completeness_reason = source_completeness_reason(
+        source_worktree, git_args_prefix=git_args_prefix
+    )
     if completeness_reason is not None:
         if fatal:
             raise MaterializationError(completeness_reason)
         return False
 
-    status_reason = status_probe_not_stampable_reason(source_worktree, git_version)
+    status_reason = status_probe_not_stampable_reason(
+        source_worktree, git_args_prefix=git_args_prefix
+    )
     if status_reason is not None:
         if fatal:
             raise MaterializationError(status_reason)
@@ -1454,7 +1474,17 @@ def detect_local_template_source(
                 ),
             )
 
-        completeness_reason = source_completeness_reason(template_root)
+        git_args_prefix, fsmonitor_reason = source_fsmonitor_safety(template_root, git_version)
+        if fsmonitor_reason is not None:
+            return LocalSourceDetection(
+                observed_source_sha=observed_source_sha,
+                source_worktree_root=source_worktree_root,
+                not_stampable_reason=fsmonitor_reason,
+            )
+
+        completeness_reason = source_completeness_reason(
+            template_root, git_args_prefix=git_args_prefix
+        )
         if completeness_reason is not None:
             return LocalSourceDetection(
                 observed_source_sha=observed_source_sha,
@@ -1462,7 +1492,9 @@ def detect_local_template_source(
                 not_stampable_reason=completeness_reason,
             )
 
-        status_reason = status_probe_not_stampable_reason(template_root, git_version)
+        status_reason = status_probe_not_stampable_reason(
+            template_root, git_args_prefix=git_args_prefix
+        )
         if status_reason is not None:
             return LocalSourceDetection(
                 observed_source_sha=observed_source_sha,
@@ -2038,6 +2070,10 @@ def load_decisions(
             "Selected module(s) are not defined by the manifest: "
             + ", ".join(sorted(unknown_modules))
         )
+    selection_errors = validate_module_compatibility(module_set, ())
+    if selection_errors:
+        raise MaterializationError(" ".join(selection_errors))
+    validate_agent_selection_migration(target_root, module_set, marker_data)
 
     raw_marker_fields: dict[str, Any] = {}
     if marker_document is not None:
@@ -2075,6 +2111,36 @@ MARKER_PLACEHOLDER_FIELDS = (
     "discussions_policy",
     "collaboration_policy_follow_up_status",
 ) + tuple(sorted(AZURE_DEVOPS_PLACEHOLDER_FIELDS))
+
+
+def validate_agent_selection_migration(
+    target_root: Path, modules: set[str], marker_data: MarkerDecisionData | None
+) -> None:
+    """Require an explicit retention/removal decision for legacy all-agent profiles."""
+    if marker_data is None or "agent-instructions" not in modules:
+        return
+    agents = {
+        "AGENTS.md": "agent-codex",
+        "CLAUDE.md": "agent-claude",
+        "GEMINI.md": "agent-gemini",
+        ".hermes.md": "agent-hermes",
+        ".cursor/rules/repository-instructions.mdc": "agent-cursor",
+    }
+    if any(name in marker_data.included_modules for name in agents.values()):
+        return
+    removals = {
+        item.path for item in marker_data.protected_decisions if item.decision == REMOVAL_DECISION
+    }
+    undecided = [
+        path
+        for path, module in agents.items()
+        if (target_root / path).exists() and module not in modules and path not in removals
+    ]
+    if undecided:
+        raise MaterializationError(
+            "Legacy agent selection requires explicit agent modules or reviewed protected "
+            "removal decisions before cleanup: " + ", ".join(undecided)
+        )
 
 
 def apply_marker_placeholder_values(args: argparse.Namespace, decisions: Decisions) -> None:
@@ -2370,6 +2436,27 @@ def write_staged_candidate(
                 + ", ".join(sorted(managed_symlinks))
             )
 
+    expected_workflows = retained_workflow_paths(template_paths, mappings, included_modules)
+    contract_path = ".github/workflow-security-contract.yml"
+    contract_relation = selected_relation_for_path(contract_path, mappings)
+    contract_retained = contract_relation is not None and contract_relation.is_retained_by(
+        included_modules
+    )
+    rendered_contract = None
+    if expected_workflows or contract_retained:
+        if not expected_workflows or not contract_retained or contract_path not in template_paths:
+            raise MaterializationError(
+                "Retained workflow inventory requires a present, retained workflow contract "
+                "and at least one retained workflow; review the source contract and manifest."
+            )
+        rendered_contract = render_workflow_contract(
+            template_root,
+            mappings,
+            included_modules,
+            template_paths=template_paths,
+            expected_workflows=expected_workflows,
+        )
+
     staged_paths: list[str] = []
     for relative_path in template_paths:
         relation = selected_relation_for_path(relative_path, mappings)
@@ -2405,9 +2492,142 @@ def write_staged_candidate(
                 included_modules,
                 relative_path=relative_path,
             )
+            if relative_path == contract_path:
+                assert rendered_contract is not None
+                filtered_text = rendered_contract
             destination.write_bytes(filtered_text.encode("utf-8"))
         staged_paths.append(relative_path)
     return tuple(sorted(staged_paths))
+
+
+def trusted_tool_path(relative_path: str) -> Path:
+    """Resolve executable helpers only from the running materializer's tool bundle."""
+    path = resolve_safe_repository_target_path(
+        TRUSTED_TOOL_ROOT, relative_path, field_name="trusted tool path"
+    )
+    if not path.is_file():
+        raise MaterializationError(
+            f"Running materializer's trusted helper is unavailable: {relative_path}; "
+            "review and update the installed tool bundle."
+        )
+    return path
+
+
+def retained_workflow_paths(
+    template_paths: Collection[str],
+    mappings: tuple[ManifestMapping, ...],
+    included_modules: Collection[str],
+) -> set[str]:
+    """Select present top-level workflows using the existing manifest ownership resolver."""
+    return {
+        path
+        for path in template_paths
+        if PurePosixPath(path).parent == PurePosixPath(".github/workflows")
+        and PurePosixPath(path).suffix in {".yml", ".yaml"}
+        and (relation := selected_relation_for_path(path, mappings)) is not None
+        and relation.is_retained_by(included_modules)
+    }
+
+
+def render_workflow_contract(
+    template_root: Path,
+    mappings: tuple[ManifestMapping, ...],
+    included_modules: Collection[str],
+    *,
+    template_paths: Collection[str] | None = None,
+    expected_workflows: set[str] | None = None,
+) -> str:
+    """Prune reviewed workflow controls using only manifest and inline-marker ownership.
+
+    Validate the complete source before deriving fingerprints of pruned shell bodies.
+    This is essential: unchecked regeneration would bless altered validation commands.
+    The resulting runtime contract has no dependency on template-sync support.
+    """
+    try:
+        import jsonschema
+    except ImportError as error:
+        raise MaterializationError(
+            "Workflow contract rendering requires jsonschema. Install it in the "
+            "Python environment running the materializer."
+        ) from error
+    validator_path = trusted_tool_path(".github/scripts/validate_workflow_security.py")
+    spec = importlib.util.spec_from_file_location("workflow_policy_renderer", validator_path)
+    if spec is None or spec.loader is None:
+        raise MaterializationError("Cannot load workflow security validator")
+    validator = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(validator)
+    trusted_tool_path(validator.SCHEMA)
+    if template_paths is None:
+        template_paths, _ = iter_safe_repository_files(template_root)
+    if expected_workflows is None:
+        expected_workflows = retained_workflow_paths(template_paths, mappings, included_modules)
+    if not expected_workflows:
+        raise MaterializationError("Cannot render a workflow contract without retained workflows")
+    try:
+        validator.validate_repository(template_root, schema_root=TRUSTED_TOOL_ROOT)
+        contract = validator.load_contract(template_root, schema_root=TRUSTED_TOOL_ROOT)
+        rendered: dict[str, Any] = {}
+        for path in contract["workflows"]:
+            relation = selected_relation_for_path(path, mappings)
+            if relation is None:
+                raise MaterializationError(f"Unmapped workflow contract path: {path}")
+            if relation.is_retained_by(included_modules):
+                text = remove_inline_blocks_for_modules(
+                    validator.read_text(template_root, path),
+                    included_modules,
+                    relative_path=path,
+                )
+                rendered[path] = validator.validate_workflow(text)
+        if set(rendered) != expected_workflows:
+            raise MaterializationError(
+                "Retained workflow inventory differs from the reviewed contract; "
+                f"missing: {', '.join(sorted(expected_workflows - set(rendered))) or 'none'}; "
+                f"unexpected: {', '.join(sorted(set(rendered) - expected_workflows)) or 'none'}. "
+                "Review the source contract and manifest together."
+            )
+        expected_examples: set[str] = set()
+        for path in template_paths:
+            if PurePosixPath(path).suffix not in {".md", ".mdc"}:
+                continue
+            relation = selected_relation_for_path(path, mappings)
+            if relation is None or not relation.is_retained_by(included_modules):
+                continue
+            text = remove_inline_blocks_for_modules(
+                validator.read_text(template_root, path),
+                included_modules,
+                relative_path=path,
+            )
+            if validator.check_examples(text):
+                expected_examples.add(path)
+
+        examples: list[str] = []
+        for path in contract["examples"]:
+            relation = selected_relation_for_path(path, mappings)
+            if relation is None:
+                raise MaterializationError(f"Unmapped workflow example: {path}")
+            if relation.is_retained_by(included_modules):
+                examples.append(path)
+        if set(examples) != expected_examples:
+            raise MaterializationError(
+                "Retained workflow example inventory differs from the reviewed contract; "
+                f"missing: {', '.join(sorted(expected_examples - set(examples))) or 'none'}; "
+                f"unexpected: {', '.join(sorted(set(examples) - expected_examples)) or 'none'}. "
+                "Review the source contract and manifest together."
+            )
+        return format_marker_yaml({"version": 1, "workflows": rendered, "examples": examples})
+    except (
+        ValueError,
+        OSError,
+        KeyError,
+        TypeError,
+        jsonschema.ValidationError,
+        jsonschema.SchemaError,
+    ) as error:
+        raise MaterializationError(
+            f"Workflow contract rendering failed: {format_cli_error(error)}; "
+            "if the source format is newer, "
+            "review and update the installed materializer tool bundle."
+        ) from error
 
 
 def placeholder_requested(args: argparse.Namespace) -> bool:
@@ -2462,16 +2682,7 @@ def run_placeholder_helper(
     if not placeholder_requested(args):
         summary.placeholder_notes.append("skipped: no placeholder inputs supplied")
         return
-    helper_path = resolve_safe_repository_target_path(
-        template_root,
-        PLACEHOLDER_HELPER_PATH,
-        field_name="placeholder helper path",
-    )
-    if not helper_path.is_file():
-        raise MaterializationError(
-            "Placeholder inputs were supplied, but the template-root placeholder "
-            f"helper is unavailable at {PLACEHOLDER_HELPER_PATH}."
-        )
+    helper_path = trusted_tool_path(PLACEHOLDER_HELPER_PATH)
 
     command = [
         sys.executable,
@@ -2560,7 +2771,7 @@ def run_placeholder_helper(
         try:
             result = subprocess.run(
                 command,
-                cwd=template_root,
+                cwd=TRUSTED_TOOL_ROOT,
                 check=False,
                 capture_output=True,
                 text=True,
@@ -3118,6 +3329,11 @@ def materialize(args: argparse.Namespace) -> Summary:
                 staging_root=staging_root,
                 decisions=decisions,
                 summary=summary,
+            )
+            render_instruction_profile(
+                staging_root=staging_root,
+                target_root=target_root,
+                marker_document=marker_document,
             )
             if license_preservation is not None:
                 staged_paths = apply_license_preservation(

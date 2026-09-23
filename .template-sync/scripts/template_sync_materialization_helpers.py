@@ -1,13 +1,14 @@
 """Shared planning helpers for template-sync materialization workflows."""
 
+# ruff: noqa: E402
+
 from __future__ import annotations
 
 import fnmatch
-import importlib
-import json
 import os
 import re
 import subprocess
+import sys
 from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,12 +16,84 @@ from typing import Any, TypeGuard, cast
 
 import yaml  # type: ignore[import-untyped]
 
+_SHARED_SCRIPTS = Path(__file__).resolve().parents[2] / ".github" / "scripts"
+if str(_SHARED_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SHARED_SCRIPTS))
+
+from instruction_contract_support import (
+    EMBEDDED_LIST_MARKER_RE,
+    EMBEDDED_MARKDOWN_FENCE_CONTEXT,
+    LIST_MARKER_RE,
+    MARKDOWN_FENCE_CONTEXT,
+    REMOVAL_DECISION,
+    MarkdownFence,
+    MarkdownLineState,
+    ProtectedFileDecision,
+    ProtectedGuideContractWaiver,
+    RepositoryPathError,
+    TemplateSyncMaterializationError,
+    active_fence_content,
+    consume_blockquote_prefix,
+    line_body,
+    line_is_outside_list_item,
+    lines_outside_markdown_fences,
+    load_json_mapping,
+    load_yaml_mapping,
+    markdown_line_states,
+    markdown_lines,
+    normalize_repository_path,
+    os_error_summary,
+    parse_fence_close_from_content,
+    parse_fence_open_from_content,
+    parse_json_mapping,
+    parse_markdown_fence_open,
+    parse_yaml_mapping,
+    read_repository_text,
+    repository_relative_path,
+    resolve_repo_path,
+    validate_schema,
+)
+
+# Explicit re-exports preserve the existing adapter API for sync callers.
+__all__ = [
+    "EMBEDDED_LIST_MARKER_RE",
+    "EMBEDDED_MARKDOWN_FENCE_CONTEXT",
+    "LIST_MARKER_RE",
+    "MARKDOWN_FENCE_CONTEXT",
+    "REMOVAL_DECISION",
+    "MarkdownFence",
+    "MarkdownLineState",
+    "ProtectedFileDecision",
+    "ProtectedGuideContractWaiver",
+    "RepositoryPathError",
+    "TemplateSyncMaterializationError",
+    "active_fence_content",
+    "consume_blockquote_prefix",
+    "line_body",
+    "line_is_outside_list_item",
+    "lines_outside_markdown_fences",
+    "load_json_mapping",
+    "load_yaml_mapping",
+    "markdown_line_states",
+    "markdown_lines",
+    "normalize_repository_path",
+    "os_error_summary",
+    "parse_fence_close_from_content",
+    "parse_fence_open_from_content",
+    "parse_json_mapping",
+    "parse_markdown_fence_open",
+    "parse_yaml_mapping",
+    "read_repository_text",
+    "repository_relative_path",
+    "resolve_repo_path",
+    "validate_schema",
+]
+
 DEFAULT_MARKER_PATH = ".template-sync/marker.yml"
 DEFAULT_MANIFEST_PATH = ".template-sync/manifest.yml"
 DEFAULT_MARKER_SCHEMA_PATH = "schemas/template-sync-marker.schema.json"
 DEFAULT_MANIFEST_SCHEMA_PATH = "schemas/template-sync-manifest.schema.json"
 DEFAULT_REMOVE_LOCAL_AUTHORIZATION_TOKENS = ("remov", "delet")
-REMOVAL_DECISION = "REMOVE-LOCAL"
 SKIPPED_DISCOVERY_DIRS = frozenset(
     {
         ".git",
@@ -34,7 +107,7 @@ SKIPPED_DISCOVERY_DIRS = frozenset(
         "__pycache__",
     }
 )
-PROTECTED_EXACT_PATHS = frozenset(
+AGENT_INSTRUCTION_EXACT_PATHS = frozenset(
     {
         ".github/copilot-instructions.md",
         ".hermes.md",
@@ -43,34 +116,53 @@ PROTECTED_EXACT_PATHS = frozenset(
         "GEMINI.md",
     }
 )
+PROTECTED_EXACT_PATHS = (
+    AGENT_INSTRUCTION_EXACT_PATHS
+    | frozenset({".template-sync/instruction-contracts.yml"})
+    | frozenset(
+        {
+            ".github/workflow-security-contract.yml",
+            ".github/instruction-profile.yml",
+            "schemas/instruction-contracts.schema.json",
+            "schemas/instruction-profile.schema.json",
+            ".github/instruction-contracts.yml",
+        }
+    )
+)
 PROTECTED_GLOB_PATTERNS = (
     ".github/instructions/**",
     ".cursor/rules/**",
 )
 INLINE_BLOCK_MARKER_RE = re.compile(
-    r"^\s*(?:#\s*template-sync:|<!--\s*template-sync:)\s*"
-    r"(?P<kind>begin|end)\s+"
-    r"(?P<name>[a-z0-9-]+-(?:reference-)?only)\s*(?:-->)?\s*$"
+    r"^[ \t]*(?:#[ \t]*template-sync:|<!--[ \t]*template-sync:)[ \t]*"
+    r"(?P<kind>begin|end)[ \t]+"
+    r"(?P<name>[a-z0-9-]+-(?:reference-)?only)[ \t]*(?:-->)?[ \t]*(?:\r\n?|\n)?\Z"
 )
 MARKDOWN_RENDERED_SUFFIXES = frozenset({".md", ".mdc"})
 YAML_SUFFIXES = frozenset({".yml", ".yaml"})
-MARKDOWN_FENCE_CONTEXT = "markdown"
-EMBEDDED_MARKDOWN_FENCE_CONTEXT = "embedded-markdown"
-LIST_MARKER_RE = re.compile(
-    r"^(?P<indent> {0,3})(?P<marker>(?:[-+*]|\d{1,9}[.)]))(?P<spaces> {1,4})(?P<rest>.*)$"
-)
 # Same as ``LIST_MARKER_RE`` but with no 0-3 space cap on the leading indent, so
 # list-contained fences inside deeply-indented YAML block scalars are recognized
 # under the embedded-Markdown fence context.
-EMBEDDED_LIST_MARKER_RE = re.compile(
-    r"^(?P<indent> *)(?P<marker>(?:[-+*]|\d{1,9}[.)]))(?P<spaces> {1,4})(?P<rest>.*)$"
-)
 # AND-retention markers. A block in this family is retained only when *every*
 # module it names is present in ``included_modules``; it is stripped when *any*
 # named module is excluded (see ``remove_inline_blocks_for_modules``). This is
 # the default inline-block semantics and covers both the ``*-only`` toolchain
 # blocks and the single-module ``*-reference-only`` documentation blocks.
 INLINE_BLOCK_MODULES = {
+    "powershell-only": frozenset({"powershell"}),
+    "instruction-enforcement-only": frozenset({"agent-instructions", "instruction-enforcement"}),
+    "instruction-enforcement-reference-only": frozenset(
+        {"agent-instructions", "instruction-enforcement"}
+    ),
+    "claude-review-command-reference-only": frozenset(
+        {"agent-instructions", "agent-claude", "github-actions"}
+    ),
+    "copilot-setup-reference-only": frozenset(
+        {"agent-instructions", "agent-copilot", "github-actions"}
+    ),
+    "baseline-only": frozenset({"baseline"}),
+    "baseline-reference-only": frozenset({"baseline"}),
+    "github-data-ci-reference-only": frozenset({"baseline", "github-actions"}),
     "git-lfs-only": frozenset({"git-lfs"}),
     "terraform-only": frozenset({"terraform"}),
     "markdown-only": frozenset({"markdown"}),
@@ -97,25 +189,14 @@ INLINE_BLOCK_MODULES = {
 # when the included modules are disjoint from the marker's module set (i.e.
 # *none* of the named modules is included). This mirrors a manifest
 # ``requires_any`` relation, so it can guard prose that documents a file which
-# is itself materialized under OR semantics (for example the data-file CI
-# workflow row, whose file requires ``github-actions`` plus any one of
-# ``baseline``, ``json``, ``yaml``, ``schema``, ``template-sync-support``).
+# is itself materialized under OR semantics. The pip updater also uses this
+# relation to cover baseline runner requirements or Python project metadata.
 INLINE_BLOCK_ANY_MODULES = {
     "azure-devops-guide-reference-only": frozenset(
         {"azure-devops-platform", "azure-pipelines", "azure-devops-collaboration"}
     ),
-    "data-ci-reference-only": frozenset(
-        {"baseline", "json", "yaml", "schema", "template-sync-support"}
-    ),
+    "pip-dependencies-only": frozenset({"baseline", "python"}),
 }
-
-
-class TemplateSyncMaterializationError(Exception):
-    """Raised when shared template-sync planning cannot continue safely."""
-
-
-class RepositoryPathError(TemplateSyncMaterializationError):
-    """Raised when a repository path is unsafe or malformed."""
 
 
 class InlineBlockError(TemplateSyncMaterializationError):
@@ -212,32 +293,6 @@ class DeferredProtectedCandidate:
     path: str
     source_commit: str
     reason: str
-
-
-@dataclass(frozen=True)
-class ProtectedFileDecision:
-    """A path-scoped protected-file decision recorded in the marker."""
-
-    path: str
-    decision: str
-    adoption_mode: str | None
-    authorization_basis: str | None
-    authorized_scope: str | None
-    tailored_authorization_basis: str | None
-    reason: str | None
-
-
-@dataclass(frozen=True)
-class ProtectedGuideContractWaiver:
-    """A protected-guide obligation waiver recorded in the marker."""
-
-    path: str
-    contract_key: str
-    target_path: str | None
-    target_module: str | None
-    linked_local_override_path: str | None
-    reason: str
-    authorization_basis: str
 
 
 @dataclass(frozen=True)
@@ -353,27 +408,6 @@ class InlineBlockSpan:
 
 
 @dataclass(frozen=True)
-class MarkdownLineState:
-    """One Markdown-rendered line classified by fenced-code visibility."""
-
-    line_number: int
-    line: str
-    is_fenced: bool
-
-
-@dataclass(frozen=True)
-class MarkdownFence:
-    """Active line-oriented Markdown fenced-code block state."""
-
-    character: str
-    length: int
-    info: str
-    quote_depth: int
-    list_content_indent: int | None
-    allow_arbitrary_indent: bool
-
-
-@dataclass(frozen=True)
 class RepositoryFileClassification:
     """Text-versus-byte classification for a safe repository file."""
 
@@ -401,11 +435,6 @@ class _MarkerYamlDumper(yaml.SafeDumper):
         return True
 
 
-def os_error_summary(error: OSError) -> str:
-    """Return an OSError summary that avoids implicit filesystem paths."""
-    return f"{type(error).__name__}: {error.strerror or 'I/O error'}"
-
-
 def default_repo_root() -> Path:
     """Return the repository root implied by this script's committed location."""
     return Path(__file__).resolve().parents[2]
@@ -420,92 +449,6 @@ def resolve_repo_root(raw_repo_root: str | None) -> Path:
             f"Repository root does not exist or is not a directory: {repo_root}"
         )
     return resolved
-
-
-def repository_relative_path(path: Path, repo_root: Path) -> str:
-    """Return a POSIX-style path relative to the repository root."""
-    return path.relative_to(repo_root).as_posix()
-
-
-def resolve_repo_path(repo_root: Path, raw_path: str) -> Path:
-    """Resolve ``raw_path`` inside ``repo_root`` and reject path traversal."""
-    candidate = Path(raw_path)
-    if candidate.is_absolute():
-        path = candidate.resolve()
-    else:
-        path = (repo_root / candidate).resolve()
-
-    try:
-        path.relative_to(repo_root)
-    except ValueError as error:
-        raise RepositoryPathError(f"Path escapes the repository root: {raw_path}") from error
-    return path
-
-
-def load_json_mapping(path: Path, repo_root: Path) -> dict[str, Any]:
-    """Load a JSON file that must contain a mapping."""
-    try:
-        parsed = json.loads(path.read_text(encoding="utf-8"))
-    except OSError as error:
-        relative_path = repository_relative_path(path, repo_root)
-        raise TemplateSyncMaterializationError(
-            f"Unable to read {relative_path}: {os_error_summary(error)}"
-        ) from error
-    except json.JSONDecodeError as error:
-        relative_path = repository_relative_path(path, repo_root)
-        raise TemplateSyncMaterializationError(
-            f"Invalid JSON in {relative_path}: {error}"
-        ) from error
-    if not isinstance(parsed, dict):
-        relative_path = repository_relative_path(path, repo_root)
-        raise TemplateSyncMaterializationError(f"{relative_path} must contain a JSON object.")
-    return cast(dict[str, Any], parsed)
-
-
-def load_yaml_mapping(path: Path, repo_root: Path) -> dict[str, Any]:
-    """Load a YAML file that must contain a mapping."""
-    try:
-        parsed = yaml.safe_load(path.read_text(encoding="utf-8-sig"))
-    except OSError as error:
-        relative_path = repository_relative_path(path, repo_root)
-        raise TemplateSyncMaterializationError(
-            f"Unable to read {relative_path}: {os_error_summary(error)}"
-        ) from error
-    except yaml.YAMLError as error:
-        relative_path = repository_relative_path(path, repo_root)
-        raise TemplateSyncMaterializationError(
-            f"Invalid YAML in {relative_path}: {error}"
-        ) from error
-    if not isinstance(parsed, dict):
-        relative_path = repository_relative_path(path, repo_root)
-        raise TemplateSyncMaterializationError(f"{relative_path} must contain a YAML mapping.")
-    return cast(dict[str, Any], parsed)
-
-
-def validate_schema(
-    document: dict[str, Any], schema: dict[str, Any], document_path: Path, repo_root: Path
-) -> None:
-    """Validate a loaded document against a Draft 2020-12 JSON Schema."""
-    try:
-        jsonschema_module = cast(Any, importlib.import_module("jsonschema"))
-    except ImportError as error:
-        raise TemplateSyncMaterializationError(
-            "jsonschema is unavailable. Install jsonschema, or run this through "
-            "the pre-commit hook, which declares the validator dependency."
-        ) from error
-    validator = jsonschema_module.Draft202012Validator(schema)
-    errors = sorted(validator.iter_errors(document), key=lambda error: error.json_path)
-    if not errors:
-        return
-
-    relative_path = repository_relative_path(document_path, repo_root)
-    messages = "\n".join(f"  - {error.json_path}: {error.message}" for error in errors[:10])
-    remaining = len(errors) - 10
-    if remaining > 0:
-        messages += f"\n  - ... {remaining} more validation error(s)"
-    raise TemplateSyncMaterializationError(
-        f"Schema validation failed for {relative_path}:\n{messages}"
-    )
 
 
 def dump_marker_yaml_object(marker_document: dict[str, Any]) -> object:
@@ -662,23 +605,6 @@ def load_validated_marker_decision_data(
         marker,
         validate_protected_decision_integrity=validate_protected_decision_integrity,
     )
-
-
-def normalize_repository_path(raw_path: str, field_name: str) -> tuple[str, bool]:
-    """Normalize a marker path and return ``(path, is_directory_prefix)``."""
-    if "\\" in raw_path:
-        raise RepositoryPathError(f"{field_name} must use POSIX separators: {raw_path}")
-    if raw_path.startswith("/"):
-        raise RepositoryPathError(f"{field_name} must be repository-relative: {raw_path}")
-
-    is_directory = raw_path.endswith("/")
-    stripped = raw_path.strip("/")
-    if not stripped:
-        raise RepositoryPathError(f"{field_name} must not be empty: {raw_path}")
-    parts = stripped.split("/")
-    if any(part in ("", ".", "..") for part in parts):
-        raise RepositoryPathError(f"{field_name} must not contain traversal segments: {raw_path}")
-    return stripped, is_directory
 
 
 def normalize_manifest_pattern(raw_pattern: str) -> str:
@@ -935,6 +861,19 @@ def validate_module_compatibility(
     """Return actionable errors for unsupported host-family module mixes."""
     included_module_set = set(included_modules)
     errors: list[str] = []
+    if "instruction-enforcement" in included_module_set:
+        if "agent-instructions" not in included_module_set:
+            errors.append("instruction-enforcement requires agent-instructions.")
+        if not included_module_set.intersection({"baseline", "github-actions", "azure-pipelines"}):
+            errors.append("instruction-enforcement requires baseline or a selected host CI route.")
+    if (
+        any(
+            module.startswith("agent-") and module != "agent-instructions"
+            for module in included_module_set
+        )
+        and "agent-instructions" not in included_module_set
+    ):
+        errors.append("Agent selections require agent-instructions.")
     for group in compatibility_groups:
         if group.mixed_hosts == "allowed":
             continue
@@ -1762,6 +1701,13 @@ def is_protected_instruction_path(relative_path: str) -> bool:
     return any(fnmatch.fnmatchcase(relative_path, pattern) for pattern in PROTECTED_GLOB_PATTERNS)
 
 
+def is_protected_prose_path(relative_path: str) -> bool:
+    """Return whether a protected path holds human-facing instruction prose."""
+    if relative_path in AGENT_INSTRUCTION_EXACT_PATHS:
+        return True
+    return any(fnmatch.fnmatchcase(relative_path, pattern) for pattern in PROTECTED_GLOB_PATTERNS)
+
+
 def is_protected_manifest_pattern(pattern: str) -> bool:
     """Return whether a manifest pattern names protected instruction paths."""
     if not has_wildcard(pattern):
@@ -1918,232 +1864,6 @@ def blank_line_limit_for_path(relative_path: str) -> int:
     return 2
 
 
-def line_body(line: str) -> str:
-    """Return ``line`` without a trailing text line ending."""
-    return line.rstrip("\r\n")
-
-
-def consume_blockquote_prefix(
-    line: str,
-    *,
-    max_depth: int | None = None,
-    allow_arbitrary_indent: bool = False,
-) -> tuple[int, int]:
-    """Return ``(depth, offset)`` after consuming Markdown blockquote prefixes.
-
-    ``allow_arbitrary_indent`` lifts GFM's 0-3 space limit on the indentation
-    preceding each ``>`` so blockquote-contained fences inside deeply-indented
-    YAML ``value: |`` block scalars are recognized as well.
-    """
-    depth = 0
-    offset = 0
-    while max_depth is None or depth < max_depth:
-        spaces = 0
-        while offset < len(line) and line[offset] == " " and (allow_arbitrary_indent or spaces < 3):
-            offset += 1
-            spaces += 1
-        if offset >= len(line) or line[offset] != ">":
-            offset -= spaces
-            break
-        offset += 1
-        depth += 1
-        if offset < len(line) and line[offset] == " ":
-            offset += 1
-    return depth, offset
-
-
-def line_is_outside_list_item(line: str, content_indent: int) -> bool:
-    """Return whether ``line`` ends a conservative list-item containing block."""
-    if not line.strip():
-        return False
-    leading_spaces = len(line) - len(line.lstrip(" "))
-    return leading_spaces < content_indent
-
-
-def parse_fence_open_from_content(
-    content: str,
-    *,
-    allow_arbitrary_indent: bool,
-) -> tuple[str, int, str] | None:
-    """Return opening fence ``(character, length, info)`` from Markdown content."""
-    leading_spaces = len(content) - len(content.lstrip(" "))
-    if not allow_arbitrary_indent and leading_spaces > 3:
-        return None
-    stripped = content[leading_spaces:]
-    if not stripped.startswith(("```", "~~~")):
-        return None
-
-    fence_character = stripped[0]
-    fence_length = 0
-    while fence_length < len(stripped) and stripped[fence_length] == fence_character:
-        fence_length += 1
-    if fence_length < 3:
-        return None
-
-    info = stripped[fence_length:]
-    if fence_character == "`" and "`" in info:
-        return None
-    return fence_character, fence_length, info
-
-
-def parse_fence_close_from_content(
-    content: str,
-    *,
-    fence_character: str,
-    minimum_length: int,
-    allow_arbitrary_indent: bool,
-) -> bool:
-    """Return whether Markdown content closes the active fenced-code block."""
-    leading_spaces = len(content) - len(content.lstrip(" "))
-    if not allow_arbitrary_indent and leading_spaces > 3:
-        return False
-    stripped = content[leading_spaces:]
-    if not stripped.startswith(fence_character * minimum_length):
-        return False
-
-    fence_length = 0
-    while fence_length < len(stripped) and stripped[fence_length] == fence_character:
-        fence_length += 1
-    if fence_length < minimum_length:
-        return False
-    return stripped[fence_length:].strip(" ") == ""
-
-
-def parse_markdown_fence_open(line: str, fence_context: str) -> MarkdownFence | None:
-    """Return active fence state when ``line`` opens a fenced-code block.
-
-    Both contexts recognize blockquote- and list-contained fences; the embedded
-    context (``allow_arbitrary_indent``) lifts GFM's 0-3 space indentation caps
-    so containing-block fences inside deeply-indented YAML ``value: |`` block
-    scalars are recognized as opaque too.
-    """
-    allow_arbitrary_indent = fence_context == EMBEDDED_MARKDOWN_FENCE_CONTEXT
-
-    quote_depth, quote_offset = consume_blockquote_prefix(
-        line, allow_arbitrary_indent=allow_arbitrary_indent
-    )
-    content = line[quote_offset:]
-
-    list_marker_re = EMBEDDED_LIST_MARKER_RE if allow_arbitrary_indent else LIST_MARKER_RE
-    list_match = list_marker_re.match(content)
-    if list_match is not None:
-        list_content_indent = (
-            len(list_match.group("indent"))
-            + len(list_match.group("marker"))
-            + len(list_match.group("spaces"))
-        )
-        opened = parse_fence_open_from_content(
-            list_match.group("rest"),
-            allow_arbitrary_indent=allow_arbitrary_indent,
-        )
-        if opened is not None:
-            character, length, info = opened
-            return MarkdownFence(
-                character=character,
-                length=length,
-                info=info,
-                quote_depth=quote_depth,
-                list_content_indent=list_content_indent,
-                allow_arbitrary_indent=allow_arbitrary_indent,
-            )
-
-    opened = parse_fence_open_from_content(content, allow_arbitrary_indent=allow_arbitrary_indent)
-    if opened is None:
-        return None
-    character, length, info = opened
-    return MarkdownFence(
-        character=character,
-        length=length,
-        info=info,
-        quote_depth=quote_depth,
-        list_content_indent=None,
-        allow_arbitrary_indent=allow_arbitrary_indent,
-    )
-
-
-def active_fence_content(line: str, active_fence: MarkdownFence) -> str | None:
-    """Return line content inside ``active_fence`` or ``None`` if its container ended."""
-    if active_fence.quote_depth:
-        quote_depth, quote_offset = consume_blockquote_prefix(
-            line,
-            max_depth=active_fence.quote_depth,
-            allow_arbitrary_indent=active_fence.allow_arbitrary_indent,
-        )
-        if quote_depth < active_fence.quote_depth:
-            return None
-        content = line[quote_offset:]
-    else:
-        content = line
-
-    if active_fence.list_content_indent is None:
-        return content
-    if line_is_outside_list_item(content, active_fence.list_content_indent):
-        return None
-    if len(content) >= active_fence.list_content_indent:
-        return content[active_fence.list_content_indent :]
-    return ""
-
-
-def markdown_line_states(
-    lines: Iterable[str],
-    *,
-    fence_context: str,
-) -> tuple[MarkdownLineState, ...]:
-    """Classify Markdown-rendered lines as fenced-code or live content."""
-    states: list[MarkdownLineState] = []
-    active_fence: MarkdownFence | None = None
-
-    for line_number, raw_line in enumerate(lines, 1):
-        line = line_body(raw_line)
-        if active_fence is not None:
-            content = active_fence_content(line, active_fence)
-            if content is not None:
-                is_close = parse_fence_close_from_content(
-                    content,
-                    fence_character=active_fence.character,
-                    minimum_length=active_fence.length,
-                    allow_arbitrary_indent=active_fence.allow_arbitrary_indent,
-                )
-                states.append(
-                    MarkdownLineState(
-                        line_number=line_number,
-                        line=raw_line,
-                        is_fenced=True,
-                    )
-                )
-                if is_close:
-                    active_fence = None
-                continue
-            active_fence = None
-
-        active_fence = parse_markdown_fence_open(line, fence_context)
-        states.append(
-            MarkdownLineState(
-                line_number=line_number,
-                line=raw_line,
-                is_fenced=active_fence is not None,
-            )
-        )
-
-    return tuple(states)
-
-
-def lines_outside_markdown_fences(
-    text: str,
-    *,
-    fence_context: str,
-) -> tuple[tuple[int, str], ...]:
-    """Return lines that are not inside Markdown fenced-code blocks."""
-    return tuple(
-        (state.line_number, state.line)
-        for state in markdown_line_states(
-            text.splitlines(),
-            fence_context=fence_context,
-        )
-        if not state.is_fenced
-    )
-
-
 def parse_inline_block_marker(
     line: str,
     *,
@@ -2194,7 +1914,7 @@ def live_inline_marker_lines(
 ) -> tuple[tuple[int, str, InlineBlockMarker | None], ...]:
     """Return text lines paired with live inline markers for ``relative_path``."""
     fence_context = markdown_fence_context_for_path(relative_path)
-    raw_lines = text.splitlines(keepends=True)
+    raw_lines = markdown_lines(text, keepends=True)
     if fence_context is None:
         states = tuple(
             MarkdownLineState(
@@ -2350,8 +2070,8 @@ def apply_blank_line_hygiene(
     blank_run = 0
     active_fence: MarkdownFence | None = None
 
-    for line in text.splitlines(keepends=True):
-        if line.strip():
+    for line in markdown_lines(text, keepends=True):
+        if line_body(line).strip(" \t"):
             body = line_body(line)
             if active_fence is not None:
                 content = active_fence_content(body, active_fence)

@@ -105,15 +105,19 @@ env:
 
 jobs:
   type-check:
+    permissions:
+      contents: read
     name: Type Check (mypy + Pyright)
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           # Python Version Policy:
           # Run mypy on the lowest supported bugfix line so type checks stay
@@ -153,6 +157,8 @@ jobs:
         continue-on-error: ${{ github.repository != 'franklesniak/copilot-repo-template' }}
 
   test:
+    permissions:
+      contents: read
     name: Test
     runs-on: ${{ matrix.os }}
 
@@ -172,10 +178,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
@@ -213,7 +221,7 @@ jobs:
       # Documentation: https://docs.codecov.com/docs/github-action
       #
       # - name: Upload coverage to Codecov
-      #   uses: codecov/codecov-action@v4
+      #   uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4.6.0
       #   with:
       #     token: ${{ secrets.CODECOV_TOKEN }}  # Required for private repos only
       #     files: ./coverage.xml

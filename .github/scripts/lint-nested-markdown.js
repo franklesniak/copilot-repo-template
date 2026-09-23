@@ -12,23 +12,68 @@
  *   Lint specific files:  node .github/scripts/lint-nested-markdown.js file1.md file2.md
  *
  * When file arguments are provided, only those files are linted (useful for pre-commit hooks).
- * When no arguments are provided, all .md files are scanned via glob
- * (excluding node_modules and .pytest_cache).
+ * When no arguments are provided, all .md and .mdc files are scanned via glob.
  * Both absolute and relative paths are supported; relative paths are resolved from cwd.
  */
 
 const fs = require('fs');
 const path = require('path');
-const { glob } = require('glob');
-const MarkdownIt = require('markdown-it');
-const { lint } = require('markdownlint/promise');
-const jsoncParser = require('jsonc-parser');
-
-// Initialize markdown-it parser
-const md = new MarkdownIt();
 
 // Repository root is two levels up from this script's location in .github/scripts/
 const REPO_ROOT = path.resolve(__dirname, '../..');
+
+const MARKDOWN_GLOB = '**/*.{md,mdc}';
+// Per-file budgets bound repeated parsing and linting of overlapping nested bodies.
+const MAX_MARKDOWN_BYTES = 1024 * 1024;
+const MAX_NESTING_DEPTH = 64;
+const MAX_EXTRACTED_BLOCKS = 1024;
+const MAX_TOTAL_EXTRACTED_BYTES = 8 * 1024 * 1024;
+const MARKDOWN_IGNORE = [
+    'node_modules/**',
+    '**/node_modules/**',
+    '.git/**',
+    '**/.git/**',
+    '.venv/**',
+    '**/.venv/**',
+    '.pytest_cache/**',
+    '**/.pytest_cache/**',
+    '.mypy_cache/**',
+    '**/.mypy_cache/**',
+    '.ruff_cache/**',
+    '**/.ruff_cache/**',
+    '__pycache__/**',
+    '**/__pycache__/**'
+];
+
+/**
+ * Load the external packages required by the nested-Markdown linter.
+ * @param {NodeRequire} moduleLoader - CommonJS module loader
+ * @param {string} repoRoot - Repository root used in setup guidance
+ * @returns {object} Loaded runtime dependencies
+ */
+function loadRuntimeDependencies(moduleLoader = require, repoRoot = REPO_ROOT) {
+    try {
+        const { glob } = moduleLoader('glob');
+        const MarkdownIt = moduleLoader('markdown-it');
+        const { lint } = moduleLoader('markdownlint/promise');
+        const jsoncParser = moduleLoader('jsonc-parser');
+        return { glob, MarkdownIt, lint, jsoncParser };
+    } catch (error) {
+        if (error.code !== 'MODULE_NOT_FOUND') {
+            throw error;
+        }
+        throw new Error(
+            `Unable to load nested-Markdown dependencies. Run ` +
+            `\`npm ci --ignore-scripts\` from ${repoRoot}. Cause: ${error.message}`,
+            { cause: error }
+        );
+    }
+}
+
+const { glob, MarkdownIt, lint, jsoncParser } = loadRuntimeDependencies();
+
+// Initialize markdown-it parser
+const md = new MarkdownIt();
 
 // ANSI color codes for terminal output
 const colors = {
@@ -43,43 +88,85 @@ const colors = {
 /**
  * Resolve file paths from command-line arguments to absolute paths
  * @param {string[]} args - Command-line arguments (file paths)
- * @returns {Object} Object with validFiles array and skippedFiles array
+ * @param {string} repoRoot - Repository root
+ * @param {object} fileSystem - File-system adapter used by deterministic tests
+ * @returns {string[]} Canonical validated input paths
  */
-function resolveFilePaths(args) {
+function resolveFilePaths(args, repoRoot = REPO_ROOT, fileSystem = fs) {
     const validFiles = [];
-    const skippedFiles = [];
 
     for (const arg of args) {
         // Resolve relative paths from current working directory
         const absolutePath = path.isAbsolute(arg)
             ? arg
             : path.resolve(process.cwd(), arg);
-
-        if (fs.existsSync(absolutePath)) {
-            validFiles.push(absolutePath);
-        } else {
-            skippedFiles.push(arg);
-        }
+        validFiles.push(validateMarkdownInput(repoRoot, absolutePath, fileSystem));
     }
 
-    return { validFiles, skippedFiles };
+    return validFiles;
+}
+
+/**
+ * Validate one nested-Markdown input before reading it.
+ * @param {string} repoRoot - Repository root
+ * @param {string} filePath - Candidate Markdown input
+ * @param {object} fileSystem - File-system adapter used by deterministic tests
+ * @returns {string} Canonical in-repository input path
+ */
+function validateMarkdownInput(repoRoot, filePath, fileSystem = fs) {
+    const rootPath = fileSystem.realpathSync(repoRoot);
+    const absoluteInputPath = path.resolve(filePath);
+    const inputMetadata = fileSystem.lstatSync(absoluteInputPath);
+
+    if (inputMetadata.isSymbolicLink() || !inputMetadata.isFile()) {
+        throw new Error(`Markdown input must be a non-symlink regular file: ${filePath}`);
+    }
+
+    const resolvedInputPath = fileSystem.realpathSync(absoluteInputPath);
+    const relativeInputPath = path.relative(rootPath, resolvedInputPath);
+    if (relativeInputPath === '..' ||
+        relativeInputPath.startsWith(`..${path.sep}`) ||
+        path.isAbsolute(relativeInputPath)) {
+        throw new Error(`Markdown input resolves outside the repository: ${filePath}`);
+    }
+
+    return resolvedInputPath;
+}
+
+/**
+ * Discover and validate Markdown inputs below a repository root.
+ * @param {string} repoRoot - Repository root
+ * @param {Function} globFunction - Glob adapter used by deterministic tests
+ * @param {object} fileSystem - File-system adapter used by deterministic tests
+ * @returns {Promise<string[]>} Canonical validated input paths
+ */
+async function findMarkdownFiles(repoRoot = REPO_ROOT, globFunction = glob, fileSystem = fs) {
+    const files = await globFunction(MARKDOWN_GLOB, {
+        ignore: MARKDOWN_IGNORE,
+        cwd: repoRoot,
+        dot: true,
+        absolute: true,
+        follow: false,
+        nodir: true
+    });
+    return files.map((file) => validateMarkdownInput(repoRoot, file, fileSystem));
 }
 
 /**
  * Load markdownlint configuration from .markdownlint.jsonc or .markdownlint.json
  */
-function loadMarkdownlintConfig() {
+function loadMarkdownlintConfig(repoRoot = REPO_ROOT, fileSystem = fs, parser = jsoncParser) {
     const configPaths = [
-        path.join(REPO_ROOT, '.markdownlint.jsonc'),
-        path.join(REPO_ROOT, '.markdownlint.json')
+        path.join(repoRoot, '.markdownlint.jsonc'),
+        path.join(repoRoot, '.markdownlint.json')
     ];
 
     for (const configPath of configPaths) {
-        if (fs.existsSync(configPath)) {
+        if (fileSystem.existsSync(configPath)) {
             try {
-                const content = fs.readFileSync(configPath, 'utf8');
+                const content = fileSystem.readFileSync(configPath, 'utf8');
                 // Use jsonc-parser for proper JSONC handling (supports comments in strings)
-                return jsoncParser.parse(content);
+                return parser.parse(content);
             } catch (error) {
                 console.warn(`Warning: Could not read config file ${configPath}: ${error.message}`);
                 continue;
@@ -96,9 +183,13 @@ function loadMarkdownlintConfig() {
  * @param {number} baseLine - Line number offset in the original file
  * @param {number} depth - Current nesting depth
  * @param {string} parentPath - Path description for nested blocks
+ * @param {object} budget - Shared counters for the entire original input
  * @returns {Array} Array of extracted blocks with metadata
  */
-function extractMarkdownFencesRecursive(content, filePath, baseLine = 0, depth = 0, parentPath = '') {
+function extractMarkdownFencesRecursive(content, filePath, baseLine = 0, depth = 0, parentPath = '', budget = { blocks: 0, bytes: 0 }) {
+    if (Buffer.byteLength(content, 'utf8') > MAX_MARKDOWN_BYTES) {
+        throw new Error(`Markdown budget exceeded in ${filePath}: source bytes limit ${MAX_MARKDOWN_BYTES}`);
+    }
     const tokens = md.parse(content, {});
     const blocks = [];
 
@@ -109,6 +200,18 @@ function extractMarkdownFencesRecursive(content, filePath, baseLine = 0, depth =
         if (token.type === 'fence' &&
             (token.info.trim().toLowerCase() === 'markdown' ||
              token.info.trim().toLowerCase() === 'md')) {
+
+            if (depth >= MAX_NESTING_DEPTH) {
+                throw new Error(`Markdown budget exceeded in ${filePath}: nesting depth limit ${MAX_NESTING_DEPTH}`);
+            }
+            budget.blocks += 1;
+            budget.bytes += Buffer.byteLength(token.content, 'utf8');
+            if (budget.blocks > MAX_EXTRACTED_BLOCKS) {
+                throw new Error(`Markdown budget exceeded in ${filePath}: block count limit ${MAX_EXTRACTED_BLOCKS}`);
+            }
+            if (budget.bytes > MAX_TOTAL_EXTRACTED_BYTES) {
+                throw new Error(`Markdown budget exceeded in ${filePath}: extracted bytes limit ${MAX_TOTAL_EXTRACTED_BYTES}`);
+            }
 
             const blockLine = baseLine + (token.map ? token.map[0] + 1 : 0);
             const blockPath = parentPath ? `${parentPath} > block at line ${blockLine}` : `line ${blockLine}`;
@@ -131,7 +234,8 @@ function extractMarkdownFencesRecursive(content, filePath, baseLine = 0, depth =
                     filePath,
                     blockLine,
                     depth + 1,
-                    blockPath
+                    blockPath,
+                    budget
                 );
                 blocks.push(...nestedBlocks);
             }
@@ -144,26 +248,35 @@ function extractMarkdownFencesRecursive(content, filePath, baseLine = 0, depth =
 /**
  * Extract markdown code fences from a file
  * @param {string} filePath - Path to the markdown file
+ * @param {string} repoRoot - Repository root
+ * @param {object} fileSystem - File-system adapter used by deterministic tests
  * @returns {Array} Array of extracted blocks with metadata
  */
-function extractMarkdownFences(filePath) {
+function extractMarkdownFences(filePath, repoRoot = REPO_ROOT, fileSystem = fs) {
+    const safeInputPath = validateMarkdownInput(repoRoot, filePath, fileSystem);
+    if (fileSystem.lstatSync(safeInputPath).size > MAX_MARKDOWN_BYTES) {
+        throw new Error(`Markdown budget exceeded in ${filePath}: source bytes limit ${MAX_MARKDOWN_BYTES}`);
+    }
     let content;
     try {
-        content = fs.readFileSync(filePath, 'utf8');
+        content = fileSystem.readFileSync(safeInputPath, 'utf8');
     } catch (error) {
-        console.error(`Error reading file ${filePath}: ${error.message}`);
-        return [];
+        throw new Error(
+            `Could not read Markdown input ${safeInputPath}: ${error.message}`,
+            { cause: error }
+        );
     }
-    return extractMarkdownFencesRecursive(content, filePath, 0, 0, '');
+    return extractMarkdownFencesRecursive(content, safeInputPath, 0, 0, '');
 }
 
 /**
  * Run markdownlint on extracted content
  * @param {string} content - Markdown content to lint
  * @param {object} config - Markdownlint configuration
+ * @param {Function} lintFunction - Asynchronous markdownlint adapter
  * @returns {Promise<object>} Markdownlint results
  */
-async function lintMarkdownContent(content, config) {
+async function lintMarkdownContent(content, config, lintFunction = lint) {
     // Create a modified config for nested markdown
     // Disable MD041 (first-line-heading) since nested markdown snippets
     // may not start with a top-level heading
@@ -182,7 +295,7 @@ async function lintMarkdownContent(content, config) {
         config: nestedConfig
     };
 
-    return await lint(options);
+    return await lintFunction(options);
 }
 
 /**
@@ -247,27 +360,11 @@ async function main() {
 
         if (cliArgs.length > 0) {
             // Use files provided as arguments
-            const { validFiles, skippedFiles } = resolveFilePaths(cliArgs);
-
-            // Warn about skipped files
-            for (const skipped of skippedFiles) {
-                console.warn(`${colors.yellow}Warning: File not found, skipping: ${skipped}${colors.reset}`);
-            }
-
-            files = validFiles;
+            files = resolveFilePaths(cliArgs);
             console.log(`Linting ${files.length} specified file(s)\n`);
         } else {
             // Find all markdown files (excluding generated/dependency directories)
-            files = await glob('**/*.md', {
-                ignore: [
-                    'node_modules/**',
-                    '**/node_modules/**',
-                    '.pytest_cache/**',
-                    '**/.pytest_cache/**'
-                ],
-                cwd: REPO_ROOT,
-                absolute: true
-            });
+            files = await findMarkdownFiles();
             console.log(`Found ${files.length} Markdown file(s) to scan\n`);
         }
 
@@ -330,5 +427,19 @@ async function main() {
     }
 }
 
-// Run main function
-main();
+// Run main function only for direct CLI execution.
+if (require.main === module) {
+    main();
+}
+
+module.exports = {
+    extractMarkdownFences,
+    extractMarkdownFencesRecursive,
+    findMarkdownFiles,
+    lintMarkdownContent,
+    loadMarkdownlintConfig,
+    loadRuntimeDependencies,
+    main,
+    resolveFilePaths,
+    validateMarkdownInput
+};

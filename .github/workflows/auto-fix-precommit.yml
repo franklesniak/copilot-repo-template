@@ -1,74 +1,71 @@
-# Auto-fix pre-commit issues for Copilot Agent PRs
+# Generate an untrusted pre-commit fix preview for Copilot-agent branches.
 #
-# This workflow automatically runs pre-commit hooks and commits any auto-fixes
-# for branches created by the Copilot Coding Agent. This ensures that PRs
-# created by the agent pass pre-commit CI checks without manual intervention.
+# Candidate hooks run with read-only repository permissions and no persisted
+# checkout credential. The workflow wrapper does not commit or push changes.
+# Review or reproduce the preview locally, include fixes in the substantive
+# change, and let precommit-ci.yml validate the resulting head.
 #
-# Hook coverage: This workflow runs the same `pre-commit run --all-files`
-# pipeline as `precommit-ci.yml`, so it runs every active hook in
-# `.pre-commit-config.yaml` (auto-fixing where the hook supports it) —
-# including JSON (check-json), YAML (check-yaml, yamllint), GitHub Actions
-# workflows (actionlint), Markdown (markdownlint-cli2), module-specific hooks
-# retained by the downstream sync, and general hygiene hooks. Note that hooks
-# like yamllint and actionlint are validators that do not auto-fix; this
-# workflow runs them but does not enforce their results (the `pre-commit` exit
-# code is intentionally ignored via `|| true` so that auto-fixed files can still
-# be committed). Validator failures are enforced by the `Pre-commit` job in
-# `precommit-ci.yml`, which runs the same hooks without `|| true`.
+# Every retained hook still runs, including validators that cannot auto-fix.
+# Hook failure remains a failed workflow after the preview is uploaded.
+# The optional artifact contains tracked-file changes and lists untracked
+# outputs separately; it is not an approval or an acceptance oracle.
 #
-# Design considerations:
-# - Only triggers on push to copilot/** branches to avoid interfering with human work
-# - Uses actor check (github.actor == 'copilot-swe-agent[bot]') to only run when
-#   the Copilot bot pushes code, preventing the workflow from running on its own
-#   commits (which would cause an infinite loop)
-# - Uses workflow concurrency to prevent race conditions when multiple pushes
-#   occur in quick succession
-# - Only commits if there are actual changes to avoid empty commits
-# - Uses github-actions[bot] identity for commits to clearly identify automated fixes
-#
-# OPTIONAL: This workflow is optional. If you prefer to manually commit pre-commit
-# fixes, you can safely delete this file. The standard CI workflow will still run
-# and report any issues that need to be fixed.
+# OPTIONAL: Delete this workflow if local fixes and aggregate pre-commit CI
+# are sufficient. Keep the required aggregate validation workflow.
 
-name: Auto-fix pre-commit (Copilot branches)
+name: Pre-commit fix preview (Copilot branches)
 
 on:
   push:
     branches:
       - "copilot/**"
 
-# Prevent multiple runs from racing with each other
+permissions:
+  contents: read
+
 concurrency:
   group: auto-fix-precommit-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  auto-fix:
-    runs-on: ubuntu-latest
-    # Only run if the pusher is the Copilot bot (GitHub App)
-    # This prevents the workflow from running on its own commits
-    if: github.actor == 'copilot-swe-agent[bot]'
+  fix-preview:
     permissions:
-      contents: write
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Scope the preview to Copilot pushes; the actor is not a trust boundary.
+    if: github.actor == 'copilot-swe-agent[bot]'
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.14"
+
+      # template-sync: begin markdown-only
+      - name: Setup Node.js for nested Markdown
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - name: Install root Markdown dependencies
+        run: npm ci --ignore-scripts
+      # template-sync: end markdown-only
 
       # template-sync: begin terraform-only
       # Install Terraform for repo-local Terraform pre-commit hooks.
       # Version Policy: Use the latest stable Terraform version for pre-commit.
       # Review and update quarterly per TEMPLATE_MAINTENANCE.md.
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v4
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: "1.14.4"
 
@@ -76,35 +73,118 @@ jobs:
       # Keep this tflint_version aligned with every other tflint_version input
       # passed to terraform-linters/setup-tflint under .github/workflows/.
       - name: Setup TFLint
-        uses: terraform-linters/setup-tflint@v6
+        uses: terraform-linters/setup-tflint@1cf010d3c7aef302051ccdb68c14c5dc2efa34ef # v6.3.1
         with:
           tflint_version: "v0.51.1"
       # template-sync: end terraform-only
 
       - name: Install pre-commit
-        run: pip install pre-commit
-
-      - name: Run pre-commit hooks (auto-fix)
+        shell: python
         run: |
-          # Run pre-commit; exit code is ignored since we check for changes separately
-          # Exit code 0 = all passed
-          # Exit code 1 = hooks failed but may have fixed files
-          pre-commit run --all-files || true
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
 
-      - name: Check for changes
-        id: changes
-        run: |
-          if [[ -n "$(git status --porcelain)" ]]; then
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_changes=false" >> "$GITHUB_OUTPUT"
-          fi
+          requirement = Path("requirements-pre-commit.txt").read_text(encoding="utf-8").strip()
+          if re.fullmatch(r"pre-commit==[0-9]+\.[0-9]+\.[0-9]+", requirement) is None:
+              raise SystemExit("requirements-pre-commit.txt must contain one exact pre-commit pin")
+          subprocess.run(
+              [sys.executable, "-m", "pip", "install", "--requirement", "requirements-pre-commit.txt"],
+              check=True,
+          )
+          expected = requirement.replace("==", " ", 1)
+          actual = subprocess.check_output(["pre-commit", "--version"], text=True).strip()
+          if actual != expected:
+              raise SystemExit(f"pre-commit version mismatch: expected {expected}, got {actual}")
+          print(actual)
 
-      - name: Commit and push fixes
-        if: steps.changes.outputs.has_changes == 'true'
+      - name: Run pre-commit hooks
+        id: hooks
+        continue-on-error: true
         run: |
-          git config --local user.name "github-actions[bot]"
-          git config --local user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "chore: Apply pre-commit auto-fixes [automated]"
-          git push
+          set +e
+          pre-commit run --all-files
+          hook_exit=$?
+          printf 'exit_code=%s\n' "$hook_exit" >> "$GITHUB_OUTPUT"
+          exit "$hook_exit"
+
+      - name: Capture untrusted fix preview
+        id: preview
+        if: ${{ !cancelled() && (steps.hooks.outcome == 'success' || steps.hooks.outcome == 'failure') }}
+        env:
+          HOOK_EXIT: ${{ steps.hooks.outputs.exit_code }}
+        shell: python
+        run: |
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          event_head = os.environ["GITHUB_SHA"]
+          if re.fullmatch(r"[0-9a-f]{40}", event_head) is None:
+              raise SystemExit("Invalid event commit for fix preview.")
+
+          def require_event_head():
+              observed = subprocess.check_output(
+                  ["git", "rev-parse", "--verify", "HEAD"], text=True
+              ).strip()
+              if observed != event_head:
+                  raise SystemExit("Local HEAD changed; cannot capture event-head preview.")
+
+          require_event_head()
+          preview = Path(os.environ["RUNNER_TEMP"]) / "precommit-fix-preview"
+          preview.mkdir(exist_ok=False)
+
+          def capture(arguments, destination, limit):
+              with destination.open("xb") as output:
+                  with subprocess.Popen(arguments, stdout=subprocess.PIPE) as process:
+                      data = process.stdout.read(limit + 1)
+                      if len(data) > limit:
+                          process.kill()
+                          raise SystemExit("Fix preview exceeds its byte limit.")
+                      if process.wait() != 0:
+                          raise SystemExit("Cannot capture a complete fix preview.")
+                      output.write(data)
+
+          capture(
+              ["git", "diff", "--binary", "--no-ext-diff", "--no-textconv", event_head, "--"],
+              preview / "tracked.patch",
+              8 * 1024 * 1024,
+          )
+          capture(
+              ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+              preview / "status.txt",
+              1024 * 1024,
+          )
+          require_event_head()
+          (preview / "README.txt").write_text(
+              "UNTRUSTED FIX PREVIEW: review or reproduce locally before applying.\n"
+              "The capture step does not commit or push. This is not a CI approval.\n"
+              "tracked.patch excludes untracked files; inspect status.txt and reproduce "
+              "those outputs locally. Rerun all required checks on the final commit.\n"
+              f"Head: {event_head}\n"
+              f"Ref: {os.environ['GITHUB_REF']}\n"
+              f"Run: {os.environ['GITHUB_RUN_ID']}\n"
+              f"Native pre-commit exit: {os.environ['HOOK_EXIT']}\n",
+              encoding="utf-8",
+          )
+
+      # See: https://github.com/actions/upload-artifact/releases/latest
+      - name: Upload untrusted fix preview
+        if: ${{ !cancelled() && steps.preview.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: untrusted-precommit-fix-preview-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/precommit-fix-preview/tracked.patch
+            ${{ runner.temp }}/precommit-fix-preview/status.txt
+            ${{ runner.temp }}/precommit-fix-preview/README.txt
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Preserve pre-commit failure
+        if: ${{ !cancelled() && steps.hooks.outcome == 'failure' }}
+        run: |
+          echo "Pre-commit failed. Review the untrusted preview and fix the final commit."
+          exit 1

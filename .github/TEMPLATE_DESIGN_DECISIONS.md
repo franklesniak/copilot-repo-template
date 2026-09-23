@@ -6,9 +6,9 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-10
+- **Last Updated:** 2026-09-23
 - **Scope:** Durable design-decision record for this repository template, including rationale for GitHub configuration, instruction files, validation policy, template structure, maintenance conventions, and the documentation-tier inventory below.
-- **Related:** [Repository Copilot Instructions](copilot-instructions.md), [Documentation Writing Style](instructions/docs.instructions.md)
+- **Related:** [Repository Copilot Instructions](copilot-instructions.md), [upstream Documentation Writing Style](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/instructions/docs.instructions.md)
 
 This document records design decisions made during the creation and maintenance of `franklesniak/copilot-repo-template`. It serves as institutional memory to prevent re-litigation of settled decisions during code review.
 
@@ -74,7 +74,7 @@ This file is placed in `.github/` because it is GitHub-specific configuration gu
 
 ### Design Decision: Contributing Guidelines Link
 
-> **Status: Superseded** (2026-05-03). This decision has been replaced by the **Issue and PR templates** carve-out in [`.github/instructions/docs.instructions.md`](instructions/docs.instructions.md), which requires absolute `https://github.com/OWNER/REPO/...` URLs in `.github/ISSUE_TEMPLATE/*.yml` and `.github/pull_request_template.md` — `https://github.com/OWNER/REPO/blob/HEAD/<path>` for repo-internal **file** targets and `https://github.com/OWNER/REPO/<other-path>` for non-file targets such as `/security`, `/discussions`, or `/issues`. The original rationale (zero-friction adoption via relative links) was weakened once `.github/workflows/check-placeholders.yml` began enforcing `OWNER/REPO` replacement automatically, and the relative-link pattern is fragile across non-GitHub.com renderers, GitHub Mobile, and email notifications. The historical content is preserved below for context.
+> **Status: Superseded** (2026-05-03). This decision has been replaced by the **Issue and PR templates** carve-out in [upstream `.github/instructions/docs.instructions.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/instructions/docs.instructions.md), which requires absolute `https://github.com/OWNER/REPO/...` URLs in `.github/ISSUE_TEMPLATE/*.yml` and `.github/pull_request_template.md` — `https://github.com/OWNER/REPO/blob/HEAD/<path>` for repo-internal **file** targets and `https://github.com/OWNER/REPO/<other-path>` for non-file targets such as `/security`, `/discussions`, or `/issues`. The original rationale (zero-friction adoption via relative links) was weakened once `.github/workflows/check-placeholders.yml` began enforcing `OWNER/REPO` replacement automatically, and the relative-link pattern is fragile across non-GitHub.com renderers, GitHub Mobile, and email notifications. The historical content is preserved below for context.
 
 The PR template uses a relative link for contributing guidelines:
 
@@ -102,7 +102,7 @@ If you need the link to work in PR drafts, GHES, or external contexts, replace w
 
 ### Design Decision: Link Strategy in PR Template
 
-> **Status: Superseded** (2026-05-03). This decision has been replaced by the **Issue and PR templates** carve-out in [`.github/instructions/docs.instructions.md`](instructions/docs.instructions.md). The current rule is that Markdown links to repo-internal files inside `.github/ISSUE_TEMPLATE/*.yml` and `.github/pull_request_template.md` MUST use absolute `https://github.com/OWNER/REPO/blob/HEAD/<path>` URLs; relative forms such as `../blob/HEAD/<file>` and `blob/HEAD/<file>` MUST NOT be used in those files. The historical content is preserved below for context.
+> **Status: Superseded** (2026-05-03). This decision has been replaced by the **Issue and PR templates** carve-out in [upstream `.github/instructions/docs.instructions.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/instructions/docs.instructions.md). The current rule is that Markdown links to repo-internal files inside `.github/ISSUE_TEMPLATE/*.yml` and `.github/pull_request_template.md` MUST use absolute `https://github.com/OWNER/REPO/blob/HEAD/<path>` URLs; relative forms such as `../blob/HEAD/<file>` and `blob/HEAD/<file>` MUST NOT be used in those files. The historical content is preserved below for context.
 
 The PR template uses relative links for repository files (e.g., `../blob/HEAD/CONTRIBUTING.md`) rather than absolute URLs with `OWNER/REPO` placeholders.
 
@@ -389,7 +389,7 @@ Instruction files in `.github/instructions/` are scoped to **code authoring stan
 
 ### Design Decision: Terraform Registry Reference URLs Use /latest/
 
-Terraform Registry reference URLs that appear in **comments** in `.tf`, `.tftest.hcl`, `.tfvars`, `.tfbackend`, `.tftpl`, and other Terraform-related files **MUST** use the `latest` path segment instead of a pinned provider or module version. The same `/latest/` requirement applies to any Terraform Registry navigation links in instructional Markdown under this template (currently those in [`TEMPLATE_MAINTENANCE.md`](../TEMPLATE_MAINTENANCE.md); the same convention would apply to any future Registry links in other Markdown documentation under this template, including under `docs/`). The Markdown half of the rule is binding via this ADR rather than via an `applyTo`-scoped instruction file: the canonical instruction file [`terraform.instructions.md`](instructions/terraform.instructions.md) is scoped to Terraform extensions only, and the convention has not yet been mirrored into `docs.instructions.md` (which governs `**/*.md`). Because the repository's auto-apply mechanism is limited to `.github/instructions/*.instructions.md` files with `applyTo` front matter, the rule is *not* auto-surfaced to an agent editing a pure Markdown file; until the convention is codified into a Markdown-scoped instruction file, a maintainer or task description has to point at this ADR for the agent to apply it.
+Terraform Registry reference URLs that appear in **comments** in `.tf`, `.tftest.hcl`, `.tfvars`, `.tfbackend`, `.tftpl`, and other Terraform-related files **MUST** use the `latest` path segment instead of a pinned provider or module version. The same `/latest/` requirement applies to any Terraform Registry navigation links in instructional Markdown under this template (currently those in [`TEMPLATE_MAINTENANCE.md`](../TEMPLATE_MAINTENANCE.md); the same convention would apply to any future Registry links in other Markdown documentation under this template, including under `docs/`). The Markdown half of the rule is binding via this ADR rather than via an `applyTo`-scoped instruction file: the canonical instruction file [upstream `terraform.instructions.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/instructions/terraform.instructions.md) is scoped to Terraform extensions only, and the convention has not yet been mirrored into `docs.instructions.md` (which governs `**/*.md`). Because the repository's auto-apply mechanism is limited to `.github/instructions/*.instructions.md` files with `applyTo` front matter, the rule is *not* auto-surfaced to an agent editing a pure Markdown file; until the convention is codified into a Markdown-scoped instruction file, a maintainer or task description has to point at this ADR for the agent to apply it.
 
 The shape of the rule is:
 
@@ -397,7 +397,7 @@ The shape of the rule is:
 - Module URLs use `latest` immediately after `/modules/<namespace>/<name>/<provider>/`, with any trailing path, query string, or fragment, or none — for example, `https://registry.terraform.io/modules/terraform-aws-modules/vpc/aws/latest` or `.../latest/submodules/...`.
 - Pinned examples such as `/azurerm/4.67.0/` or `/random/3.8.1/` **MUST NOT** appear in either Terraform-file documentation comments or instructional Markdown under this template, except as clearly labeled non-compliant examples that exist to document this rule.
 
-For Terraform-file comments, the full normative rule (with compliant and non-compliant examples) lives in [`.github/instructions/terraform.instructions.md`](instructions/terraform.instructions.md) under "Terraform Registry Documentation URLs"; that file is loaded automatically when an agent edits a Terraform file. For instructional Markdown, this ADR is the binding statement until the convention is mirrored into `docs.instructions.md` or a separate `applyTo`-scoped instruction file. This ADR records *why* the template adopts the rule and how it spans Terraform comments and Markdown today; the Terraform instruction file remains the single source of truth for *what* the rule says inside Terraform files.
+For Terraform-file comments, the full normative rule (with compliant and non-compliant examples) lives in [upstream `.github/instructions/terraform.instructions.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/instructions/terraform.instructions.md) under "Terraform Registry Documentation URLs"; that file is loaded automatically when an agent edits a Terraform file. For instructional Markdown, this ADR is the binding statement until the convention is mirrored into `docs.instructions.md` or a separate `applyTo`-scoped instruction file. This ADR records *why* the template adopts the rule and how it spans Terraform comments and Markdown today; the Terraform instruction file remains the single source of truth for *what* the rule says inside Terraform files.
 
 **Rationale:**
 
@@ -499,7 +499,7 @@ Retained shared documents may contain `*-reference-only` template-sync blocks ar
 
 3. **Protocol and baseline preservation**: Agent entry points can remain thin summaries while retaining platform protocol sections, such as Claude review-loop rules and Codex GitHub-plugin/PR-review rules. Baseline docs such as `README.md` and `CONTRIBUTING.md` can keep pre-commit, Markdown, PowerShell, GitHub, no-secrets, PR-readiness, and template-sync guidance while removing references to excluded optional stacks.
 
-**Decision:** Use `*-reference-only` only for textual optional-stack references in retained documents. Continue to use `*-only` for module-owned configuration, workflow, or validation blocks. Both families strip when the corresponding module is absent, but tests must prove protected-file pruning removes only the reference blocks and preserves required protocol headings, and shared baseline doc pruning removes excluded-stack prose without dropping retained contributor-facing guidance.
+**Decision:** Use `*-reference-only` only for textual optional-stack references in retained documents. Continue to use `*-only` for module-owned configuration, workflow, or validation blocks. Both families use each marker's registered AND or OR retention relation: strip an AND block when any required module is absent and an OR block only when all its alternative modules are absent. Tests must prove protected-file pruning removes only the reference blocks and preserves required protocol headings, and shared baseline doc pruning removes excluded-stack prose without dropping retained contributor-facing guidance.
 
 **Alternatives considered:**
 
@@ -719,13 +719,13 @@ This template wires `check-jsonschema --builtin-schema ...` validation for selec
 
 The pinned `vendor.dependabot` schema has been verified against the documented Dependabot auto-assignment snippet in [`OPTIONAL_CONFIGURATIONS.md`](../OPTIONAL_CONFIGURATIONS.md): it accepts `assignees` and rejects `reviewers` as an additional property. The template therefore keeps `validate-dependabot-config` default-wired, limits the documented auto-assignment guidance to the accepted `assignees` field, validates the matching fixture with the `validate-dependabot-config-valid-examples` hook at the same pinned `rev`, and re-validates it under pytest in [`tests/test_dependabot_schema.py`](../tests/test_dependabot_schema.py).
 
-The pytest `check-jsonschema` dev dependency in [`pyproject.toml`](../pyproject.toml) and the pre-commit hook `rev` are updated by separate Dependabot ecosystems (`pip` and `pre-commit`) and are intentionally **not** required to match. An equality guard between the two pins cannot be satisfied by either ecosystem's pull request on its own, so each `check-jsonschema` release produced two failing pull requests that could only be merged together. Validating the fixture inside the hook keeps the vendored-schema contract enforced at the hook's pinned `rev` without coupling the pip pin to it.
+The pytest `check-jsonschema` dev dependency in [upstream `pyproject.toml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/pyproject.toml) and the pre-commit hook `rev` are updated by separate Dependabot ecosystems (`pip` and `pre-commit`) and are intentionally **not** required to match. An equality guard between the two pins cannot be satisfied by either ecosystem's pull request on its own, so each `check-jsonschema` release produced two failing pull requests that could only be merged together. Validating the fixture inside the hook keeps the vendored-schema contract enforced at the hook's pinned `rev` without coupling the pip pin to it.
 
 **Evaluated but deferred:**
 
 The following candidates were evaluated and intentionally **not** wired in this iteration. This subsection is the durable negative-space record: each entry exists so future authors do not re-litigate the same decision without new evidence.
 
-- **GitHub Actions workflow files (`.github/workflows/*.yml`).** Already validated by `actionlint` (pinned in [`.pre-commit-config.yaml`](../.pre-commit-config.yaml) and re-run by [`.github/workflows/data-ci.yml`](./workflows/data-ci.yml)). Adding a generic JSON Schema hook against the SchemaStore Actions schema would be **redundant** with `actionlint` and would not catch the Actions-specific issues `actionlint` is designed for. Decision: rely on `actionlint`.
+- **GitHub Actions workflow files (`.github/workflows/*.yml`).** Already validated by `actionlint` (pinned in [upstream `.pre-commit-config.yaml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.pre-commit-config.yaml) and re-run by [`.github/workflows/data-ci.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/data-ci.yml)). Adding a generic JSON Schema hook against the SchemaStore Actions schema would be **redundant** with `actionlint` and would not catch the Actions-specific issues `actionlint` is designed for. Decision: rely on `actionlint`.
 - **`.pre-commit-config.yaml`.** The pinned `check-jsonschema` release does not ship a `vendor.pre-commit-config` (or equivalent) built-in schema. pre-commit itself validates the file's structure when it loads its configuration, so a separate schema check would have minimal marginal value even if one became available. Decision: rely on pre-commit's own configuration loader.
 - **`package.json`.** The pinned `check-jsonschema` release does not ship a `vendor.package` (or equivalent) built-in schema. npm validates this file when it parses dependency manifests, so it is not unguarded. Decision: rely on the package manager's own validation; revisit if a stable built-in schema is added upstream.
 - **`.markdownlint.jsonc`.** The pinned `check-jsonschema` release does not ship a `vendor.markdownlint` built-in schema. The file is intentionally JSONC (it contains comments) and **MUST NOT** be converted to strict JSON merely to satisfy a validator. markdownlint's own configuration loader remains the enforcement mechanism for this file. Decision: rely on markdownlint's own validation.
@@ -754,8 +754,8 @@ If a future `check-jsonschema` release adds a mature built-in schema for any of 
 To remove built-in schema validation for a single file family in a downstream repository:
 
 1. Delete or stop using the validated file (for example, remove `.github/dependabot.yml`).
-2. Remove the corresponding `check-jsonschema` hook entry (or its `alias:`) from [`.pre-commit-config.yaml`](../.pre-commit-config.yaml).
-3. If the granular `data-ci.yml` step list explicitly invokes the hook by ID or alias, remove the corresponding step from [`.github/workflows/data-ci.yml`](./workflows/data-ci.yml). Steps that invoke a hook by ID continue to work for any remaining files; only remove the step if the entire hook is being retired.
+2. When baseline is retained, remove the corresponding `check-jsonschema` hook entry (or its `alias:`) from the local `.pre-commit-config.yaml`.
+3. If the granular `data-ci.yml` step list explicitly invokes the hook by ID or alias, remove the corresponding step from [`.github/workflows/data-ci.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/data-ci.yml). Steps that invoke a hook by ID continue to work for any remaining files; only remove the step if the entire hook is being retired.
 4. Update documentation that lists the active schema-validated files, including the table in this ADR, [`schemas/README.md`](../schemas/README.md), and [`OPTIONAL_CONFIGURATIONS.md`](../OPTIONAL_CONFIGURATIONS.md).
 
 **Trade-offs:**
@@ -872,7 +872,7 @@ The template sync manifest uses version 2 semantics for path mappings. Version 2
 
 **Rationale:**
 
-1. **Smallest sufficient contract change:** The known gap was platform-spanning shared files, especially `.github/workflows/data-ci.yml`, which needs `github-actions` plus at least one data-file module. One OR group alongside the existing AND list expresses that without introducing an expression language.
+1. **Smallest sufficient contract change:** Shared files can serve alternative retained modules. For example, `tests/test_schema_examples.py` is retained with either `schema` or `template-sync-support`. One OR group alongside the existing AND relation expresses these alternatives without introducing an expression language.
 2. **Backward compatibility:** Keeping version 1 valid lets downstream repositories validate existing manifests while migrating on their own schedule.
 3. **Reviewability:** `requires_all` plus `requires_any` remains easy to render in human sync documentation and easy to validate with JSON Schema plus focused pytest coverage.
 4. **Migration clarity:** Existing rows can remain unchanged during a v1-to-v2 migration unless they truly need alternative-module semantics.
@@ -925,7 +925,7 @@ The repository ships a dedicated `.github/workflows/data-ci.yml` workflow that r
 
 **Trade-off accepted:** The duplication between `precommit-ci.yml` and `data-ci.yml` is intentional. The previous decision to keep aggregate pre-commit enforcement in `python-ci.yml` was reversed because excluding the `python` module deleted the aggregate gate for downstream repositories with no Python project source. The accepted topology keeps data-file visibility while moving shared hook enforcement to a baseline workflow.
 
-**Distinction from `auto-fix-precommit.yml`:** `data-ci.yml` is a contract enforcement gate that runs on all PRs and pushes. `.github/workflows/auto-fix-precommit.yml` is intentionally NOT a peer of `data-ci.yml`: it is a fix-up workflow scoped to `copilot/**` branches that auto-applies pre-commit fixes and does not enforce results. The two workflows serve different purposes and must not be conflated.
+**Distinction from `auto-fix-precommit.yml`:** `data-ci.yml` is a contract enforcement gate that runs on all PRs and pushes. `.github/workflows/auto-fix-precommit.yml` is an optional read-only fix-preview workflow scoped to Copilot-agent pushes on `copilot/**` branches. Candidate hooks receive no repository write credential, and checkout credentials do not persist. The workflow wrapper publishes an explicitly untrusted patch/status artifact, preserves hook failures, and does not commit or push. The capture code checks 8 MiB patch and 1 MiB status limits plus event-head identity, but hooks and capture share a runner. These candidate-produced checks do not independently guarantee uploaded size, integrity, or provenance against hostile hooks. The agent or owner must review and apply or reproduce fixes locally. This retains useful fix generation while avoiding privileged execution of proposed hooks. A new trusted privileged publisher would require a separate artifact and write trust boundary. The aggregate pre-commit workflow remains the required final-head enforcement.
 
 **Schema validation steps:** `data-ci.yml` invokes schema-backed validation by alias rather than by the aggregate `check-jsonschema` or `check-metaschema` hook IDs. Schema-owned aliases validate the worked-example schema fixtures, template-sync marker fixtures, and project-owned schemas against their declared Draft 2020-12 metaschemas inside `schema-only` inline blocks. Joint schema plus template-sync-support aliases validate `.template-sync/manifest.yml` and `.template-sync/marker.yml` inside `schema-template-sync-support-only` inline blocks. The GitHub-platform-owned `validate-dependabot-config` alias validates `.github/dependabot.yml` against `vendor.dependabot` in its own standalone step. This alias-based model preserves current validation when modules are retained while allowing downstream repositories to strip `schema` or `template-sync-support` blocks without leaving CI steps that invoke missing hooks or unrelated module-owned validation.
 
@@ -1144,17 +1144,17 @@ The repository-wide rule for how third-party action versions and tool versions a
 **Context:**
 
 - Dependabot's `github-actions` ecosystem rewrites GitHub Actions `uses:` references when an action publishes a new version. It does **not** generally rewrite unrelated `with:` inputs, workflow-level `env:` values, cache keys, file paths, shell-script literals, manually constructed image tags, or comments — even when those locations contain a literal copy of the same action version string.
-- Workflow files in this repository today contain repeated `uses:` references to the same action (for example, `actions/checkout@v6` and `actions/setup-python@v6` appear in multiple workflows and jobs). Each occurrence is a normal Dependabot-managed `uses:` reference, which is fine.
-- Workflow files also contain manually maintained tool-version inputs that are **not** Dependabot-managed: `terraform_version: "1.14.4"` (passed to `hashicorp/setup-terraform@v4`) appears in multiple jobs in [`.github/workflows/terraform-ci.yml`](workflows/terraform-ci.yml), and `tflint_version: v0.51.1` is passed to `terraform-linters/setup-tflint@v6`. These are CLI versions installed by the setup actions, distinct from the setup action versions themselves.
+- Workflow files in this repository today contain repeated `uses:` references to the same action (for example, `actions/checkout` and `actions/setup-python` appear in multiple workflows and jobs). Each occurrence is a normal Dependabot-managed `uses:` reference, which is fine.
+- Workflow files also contain manually maintained tool-version inputs that are **not** Dependabot-managed: `terraform_version: "1.14.4"` (passed to `hashicorp/setup-terraform`) appears in multiple jobs in [upstream `.github/workflows/terraform-ci.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/terraform-ci.yml), and `tflint_version: v0.51.1` is passed to `terraform-linters/setup-tflint`. These are CLI versions installed by the setup actions, distinct from the setup action versions themselves.
 - Without a written rule, future authors could reasonably assume that lifting an action version into a workflow-level `env:` variable is "DRY" or that a cache key embedding the action version is a useful invalidation hint. Both patterns silently break Dependabot coherence: Dependabot bumps the `uses:` line, the mirror remains stale, and the workflow runs with a mismatched literal until someone notices.
 
 **Decision:**
 
 1. **Action versions in `uses:` lines are the only authoritative source for the action version.** Repeated `uses:` references are acceptable; Dependabot updates each line.
-2. **Action versions MUST NOT be mirrored** into workflow-level `env:` variables, comments-presented-as-authoritative-state, cache keys, file paths, shell literals, manually constructed image tags, or any other secondary location that Dependabot will not reliably rewrite.
+2. **Action versions MUST NOT be mirrored** into workflow-level `env:` variables, comments-presented-as-authoritative-state, cache keys, file paths, shell literals, manually constructed image tags, or any other secondary location that Dependabot will not reliably rewrite. Every template-owned external `uses:` reference MUST use a verified full SHA and a same-line `# vMAJOR.MINOR.PATCH` annotation, including commented and copyable examples. This annotation is descriptive documentation: Dependabot explicitly updates this form. It is not a second authoritative pin; unrelated navigation comments still follow the versionless-URL rule.
 3. **Secondary workflow behavior that needs to track a `uses:` change** must be derived from a stable source that naturally changes with the workflow or tool configuration — for example, cache keys scoped to the specific configuration file that governs the cached artifact (`hashFiles('.pre-commit-config.yaml')` for pre-commit caches, `hashFiles('.tflint.hcl')` for TFLint plugin caches, `hashFiles('**/.terraform.lock.hcl')` for Terraform provider caches, mirroring the pattern already used in this repository's workflows) — rather than embedding a duplicated literal version string. Avoid broad wildcard patterns like `hashFiles('.github/workflows/*.yml')` for cache keys: any unrelated workflow edit would invalidate every job's cache, and the goal is to track the configuration that drives the cached content, not the workflow definition that consumes it.
 4. **Tool versions that are not Dependabot-managed** (for example, `terraform_version`, `tflint_version`) **SHOULD** still avoid unnecessary duplication. A workflow-level `env:` value is the encouraged single source of truth for these, precisely because Dependabot does not manage them and there is no desync risk.
-5. **Wrapper actions and the tools they install are separate pins.** `hashicorp/setup-terraform@v4` is the setup action version (Dependabot-managed via `uses:`); `terraform_version: "1.14.4"` is the CLI version installed by that setup action (manually maintained). Both pins coexist in the same step; do not conflate them.
+5. **Wrapper actions and the tools they install are separate pins.** `hashicorp/setup-terraform` is the setup action version (Dependabot-managed via `uses:`); `terraform_version: "1.14.4"` is the CLI version installed by that setup action (manually maintained). Both pins coexist in the same step; do not conflate them.
 6. **The `.github/dependabot.yml` `ignore:` escape hatch** is appropriate only when a Dependabot-managed dependency genuinely cannot be represented without duplication and Dependabot would otherwise produce partial updates. When used, the `ignore:` entry **MUST** carry a YAML comment explaining why the dependency is intentionally not auto-updated.
 
 **Asymmetry around workflow-level `env:`:**
@@ -1168,10 +1168,12 @@ This asymmetry is the entire point of the rule: the choice of where a version li
 
 - **Allow workflow-level `env:` mirrors of action versions, on the theory that a human reviewer will catch the desync.** Rejected. The whole purpose of Dependabot is to remove the human reviewer from routine version bumps; relying on review to catch silent drift defeats the automation.
 - **Forbid repeated `uses:` references and require a single composite action wrapper.** Rejected. Repeated `uses:` references are explicitly compatible with Dependabot; introducing composite-action indirection trades a non-problem for new template complexity.
-- **Bulk-refactor existing workflows now to centralize `terraform_version` and `tflint_version` under workflow-level `env:`.** Out of scope for this documentation-only change. The rule documents the preferred pattern; existing duplication is accepted until a separate refactor lands.
+- **Bulk-refactor existing workflows now to centralize `terraform_version` and `tflint_version` under workflow-level `env:`.** Out of scope for the action identity policy. The rule documents the preferred pattern; existing duplication is accepted until a separate refactor lands.
 - **Add `.github/dependabot.yml` `ignore:` entries pre-emptively for the duplicated tool-version literals.** Rejected. Tool-version literals are not Dependabot-managed in the first place, so `ignore:` would be a no-op. `ignore:` is reserved for genuine partial-update problems on Dependabot-managed dependencies.
 
 **Trade-offs:**
+
+- Full upstream-verified commit pins provide immutable action identity while retaining Dependabot version updates, including same-line release annotations. GitHub does not generate Dependabot vulnerability alerts for SHA-pinned actions. All template-owned workflows use this tradeoff; maintenance includes release and advisory review. This uniform template-owned policy includes all retained workflows and copyable examples. It is not a complete dependency lock. Adopter-created workflows enter universal enforcement only through the documented explicit strict profile. See [GitHub's security reference](https://docs.github.com/en/actions/reference/security/secure-use#monitoring-the-actions-in-your-workflows) and [supported update forms](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories#github-actions).
 
 - Pro: Eliminates a class of silent partial-update bugs where a `uses:` line moves but a mirrored literal stays on the old version.
 - Pro: Documents the wrapper-action vs. installed-tool distinction so future authors do not collapse them into a single "version" concept.
@@ -1268,7 +1270,7 @@ Templates use `snake_case` for all field IDs (e.g., `steps_to_reproduce`, `opera
 
 #### Security Notice URL Strategy
 
-> **Status: Superseded** (2026-05-03). This decision has been replaced by the **Issue and PR templates** carve-out in [`.github/instructions/docs.instructions.md`](instructions/docs.instructions.md). The relative links described below were not actually working: `[Security tab](security)` resolved to `/{owner}/{repo}/issues/security` (404), and `[SECURITY.md](blob/HEAD/SECURITY.md)` resolved to `/{owner}/{repo}/issues/blob/HEAD/SECURITY.md` (404), because issue-form `value:` blocks render at `/{owner}/{repo}/issues/new?...`. The current `bug_report.yml` uses absolute `https://github.com/OWNER/REPO/security` and `https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md` URLs; the `OWNER/REPO` substitution is enforced by `.github/workflows/check-placeholders.yml` **only when that workflow is adopted and kept** (it is an optional adoption step that downstream repositories MAY skip or remove after initial setup, in which case no CI guardrail catches a missed substitution and adopters must verify it manually). The historical content is preserved below for context.
+> **Status: Superseded** (2026-05-03). This decision has been replaced by the **Issue and PR templates** carve-out in [upstream `.github/instructions/docs.instructions.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/instructions/docs.instructions.md). The relative links described below were not actually working: `[Security tab](security)` resolved to `/{owner}/{repo}/issues/security` (404), and `[SECURITY.md](blob/HEAD/SECURITY.md)` resolved to `/{owner}/{repo}/issues/blob/HEAD/SECURITY.md` (404), because issue-form `value:` blocks render at `/{owner}/{repo}/issues/new?...`. The current `bug_report.yml` uses absolute `https://github.com/OWNER/REPO/security` and `https://github.com/OWNER/REPO/blob/HEAD/SECURITY.md` URLs; the `OWNER/REPO` substitution is enforced by `.github/workflows/check-placeholders.yml` **only when that workflow is adopted and kept** (it is an optional adoption step that downstream repositories MAY skip or remove after initial setup, in which case no CI guardrail catches a missed substitution and adopters must verify it manually). The historical content is preserved below for context.
 
 The security notice uses relative links that work automatically after cloning:
 
@@ -1467,19 +1469,19 @@ The template provides these CI jobs that can be configured as required status ch
 | --- | --- | --- | --- |
 | `precommit-ci.yml` | **Pre-commit** | ✅ Yes | Foundational check—catches formatting and linting issues |
 | `data-ci.yml` | **Data file linting** | ✅ Yes | Gives JSON/YAML/Actions validation a distinct required-check identity |
-| `python-ci.yml` | **Type Check (mypy)** | Optional | Set to `continue-on-error: true` by default; make strict when ready |
+| `python-ci.yml` | **Type Check (mypy + Pyright)** | Optional | Set to `continue-on-error: true` by default; make strict when ready |
 | `python-ci.yml` | **Test** | ✅ Yes | Ensures tests pass on all platforms |
-| `markdownlint.yml` | **Markdown Lint** | ✅ Yes | Ensures documentation quality |
+| `markdownlint.yml` | **markdownlint** | ✅ Yes | Ensures documentation quality |
 | `powershell-ci.yml` | **Lint (PSScriptAnalyzer)** | Optional | Only if using PowerShell |
 | `powershell-ci.yml` | **PowerShell Tests (Pester)** | Optional | Only if using PowerShell with tests |
 | `check-placeholders.yml` | **Check for OWNER/REPO Placeholders** | Optional | Only runs in repos created from this template (skipped in template repo itself) |
 
-> **Note:** In the GitHub Actions UI and branch ruleset status-check picker,
-> checks appear in the format **`Workflow name / Job name`** (for example,
-> `Pre-commit CI / Pre-commit`). The **Job Name** column above lists only the
-> job-level name; prepend the workflow name when searching for checks in the
-> ruleset configuration. Status checks only appear for selection after the
-> corresponding workflow has run at least once.
+> **Note:** Ordinary workflow required checks use the **job name**, such as
+> `Pre-commit`; do not prepend the workflow's Actions-tab label.
+> An unnamed job uses its job ID, such as `markdownlint`. Reusable workflow
+> checks use `Job name / Reusable job name`. Select the actual checks from a
+> recent successful run, including applicable matrix variants, and verify the
+> resulting ruleset. See GitHub's [required-check troubleshooting](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/troubleshooting-rules#troubleshooting-required-status-checks).
 >
 > The `auto-fix-precommit.yml` workflow is intentionally **not listed** above
 > because it only triggers on pushes to `copilot/**` branches by the Copilot
@@ -1561,11 +1563,11 @@ For a Python project using this template:
 - Pre-commit
 - Data file linting
 - Test
-- Markdown Lint
+- markdownlint
 
 **Optional but recommended:**
 
-- Type Check (mypy) — after making it strict by removing `continue-on-error: true`
+- Type Check (mypy + Pyright) — after making it strict by removing `continue-on-error: true`
 
 For a multi-language project (Python + PowerShell):
 
@@ -1574,7 +1576,7 @@ For a multi-language project (Python + PowerShell):
 - Pre-commit
 - Data file linting
 - Test
-- Markdown Lint
+- markdownlint
 - Lint (PSScriptAnalyzer)
 - PowerShell Tests (Pester)
 
@@ -1582,7 +1584,7 @@ For a multi-language project (Python + PowerShell):
 
 ## Documentation Tier Inventory
 
-The documentation-tier policy itself lives in [`.github/instructions/docs.instructions.md`](instructions/docs.instructions.md) and is intentionally expressed in categorical, content-based terms with path patterns rather than as a list of specific shipped filenames. This section captures **this template repository's current file-by-file classification** under that policy. Downstream consumers of this template should treat this section as template-state to maintain, prune, replace, or extend as their own file set diverges from the template.
+The documentation-tier policy itself lives in [upstream `.github/instructions/docs.instructions.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/instructions/docs.instructions.md) and is intentionally expressed in categorical, content-based terms with path patterns rather than as a list of specific shipped filenames. This section captures **this template repository's current file-by-file classification** under that policy. Downstream consumers of this template should treat this section as template-state to maintain, prune, replace, or extend as their own file set diverges from the template.
 
 ### Tier 1 (Metadata Block Present)
 
@@ -1625,7 +1627,7 @@ Two categories of files were updated in the same PR that introduced the tiered p
 
 ### Maintenance Note
 
-Future files added to this template should be classified by the categorical policy in [`.github/instructions/docs.instructions.md`](instructions/docs.instructions.md). Record an entry in this inventory only when it remains useful to maintainers; the inventory is template-state to maintain, prune, replace, or extend, not a registry that has to track every file in the repository.
+Future files added to this template should be classified by the categorical policy in [upstream `.github/instructions/docs.instructions.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/instructions/docs.instructions.md). Record an entry in this inventory only when it remains useful to maintainers; the inventory is template-state to maintain, prune, replace, or extend, not a registry that has to track every file in the repository.
 
 ---
 

@@ -18,6 +18,10 @@ from pathlib import Path, PurePosixPath
 from typing import NoReturn, Protocol, TextIO, cast
 
 import yaml  # type: ignore[import-untyped]
+from template_sync_materialization_helpers import (
+    TemplateSyncMaterializationError,
+    parse_yaml_mapping,
+)
 
 DEFAULT_SUPPRESSION_PATH = ".template-sync/first-adoption/quality-suppressions.json"
 MARKER_PATH = ".template-sync/marker.yml"
@@ -369,17 +373,16 @@ def load_marker_template_sync(repo_root: Path) -> dict[str, object] | None:
     if not is_present_regular_file(marker_link):
         raise FirstAdoptionQualityError(f"Expected a regular file: {MARKER_PATH}")
     try:
-        marker_document = yaml.safe_load(marker_path.read_text(encoding="utf-8-sig"))
-    except yaml.YAMLError as error:
-        raise FirstAdoptionQualityError(f"{MARKER_PATH} is not valid YAML: {error}") from error
+        marker_document = parse_yaml_mapping(
+            marker_path.read_text(encoding="utf-8-sig"), MARKER_PATH
+        )
+    except TemplateSyncMaterializationError as error:
+        raise FirstAdoptionQualityError(str(error)) from error
     except OSError as error:
         error_summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
         raise FirstAdoptionQualityError(
             f"Unable to read {MARKER_PATH} ({error_summary})."
         ) from error
-    if not isinstance(marker_document, dict):
-        raise FirstAdoptionQualityError(f"{MARKER_PATH} must contain a YAML mapping.")
-    marker_document = cast(dict[str, object], marker_document)
     template_sync = marker_document.get("template_sync")
     if not isinstance(template_sync, dict):
         raise FirstAdoptionQualityError(f"{MARKER_PATH} must contain template_sync mapping.")

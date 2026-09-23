@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import inspect
 import json
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, cast
@@ -23,6 +25,14 @@ placeholder_helper = importlib.util.module_from_spec(SCRIPT_SPEC)
 sys.modules[SCRIPT_SPEC.name] = placeholder_helper
 SCRIPT_SPEC.loader.exec_module(placeholder_helper)
 StructuredObject = dict[str, Any]
+RAW_CONTRIBUTING_CLONE_BLOCK = (
+    "### 1. Clone the Repository\n\n"
+    "<!-- CUSTOMIZE: Replace `OWNER/REPO` with your organization and repository name -->\n\n"
+    "```bash\n"
+    "git clone https://github.com/OWNER/REPO.git\n"
+    "cd REPO\n"
+    "```\n"
+)
 
 
 def write_file(path: Path, content: str) -> Path:
@@ -422,6 +432,7 @@ def test_azure_security_reporting_renders_security_md_without_github_urls(
     assert "[security contact email]" not in security_text
 
 
+@pytest.mark.upstream_template_only
 def test_azure_only_baseline_docs_do_not_leave_github_placeholders(tmp_path: Path) -> None:
     """Azure-only rendering removes GitHub OWNER/REPO placeholders from baseline docs."""
     for relative_path in ("CONTRIBUTING.md", "SECURITY.md", "CODE_OF_CONDUCT.md"):
@@ -444,7 +455,132 @@ def test_azure_only_baseline_docs_do_not_leave_github_placeholders(tmp_path: Pat
     )
     assert "[Platform](https://dev.azure.com/contoso/Platform)" in contributing_text
     assert "Azure Boards intake policy: work-items" in contributing_text
+    for boundary in ("begin", "end"):
+        marker = f"<!-- template-sync: {boundary} markdown-reference-only -->"
+        assert contributing_text.count(marker) == read_file(REPO_ROOT / "CONTRIBUTING.md").count(
+            marker
+        )
     assert placeholder_helper.scan_repository(tmp_path) == ()
+
+
+@pytest.mark.upstream_template_only
+def test_raw_clone_fixture_matches_shipped_contributing_document() -> None:
+    """The portable clone fixture stays identical to the shipped source block."""
+    template = read_file(REPO_ROOT / "CONTRIBUTING.md")
+    clone_start = template.index("### 1. Clone the Repository\n")
+    clone_end = template.index("\n```\n", clone_start) + len("\n```\n")
+
+    assert template[clone_start:clone_end] == RAW_CONTRIBUTING_CLONE_BLOCK
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        "\n### Install Python\n\nKeep this setup.\n",
+        (
+            "\n<!-- template-sync: begin markdown-reference-only -->\n"
+            "### 2. Install Node.js Dependencies\n\nKeep this setup.\n"
+            "<!-- template-sync: end markdown-reference-only -->\n"
+        ),
+        "\nAdopter notes before another heading.\n\n## More\n",
+        "",
+    ],
+)
+def test_azure_clone_rendering_preserves_adjacent_content(suffix: str) -> None:
+    """Clone rendering does not depend on or consume the next optional section."""
+    context = placeholder_helper.build_replacement_context(
+        host_provider="azure-devops-services",
+        azure_devops_organization="contoso",
+        azure_devops_project="Platform",
+        azure_devops_repository="Project Tools",
+    )
+    text = "Prefix stays.\n\n" + RAW_CONTRIBUTING_CLONE_BLOCK + suffix
+    expected = (
+        "Prefix stays.\n\n### 1. Clone the Repository\n\n```bash\n"
+        "git clone https://dev.azure.com/contoso/Platform/_git/Project%20Tools\n"
+        "cd 'Project Tools'\n```\n" + suffix
+    )
+
+    rendered, count = placeholder_helper.replace_contributing_clone_block(text, context)
+
+    assert count == 1
+    assert rendered == expected
+    assert placeholder_helper.replace_contributing_clone_block(rendered, context) == (rendered, 0)
+
+
+def test_azure_clone_rendering_preserves_customized_github_clone() -> None:
+    """Azure rendering does not retarget an adopter's customized GitHub clone block."""
+    context = placeholder_helper.build_replacement_context(
+        host_provider="azure-devops-services",
+        azure_devops_organization="contoso",
+        azure_devops_project="Platform",
+        azure_devops_repository="downstream-template",
+    )
+    customized = RAW_CONTRIBUTING_CLONE_BLOCK.replace("OWNER/REPO", "octocat/hello-world").replace(
+        "cd REPO", "cd hello-world"
+    )
+
+    assert placeholder_helper.replace_contributing_clone_block(customized, context) == (
+        customized,
+        0,
+    )
+
+
+@pytest.mark.parametrize("shape", ["custom-command", "missing-close", "duplicate"])
+def test_azure_clone_unknown_shape_retains_placeholder_failure(tmp_path: Path, shape: str) -> None:
+    """Unknown or ambiguous clone blocks stay intact and fail the unresolved scan."""
+    context = placeholder_helper.build_replacement_context(
+        host_provider="azure-devops-services",
+        azure_devops_organization="contoso",
+        azure_devops_project="Platform",
+        azure_devops_repository="downstream-template",
+    )
+    text = RAW_CONTRIBUTING_CLONE_BLOCK
+    if shape == "custom-command":
+        text = text.replace("git clone ", "git clone --filter=blob:none ")
+    elif shape == "missing-close":
+        text = text.removesuffix("```\n")
+    else:
+        text += "\n" + text
+
+    assert placeholder_helper.replace_contributing_clone_block(text, context) == (text, 0)
+    write_file(tmp_path / "CONTRIBUTING.md", text)
+    findings = placeholder_helper.scan_repository(tmp_path)
+    assert any(finding.path == "CONTRIBUTING.md" for finding in findings)
+    assert placeholder_helper.scan_has_failures(findings, "retained-hard")
+
+
+def test_azure_clone_oracle_detects_optional_heading_dependency(tmp_path: Path) -> None:
+    """An independent expected clone command rejects the old Node-heading assumption."""
+    context = placeholder_helper.build_replacement_context(
+        host_provider="azure-devops-services",
+        azure_devops_organization="contoso",
+        azure_devops_project="Platform",
+        azure_devops_repository="downstream-template",
+    )
+    text = RAW_CONTRIBUTING_CLONE_BLOCK + "\n### Install Python\n"
+    expected_command = "git clone https://dev.azure.com/contoso/Platform/_git/downstream-template"
+    assert expected_command in placeholder_helper.replace_contributing_clone_block(text, context)[0]
+    source = inspect.getsource(placeholder_helper.replace_contributing_clone_block)
+    anchor = "    assert context.azure_devops is not None\n"
+    assert source.count(anchor) == 1
+    mutant_source = source.replace(
+        anchor,
+        anchor
+        + '    if "### 2. Install Node.js Dependencies" not in text:\n        return text, 0\n',
+        1,
+    )
+    mutant_path = write_file(
+        tmp_path / "clone_mutant.py",
+        "from __future__ import annotations\nimport shlex\n\n" + mutant_source,
+    )
+    mutant_spec = importlib.util.spec_from_file_location("clone_heading_mutant", mutant_path)
+    assert mutant_spec is not None and mutant_spec.loader is not None
+    mutant = importlib.util.module_from_spec(mutant_spec)
+    mutant_spec.loader.exec_module(mutant)
+    mutant_text, _count = mutant.replace_contributing_clone_block(text, context)
+    with pytest.raises(AssertionError):
+        assert expected_command in mutant_text
 
 
 def test_azure_pr_template_materializes_service_links_and_policy_guidance(
@@ -1125,16 +1261,16 @@ def test_placeholder_manifest_paths_resolve_through_template_manifest() -> None:
         mappings,
     )
     assert schema_relation is not None
-    assert schema_relation.requires_all == frozenset({"baseline"})
-    assert schema_relation.requires_any == frozenset()
+    assert schema_relation.requires_all == frozenset()
+    assert schema_relation.requires_any == frozenset({"baseline", "template-sync-support"})
 
     data_ci_relation = placeholder_helper.selected_relation_for_path(
         ".github/workflows/data-ci.yml",
         mappings,
     )
     assert data_ci_relation is not None
-    assert data_ci_relation.requires_all == frozenset({"github-actions"})
-    assert "baseline" in data_ci_relation.requires_any
+    assert data_ci_relation.requires_all == frozenset({"baseline", "github-actions"})
+    assert data_ci_relation.requires_any == frozenset()
 
 
 def test_classified_scan_preserves_all_contexts(tmp_path: Path) -> None:
@@ -1674,3 +1810,567 @@ def test_resolve_repo_path_rejects_symlinked_parent_directory(tmp_path: Path) ->
 
     with pytest.raises(placeholder_helper.PlaceholderError, match="must not traverse a symlink"):
         placeholder_helper.resolve_repo_path(tmp_path, ".github/CODEOWNERS")
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize("noncanonical", ["<owner>/<repo>", "<OWNER>/<REPO>", "your-org/your-repo"])
+def test_live_yaml_placeholders_are_canonical_and_replaced(
+    tmp_path: Path, noncanonical: str
+) -> None:
+    """Reject alternate live URL tokens without interpreting schematic documentation as config."""
+    import re
+
+    def assert_live_urls(document: dict[str, Any]) -> None:
+        values = [item["url"] for item in document.get("contact_links", [])]
+        values.extend(
+            item["attributes"]["value"]
+            for item in document.get("body", [])
+            if item.get("type") == "markdown"
+        )
+        assert values
+        for value in values:
+            assert not re.search(
+                r"https://[^/\s]+/(?:<owner>/<repo>|<OWNER>/<REPO>|your-org/your-repo)(?:/|$)",
+                value,
+            )
+
+    for relative in (".github/ISSUE_TEMPLATE/config.yml", ".github/ISSUE_TEMPLATE/bug_report.yml"):
+        source = read_file(REPO_ROOT / relative)
+        document = yaml.safe_load(source)
+        assert_live_urls(document)
+        assert "https://github.com/OWNER/REPO/" in source
+        invalid = source.replace(
+            "https://github.com/OWNER/REPO/", f"https://github.com/{noncanonical}/"
+        )
+        with pytest.raises(AssertionError):
+            assert_live_urls(yaml.safe_load(invalid))
+        write_file(tmp_path / relative, source)
+    schematic = "Schematic upstream URL: https://github.com/<owner>/<repo>/releases/latest\n"
+    write_file(tmp_path / "docs/schematic.md", schematic)
+    placeholder_helper.replace_placeholders(repo_root=tmp_path, context=build_context())
+    for relative in (".github/ISSUE_TEMPLATE/config.yml", ".github/ISSUE_TEMPLATE/bug_report.yml"):
+        rendered = read_file(tmp_path / relative)
+        assert "https://github.com/OWNER/REPO/" not in rendered
+        assert "https://github.com/octo/widget/" in rendered
+    assert read_file(tmp_path / "docs/schematic.md") == schematic
+    # The existing live manifest loader also refuses redefining the canonical token.
+    manifest = json.loads(read_file(REPO_ROOT / ".github/template-placeholders.json"))
+    token = next(
+        token for token in manifest["tokens"] if token["replacementStyle"] == "owner-repo-token"
+    )
+    token["placeholder"] = noncanonical
+    schema = json.loads(read_file(REPO_ROOT / "schemas/template-placeholders.schema.json"))
+    with pytest.raises(placeholder_helper.PlaceholderError, match="OWNER/REPO.*was expected"):
+        placeholder_helper.validate_placeholder_manifest(manifest, schema=schema)
+
+
+@pytest.mark.parametrize("reader", ["classification", "args"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "key: one\nkey: two\n",
+        "outer: {key: one, key: two}\n",
+        "rows: [{key: one, key: two}]\n",
+        "base: &base {key: one, key: two}\nmerged: {<<: *base}\n",
+        "base: &base {key: one}\nmerged: {<<: *base, <<: *base}\n",
+        "true: one\n1: two\n",
+        "key: one\n'key': one\n",
+    ],
+)
+def test_yaml_readers_reject_duplicate_explicit_keys(
+    tmp_path: Path, reader: str, text: str
+) -> None:
+    """Both public YAML readers reject ambiguity before classification."""
+    path = write_file(tmp_path / "operator.yml", text)
+    with pytest.raises(placeholder_helper.PlaceholderError, match="duplicate explicit mapping key"):
+        if reader == "classification":
+            placeholder_helper.load_yaml_mapping(path, "operator.yml")
+        else:
+            placeholder_helper.load_yaml_args_file(path)
+
+
+@pytest.mark.parametrize("reader", ["classification", "args"])
+def test_yaml_readers_preserve_merge_alias_and_scalar_key_semantics(
+    tmp_path: Path, reader: str
+) -> None:
+    """Original-key checks distinguish inherited overrides and reused aliases."""
+    path = write_file(
+        tmp_path / "operator.yml",
+        "\ufeffbase: &base {key: inherited}\n"
+        "other: &other {key: later, extra: yes}\n"
+        "override: &override {<<: *base, key: explicit}\n"
+        "reuse: {<<: *override}\n"
+        "sequence: {<<: [*base, *other]}\n"
+        "literal: {'<<': literal, =: equals}\n",
+    )
+    if reader == "classification":
+        result = placeholder_helper.load_yaml_mapping(path, "operator.yml")
+    else:
+        result = placeholder_helper.load_yaml_args_file(path)
+    assert result["override"] == {"key": "explicit"}
+    assert result["reuse"] == {"key": "explicit"}
+    assert result["sequence"] == {"key": "inherited", "extra": True}
+    assert result["literal"] == {"<<": "literal", "=": "equals"}
+
+
+@pytest.mark.parametrize("text", ["key: !unknown value\n", "? [a, b]\n: value\n", "[", "[]"])
+def test_yaml_reader_preserves_invalid_input_failures(tmp_path: Path, text: str) -> None:
+    """Unsafe tags, nonhashable keys and malformed shapes remain domain failures."""
+    path = write_file(tmp_path / "operator.yml", text)
+    with pytest.raises(placeholder_helper.PlaceholderError):
+        placeholder_helper.load_yaml_args_file(path)
+
+
+def _copy_standalone_placeholder_tool(root: Path) -> Path:
+    """Copy only the baseline helper and its retained placeholder manifest."""
+    for relative in (
+        ".github/scripts/replace-template-placeholders.py",
+        ".github/template-placeholders.json",
+        "schemas/template-placeholders.schema.json",
+    ):
+        destination = root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPO_ROOT / relative, destination)
+    assert not (root / ".template-sync").exists()
+    assert not (root / ".github/scripts/instruction_contract_support.py").exists()
+    return root / ".github/scripts/replace-template-placeholders.py"
+
+
+def _classification_manifest_fixture(root: Path) -> Path:
+    """Declare fixed module ownership without needing retained sync source files."""
+    return write_file(
+        root / "external-manifest.yml",
+        "template_manifest:\n  modules:\n    - name: baseline\n    - name: github-actions\n"
+        "  path_mappings:\n    - pattern: '**'\n      requires_all: [baseline]\n",
+    )
+
+
+@pytest.mark.parametrize("source", ["marker", "args"])
+@pytest.mark.parametrize("mutate", [False, True])
+def test_native_placeholder_duplicate_yaml_guard(tmp_path: Path, source: str, mutate: bool) -> None:
+    """Native failure depends on the guard, not another schema or lint gate."""
+    script = _copy_standalone_placeholder_tool(tmp_path / "installed")
+    if mutate:
+        text = read_file(script)
+        guard = "return yaml_module.load(text, Loader=UniqueKeySafeLoader)"
+        assert text.count(guard) == 1
+        write_file(script, text.replace(guard, "return yaml_module.safe_load(text)"))
+    target = tmp_path / "target"
+    write_file(target / "CONTRIBUTING.md", "See OWNER/REPO.\n")
+    arguments = ["--scan-mode", "retained-hard"]
+    if source == "marker":
+        write_file(
+            target / ".template-sync/marker.yml",
+            "template_sync:\n  included_modules: [baseline]\n"
+            "  included_modules: [github-actions]\n",
+        )
+    else:
+        path = write_file(
+            tmp_path / "external-args.yml",
+            "retained_modules: [baseline]\nretained_modules: [github-actions]\n",
+        )
+        arguments.extend(["--args-file", str(path)])
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            str(script),
+            "scan",
+            "--repo-root",
+            str(target),
+            "--manifest",
+            str(_classification_manifest_fixture(tmp_path)),
+            *arguments,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+    if mutate:
+        assert result.returncode == 0, result.stderr
+        assert "pruned-informational" in result.stdout
+        with pytest.raises(AssertionError):
+            assert result.returncode == 1
+    else:
+        assert result.returncode == 1, result.stdout
+        assert "duplicate explicit mapping key" in result.stderr
+        assert "--args-file" in result.stderr if source == "args" else "marker.yml" in result.stderr
+
+
+def test_baseline_only_placeholder_json_works_without_site_packages(
+    tmp_path: Path,
+) -> None:
+    """JSON/default scans need neither PyYAML nor instruction/sync runtime files."""
+    script = _copy_standalone_placeholder_tool(tmp_path / "installed")
+    target = tmp_path / "target"
+    write_file(target / "README.md", "Ready.\n")
+    json_args = write_file(tmp_path / "external.json", '\ufeff{"repository": "octo/widget"}\n')
+    command = [
+        sys.executable,
+        "-S",
+        "-B",
+        str(script),
+        "scan",
+        "--repo-root",
+        str(target),
+    ]
+    result = subprocess.run(
+        [*command, "--args-file", str(json_args)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+    assert result.returncode == 0, result.stderr
+    yaml_args = write_file(tmp_path / "external.yml", "repository: octo/widget\n")
+    missing_yaml = subprocess.run(
+        [*command, "--args-file", str(yaml_args)],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+    assert missing_yaml.returncode == 1
+    assert "YAML --args-file support is unavailable" in missing_yaml.stderr
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        '{"repository":"a/b","repository":"c/d"}',
+        '{"metadata":{"name":"one","name":"two"}}',
+        '{"repository":"a/b","repos\\u0069tory":"a/b"}',
+    ],
+)
+def test_json_args_reject_duplicate_object_names(tmp_path: Path, text: str) -> None:
+    """Repeated decoded names fail before argument/schema interpretation."""
+    path = write_file(tmp_path / "external.json", text)
+    with pytest.raises(placeholder_helper.PlaceholderError, match="--args-file: duplicate JSON"):
+        placeholder_helper.load_json_args_file(path)
+
+
+def test_json_args_allow_name_reuse_in_separate_objects(tmp_path: Path) -> None:
+    """Uniqueness belongs to each object, not the whole document."""
+    path = write_file(tmp_path / "external.json", '{"one":{"key":1},"two":{"key":2}}')
+    assert placeholder_helper.load_json_args_file(path) == {
+        "one": {"key": 1},
+        "two": {"key": 2},
+    }
+
+
+@pytest.mark.parametrize("mutate", [False, True])
+def test_native_placeholder_duplicate_json_guard(tmp_path: Path, mutate: bool) -> None:
+    """Removing only the JSON hook restores the original false success."""
+    script = _copy_standalone_placeholder_tool(tmp_path / "installed")
+    if mutate:
+        text = read_file(script)
+        guard = "json.loads(text, object_pairs_hook=unique_object)"
+        assert text.count(guard) == 1
+        write_file(script, text.replace(guard, "json.loads(text)"))
+    target = tmp_path / "target"
+    write_file(target / "CONTRIBUTING.md", "See OWNER/REPO.\n")
+    path = write_file(
+        tmp_path / "external.json",
+        '{"retained_modules":["baseline"],"retained_modules":["github-actions"]}',
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            str(script),
+            "scan",
+            "--repo-root",
+            str(target),
+            "--manifest",
+            str(_classification_manifest_fixture(tmp_path)),
+            "--scan-mode",
+            "retained-hard",
+            "--args-file",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+    if mutate:
+        assert result.returncode == 0, result.stderr
+        assert "pruned-informational" in result.stdout
+        with pytest.raises(AssertionError):
+            assert result.returncode == 1
+    else:
+        assert result.returncode == 1, result.stdout
+        assert "--args-file: duplicate JSON object key" in result.stderr
+
+
+@pytest.mark.parametrize("encoding", ["json", "yaml"])
+@pytest.mark.parametrize(
+    ("module", "override", "expected_exit", "disposition"),
+    [
+        ("baseline", False, 1, "retained-hard-failure"),
+        ("github-actions", False, 0, "pruned-informational"),
+        ("github-actions", True, 1, "retained-hard-failure"),
+    ],
+)
+def test_native_placeholder_unique_module_selection_and_cli_precedence(
+    tmp_path: Path,
+    encoding: str,
+    module: str,
+    override: bool,
+    expected_exit: int,
+    disposition: str,
+) -> None:
+    """Valid external arguments retain pruning and explicit CLI precedence."""
+    target = tmp_path / "target"
+    write_file(target / "CONTRIBUTING.md", "See OWNER/REPO.\n")
+    data = {"retained_modules": [module]}
+    text = json.dumps(data) if encoding == "json" else yaml.safe_dump(data)
+    path = write_file(tmp_path / f"external.{encoding}", "\ufeff" + text)
+    command = [
+        sys.executable,
+        "-B",
+        str(SCRIPT_PATH),
+        "scan",
+        "--repo-root",
+        str(target),
+        "--manifest",
+        str(_classification_manifest_fixture(tmp_path)),
+        "--scan-mode",
+        "retained-hard",
+        "--args-file",
+        str(path),
+    ]
+    if override:
+        command.extend(["--retained-module", "baseline"])
+    result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=15)
+    assert result.returncode == expected_exit, result.stderr
+    assert disposition in result.stdout
+
+
+def run_placeholder_schema_control(
+    root: Path, adapter: str, *, missing_dependency: bool = False, unsafe_default: bool = False
+) -> subprocess.CompletedProcess[str]:
+    """Execute either standalone adapter with a safe public network seam."""
+    filename = (
+        "replace-template-placeholders.py"
+        if adapter == "manifest"
+        else "validate-placeholder-schema-examples.py"
+    )
+    command = (
+        ["scan", "--repo-root", str(root / "scan-root")]
+        if adapter == "manifest"
+        else ["--repo-root", str(root)]
+    )
+    program = (
+        "import importlib, io, json, runpy, sys, urllib.request\n"
+        "calls = []\n"
+        "def retrieve(request, *args, **kwargs):\n"
+        "    calls.append(request.full_url)\n"
+        "    return io.BytesIO(b'{}')\n"
+        "urllib.request.urlopen = retrieve\n"
+        "sys.dont_write_bytecode = True\n"
+        f"if {(unsafe_default and not missing_dependency)!r}:\n"
+        "    import jsonschema\n"
+        "    from referencing import Registry, Resource\n"
+        "    from referencing.jsonschema import DRAFT202012\n"
+        "    original_validator = jsonschema.Draft202012Validator\n"
+        "    def retrieve_schema(uri):\n"
+        "        with urllib.request.urlopen(urllib.request.Request(uri)) as response:\n"
+        "            return Resource(contents=json.load(response), specification=DRAFT202012)\n"
+        "    def dependency_default(schema, *args, **kwargs):\n"
+        "        if 'registry' not in kwargs:\n"
+        "            kwargs['registry'] = Registry(retrieve=retrieve_schema)\n"
+        "        return original_validator(schema, *args, **kwargs)\n"
+        "    dependency_default.check_schema = original_validator.check_schema\n"
+        "    jsonschema.Draft202012Validator = dependency_default\n"
+        "original_import = importlib.import_module\n"
+        "def optional_import(name, *args, **kwargs):\n"
+        f"    if {missing_dependency!r} and name == 'jsonschema':\n"
+        "        raise ImportError('private missing optional dependency')\n"
+        "    return original_import(name, *args, **kwargs)\n"
+        "importlib.import_module = optional_import\n"
+        f"sys.argv = {[str(root / '.github/scripts' / filename), *command]!r}\n"
+        "try:\n"
+        "    runpy.run_path(sys.argv[0], run_name='__main__')\n"
+        "finally:\n"
+        "    print('REFERENCE_RETRIEVALS=' + json.dumps(calls))\n"
+    )
+    return subprocess.run(
+        [sys.executable, "-c", program],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+
+def copy_placeholder_schema_adapter(root: Path, adapter: str) -> Path:
+    """Deploy each adapter independently of instruction/sync runtime files."""
+    if adapter == "manifest":
+        script = _copy_standalone_placeholder_tool(root)
+        write_file(root / "scan-root/README.md", "Clean application documentation.\n")
+    else:
+        script = root / ".github/scripts/validate-placeholder-schema-examples.py"
+        write_file(script, read_file(REPO_ROOT / ".github/scripts" / script.name))
+        write_json(
+            root / "schemas/template-placeholders.schema.json",
+            {"type": "object", "required": ["required"]},
+        )
+        write_json(root / "schemas/examples/template-placeholders/invalid/missing.json", {})
+    assert not (root / ".template-sync").exists()
+    assert not (root / ".github/scripts/instruction_contract_support.py").exists()
+    return script
+
+
+@pytest.mark.parametrize("adapter", ["manifest", "examples"])
+@pytest.mark.parametrize("keyword", ["$ref", "$dynamicRef"])
+@pytest.mark.parametrize("reference", ["https://schema.invalid/private", "file:///private.json"])
+def test_placeholder_schema_adapters_refuse_external_retrieval(
+    tmp_path: Path, adapter: str, keyword: str, reference: str
+) -> None:
+    """Both real CLIs reject unreachable schemas without touching their URI."""
+    copy_placeholder_schema_adapter(tmp_path, adapter)
+    path = tmp_path / "schemas/template-placeholders.schema.json"
+    schema = json.loads(read_file(path))
+    schema["allOf"] = [{keyword: reference}]
+    write_json(path, schema)
+    result = run_placeholder_schema_control(tmp_path, adapter)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Unable to resolve a placeholder" in result.stderr
+    assert "REFERENCE_RETRIEVALS=[]" in result.stdout
+    assert "Traceback" not in result.stderr
+    assert reference not in result.stderr
+
+
+@pytest.mark.parametrize("adapter", ["manifest", "examples"])
+def test_placeholder_schema_registry_removal_has_native_failure_oracle(
+    tmp_path: Path, adapter: str
+) -> None:
+    """Only restoring implicit retrieval changes a fixed failure into success."""
+    script = copy_placeholder_schema_adapter(tmp_path, adapter)
+    path = tmp_path / "schemas/template-placeholders.schema.json"
+    schema = json.loads(read_file(path))
+    schema["allOf"] = [{"$ref": "https://schema.invalid/private"}]
+    write_json(path, schema)
+    rejected = run_placeholder_schema_control(tmp_path, adapter, unsafe_default=True)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert "REFERENCE_RETRIEVALS=[]" in rejected.stdout
+    source = read_file(script)
+    anchor = ", registry=referencing_module.Registry()"
+    assert source.count(anchor) == 1
+    write_file(script, source.replace(anchor, ""))
+    mutant = run_placeholder_schema_control(tmp_path, adapter, unsafe_default=True)
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    assert 'REFERENCE_RETRIEVALS=["https://schema.invalid/private"]' in mutant.stdout
+    assert "Traceback" not in mutant.stderr
+
+
+@pytest.mark.parametrize("adapter", ["manifest", "examples"])
+@pytest.mark.parametrize(
+    "case", ["fragment", "annotations", "missing-fragment", "missing-dependency"]
+)
+def test_placeholder_schema_adapter_compatibility(tmp_path: Path, adapter: str, case: str) -> None:
+    """Local references and optional import behavior survive independent deployment."""
+    copy_placeholder_schema_adapter(tmp_path, adapter)
+    path = tmp_path / "schemas/template-placeholders.schema.json"
+    schema = json.loads(read_file(path))
+    if case == "fragment":
+        schema.setdefault("$defs", {})["local"] = {"type": "object"}
+        schema["allOf"] = [{"$ref": "#/$defs/local"}]
+    elif case == "annotations":
+        schema["examples"] = [{"$ref": 7, "$dynamicRef": "https://schema.invalid/data"}]
+    elif case == "missing-fragment":
+        schema["allOf"] = [{"$ref": "#/$defs/missing"}]
+    write_json(path, schema)
+    result = run_placeholder_schema_control(
+        tmp_path, adapter, missing_dependency=case == "missing-dependency"
+    )
+    expected = (
+        1
+        if case == "missing-fragment" or (case == "missing-dependency" and adapter == "examples")
+        else 0
+    )
+    assert result.returncode == expected, result.stdout + result.stderr
+    assert "REFERENCE_RETRIEVALS=[]" in result.stdout
+    if case == "missing-dependency" and adapter == "examples":
+        assert "jsonschema is unavailable" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_placeholder_invalid_example_adapter_still_rejects_valid_examples(tmp_path: Path) -> None:
+    """Offline resolution must not turn the invalid-example gate into unconditional success."""
+    copy_placeholder_schema_adapter(tmp_path, "examples")
+    write_json(
+        tmp_path / "schemas/examples/template-placeholders/invalid/missing.json", {"required": 1}
+    )
+    result = run_placeholder_schema_control(tmp_path, "examples")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "expected rejection but validation passed" in result.stdout
+    assert "REFERENCE_RETRIEVALS=[]" in result.stdout
+
+
+def test_placeholder_bootstrap_preserves_import_errors_and_clean_cli_failure(
+    tmp_path: Path,
+) -> None:
+    """The CLI wrapper suppresses chained details without changing library exceptions."""
+    script = copy_placeholder_schema_adapter(tmp_path, "manifest")
+    path = tmp_path / "schemas/template-placeholders.schema.json"
+    schema = json.loads(read_file(path))
+    schema["allOf"] = [{"$ref": "https://schema.invalid/private"}]
+    write_json(path, schema)
+    rejected = run_placeholder_schema_control(tmp_path, "manifest")
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert (
+        rejected.stderr.strip()
+        == "ERROR: Unable to resolve a placeholder manifest schema reference."
+    )
+    assert "REFERENCE_RETRIEVALS=[]" in rejected.stdout
+    program = (
+        "import importlib.util, io, sys, urllib.request\n"
+        "sys.dont_write_bytecode = True\n"
+        "calls = []\n"
+        "def retrieve(request, *args, **kwargs):\n"
+        "    calls.append(request.full_url)\n"
+        "    return io.BytesIO(b'{}')\n"
+        "urllib.request.urlopen = retrieve\n"
+        f"spec = importlib.util.spec_from_file_location('imported_placeholder', {str(script)!r})\n"
+        "module = importlib.util.module_from_spec(spec)\n"
+        "sys.modules[spec.name] = module\n"
+        "try:\n"
+        "    spec.loader.exec_module(module)\n"
+        "except module.PlaceholderError as error:\n"
+        "    print('LIBRARY_DOMAIN_ERROR=' + str(error))\n"
+        "else:\n"
+        "    raise AssertionError('Library import must reject the unresolved schema')\n"
+        "assert calls == []\n"
+    )
+    imported = subprocess.run(
+        [sys.executable, "-c", program],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert imported.returncode == 0, imported.stdout + imported.stderr
+    assert "LIBRARY_DOMAIN_ERROR=Unable to resolve" in imported.stdout
+    assert "Traceback" not in imported.stderr
+    source = read_file(script)
+    wrapper = (
+        "try:\n"
+        "    PLACEHOLDER_MANIFEST = load_placeholder_manifest()\n"
+        "except PlaceholderError as error:\n"
+        '    if __name__ == "__main__":\n'
+        '        print(f"ERROR: {error}", file=sys.stderr)\n'
+        "        raise SystemExit(1) from error\n"
+        "    raise\n"
+    )
+    assert source.count(wrapper) == 1
+    write_file(
+        script, source.replace(wrapper, "PLACEHOLDER_MANIFEST = load_placeholder_manifest()\n")
+    )
+    mutant = run_placeholder_schema_control(tmp_path, "manifest")
+    assert mutant.returncode == 1, mutant.stdout + mutant.stderr
+    assert "REFERENCE_RETRIEVALS=[]" in mutant.stdout
+    assert "Traceback" in mutant.stderr
+    assert "https://schema.invalid/private" in mutant.stderr

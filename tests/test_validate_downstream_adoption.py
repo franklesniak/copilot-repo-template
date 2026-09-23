@@ -10,6 +10,8 @@ from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 
+from tests._pytest_compat import pytest
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPT_PATH = REPO_ROOT / ".template-sync" / "scripts" / "validate_downstream_adoption.py"
 CONTRACTS_SCHEMA_PATH = REPO_ROOT / "schemas" / "template-sync-instruction-contracts.schema.json"
@@ -500,25 +502,24 @@ def test_or_group_inline_block_is_valid_when_any_member_module_retained(
 ) -> None:
     """An OR-retention (ANY) inline block is not flagged while any member is retained.
 
-    ``PARTIAL_MODULES`` excludes ``json`` but keeps ``yaml``, ``schema``, and
-    ``template-sync-support``, so the ``data-ci-reference-only`` OR-group block is
-    correctly retained. A naive AND check would flag it as requiring the excluded
-    ``json`` module.
+    ``PARTIAL_MODULES`` excludes ``python`` but keeps ``baseline``, so the
+    ``pip-dependencies-only`` OR-group block is correctly retained. A naive AND
+    check would flag it as requiring the excluded ``python`` module.
     """
     _write_common_downstream_repo(
         tmp_path,
         readme_text=(
             "# Downstream\n\n"
-            "<!-- template-sync: begin data-ci-reference-only -->\n"
-            "Data CI guidance.\n"
-            "<!-- template-sync: end data-ci-reference-only -->\n"
+            "<!-- template-sync: begin pip-dependencies-only -->\n"
+            "Baseline runner dependency guidance.\n"
+            "<!-- template-sync: end pip-dependencies-only -->\n"
         ),
     )
 
     result = _run_validator(tmp_path, "--require-marker")
 
     assert result.returncode == 0, result.stdout
-    assert "data-ci-reference-only" not in result.stdout
+    assert "pip-dependencies-only" not in result.stdout
 
 
 def test_azure_guide_or_group_inline_block_is_reported_without_azure_modules(
@@ -565,13 +566,23 @@ def test_azure_guide_or_group_inline_block_is_valid_when_one_azure_module_retain
     assert "azure-devops-guide-reference-only" not in result.stdout
 
 
+@pytest.mark.parametrize(
+    "link",
+    [
+        "[Azure guide](docs/azure-devops-support.md)",
+        '[Azure guide](docs/azure-devops-support.md\n "Azure guide")',
+        '[Azure guide](docs/azure-devops-support.md "Azure\nguide")',
+        '[Azure guide]:\n docs/azure-devops-support.md\n "Azure guide"',
+    ],
+)
 def test_github_only_downstream_adoption_reports_unguarded_azure_guide_link(
     tmp_path: Path,
+    link: str,
 ) -> None:
     """GitHub-only adopters cannot keep unguarded relative links to the Azure guide."""
     _write_common_downstream_repo(
         tmp_path,
-        readme_text="# Downstream\n\nSee [Azure guide](docs/azure-devops-support.md).\n",
+        readme_text="# Downstream\n\n" + link + "\n",
     )
 
     result = _run_validator(tmp_path, "--require-marker")
@@ -754,8 +765,17 @@ def test_protected_guide_reference_obligation_flags_excluded_modules_when_target
     assert "AGENTS.md:7: agents-azure-devops-retained-target-reference" in result.stdout
 
 
+@pytest.mark.parametrize(
+    ("reference_kind", "body"),
+    [
+        ("prose-reference", "Use docs/azure-devops-support.md when the guide is retained."),
+        ("markdown-relative-link", '[Azure](docs/azure-devops-support.md\n "Azure guide")'),
+    ],
+)
 def test_protected_guide_reference_waiver_passes_and_is_reported(
     tmp_path: Path,
+    reference_kind: str,
+    body: str,
 ) -> None:
     """A matching protected-guide waiver turns the reference finding into a visible waiver."""
     contracts = _contracts()
@@ -763,7 +783,7 @@ def test_protected_guide_reference_waiver_passes_and_is_reported(
         {
             "key": "agents-azure-devops-support-guide-path",
             "path": "AGENTS.md",
-            "reference_kind": "prose-reference",
+            "reference_kind": reference_kind,
             "target_path": "docs/azure-devops-support.md",
             "target_modules": [
                 "azure-devops-platform",
@@ -773,6 +793,8 @@ def test_protected_guide_reference_waiver_passes_and_is_reported(
             "tokens": ["docs/azure-devops-support.md"],
         }
     ]
+    if reference_kind == "markdown-relative-link":
+        contracts["protected_guide_reference_obligations"][0].pop("tokens")
     _write_common_downstream_repo(
         tmp_path,
         marker=_marker(
@@ -784,20 +806,30 @@ def test_protected_guide_reference_waiver_passes_and_is_reported(
                     "reason": "GitHub-only fixture keeps the protected guide reference.",
                     "authorization_basis": "Owner authorized this protected-guide waiver.",
                 }
-            ]
+            ],
+            local_overrides=(
+                [
+                    {
+                        "path": "AGENTS.md",
+                        "reason": "Protected instruction references use the exact waiver below.",
+                        "default_decision": "SKIP",
+                    }
+                ]
+                if reference_kind == "markdown-relative-link"
+                else None
+            ),
         ),
         agents_text=(
             "# Agent Instructions\n\n"
             "## Protected Instruction Files\n\n"
-            "## GitHub Plugin Usage\n\n"
-            "Use docs/azure-devops-support.md when the guide is retained.\n"
+            "## GitHub Plugin Usage\n\n" + body + "\n"
         ),
     )
     _write_yaml(tmp_path, ".template-sync/instruction-contracts.yml", contracts)
 
     result = _run_validator(tmp_path, "--require-marker")
 
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
     assert "Downstream adoption validation passed with waivers." in result.stdout
     assert "Protected guide contract waiver: AGENTS.md: agents-azure-devops-support-guide-path" in (
         result.stdout
@@ -850,3 +882,190 @@ def test_waivers_deferred_items_and_commands_are_reported(tmp_path: Path) -> Non
     assert "Validation commands considered:" in result.stdout
     assert "validate_marker.py --require-marker" in result.stdout
     assert "validate_instruction_contracts.py --mode downstream --require-marker" in (result.stdout)
+
+
+@pytest.mark.parametrize("retain_yaml,retain_agents", [(True, True), (False, True), (True, False)])
+def test_aggregate_scoped_contract_requires_all_modules(
+    tmp_path: Path, retain_yaml: bool, retain_agents: bool
+) -> None:
+    """Aggregate validation enforces a retained guide, never an excluded conjunction."""
+    modules = ["baseline", "template-sync-support"]
+    if retain_yaml:
+        modules.append("yaml")
+    if retain_agents:
+        modules.append("agent-instructions")
+    _run_git(tmp_path, "init")
+    _copy_schemas(tmp_path)
+    manifest = _manifest()
+    manifest["template_manifest"]["path_mappings"].append(
+        {
+            "pattern": ".github/instructions/yaml.instructions.md",
+            "requires_all": ["yaml", "agent-instructions"],
+        }
+    )
+    _write_yaml(tmp_path, ".template-sync/manifest.yml", manifest)
+    _write_yaml(tmp_path, ".template-sync/marker.yml", _marker(modules))
+    _write_text(tmp_path, "README.md", "# Downstream\n")
+    _write_text(tmp_path, ".pre-commit-config.yaml", "repos: []\n")
+    for script in (
+        "validate_marker.py",
+        "validate_instruction_contracts.py",
+        "validate_downstream_adoption.py",
+    ):
+        _write_text(tmp_path, f".template-sync/scripts/{script}")
+    if retain_yaml:
+        _write_text(tmp_path, ".yamllint.yml", "extends: default\n")
+    if retain_agents:
+        _write_text(tmp_path, "AGENTS.md", "# Agent instructions\n")
+    _write_yaml(
+        tmp_path,
+        ".template-sync/instruction-contracts.yml",
+        {
+            "instruction_contracts": [
+                {
+                    "path": ".github/instructions/yaml.instructions.md",
+                    "requires_modules": ["yaml", "agent-instructions"],
+                    "required_sections": [
+                        {
+                            "heading": "## Trusted inputs",
+                            "next_heading": None,
+                            "required_paragraphs": [
+                                "Reject Git modes 120000 and 160000 before parsing."
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+    )
+    if retain_yaml and retain_agents:
+        _write_text(
+            tmp_path,
+            ".github/instructions/yaml.instructions.md",
+            "## Trusted inputs\n\nReject Git modes 120000 and 160000 before parsing.\n",
+        )
+    _run_git(tmp_path, "add", ".")
+    result = _run_validator(tmp_path, "--require-marker")
+    assert result.returncode == 0, result.stdout + result.stderr
+    if retain_yaml and retain_agents:
+        _write_text(
+            tmp_path,
+            ".github/instructions/yaml.instructions.md",
+            "## Trusted inputs\n\nAccept all Git blob modes.\n",
+        )
+        result = _run_validator(tmp_path, "--require-marker")
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert "section:## Trusted inputs:paragraph:" in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("body", "line_number"),
+    [
+        ("    [JSON](templates/json/example.json)\n", None),
+        ("Paragraph\n    [JSON](templates/json/example.json)\n", 4),
+        ("- Item\n\n      [JSON](templates/json/example.json)\n", None),
+        ("- Item\n\n    [JSON](templates/json/example.json)\n", 5),
+        (">     [JSON](templates/json/example.json)\n", None),
+        ("> Paragraph\n>     [JSON](templates/json/example.json)\n", 4),
+    ],
+)
+def test_marker_relative_links_distinguish_indented_code_from_continuation(
+    tmp_path: Path, body: str, line_number: int | None
+) -> None:
+    """The public marker route uses contextual code filtering and original lines."""
+    _write_common_downstream_repo(tmp_path, readme_text="# Downstream\n\n" + body)
+    result = _run_validator(tmp_path, "--require-marker")
+    assert result.returncode == (1 if line_number is not None else 0), result.stdout + result.stderr
+    if line_number is not None:
+        assert (
+            f"README.md:{line_number}: templates/json/example.json -> templates/json/example.json"
+            in result.stdout
+        )
+    else:
+        assert "Retained Markdown relative link targets excluded module(s)" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("body", "line_number"),
+    [
+        ("<!-- [JSON](templates/json/example.json) -->\n", None),
+        ("<pre>\n[JSON](templates/json/example.json)\n</pre>\n", None),
+        ("<div>\n[JSON](templates/json/example.json)\n\n", None),
+        ("Text <!-- [JSON](templates/json/example.json) -->\n", None),
+        ('Text <span title="[JSON](templates/json/example.json)"> prose</span>\n', None),
+        ("<span>[JSON](templates/json/example.json)</span>\n", 3),
+        ("[A <!-- ] --> B](templates/json/example.json)\n", 3),
+        ("<!--\n```\n-->\n[JSON](templates/json/example.json)\n", 6),
+    ],
+)
+def test_marker_html_literals_and_live_links_have_native_boundary_controls(
+    tmp_path: Path, body: str, line_number: int | None
+) -> None:
+    """The marker route neither reports literal HTML nor loses adjacent real links."""
+    _write_common_downstream_repo(tmp_path, readme_text="# Downstream\n\n" + body)
+    result = _run_validator(tmp_path, "--require-marker")
+    assert result.returncode == (1 if line_number is not None else 0), result.stdout + result.stderr
+    if line_number is not None:
+        assert (
+            f"README.md:{line_number}: templates/json/example.json -> templates/json/example.json"
+            in result.stdout
+        )
+    else:
+        assert "Retained Markdown relative link targets excluded module(s)" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("body", "line_number"),
+    [
+        ("[outer [JSON](templates/json/example.json)](kept.md)", 3),
+        ("[outer [kept](kept.md)](templates/json/example.json)", None),
+        ("![outer [JSON](templates/json/example.json)](image.png)", None),
+        ("[outer ![image [JSON](templates/json/example.json)](image.png)](kept.md)", None),
+        ("[outer ![image](image.png)](templates/json/example.json)", 3),
+        ("[outer\n [JSON](templates/json/example.json)](kept.md)", 4),
+        ("[outer [Guide][ref]](templates/json/example.json)\n\n[ref]: kept.md", None),
+        ("[outer [Guide][missing]](templates/json/example.json)", 3),
+    ],
+)
+def test_marker_nested_link_activity_has_fixed_native_findings(
+    tmp_path: Path, body: str, line_number: int | None
+) -> None:
+    """Nested ordinary links and image descriptions preserve the public route."""
+    _write_common_downstream_repo(tmp_path, readme_text="# Downstream\n\n" + body + "\n")
+    result = _run_validator(tmp_path, "--require-marker")
+    assert result.returncode == (1 if line_number is not None else 0), result.stdout + result.stderr
+    if line_number is not None:
+        assert (
+            f"README.md:{line_number}: templates/json/example.json -> templates/json/example.json"
+            in result.stdout
+        )
+    else:
+        assert "Retained Markdown relative link targets excluded module(s)" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("body", "line_number"),
+    [
+        ("[Guide]\n[Guide]: templates/json/example.json", None),
+        ("> [Guide]\n> [Guide]: templates/json/example.json", None),
+        ("- [Guide]\n  [Guide]: templates/json/example.json", None),
+        ("[Guide]\n\n[Guide]: templates/json/example.json", 5),
+        ('Paragraph\n[Guide]: kept.md "[live](templates/json/example.json)"', 4),
+        ("# Heading\n[Guide]: templates/json/example.json", 4),
+        ("[kept]: kept.md\n[Guide]: templates/json/example.json", 4),
+    ],
+)
+def test_marker_definition_context_has_fixed_native_findings(
+    tmp_path: Path, body: str, line_number: int | None
+) -> None:
+    """The marker route does not consume paragraph lookalikes as definitions."""
+    _write_common_downstream_repo(tmp_path, readme_text="# Downstream\n\n" + body + "\n")
+    result = _run_validator(tmp_path, "--require-marker")
+    assert result.returncode == (1 if line_number is not None else 0), result.stdout + result.stderr
+    if line_number is not None:
+        assert (
+            f"README.md:{line_number}: templates/json/example.json -> templates/json/example.json"
+            in result.stdout
+        )
+    else:
+        assert "Retained Markdown relative link targets excluded module(s)" not in result.stdout

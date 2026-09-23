@@ -14,7 +14,8 @@
 # ============================================================================
 
 # Pre-commit configuration
-# Install:  pip install pre-commit && pre-commit install
+# Install: python -m pip install -r requirements-pre-commit.txt
+# Activate: pre-commit install
 # Run:  pre-commit run --all-files
 #
 # Note: This file configures pre-commit hooks for all projects. Module-specific
@@ -109,6 +110,15 @@ repos:
     rev: v1.7.12
     hooks:
       - id: actionlint
+  - repo: local
+    hooks:
+      - id: validate-workflow-security
+        name: Validate workflow security contract
+        entry: python .github/scripts/validate_workflow_security.py
+        language: python
+        additional_dependencies: [PyYAML==6.0.3, jsonschema==4.26.0]
+        pass_filenames: false
+        always_run: true
   # template-sync: end github-actions-only
 
   # template-sync: begin python-only
@@ -406,6 +416,12 @@ repos:
         language: python
         types: [markdown]
         files: ^docs/.*\.md$
+      - id: lint-nested-markdown
+        name: Lint nested Markdown
+        entry: python .github/scripts/lint_nested_markdown_hook.py
+        language: python
+        types: [file]
+        files: '\.(md|mdc)$'
 
   # Markdown linting
   - repo: https://github.com/DavidAnson/markdownlint-cli2
@@ -442,3 +458,17 @@ repos:
         pass_filenames: false
         files: '(^|/)([^/]+\.tf(\.json)?|\.tflint\.hcl)$'
   # template-sync: end terraform-only
+
+  # template-sync: begin instruction-enforcement-only
+  - repo: local
+    hooks:
+      - id: validate-instruction-profile
+        name: Validate retained instruction profile
+        entry: python .github/scripts/validate_instruction_profile.py
+        language: python
+        pass_filenames: false
+        always_run: true
+        additional_dependencies:
+          - PyYAML==6.0.3
+          - jsonschema==4.26.0
+  # template-sync: end instruction-enforcement-only

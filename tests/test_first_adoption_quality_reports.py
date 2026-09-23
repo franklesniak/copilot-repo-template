@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import io
 import json
+import shutil
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
@@ -498,6 +499,7 @@ def test_collect_powershell_candidate_paths_uses_analyzer_suffixes_case_insensit
     }
 
 
+@pytest.mark.upstream_template_only
 def test_report_suffix_policy_matches_shared_helper() -> None:
     """The Python report and PowerShell helper expose the same analyzer suffix set."""
     executable = quality_reports.powershell_executable()
@@ -1438,3 +1440,177 @@ def test_path_reference_cli_can_fail_on_findings(tmp_path: Path) -> None:
 
     assert result == 1
     assert "path-reference.case-mismatch" in stdout.getvalue()
+
+
+def _copy_installed_host_report(root: Path) -> Path:
+    """Copy the support-owned report and its actual installed import closure."""
+    for relative in (
+        ".template-sync/scripts/first_adoption_quality_reports.py",
+        ".template-sync/scripts/template_sync_materialization_helpers.py",
+        ".github/scripts/instruction_contract_support.py",
+    ):
+        destination = root / relative
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(REPO_ROOT / relative, destination)
+    assert not (root / ".github/scripts/instruction_contract_core.py").exists()
+    assert not (root / "pyproject.toml").exists()
+    return root / ".template-sync/scripts/first_adoption_quality_reports.py"
+
+
+@pytest.mark.parametrize(
+    ("marker", "exit_code", "message"),
+    [
+        (None, 0, "not found; no host setup marker decisions"),
+        ("template_sync: {included_modules: [github-actions]}\n", 0, "No Azure DevOps"),
+        (
+            (
+                "template_sync:\n  included_modules: [azure-pipelines]\n"
+                "  azure_dependency_update_policy: manual-follow-up\n"
+            ),
+            0,
+            "manual-follow-up",
+        ),
+        (
+            (
+                "\ufeffbase: &base {included_modules: [github-actions]}\n"
+                "template_sync:\n  <<: *base\n  included_modules: [azure-pipelines]\n"
+                "  azure_dependency_update_policy: inherited-override\n"
+            ),
+            0,
+            "inherited-override",
+        ),
+        (
+            (
+                "template_sync:\n  included_modules: [azure-pipelines]\n"
+                "  included_modules: [github-actions]\n"
+            ),
+            1,
+            "duplicate explicit mapping key",
+        ),
+        (
+            (
+                "template_sync: {included_modules: [azure-pipelines]}\n"
+                "template_sync: {included_modules: [github-actions]}\n"
+            ),
+            1,
+            "duplicate explicit mapping key",
+        ),
+        ("template_sync: [\n", 1, "Invalid YAML in .template-sync/marker.yml:"),
+        ("[]\n", 1, "must contain a YAML mapping"),
+        ("hello\n", 1, "must contain a YAML mapping"),
+        ("null\n", 1, "must contain a YAML mapping"),
+        ("template_sync: []\n", 1, "must contain template_sync mapping"),
+    ],
+)
+def test_installed_host_report_uses_unambiguous_marker(
+    tmp_path: Path, marker: str | None, exit_code: int, message: str
+) -> None:
+    """Direct installed CLI reports follow-ups only from unambiguous input."""
+    script = _copy_installed_host_report(tmp_path / "installed")
+    target = tmp_path / "target"
+    target.mkdir()
+    if marker is not None:
+        _write_text(target, ".template-sync/marker.yml", marker)
+    result = subprocess.run(
+        [sys.executable, "-B", str(script), "--repo-root", str(target), "host-setup"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+    assert result.returncode == exit_code, result.stderr
+    assert message in result.stdout + result.stderr
+    if exit_code:
+        assert result.stdout == ""
+        assert result.stderr.count(".template-sync/marker.yml") == 1
+        if message.startswith("must contain"):
+            assert result.stderr == f"ERROR: .template-sync/marker.yml {message}.\n"
+        else:
+            assert result.stderr.startswith("ERROR: Invalid YAML in .template-sync/marker.yml:")
+        assert "is not valid YAML" not in result.stderr
+
+
+@pytest.mark.parametrize("marker", ["[]\n", "template_sync: [\n", "key: 1\nkey: 2\n"])
+def test_host_report_preserves_marker_parser_cause(tmp_path: Path, marker: str) -> None:
+    """Domain translation retains the parser's precise message and original cause."""
+    _write_text(tmp_path, ".template-sync/marker.yml", marker)
+
+    with pytest.raises(quality_reports.FirstAdoptionQualityError) as caught:
+        quality_reports.load_marker_template_sync(tmp_path)
+
+    cause = caught.value.__cause__
+    assert isinstance(cause, quality_reports.TemplateSyncMaterializationError)
+    assert str(caught.value) == str(cause)
+
+
+def test_host_report_old_wrapper_fails_exact_shape_diagnostic(tmp_path: Path) -> None:
+    """A fixed diagnostic oracle catches restoration of the misleading wrapper."""
+    script = _copy_installed_host_report(tmp_path / "installed")
+    source = script.read_text(encoding="utf-8")
+    translation = "raise FirstAdoptionQualityError(str(error)) from error"
+    assert source.count(translation) == 1
+    script.write_text(
+        source.replace(
+            translation,
+            'raise FirstAdoptionQualityError(f"{MARKER_PATH} is not valid YAML: {error}") from error',
+        ),
+        encoding="utf-8",
+    )
+    target = tmp_path / "target"
+    _write_text(target, ".template-sync/marker.yml", "[]\n")
+    result = subprocess.run(
+        [sys.executable, "-B", str(script), "--repo-root", str(target), "host-setup"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+    assert result.returncode == 1, result.stderr
+    assert result.stdout == ""
+    assert "is not valid YAML" in result.stderr
+    with pytest.raises(AssertionError):
+        assert result.stderr == "ERROR: .template-sync/marker.yml must contain a YAML mapping.\n"
+
+
+def test_host_report_duplicate_guard_removal_restores_false_no_tasks(
+    tmp_path: Path,
+) -> None:
+    """An independent fixed expected-error oracle detects parser guard removal."""
+    installed = tmp_path / "installed"
+    script = _copy_installed_host_report(installed)
+    support = installed / ".github/scripts/instruction_contract_support.py"
+    source = support.read_text(encoding="utf-8")
+    guard = "yaml.load(text, Loader=UniqueKeySafeLoader)"
+    assert source.count(guard) == 1
+    support.write_text(source.replace(guard, "yaml.safe_load(text)"), encoding="utf-8")
+    target = tmp_path / "target"
+    _write_text(
+        target,
+        ".template-sync/marker.yml",
+        "template_sync:\n  included_modules: [azure-pipelines]\n"
+        "  included_modules: [github-actions]\n"
+        "  azure_dependency_update_policy: manual-follow-up\n",
+    )
+    result = subprocess.run(
+        [sys.executable, "-B", str(script), "--repo-root", str(target), "host-setup"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "No Azure DevOps Services host setup tasks" in result.stdout
+    with pytest.raises(AssertionError):
+        assert result.returncode == 1
+
+
+@pytest.mark.parametrize("escape", [False, True])
+def test_host_report_preserves_marker_symlink_rejection(tmp_path: Path, escape: bool) -> None:
+    """Shared parsing does not weaken the reader's lexical or containment checks."""
+    target = tmp_path / "target"
+    (target / ".template-sync").mkdir(parents=True)
+    destination = (tmp_path if escape else target) / "actual.yml"
+    destination.write_text("template_sync: {}\n", encoding="utf-8")
+    (target / ".template-sync/marker.yml").symlink_to(destination)
+    with pytest.raises(quality_reports.FirstAdoptionQualityError, match="escapes|regular file"):
+        quality_reports.build_host_setup_report(target)

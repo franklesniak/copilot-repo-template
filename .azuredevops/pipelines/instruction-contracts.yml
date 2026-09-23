@@ -1,0 +1,27 @@
+# Azure Pipelines instruction-contract validation.
+#
+# Azure Repos pull request validation is configured through branch policy build
+# validation. This YAML intentionally omits a `pr:` trigger.
+
+name: "$(Date:yyyyMMdd).$(Rev:r)"
+
+trigger:
+  branches:
+    include:
+      - '*'
+pool:
+  vmImage: ubuntu-latest
+jobs:
+  - job: instruction_contracts
+    timeoutInMinutes: 10
+    steps:
+      - checkout: self
+        persistCredentials: false
+      - task: UsePythonVersion@0
+        inputs:
+          versionSpec: '3.13'
+        displayName: Set up Python
+      - script: python -m pip install PyYAML==6.0.3 jsonschema==4.26.0
+        displayName: Install validator dependencies
+      - script: python .github/scripts/validate_instruction_profile.py
+        displayName: Validate instruction contracts

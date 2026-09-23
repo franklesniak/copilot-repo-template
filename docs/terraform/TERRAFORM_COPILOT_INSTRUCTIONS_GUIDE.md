@@ -1,12 +1,12 @@
 # Guide: Writing Terraform Copilot Instructions
 
-**Version:** 1.0.20260124.0
+**Version:** 1.0.20260923.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-01-24
+- **Last Updated:** 2026-09-23
 - **Scope:** This document provides comprehensive guidance for creating a `.github/instructions/terraform.instructions.md` file that matches the depth, structure, and quality of the PowerShell instructions file (~143KB). It covers best practices, recommendations, rationale, and implementation guidance for Terraform-specific Copilot instructions.
 - **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md)
 
@@ -166,7 +166,7 @@ This section details what **MUST** be included in each major section of the inst
 ```text
 # Terraform Writing Style
 
-**Version:** 1.0.20260124.0
+**Version:** 1.0.20260919.0
 ```
 
 **Version format:** `Major.Minor.YYYYMMDD.Revision`
@@ -185,7 +185,7 @@ This section details what **MUST** be included in each major section of the inst
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-01-24
+- **Last Updated:** 2026-09-19
 - **Scope:** Defines Terraform coding standards for all `.tf`, `.tfvars`, `.tftest.hcl`, and related files in this repository. Covers style, formatting, naming conventions, module design, security, testing, and documentation requirements.
 - **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
 ```
@@ -1354,14 +1354,16 @@ terraform test -filter=tests/basic.tftest.hcl
 
 #### CI Integration Example
 
-\`\`\`yaml
+```
+
+```yaml
 # .github/workflows/terraform-ci.yml
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: "1.6.0"
 
@@ -1370,7 +1372,6 @@ jobs:
 
       - name: Terraform Test
         run: terraform test -verbose
-\`\`\`
 ```
 
 ### What to Test
@@ -1664,7 +1665,9 @@ rule "terraform_documented_outputs" {
 
 A GitHub Actions workflow for Terraform **SHOULD** include:
 
-\`\`\`yaml
+```
+
+```yaml
 # .github/workflows/terraform-ci.yml
 name: Terraform CI
 
@@ -1687,9 +1690,8 @@ jobs:
     name: Validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: "1.6.0"
 
@@ -1706,10 +1708,8 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: terraform-linters/setup-tflint@v4
-
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: terraform-linters/setup-tflint@90f302c255ef959cbfb4bd10581afecdb7ece3e6 # v4.1.1
       - name: Init TFLint
         run: tflint --init
 
@@ -1720,9 +1720,8 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: "1.6.0"
 
@@ -1736,13 +1735,11 @@ jobs:
     name: Security Scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Run tfsec
-        uses: aquasecurity/tfsec-action@v1.0.3
+        uses: aquasecurity/tfsec-action@b466648d6e39e7c75324f25d83891162a721f2d6 # v1.0.3
         with:
           soft_fail: true  # Set to false to fail on findings
-\`\`\`
 ```
 
 ---

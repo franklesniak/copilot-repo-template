@@ -7,13 +7,13 @@ alwaysApply: true
 
 # Agent Instructions for Cursor Agent
 
-**Version:** 1.1.20260629.0
+**Version:** 1.1.20260923.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-29
+- **Last Updated:** 2026-09-23
 - **Scope:** Agent-specific project rule for Cursor Agent and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md), [Documentation Writing Style](../../.github/instructions/docs.instructions.md)
@@ -45,12 +45,15 @@ During downstream template adoption and stack selection, perform non-protected c
   - Respect allowlisted file access boundaries; reject path traversal and symlink escapes.
 
 - **Pre-commit and validation**
+  <!-- template-sync: begin baseline-reference-only -->
   - Run `pre-commit run --all-files` before every commit.
+  <!-- template-sync: end baseline-reference-only -->
   - Include all auto-fixes in the same commit as the related change.
   - Do not push code when pre-commit or required validation checks are failing; fix issues and re-run until the checks pass.
   - Use the repository's existing validation commands as needed:
     <!-- template-sync: begin markdown-reference-only -->
     - `npm run lint:md`
+    - `npm run lint:md:nested`
     <!-- template-sync: end markdown-reference-only -->
     <!-- template-sync: begin python-reference-only -->
     - `python -m pyright --project pyrightconfig.json`
@@ -68,7 +71,9 @@ During downstream template adoption and stack selection, perform non-protected c
     - `tflint --recursive`
     - `terraform test -verbose`
     <!-- template-sync: end terraform-reference-only -->
+  <!-- template-sync: begin baseline-reference-only -->
   - The `pre-commit run --all-files` command exercises the active hooks configured in [`.pre-commit-config.yaml`](../../.pre-commit-config.yaml), the authoritative list of active hooks.
+  <!-- template-sync: end baseline-reference-only -->
   <!-- template-sync: begin json-reference-only -->
   - Retained JSON checks include strict JSON syntax (`check-json`).
   <!-- template-sync: end json-reference-only -->
@@ -80,9 +85,11 @@ During downstream template adoption and stack selection, perform non-protected c
   <!-- template-sync: begin schema-reference-only -->
   - Retained schema checks include JSON Schema validation (`check-jsonschema`) and schema self-validation (`check-metaschema`).
   <!-- template-sync: end schema-reference-only -->
-  - When the `github-actions` module is retained, the dedicated [`.github/workflows/data-ci.yml`](../../.github/workflows/data-ci.yml) workflow re-runs retained data-file hooks so adopted data-file enforcement can be required via branch protection.
+  <!-- template-sync: begin github-data-ci-reference-only -->
+  - When both `baseline` and `github-actions` are retained, the dedicated [`.github/workflows/data-ci.yml`](../../.github/workflows/data-ci.yml) workflow re-runs retained data-file hooks so adopted data-file enforcement can be required via branch protection.
+  <!-- template-sync: end github-data-ci-reference-only -->
   <!-- template-sync: begin azure-devops-guide-reference-only -->
-  - When the `azure-pipelines` module is retained, `.azuredevops/pipelines/data-ci.yml` re-runs retained data-file hooks; pipeline YAML and branch-policy validation remain Azure DevOps Services-backed.
+  - When both `baseline` and `azure-pipelines` are retained, `.azuredevops/pipelines/data-ci.yml` re-runs retained data-file hooks; pipeline YAML and branch-policy validation remain Azure DevOps Services-backed.
   <!-- template-sync: end azure-devops-guide-reference-only -->
   - Retained data-file authoring guidance lives in the matching module docs.
   <!-- template-sync: begin json-reference-only -->

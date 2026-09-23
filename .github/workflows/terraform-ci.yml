@@ -60,15 +60,19 @@ permissions:
 
 jobs:
   format:
+    permissions:
+      contents: read
     name: Format Check
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v4
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: "1.14.4"
 
@@ -76,21 +80,25 @@ jobs:
         run: terraform fmt -check -recursive -diff
 
   validate:
+    permissions:
+      contents: read
     name: Validate
     needs: format
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v4
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: "1.14.4"
 
       - name: Cache Terraform Providers
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.terraform.d/plugin-cache
           key: terraform-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
@@ -121,16 +129,20 @@ jobs:
           done
 
   lint:
+    permissions:
+      contents: read
     name: Lint (TFLint)
     needs: validate
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Cache TFLint Plugins
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.tflint.d/plugins
           key: tflint-plugins-${{ hashFiles('.tflint.hcl') }}
@@ -138,7 +150,7 @@ jobs:
             tflint-plugins-
 
       - name: Setup TFLint
-        uses: terraform-linters/setup-tflint@v6
+        uses: terraform-linters/setup-tflint@1cf010d3c7aef302051ccdb68c14c5dc2efa34ef # v6.3.1
         with:
           tflint_version: v0.51.1
 
@@ -149,21 +161,25 @@ jobs:
         run: tflint --recursive --config "$(pwd)/.tflint.hcl"
 
   test:
+    permissions:
+      contents: read
     name: Test
     needs: validate
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v4
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
         with:
           terraform_version: "1.14.4"
 
       - name: Cache Terraform Providers
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.terraform.d/plugin-cache
           key: terraform-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
@@ -220,9 +236,9 @@ jobs:
   #
   #   steps:
   #     - name: Checkout repository
-  #       uses: actions/checkout@v7
+  #       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
   #
   #     - name: Run tfsec
-  #       uses: aquasecurity/tfsec-action@v1.0.3
+  #       uses: aquasecurity/tfsec-action@b466648d6e39e7c75324f25d83891162a721f2d6 # v1.0.3
   #       with:
   #         soft_fail: true  # Set to false to fail on findings

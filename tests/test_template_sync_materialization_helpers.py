@@ -40,11 +40,14 @@ from template_sync_materialization_helpers import (  # noqa: E402
     inline_block_families_to_prune,
     is_excluded_template_path,
     is_protected_instruction_path,
+    is_protected_manifest_pattern,
+    is_protected_prose_path,
     is_retained_template_path,
     is_template_managed_path,
     lines_outside_markdown_fences,
     load_validated_manifest,
     load_validated_marker_decision_data,
+    markdown_lines,
     parse_manifest_compatibility_groups,
     parse_manifest_mappings,
     remove_inline_block_family,
@@ -371,7 +374,170 @@ def test_protected_file_classification_uses_shared_rules() -> None:
     assert is_protected_instruction_path(".github/copilot-instructions.md")
     assert is_protected_instruction_path(".github/instructions/python.instructions.md")
     assert is_protected_instruction_path(".cursor/rules/repository-instructions.mdc")
+    assert is_protected_instruction_path(".template-sync/instruction-contracts.yml")
+    assert is_protected_manifest_pattern(".template-sync/instruction-contracts.yml")
+    assert not is_protected_instruction_path(".template-sync/manifest.yml")
+    assert not is_protected_instruction_path(
+        "schemas/template-sync-instruction-contracts.schema.json"
+    )
     assert not is_protected_instruction_path("README.md")
+    for path in (
+        ".github/copilot-instructions.md",
+        ".hermes.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "GEMINI.md",
+        ".github/instructions/python.instructions.md",
+        ".cursor/rules/repository-instructions.mdc",
+        ".github/instructions/nested/policy",
+        ".cursor/rules/nested/policy",
+    ):
+        assert is_protected_instruction_path(path)
+        assert is_protected_prose_path(path)
+    assert not is_protected_prose_path(".template-sync/instruction-contracts.yml")
+    assert not is_protected_prose_path(".template-sync/manifest.yml")
+    assert not is_protected_prose_path("README.md")
+
+
+@pytest.mark.parametrize(
+    ("source", "without", "with_endings"),
+    [
+        ("", [], []),
+        ("one", ["one"], ["one"]),
+        ("one\n", ["one"], ["one\n"]),
+        ("one\r", ["one"], ["one\r"]),
+        ("one\r\n", ["one"], ["one\r\n"]),
+        ("\n\r\r\n", ["", "", ""], ["\n", "\r", "\r\n"]),
+        (
+            "one\r\ntwo\rthree\nfour",
+            ["one", "two", "three", "four"],
+            ["one\r\n", "two\r", "three\n", "four"],
+        ),
+    ],
+)
+def test_markdown_physical_line_endings_are_exact(
+    source: str, without: list[str], with_endings: list[str]
+) -> None:
+    """Only CR/LF/CRLF split source text, including exact terminal-ending behavior."""
+    assert markdown_lines(source) == without
+    assert markdown_lines(source, keepends=True) == with_endings
+    assert "".join(markdown_lines(source, keepends=True)) == source
+
+
+@pytest.mark.parametrize(
+    "literal",
+    ["\v", "\f", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029", "\u00a0", "\u2003", "\x1f"],
+)
+def test_non_markdown_separators_remain_literal_in_shared_consumers(literal: str) -> None:
+    """Unicode/control whitespace cannot close a fence or turn text into a marker."""
+    assert markdown_lines("left" + literal + "right") == ["left" + literal + "right"]
+    assert markdown_lines(literal, keepends=True) == [literal]
+    for fence in ("```", "~~~"):
+        for context in (MARKDOWN_FENCE_CONTEXT, EMBEDDED_MARKDOWN_FENCE_CONTEXT):
+            for ending in ("\r", "\n", "\r\n"):
+                fenced = fence + ending + "example" + ending + fence + literal
+                fenced += ending + "Must remain code"
+                assert lines_outside_markdown_fences(fenced, fence_context=context) == ()
+    for location in ("prefix", "suffix", "internal"):
+        begin = "<!-- template-sync: begin python-reference-only -->"
+        end = "<!-- template-sync: end python-reference-only -->"
+        if location == "prefix":
+            begin, end = literal + begin, literal + end
+        elif location == "suffix":
+            begin, end = begin + literal, end + literal
+        else:
+            begin, end = begin.replace(": ", ":" + literal), end.replace(": ", ":" + literal)
+        text = begin + "\nPOLICY\n" + end + "\n"
+        assert (
+            remove_inline_blocks_for_modules(
+                text, {"baseline", "markdown"}, relative_path="README.md"
+            )
+            == text
+        )
+
+
+@pytest.mark.parametrize("ending", ["\r", "\n", "\r\n"])
+@pytest.mark.parametrize("spacing", ["", " ", "\t", " \t"])
+def test_ascii_marker_spacing_and_real_line_endings_still_prune(ending: str, spacing: str) -> None:
+    """Ordinary ASCII marker indentation retains exact supported pruning behavior."""
+    text = (
+        spacing
+        + "<!-- template-sync: begin python-reference-only -->"
+        + spacing
+        + ending
+        + "removed"
+        + ending
+        + spacing
+        + "<!-- template-sync: end python-reference-only -->"
+        + spacing
+        + ending
+        + "retained"
+        + ending
+    )
+    assert (
+        remove_inline_blocks_for_modules(text, {"baseline", "markdown"}, relative_path="README.md")
+        == "retained" + ending
+    )
+
+
+def test_physical_line_slices_have_bounded_total_work() -> None:
+    """The shared splitter copies each source character at most once per result."""
+
+    class BoundedText(str):
+        copied = 0
+
+        def __getitem__(self, key: Any) -> str:
+            assert isinstance(key, slice)
+            self.copied += len(range(*key.indices(len(self))))
+            assert self.copied <= len(self)
+            return super().__getitem__(key)
+
+    text = BoundedText(("first\r\nsecond\rthird\nfourth\v\u2028\n") * 10000)
+    observed = markdown_lines(text, keepends=True)
+    assert "".join(observed) == text
+    assert text.copied == len(text)
+
+
+def test_non_ascii_blank_hygiene_and_marker_guard_mutants() -> None:
+    """Actual pruning preserves literal lines; restoring broad marker grammar breaks it."""
+    import re
+
+    import template_sync_materialization_helpers as helpers
+
+    literal = "\u00a0"
+    marker = "<!-- template-sync: {kind} python-reference-only -->"
+    text = literal + marker.format(kind="begin") + "\nPOLICY\n"
+    text += literal + marker.format(kind="end") + "\n"
+    assert (
+        remove_inline_blocks_for_modules(text, {"baseline", "markdown"}, relative_path="README.md")
+        == text
+    )
+    original = helpers.INLINE_BLOCK_MARKER_RE
+    try:
+        helpers.INLINE_BLOCK_MARKER_RE = re.compile(original.pattern.replace(r"[ \t]", r"\s"))
+        assert (
+            remove_inline_blocks_for_modules(
+                text, {"baseline", "markdown"}, relative_path="README.md"
+            )
+            == ""
+        )
+    finally:
+        helpers.INLINE_BLOCK_MARKER_RE = original
+    for literal in (
+        "\v",
+        "\f",
+        "\x1c",
+        "\x1d",
+        "\x1e",
+        "\x85",
+        "\u2028",
+        "\u2029",
+        "\u00a0",
+        "\u2003",
+        "\x1f",
+    ):
+        content = "top\n" + (literal + "\n") * 4 + "bottom\n"
+        assert helpers.apply_blank_line_hygiene(content, max_consecutive_blank_lines=1) == content
 
 
 def test_inline_block_removal_uses_yaml_blank_line_limit() -> None:
@@ -745,6 +911,31 @@ def test_markdown_fence_rules_control_marker_liveness(
     )
 
     assert ("python-reference-only" not in result) is expected_pruned
+
+
+@pytest.mark.parametrize("context", [MARKDOWN_FENCE_CONTEXT, EMBEDDED_MARKDOWN_FENCE_CONTEXT])
+@pytest.mark.parametrize("fence", ["```", "~~~"])
+@pytest.mark.parametrize(
+    ("suffix", "closed"),
+    [("\t", True), (" \t ", True), ("text", False), ("\u00a0", False), ("\v", False)],
+)
+def test_shared_fence_close_whitespace_keeps_following_lines_live(
+    context: str, fence: str, suffix: str, closed: bool
+) -> None:
+    """Only ASCII space and tab may follow a matching closing fence."""
+    text = fence + "\nexample\n" + fence + suffix + "\nAfter fence"
+    visible = lines_outside_markdown_fences(text, fence_context=context)
+    assert any(line == "After fence" for _, line in visible) is closed
+
+
+@pytest.mark.parametrize("context", [MARKDOWN_FENCE_CONTEXT, EMBEDDED_MARKDOWN_FENCE_CONTEXT])
+@pytest.mark.parametrize("marker", ["١.", "１)", "1١.", "१२.", "1.", "2)"])
+def test_shared_fence_list_markers_use_ascii_digits(context: str, marker: str) -> None:
+    """Both normal and embedded Markdown keep Unicode-digit pseudo-items live."""
+    indent = "        " if context == EMBEDDED_MARKDOWN_FENCE_CONTEXT else ""
+    text = indent + marker + " ```\n" + indent + "   Visible unless a real list"
+    visible = lines_outside_markdown_fences(text, fence_context=context)
+    assert any("Visible unless" in line for _, line in visible) is (marker not in {"1.", "2)"})
 
 
 def test_embedded_markdown_fence_context_preserves_yaml_block_scalar_examples() -> None:

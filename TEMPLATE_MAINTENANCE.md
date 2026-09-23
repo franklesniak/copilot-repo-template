@@ -6,9 +6,9 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-10
+- **Last Updated:** 2026-09-23
 - **Scope:** Periodic maintenance procedures for the `franklesniak/copilot-repo-template` repository, including dependency review cadence, pre-commit hook upkeep, Terraform/TFLint version reviews, schema and worked-example reviews, template sync taxonomy upkeep, and validation steps for template-only changes. Does not cover repositories created FROM this template; consumers of the template should follow [OPTIONAL_CONFIGURATIONS.md](OPTIONAL_CONFIGURATIONS.md#ongoing-maintenance) instead.
-- **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [Contributing](CONTRIBUTING.md)
+- **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Optional Configurations](OPTIONAL_CONFIGURATIONS.md), [upstream Contributing](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/CONTRIBUTING.md)
 
 This guide is for **maintainers of the `franklesniak/copilot-repo-template` repository**. It documents periodic maintenance tasks to keep the template current and functional.
 
@@ -27,6 +27,7 @@ This guide is for **maintainers of the `franklesniak/copilot-repo-template` repo
 - [Reviewing Terraform and TFLint Version Requirements](#reviewing-terraform-and-tflint-version-requirements)
 - [Reviewing Terraform Provider Versions](#reviewing-terraform-provider-versions)
 - [Reviewing Instruction File Versions](#reviewing-instruction-file-versions)
+- [Refreshing Imported Style Guides](#refreshing-imported-style-guides)
 - [Reviewing Agent Instruction Files](#reviewing-agent-instruction-files)
 - [Testing Template Changes](#testing-template-changes)
 
@@ -57,9 +58,21 @@ To keep the template current and functional, maintainers **SHOULD** review templ
 
 ---
 
+### Reviewing Pinned GitHub Actions References
+
+Every template-owned external action and reusable workflow reference uses an upstream-verified full commit SHA with a same-line release annotation. Keep the direct `uses:` declarations and applicable `github-actions` Dependabot updates. For each changed pin, verify the release-to-commit mapping in its upstream repository, review release changes and advisories, confirm supported inputs and runner requirements, and run the affected gates. Preserve workflow-specific controls, including the fix-preview permissions and failure boundary.
+
+[Dependabot version updates](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories#github-actions) support these pins and same-line comments. [Vulnerability alerts for actions](https://docs.github.com/en/actions/reference/security/secure-use#monitoring-the-actions-in-your-workflows) do not cover SHA references, so maintainers must review upstream advisories separately. A SHA does not lock downloaded tools or make an action compatible with unsupported runners or GitHub Enterprise Server.
+
+Ordinary workflow-security validation checks pin syntax offline. The explicit `--verify-releases` mode checks upstream release mappings through network access; an unavailable lookup is not verified. Adopter-created workflows remain outside the default contract unless the owner deliberately enables the documented `--strict` profile. See the [upstream workflow-security guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/workflow-security.md) for both modes.
+
 ## Updating Pre-commit Hook Versions
 
 Pre-commit hooks **SHOULD** be kept up-to-date for security and compatibility.
+
+The runner is a separate dependency. Its one exact direct pin lives in `requirements-pre-commit.txt`, owned by `baseline` rather than the optional Python language module. GitHub Dependabot's `pip` ecosystem updates that requirement; its `pre-commit` ecosystem updates hook revisions. Review runner release notes and Python compatibility, install with `python -m pip install -r requirements-pre-commit.txt`, compare `pre-commit --version` with the requirement, then run the aggregate gate. CI, the Claude web bootstrap, and the selected Copilot setup workflow derive their expected version from the requirement. Do not copy the numeric version into other consumers.
+
+The direct pin does not lock transitive dependencies or prove package authenticity. The GitHub pip cache names the requirement, and hook-cache keys include it with the hook configuration. A runner update therefore invalidates the relevant caches. Azure-only adopters review this requirement manually or with their chosen supported update service; GitHub Dependabot is not supplied by Azure Pipelines.
 
 ### Maintenance Cadence
 
@@ -198,7 +211,7 @@ When updating to new major versions, check the release notes for breaking change
 
 ## Reviewing the Worked-Example Schema and Data CI Workflow
 
-The template ships a worked-example JSON Schema (`schemas/example-config.schema.json`), valid and invalid example fixtures under `schemas/examples/example-config/`, the schema-example pytest contract at `tests/test_schema_examples.py`, and the dedicated [`.github/workflows/data-ci.yml`](.github/workflows/data-ci.yml) workflow. These need periodic review to stay aligned with current JSON Schema and pre-commit hook versions.
+The template ships a worked-example JSON Schema (`schemas/example-config.schema.json`), valid and invalid example fixtures under `schemas/examples/example-config/`, the schema-example pytest contract at `tests/test_schema_examples.py`, and the dedicated [`.github/workflows/data-ci.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/data-ci.yml) workflow. These need periodic review to stay aligned with current JSON Schema and pre-commit hook versions.
 
 **When to review:** Quarterly, or whenever `check-jsonschema`, `pre-commit-hooks`, `yamllint`, or `actionlint` have a major version bump.
 
@@ -229,17 +242,21 @@ Update that taxonomy whenever a template-managed file is:
 - moved between directories
 - changed so its primary purpose belongs to a different module
 
-For each affected path, maintainers **MUST** update `.template-sync/manifest.yml` first, review whether the path mapping still uses the most specific pattern, whether multi-module rows still require the intended AND-style module set, and whether the module definition list needs a new or revised module. Then update or regenerate the rendered tables in `TEMPLATE_UPDATE_PROCEDURE.md`. Keep examples and worked sync scenarios in `TEMPLATE_UPDATE_PROCEDURE.md` aligned with any taxonomy change.
+For each affected path, maintainers **MUST** update `.template-sync/manifest.yml` first, review whether the path mapping still uses the most specific pattern, whether multi-module rows still express the intended `requires_all` AND and `requires_any` OR relations, and whether the module definition list needs a new or revised module. Then update or regenerate the rendered tables in `TEMPLATE_UPDATE_PROCEDURE.md`. Keep examples and worked sync scenarios in `TEMPLATE_UPDATE_PROCEDURE.md` aligned with any taxonomy change.
+
+Treat shared `agent-instructions`, the six explicit `agent-*` selections, and optional `instruction-enforcement` as separate choices. Keep enforcement's baseline hook and dedicated GitHub/Azure routes aligned with its runner requirements; the optional Python project must not become a dependency. Preserve the policy-only selection and deliberate migration between marker and standalone profiles. The marker remains authoritative in marker mode; the protected standalone profile controls standalone applicability and reports exact local exceptions without proving owner authorization. See the [upstream instruction-enforcement guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/instruction-enforcement.md).
+
+When instruction obligations change, update the reviewed marker catalog and standalone seed catalog together and run their parity check. Review `instruction_profile_migration.py`, both profile/catalog schemas, inline marker registrations, and lifecycle tests for retained agents, hosts, sync removal, changed protected profiles and scoped declarations. Keep the Copilot setup workflow restricted to Copilot with GitHub Actions and the Claude command restricted to Claude with GitHub Actions. Update the workflow-security inventory when setup or dedicated GitHub validation routes change.
 
 When module relations, glob patterns, or marker fields change, maintainers **MUST** review `.template-sync/scripts/validate_marker.py`, `.template-sync/scripts/generate_sync_candidates.py`, `tests/test_validate_marker.py`, and `tests/test_generate_sync_candidates.py` so the downstream retained-state helper and candidate table generator still match the manifest contract. These helpers should continue to use the existing schema validation stack (`PyYAML`, `jsonschema`, and the checked-in schemas) instead of introducing a separate validator dependency.
 
-When reviewing a taxonomy change, include `pytest tests/test_template_manifest.py tests/test_validate_marker.py tests/test_generate_sync_candidates.py -v` so the manifest schema, semantic checks, rendered-table drift checks, retained-state helper behavior, and candidate table generation behavior run together. Also include at least one validation pass with `npm run lint:md`, `npm run lint:md:links`, and `npm run lint:md:nested` (the latter catches lint failures in nested Markdown code fences inside files such as `TEMPLATE_UPDATE_PROCEDURE.md`). If the change also updates schema, YAML, GitHub Actions, Python, PowerShell, or Terraform files, run the validation commands for those modules as well.
+When reviewing a taxonomy change, include `pytest tests/test_template_manifest.py tests/test_validate_marker.py tests/test_generate_sync_candidates.py -v` so the manifest schema, semantic checks, rendered-table drift checks, retained-state helper behavior, and candidate table generation behavior run together. For enforcement, agent or host selection changes, also run `pytest tests/test_instruction_profile.py tests/test_validate_instruction_contracts.py tests/test_materialize_downstream_adoption.py tests/test_contract_wiring.py tests/test_workflow_security_lifecycle.py -v`. These checks exercise static policy and selection behavior; they do not establish hosted activation or future agent compliance. Also include at least one validation pass with `npm run lint:md`, `npm run lint:md:links`, and `npm run lint:md:nested` (the latter catches lint failures in nested Markdown code fences inside files such as `TEMPLATE_UPDATE_PROCEDURE.md`). If the change also updates schema, YAML, GitHub Actions, Python, PowerShell, or Terraform files, run the validation commands for those modules as well.
 
 ---
 
 ## Adding or Modifying Template-Substitution Markers
 
-For the portable authoring principle, see [Template-substitution marker boundaries and replacement surfaces](.github/instructions/docs.instructions.md#template-substitution-marker-boundaries-and-replacement-surfaces).
+For the portable authoring principle, see [upstream Template-substitution marker boundaries and replacement surfaces](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/instructions/docs.instructions.md#template-substitution-marker-boundaries-and-replacement-surfaces).
 
 When adding or modifying a template-substitution marker, maintainers **MUST** keep these repository-specific surfaces in sync in the same change:
 
@@ -247,8 +264,8 @@ When adding or modifying a template-substitution marker, maintainers **MUST** ke
 - The GNU `sed` snippet in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
 - The BSD `sed` snippet in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
 - The manual Find/Replace instructions in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md)
-- The grep patterns for hard-coded marker strings in [`.github/workflows/check-placeholders.yml`](.github/workflows/check-placeholders.yml)
-- The validation phases and allowlists in [`.github/workflows/check-placeholders.yml`](.github/workflows/check-placeholders.yml), because the placeholder validation workflow must stay aligned with every marker that adopters are expected to replace.
+- The grep patterns for hard-coded marker strings in [upstream `.github/workflows/check-placeholders.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/check-placeholders.yml)
+- The validation phases and allowlists in [upstream `.github/workflows/check-placeholders.yml`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/workflows/check-placeholders.yml), because the placeholder validation workflow must stay aligned with every marker that adopters are expected to replace.
 - The **Files That Need Placeholders Replaced** inventory table in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md), because it is the at-a-glance marker-to-file mapping adopters read first and must add or update the corresponding row when a marker changes.
 - The **What the Placeholders Mean** definition list in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md), because it is the canonical glossary for each marker's meaning and must define new markers or reflect renames.
 - The **GHES adopters** callouts and snippet comments in [`GETTING_STARTED_NEW_REPO.md`](GETTING_STARTED_NEW_REPO.md) that enumerate files requiring `github.com`-to-GHES host substitution, because they tell GHES adopters which absolute GitHub URLs need host substitution.
@@ -319,7 +336,7 @@ The Terraform instructions file uses the newest stable major versions in provide
    - [Azure Provider](https://registry.terraform.io/providers/hashicorp/azurerm/latest)
    - [GCP Provider](https://registry.terraform.io/providers/hashicorp/google/latest)
 
-   > **Note:** Terraform Registry navigation links — including the provider links above — **MUST** use the `latest` path segment, not a pinned provider or module version. See the **Terraform Registry Reference URLs Use /latest/** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md) for the scope (Terraform-file comments and instructional Markdown), rationale, and authoritative version sources; the canonical, agent-loadable rule for Terraform-file comments lives in [`.github/instructions/terraform.instructions.md`](.github/instructions/terraform.instructions.md).
+   > **Note:** Terraform Registry navigation links — including the provider links above — **MUST** use the `latest` path segment, not a pinned provider or module version. See the **Terraform Registry Reference URLs Use /latest/** ADR in [`.github/TEMPLATE_DESIGN_DECISIONS.md`](.github/TEMPLATE_DESIGN_DECISIONS.md) for the scope (Terraform-file comments and instructional Markdown), rationale, and authoritative version sources; the canonical, agent-loadable rule for Terraform-file comments lives in [upstream `.github/instructions/terraform.instructions.md`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/instructions/terraform.instructions.md).
 2. Identify current stable major versions for each provider
 3. If a new major version is now the recommended stable release, update the following files:
    - `.github/instructions/terraform.instructions.md` (version constraint examples throughout)
@@ -371,6 +388,21 @@ The instruction files in `.github/instructions/` include version numbers in the 
 
 ---
 
+## Refreshing Imported Style Guides
+
+Template maintainers own refreshes from the external style-guide repositories. The retained origin record at `docs/upstream-style-guides.md` identifies each imported generated consumer by repository, immutable commit, path, and Git blob. It remains useful after adopters remove onboarding or template-sync support. See the [upstream copy of the origin record](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/upstream-style-guides.md) when that file is not retained locally.
+
+1. Select an immutable upstream commit. Inspect that revision's normative source, generated consumer, and generation instructions. Import the consumer instruction file; do not substitute the normative source's blob identity.
+2. Retrieve the exact consumer snapshot and verify its Git blob ID. Compare the complete snapshot with the destination, including any newer local content or deliberate deviations. Source instructions are comparison evidence, not permission to edit either repository.
+3. Obtain explicit authorization for the bounded protected-content import. Review the exact hunks and preserve destination-specific authority, module selection, host behavior, and local extensions. Preserve upstream version/date for an exact upstream import; identify and govern any local extension separately.
+4. Apply the authorized changes and update the origin record in the same change. Record the imported consumer's repository, commit, path, blob, generated status, destination, and deliberate local differences. An upstream blob is not a checksum claim for later customized destination content.
+5. Validate the complete guide diffs, Markdown and nested Markdown, instruction contracts, and required pre-commit hooks. Exercise affected retained/excluded language and agent profiles. Confirm the origin record survives onboarding/support omission, preserves local update decisions, and prunes excluded-language references.
+6. Publish the reviewed template update through the normal review process. Downstream owners normally consume it through their existing selective template-update process. Preserve their local ownership, overrides, and explicit protected-file decisions; do not turn an upstream refresh into automatic replacement or deletion.
+
+This process adds no generator, scheduled updater, live-fetch validation gate, or direct-source tracking duty for adopters. A downstream owner can choose a separate direct refresh under that repository's governance. The provenance record supplements, rather than replaces, retained marker ownership and decision records.
+
+---
+
 ## Reviewing Agent Instruction Files
 
 Agent instruction files (`.cursor/rules/repository-instructions.mdc`, `.hermes.md`, `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`) are thin entry points that **MUST** stay aligned with `.github/copilot-instructions.md`. The canonical file holds the full shared rule set; the agent files keep only a minimal inline summary of the highest-priority shared rules plus any platform-specific guidance.
@@ -408,3 +440,17 @@ Before merging significant template changes:
 6. Open and close a test PR to verify the PR template
 
 Delete the test repository after verification.
+
+<!-- template-sync: begin github-actions-only -->
+
+## Workflow Security Governance
+
+The `github-actions` module retains a self-contained workflow security contract, validator, schema, and standalone CI gate. Template-sync support also retains the validator and schema as trusted dependencies for future materialization. The manifest owns selection. Before staging, materialization requires a retained contract and checks that it covers every retained manifest-owned workflow in the source inventory. It then validates the reviewed source and renders the retained controls. Baseline selections also retain the always-running pre-commit hook and Data CI invocation. Language-specific requirements disappear with their owning modules.
+
+Authorize `.github/workflow-security-contract.yml` explicitly as a protected policy path before first adoption or replacement. Record permitted local customization and the reviewed update decision. Adopter-created workflows remain outside baseline policy unless the owner explicitly enables `--strict`; synchronization preserves their bytes. Run `python .github/scripts/validate_workflow_security.py` after adoption and updates, and add `--verify-releases` when verifying changed action pins against upstream.
+
+Removing GitHub Actions requires reviewed cleanup of excluded standalone files and replacement of retained shared files with their pruned forms. Materialization never silently deletes those files. Validate the final downstream tree for excluded-module leftovers, including hooks, updater entries, documentation, and policy references. Remove the shared validator and schema only when neither Actions nor template-sync support remains. Dependabot's Actions updater survives only when both GitHub platform automation and Actions are retained; otherwise action updates need manual review.
+
+See the [workflow security guide](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/docs/workflow-security.md) for the baseline/strict boundary, required authorization, exact command fingerprints, intentional failure-aggregation exceptions, and the SHA-pin vulnerability-alert limitation. Copilot prerequisite setup is available when `agent-instructions`, `agent-copilot`, and `github-actions` are selected together. Action-free acquisition remains a future opt-in profile.
+
+<!-- template-sync: end github-actions-only -->

@@ -116,10 +116,10 @@
 #
 # 2. Relationship to auto-fix-precommit.yml:
 #    `.github/workflows/auto-fix-precommit.yml` is intentionally NOT a peer
-#    of this workflow. It is a fix-up workflow scoped to `copilot/**`
-#    branches that auto-applies pre-commit fixes; it is not a contract
-#    enforcement gate. `data-ci.yml` is a contract enforcement gate for all
-#    PRs and pushes.
+#    of this workflow. It is an optional read-only fix preview scoped to
+#    Copilot-agent pushes on `copilot/**` branches. It records hook failures
+#    and publishes an untrusted patch; its wrapper does not commit or push.
+#    `data-ci.yml` is a contract enforcement gate for all PRs and pushes.
 #
 # 3. Template Repository Trigger Policy:
 #    This workflow does NOT use path-based filtering. This repository is a
@@ -151,28 +151,51 @@ permissions:
 
 jobs:
   data-file-linting:
+    permissions:
+      contents: read
     name: Data file linting
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@v7
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           # See: .github/instructions/yaml.instructions.md (GitHub Actions Setup Version Pins).
           python-version: '3.14'
           cache: 'pip'
+          cache-dependency-path: requirements-pre-commit.txt
 
       - name: Cache pre-commit hooks
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/pre-commit
-          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml', 'requirements-pre-commit.txt') }}
 
       - name: Install pre-commit
-        run: pip install pre-commit
+        shell: python
+        run: |
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          requirement = Path("requirements-pre-commit.txt").read_text(encoding="utf-8").strip()
+          if re.fullmatch(r"pre-commit==[0-9]+\.[0-9]+\.[0-9]+", requirement) is None:
+              raise SystemExit("requirements-pre-commit.txt must contain one exact pre-commit pin")
+          subprocess.run(
+              [sys.executable, "-m", "pip", "install", "--requirement", "requirements-pre-commit.txt"],
+              check=True,
+          )
+          expected = requirement.replace("==", " ", 1)
+          actual = subprocess.check_output(["pre-commit", "--version"], text=True).strip()
+          if actual != expected:
+              raise SystemExit(f"pre-commit version mismatch: expected {expected}, got {actual}")
+          print(actual)
 
       - name: Run check-json
         run: pre-commit run check-json --all-files
@@ -259,3 +282,11 @@ jobs:
       - name: Run validate-dependabot-config-valid-examples
         run: pre-commit run validate-dependabot-config-valid-examples --all-files
       # template-sync: end github-platform-only
+
+      - name: Run validate-workflow-security
+        run: pre-commit run validate-workflow-security --all-files
+
+      # template-sync: begin instruction-enforcement-only
+      - name: Run validate-instruction-profile
+        run: pre-commit run validate-instruction-profile --all-files
+      # template-sync: end instruction-enforcement-only

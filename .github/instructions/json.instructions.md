@@ -7,15 +7,21 @@ description: "JSON authoring standards: strict-by-default, schema-backed, determ
 
 # JSON Writing Style
 
-**Version:** 1.4.20260629.0
+**Version:** 1.4.20260923.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-06-29
+- **Last Updated:** 2026-09-23
 - **Scope:** Defines authoring standards for JSON and JSONC files in this repository, including configuration, schemas, fixtures, generated metadata, and machine-readable contracts. Covers dialect policy, formatting, key ordering, naming, data modeling, schema usage, comments, security, and generated output.
-- **Related:** [Repository Copilot Instructions](../copilot-instructions.md), [`.gitattributes` Rules](./gitattributes.instructions.md), [YAML Writing Style](./yaml.instructions.md) (companion guide, if present)
+- **Related:** [Repository Copilot Instructions](../copilot-instructions.md)
+<!-- template-sync: begin baseline-reference-only -->
+- **Related baseline guidance:** [`.gitattributes` Rules](./gitattributes.instructions.md)
+<!-- template-sync: end baseline-reference-only -->
+<!-- template-sync: begin yaml-reference-only -->
+- **Related YAML guidance:** [YAML Writing Style](./yaml.instructions.md)
+<!-- template-sync: end yaml-reference-only -->
 
 ## Purpose and Scope
 
@@ -25,7 +31,9 @@ The guide applies to every `.json` and `.jsonc` file in the repository, includin
 
 > **Note:** This document uses [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119) keywords (**MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, **MAY**) to indicate requirement levels.
 
+<!-- template-sync: begin baseline-reference-only -->
 Line-ending pinning, BOM behavior, end-of-file newline, and trailing whitespace policy for JSON files are governed by [`.gitattributes` Rules](./gitattributes.instructions.md); this guide does not duplicate or override those rules.
+<!-- template-sync: end baseline-reference-only -->
 
 ## Quick Reference Checklist
 
@@ -55,7 +63,10 @@ This repository recognizes two JSON dialects: strict JSON and JSONC. Other diale
 - Keys and string values **MUST** be double-quoted. Single quotes and unquoted keys **MUST NOT** be used (this is required by strict JSON and is also the recommended style for JSONC).
 - Trailing commas **MUST NOT** appear in strict JSON. In JSONC files, trailing commas **MAY** be used only when the consuming tool documents support for them; otherwise they **SHOULD** be avoided to ease later conversion to strict JSON.
 - Objects with more than one entry **SHOULD** use one key-value pair per line to keep diffs reviewable.
-- Files **MUST** end with a single newline (enforced by the repository's `end-of-file-fixer` pre-commit hook). Line-ending and trailing-whitespace policy is governed by [`.gitattributes` Rules](./gitattributes.instructions.md).
+- Files **MUST** end with a single newline.
+<!-- template-sync: begin baseline-reference-only -->
+- When baseline is retained, its `end-of-file-fixer` pre-commit hook enforces the single-newline requirement. Line-ending and trailing-whitespace policy is governed by [`.gitattributes` Rules](./gitattributes.instructions.md).
+<!-- template-sync: end baseline-reference-only -->
 
 **Example (strict JSON):**
 
@@ -127,7 +138,7 @@ Validation tooling:
 - **Schema validation.** Schema-backed JSON files **MUST** pass every schema validator configured for their file family in the repository's pre-commit hooks or CI. Where no hook exists yet for a schema-backed file family, authors **SHOULD** run the applicable validator locally before committing and SHOULD add a file-family-scoped validator when the contract becomes durable.
 - **Schema self-validation.** Project-owned schemas **SHOULD** be self-validated against their declared metaschema when the repository's validator supports that check.
 - **Example fixture tests.** Repositories that keep valid and invalid schema examples **SHOULD** test both sides of the contract: valid examples pass, and invalid examples fail. Invalid examples **MUST NOT** be wired directly into a normal passing schema-validation hook unless that hook is explicitly designed to expect failure.
-- **Active hook list.** The repository's pre-commit configuration and CI definitions are the authoritative inventory of active validators. Repository-specific schema inventories, worked examples, removal checklists, and future validation candidates SHOULD live in the repository's schema documentation, if present.
+- **Active hook list.** When pre-commit or CI validation is retained, its configuration is the authoritative inventory of active validators. Repository-specific schema inventories, worked examples, removal checklists, and future validation candidates SHOULD live in the repository's schema documentation, if present.
 
 ## Comments and Documentation
 
@@ -146,7 +157,7 @@ Validation tooling:
 ## Generated JSON
 
 - Generation **MUST** be reproducible: re-running the generator on the same inputs **MUST** produce byte-identical output. This is what makes diffs meaningful and what allows generated JSON to be safely committed.
-- Generated files **MUST** use stable formatting (consistent indentation, consistent quoting, consistent line endings). The producer **SHOULD** write files with LF line endings explicitly to interoperate with the repository's `.gitattributes` policy.
+- Generated files **MUST** use stable formatting (consistent indentation, consistent quoting, consistent line endings). The producer **SHOULD** write files with LF line endings explicitly; when baseline is retained, this also follows the repository's `.gitattributes` policy.
 - Where ordering is non-semantic (for example, the order of keys in an object), the generator **MUST** apply a stable, documented ordering (for example, sorted by key, or grouped in a documented order). Where ordering **is** semantic (for example, an array of pipeline steps), the generator **MUST** preserve input order.
 - Generated files **SHOULD** identify their source or generation command, either via a sibling `README.md` that names the generator, a top-level `"$generatedBy"` or similar property when the schema permits it, or a comment in the generator's own README. The identification **MUST NOT** violate the strict-JSON-no-comments rule: if the file is `.json`, use a property allowed by the schema or a sibling document, not an inline comment.
 
@@ -163,4 +174,4 @@ A JSON change is considered done when **all** of the following hold:
 - Strict JSON contains no comments; documentation lives in schemas and sibling docs.
 - No secrets are committed; example values are obviously fake.
 - Generated JSON is reproducible, stably formatted, stably ordered when ordering is non-semantic, and identifies its source or generation command.
-- The repository's configured JSON or JSONC validators pass; schema and metaschema validators pass for any schema-backed file family wired into pre-commit or CI; schema-example tests pass after any schema or schema-example change; pre-commit and Markdown checks pass for any associated documentation changes.
+- The repository's configured JSON or JSONC validators pass; schema and metaschema validators pass for any schema-backed file family wired into pre-commit or CI; retained schema-example tests pass after any schema or schema-example change. When pre-commit or Markdown checks are retained, the applicable checks pass for associated documentation changes.

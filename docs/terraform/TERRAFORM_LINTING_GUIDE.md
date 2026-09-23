@@ -1,12 +1,12 @@
 # Terraform Linting Implementation Guide
 
-**Version:** 1.0.20260518.0
+**Version:** 1.0.20260923.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-05-18
+- **Last Updated:** 2026-09-23
 - **Scope:** This document provides comprehensive guidance for implementing Terraform linting in CI for the `franklesniak/copilot-repo-template` repository. It covers tool selection, workflow design, configuration, pre-commit integration, and best practices. This is a **guidance-only** document—it does not modify workflows or configurations directly.
 - **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md), [Terraform Instructions](../../.github/instructions/terraform.instructions.md)
 
@@ -35,11 +35,13 @@
   - [Configuration File Placement](#configuration-file-placement)
   - [Recommended Rule Sets and Plugins](#recommended-rule-sets-and-plugins)
   - [Rule Customization](#rule-customization)
+<!-- template-sync: begin baseline-reference-only -->
 - [Pre-commit Integration](#pre-commit-integration)
   - [Recommended Hooks](#recommended-hooks)
   - [Updating pre-commit-config.yaml](#updating-pre-commit-configyaml)
   - [Local Workflow](#local-workflow)
   - [Troubleshooting Pre-commit Hooks](#troubleshooting-pre-commit-hooks)
+<!-- template-sync: end baseline-reference-only -->
 - [CI Workflow Design Decisions](#ci-workflow-design-decisions)
   - [Header Comment Documentation](#header-comment-documentation)
   - [Job Dependencies](#job-dependencies)
@@ -595,8 +597,8 @@ jobs:
     name: Format Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: "1.6.0"
       - name: Terraform Format Check
@@ -607,8 +609,8 @@ jobs:
     needs: format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
         with:
           terraform_version: "1.6.0"
       - name: Find Terraform Directories
@@ -631,8 +633,8 @@ jobs:
     needs: validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: terraform-linters/setup-tflint@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: terraform-linters/setup-tflint@90f302c255ef959cbfb4bd10581afecdb7ece3e6 # v4.1.1
         with:
           tflint_version: v0.51.1  # Pin version for reproducibility
       - name: Init TFLint
@@ -646,8 +648,8 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true  # Advisory, not blocking
     steps:
-      - uses: actions/checkout@v4
-      - uses: aquasecurity/tfsec-action@v1.0.3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: aquasecurity/tfsec-action@b466648d6e39e7c75324f25d83891162a721f2d6 # v1.0.3
         with:
           soft_fail: true
 ```
@@ -689,7 +691,7 @@ validate
 Use `hashicorp/setup-terraform` for consistent Terraform installation:
 
 ```yaml
-- uses: hashicorp/setup-terraform@v3
+- uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
   with:
     terraform_version: "1.6.0"  # Pin specific version
     terraform_wrapper: true      # Enables output capturing
@@ -743,7 +745,7 @@ strategy:
     terraform-version: ['1.5.0', '1.6.0', '1.7.0']
 
 steps:
-  - uses: hashicorp/setup-terraform@v3
+  - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
     with:
       terraform_version: ${{ matrix.terraform-version }}
 ```
@@ -758,7 +760,7 @@ Cache the Terraform plugin directory to avoid repeated provider downloads:
 
 ```yaml
 - name: Cache Terraform Providers
-  uses: actions/cache@v4
+  uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
   with:
     path: ~/.terraform.d/plugin-cache
     key: terraform-providers-${{ hashFiles('**/.terraform.lock.hcl') }}
@@ -777,7 +779,7 @@ Cache TFLint plugins to avoid repeated downloads:
 
 ```yaml
 - name: Cache TFLint Plugins
-  uses: actions/cache@v4
+  uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
   with:
     path: ~/.tflint.d/plugins
     key: tflint-plugins-${{ hashFiles('.tflint.hcl') }}
@@ -815,17 +817,16 @@ security:
   needs: validate
   runs-on: ubuntu-latest
   steps:
-    - uses: actions/checkout@v4
-
+    - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
     # Primary scanner (required)
     - name: Run tfsec
-      uses: aquasecurity/tfsec-action@v1.0.3
+      uses: aquasecurity/tfsec-action@b466648d6e39e7c75324f25d83891162a721f2d6 # v1.0.3
       with:
         soft_fail: false  # Fail on findings
 
     # Advisory scanner (optional)
     - name: Run Checkov (Advisory)
-      uses: bridgecrewio/checkov-action@v12
+      uses: bridgecrewio/checkov-action@444c9db6fa75e2d9c19ebf1fde7322089be9009e # v12.3125.0
       continue-on-error: true  # Don't fail workflow
       with:
         directory: .
@@ -1047,7 +1048,11 @@ For organization-specific rules, consider:
 
 ---
 
+<!-- template-sync: begin baseline-reference-only -->
+
 ## Pre-commit Integration
+
+Run the installation commands below from the repository root after retaining or copying `requirements-pre-commit.txt` with `.pre-commit-config.yaml`. The baseline module owns both files; Python is the tooling runtime even when the Python language module is excluded. The requirement selects the runner version only, not a full transitive lock. If baseline is excluded, these template pre-commit setup steps do not apply.
 
 This repository already has Terraform hooks configured in `.pre-commit-config.yaml`. The active hooks are repo-local Python wrappers rather than POSIX shell hooks, so local validation works from native Windows / PowerShell, WSL/Linux, macOS, and Linux without depending on Bash path translation.
 
@@ -1124,7 +1129,7 @@ To add automatic documentation generation, add a dedicated `terraform-docs` hook
 
 ```bash
 # Install pre-commit globally
-pip install pre-commit
+python -m pip install -r requirements-pre-commit.txt
 
 # Install Terraform and TFLint so the repo-local hooks can find them on PATH
 terraform version
@@ -1206,6 +1211,8 @@ git commit --no-verify -m "Emergency commit"
 
 ---
 
+<!-- template-sync: end baseline-reference-only -->
+
 ## CI Workflow Design Decisions
 
 This section explains the design decisions that **SHOULD** be documented in the workflow header comment.
@@ -1281,11 +1288,10 @@ Every workflow file **SHOULD** include a comprehensive header comment explaining
 ```yaml
 # Primary security scan - MUST pass
 - name: Run tfsec
-  uses: aquasecurity/tfsec-action@v1.0.3
-
+  uses: aquasecurity/tfsec-action@b466648d6e39e7c75324f25d83891162a721f2d6 # v1.0.3
 # Advisory scan - informational only
 - name: Run Checkov (Advisory)
-  uses: bridgecrewio/checkov-action@v12
+  uses: bridgecrewio/checkov-action@444c9db6fa75e2d9c19ebf1fde7322089be9009e # v12.3125.0
   continue-on-error: true
 ```
 
@@ -1399,10 +1405,12 @@ on:
 
 In GitHub branch ruleset settings, configure these jobs as required status checks:
 
-1. `Terraform CI / Format Check`
-2. `Terraform CI / Validate`
-3. `Terraform CI / Lint (TFLint)`
-4. `Terraform CI / Test` (if tests exist)
+1. `Format Check`
+2. `Validate`
+3. `Lint (TFLint)`
+4. `Test` (if tests exist)
+
+Select the job checks from a recent successful run. Do not prepend the `Terraform CI` workflow label. See GitHub's [required-check troubleshooting](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/troubleshooting-rules#troubleshooting-required-status-checks).
 
 Security scans can be optional based on team preference.
 
@@ -1425,7 +1433,7 @@ The repository's `auto-fix-precommit.yml` workflow could be extended to support 
 
 #### Potential Auto-fix Addition
 
-The existing auto-fix workflow runs `pre-commit run --all-files`, which includes `terraform-fmt`. The repo-local format hook reports diffs but does not rewrite files; developers should run `terraform fmt -recursive`, review the result, and include the formatting update in the same change.
+When baseline and GitHub Actions are retained, the existing auto-fix workflow runs `pre-commit run --all-files`, which includes `terraform-fmt`. The repo-local format hook reports diffs but does not rewrite files; developers should run `terraform fmt -recursive`, review the result, and include the formatting update in the same change.
 
 For repositories where TFLint can auto-fix issues, consider:
 
@@ -1519,7 +1527,7 @@ tflint --init && tflint --recursive
 **SHOULD** pin Terraform version for reproducibility:
 
 ```yaml
-- uses: hashicorp/setup-terraform@v3
+- uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
   with:
     terraform_version: "1.6.0"  # Pin specific version
 ```
@@ -1552,7 +1560,7 @@ Using `latest` is **NOT** acceptable for:
 Avoid `latest` for reproducible CI runs:
 
 ```yaml
-- uses: terraform-linters/setup-tflint@v6
+- uses: terraform-linters/setup-tflint@1cf010d3c7aef302051ccdb68c14c5dc2efa34ef # v6.3.1
   with:
     tflint_version: latest
 ```
@@ -1560,14 +1568,14 @@ Avoid `latest` for reproducible CI runs:
 **Recommendation:** Pin to specific version for reproducibility:
 
 ```yaml
-- uses: terraform-linters/setup-tflint@v6
+- uses: terraform-linters/setup-tflint@1cf010d3c7aef302051ccdb68c14c5dc2efa34ef # v6.3.1
   with:
     tflint_version: v0.51.1
 ```
 
 ### Repo-local Pre-commit Hook Maintenance
 
-The Terraform pre-commit hooks are `repo: local` wrappers, so there is no external pre-commit hook revision to pin:
+When baseline is retained, the Terraform pre-commit hooks are `repo: local` wrappers, so there is no external pre-commit hook revision to pin:
 
 ```yaml
 - repo: local

@@ -66,6 +66,8 @@ def test_validation_commands_keep_actionlint_github_actions_scoped() -> None:
     azure_pipeline_commands = sync_candidates.VALIDATION_COMMANDS_BY_MODULE["azure-pipelines"]
 
     assert any("actionlint" in command for command in github_actions_commands)
+    assert "python .github/scripts/validate_workflow_security.py" in github_actions_commands
+    assert not any("validate_workflow_security" in command for command in azure_pipeline_commands)
     assert not any("actionlint" in command for command in azure_pipeline_commands)
     assert any("Azure Pipelines" in command for command in azure_pipeline_commands)
 
@@ -2617,6 +2619,31 @@ def test_local_overrides_are_reported(tmp_path: Path) -> None:
     assert "Local override present; use it as a default" in result.stdout
 
 
+def test_catalog_is_protected_without_becoming_an_agent_entry_point(tmp_path: Path) -> None:
+    """Catalog evolution needs authority even when the agent module is not retained."""
+    _init_repo(tmp_path)
+    catalog_path = ".template-sync/instruction-contracts.yml"
+    _write_text(tmp_path, catalog_path, "base\n")
+    base_sha = _commit_all(tmp_path, "base")
+    _write_text(tmp_path, catalog_path, "head\n")
+    head_sha = _commit_all(tmp_path, "head")
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["template-sync-support"], last_reviewed_template_commit=base_sha),
+    )
+    result = _run_generator(tmp_path, "--range-head", head_sha)
+    assert result.returncode == 0, result.stderr
+    assert "| .template-sync/instruction-contracts.yml | Modified |" in result.stdout
+    assert (
+        "Protected instruction/governance file; explicit owner authorization is required."
+        in result.stdout
+    )
+    assert catalog_path not in sync_candidates.discover_agent_instruction_files(tmp_path)
+    _write_text(tmp_path, "AGENTS.md", "Agent guidance\n")
+    assert "AGENTS.md" in sync_candidates.discover_agent_instruction_files(tmp_path)
+
+
 def test_deferred_protected_candidates_and_protected_files_are_flagged(tmp_path: Path) -> None:
     """Deferred protected marker entries and protected paths are visible."""
     _init_repo(tmp_path)
@@ -2908,3 +2935,47 @@ def test_invalid_marker_schema_is_rejected(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert "Schema validation failed for .template-sync/marker.yml" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "agent_module",
+    [
+        "agent-copilot",
+        "agent-codex",
+        "agent-claude",
+        "agent-cursor",
+        "agent-gemini",
+        "agent-hermes",
+    ],
+)
+def test_agent_selection_guidance_does_not_require_optional_enforcement(agent_module: str) -> None:
+    """Policy-only agents require review without silently selecting optional tooling."""
+    modules = frozenset({"agent-instructions", agent_module})
+    guidance = sync_candidates.validation_commands_for_modules(modules)
+    assert "manual" in guidance
+    for unrelated in ("python ", "pytest ", "npm ", "pre-commit ", "validate_instruction_profile"):
+        assert unrelated not in guidance
+    assert (
+        sync_candidates.adoption_mode_for_modules(
+            frozenset({agent_module}), (), False, "minimal-preservation"
+        )
+        == "minimal-preservation"
+    )
+
+
+def test_enforcement_guidance_uses_portable_profile_dispatcher() -> None:
+    """Selected enforcement names its portable CLI independently of project/host modules."""
+    guidance = sync_candidates.validation_commands_for_modules(
+        frozenset({"instruction-enforcement"})
+    )
+    assert "python .github/scripts/validate_instruction_profile.py" in guidance
+    assert "selected modules" in guidance
+    assert "local exception declarations" in guidance
+    for unrelated in (".template-sync/", "pytest ", "npm ", "pre-commit "):
+        assert unrelated not in guidance
+    assert (
+        sync_candidates.adoption_mode_for_modules(
+            frozenset({"instruction-enforcement"}), (), False, "tailored"
+        )
+        == "tailored"
+    )

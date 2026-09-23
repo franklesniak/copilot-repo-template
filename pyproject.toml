@@ -83,7 +83,7 @@ target-version = ["py313", "py314"]
 # Check against the lowest supported Python line so type checks stay compatible
 # across the support window. mypy uses a dotted version string.
 python_version = "3.13"
-mypy_path = "$MYPY_CONFIG_FILE_DIR/src,$MYPY_CONFIG_FILE_DIR/.template-sync/scripts"
+mypy_path = "$MYPY_CONFIG_FILE_DIR/src,$MYPY_CONFIG_FILE_DIR/.template-sync/scripts,$MYPY_CONFIG_FILE_DIR/.github/scripts"
 explicit_package_bases = true
 warn_return_any = true
 warn_unused_configs = true
