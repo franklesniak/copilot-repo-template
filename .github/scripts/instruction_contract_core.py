@@ -2411,24 +2411,31 @@ def markdown_reference_definition_ends(spans: list[list[tuple[int, str]]]) -> di
 
 
 def markdown_link_spans(
-    text: str, fence_context: str, reference_labels: set[str] | None = None
+    text: str,
+    fence_context: str,
+    reference_labels: set[str] | None = None,
+    definition_lines: set[int] | None = None,
 ) -> list[list[tuple[int, str]]]:
-    """Preserve definition inventory while removing contextual literal blocks."""
+    """Locate contextual definitions while removing literal blocks from link spans."""
     if fence_context != MARKDOWN_FENCE_CONTEXT:
         spans = markdown_live_link_spans(text, fence_context, set())
+        active_definitions = set(markdown_reference_definition_ends(spans))
         if reference_labels is not None:
-            definition_lines = set(markdown_reference_definition_ends(spans))
-            reference_labels.update(markdown_definition_labels(spans, definition_lines))
+            reference_labels.update(markdown_definition_labels(spans, active_definitions))
+        if definition_lines is not None:
+            definition_lines.update(active_definitions)
         return spans
     literal_lines = markdown_indented_code_lines(text, include_indented=False)
     spans = markdown_live_link_spans(text, fence_context, literal_lines)
     definition_ends = markdown_reference_definition_ends(spans)
-    active_definitions: set[int] = set()
+    active_definitions = set()
     code_lines = markdown_indented_code_lines(
         text, definition_ends, active_definitions=active_definitions
     )
     if reference_labels is not None:
         reference_labels.update(markdown_definition_labels(spans, active_definitions))
+    if definition_lines is not None:
+        definition_lines.update(active_definitions)
     return markdown_live_link_spans(text, fence_context, code_lines)
 
 
@@ -2733,6 +2740,7 @@ def markdown_link_candidates(
     starts: list[int],
     whitespace: list[int],
     reference_labels: set[str] | None = None,
+    definition_starts: set[int] | None = None,
 ) -> list[tuple[int, int, int, int]]:
     """Scan inline labels while keeping destinations and definitions literal.
 
@@ -2776,14 +2784,17 @@ def markdown_link_candidates(
         closing = definitions.get(index) if character == "[" else None
         if closing is not None:
             line_start = starts[bisect_right(starts, opening) - 1]
-            component = markdown_link_component(
-                text, opening, closing, closes, whitespace, line_start
-            )
-            if component is not None:
-                end, target_start, target_end = component
-                candidates.append((opening, end, target_start, target_end))
-                index = end
-                continue
+            # Paragraph lookalikes stay inline; their apparent titles can
+            # contain real links that definition consumption would hide.
+            if definition_starts is None or line_start in definition_starts:
+                component = markdown_link_component(
+                    text, opening, closing, closes, whitespace, line_start
+                )
+                if component is not None:
+                    end, target_start, target_end = component
+                    candidates.append((opening, end, target_start, target_end))
+                    index = end
+                    continue
         if character == "[":
             brackets.append(
                 (index, len(candidates), visible_links, markdown_link_opening_is_image(text, index))
@@ -2824,7 +2835,9 @@ def markdown_link_candidates(
 
 
 def markdown_span_link_targets(
-    span: list[tuple[int, str]], reference_labels: set[str] | None = None
+    span: list[tuple[int, str]],
+    reference_labels: set[str] | None = None,
+    definition_lines: set[int] | None = None,
 ) -> list[tuple[int, str]]:
     """Extract the supported link surface from one contiguous live text span."""
     text = "\n".join(line for _, line in span)
@@ -2839,10 +2852,15 @@ def markdown_span_link_targets(
         if ord(character) <= 32 or ord(character) == 127
     ]
     whitespace.append(len(text))
+    definition_starts = (
+        None
+        if definition_lines is None
+        else {start for start, (line, _) in zip(starts, span) if line in definition_lines}
+    )
     targets: list[tuple[int, str]] = []
     consumed_until = 0
     for opening, end, target_start, target_end in sorted(
-        markdown_link_candidates(text, starts, whitespace, reference_labels)
+        markdown_link_candidates(text, starts, whitespace, reference_labels, definition_starts)
     ):
         if opening < consumed_until:
             continue
@@ -2859,9 +2877,12 @@ def markdown_link_targets_from_text(
 ) -> tuple[tuple[int, str], ...]:
     """Extract bounded multiline links, not a general CommonMark rendering tree."""
     reference_labels: set[str] = set()
-    spans = markdown_link_spans(text, fence_context, reference_labels)
+    definition_lines: set[int] = set()
+    spans = markdown_link_spans(text, fence_context, reference_labels, definition_lines)
     return tuple(
-        target for span in spans for target in markdown_span_link_targets(span, reference_labels)
+        target
+        for span in spans
+        for target in markdown_span_link_targets(span, reference_labels, definition_lines)
     )
 
 

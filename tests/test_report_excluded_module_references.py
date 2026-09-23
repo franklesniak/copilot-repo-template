@@ -1135,3 +1135,46 @@ def test_reporter_nested_link_activity_has_fixed_targets_and_lines(
         assert len(links) == 1, links
         assert f"{relative_path}:{line_number} |" in links[0]
         assert "templates/json/example.json" in links[0]
+
+
+@pytest.mark.parametrize(
+    ("suffix", "body", "line_number"),
+    [
+        ("md", "[Guide]\n[Guide]: templates/json/example.json", None),
+        ("mdc", "> [Guide]\n> [Guide]: templates/json/example.json", None),
+        ("md", "- [Guide]\n  [Guide]: templates/json/example.json", None),
+        ("md", "[Guide]\n\n[Guide]: templates/json/example.json", 3),
+        ("md", 'Paragraph\n[Guide]: kept.md "[live](templates/json/example.json)"', 2),
+        ("md", "# Heading\n[Guide]: templates/json/example.json", 2),
+        ("md", "[kept]: kept.md\n[Guide]: templates/json/example.json", 2),
+        ("yaml", "value: |\n  [Guide]: templates/json/example.json", 2),
+        ("yml", "value: |\n  [Guide]\n  [Guide]: templates/json/example.json", 3),
+        ("yaml", "value: |\n    [Guide]: templates/json/example.json", None),
+        ("yml", "value: |\n    [Guide]\n    [Guide]: templates/json/example.json", None),
+    ],
+)
+def test_reporter_definition_context_preserves_native_findings_and_embedded_yaml(
+    tmp_path: Path, suffix: str, body: str, line_number: int | None
+) -> None:
+    """Reports apply Markdown block context while retaining explicit YAML scanning."""
+    _write_common_repo(tmp_path, include_reference_content=False)
+    relative_path = f"example.{suffix}"
+    manifest = _manifest()
+    manifest["template_manifest"]["path_mappings"].append(
+        {"pattern": relative_path, "requires_all": ["baseline"]}
+    )
+    _write_yaml(tmp_path, ".template-sync/manifest.yml", manifest)
+    _write_text(tmp_path, relative_path, body + "\n")
+    result = _run_report(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    links = [
+        line
+        for line in _finding_lines(result.stdout)
+        if line.startswith("markdown-link.excluded-target") and f" | {relative_path}:" in line
+    ]
+    if line_number is None:
+        assert links == []
+    else:
+        assert len(links) == 1, links
+        assert f"{relative_path}:{line_number} |" in links[0]
+        assert "templates/json/example.json" in links[0]

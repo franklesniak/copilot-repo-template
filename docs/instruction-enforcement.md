@@ -5,7 +5,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-22
+- **Last Updated:** 2026-09-23
 - **Scope:** Optional static instruction checks, applicability, local declarations, and migration.
 - **Related:** [Repository instructions](../.github/copilot-instructions.md)
 
@@ -41,7 +41,7 @@ Raw HTML blocks, including comments, contain literal examples rather than Markdo
 
 Matched code spans inside an inline link label do not supply label brackets. For example, ``[a `]`](target.md)`` still checks `target.md`; the bracket inside code does not end the label. Link-shaped text wholly inside a code span is literal and produces no target. Unmatched backticks remain literal. Destinations, titles and reference-definition labels retain their own syntax, so a backtick in those components does not hide a later link.
 
-When an ordinary link label contains another live link, the inner link wins: `[outer [Guide](inner.md)](outer.md)` checks `inner.md`, while the outer destination is literal text. Image descriptions remain non-anchor text, including links inside their descriptions; an image inside a real link does not hide that enclosing link. Recognized full, collapsed and shortcut reference links also affect enclosing link activity. Definition destinations remain part of the existing target inventory even when unused, without adding duplicate targets at each reference use.
+When an ordinary link label contains another live link, the inner link wins: `[outer [Guide](inner.md)](outer.md)` checks `inner.md`, while the outer destination is literal text. Image descriptions remain non-anchor text, including links inside their descriptions; an image inside a real link does not hide that enclosing link. Recognized full, collapsed and shortcut reference links also affect enclosing link activity. Genuine reference-definition destinations remain part of the target inventory even when unused, without adding duplicate targets at each reference use. Definition-shaped text cannot interrupt an open paragraph. For example, `[Guide]` immediately followed by `[Guide]: target.md` on the next line, without a blank line, supplies no definition target. Real inline links in that paragraph remain checked.
 
 Before comparing a destination with a catalog path, the checker decodes Markdown punctuation escapes and valid character references in one pass. For example, `target\.md` and `target&#46;md` both compare as `target.md`. Replacements are not decoded again, and ordinary URL percent decoding follows afterward. Reports and exception anchors keep the exact original destination spelling; equivalent rendered paths do not share an exception automatically.
 
@@ -52,6 +52,8 @@ Each standalone exception names one exact `path`, one exact reported `anchor`, t
 Every applied exception is reported. A schema-valid declaration is auditable local data, **not independent proof of owner authorization**. Owner approval remains an external repository process. Candidate-owned static checks cannot establish human permission, arbitrary natural-language compliance, future agent behavior, or resistance to an attacker editing the checker and its catalog together.
 
 Initial materialization renders the explicit selected profile. Removing sync support translates relevant anchor/removal declarations to exact local exceptions and scopes stale-section waivers to observed content. It preserves source decisions as migration evidence without treating their historical authority as a new grant. Review the protected profile candidate and any reported failure before removing the old support paths. Reintroducing sync with local declarations requires explicitly translating them back to reviewed marker decisions first; the tool refuses an implicit loss of declarations.
+
+Before changing downstream files, materialization checks that the selected enforcement profile, runtime and mode-specific schemas and catalog are regular files. `SKIP` therefore requires existing local files. A skipped profile must match the requested mode. Standalone mode requires the same module set; marker mode requires `downstream` context. These checks reject missing inputs and conflicting applicability before target writes. Review the preserved profile or requested selection before retrying. Valid local bytes and declarations remain owner-controlled; these checks do not validate every preserved runtime file's contents.
 
 Newly migrated waivers follow the file selection: protected files use their explicit protected decisions, and other files use the most specific matching local override. `TAKE` uses the staged candidate when present, and `SKIP` uses the preserved local content. Section or reference waivers produce exceptions only for failures in that selected content. If a direct instruction waiver accompanies `TAKE` but its anchor no longer fails, migration rejects the conflicting waiver before writing the profile. Review that waiver against the selected candidate.
 

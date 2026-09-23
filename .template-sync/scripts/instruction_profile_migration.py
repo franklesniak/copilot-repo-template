@@ -20,6 +20,7 @@ from template_sync_materialization_helpers import (
     TemplateSyncMaterializationError,
     is_protected_instruction_path,
     parse_marker_decision_data,
+    resolve_safe_repository_target_path,
 )
 
 PROFILE_PATH = ".github/instruction-profile.yml"
@@ -199,6 +200,57 @@ def report_failure_keys(report: core.InstructionContractReport) -> set[tuple[str
     return failures
 
 
+def validate_selected_enforcement_inputs(
+    staging_root: Path, target_root: Path, marker: dict[str, Any]
+) -> None:
+    """Require the selected runtime inputs without overriding local ownership."""
+    paths = [
+        PROFILE_PATH,
+        "schemas/instruction-profile.schema.json",
+        ".github/scripts/validate_instruction_profile.py",
+        ".github/scripts/instruction_contract_core.py",
+        ".github/scripts/instruction_contract_support.py",
+    ]
+    if "template-sync-support" not in marker["included_modules"]:
+        paths.extend(
+            [".github/instruction-contracts.yml", "schemas/instruction-contracts.schema.json"]
+        )
+    for relative_path in paths:
+        content_root, _ = selected_content_root(relative_path, staging_root, target_root, marker)
+        path = resolve_safe_repository_target_path(
+            content_root, relative_path, field_name="selected enforcement input"
+        )
+        if not path.is_file():
+            raise TemplateSyncMaterializationError(
+                f"Selected enforcement input is missing or not a regular file: {relative_path}. "
+                "SKIP requires preserved local input; review the file or its selection."
+            )
+
+
+def validate_skipped_profile_applicability(target_root: Path, marker: dict[str, Any]) -> None:
+    """Reject contradictory preserved applicability without changing profile bytes."""
+    if not any(
+        item["path"] == PROFILE_PATH and item["decision"] == "SKIP"
+        for item in marker.get("protected_file_decisions", [])
+    ):
+        return
+    local = load_existing_profile(target_root)
+    modules = set(marker["included_modules"])
+    expected_mode = "marker" if "template-sync-support" in modules else "standalone"
+    if local["mode"] != expected_mode:
+        field = "mode"
+    elif expected_mode == "marker" and local["context"] != "downstream":
+        field = "context"
+    elif expected_mode == "standalone" and set(local["modules"]) != modules:
+        field = "modules"
+    else:
+        return
+    raise TemplateSyncMaterializationError(
+        f"Preserved {PROFILE_PATH} {field} conflicts with the selected materialization. "
+        "Review the local profile or its SKIP decision; local bytes are not changed."
+    )
+
+
 def render_instruction_profile(
     *,
     staging_root: Path,
@@ -222,6 +274,8 @@ def render_instruction_profile(
     destination = staging_root / PROFILE_PATH
     if not destination.is_file():
         raise TemplateSyncMaterializationError("Selected enforcement profile candidate is missing.")
+    validate_selected_enforcement_inputs(staging_root, target_root, marker)
+    validate_skipped_profile_applicability(target_root, marker)
     previous = target_root / PROFILE_PATH
     if "template-sync-support" in modules:
         if previous.is_file():

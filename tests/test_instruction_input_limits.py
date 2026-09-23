@@ -72,7 +72,13 @@ def test_cli_byte_boundary_for_each_input_family(
     _write_input_fixture(tmp_path)
     target = tmp_path / relative_path
     original = target.read_bytes()
-    target.write_bytes(original + b" " * (ACCEPTED_LIMIT + size_delta - len(original)))
+    target_size = ACCEPTED_LIMIT + size_delta
+    assert len(original) <= target_size, (
+        f"{relative_path}: original fixture has {len(original)} bytes; "
+        f"requested boundary is {target_size} bytes"
+    )
+    target.write_bytes(original + b" " * (target_size - len(original)))
+    assert target.stat().st_size == target_size
 
     result = _run_input_validator(tmp_path)
     if size_delta <= 0:

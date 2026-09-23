@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Agent Instructions for Claude Code
 
-**Version:** 1.7.20260922.0
+**Version:** 1.7.20260923.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-22
+- **Last Updated:** 2026-09-23
 - **Scope:** Agent-specific entry point for Claude Code and compatible AI coding agents operating in this repository. Mirrors a minimal inline summary of the highest-priority shared rules; `.github/copilot-instructions.md` remains the canonical source of truth.
 <!-- template-sync: begin markdown-reference-only -->
 - **Related:** [Repository Copilot Instructions](.github/copilot-instructions.md), [Documentation Writing Style](.github/instructions/docs.instructions.md)

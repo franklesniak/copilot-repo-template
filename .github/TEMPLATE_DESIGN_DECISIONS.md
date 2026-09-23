@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-22
+- **Last Updated:** 2026-09-23
 - **Scope:** Durable design-decision record for this repository template, including rationale for GitHub configuration, instruction files, validation policy, template structure, maintenance conventions, and the documentation-tier inventory below.
 - **Related:** [Repository Copilot Instructions](copilot-instructions.md), [upstream Documentation Writing Style](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/instructions/docs.instructions.md)
 

@@ -883,6 +883,7 @@ def test_migration_retires_scoped_section_declaration_and_detects_mutant(
     assert generated["source_decisions"]["retired_exceptions"] == [declaration]
     validated = run(stage)
     assert validated.returncode == 0, validated.stdout + validated.stderr
+
     mutant = run_migration_schema_control(
         stage, target, marker_document=marker, omit_scoped_retirement=True
     )
@@ -1956,3 +1957,292 @@ def test_excluded_scope_retires_prior_declaration_before_digest_check(tmp_path: 
     assert generated["source_decisions"]["retired_exceptions"] == [declaration]
     validated = run(stage)
     assert validated.returncode == 0, validated.stdout + validated.stderr
+
+
+def enforcement_adoption_decisions(
+    modules: set[str], *, skipped_path: str | None = None
+) -> dict[str, Any]:
+    """Build public decisions for an actual template adoption fixture."""
+    sys.path.insert(0, str(ROOT / ".template-sync/scripts"))
+    from template_sync_materialization_helpers import (
+        is_protected_instruction_path,
+        iter_safe_repository_files,
+        parse_manifest_mappings,
+        selected_relation_for_path,
+    )
+
+    manifest = yaml.safe_load((ROOT / ".template-sync/manifest.yml").read_text(encoding="utf-8"))
+    _, mappings = parse_manifest_mappings(manifest)
+    decisions = []
+    for relative in iter_safe_repository_files(ROOT)[0]:
+        relation = selected_relation_for_path(relative, mappings)
+        if (
+            relation
+            and relation.is_retained_by(modules)
+            and is_protected_instruction_path(relative)
+        ):
+            decisions.append(
+                {
+                    "path": relative,
+                    "decision": "SKIP" if relative == skipped_path else "TAKE",
+                    "adoption_mode": "minimal-preservation",
+                    "authorization_basis": "Fixture owner selects this exact path",
+                    "authorized_scope": relative,
+                    "reason": "Enforcement input lifecycle",
+                }
+            )
+    marker: dict[str, Any] = {
+        "included_modules": sorted(modules),
+        "source_repo": "https://github.com/franklesniak/copilot-repo-template",
+        "protected_file_decisions": decisions,
+        "protected_guide_contract_waivers": [
+            {
+                "path": "AGENTS.md",
+                "contract_key": "agents-azure-devops-pr-review-protocol",
+                "target_module": "azure-devops-collaboration",
+                "reason": "Reviewed fixture protocol",
+                "authorization_basis": "Fixture owner retains protocol",
+            }
+        ],
+    }
+    if skipped_path is not None and not is_protected_instruction_path(skipped_path):
+        marker["local_overrides"] = [
+            {
+                "path": skipped_path,
+                "default_decision": "SKIP",
+                "reason": "Fixture owner retains local input",
+            }
+        ]
+    return {"template_sync": marker}
+
+
+def run_enforcement_adoption(
+    target: Path, *, omit_check: str | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Run adoption, optionally removing one preflight only inside a child process."""
+    arguments = [
+        str(ROOT / ".template-sync/scripts/materialize_downstream_adoption.py"),
+        "--template-root",
+        str(ROOT),
+        "--target-root",
+        str(target),
+        "--decisions-file",
+        "decisions.yml",
+    ]
+    command = [sys.executable, "-B", *arguments]
+    if omit_check is not None:
+        guards = {
+            "inputs": "    validate_selected_enforcement_inputs(staging_root, target_root, marker)\n",
+            "applicability": "    validate_skipped_profile_applicability(target_root, marker)\n",
+        }
+        guard = guards[omit_check]
+        program = (
+            "import sys, runpy\n"
+            f"sys.path.insert(0, {str(ROOT / '.template-sync/scripts')!r})\n"
+            "import instruction_profile_migration as migration\n"
+            "source = migration.Path(migration.__file__).read_text(encoding='utf-8')\n"
+            f"assert source.count({guard!r}) == 1\n"
+            f"source = source.replace({guard!r}, '')\n"
+            "exec(compile(source, migration.__file__, 'exec'), migration.__dict__)\n"
+            f"sys.argv = {arguments!r}\n"
+            "runpy.run_path(sys.argv[0], run_name='__main__')\n"
+        )
+        command = [sys.executable, "-B", "-c", program]
+    return subprocess.run(command, capture_output=True, text=True, check=False, timeout=90)
+
+
+def snapshot_enforcement_target(target: Path) -> dict[str, bytes]:
+    """Capture every regular fixture file to detect writes before rejection."""
+    sys.path.insert(0, str(ROOT / ".template-sync/scripts"))
+    from template_sync_materialization_helpers import iter_safe_repository_files
+
+    paths, skipped = iter_safe_repository_files(target, skipped_dirs=())
+    assert not skipped
+    return {relative: (target / relative).read_bytes() for relative in paths}
+
+
+@pytest.mark.parametrize(
+    ("relative", "sync"),
+    [
+        (".github/instruction-profile.yml", False),
+        ("schemas/instruction-profile.schema.json", False),
+        (".github/scripts/validate_instruction_profile.py", False),
+        (".github/scripts/instruction_contract_core.py", False),
+        (".github/scripts/instruction_contract_support.py", False),
+        (".github/instruction-contracts.yml", False),
+        ("schemas/instruction-contracts.schema.json", False),
+        (".github/instruction-profile.yml", True),
+    ],
+)
+def test_skipped_missing_enforcement_inputs_reject_before_adoption_writes(
+    tmp_path: Path, relative: str, sync: bool
+) -> None:
+    """A retained hook cannot be installed successfully with a missing selected input."""
+    modules = {"baseline", "agent-instructions", "instruction-enforcement", "agent-codex"}
+    if sync:
+        modules.add("template-sync-support")
+    marker = enforcement_adoption_decisions(modules, skipped_path=relative)
+    write(tmp_path, "decisions.yml", yaml.safe_dump(marker))
+    before = snapshot_enforcement_target(tmp_path)
+    result = run_enforcement_adoption(tmp_path)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert (
+        f"Selected enforcement input is missing or not a regular file: {relative}" in result.stderr
+    )
+    assert snapshot_enforcement_target(tmp_path) == before
+
+
+@pytest.mark.parametrize("sync", [False, True])
+def test_preserved_profile_directory_rejects_before_adoption_writes(
+    tmp_path: Path, sync: bool
+) -> None:
+    """A wrong-kind profile fails before unrelated files are installed."""
+    modules = {"baseline", "agent-instructions", "instruction-enforcement", "agent-codex"}
+    if sync:
+        modules.add("template-sync-support")
+    relative = ".github/instruction-profile.yml"
+    marker = enforcement_adoption_decisions(modules, skipped_path=relative)
+    write(tmp_path, "decisions.yml", yaml.safe_dump(marker))
+    (tmp_path / relative).mkdir(parents=True)
+    before = snapshot_enforcement_target(tmp_path)
+    result = run_enforcement_adoption(tmp_path)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert (
+        f"Selected enforcement input is missing or not a regular file: {relative}" in result.stderr
+    )
+    assert snapshot_enforcement_target(tmp_path) == before
+
+
+@pytest.mark.parametrize(
+    ("case", "sync", "field"),
+    [
+        ("wrong-mode", False, "mode"),
+        ("missing-module", False, "modules"),
+        ("extra-module", False, "modules"),
+        ("wrong-mode", True, "mode"),
+        ("upstream-context", True, "context"),
+    ],
+)
+def test_preserved_profile_applicability_rejects_before_adoption_writes(
+    tmp_path: Path, case: str, sync: bool, field: str
+) -> None:
+    """Schema-valid local applicability cannot silently override selected modules or mode."""
+    modules = {"baseline", "agent-instructions", "instruction-enforcement", "agent-codex"}
+    if sync:
+        modules.add("template-sync-support")
+    relative = ".github/instruction-profile.yml"
+    marker = enforcement_adoption_decisions(modules, skipped_path=relative)
+    local: dict[str, Any] = {
+        "version": 1,
+        "mode": "standalone",
+        "modules": sorted(modules - {"template-sync-support"}),
+        "exceptions": [],
+    }
+    if (case == "wrong-mode" and not sync) or case == "upstream-context":
+        local = {
+            "version": 1,
+            "mode": "marker",
+            "context": "upstream-template" if sync else "downstream",
+        }
+    if case == "missing-module":
+        local["modules"].remove("agent-codex")
+    if case == "extra-module":
+        local["modules"].append("agent-claude")
+    write(tmp_path, relative, yaml.safe_dump(local))
+    write(tmp_path, "decisions.yml", yaml.safe_dump(marker))
+    before = snapshot_enforcement_target(tmp_path)
+    result = run_enforcement_adoption(tmp_path)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"Preserved {relative} {field} conflicts" in result.stderr
+    assert snapshot_enforcement_target(tmp_path) == before
+
+
+@pytest.mark.parametrize("sync", [False, True])
+def test_valid_skipped_profile_keeps_local_bytes_and_repeated_adoption(
+    tmp_path: Path, sync: bool
+) -> None:
+    """Owner comments, exceptions and module ordering survive repeated materialization."""
+    modules = {"baseline", "agent-instructions", "instruction-enforcement", "agent-codex"}
+    if sync:
+        modules.add("template-sync-support")
+    marker = enforcement_adoption_decisions(modules)
+    write(tmp_path, "decisions.yml", yaml.safe_dump(marker))
+    initial = run_enforcement_adoption(tmp_path)
+    assert initial.returncode == 0, initial.stdout + initial.stderr
+    validated = run(tmp_path)
+    assert validated.returncode == 0, validated.stdout + validated.stderr
+    relative = ".github/instruction-profile.yml"
+    local = yaml.safe_load((tmp_path / relative).read_text(encoding="utf-8"))
+    if not sync:
+        local["modules"].reverse()
+    preserved = "# Owner comment must remain.\n" + yaml.safe_dump(local, sort_keys=False)
+    write(tmp_path, relative, preserved)
+    marker = enforcement_adoption_decisions(modules, skipped_path=relative)
+    write(tmp_path, "decisions.yml", yaml.safe_dump(marker))
+    for _ in range(2):
+        adopted = run_enforcement_adoption(tmp_path)
+        assert adopted.returncode == 0, adopted.stdout + adopted.stderr
+        assert (tmp_path / relative).read_bytes() == preserved.encode("utf-8")
+        validated = run(tmp_path)
+        assert validated.returncode == 0, validated.stdout + validated.stderr
+
+
+def test_policy_only_materialization_does_not_require_profile(tmp_path: Path) -> None:
+    """Optional enforcement remains optional in the actual materializer."""
+    marker = enforcement_adoption_decisions({"baseline", "agent-instructions", "agent-codex"})
+    write(tmp_path, "decisions.yml", yaml.safe_dump(marker))
+    result = run_enforcement_adoption(tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not (tmp_path / ".github/instruction-profile.yml").exists()
+    assert not (tmp_path / ".github/scripts/validate_instruction_profile.py").exists()
+
+
+@pytest.mark.parametrize(
+    ("omitted", "case"),
+    [
+        ("inputs", "catalog"),
+        ("inputs", "entrypoint"),
+        ("applicability", "mode"),
+        ("applicability", "modules"),
+    ],
+)
+def test_actual_adoption_preflights_detect_independent_guard_removal(
+    tmp_path: Path, omitted: str, case: str
+) -> None:
+    """Fixed failure oracles catch removed guards, including silent coverage loss."""
+    modules = {"baseline", "agent-instructions", "instruction-enforcement", "agent-codex"}
+    relative = {
+        "catalog": ".github/instruction-contracts.yml",
+        "entrypoint": ".github/scripts/validate_instruction_profile.py",
+        "mode": ".github/instruction-profile.yml",
+        "modules": ".github/instruction-profile.yml",
+    }[case]
+    marker = enforcement_adoption_decisions(modules, skipped_path=relative)
+    if case == "mode":
+        local: dict[str, Any] = {"version": 1, "mode": "marker", "context": "downstream"}
+        write(tmp_path, relative, yaml.safe_dump(local))
+    elif case == "modules":
+        local = {
+            "version": 1,
+            "mode": "standalone",
+            "modules": sorted(modules - {"agent-codex"}),
+            "exceptions": [],
+        }
+        write(tmp_path, relative, yaml.safe_dump(local))
+    write(tmp_path, "decisions.yml", yaml.safe_dump(marker))
+    before = snapshot_enforcement_target(tmp_path)
+    rejected = run_enforcement_adoption(tmp_path)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert snapshot_enforcement_target(tmp_path) == before
+    mutant = run_enforcement_adoption(tmp_path, omit_check=omitted)
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    with pytest.raises(AssertionError):
+        assert mutant.returncode == 1
+    with pytest.raises(AssertionError):
+        assert snapshot_enforcement_target(tmp_path) == before
+    if case == "entrypoint":
+        assert not (tmp_path / relative).exists()
+    else:
+        validated = run(tmp_path)
+        expected = 0 if case == "modules" else 2 if case == "mode" else 1
+        assert validated.returncode == expected, validated.stdout + validated.stderr

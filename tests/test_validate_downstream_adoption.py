@@ -1041,3 +1041,31 @@ def test_marker_nested_link_activity_has_fixed_native_findings(
         )
     else:
         assert "Retained Markdown relative link targets excluded module(s)" not in result.stdout
+
+
+@pytest.mark.parametrize(
+    ("body", "line_number"),
+    [
+        ("[Guide]\n[Guide]: templates/json/example.json", None),
+        ("> [Guide]\n> [Guide]: templates/json/example.json", None),
+        ("- [Guide]\n  [Guide]: templates/json/example.json", None),
+        ("[Guide]\n\n[Guide]: templates/json/example.json", 5),
+        ('Paragraph\n[Guide]: kept.md "[live](templates/json/example.json)"', 4),
+        ("# Heading\n[Guide]: templates/json/example.json", 4),
+        ("[kept]: kept.md\n[Guide]: templates/json/example.json", 4),
+    ],
+)
+def test_marker_definition_context_has_fixed_native_findings(
+    tmp_path: Path, body: str, line_number: int | None
+) -> None:
+    """The marker route does not consume paragraph lookalikes as definitions."""
+    _write_common_downstream_repo(tmp_path, readme_text="# Downstream\n\n" + body + "\n")
+    result = _run_validator(tmp_path, "--require-marker")
+    assert result.returncode == (1 if line_number is not None else 0), result.stdout + result.stderr
+    if line_number is not None:
+        assert (
+            f"README.md:{line_number}: templates/json/example.json -> templates/json/example.json"
+            in result.stdout
+        )
+    else:
+        assert "Retained Markdown relative link targets excluded module(s)" not in result.stdout

@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-22
+- **Last Updated:** 2026-09-23
 - **Scope:** Durable adoption guidance for optional Azure DevOps Services host modules in this template. Covers Azure Repos, Azure Pipelines, Azure Boards, Azure DevOps security scanning, dependency-update choices, Copilot code review constraints, and local versus service-backed validation boundaries. Azure DevOps Server is out of scope unless a future change verifies and documents server-specific behavior.
 - **Related:** [Issue #758](https://github.com/franklesniak/copilot-repo-template/issues/758), [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Template Update Procedure](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/TEMPLATE_UPDATE_PROCEDURE.md)
 

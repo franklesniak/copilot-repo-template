@@ -1,12 +1,12 @@
 # Terraform Unit Testing Implementation Guide
 
-**Version:** 1.0.20260922.0
+**Version:** 1.0.20260923.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-22
+- **Last Updated:** 2026-09-23
 - **Scope:** This document provides comprehensive guidance for implementing Terraform unit testing in CI for the `franklesniak/copilot-repo-template` repository. It serves two purposes: (1) CI/Infrastructure Implementation Guide for setting up Terraform testing in GitHub Actions, and (2) Content Specification for what testing guidance should be embedded in `terraform.instructions.md`. This is a **guidance-only** document—it does not modify workflows or configurations directly.
 - **Related:** [Repository Copilot Instructions](../../.github/copilot-instructions.md), [Terraform Instructions](../../.github/instructions/terraform.instructions.md), [Terraform Linting Guide](./TERRAFORM_LINTING_GUIDE.md)
 

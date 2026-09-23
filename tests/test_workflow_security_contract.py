@@ -741,6 +741,68 @@ def test_configured_workflow_hook_native_failure(tmp_path: Path) -> None:
     assert "persist-credentials" in result.stderr
 
 
+@pytest.mark.parametrize("operation", ["resolve", "open"])
+@pytest.mark.parametrize(
+    ("error_kind", "summary"),
+    [
+        ("permission", "PermissionError: Permission denied"),
+        ("missing-cause", "OSError: I/O error"),
+        ("opaque", "OSError: I/O error"),
+    ],
+)
+def test_native_os_error_diagnostics(operation: str, error_kind: str, summary: str) -> None:
+    """Filesystem failures stay nonzero without exposing either exception filename."""
+    script = """
+import importlib.util
+import sys
+from pathlib import Path
+from unittest.mock import patch
+
+source, root, operation, error_kind = sys.argv[1:]
+spec = importlib.util.spec_from_file_location("workflow_diagnostic_probe", source)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+root = Path(root)
+first = "C:/private-diagnostic-canary/source.yml"
+second = "C:/private-diagnostic-canary/destination.yml"
+if error_kind == "permission":
+    error = PermissionError(13, "Permission denied", first, None, second)
+elif error_kind == "missing-cause":
+    error = OSError(5, None, first, None, second)
+else:
+    error = OSError("C:/private-diagnostic-canary/opaque-message")
+original = getattr(Path, operation)
+target = root if operation == "resolve" else root / module.CONTRACT
+
+def fail_selected(path, *args, **kwargs):
+    if path == target:
+        raise error
+    return original(path, *args, **kwargs)
+
+with patch.object(Path, operation, fail_selected):
+    raise SystemExit(module.main(["--repo-root", str(root)]))
+"""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            script,
+            str(ROOT / ".github/scripts/validate_workflow_security.py"),
+            str(ROOT),
+            operation,
+            error_kind,
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert result.stdout == ""
+    assert result.stderr == f"Workflow security validation failed: {summary}\n"
+    assert "private-diagnostic-canary" not in result.stderr
+
+
 @pytest.mark.parametrize(
     "template",
     [

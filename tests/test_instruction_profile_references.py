@@ -268,7 +268,8 @@ def test_deployed_multiline_reference_fails_without_sync_and_exact_exception_pas
 ) -> None:
     """Use the deployed CLI, then preserve existing exact declaration semantics."""
     document, _ = reference_fixture(tmp_path, "markdown-relative-link")
-    append_reference(tmp_path, "\n" + body)
+    # The helper adds prose before this body; definitions require a new block.
+    append_reference(tmp_path, "\n\n" + body)
     require_reference_failure(tmp_path)
     assert not (tmp_path / ".template-sync").exists()
     declaration = {
@@ -432,7 +433,7 @@ def restore_raw_link_candidate_scanner(source: str) -> str:
     """Restore pre-code-context bracket enumeration in an isolated mutant only."""
     candidate_start = source.index("def markdown_link_candidates(")
     candidate_stop = source.index("\ndef markdown_span_link_targets(", candidate_start)
-    raw_candidates = """def markdown_link_candidates(text, starts, whitespace, reference_labels=None):
+    raw_candidates = """def markdown_link_candidates(text, starts, whitespace, reference_labels=None, definition_starts=None):
     labels, closes = markdown_delimiter_pairs(text)
     candidates = []
     for opening, closing in labels:
@@ -906,7 +907,8 @@ def test_deployed_encoded_destination_fails_with_original_identity(
     import instruction_contract_core as core
 
     assert core.markdown_link_targets_from_text("Heading\n\n" + body) == ((3, target),)
-    append_reference(tmp_path, "\n" + body)
+    # Keep definition forms outside the helper's introductory paragraph.
+    append_reference(tmp_path, "\n\n" + body)
     result = run(tmp_path)
     assert result.returncode == 1, result.stdout + result.stderr
     assert "Stale protected-guide references" in result.stdout
@@ -1364,7 +1366,7 @@ REFERENCE_CODE_BOUNDARIES = (
     ("- [ref]: target.md\n      [x](ignored.md)\n", ((1, "target.md"),)),
     (
         "Paragraph\n[ref]: target.md\n    [x](live.md)\n",
-        ((2, "target.md"), (3, "live.md")),
+        ((3, "live.md"),),
     ),
     ("[ref]: target.md trailing\n    [x](live.md)\n", ((2, "live.md"),)),
     ("[ref]: <unfinished\n    [x](live.md)\n", ((2, "live.md"),)),
@@ -1682,7 +1684,7 @@ REFERENCE_ACTIVITY_CASES = (
     ("[outer [ref]](target.md)\n\n    [ref]: ignored.md", ((1, "target.md"),)),
     (
         "[outer [ref]](target.md)\n\nParagraph\n[ref]: inventory.md",
-        ((1, "target.md"), (4, "inventory.md")),
+        ((1, "target.md"),),
     ),
     (
         "[outer [ref]](literal.md)\n\n[ref]: first.md\n[REF]: second.md",
@@ -1694,10 +1696,10 @@ REFERENCE_ACTIVITY_CASES = (
 
 @pytest.mark.parametrize(("body", "expected"), REFERENCE_ACTIVITY_CASES)
 @pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
-def test_reference_activity_is_separate_from_existing_definition_inventory(
+def test_reference_activity_preserves_genuine_definition_inventory(
     body: str, expected: tuple[tuple[int, str], ...], ending: str
 ) -> None:
-    """Only actual definitions activate inner references; inventory stays unchanged."""
+    """Only block definitions supply lookup labels and inventoried destinations."""
     sys.path.insert(0, str(ROOT / ".github/scripts"))
     import instruction_contract_core as core
 
@@ -1831,3 +1833,114 @@ def test_nested_live_reference_preserves_exact_exception_digest(tmp_path: Path) 
     test_deployed_multiline_reference_fails_without_sync_and_exact_exception_passes(
         tmp_path, "[outer [Guide](docs/azure-devops-support.md)](kept.md)"
     )
+
+
+PARAGRAPH_DEFINITION_CASES = (
+    ("[Guide]\n[Guide]: target.md", ()),
+    ("[Guide]\n\n[Guide]: target.md", ((3, "target.md"),)),
+    ("> [Guide]\n> [Guide]: target.md", ()),
+    ("- [Guide]\n  [Guide]: target.md", ()),
+    ("> [Guide]\n[Guide]: target.md", ()),
+    ("- [Guide]\n[Guide]: target.md", ()),
+    ("Paragraph\n[Guide]: literal [live](target.md)", ((2, "target.md"),)),
+    ('Paragraph\n[Guide]: kept.md "[live](target.md)"', ((2, "target.md"),)),
+    ("[kept]: kept.md\n[Guide]: target.md\n[Guide]", ((1, "kept.md"), (2, "target.md"))),
+    ("# Header\n[Guide]: target.md\n[Guide]", ((2, "target.md"),)),
+    ("[kept]: kept.md\nParagraph\n[Guide]: target.md\n[Guide]", ((1, "kept.md"),)),
+    ("Paragraph\n[Guide\n label]: target.md", ()),
+    ("Paragraph\n---\n[Guide]: target.md", ((3, "target.md"),)),
+    ("Paragraph\n***\n[Guide]: target.md", ((3, "target.md"),)),
+    ("```text\nliteral\n```\n[Guide]: target.md", ((4, "target.md"),)),
+    ("> Paragraph\n>\n> [Guide]: target.md", ((3, "target.md"),)),
+    ("- Paragraph\n\n  [Guide]: target.md", ((3, "target.md"),)),
+    ("Paragraph\n> [Guide]: target.md", ((2, "target.md"),)),
+    ("Paragraph\n- [Guide]: target.md", ((2, "target.md"),)),
+    ('[Guide\n label]:\n target.md\n "title"', ((1, "target.md"),)),
+    ("[unused]: target.md\n[UNUSED]: other.md", ((1, "target.md"), (2, "other.md"))),
+    ('Paragraph\n[Guide]: kept.md "[outer [live](target.md)](literal.md)"', ((2, "target.md"),)),
+)
+
+
+@pytest.mark.parametrize(("body", "expected"), PARAGRAPH_DEFINITION_CASES)
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
+def test_definition_candidates_follow_block_context_and_keep_inline_links(
+    body: str, expected: tuple[tuple[int, str], ...], ending: str
+) -> None:
+    """Definition-shaped paragraph text remains inline without creating false targets."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.markdown_link_targets_from_text(body.replace("\n", ending)) == expected
+
+
+@pytest.mark.parametrize(("body", "expected"), PARAGRAPH_DEFINITION_CASES)
+def test_deployed_definition_context_has_fixed_native_results_without_sync(
+    tmp_path: Path, body: str, expected: tuple[tuple[int, str], ...]
+) -> None:
+    """The copied standalone runtime distinguishes real definitions from continuations."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    write(
+        tmp_path,
+        "AGENTS.md",
+        "Agents MUST validate.\nAgents MUST preserve authority.\n\n"
+        + body.replace("target.md", TOKENS["markdown-relative-link"]),
+    )
+    result = run(tmp_path)
+    expected_exit = int(any(target == "target.md" for _, target in expected))
+    assert result.returncode == expected_exit, result.stdout + result.stderr
+    if expected_exit:
+        assert "Stale protected-guide references" in result.stdout
+    assert not (tmp_path / ".template-sync").exists()
+
+
+def test_definition_context_guard_removal_has_both_native_failure_oracles(tmp_path: Path) -> None:
+    """Removing block context restores false failures and hides genuine inline links."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    path = tmp_path / ".github/scripts/instruction_contract_core.py"
+    source = path.read_text(encoding="utf-8")
+    guard = "            if definition_starts is None or line_start in definition_starts:\n"
+    assert source.count(guard) == 1
+    mutant = source.replace(guard, "            if True:\n")
+    for body, expected_exit in (
+        ("[Guide]\n[Guide]: target.md", 0),
+        ('Paragraph\n[Guide]: kept.md "[live](target.md)"', 1),
+    ):
+        write(
+            tmp_path,
+            "AGENTS.md",
+            "Agents MUST validate.\nAgents MUST preserve authority.\n\n"
+            + body.replace("target.md", TOKENS["markdown-relative-link"]),
+        )
+        path.write_text(source, encoding="utf-8", newline="\n")
+        correct = run(tmp_path)
+        assert correct.returncode == expected_exit, correct.stdout + correct.stderr
+        path.write_text(mutant, encoding="utf-8", newline="\n")
+        incorrect = run(tmp_path)
+        assert incorrect.returncode == 1 - expected_exit, incorrect.stdout + incorrect.stderr
+        assert "Traceback" not in incorrect.stderr
+        if incorrect.returncode:
+            assert "Stale protected-guide references" in incorrect.stdout
+        with pytest.raises(AssertionError):
+            assert incorrect.returncode == expected_exit
+
+
+def test_repeated_paragraph_definition_lookalikes_remain_bounded() -> None:
+    """Near-limit definition lookalikes neither leak targets nor hide a final live link."""
+    program = "\n".join(
+        [
+            "import sys",
+            f"sys.path.insert(0, {str(ROOT / '.github/scripts')!r})",
+            "import instruction_contract_core as c",
+            "text='Paragraph\\n'+'[Guide]: ignored.md\\n'*50000+'[live](target.md)'",
+            "assert len(text.encode('utf-8')) < c.MAXIMUM_INPUT_BYTES",
+            "assert c.markdown_link_targets_from_text(text) == ((50002, 'target.md'),)",
+        ]
+    )
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", program],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

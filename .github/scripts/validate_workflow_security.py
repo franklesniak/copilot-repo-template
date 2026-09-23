@@ -638,9 +638,12 @@ def main(argv: list[str] | None = None) -> int:
         count = validate_repository(
             args.repo_root.resolve(), strict=args.strict, verify_releases=args.verify_releases
         )
+    except OSError as error:
+        summary = f"{type(error).__name__}: {error.strerror or 'I/O error'}"
+        print(f"Workflow security validation failed: {summary}", file=sys.stderr)
+        return 1
     except (
         PolicyError,
-        OSError,
         UnicodeError,
         jsonschema.ValidationError,
         jsonschema.SchemaError,

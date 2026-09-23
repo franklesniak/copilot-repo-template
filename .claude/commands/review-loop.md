@@ -10,7 +10,7 @@ argument-hint: <pull-request-url>
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-22
+- **Last Updated:** 2026-09-23
 - **Scope:** Local Claude command for an explicitly supplied GitHub pull request.
 - **Related:** [Claude instructions](../../CLAUDE.md), [Canonical instructions](../../.github/copilot-instructions.md)
 
