@@ -2212,3 +2212,378 @@ def test_repeated_and_nested_empty_list_boundaries_remain_bounded() -> None:
         timeout=20,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def obligation_identity_catalog(
+    *,
+    reference_key: str = "azure-obligation",
+    reference_path: str = "AGENTS.md",
+    reference_kind: str = "markdown-relative-link",
+    reference_module: str = "azure-devops-platform",
+) -> dict[str, Any]:
+    """Build distinct obligation families whose declared identities may collide."""
+    reference: dict[str, Any] = {
+        "key": reference_key,
+        "path": reference_path,
+        "reference_kind": reference_kind,
+        "target_modules": [reference_module],
+        "target_path": "docs/azure-devops-support.md",
+    }
+    if reference_kind != "markdown-relative-link":
+        reference["tokens"] = [TOKENS[reference_kind]]
+    return {
+        "instruction_contracts": [
+            {
+                "path": "AGENTS.md",
+                "requires_modules": ["agent-instructions"],
+                "required_phrases": ["Agents MUST validate."],
+            }
+        ],
+        "protected_guide_section_obligations": [
+            {
+                "key": "azure-obligation",
+                "path": "AGENTS.md",
+                "target_modules": ["azure-devops-platform"],
+                "stale_phrases": ["Legacy Azure section."],
+            }
+        ],
+        "protected_guide_reference_obligations": [reference],
+    }
+
+
+@pytest.mark.parametrize("family", ["section", "reference"])
+@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize("reference_module", ["azure-devops-platform", "terraform"])
+def test_cross_family_obligation_identity_is_rejected_by_either_parser(
+    family: str, kind: str, reference_module: str
+) -> None:
+    """Module sets and reference kind cannot distinguish a type-less waiver key."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    catalog = obligation_identity_catalog(reference_kind=kind, reference_module=reference_module)
+    parser = getattr(core, f"parse_protected_guide_{family}_obligations")
+    with pytest.raises(
+        core.InstructionContractValidationError,
+        match=r"across section and reference types: \(AGENTS.md, azure-obligation\)",
+    ):
+        parser(catalog, {"agent-instructions", "azure-devops-platform", "terraform"})
+
+
+@pytest.mark.parametrize("family", ["section", "reference"])
+@pytest.mark.parametrize("distinct", ["key", "path", "empty-section", "empty-reference"])
+def test_cross_family_obligation_identity_preserves_distinct_and_single_families(
+    family: str, distinct: str
+) -> None:
+    """Valid per-path identities do not acquire a global key or path-only restriction."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    catalog = obligation_identity_catalog()
+    if distinct == "key":
+        catalog["protected_guide_reference_obligations"][0]["key"] = "separate-reference"
+    elif distinct == "path":
+        catalog["protected_guide_reference_obligations"][0]["path"] = "CLAUDE.md"
+    else:
+        catalog[f"protected_guide_{distinct.removeprefix('empty-')}_obligations"] = []
+    parser = getattr(core, f"parse_protected_guide_{family}_obligations")
+    parsed = parser(catalog, {"agent-instructions", "azure-devops-platform"})
+    assert len(parsed) == len(catalog[f"protected_guide_{family}_obligations"])
+
+
+@pytest.mark.parametrize("family", ["section", "reference"])
+@pytest.mark.parametrize("invalid", ["duplicate", "mapping", "key", "path", "module"])
+def test_cross_family_identity_preserves_existing_invalid_catalog_failures(
+    family: str, invalid: str
+) -> None:
+    """The new shared identity pass does not weaken either family's existing guards."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    catalog = obligation_identity_catalog(reference_key="separate-reference")
+    records = catalog[f"protected_guide_{family}_obligations"]
+    if invalid == "duplicate":
+        records.append(dict(records[0]))
+    elif invalid == "mapping":
+        records[0] = "not a mapping"
+    elif invalid == "key":
+        records[0]["key"] = 1
+    elif invalid == "path":
+        records[0]["path"] = "../AGENTS.md"
+    else:
+        records[0]["target_modules"] = ["unknown-module"]
+    parser = getattr(core, f"parse_protected_guide_{family}_obligations")
+    with pytest.raises(
+        (core.InstructionContractValidationError, core.support.TemplateSyncMaterializationError)
+    ):
+        parser(catalog, {"agent-instructions", "azure-devops-platform"})
+
+
+@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize("retained", [False, True])
+def test_deployed_cross_family_identity_rejects_inert_catalog_without_sync(
+    tmp_path: Path, kind: str, retained: bool
+) -> None:
+    """An inert ambiguous catalog is invalid independently of current applicability."""
+    document, _ = reference_fixture(tmp_path, kind)
+    if retained:
+        document["modules"].append("azure-devops-platform")
+        write(tmp_path, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    write(
+        tmp_path,
+        ".github/instruction-contracts.yml",
+        yaml.safe_dump(obligation_identity_catalog(reference_kind=kind)),
+    )
+    result = run(tmp_path)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Duplicate protected-guide obligation" in result.stdout + result.stderr
+    assert "(AGENTS.md, azure-obligation)" in result.stdout + result.stderr
+    assert "Traceback" not in result.stderr
+    assert not (tmp_path / ".template-sync").exists()
+
+
+def test_marker_section_only_parser_rejects_cross_family_identity(tmp_path: Path) -> None:
+    """The actual marker CLI must inspect identities even when it checks only sections."""
+    from tests.test_validate_instruction_contracts import (
+        _marker,
+        _run_validator,
+        _write_common_contract_repo,
+        _write_text,
+        _write_yaml,
+    )
+
+    catalog = obligation_identity_catalog()
+    for family in ("section", "reference"):
+        catalog[f"protected_guide_{family}_obligations"][0]["target_modules"] = [
+            "azure-devops-collaboration"
+        ]
+    _write_common_contract_repo(tmp_path, catalog)
+    _write_text(tmp_path, "AGENTS.md", "Agents MUST validate.\n")
+    _write_yaml(
+        tmp_path,
+        ".template-sync/marker.yml",
+        _marker(["agent-instructions", "template-sync-support"]),
+    )
+    result = _run_validator(tmp_path, "--mode", "downstream", "--require-marker")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Duplicate protected-guide obligation" in result.stdout + result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_reference_only_downstream_report_rejects_cross_family_identity(tmp_path: Path) -> None:
+    """Reference-only consumers cannot bypass the combined catalog invariant."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    write(
+        tmp_path,
+        ".github/instruction-contracts.yml",
+        yaml.safe_dump(obligation_identity_catalog()),
+    )
+    program = "\n".join(
+        [
+            "import sys",
+            "from pathlib import Path",
+            f"sys.path.insert(0, {str(ROOT / '.template-sync/scripts')!r})",
+            "import validate_downstream_adoption as v",
+            "import instruction_contract_core as c",
+            "root=Path(sys.argv[1])",
+            "try:",
+            "    v.protected_guide_reference_report_items(",
+            "        repo_root=root, contracts_path=root/'.github/instruction-contracts.yml',",
+            "        contracts_schema_path=root/'schemas/instruction-contracts.schema.json',",
+            "        manifest_modules={'agent-instructions','azure-devops-platform'},",
+            "        mappings=(), included_modules={'agent-instructions'},",
+            "        protected_guide_waivers=())",
+            "except c.InstructionContractValidationError as error:",
+            "    print(error)",
+            "    raise SystemExit(1)",
+        ]
+    )
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", program, str(tmp_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Duplicate protected-guide obligation" in result.stdout
+    assert "Traceback" not in result.stderr
+
+
+def test_cross_family_identity_rejects_waiver_migration_before_profile_write(
+    tmp_path: Path,
+) -> None:
+    """One marker record cannot be expanded into both stale and reference exceptions."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    for root in (stage, target):
+        document, _ = reference_fixture(root, "markdown-relative-link")
+        write(
+            root, ".github/instruction-contracts.yml", yaml.safe_dump(obligation_identity_catalog())
+        )
+        write(
+            root,
+            "AGENTS.md",
+            "Agents MUST validate.\n\nLegacy Azure section.\n"
+            "[Guide](docs/azure-devops-support.md)\n",
+        )
+    before = (stage / ".github/instruction-profile.yml").read_bytes()
+    marker = {
+        "template_sync": {
+            "included_modules": document["modules"],
+            "protected_guide_contract_waivers": [
+                {
+                    "path": "AGENTS.md",
+                    "contract_key": "azure-obligation",
+                    "target_module": "azure-devops-platform",
+                    "reason": "One selected obligation",
+                    "authorization_basis": "Fixture declaration",
+                }
+            ],
+        }
+    }
+    result = run_migration_schema_control(stage, target, marker_document=marker)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Duplicate protected-guide obligation" in result.stdout + result.stderr
+    assert (stage / ".github/instruction-profile.yml").read_bytes() == before
+
+
+@pytest.mark.parametrize("distinct", ["key", "path"])
+def test_distinct_obligation_identities_keep_exact_waiver_migration_and_noop(
+    tmp_path: Path, distinct: str
+) -> None:
+    """Two separately identified waiver records retain their exact typed exceptions."""
+    reference_key = "separate-reference" if distinct == "key" else "azure-obligation"
+    reference_path = "CLAUDE.md" if distinct == "path" else "AGENTS.md"
+    catalog = obligation_identity_catalog(
+        reference_key=reference_key, reference_path=reference_path
+    )
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    for root in (stage, target):
+        document, _ = reference_fixture(root, "markdown-relative-link")
+        write(root, ".github/instruction-contracts.yml", yaml.safe_dump(catalog))
+        write(root, "AGENTS.md", "Agents MUST validate.\n\nLegacy Azure section.\n")
+        path = root / reference_path
+        before_reference = path.read_text(encoding="utf-8") if path.exists() else ""
+        write(root, reference_path, before_reference + "[Guide](docs/azure-devops-support.md)\n")
+    waivers = [
+        {
+            "path": "AGENTS.md",
+            "contract_key": "azure-obligation",
+            "target_module": "azure-devops-platform",
+            "reason": "Selected section",
+            "authorization_basis": "Fixture declaration",
+        },
+        {
+            "path": reference_path,
+            "contract_key": reference_key,
+            "target_path": "docs/azure-devops-support.md",
+            "reason": "Selected reference",
+            "authorization_basis": "Separate fixture declaration",
+        },
+    ]
+    marker = {
+        "template_sync": {
+            "included_modules": document["modules"],
+            "protected_guide_contract_waivers": waivers,
+        }
+    }
+    result = run_migration_schema_control(stage, target, marker_document=marker)
+    assert result.returncode == 0, result.stdout + result.stderr
+    profile_path = stage / ".github/instruction-profile.yml"
+    before = profile_path.read_bytes()
+    generated = yaml.safe_load(before)
+    assert {(x["path"], x["anchor"]) for x in generated["exceptions"]} == {
+        ("AGENTS.md", "stale:azure-obligation:phrase:Legacy Azure section."),
+        (
+            reference_path,
+            f"reference:{reference_key}:markdown-relative-link:docs/azure-devops-support.md",
+        ),
+    }
+    accepted = run(stage)
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+    write(target, ".github/instruction-profile.yml", before.decode("utf-8"))
+    repeated = run_migration_schema_control(stage, target, marker_document=marker)
+    assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+    assert profile_path.read_bytes() == before
+
+
+def test_cross_family_identity_mutants_have_independent_native_oracles(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Fixed invalid and valid catalogs detect missing and overbroad identity guards."""
+    monkeypatch.setenv("PYTHONDONTWRITEBYTECODE", "1")
+    reference_fixture(tmp_path, "markdown-relative-link")
+    path = tmp_path / ".github/scripts/instruction_contract_core.py"
+    source = path.read_text(encoding="utf-8")
+    for catalog, guard, replacement, expected_exit in (
+        (
+            obligation_identity_catalog(),
+            "    duplicate_keys = family_keys[0] & family_keys[1]\n",
+            "    duplicate_keys = set()\n",
+            1,
+        ),
+        (
+            obligation_identity_catalog(reference_path="CLAUDE.md"),
+            "            keys.add((path, key))\n",
+            '            keys.add(("", key))\n',
+            0,
+        ),
+        (
+            obligation_identity_catalog(reference_key="separate-reference"),
+            "            keys.add((path, key))\n",
+            '            keys.add((path, ""))\n',
+            0,
+        ),
+    ):
+        assert source.count(guard) == 1
+        write(tmp_path, ".github/instruction-contracts.yml", yaml.safe_dump(catalog))
+        write(tmp_path, "CLAUDE.md", "No stale reference.\n")
+        path.write_text(source, encoding="utf-8", newline="\n")
+        correct = run(tmp_path)
+        assert correct.returncode == expected_exit, correct.stdout + correct.stderr
+        path.write_text(source.replace(guard, replacement), encoding="utf-8", newline="\n")
+        mutant = run(tmp_path)
+        assert mutant.returncode == 1 - expected_exit, mutant.stdout + mutant.stderr
+        assert "Traceback" not in mutant.stderr
+        if mutant.returncode:
+            assert "Duplicate protected-guide obligation" in mutant.stdout + mutant.stderr
+        with pytest.raises(AssertionError):
+            assert mutant.returncode == expected_exit
+
+
+def test_combined_obligation_identity_scan_is_bounded_and_deterministic() -> None:
+    """A near-limit inventory keeps valid keys and reports sorted cross-family pairs."""
+    program = "\n".join(
+        [
+            "import json, sys",
+            f"sys.path.insert(0, {str(ROOT / '.github/scripts')!r})",
+            "import instruction_contract_core as c",
+            "section={'path':'AGENTS.md','target_modules':['terraform'],'stale_phrases':['Old']}",
+            (
+                "reference={'path':'AGENTS.md','target_modules':['terraform'],"
+                "'reference_kind':'prose-reference','tokens':['Old']}"
+            ),
+            "catalog={'protected_guide_section_obligations':",
+            "    [dict(section,key=f'section-{i}') for i in range(3000)],",
+            "    'protected_guide_reference_obligations':",
+            "    [dict(reference,key=f'reference-{i}') for i in range(3000)]}",
+            "assert len(json.dumps(catalog).encode()) < c.MAXIMUM_INPUT_BYTES",
+            "assert len(c.parse_protected_guide_section_obligations(catalog,{'terraform'}))==3000",
+            "assert len(c.parse_protected_guide_reference_obligations(catalog,{'terraform'}))==3000",
+            "catalog['protected_guide_reference_obligations'][-2]['key']='section-9'",
+            "catalog['protected_guide_reference_obligations'][-1]['key']='section-1'",
+            "for parser in (c.parse_protected_guide_section_obligations,",
+            "               c.parse_protected_guide_reference_obligations):",
+            "    try: parser(catalog,{'terraform'})",
+            "    except c.InstructionContractValidationError as error:",
+            "        assert str(error).endswith('(AGENTS.md, section-1), (AGENTS.md, section-9)')",
+            "    else: raise AssertionError('An ambiguous combined inventory must fail.')",
+        ]
+    )
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", program],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=15,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

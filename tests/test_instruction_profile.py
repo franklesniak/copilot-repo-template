@@ -292,6 +292,25 @@ def test_reviewed_seed_and_module_taxonomy_do_not_drift() -> None:
     }
 
 
+def candidate_installation_marker(marker: dict[str, Any]) -> dict[str, Any]:
+    """Record the candidate profile/catalog installation used by synthetic fixtures."""
+    selected: dict[str, Any] = json.loads(json.dumps(marker))
+    decisions = selected["template_sync"].setdefault("protected_file_decisions", [])
+    for path in (".github/instruction-profile.yml", ".github/instruction-contracts.yml"):
+        if not any(item["path"] == path for item in decisions):
+            decisions.append(
+                {
+                    "path": path,
+                    "decision": "TAKE",
+                    "adoption_mode": "minimal-preservation",
+                    "authorization_basis": "Fixture owner installs candidate input",
+                    "authorized_scope": path,
+                    "reason": "Explicit synthetic candidate installation",
+                }
+            )
+    return selected
+
+
 def test_migration_preserves_scoped_declarations_and_repeated_noop(tmp_path: Path) -> None:
     """Migrated decisions bind local content and do not duplicate on repeat adoption."""
     sys.path.insert(0, str(ROOT / ".template-sync/scripts"))
@@ -315,6 +334,7 @@ def test_migration_preserves_scoped_declarations_and_repeated_noop(tmp_path: Pat
             ],
         }
     }
+    marker = candidate_installation_marker(marker)
     render_instruction_profile(staging_root=stage, target_root=target, marker_document=marker)
     first = (stage / ".github/instruction-profile.yml").read_bytes()
     (target / ".github/instruction-profile.yml").write_bytes(first)
@@ -356,7 +376,9 @@ def test_later_agent_removal_retires_exception_as_nonoperative_evidence(tmp_path
     render_instruction_profile(
         staging_root=stage,
         target_root=target,
-        marker_document={"template_sync": {"included_modules": document["modules"]}},
+        marker_document=candidate_installation_marker(
+            {"template_sync": {"included_modules": document["modules"]}}
+        ),
     )
     result = yaml.safe_load((stage / ".github/instruction-profile.yml").read_text())
     assert result["exceptions"] == []
@@ -478,7 +500,7 @@ def run_migration_schema_control(
     omit_reference_validation: bool = False,
     restore_prior_path_prefilter: bool = False,
     reverse_section_precedence: bool = False,
-    restore_content_preference: bool = False,
+    restore_content_preference: str | None = None,
     omit_retained_check: str | None = None,
     marker_document: dict[str, Any] | None = None,
 ) -> subprocess.CompletedProcess[str]:
@@ -500,7 +522,8 @@ def run_migration_schema_control(
         source = source.replace(
             guard,
             guard
-            + "    return (target_root if (target_root / relative_path).exists() else staging_root), False\n",
+            + f"    if relative_path == {restore_content_preference!r}:\n"
+            + "        return (target_root if (target_root / relative_path).exists() else staging_root), False\n",
         )
     if redirect_trust:
         guard = "TRUSTED_TOOL_ROOT = Path(__file__).resolve().parents[2]"
@@ -535,11 +558,14 @@ def run_migration_schema_control(
         guard = "key=lambda item: len(item.heading), reverse=True"
         assert source.count(guard) == 1
         source = source.replace(guard, "key=lambda item: len(item.heading), reverse=False")
-    marker_document = marker_document or {
-        "template_sync": {
-            "included_modules": ["agent-instructions", "instruction-enforcement", "baseline"]
+    marker_document = candidate_installation_marker(
+        marker_document
+        or {
+            "template_sync": {
+                "included_modules": ["agent-instructions", "instruction-enforcement", "baseline"]
+            }
         }
-    }
+    )
     program = (
         "import sys\n"
         "from pathlib import Path\n"
@@ -884,6 +910,7 @@ def test_migration_retires_scoped_section_declaration_and_detects_mutant(
     validated = run(stage)
     assert validated.returncode == 0, validated.stdout + validated.stderr
 
+    before_mutation = destination.read_bytes()
     mutant = run_migration_schema_control(
         stage, target, marker_document=marker, omit_scoped_retirement=True
     )
@@ -891,10 +918,11 @@ def test_migration_retires_scoped_section_declaration_and_detects_mutant(
         assert mutant.returncode == 1, mutant.stdout + mutant.stderr
         assert "Existing standalone exception conflicts" in mutant.stderr
     else:
-        assert mutant.returncode == 0, mutant.stdout + mutant.stderr
-        rejected = run(stage)
-        assert rejected.returncode == 1, rejected.stdout + rejected.stderr
-        assert "does not match a current failure" in rejected.stderr
+        assert mutant.returncode == 1, mutant.stdout + mutant.stderr
+        assert "Instruction waiver conflicts with selected preserved content" in mutant.stderr
+        assert destination.read_bytes() == before_mutation
+        with pytest.raises(AssertionError):
+            assert mutant.returncode == 0
     restored = run_migration_schema_control(stage, target, marker_document=marker)
     assert restored.returncode == 0, restored.stdout + restored.stderr
     before_bytes = destination.read_bytes()
@@ -1236,7 +1264,11 @@ def test_migration_does_not_invent_exception_for_unknown_protected_removal(tmp_p
     assert migrated.returncode == 0, migrated.stdout + migrated.stderr
     generated = yaml.safe_load((stage / ".github/instruction-profile.yml").read_text())
     assert generated["exceptions"] == []
-    assert generated["source_decisions"]["protected_file_decisions"] == [removal]
+    expected_decisions = candidate_installation_marker(marker)["template_sync"][
+        "protected_file_decisions"
+    ]
+    assert expected_decisions[0] == removal
+    assert generated["source_decisions"]["protected_file_decisions"] == expected_decisions
     validated = run(stage)
     assert validated.returncode == 0, validated.stdout + validated.stderr
 
@@ -1435,7 +1467,7 @@ def test_migration_binds_only_selected_content(
     assert not (stage / ".template-sync").exists()
     if decision == "TAKE" and candidate_failure:
         mutant = run_migration_schema_control(
-            stage, target, marker_document=marker, restore_content_preference=True
+            stage, target, marker_document=marker, restore_content_preference=path
         )
         assert mutant.returncode == 0, mutant.stdout + mutant.stderr
         rejected = run(stage)
@@ -2234,7 +2266,32 @@ def test_actual_adoption_preflights_detect_independent_guard_removal(
     rejected = run_enforcement_adoption(tmp_path)
     assert rejected.returncode == 1, rejected.stdout + rejected.stderr
     assert snapshot_enforcement_target(tmp_path) == before
+    expected_diagnostic = (
+        f"Selected enforcement input is missing or not a regular file: {relative}"
+        if omitted == "inputs"
+        else f"Preserved .github/instruction-profile.yml {case} conflicts"
+    )
+    assert expected_diagnostic in rejected.stderr
     mutant = run_enforcement_adoption(tmp_path, omit_check=omitted)
+    if case != "entrypoint":
+        # New independent backstops still reject; the removed early guard loses
+        # its exact diagnostic, rather than creating a native false success.
+        assert mutant.returncode == 1, mutant.stdout + mutant.stderr
+        assert expected_diagnostic not in mutant.stderr
+        backstop_diagnostic = {
+            "catalog": "ERROR: Unable to read .github/instruction-contracts.yml: FileNotFoundError:",
+            "mode": "ERROR: Selected preserved instruction profile mode conflicts with standalone migration.",
+            "modules": (
+                "ERROR: Retained instruction catalog conflicts with selected content: AGENTS.md: "
+                "stale:agents-azure-devops-pr-review-protocol:heading:## Azure DevOps PR Review Protocol."
+            ),
+        }[case]
+        assert backstop_diagnostic in mutant.stderr
+        assert "Traceback" not in mutant.stderr
+        assert snapshot_enforcement_target(tmp_path) == before
+        with pytest.raises(AssertionError):
+            assert expected_diagnostic in mutant.stderr
+        return
     assert mutant.returncode == 0, mutant.stdout + mutant.stderr
     with pytest.raises(AssertionError):
         assert mutant.returncode == 1
@@ -2422,3 +2479,619 @@ def test_instruction_schema_reference_scan_preserves_dialect_semantics(
     assert result.returncode == (0 if nested and known else 1), result.stdout + result.stderr
     assert "REFERENCE_RETRIEVALS=[]" in result.stdout
     assert "Traceback" not in result.stderr
+
+
+def run_catalog_selection_adoption(
+    target: Path, *, control: str | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Exercise the public CLI with independent child-only guard and input controls."""
+    program = (
+        "import sys, yaml\n"
+        f"sys.path.insert(0, {str(ROOT / '.template-sync/scripts')!r})\n"
+        "import instruction_profile_migration as migration\n"
+        "source = migration.Path(migration.__file__).read_text(encoding='utf-8')\n"
+    )
+    mutations = {
+        "catalog": (
+            (
+                "        catalog_root, _ = selected_content_root(\n"
+                '            ".github/instruction-contracts.yml", staging_root, target_root, marker\n'
+                "        )\n"
+            ),
+            "        catalog_root = staging_root\n",
+        ),
+        "preflight": (
+            (
+                "            validate_retained_catalog_selection(\n"
+                "                staging_root, target_root, marker, document, reports, path_applicability\n"
+                "            )\n"
+            ),
+            "            pass\n",
+        ),
+        "waiver": (
+            (
+                "                declaration_applies(\n"
+                "                    waiver, contracts, section_obligations, modules, reference_obligations\n"
+            ),
+            (
+                "                taken and declaration_applies(\n"
+                "                    waiver, contracts, section_obligations, modules, reference_obligations\n"
+            ),
+        ),
+        "mode": (
+            (
+                '    if effective_profile["mode"] != "standalone":\n'
+                "        raise TemplateSyncMaterializationError(\n"
+                '            "Selected preserved instruction profile mode conflicts with standalone migration. "\n'
+                '            "Review the profile or supply an explicit protected selection."\n'
+                "        )\n"
+            ),
+            "",
+        ),
+        "skipped-profile": (
+            (
+                " or any(\n"
+                '            item["path"] == PROFILE_PATH and item["decision"] == "SKIP"\n'
+                '            for item in marker.get("protected_file_decisions", [])\n'
+                "        )"
+            ),
+            "",
+        ),
+        "removal-scope": (
+            (
+                "            if not path_applicability.get(path, False):\n"
+                "                continue\n"
+            ),
+            "",
+        ),
+        "removal-presence": (
+            (
+                "            if removal_target.exists() or removal_target.is_symlink():\n"
+                "                raise TemplateSyncMaterializationError(\n"
+                '                    f"Selected protected removal is not complete: {path}. "\n'
+                '                    "Complete the reviewed local removal before standalone migration."\n'
+                "                )\n"
+            ),
+            "",
+        ),
+        "removal": (
+            (
+                "        removed_paths = {\n"
+                '            item["path"]\n'
+                '            for item in marker.get("protected_file_decisions", [])\n'
+                '            if item["decision"] == "REMOVE-LOCAL"\n'
+                "        }\n"
+            ),
+            "        removed_paths: set[str] = set()\n",
+        ),
+        "diagnostic": (
+            "        raise TemplateSyncMaterializationError(str(error)) from error\n",
+            "        raise\n",
+        ),
+    }
+    if control in mutations:
+        original, replacement = mutations[control]
+        program += (
+            f"assert source.count({original!r}) == 1\n"
+            f"source = source.replace({original!r}, {replacement!r})\n"
+        )
+    program += (
+        "exec(compile(source, migration.__file__, 'exec'), migration.__dict__)\n"
+        "import materialize_downstream_adoption as materializer\n"
+    )
+    if control in {"semantic", "diagnostic"}:
+        program += (
+            "original_writer = materializer.write_staged_candidate\n"
+            "def prepared(**kwargs):\n"
+            "    result = original_writer(**kwargs)\n"
+            "    path = kwargs['staging_root'] / '.github/instruction-contracts.yml'\n"
+            "    catalog = yaml.safe_load(path.read_text(encoding='utf-8'))\n"
+            "    contract = next(c for c in catalog['instruction_contracts'] if c['path'] == 'AGENTS.md')\n"
+            "    extra = dict(contract['required_sections'][0])\n"
+            "    extra['required_paragraphs'] = ['Distinct schema-valid paragraph']\n"
+            "    contract['required_sections'].append(extra)\n"
+            "    path.write_text(yaml.safe_dump(catalog), encoding='utf-8')\n"
+            "    return result\n"
+            "materializer.write_staged_candidate = prepared\n"
+        )
+    program += (
+        f"raise SystemExit(materializer.main(['--template-root', {str(ROOT)!r}, "
+        f"'--target-root', {str(target)!r}, '--decisions-file', 'decisions.yml']))\n"
+    )
+    return subprocess.run(
+        [sys.executable, "-B", "-c", program],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=90,
+    )
+
+
+@pytest.mark.parametrize("case", ["incompatible", "compatible", "waived", "take", "skip-profile"])
+def test_selected_local_catalog_controls_native_adoption(tmp_path: Path, case: str) -> None:
+    """The installed catalog and effective profile control actual selected guide bytes."""
+    modules = {"baseline", "agent-instructions", "instruction-enforcement", "agent-codex"}
+    marker = enforcement_adoption_decisions(
+        modules, skipped_path=None if case == "take" else ".github/instruction-contracts.yml"
+    )
+    catalog = yaml.safe_load(
+        (ROOT / ".github/instruction-contracts.yml").read_text(encoding="utf-8")
+    )
+    contract = next(
+        item for item in catalog["instruction_contracts"] if item["path"] == "AGENTS.md"
+    )
+    anchor = (
+        "Canonical Instructions" if case == "compatible" else "Local reviewed clause is absent."
+    )
+    contract.setdefault("required_phrases", []).append(anchor)
+    catalog_text = yaml.safe_dump(catalog)
+    write(tmp_path, ".github/instruction-contracts.yml", catalog_text)
+    if case in {"waived", "skip-profile"}:
+        marker["template_sync"]["instruction_contract_waivers"] = [
+            {
+                "path": "AGENTS.md",
+                "anchor": anchor,
+                "reason": "Fixture owner reviewed local catalog requirement",
+                "authorization_basis": "Explicit private fixture declaration",
+            }
+        ]
+    if case == "skip-profile":
+        for decision in marker["template_sync"]["protected_file_decisions"]:
+            if decision["path"] == ".github/instruction-profile.yml":
+                decision["decision"] = "SKIP"
+        write(
+            tmp_path,
+            ".github/instruction-profile.yml",
+            yaml.safe_dump(
+                {
+                    "version": 1,
+                    "mode": "standalone",
+                    "modules": sorted(modules),
+                    "exceptions": [],
+                }
+            ),
+        )
+    write(tmp_path, "decisions.yml", yaml.safe_dump(marker))
+    before = snapshot_enforcement_target(tmp_path)
+    adopted = run_catalog_selection_adoption(tmp_path)
+    if case in {"incompatible", "skip-profile"}:
+        assert adopted.returncode == 1, adopted.stdout + adopted.stderr
+        assert "Retained instruction catalog conflicts with selected content" in adopted.stderr
+        assert anchor in adopted.stderr
+        assert snapshot_enforcement_target(tmp_path) == before
+        return
+    assert adopted.returncode == 0, adopted.stdout + adopted.stderr
+    checked = run(tmp_path)
+    assert checked.returncode == 0, checked.stdout + checked.stderr
+    assert not (tmp_path / ".template-sync").exists()
+    if case != "take":
+        assert (tmp_path / ".github/instruction-contracts.yml").read_text(
+            encoding="utf-8"
+        ) == catalog_text
+    profile_bytes = (tmp_path / ".github/instruction-profile.yml").read_bytes()
+    repeated = run_catalog_selection_adoption(tmp_path)
+    assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+    assert (tmp_path / ".github/instruction-profile.yml").read_bytes() == profile_bytes
+
+
+@pytest.mark.parametrize("guard", ["catalog", "preflight"])
+def test_retained_catalog_guards_have_independent_native_oracles(
+    tmp_path: Path, guard: str
+) -> None:
+    """Removing either guard restores adoption success with a failing installed hook."""
+    modules = {"baseline", "agent-instructions", "instruction-enforcement", "agent-codex"}
+    marker = enforcement_adoption_decisions(
+        modules, skipped_path=".github/instruction-contracts.yml"
+    )
+    catalog = yaml.safe_load(
+        (ROOT / ".github/instruction-contracts.yml").read_text(encoding="utf-8")
+    )
+    contract = next(
+        item for item in catalog["instruction_contracts"] if item["path"] == "AGENTS.md"
+    )
+    contract.setdefault("required_phrases", []).append("Fixed unwaived local obligation.")
+    write(tmp_path, ".github/instruction-contracts.yml", yaml.safe_dump(catalog))
+    write(tmp_path, "decisions.yml", yaml.safe_dump(marker))
+    before = snapshot_enforcement_target(tmp_path)
+    rejected = run_catalog_selection_adoption(tmp_path)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert "Retained instruction catalog conflicts" in rejected.stderr
+    assert snapshot_enforcement_target(tmp_path) == before
+    mutant = run_catalog_selection_adoption(tmp_path, control=guard)
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    assert snapshot_enforcement_target(tmp_path) != before
+    invalid = run(tmp_path)
+    assert invalid.returncode == 1, invalid.stdout + invalid.stderr
+    assert "Fixed unwaived local obligation." in invalid.stdout
+    with pytest.raises(AssertionError):
+        assert mutant.returncode == 1
+
+
+@pytest.mark.parametrize("active", [False, True])
+def test_direct_skip_waivers_follow_current_selected_failures(tmp_path: Path, active: bool) -> None:
+    """Satisfied SKIP waivers reject; exact missing clauses remain valid declarations."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    document = profile(stage)
+    profile(target)
+    if active:
+        write(target, "AGENTS.md", "Agents MUST preserve authority.\n")
+    marker = {
+        "template_sync": {
+            "included_modules": document["modules"],
+            "protected_file_decisions": [
+                {
+                    "path": path,
+                    "decision": decision,
+                    "adoption_mode": "minimal-preservation",
+                    "authorization_basis": "Fixture owner",
+                    "authorized_scope": path,
+                    "reason": "Reviewed selected input",
+                }
+                for path, decision in (
+                    ("AGENTS.md", "SKIP"),
+                    (".github/instruction-contracts.yml", "TAKE"),
+                    (".github/instruction-profile.yml", "TAKE"),
+                )
+            ],
+            "instruction_contract_waivers": [
+                {
+                    "path": "AGENTS.md",
+                    "anchor": "Agents MUST validate.",
+                    "reason": "Reviewed exact selected clause",
+                    "authorization_basis": "Fixture owner",
+                }
+            ],
+        }
+    }
+    before = (stage / ".github/instruction-profile.yml").read_bytes()
+    result = run_migration_schema_control(stage, target, marker_document=marker)
+    if not active:
+        assert result.returncode == 1, result.stdout + result.stderr
+        assert "Instruction waiver conflicts with selected preserved content" in result.stderr
+        assert (stage / ".github/instruction-profile.yml").read_bytes() == before
+        return
+    assert result.returncode == 0, result.stdout + result.stderr
+    write(stage, "AGENTS.md", (target / "AGENTS.md").read_text(encoding="utf-8"))
+    checked = run(stage)
+    assert checked.returncode == 0, checked.stdout + checked.stderr
+    assert not (stage / ".template-sync").exists()
+
+
+def test_direct_skip_waiver_guard_catches_native_false_success(tmp_path: Path) -> None:
+    """A satisfied known paragraph cannot become an active standalone exception."""
+    modules = {"baseline", "agent-instructions", "instruction-enforcement", "agent-codex"}
+    marker = enforcement_adoption_decisions(modules)
+    write(tmp_path, "decisions.yml", yaml.safe_dump(marker))
+    initial = run_enforcement_adoption(tmp_path)
+    assert initial.returncode == 0, initial.stdout + initial.stderr
+    for decision in marker["template_sync"]["protected_file_decisions"]:
+        if decision["path"] == "AGENTS.md":
+            decision["decision"] = "SKIP"
+    marker["template_sync"]["instruction_contract_waivers"] = [
+        {
+            "path": "AGENTS.md",
+            "anchor": "section:## Execution:paragraph:2eea7e4977d47083984c652d3bfcbccce8d48317ca6c14354736ec3c672e9894",
+            "reason": "Reviewed fixed paragraph",
+            "authorization_basis": "Fixture owner",
+        }
+    ]
+    write(tmp_path, "decisions.yml", yaml.safe_dump(marker))
+    before = snapshot_enforcement_target(tmp_path)
+    rejected = run_catalog_selection_adoption(tmp_path)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert "Instruction waiver conflicts with selected preserved content" in rejected.stderr
+    assert snapshot_enforcement_target(tmp_path) == before
+    mutant = run_catalog_selection_adoption(tmp_path, control="waiver")
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    invalid = run(tmp_path)
+    assert invalid.returncode == 1, invalid.stdout + invalid.stderr
+    assert "Exception does not match a current failure and exact content" in invalid.stderr
+    with pytest.raises(AssertionError):
+        assert mutant.returncode == 1
+
+
+def test_migration_core_errors_preserve_native_diagnostic_boundary(tmp_path: Path) -> None:
+    """Semantic core failures remain nonzero without leaking an uncaught traceback."""
+    modules = {"baseline", "agent-instructions", "instruction-enforcement", "agent-codex"}
+    write(tmp_path, "decisions.yml", yaml.safe_dump(enforcement_adoption_decisions(modules)))
+    before = snapshot_enforcement_target(tmp_path)
+    rejected = run_catalog_selection_adoption(tmp_path, control="semantic")
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert "ERROR: Duplicate required section: ## Execution" in rejected.stderr
+    assert "Traceback" not in rejected.stderr
+    assert snapshot_enforcement_target(tmp_path) == before
+    mutant = run_catalog_selection_adoption(tmp_path, control="diagnostic")
+    assert mutant.returncode == 1, mutant.stdout + mutant.stderr
+    assert "Duplicate required section: ## Execution" in mutant.stderr
+    assert "Traceback" in mutant.stderr
+    assert snapshot_enforcement_target(tmp_path) == before
+    with pytest.raises(AssertionError):
+        assert "Traceback" not in mutant.stderr
+
+
+def test_unresolved_preserved_marker_profile_fails_without_traceback(tmp_path: Path) -> None:
+    """An unresolved marker profile cannot be treated as an authorized standalone candidate."""
+    modules = {"baseline", "agent-instructions", "instruction-enforcement", "agent-codex"}
+    marker = enforcement_adoption_decisions(
+        modules, skipped_path=".github/instruction-contracts.yml"
+    )
+    marker["template_sync"]["protected_file_decisions"] = [
+        item
+        for item in marker["template_sync"]["protected_file_decisions"]
+        if item["path"] != ".github/instruction-profile.yml"
+    ]
+    write(
+        tmp_path,
+        ".github/instruction-contracts.yml",
+        (ROOT / ".github/instruction-contracts.yml").read_text(encoding="utf-8"),
+    )
+    write(
+        tmp_path,
+        ".github/instruction-profile.yml",
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "mode": "marker",
+                "context": "downstream",
+            }
+        ),
+    )
+    write(tmp_path, "decisions.yml", yaml.safe_dump(marker))
+    before = snapshot_enforcement_target(tmp_path)
+    rejected = run_catalog_selection_adoption(tmp_path)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert "ERROR: Selected preserved instruction profile mode conflicts" in rejected.stderr
+    assert "Traceback" not in rejected.stderr
+    assert snapshot_enforcement_target(tmp_path) == before
+    mutant = run_catalog_selection_adoption(tmp_path, control="mode")
+    assert mutant.returncode == 1, mutant.stdout + mutant.stderr
+    assert "KeyError: 'exceptions'" in mutant.stderr
+    with pytest.raises(AssertionError):
+        assert "Traceback" not in mutant.stderr
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_selected_removal_preserves_original_absence_declaration(
+    tmp_path: Path, existing: bool
+) -> None:
+    """Authorized final absence preserves the original declaration without renewing a hash."""
+    modules = {"baseline", "agent-instructions", "instruction-enforcement", "agent-codex"}
+    marker = enforcement_adoption_decisions(
+        modules, skipped_path=".github/instruction-contracts.yml"
+    )
+    for item in marker["template_sync"]["protected_file_decisions"]:
+        if item["path"] == "AGENTS.md":
+            item["decision"] = "REMOVE-LOCAL"
+    declaration = {
+        "path": "AGENTS.md",
+        "anchor": "file:absent",
+        "content_sha256": "absent",
+        "reason": "Original absence rationale",
+        "authorization_basis": "Original fixture owner",
+    }
+    write(
+        tmp_path,
+        ".github/instruction-profile.yml",
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "mode": "standalone",
+                "modules": sorted(modules),
+                "exceptions": [declaration],
+            }
+        ),
+    )
+    write(
+        tmp_path,
+        ".github/instruction-contracts.yml",
+        yaml.safe_dump(
+            {
+                "instruction_contracts": [
+                    {
+                        "path": "AGENTS.md",
+                        "requires_modules": ["agent-instructions", "agent-codex"],
+                        "required_phrases": ["Reviewed absence fixture."],
+                    }
+                ],
+            }
+        ),
+    )
+    if existing:
+        write(tmp_path, "AGENTS.md", "Content selected for explicit removal.\n")
+    write(tmp_path, "decisions.yml", yaml.safe_dump(marker))
+    before = snapshot_enforcement_target(tmp_path)
+    if existing:
+        rejected = run_catalog_selection_adoption(tmp_path)
+        assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+        assert "Selected protected removal is not complete: AGENTS.md" in rejected.stderr
+        assert snapshot_enforcement_target(tmp_path) == before
+        mutant = run_catalog_selection_adoption(tmp_path, control="removal-presence")
+        assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+        assert (tmp_path / "AGENTS.md").read_bytes() == before["AGENTS.md"]
+        invalid = run(tmp_path)
+        assert invalid.returncode == 1, invalid.stdout + invalid.stderr
+        assert "Exception does not match a current failure and exact content" in invalid.stderr
+        with pytest.raises(AssertionError):
+            assert mutant.returncode == 1
+        return
+    mutant = run_catalog_selection_adoption(tmp_path, control="removal")
+    assert mutant.returncode == 1, mutant.stdout + mutant.stderr
+    assert "Existing standalone exception conflicts" in mutant.stderr
+    assert snapshot_enforcement_target(tmp_path) == before
+    adopted = run_catalog_selection_adoption(tmp_path)
+    assert adopted.returncode == 0, adopted.stdout + adopted.stderr
+    assert not (tmp_path / "AGENTS.md").exists()
+    generated = yaml.safe_load(
+        (tmp_path / ".github/instruction-profile.yml").read_text(encoding="utf-8")
+    )
+    assert generated["exceptions"] == [declaration]
+    checked = run(tmp_path)
+    assert checked.returncode == 0, checked.stdout + checked.stderr
+    assert not (tmp_path / ".template-sync").exists()
+    repeated = run_catalog_selection_adoption(tmp_path)
+    assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+    assert yaml.safe_load(
+        (tmp_path / ".github/instruction-profile.yml").read_text(encoding="utf-8")
+    )["exceptions"] == [declaration]
+
+
+@pytest.mark.parametrize("declaration_kind", ["wrong-absence-digest", "nonabsence"])
+def test_selected_removal_does_not_renew_invalid_declarations(
+    tmp_path: Path, declaration_kind: str
+) -> None:
+    """Removal does not make invalid hashes or old content-specific anchors valid."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    profile(stage)
+    document = profile(target)
+    write(target, "AGENTS.md", "Agents MUST preserve authority.\n")
+    declaration = {
+        "path": "AGENTS.md",
+        "anchor": "file:absent",
+        "content_sha256": "0" * 64,
+        "reason": "Unchanged reviewed record",
+        "authorization_basis": "Fixture owner",
+    }
+    if declaration_kind == "nonabsence":
+        declaration["anchor"] = "Agents MUST validate."
+        declaration["content_sha256"] = hashlib.sha256(
+            (target / "AGENTS.md").read_bytes()
+        ).hexdigest()
+    document["exceptions"] = [declaration]
+    write(target, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    marker = {
+        "template_sync": {
+            "included_modules": document["modules"],
+            "protected_file_decisions": [
+                {"path": "AGENTS.md", "decision": "REMOVE-LOCAL"},
+            ],
+        }
+    }
+    # The owner has completed removal; old content-specific authority remains invalid.
+    (target / "AGENTS.md").unlink()
+    before = (stage / ".github/instruction-profile.yml").read_bytes()
+    rejected = run_migration_schema_control(stage, target, marker_document=marker)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert "Existing standalone exception conflicts" in rejected.stderr
+    assert (stage / ".github/instruction-profile.yml").read_bytes() == before
+    assert not (target / "AGENTS.md").exists()
+
+
+@pytest.mark.parametrize("stale", [False, True])
+def test_skipped_profile_with_taken_catalog_uses_effective_exceptions(
+    tmp_path: Path, stale: bool
+) -> None:
+    """A discarded generated profile cannot retire the retained profile's exception."""
+    modules = {"baseline", "agent-instructions", "instruction-enforcement"}
+    marker = enforcement_adoption_decisions(modules, skipped_path=".github/instruction-profile.yml")
+    # No agent-codex means the new catalog excludes AGENTS; its prior exception is stale.
+    exceptions = (
+        [
+            {
+                "path": "AGENTS.md",
+                "anchor": "file:absent",
+                "content_sha256": "absent",
+                "reason": "Earlier catalog clause",
+                "authorization_basis": "Fixture owner",
+            }
+        ]
+        if stale
+        else []
+    )
+    write(
+        tmp_path,
+        ".github/instruction-profile.yml",
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "mode": "standalone",
+                "modules": sorted(modules),
+                "exceptions": exceptions,
+            }
+        ),
+    )
+    write(tmp_path, "decisions.yml", yaml.safe_dump(marker))
+    before = snapshot_enforcement_target(tmp_path)
+    result = run_catalog_selection_adoption(tmp_path)
+    if not stale:
+        assert result.returncode == 0, result.stdout + result.stderr
+        validated = run(tmp_path)
+        assert validated.returncode == 0, validated.stdout + validated.stderr
+        return
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Retained instruction catalog conflicts with selected profile exception" in result.stderr
+    assert snapshot_enforcement_target(tmp_path) == before
+    mutant = run_catalog_selection_adoption(tmp_path, control="skipped-profile")
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    invalid = run(tmp_path)
+    assert invalid.returncode == 1, invalid.stdout + invalid.stderr
+    assert "Exception does not match a current failure and exact content" in invalid.stderr
+    with pytest.raises(AssertionError):
+        assert mutant.returncode == 1
+
+
+@pytest.mark.parametrize("explicit", ["SKIP", "REMOVE-LOCAL", "TAKE"])
+def test_candidate_installation_fixture_preserves_explicit_decisions(explicit: str) -> None:
+    """Synthetic defaults never override an explicit profile or catalog selection."""
+    marker = {
+        "template_sync": {
+            "included_modules": ["baseline"],
+            "protected_file_decisions": [
+                {"path": path, "decision": explicit, "reason": "Exact original record"}
+                for path in (
+                    ".github/instruction-profile.yml",
+                    ".github/instruction-contracts.yml",
+                    "AGENTS.md",
+                )
+            ],
+        }
+    }
+    before = json.dumps(marker)
+    selected = candidate_installation_marker(marker)
+    assert selected == marker
+    assert selected is not marker
+    assert json.dumps(marker) == before
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".github/instructions/local-owner-note.md",
+        ".github/instructions/yaml.instructions.md",
+    ],
+)
+def test_unrelated_or_inactive_removal_keeps_existing_reconciliation(
+    tmp_path: Path, path: str
+) -> None:
+    """Only applicable enforcement absence requires completed local removal."""
+    modules = {"baseline", "agent-instructions", "instruction-enforcement", "agent-codex"}
+    marker = enforcement_adoption_decisions(modules)
+    decision = {
+        "path": path,
+        "decision": "REMOVE-LOCAL",
+        "authorized_scope": path,
+        "authorization_basis": "Fixture owner",
+        "reason": "Separate recorded local cleanup",
+        "adoption_mode": "minimal-preservation",
+    }
+    marker["template_sync"]["protected_file_decisions"].append(decision)
+    local_text = "Local content outside currently applicable instruction contracts.\n"
+    write(tmp_path, path, local_text)
+    write(tmp_path, "decisions.yml", yaml.safe_dump(marker))
+    before = snapshot_enforcement_target(tmp_path)
+    mutant = run_catalog_selection_adoption(tmp_path, control="removal-scope")
+    assert mutant.returncode == 1, mutant.stdout + mutant.stderr
+    assert f"Selected protected removal is not complete: {path}" in mutant.stderr
+    assert snapshot_enforcement_target(tmp_path) == before
+    with pytest.raises(AssertionError):
+        assert mutant.returncode == 0
+    adopted = run_catalog_selection_adoption(tmp_path)
+    assert adopted.returncode == 0, adopted.stdout + adopted.stderr
+    assert (tmp_path / path).read_bytes() == before[path]
+    document = yaml.safe_load(
+        (tmp_path / ".github/instruction-profile.yml").read_text(encoding="utf-8")
+    )
+    assert decision in document["source_decisions"]["protected_file_decisions"]
+    assert all(item["path"] != path for item in document["exceptions"])
+    validated = run(tmp_path)
+    assert validated.returncode == 0, validated.stdout + validated.stderr
+    assert not (tmp_path / ".template-sync").exists()

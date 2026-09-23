@@ -12,7 +12,13 @@ import jsonschema
 import yaml  # type: ignore[import-untyped]
 
 from tests._pytest_compat import pytest
-from tests.test_instruction_profile import ROOT, profile, run, write
+from tests.test_instruction_profile import (
+    ROOT,
+    candidate_installation_marker,
+    profile,
+    run,
+    write,
+)
 
 pytestmark = pytest.mark.upstream_template_only
 
@@ -112,12 +118,14 @@ def output_fixture(root: Path, count: int, reason_length: int) -> tuple[Path, Pa
     return (
         stage,
         target,
-        {
-            "template_sync": {
-                "included_modules": document["modules"],
-                "instruction_contract_waivers": waivers,
+        candidate_installation_marker(
+            {
+                "template_sync": {
+                    "included_modules": document["modules"],
+                    "instruction_contract_waivers": waivers,
+                }
             }
-        },
+        ),
     )
 
 

@@ -251,7 +251,97 @@ def validate_skipped_profile_applicability(target_root: Path, marker: dict[str, 
     )
 
 
+def validate_retained_catalog_selection(
+    staging_root: Path,
+    target_root: Path,
+    marker: dict[str, Any],
+    document: dict[str, Any],
+    reports: dict[Path, core.InstructionContractReport],
+    path_applicability: dict[str, bool],
+) -> None:
+    """Reject incompatible retained catalogs without changing selected local bytes."""
+    removed = {
+        item["path"]
+        for item in marker.get("protected_file_decisions", [])
+        if item["decision"] == "REMOVE-LOCAL"
+    }
+    selections: dict[str, Path] = {}
+
+    def selected_root(path: str) -> Path:
+        if path not in selections:
+            selections[path] = selected_content_root(path, staging_root, target_root, marker)[0]
+        return selections[path]
+
+    failures = {
+        (path, anchor)
+        for content_root, report in reports.items()
+        for path, anchor in report_failure_keys(report)
+        if path not in removed and selected_root(path) == content_root
+    }
+    failures.update(
+        (path, "file:absent") for path in removed if path_applicability.get(path, False)
+    )
+    effective_profile = (
+        load_existing_profile(target_root)
+        if selected_root(PROFILE_PATH) == target_root
+        else document
+    )
+    if effective_profile["mode"] != "standalone":
+        raise TemplateSyncMaterializationError(
+            "Selected preserved instruction profile mode conflicts with standalone migration. "
+            "Review the profile or supply an explicit protected selection."
+        )
+    applied: set[tuple[str, str]] = set()
+    digests: dict[str, str] = {}
+    for declaration in effective_profile["exceptions"]:
+        path, anchor = declaration["path"], declaration["anchor"]
+        key = (path, anchor)
+        if path not in digests:
+            digests[path] = (
+                "absent" if path in removed else core.file_digest(selected_root(path), path)
+            )
+        if key in applied or key not in failures or declaration["content_sha256"] != digests[path]:
+            raise TemplateSyncMaterializationError(
+                f"Retained instruction catalog conflicts with selected profile exception: {path}: {anchor}. "
+                "Review the selected catalog, content, or profile declaration."
+            )
+        applied.add(key)
+    remaining = sorted(failures - applied)
+    if remaining:
+        path, anchor = remaining[0]
+        raise TemplateSyncMaterializationError(
+            f"Retained instruction catalog conflicts with selected content: {path}: {anchor}. "
+            "Review the selected content or supply an exact authorized declaration."
+        )
+    active_imports = [
+        item
+        for content_root, report in reports.items()
+        for item in report.active_claude_imports
+        if item.path not in removed and selected_root(item.path) == content_root
+    ]
+    if active_imports or reports[target_root].tracked_claude_local_memory:
+        raise TemplateSyncMaterializationError(
+            "Retained instruction catalog conflicts with non-exceptable Claude instruction content. "
+            "Review active imports and tracked local memory before migration."
+        )
+
+
 def render_instruction_profile(
+    *,
+    staging_root: Path,
+    target_root: Path,
+    marker_document: dict[str, Any],
+) -> None:
+    """Preserve the materializer's controlled diagnostic boundary for core failures."""
+    try:
+        _render_instruction_profile(
+            staging_root=staging_root, target_root=target_root, marker_document=marker_document
+        )
+    except core.InstructionContractValidationError as error:
+        raise TemplateSyncMaterializationError(str(error)) from error
+
+
+def _render_instruction_profile(
     *,
     staging_root: Path,
     target_root: Path,
@@ -290,19 +380,22 @@ def render_instruction_profile(
         document: dict[str, Any] = {"version": 1, "mode": "marker", "context": "downstream"}
     else:
         schema = load_reviewed_schema("schemas/instruction-profile.schema.json")
+        catalog_root, _ = selected_content_root(
+            ".github/instruction-contracts.yml", staging_root, target_root, marker
+        )
         catalog_path = core.support.resolve_repo_path(
-            staging_root, ".github/instruction-contracts.yml"
+            catalog_root, ".github/instruction-contracts.yml"
         )
         catalog = core.support.load_yaml_mapping(
             catalog_path,
-            staging_root,
+            catalog_root,
             maximum_bytes=core.MAXIMUM_INPUT_BYTES,
         )
         core.support.validate_schema(
             catalog,
             load_reviewed_schema("schemas/instruction-contracts.schema.json"),
             catalog_path,
-            staging_root,
+            catalog_root,
         )
         known_modules = set(schema["$defs"]["moduleName"]["enum"])
         contracts = core.parse_contracts(catalog, known_modules)
@@ -346,7 +439,35 @@ def render_instruction_profile(
                 protected_guide_section_obligations=section_obligations,
                 protected_guide_reference_obligations=reference_obligations,
             )
-        failure_keys = {root: report_failure_keys(report) for root, report in reports.items()}
+        removed_paths = {
+            item["path"]
+            for item in marker.get("protected_file_decisions", [])
+            if item["decision"] == "REMOVE-LOCAL"
+        }
+        for path in sorted(removed_paths):
+            if not path_applicability.get(path, False):
+                continue
+            removal_target = resolve_safe_repository_target_path(
+                target_root, path, field_name="selected protected removal"
+            )
+            if removal_target.exists() or removal_target.is_symlink():
+                raise TemplateSyncMaterializationError(
+                    f"Selected protected removal is not complete: {path}. "
+                    "Complete the reviewed local removal before standalone migration."
+                )
+        failure_keys = {
+            root: {
+                (path, anchor)
+                for path, anchor in report_failure_keys(report)
+                if path not in removed_paths
+            }
+            | {
+                (path, "file:absent")
+                for path in removed_paths
+                if path_applicability.get(path, False)
+            }
+            for root, report in reports.items()
+        }
         content_digests: dict[tuple[Path, str], str] = {}
         for declaration in exceptions:
             if not declaration_applies(
@@ -357,7 +478,9 @@ def render_instruction_profile(
             content_root, _ = selected_content_root(path, staging_root, target_root, marker)
             content_key = (content_root, path)
             if content_key not in content_digests:
-                content_digests[content_key] = core.file_digest(content_root, path)
+                content_digests[content_key] = (
+                    "absent" if path in removed_paths else core.file_digest(content_root, path)
+                )
             digest = content_digests[content_key]
             original_digest = declaration["content_sha256"]
             if (path, anchor) not in failure_keys[content_root] or original_digest != digest:
@@ -370,22 +493,33 @@ def render_instruction_profile(
                 waiver["path"], staging_root, target_root, marker
             )
             if (
-                taken
-                and declaration_applies(
+                declaration_applies(
                     waiver, contracts, section_obligations, modules, reference_obligations
                 )
                 and (waiver["path"], waiver["anchor"]) not in failure_keys[content_root]
             ):
                 raise TemplateSyncMaterializationError(
-                    f"Instruction waiver conflicts with selected TAKE content: "
+                    f"Instruction waiver conflicts with selected {'TAKE' if taken else 'preserved'} content: "
                     f"{waiver['path']}: {waiver['anchor']}. Review or remove the waiver."
                 )
             exceptions.append(
-                {**waiver, "content_sha256": core.file_digest(content_root, waiver["path"])}
+                {
+                    **waiver,
+                    "content_sha256": (
+                        "absent"
+                        if waiver["path"] in removed_paths
+                        else core.file_digest(content_root, waiver["path"])
+                    ),
+                }
             )
         for decision in marker.get("protected_file_decisions", []):
-            if decision["decision"] == "REMOVE-LOCAL" and path_applicability.get(
-                decision["path"], False
+            if (
+                decision["decision"] == "REMOVE-LOCAL"
+                and path_applicability.get(decision["path"], False)
+                and not any(
+                    item["path"] == decision["path"] and item["anchor"] == "file:absent"
+                    for item in exceptions
+                )
             ):
                 exceptions.append(
                     {
@@ -399,7 +533,8 @@ def render_instruction_profile(
         for content_root, report in reports.items():
             for stale in report.stale_protected_guide_sections:
                 if (
-                    content_root
+                    stale.path in removed_paths
+                    or content_root
                     != selected_content_root(stale.path, staging_root, target_root, marker)[0]
                 ):
                     continue
@@ -419,7 +554,8 @@ def render_instruction_profile(
                     )
             for reference in report.stale_protected_guide_references:
                 if (
-                    content_root
+                    reference.path in removed_paths
+                    or content_root
                     != selected_content_root(reference.path, staging_root, target_root, marker)[0]
                 ):
                     continue
@@ -463,6 +599,13 @@ def render_instruction_profile(
         }
         if retired_exceptions:
             source_decisions["retired_exceptions"] = retired_exceptions
+        if catalog_root == target_root or any(
+            item["path"] == PROFILE_PATH and item["decision"] == "SKIP"
+            for item in marker.get("protected_file_decisions", [])
+        ):
+            validate_retained_catalog_selection(
+                staging_root, target_root, marker, document, reports, path_applicability
+            )
     core.support.validate_schema(
         document,
         load_reviewed_schema("schemas/instruction-profile.schema.json"),

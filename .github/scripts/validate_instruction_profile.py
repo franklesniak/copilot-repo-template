@@ -124,11 +124,11 @@ def validate_standalone(root: Path, profile: dict[str, Any]) -> core.Instruction
 
 def main(argv: list[str] | None = None) -> int:
     """Validate explicit applicability and preserve native validator failures."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[2]))
-    args = parser.parse_args(argv)
-    root = Path(args.repo_root).resolve()
     try:
+        parser = argparse.ArgumentParser(description=__doc__)
+        parser.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[2]))
+        args = parser.parse_args(argv)
+        root = Path(args.repo_root).resolve()
         profile = core.load_schema_validated_yaml(
             support.resolve_repo_path(root, PROFILE_PATH),
             support.resolve_repo_path(root, PROFILE_SCHEMA),

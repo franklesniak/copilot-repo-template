@@ -511,6 +511,42 @@ def parse_contracts(
     return tuple(contracts)
 
 
+def validate_protected_guide_obligation_keys(contracts_document: dict[str, Any]) -> None:
+    """Keep the type-less marker waiver identity unique across obligation families."""
+    family_keys: list[set[tuple[str, str]]] = []
+    for kind in ("section", "reference"):
+        field = f"protected_guide_{kind}_obligations"
+        raw_obligations = contracts_document.get(field, [])
+        if not isinstance(raw_obligations, list):
+            raise InstructionContractValidationError(f"{field} must be a list.")
+        keys: set[tuple[str, str]] = set()
+        for raw_obligation in raw_obligations:
+            if not isinstance(raw_obligation, dict):
+                raise InstructionContractValidationError(
+                    f"Each protected guide {kind} obligation must be a mapping."
+                )
+            key = raw_obligation.get("key")
+            raw_path = raw_obligation.get("path")
+            if not isinstance(key, str) or not isinstance(raw_path, str):
+                raise InstructionContractValidationError(
+                    f"Each protected guide {kind} obligation must define key and path."
+                )
+            path, is_directory = normalize_repository_path(raw_path, f"{field}[].path")
+            if is_directory:
+                raise InstructionContractValidationError(
+                    f"{field}[].path must reference a file, not a directory: {raw_path}"
+                )
+            keys.add((path, key))
+        family_keys.append(keys)
+    duplicate_keys = family_keys[0] & family_keys[1]
+    if duplicate_keys:
+        formatted_keys = ", ".join(f"({path}, {key})" for path, key in sorted(duplicate_keys))
+        raise InstructionContractValidationError(
+            "Duplicate protected-guide obligation (path, key) pair(s) across section "
+            f"and reference types: {formatted_keys}"
+        )
+
+
 def parse_protected_guide_section_obligations(
     contracts_document: dict[str, Any],
     manifest_modules: set[str],
@@ -587,6 +623,7 @@ def parse_protected_guide_section_obligations(
             "Duplicate protected_guide_section_obligations (path, key) pair(s): "
             f"{formatted_keys}"
         )
+    validate_protected_guide_obligation_keys(contracts_document)
     return tuple(obligations)
 
 
@@ -693,6 +730,7 @@ def parse_protected_guide_reference_obligations(
             "Duplicate protected_guide_reference_obligations (path, key) pair(s): "
             f"{formatted_keys}"
         )
+    validate_protected_guide_obligation_keys(contracts_document)
     return tuple(obligations)
 
 

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from tests._pytest_compat import pytest
+from tests.test_instruction_profile import profile as write_standalone_profile
 from tests.test_validate_instruction_contracts import (
     SCRIPT_PATH,
     _contracts,
@@ -265,3 +266,147 @@ assert read_repository_text(Path("policy.md"), Path("."), maximum_bytes=128) == 
         else:
             assert changed.returncode == 1
             assert "UnicodeDecodeError" in changed.stderr and "Traceback" in changed.stderr
+
+
+def _run_profile_root_probe(
+    root: Path, *, fault: str = "none", invocation: str = "explicit"
+) -> subprocess.CompletedProcess[str]:
+    """Inject only public path-resolution failures into the actual copied CLI."""
+    program = """import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(sys.argv[1]).parent))
+import validate_instruction_profile as validator
+original_resolve = Path.resolve
+root, fault, invocation = sys.argv[2:]
+def resolve(path, *args, **kwargs):
+    selected = fault.startswith("selected-") and str(path) == root
+    default = fault.startswith("default-") and str(path) == validator.__file__
+    if selected or default:
+        if fault.endswith("generic"):
+            raise OSError(None, None, "/private-fixture/root-marker")
+        raise PermissionError(13, "Permission denied", "/private-fixture/root-marker")
+    return original_resolve(path, *args, **kwargs)
+Path.resolve = resolve
+argv = ["--repo-root", root]
+if invocation == "default":
+    argv = []
+elif invocation == "help":
+    argv = ["--help"]
+elif invocation == "bad-argument":
+    argv.append("--unsupported-mode")
+raise SystemExit(validator.main(argv))
+"""
+    return subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            "-c",
+            program,
+            str(root / ".github/scripts/validate_instruction_profile.py"),
+            str(root),
+            fault,
+            invocation,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+    )
+
+
+# These deployment fixtures copy optional runtime files from the complete template.
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize("root_kind", ["selected", "default"])
+@pytest.mark.parametrize(
+    ("error_kind", "expected_error"),
+    [
+        ("permission", "ERROR: PermissionError: Permission denied\n"),
+        ("generic", "ERROR: OSError: I/O error\n"),
+    ],
+)
+def test_profile_root_resolution_failure_is_sanitized(
+    tmp_path: Path, root_kind: str, error_kind: str, expected_error: str
+) -> None:
+    """Default and selected roots fail truthfully without filename disclosure."""
+    write_standalone_profile(tmp_path)
+    assert not (tmp_path / ".template-sync").exists()
+    assert not (tmp_path / "pyproject.toml").exists()
+
+    result = _run_profile_root_probe(tmp_path, fault=f"{root_kind}-{error_kind}")
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert result.stdout == ""
+    assert result.stderr == expected_error
+    assert "Traceback" not in result.stderr
+    assert "/private-fixture/root-marker" not in result.stderr
+    assert str(tmp_path) not in result.stderr
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize(
+    ("invocation", "expected_exit"),
+    [("explicit", 0), ("default", 0), ("help", 0), ("bad-argument", 2)],
+)
+def test_profile_root_guard_preserves_command_behavior(
+    tmp_path: Path, invocation: str, expected_exit: int
+) -> None:
+    """Valid roots, default lookup and argument-parser exits retain their meanings."""
+    write_standalone_profile(tmp_path)
+    result = _run_profile_root_probe(tmp_path, invocation=invocation)
+
+    assert result.returncode == expected_exit, result.stdout + result.stderr
+    assert "Traceback" not in result.stderr
+    if invocation in {"explicit", "default"}:
+        assert "Instruction-contract validation passed." in result.stdout
+        assert "Mode: standalone" in result.stdout
+        assert result.stderr == ""
+    elif invocation == "help":
+        assert "--repo-root" in result.stdout
+        assert result.stderr == ""
+    else:
+        assert "unrecognized arguments: --unsupported-mode" in result.stderr
+        assert "validation passed" not in result.stdout
+
+
+@pytest.mark.upstream_template_only
+def test_profile_root_guard_preserves_marker_adapter_exit(tmp_path: Path) -> None:
+    """A real adapter subprocess retains its native failure code."""
+    write_standalone_profile(tmp_path)
+    _write_yaml(
+        tmp_path,
+        ".github/instruction-profile.yml",
+        {"version": 1, "mode": "marker", "context": "downstream"},
+    )
+    adapter = tmp_path / ".template-sync/scripts/validate_instruction_contracts.py"
+    adapter.parent.mkdir(parents=True)
+    adapter.write_text("raise SystemExit(7)\n", encoding="utf-8")
+
+    result = _run_profile_root_probe(tmp_path)
+
+    assert result.returncode == 7, result.stdout + result.stderr
+    assert result.stdout == ""
+    assert result.stderr == ""
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize("root_kind", ["selected", "default"])
+def test_profile_root_failure_oracle_detects_removed_guard(tmp_path: Path, root_kind: str) -> None:
+    """Removing the actual handler exposes the independently fixed path sentinel."""
+    write_standalone_profile(tmp_path)
+    script = tmp_path / ".github/scripts/validate_instruction_profile.py"
+    baseline = _run_profile_root_probe(tmp_path, fault=f"{root_kind}-permission")
+    assert baseline.returncode == 1
+    assert baseline.stderr == "ERROR: PermissionError: Permission denied\n"
+    original = script.read_text(encoding="utf-8")
+    guard = "except OSError as error:"
+    assert original.count(guard) == 1
+    script.write_text(original.replace(guard, "except FileExistsError as error:"), encoding="utf-8")
+
+    mutant = _run_profile_root_probe(tmp_path, fault=f"{root_kind}-permission")
+
+    assert mutant.returncode == 1
+    assert "Traceback" in mutant.stderr
+    assert "PermissionError" in mutant.stderr
+    assert "/private-fixture/root-marker" in mutant.stderr
+    assert not list((tmp_path / ".github/scripts").rglob("*.pyc"))
