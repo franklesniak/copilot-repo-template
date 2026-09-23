@@ -312,8 +312,17 @@ def validate_placeholder_manifest_schema(
         jsonschema_module = jsonschema_loader("jsonschema")
     except ImportError:
         return
-    validator = jsonschema_module.Draft202012Validator(schema)
-    errors = sorted(validator.iter_errors(manifest), key=lambda error: error.json_path)
+    referencing_module = cast(Any, importlib.import_module("referencing"))
+    referencing_errors = cast(Any, importlib.import_module("referencing.exceptions"))
+    validator = jsonschema_module.Draft202012Validator(
+        schema, registry=referencing_module.Registry()
+    )
+    try:
+        errors = sorted(validator.iter_errors(manifest), key=lambda error: error.json_path)
+    except referencing_errors.Unresolvable as error:
+        raise PlaceholderError(
+            "Unable to resolve a placeholder manifest schema reference."
+        ) from error
     if errors:
         messages = "\n".join(f"  - {error.json_path}: {error.message}" for error in errors[:10])
         raise PlaceholderError(f"Placeholder manifest schema validation failed:\n{messages}")
@@ -419,7 +428,13 @@ def owner_repo_token_paths(
     )
 
 
-PLACEHOLDER_MANIFEST = load_placeholder_manifest()
+try:
+    PLACEHOLDER_MANIFEST = load_placeholder_manifest()
+except PlaceholderError as error:
+    if __name__ == "__main__":
+        print(f"ERROR: {error}", file=sys.stderr)
+        raise SystemExit(1) from error
+    raise
 PLACEHOLDER_TOKEN_SPECS = normalized_manifest_tokens(PLACEHOLDER_MANIFEST)
 PLACEHOLDER_RENDERER_PATHS = renderer_path_group_paths(PLACEHOLDER_MANIFEST)
 GITHUB_URL_TOKEN_SPECS = tuple(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import importlib.util
 import re
 import shlex
@@ -1602,3 +1603,255 @@ def test_governed_indented_non_yaml_compatibility_boundary() -> None:
         )
     with pytest.raises(policy.PolicyError, match="full SHA"):
         policy.check_examples(before + governed.replace("a" * 40, "v1"))
+
+
+def workflow_with_scalar_step(body: str) -> str:
+    """Build a fixed workflow with caller-supplied step YAML, without a policy oracle."""
+    return (
+        "on: push\npermissions: {}\njobs:\n  sample:\n    permissions: {}\n"
+        "    runs-on: ubuntu-latest\n    steps:\n      - " + body
+    )
+
+
+@pytest.mark.parametrize("style", ["|", "|-", "|+", "|2-", ">", ">-", ">+"])
+@pytest.mark.parametrize("prefix", ["", "# "])
+def test_workflow_scalar_action_text(style: str, prefix: str) -> None:
+    """Action-looking block scalar content remains data with its original fingerprint."""
+    content = prefix + "uses: owner/action@v1"
+    text = workflow_with_scalar_step(f"run: {style}\n          {content}\n")
+    expected = content + ("" if style.endswith("-") else "\n")
+    actual = policy.validate_workflow(text)
+    assert actual["jobs"]["sample"]["steps"] == [
+        {"run_sha256": hashlib.sha256(expected.encode()).hexdigest()}
+    ]
+
+
+@pytest.mark.parametrize("quote", ["'", '"'])
+@pytest.mark.parametrize("prefix", ["", "# "])
+def test_workflow_quoted_scalar_action_text(quote: str, prefix: str) -> None:
+    """Quoted continuation and closing rows stay within their composed scalar."""
+    content = prefix + "uses: owner/action@v1"
+    text = workflow_with_scalar_step(f"run: {quote}echo\n          {content}{quote}\n")
+    actual = policy.validate_workflow(text)
+    assert actual["jobs"]["sample"]["steps"] == [
+        {"run_sha256": hashlib.sha256(f"echo {content}".encode()).hexdigest()}
+    ]
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    [
+        ("run: echo\n          uses:owner/action@v1\n", "echo uses:owner/action@v1"),
+        ("run: |\n          # uses: owner/action@v1", "# uses: owner/action@v1"),
+        (
+            "run: |\n          cat <<'SAMPLE'\n          uses: owner/action@v1\n          SAMPLE\n",
+            "cat <<'SAMPLE'\nuses: owner/action@v1\nSAMPLE\n",
+        ),
+        (
+            "run: |\n          cat <<'SAMPLE'\n          # uses: owner/action@v1\n          SAMPLE\n",
+            "cat <<'SAMPLE'\n# uses: owner/action@v1\nSAMPLE\n",
+        ),
+    ],
+)
+def test_workflow_scalar_plain_eof_and_heredoc(body: str, expected: str) -> None:
+    """Plain continuation, EOF and shell fixture text do not create action identities."""
+    actual = policy.validate_workflow(workflow_with_scalar_step(body))
+    assert actual["jobs"]["sample"]["steps"] == [
+        {"run_sha256": hashlib.sha256(expected.encode()).hexdigest()}
+    ]
+
+
+def test_workflow_nonexecutable_uses_input_and_environment() -> None:
+    """An action input named uses and an environment scalar are ordinary data."""
+    pin = "owner/action@" + "a" * 40 + " # v1.2.3"
+    text = workflow_with_scalar_step(
+        f"uses: {pin}\n        with:\n          uses: owner/action@v1\n"
+        "        env:\n          SAMPLE: |\n            uses: owner/action@v1\n"
+        "            # uses: owner/action@v1\n"
+    )
+    actual = policy.validate_workflow(text)
+    assert actual["jobs"]["sample"]["steps"] == [
+        {
+            "action": "owner/action",
+            "with": {"uses": "owner/action@v1"},
+            "env": {"SAMPLE": "uses: owner/action@v1\n# uses: owner/action@v1\n"},
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "run: |\n          echo harmless\n",
+        "run: |-\n          echo harmless\n",
+        "run: |+\n          echo harmless\n\n",
+        "run: |2-\n          echo harmless\n",
+        "run: >\n          echo harmless\n",
+        "run: 'echo\n          harmless'\n",
+        'run: "echo\n          harmless"\n',
+        "run: echo\n          harmless\n",
+    ],
+)
+@pytest.mark.parametrize("suffix", ["      # uses: ", "      - uses: "])
+def test_workflow_scalar_end_preserves_real_references(body: str, suffix: str) -> None:
+    """The first true YAML comment or action after a scalar remains governed."""
+    text = workflow_with_scalar_step(body) + suffix
+    with pytest.raises(policy.PolicyError, match="full SHA"):
+        policy.validate_workflow(text + "owner/action@v1\n")
+    policy.validate_workflow(text + "owner/action@" + "a" * 40 + " # v1.2.3\n")
+
+
+def test_scalar_opacity_does_not_allow_invalid_yaml_or_executable_forms() -> None:
+    """Literal data cannot authorize a real mapping, folded action or borrowed annotation."""
+    pin = "owner/action@" + "a" * 40
+    for body in [
+        "run: echo\n          uses: owner/action@v1\n",
+        f"uses: >-\n          {pin} # v1.2.3\n",
+        f"uses: '{pin}' # v1.2.3\n",
+        f"{{uses: {pin}}} # v1.2.3\n",
+        f"run: |\n          uses: {pin} # v1.2.3\n      - uses: {pin}\n",
+    ]:
+        with pytest.raises(policy.PolicyError):
+            policy.validate_workflow(workflow_with_scalar_step(body))
+    reusable = (
+        "on: push\npermissions: {}\njobs:\n  sample:\n    permissions: {}\n"
+        "    uses: owner/repo/.github/workflows/build.yml@"
+    )
+    with pytest.raises(policy.PolicyError, match="full SHA"):
+        policy.validate_workflow(reusable + "v1\n")
+    policy.validate_workflow(reusable + "a" * 40 + " # v1.2.3\n")
+
+
+@pytest.mark.parametrize("guard", ["raw-scan", "scalar-exclusion", "end-boundary", "executable"])
+def test_workflow_scalar_guard_mutations(tmp_path: Path, guard: str) -> None:
+    """Independent positive and negative fixtures detect each classification regression."""
+    source = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
+    if guard == "raw-scan":
+        before = "    for job in jobs.values():\n"
+        after = (
+            "    for line in text.splitlines():\n"
+            "        if not line.lstrip().startswith('#') and (match := USES_LINE.match(line)):\n"
+            "            check_reference(match[1], line, resolver)\n" + before
+        )
+        text = workflow_with_scalar_step("run: |\n          uses: owner/action@v1\n")
+    elif guard == "scalar-exclusion":
+        before = "    lines = workflow_comment_lines(tree, text.splitlines())\n"
+        after = "    lines = text.splitlines()\n"
+        text = workflow_with_scalar_step("run: |\n          # uses: owner/action@v1\n")
+    elif guard == "end-boundary":
+        before = "            end = node.end_mark.line + bool(node.end_mark.column)\n"
+        after = "            end = node.end_mark.line + 1\n"
+        text = workflow_with_scalar_step("run: |\n          echo harmless\n")
+        text += "      # uses: owner/action@v1\n"
+    else:
+        before = "    tree = check_executable_annotations(text, resolver)\n"
+        after = "    tree = yaml.compose(text, Loader=WorkflowLoader)\n"
+        text = workflow_with_scalar_step("uses: owner/action@v1\n")
+    assert source.count(before) == 1
+    mutant = load_policy_mutant(tmp_path, source.replace(before, after))
+    if guard in {"raw-scan", "scalar-exclusion"}:
+        policy.validate_workflow(text)
+        with pytest.raises(mutant.PolicyError, match="full SHA"):
+            mutant.validate_workflow(text)
+    else:
+        with pytest.raises(policy.PolicyError, match="full SHA"):
+            policy.validate_workflow(text)
+        mutant.validate_workflow(text)
+
+
+def test_workflow_scalar_graph_identity_guard(tmp_path: Path) -> None:
+    """Identity tracking handles shared/cyclic nodes without granting public YAML aliases."""
+    source = (ROOT / ".github/scripts/validate_workflow_security.py").read_text(encoding="utf-8")
+    start = source.index("def workflow_comment_lines(")
+    end = source.index("\ndef validate_workflow(", start)
+    helper = source[start:end]
+    guard = "        if id(node) in seen:\n"
+    assert helper.count(guard) == 1
+    changed = source[:start] + helper.replace(guard, "        if False:\n") + source[end:]
+    mutant = load_policy_mutant(tmp_path, changed)
+    script = """
+import importlib.util
+import sys
+
+spec = importlib.util.spec_from_file_location("scalar_graph", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+text = "run: |\\n  # uses: owner/action@v1\\n# real comment\\n"
+tree = module.yaml.compose(text, Loader=module.WorkflowLoader)
+key, value = tree.value[0]
+tree.value.extend([(key, value), (key, tree)])
+assert module.workflow_comment_lines(tree, text.splitlines()) == ["", "", "# real comment"]
+print("shared-cycle-pass")
+"""
+    command = [sys.executable, "-c", script]
+    result = subprocess.run(
+        [*command, str(ROOT / ".github/scripts/validate_workflow_security.py")],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.strip() == "shared-cycle-pass"
+    with pytest.raises(subprocess.TimeoutExpired):
+        subprocess.run(
+            [*command, mutant.__file__], check=False, capture_output=True, text=True, timeout=2
+        )
+    with pytest.raises(policy.PolicyError, match="anchors"):
+        policy.validate_workflow(workflow_with_scalar_step("run: &body echo\n        env: *body\n"))
+
+
+def test_configured_workflow_hook_scalar_boundary_native(tmp_path: Path) -> None:
+    """Actual hook argv accepts owned scalar data and rejects a real comment after it."""
+    contract = copy_policy(tmp_path)
+    path = ".github/workflows/scalar.yml"
+    run = "cat <<'SAMPLE'\nuses: owner/action@v1\n# uses: owner/action@v1\nSAMPLE\n"
+    text = workflow_with_scalar_step(
+        "run: |\n" + "".join("          " + line + "\n" for line in run.splitlines())
+    )
+    # Fixed contract structure and command bytes are independent of describe_workflow.
+    contract["workflows"][path] = {
+        "events": "push",
+        "permissions": {},
+        "defaults": {},
+        "env": {},
+        "jobs": {
+            "sample": {
+                "controls": {"permissions": {}, "runs-on": "ubuntu-latest"},
+                "steps": [{"run_sha256": hashlib.sha256(run.encode()).hexdigest()}],
+            }
+        },
+    }
+    (tmp_path / policy.CONTRACT).write_text(yaml.safe_dump(contract), encoding="utf-8")
+    workflow = tmp_path / path
+    workflow.write_text(text, encoding="utf-8")
+    config = policy.parse_yaml(policy.read_text(ROOT, ".pre-commit-config.yaml"))
+    hook = next(
+        h
+        for repo in config["repos"]
+        for h in repo["hooks"]
+        if h["id"] == "validate-workflow-security"
+    )
+    configured = shlex.split(hook["entry"])
+    command = [
+        sys.executable,
+        str(ROOT / configured[1]),
+        *configured[2:],
+        "--repo-root",
+        str(tmp_path),
+    ]
+    for suffix, expected in [("", 0), ("      # uses: owner/action@v1\n", 1)]:
+        workflow.write_text(text + suffix, encoding="utf-8")
+        result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=30)
+        assert result.returncode == expected, result.stdout + result.stderr
+        if expected:
+            assert "full SHA" in result.stderr
+    del contract["workflows"][path]
+    (tmp_path / policy.CONTRACT).write_text(yaml.safe_dump(contract), encoding="utf-8")
+    # Local unowned files still require explicit strict opt-in.
+    result = subprocess.run(command, check=False, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr
+    result = subprocess.run(
+        [*command, "--strict"], check=False, capture_output=True, text=True, timeout=30
+    )
+    assert result.returncode == 1 and "full SHA" in result.stderr

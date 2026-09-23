@@ -263,6 +263,23 @@ def load_yaml_mapping(
     )
 
 
+def validate_local_schema_references(schema: dict[str, Any], specification: Any) -> None:
+    """Inspect schema resources without treating annotation data as executable schemas."""
+    pending = [specification.create_resource(schema)]
+    while pending:
+        resource = pending.pop()
+        node = resource.contents
+        if isinstance(node, dict):
+            for keyword in ("$ref", "$dynamicRef"):
+                if keyword in node:
+                    reference = node[keyword]
+                    if not isinstance(reference, str) or not reference.startswith("#"):
+                        raise TemplateSyncMaterializationError(
+                            "Only local instruction schema references are supported."
+                        )
+        pending.extend(resource.subresources())
+
+
 def validate_schema(
     document: dict[str, Any], schema: dict[str, Any], document_path: Path, repo_root: Path
 ) -> None:
@@ -278,8 +295,23 @@ def validate_schema(
         jsonschema_module.Draft202012Validator.check_schema(schema)
     except jsonschema_module.exceptions.SchemaError as error:
         raise TemplateSyncMaterializationError("Invalid instruction validation schema.") from error
-    validator = jsonschema_module.Draft202012Validator(schema)
-    errors = sorted(validator.iter_errors(document), key=lambda error: error.json_path)
+    referencing_module = cast(Any, importlib.import_module("referencing"))
+    referencing_schema = cast(Any, importlib.import_module("referencing.jsonschema"))
+    referencing_errors = cast(Any, importlib.import_module("referencing.exceptions"))
+    try:
+        validate_local_schema_references(schema, referencing_schema.DRAFT202012)
+        validator = jsonschema_module.Draft202012Validator(
+            schema, registry=referencing_module.Registry()
+        )
+        errors = sorted(validator.iter_errors(document), key=lambda error: error.json_path)
+    except (
+        referencing_errors.Unresolvable,
+        referencing_errors.CannotDetermineSpecification,
+        referencing_schema.UnknownDialect,
+    ) as error:
+        raise TemplateSyncMaterializationError(
+            "Unable to resolve an instruction validation schema reference."
+        ) from error
     if not errors:
         return
 

@@ -1944,3 +1944,271 @@ def test_repeated_paragraph_definition_lookalikes_remain_bounded() -> None:
         timeout=20,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+EMPTY_LIST_MARKERS = (
+    "-",
+    "+",
+    "*",
+    "1.",
+    "0)",
+    "123456789.",
+    "> -",
+    "- -",
+    "1. -",
+    "> 1. -",
+    "  -",
+    "- ",
+    "-\t",
+)
+
+EMPTY_LIST_LINK_CASES = (
+    ("-\n  [x](target.md)", ((2, "target.md"),)),
+    ("-\n      [x](target.md)", ()),
+    ("    -\n    [x](target.md)", ()),
+    ("Paragraph\n+\n    [x](target.md)", ((3, "target.md"),)),
+    ("Paragraph\n1.\n    [x](target.md)", ((3, "target.md"),)),
+    ("```text\n-\n```\n[x](target.md)", ((4, "target.md"),)),
+    ("<!--\n-\n-->\n[x](target.md)", ((4, "target.md"),)),
+    (">", ()),
+    ("Paragraph\n- \n    [x](target.md)", ()),
+    ("Paragraph\n-\n    [x](target.md)", ()),
+    ("> Paragraph\n> - \n>     [x](target.md)", ()),
+    ("- Paragraph\n  - \n      [x](target.md)", ()),
+    ("> - Paragraph\n>   - \n>       [x](target.md)", ()),
+    ("Paragraph\n   - \n    [x](target.md)", ()),
+    ("[x](target.md)\n- ", ((1, "target.md"),)),
+    ("Paragraph\n- \n[x](target.md)", ((3, "target.md"),)),
+    ("> Paragraph\n- \n    [x](target.md)", ((3, "target.md"),)),
+    ("- Paragraph\n- \n    [x](target.md)", ((3, "target.md"),)),
+    ("Paragraph\n+ \n    [x](target.md)", ((3, "target.md"),)),
+    ("Paragraph\n1. \n    [x](target.md)", ((3, "target.md"),)),
+    ("Paragraph\n--\n    [x](target.md)", ()),
+    ("Paragraph\n=\n    [x](target.md)", ()),
+    ("- \n\n    [x](target.md)", ()),
+    ("-\n\n    [x](target.md)", ()),
+    ("+ \n\n    [x](target.md)", ()),
+    ("* \n\n    [x](target.md)", ()),
+    ("1. \n\n    [x](target.md)", ()),
+    ("> - \n>\n>     [x](target.md)", ()),
+    ("- - \n\n      [x](target.md)", ()),
+    ("- - \n\n    [x](target.md)", ((3, "target.md"),)),
+    ("- > - \n  >\n  >   [x](target.md)", ((3, "target.md"),)),
+    ("- \n    [x](target.md)", ((2, "target.md"),)),
+    ("-\n    [x](target.md)", ((2, "target.md"),)),
+    ("- \n      [x](target.md)", ()),
+    ("- \n\n  [x](target.md)", ((3, "target.md"),)),
+    ("- Text\n\n    [x](target.md)", ((3, "target.md"),)),
+    ("- Text\n\n      [x](target.md)", ()),
+    ("- \n\n- [x](target.md)", ((3, "target.md"),)),
+    ("> - \n\n    [x](target.md)", ()),
+    ("- \n\n\n    [x](target.md)", ()),
+    ("- \n  \n    [x](target.md)", ()),
+    ("-\t\n\t\n\t[x](target.md)", ()),
+)
+
+
+@pytest.mark.parametrize("marker", EMPTY_LIST_MARKERS)
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
+def test_empty_list_markers_preserve_virtual_margins_without_crashing(
+    marker: str, ending: str
+) -> None:
+    """Valid bare markers have no destinations under every physical line ending."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.markdown_link_targets_from_text(marker + ending) == ()
+
+
+@pytest.mark.parametrize(
+    ("line", "offset", "expected"),
+    [
+        ("", 0, None),
+        ("-", 1, None),
+        ("-", 2, None),
+        ("-", 0, ("list", 2)),
+        ("-    ", 0, ("list", 2)),
+        ("123456789.", 0, ("list", 11)),
+    ],
+)
+def test_empty_list_container_offsets_are_exhausted_or_preserve_required_margin(
+    line: str, offset: int, expected: tuple[str, int] | None
+) -> None:
+    """An exhausted source offset and a virtual continuation margin are distinct."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.markdown_link_container(line, offset) == expected
+
+
+@pytest.mark.parametrize(("body", "expected"), EMPTY_LIST_LINK_CASES)
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
+def test_empty_list_boundaries_preserve_code_live_links_and_physical_lines(
+    body: str, expected: tuple[tuple[int, str], ...], ending: str
+) -> None:
+    """Fixed rendered cases distinguish setext headings and empty item lifetimes."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.markdown_link_targets_from_text(body.replace("\n", ending)) == expected
+
+
+@pytest.mark.parametrize(
+    ("body", "expected"),
+    tuple((marker, ()) for marker in EMPTY_LIST_MARKERS) + EMPTY_LIST_LINK_CASES,
+)
+def test_deployed_empty_list_boundaries_have_fixed_native_results_without_sync(
+    tmp_path: Path, body: str, expected: tuple[tuple[int, str], ...]
+) -> None:
+    """The copied CLI accepts inert blocks and rejects genuinely live excluded links."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    write(
+        tmp_path,
+        "AGENTS.md",
+        "Agents MUST validate.\nAgents MUST preserve authority.\n\n"
+        + body.replace("target.md", TOKENS["markdown-relative-link"]),
+    )
+    result = run(tmp_path)
+    assert result.returncode == int(bool(expected)), result.stdout + result.stderr
+    assert "Traceback" not in result.stderr
+    if expected:
+        assert "Stale protected-guide references" in result.stdout
+        assert "azure-reference" in result.stdout
+    assert not (tmp_path / ".template-sync").exists()
+
+
+@pytest.mark.parametrize("ending", ["\r\n", "\r"])
+@pytest.mark.parametrize(
+    ("body", "expected_exit"),
+    [
+        ("-\n", 0),
+        ("Paragraph\n-\n    [x](target.md)", 0),
+        ("-\n\n    [x](target.md)", 0),
+        ("-\n  [x](target.md)", 1),
+    ],
+)
+def test_deployed_empty_lists_keep_native_meaning_with_alternate_line_endings(
+    tmp_path: Path, ending: str, body: str, expected_exit: int
+) -> None:
+    """Write physical CRLF/CR bytes so native tests do not normalize their inputs."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    text = "Agents MUST validate.\nAgents MUST preserve authority.\n\n" + body.replace(
+        "target.md", TOKENS["markdown-relative-link"]
+    )
+    (tmp_path / "AGENTS.md").write_bytes(text.replace("\n", ending).encode("utf-8"))
+    result = run(tmp_path)
+    assert result.returncode == expected_exit, result.stdout + result.stderr
+    assert "Traceback" not in result.stderr
+    if expected_exit:
+        assert "Stale protected-guide references" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "body",
+    ["-\n", "Paragraph\n-\n    [x](target.md)", "-\n\n    [x](target.md)"],
+)
+def test_materialization_accepts_empty_list_and_heading_code_controls(
+    tmp_path: Path, body: str
+) -> None:
+    """The actual migration materializer accepts the same three inert native cases."""
+    stage = tmp_path / "stage"
+    target = tmp_path / "target"
+    reference_fixture(stage, "markdown-relative-link")
+    reference_fixture(target, "markdown-relative-link")
+    write(
+        stage,
+        "AGENTS.md",
+        "Agents MUST validate.\nAgents MUST preserve authority.\n\n"
+        + body.replace("target.md", TOKENS["markdown-relative-link"]),
+    )
+    result = run_migration_schema_control(stage, target)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_empty_list_guard_removals_have_independent_native_failure_oracles(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Three independent positive oracles expose the original crash and false failures."""
+    # Equal-size edits within one timestamp interval must execute fresh source.
+    monkeypatch.setenv("PYTHONDONTWRITEBYTECODE", "1")
+    reference_fixture(tmp_path, "markdown-relative-link")
+    path = tmp_path / ".github/scripts/instruction_contract_core.py"
+    source = path.read_text(encoding="utf-8")
+    cases = (
+        (
+            "    if start - offset > 3 or start >= len(line):\n",
+            "    if start - offset > 3 or start == len(line):\n",
+            "-\n",
+            "IndexError: string index out of range",
+        ),
+        (
+            "        if blank or setext:\n",
+            "        if blank:\n",
+            "Paragraph\n- \n    [x](target.md)",
+            "Stale protected-guide references",
+        ),
+        (
+            (
+                "        if blank and empty_list is not None:\n"
+                "            # An item starting empty cannot consume another initial blank line.\n"
+                "            matched = min(matched, empty_list)\n"
+            ),
+            "",
+            "- \n\n    [x](target.md)",
+            "Stale protected-guide references",
+        ),
+    )
+    for guard, replacement, body, diagnostic in cases:
+        assert source.count(guard) == 1
+        write(
+            tmp_path,
+            "AGENTS.md",
+            "Agents MUST validate.\nAgents MUST preserve authority.\n\n"
+            + body.replace("target.md", TOKENS["markdown-relative-link"]),
+        )
+        path.write_text(source, encoding="utf-8", newline="\n")
+        positive = run(tmp_path)
+        assert positive.returncode == 0, positive.stdout + positive.stderr
+        path.write_text(source.replace(guard, replacement), encoding="utf-8", newline="\n")
+        mutant = run(tmp_path)
+        assert mutant.returncode == 1, mutant.stdout + mutant.stderr
+        assert diagnostic in mutant.stdout + mutant.stderr
+        assert not list((path.parent / "__pycache__").glob("instruction_contract_core.*.pyc"))
+        if diagnostic.startswith("Stale"):
+            assert "Traceback" not in mutant.stderr
+        with pytest.raises(AssertionError):
+            assert mutant.returncode == 0, "This fixed inert case must pass native validation."
+
+
+def test_repeated_and_nested_empty_list_boundaries_remain_bounded() -> None:
+    """Near-limit container input preserves exact output without repeated suffix scans."""
+    program = "\n".join(
+        [
+            "import sys",
+            f"sys.path.insert(0, {str(ROOT / '.github/scripts')!r})",
+            "import instruction_contract_core as c",
+            "cases = (",
+            "    ('> - '*150000+'-\\n', ()),",
+            (
+                "    ('-\\n\\n    [x](ignored.md)\\n\\n'*40000+'[live](target.md)',"
+                " ((160001, 'target.md'),)),"
+            ),
+            (
+                "    ('Text\\n-\\n    [x](ignored.md)\\n\\n'*30000+'[live](target.md)',"
+                " ((120001, 'target.md'),)),"
+            ),
+            ")",
+            "for text, expected in cases:",
+            "    assert len(text.encode('utf-8')) < c.MAXIMUM_INPUT_BYTES",
+            "    assert c.markdown_link_targets_from_text(text) == expected",
+        ]
+    )
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", program],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

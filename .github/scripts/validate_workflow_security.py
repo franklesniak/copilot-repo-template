@@ -230,8 +230,8 @@ def describe_workflow(document: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def check_executable_annotations(text: str, resolver: Callable[[str, str], str] | None) -> None:
-    """Bind each executable uses scalar to its own physical source line."""
+def check_executable_annotations(text: str, resolver: Callable[[str, str], str] | None) -> Any:
+    """Bind executable references to source lines and return the checked composition."""
     tree = yaml.compose(text, Loader=WorkflowLoader)
     lines = text.splitlines()
 
@@ -265,6 +265,30 @@ def check_executable_annotations(text: str, resolver: Callable[[str, str], str] 
                 raise PolicyError("Steps must be a sequence")
             for step in steps.value:
                 check(step)
+    return tree
+
+
+def workflow_comment_lines(tree: Any, lines: list[str]) -> list[str]:
+    """Separate real YAML comments from scalar content using the checked source marks."""
+    pending = [tree]
+    seen: set[int] = set()
+    scalar_lines: set[int] = set()
+    while pending:
+        node = pending.pop()
+        if id(node) in seen:
+            continue
+        seen.add(id(node))
+        if isinstance(node, yaml.ScalarNode):
+            # Column-zero end marks precede the next line; quoted closing lines
+            # with a nonzero end column still belong to the scalar.
+            end = node.end_mark.line + bool(node.end_mark.column)
+            scalar_lines.update(range(node.start_mark.line, end))
+        elif isinstance(node, yaml.MappingNode):
+            for key, value in node.value:
+                pending.extend((key, value))
+        elif isinstance(node, yaml.SequenceNode):
+            pending.extend(node.value)
+    return ["" if number in scalar_lines else line for number, line in enumerate(lines)]
 
 
 def validate_workflow(
@@ -272,7 +296,7 @@ def validate_workflow(
 ) -> dict[str, Any]:
     """Enforce universal rules before comparing reviewed required execution controls."""
     document = parse_yaml(text)
-    check_executable_annotations(text, resolver)
+    tree = check_executable_annotations(text, resolver)
     events = document.get("on")
     names = {events} if isinstance(events, str) else set(events or [])
     if not names or names & {"pull_request_target", "workflow_run"}:
@@ -282,34 +306,22 @@ def validate_workflow(
     jobs = document.get("jobs")
     if not isinstance(jobs, dict) or not jobs:
         raise PolicyError("Workflow must declare jobs")
-    lines = text.splitlines()
-    references = []
-    for line in lines:
-        if line.lstrip().startswith("#"):
-            continue
-        match = USES_LINE.match(line)
-        if match:
-            check_reference(match[1], line, resolver)
-            references.append(match[1])
     for job in jobs.values():
         if not isinstance(job, dict) or job.get("permissions") not in ({}, {"contents": "read"}):
             raise PolicyError("Job permissions must be explicit and read-only")
-        if "uses" in job and job["uses"] not in references:
-            raise PolicyError("Reusable workflow reference must have a literal annotated uses line")
         for step in job.get("steps", []):
             if not isinstance(step, dict):
                 raise PolicyError("Workflow step must be a mapping")
             if "parallel" in step:
                 raise PolicyError("Parallel step groups require recursive workflow policy support")
             reference = step.get("uses")
-            if reference is not None and reference not in references:
-                raise PolicyError("Action reference must have a literal annotated uses line")
             if (
                 reference
                 and reference.split("@", 1)[0].casefold() == "actions/checkout"
                 and step.get("with", {}).get("persist-credentials") is not False
             ):
                 raise PolicyError("Checkout must set persist-credentials: false")
+    lines = workflow_comment_lines(tree, text.splitlines())
     check_commented_examples(lines, resolver)
     return describe_workflow(document)
 

@@ -86,7 +86,13 @@ def validation_errors_for(
     example: dict[str, Any],
 ) -> tuple[str, ...]:
     """Return bounded validation errors for one invalid example."""
-    errors = sorted(validator.iter_errors(example), key=lambda error: error.json_path)
+    referencing_errors = cast(Any, importlib.import_module("referencing.exceptions"))
+    try:
+        errors = sorted(validator.iter_errors(example), key=lambda error: error.json_path)
+    except referencing_errors.Unresolvable as error:
+        raise PlaceholderExampleValidationError(
+            "Unable to resolve a placeholder example schema reference."
+        ) from error
     return tuple(f"{error.json_path}: {error.message}" for error in errors[:DIAGNOSTIC_LIMIT])
 
 
@@ -99,7 +105,8 @@ def validate_invalid_examples(
     """Return failures for invalid examples that unexpectedly validate."""
     validator_class = import_jsonschema_validator()
     schema = load_json_object(schema_path, schema_path.relative_to(repo_root).as_posix())
-    validator = validator_class(schema)
+    referencing_module = cast(Any, importlib.import_module("referencing"))
+    validator = validator_class(schema, registry=referencing_module.Registry())
     failures: list[str] = []
     for example_path in iter_invalid_examples(examples_dir, repo_root):
         relative_example_path = example_path.relative_to(repo_root).as_posix()

@@ -2214,7 +2214,7 @@ def markdown_link_container(
 ) -> tuple[str, int] | None:
     """Recognize one quote or list prefix in a column-expanded structural view."""
     start = markdown_prefix_end(line, offset)
-    if start - offset > 3 or start == len(line):
+    if start - offset > 3 or start >= len(line):
         return None
     if line[start] == ">":
         end = start + 1
@@ -2249,6 +2249,7 @@ def markdown_indented_code_lines(
     code_lines: set[int] = set()
     containers: list[tuple[str, int]] = []
     quote_positions: list[int] = []
+    empty_list: int | None = None
     paragraph_active = False
     definition_end = 0
     active_fence: MarkdownFence | None = None
@@ -2301,6 +2302,10 @@ def markdown_indented_code_lines(
             matched += 1
         content = line[offset:]
         blank = not content.strip(" ")
+        if blank and empty_list is not None:
+            # An item starting empty cannot consume another initial blank line.
+            matched = min(matched, empty_list)
+        empty_list = None
         if active_html_end is not None:
             if matched == len(containers):
                 code_lines.add(line_number)
@@ -2311,6 +2316,11 @@ def markdown_indented_code_lines(
             active_html_end = None
         html_end = markdown_link_html_block_end(content, paragraph_active=paragraph_active)
         heading = is_policy_heading(content)
+        setext = (
+            paragraph_active
+            and matched == len(containers)
+            and re.fullmatch(r" {0,3}(?:=+|-+)[ ]*", content) is not None
+        )
         separator = is_policy_thematic_break(content) or (
             re.fullmatch(r" {0,3}(?:=+|-+)[ ]*", content) is not None
         )
@@ -2335,7 +2345,7 @@ def markdown_indented_code_lines(
         while quote_positions and quote_positions[-1] >= matched:
             quote_positions.pop()
         paragraph_active = False
-        if blank:
+        if blank or setext:
             continue
         thematic_start, thematic_end = markdown_thematic_suffix(line)
         while not (
@@ -2348,6 +2358,8 @@ def markdown_indented_code_lines(
             kind, end = container
             if kind == "quote":
                 quote_positions.append(len(containers))
+            if kind == "list" and markdown_prefix_end(line, end) >= len(line):
+                empty_list = len(containers)
             containers.append((kind, end - offset))
             offset = end
         content = line[offset:]

@@ -2146,3 +2146,231 @@ def test_native_placeholder_unique_module_selection_and_cli_precedence(
     result = subprocess.run(command, capture_output=True, text=True, check=False, timeout=15)
     assert result.returncode == expected_exit, result.stderr
     assert disposition in result.stdout
+
+
+def run_placeholder_schema_control(
+    root: Path, adapter: str, *, missing_dependency: bool = False, unsafe_default: bool = False
+) -> subprocess.CompletedProcess[str]:
+    """Execute either standalone adapter with a safe public network seam."""
+    filename = (
+        "replace-template-placeholders.py"
+        if adapter == "manifest"
+        else "validate-placeholder-schema-examples.py"
+    )
+    command = (
+        ["scan", "--repo-root", str(root / "scan-root")]
+        if adapter == "manifest"
+        else ["--repo-root", str(root)]
+    )
+    program = (
+        "import importlib, io, json, runpy, sys, urllib.request\n"
+        "calls = []\n"
+        "def retrieve(request, *args, **kwargs):\n"
+        "    calls.append(request.full_url)\n"
+        "    return io.BytesIO(b'{}')\n"
+        "urllib.request.urlopen = retrieve\n"
+        "sys.dont_write_bytecode = True\n"
+        f"if {(unsafe_default and not missing_dependency)!r}:\n"
+        "    import jsonschema\n"
+        "    from referencing import Registry, Resource\n"
+        "    from referencing.jsonschema import DRAFT202012\n"
+        "    original_validator = jsonschema.Draft202012Validator\n"
+        "    def retrieve_schema(uri):\n"
+        "        with urllib.request.urlopen(urllib.request.Request(uri)) as response:\n"
+        "            return Resource(contents=json.load(response), specification=DRAFT202012)\n"
+        "    def dependency_default(schema, *args, **kwargs):\n"
+        "        if 'registry' not in kwargs:\n"
+        "            kwargs['registry'] = Registry(retrieve=retrieve_schema)\n"
+        "        return original_validator(schema, *args, **kwargs)\n"
+        "    dependency_default.check_schema = original_validator.check_schema\n"
+        "    jsonschema.Draft202012Validator = dependency_default\n"
+        "original_import = importlib.import_module\n"
+        "def optional_import(name, *args, **kwargs):\n"
+        f"    if {missing_dependency!r} and name == 'jsonschema':\n"
+        "        raise ImportError('private missing optional dependency')\n"
+        "    return original_import(name, *args, **kwargs)\n"
+        "importlib.import_module = optional_import\n"
+        f"sys.argv = {[str(root / '.github/scripts' / filename), *command]!r}\n"
+        "try:\n"
+        "    runpy.run_path(sys.argv[0], run_name='__main__')\n"
+        "finally:\n"
+        "    print('REFERENCE_RETRIEVALS=' + json.dumps(calls))\n"
+    )
+    return subprocess.run(
+        [sys.executable, "-c", program],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+
+def copy_placeholder_schema_adapter(root: Path, adapter: str) -> Path:
+    """Deploy each adapter independently of instruction/sync runtime files."""
+    if adapter == "manifest":
+        script = _copy_standalone_placeholder_tool(root)
+        write_file(root / "scan-root/README.md", "Clean application documentation.\n")
+    else:
+        script = root / ".github/scripts/validate-placeholder-schema-examples.py"
+        write_file(script, read_file(REPO_ROOT / ".github/scripts" / script.name))
+        write_json(
+            root / "schemas/template-placeholders.schema.json",
+            {"type": "object", "required": ["required"]},
+        )
+        write_json(root / "schemas/examples/template-placeholders/invalid/missing.json", {})
+    assert not (root / ".template-sync").exists()
+    assert not (root / ".github/scripts/instruction_contract_support.py").exists()
+    return script
+
+
+@pytest.mark.parametrize("adapter", ["manifest", "examples"])
+@pytest.mark.parametrize("keyword", ["$ref", "$dynamicRef"])
+@pytest.mark.parametrize("reference", ["https://schema.invalid/private", "file:///private.json"])
+def test_placeholder_schema_adapters_refuse_external_retrieval(
+    tmp_path: Path, adapter: str, keyword: str, reference: str
+) -> None:
+    """Both real CLIs reject unreachable schemas without touching their URI."""
+    copy_placeholder_schema_adapter(tmp_path, adapter)
+    path = tmp_path / "schemas/template-placeholders.schema.json"
+    schema = json.loads(read_file(path))
+    schema["allOf"] = [{keyword: reference}]
+    write_json(path, schema)
+    result = run_placeholder_schema_control(tmp_path, adapter)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Unable to resolve a placeholder" in result.stderr
+    assert "REFERENCE_RETRIEVALS=[]" in result.stdout
+    assert "Traceback" not in result.stderr
+    assert reference not in result.stderr
+
+
+@pytest.mark.parametrize("adapter", ["manifest", "examples"])
+def test_placeholder_schema_registry_removal_has_native_failure_oracle(
+    tmp_path: Path, adapter: str
+) -> None:
+    """Only restoring implicit retrieval changes a fixed failure into success."""
+    script = copy_placeholder_schema_adapter(tmp_path, adapter)
+    path = tmp_path / "schemas/template-placeholders.schema.json"
+    schema = json.loads(read_file(path))
+    schema["allOf"] = [{"$ref": "https://schema.invalid/private"}]
+    write_json(path, schema)
+    rejected = run_placeholder_schema_control(tmp_path, adapter, unsafe_default=True)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert "REFERENCE_RETRIEVALS=[]" in rejected.stdout
+    source = read_file(script)
+    anchor = ", registry=referencing_module.Registry()"
+    assert source.count(anchor) == 1
+    write_file(script, source.replace(anchor, ""))
+    mutant = run_placeholder_schema_control(tmp_path, adapter, unsafe_default=True)
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    assert 'REFERENCE_RETRIEVALS=["https://schema.invalid/private"]' in mutant.stdout
+    assert "Traceback" not in mutant.stderr
+
+
+@pytest.mark.parametrize("adapter", ["manifest", "examples"])
+@pytest.mark.parametrize(
+    "case", ["fragment", "annotations", "missing-fragment", "missing-dependency"]
+)
+def test_placeholder_schema_adapter_compatibility(tmp_path: Path, adapter: str, case: str) -> None:
+    """Local references and optional import behavior survive independent deployment."""
+    copy_placeholder_schema_adapter(tmp_path, adapter)
+    path = tmp_path / "schemas/template-placeholders.schema.json"
+    schema = json.loads(read_file(path))
+    if case == "fragment":
+        schema.setdefault("$defs", {})["local"] = {"type": "object"}
+        schema["allOf"] = [{"$ref": "#/$defs/local"}]
+    elif case == "annotations":
+        schema["examples"] = [{"$ref": 7, "$dynamicRef": "https://schema.invalid/data"}]
+    elif case == "missing-fragment":
+        schema["allOf"] = [{"$ref": "#/$defs/missing"}]
+    write_json(path, schema)
+    result = run_placeholder_schema_control(
+        tmp_path, adapter, missing_dependency=case == "missing-dependency"
+    )
+    expected = (
+        1
+        if case == "missing-fragment" or (case == "missing-dependency" and adapter == "examples")
+        else 0
+    )
+    assert result.returncode == expected, result.stdout + result.stderr
+    assert "REFERENCE_RETRIEVALS=[]" in result.stdout
+    if case == "missing-dependency" and adapter == "examples":
+        assert "jsonschema is unavailable" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_placeholder_invalid_example_adapter_still_rejects_valid_examples(tmp_path: Path) -> None:
+    """Offline resolution must not turn the invalid-example gate into unconditional success."""
+    copy_placeholder_schema_adapter(tmp_path, "examples")
+    write_json(
+        tmp_path / "schemas/examples/template-placeholders/invalid/missing.json", {"required": 1}
+    )
+    result = run_placeholder_schema_control(tmp_path, "examples")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "expected rejection but validation passed" in result.stdout
+    assert "REFERENCE_RETRIEVALS=[]" in result.stdout
+
+
+def test_placeholder_bootstrap_preserves_import_errors_and_clean_cli_failure(
+    tmp_path: Path,
+) -> None:
+    """The CLI wrapper suppresses chained details without changing library exceptions."""
+    script = copy_placeholder_schema_adapter(tmp_path, "manifest")
+    path = tmp_path / "schemas/template-placeholders.schema.json"
+    schema = json.loads(read_file(path))
+    schema["allOf"] = [{"$ref": "https://schema.invalid/private"}]
+    write_json(path, schema)
+    rejected = run_placeholder_schema_control(tmp_path, "manifest")
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert (
+        rejected.stderr.strip()
+        == "ERROR: Unable to resolve a placeholder manifest schema reference."
+    )
+    assert "REFERENCE_RETRIEVALS=[]" in rejected.stdout
+    program = (
+        "import importlib.util, io, sys, urllib.request\n"
+        "sys.dont_write_bytecode = True\n"
+        "calls = []\n"
+        "def retrieve(request, *args, **kwargs):\n"
+        "    calls.append(request.full_url)\n"
+        "    return io.BytesIO(b'{}')\n"
+        "urllib.request.urlopen = retrieve\n"
+        f"spec = importlib.util.spec_from_file_location('imported_placeholder', {str(script)!r})\n"
+        "module = importlib.util.module_from_spec(spec)\n"
+        "sys.modules[spec.name] = module\n"
+        "try:\n"
+        "    spec.loader.exec_module(module)\n"
+        "except module.PlaceholderError as error:\n"
+        "    print('LIBRARY_DOMAIN_ERROR=' + str(error))\n"
+        "else:\n"
+        "    raise AssertionError('Library import must reject the unresolved schema')\n"
+        "assert calls == []\n"
+    )
+    imported = subprocess.run(
+        [sys.executable, "-c", program],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert imported.returncode == 0, imported.stdout + imported.stderr
+    assert "LIBRARY_DOMAIN_ERROR=Unable to resolve" in imported.stdout
+    assert "Traceback" not in imported.stderr
+    source = read_file(script)
+    wrapper = (
+        "try:\n"
+        "    PLACEHOLDER_MANIFEST = load_placeholder_manifest()\n"
+        "except PlaceholderError as error:\n"
+        '    if __name__ == "__main__":\n'
+        '        print(f"ERROR: {error}", file=sys.stderr)\n'
+        "        raise SystemExit(1) from error\n"
+        "    raise\n"
+    )
+    assert source.count(wrapper) == 1
+    write_file(
+        script, source.replace(wrapper, "PLACEHOLDER_MANIFEST = load_placeholder_manifest()\n")
+    )
+    mutant = run_placeholder_schema_control(tmp_path, "manifest")
+    assert mutant.returncode == 1, mutant.stdout + mutant.stderr
+    assert "REFERENCE_RETRIEVALS=[]" in mutant.stdout
+    assert "Traceback" in mutant.stderr
+    assert "https://schema.invalid/private" in mutant.stderr

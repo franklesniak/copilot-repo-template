@@ -2246,3 +2246,179 @@ def test_actual_adoption_preflights_detect_independent_guard_removal(
         validated = run(tmp_path)
         expected = 0 if case == "modules" else 2 if case == "mode" else 1
         assert validated.returncode == expected, validated.stdout + validated.stderr
+
+
+def run_schema_reference_control(
+    root: Path, *, unsafe_default: bool = False
+) -> subprocess.CompletedProcess[str]:
+    """Run the deployed CLI behind a public retrieval stub, never an external server."""
+    program = (
+        "import io, json, runpy, sys, urllib.request\n"
+        "calls = []\n"
+        "def retrieve(request, *args, **kwargs):\n"
+        "    calls.append(request.full_url)\n"
+        "    return io.BytesIO(b'{}')\n"
+        "urllib.request.urlopen = retrieve\n"
+        "sys.dont_write_bytecode = True\n"
+        f"if {unsafe_default!r}:\n"
+        "    import jsonschema\n"
+        "    from referencing import Registry, Resource\n"
+        "    from referencing.jsonschema import DRAFT202012\n"
+        "    original_validator = jsonschema.Draft202012Validator\n"
+        "    def retrieve_schema(uri):\n"
+        "        with urllib.request.urlopen(urllib.request.Request(uri)) as response:\n"
+        "            return Resource(contents=json.load(response), specification=DRAFT202012)\n"
+        "    def dependency_default(schema, *args, **kwargs):\n"
+        "        if 'registry' not in kwargs:\n"
+        "            kwargs['registry'] = Registry(retrieve=retrieve_schema)\n"
+        "        return original_validator(schema, *args, **kwargs)\n"
+        "    dependency_default.check_schema = original_validator.check_schema\n"
+        "    jsonschema.Draft202012Validator = dependency_default\n"
+        "root = sys.argv[1]\n"
+        "sys.path.insert(0, root + '/.github/scripts')\n"
+        "sys.argv = [root + '/.github/scripts/validate_instruction_profile.py', '--repo-root', root]\n"
+        "try:\n"
+        "    runpy.run_path(sys.argv[0], run_name='__main__')\n"
+        "finally:\n"
+        "    print('REFERENCE_RETRIEVALS=' + json.dumps(calls))\n"
+    )
+    return subprocess.run(
+        [sys.executable, "-c", program, str(root)],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+
+@pytest.mark.parametrize("slot", ["profile", "contracts"])
+@pytest.mark.parametrize("keyword", ["$ref", "$dynamicRef"])
+@pytest.mark.parametrize(
+    "reference", ["https://schema.invalid/private", "file:///private.json", "other.json"]
+)
+def test_instruction_schema_external_references_fail_without_retrieval(
+    tmp_path: Path, slot: str, keyword: str, reference: str
+) -> None:
+    """Both standalone schema ingresses reject HTTP, file and relative references."""
+    profile(tmp_path, ["agent-instructions", "instruction-enforcement", "github-actions"])
+    path = tmp_path / f"schemas/instruction-{slot}.schema.json"
+    schema = json.loads(path.read_text(encoding="utf-8"))
+    schema["allOf"] = [{keyword: reference}]
+    write(tmp_path, path.relative_to(tmp_path).as_posix(), json.dumps(schema))
+    result = run_schema_reference_control(tmp_path)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Only local instruction schema references are supported." in result.stderr
+    assert "REFERENCE_RETRIEVALS=[]" in result.stdout
+    assert "Traceback" not in result.stderr
+    assert reference not in result.stderr
+    assert not (tmp_path / ".template-sync").exists()
+    assert not (tmp_path / ".pre-commit-config.yaml").exists()
+    assert not (tmp_path / "pyproject.toml").exists()
+
+
+@pytest.mark.parametrize(
+    ("case", "expected"),
+    [
+        ("fragment", 0),
+        ("anchor", 0),
+        ("dynamic-anchor", 0),
+        ("annotations", 0),
+        ("boolean", 0),
+        ("missing-fragment", 1),
+        ("invalid-reference-type", 1),
+        ("indirect-external", 1),
+        ("unused-external", 1),
+    ],
+)
+def test_instruction_schema_reference_boundaries(tmp_path: Path, case: str, expected: int) -> None:
+    """Preserve local reuse and annotation data while rejecting unresolved schemas."""
+    profile(tmp_path)
+    path = tmp_path / "schemas/instruction-profile.schema.json"
+    schema = json.loads(path.read_text(encoding="utf-8"))
+    if case == "fragment":
+        schema["$defs"]["local"] = {"type": "object"}
+        schema["allOf"] = [{"$ref": "#/$defs/local"}]
+    elif case in {"anchor", "dynamic-anchor"}:
+        anchor = "$dynamicAnchor" if case == "dynamic-anchor" else "$anchor"
+        schema["$defs"]["local"] = {anchor: "local", "type": "object"}
+        schema["allOf"] = [{"$dynamicRef" if case == "dynamic-anchor" else "$ref": "#local"}]
+    elif case == "annotations":
+        schema["examples"] = [{"$ref": 7, "$dynamicRef": "https://schema.invalid/data"}]
+        schema["default"] = {"$ref": "file:///annotation.json"}
+    elif case == "boolean":
+        schema["allOf"] = [True]
+    elif case == "missing-fragment":
+        schema["allOf"] = [{"$ref": "#/$defs/missing"}]
+    elif case == "invalid-reference-type":
+        schema["allOf"] = [{"$ref": 7}]
+    elif case == "indirect-external":
+        schema["examples"] = [{"$ref": "https://schema.invalid/indirect"}]
+        schema["allOf"] = [{"$ref": "#/examples/0"}]
+    else:
+        schema["$defs"]["unused"] = {"$ref": "https://schema.invalid/unused"}
+    write(tmp_path, path.relative_to(tmp_path).as_posix(), json.dumps(schema))
+    result = run_schema_reference_control(tmp_path)
+    assert result.returncode == expected, result.stdout + result.stderr
+    assert "REFERENCE_RETRIEVALS=[]" in result.stdout
+    assert "Traceback" not in result.stderr
+    if case in {"missing-fragment", "indirect-external"}:
+        assert "Unable to resolve an instruction validation schema reference." in result.stderr
+    elif case == "invalid-reference-type":
+        assert "Invalid instruction validation schema." in result.stderr
+
+
+@pytest.mark.parametrize("guard", ["preflight", "registry"])
+def test_instruction_schema_reference_guards_have_independent_native_oracles(
+    tmp_path: Path, guard: str
+) -> None:
+    """Removing either guard causes a fixed rejected deployment to pass natively."""
+    profile(tmp_path)
+    path = tmp_path / "schemas/instruction-profile.schema.json"
+    schema = json.loads(path.read_text(encoding="utf-8"))
+    if guard == "preflight":
+        schema["$defs"]["unused"] = {"$ref": "https://schema.invalid/unused"}
+    else:
+        schema["examples"] = [{"$ref": "https://schema.invalid/indirect"}]
+        schema["allOf"] = [{"$ref": "#/examples/0"}]
+    write(tmp_path, path.relative_to(tmp_path).as_posix(), json.dumps(schema))
+    rejected = run_schema_reference_control(tmp_path, unsafe_default=guard == "registry")
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert "REFERENCE_RETRIEVALS=[]" in rejected.stdout
+    source_path = tmp_path / ".github/scripts/instruction_contract_support.py"
+    source = source_path.read_text(encoding="utf-8")
+    anchor = (
+        "        validate_local_schema_references(schema, referencing_schema.DRAFT202012)\n"
+        if guard == "preflight"
+        else ", registry=referencing_module.Registry()"
+    )
+    assert source.count(anchor) == 1
+    source_path.write_text(source.replace(anchor, ""), encoding="utf-8")
+    mutant = run_schema_reference_control(tmp_path, unsafe_default=guard == "registry")
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    assert "Traceback" not in mutant.stderr
+    expected_calls = "[]" if guard == "preflight" else '["https://schema.invalid/indirect"]'
+    assert "REFERENCE_RETRIEVALS=" + expected_calls in mutant.stdout
+
+
+@pytest.mark.parametrize("nested", [False, True])
+@pytest.mark.parametrize("known", [False, True])
+def test_instruction_schema_reference_scan_preserves_dialect_semantics(
+    tmp_path: Path, nested: bool, known: bool
+) -> None:
+    """Root remains explicit 2020-12; nested known dialects retain existing evolution."""
+    profile(tmp_path)
+    path = tmp_path / "schemas/instruction-profile.schema.json"
+    schema = json.loads(path.read_text(encoding="utf-8"))
+    dialect = (
+        "http://json-schema.org/draft-07/schema#" if known else "https://schema.invalid/dialect"
+    )
+    declaration = {"$schema": dialect, "dependentRequired": {"mode": ["privateMissing"]}}
+    if nested:
+        schema["allOf"] = [declaration]
+    else:
+        schema.update(declaration)
+    write(tmp_path, path.relative_to(tmp_path).as_posix(), json.dumps(schema))
+    result = run_schema_reference_control(tmp_path)
+    assert result.returncode == (0 if nested and known else 1), result.stdout + result.stderr
+    assert "REFERENCE_RETRIEVALS=[]" in result.stdout
+    assert "Traceback" not in result.stderr
