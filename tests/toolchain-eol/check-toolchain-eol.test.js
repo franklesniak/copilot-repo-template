@@ -1515,3 +1515,203 @@ test('Azure unresolved compile-time declarations cannot capture callee defaults'
         assert.deepEqual(result.report.selectors, []);
     }
 });
+
+function azureMatrixPipeline(matrix, variables = {}, steps = azureNode('$(node)').steps) {
+    return { variables, jobs: [{ job: 'matrix', strategy: { matrix }, steps }] };
+}
+
+function assertAzureSelection(result, status, values, diagnostic) {
+    assert.equal(result.status, status, 'Azure selector native status');
+    assert.deepEqual(result.report.selectors.map((item) => item.rawValue), values,
+        'Azure effective selector values');
+    if (diagnostic) {
+        assert(result.report.problems.some((item) => diagnostic.test(item.message)),
+            'Azure selected-input diagnostic');
+    } else {
+        assert.deepEqual(result.report.problems, []);
+    }
+}
+
+test('Azure matrix variants preserve missing and invalid selectors across all Node inputs', () => {
+    for (const [task, input, extra] of [
+        ['UseNode@1', 'version', {}],
+        ['NodeTool@0', 'versionSpec', {}],
+        ['NodeTool@0', 'versionFilePath', { versionSource: 'fromFile' }],
+    ]) {
+        for (const bad of [{}, { node: '' }, { node: '  ' }, { node: null },
+            { node: ['24'] }, { node: { nested: '24' } }]) {
+            const repoRoot = makeTempRepo();
+            writeFile(repoRoot, '.nvmrc', '24\n');
+            const good = input === 'versionFilePath' ? '.nvmrc' : '24';
+            writeAzure(repoRoot, 'azure-pipelines.yml', azureMatrixPipeline(
+                { good: { node: good }, bad }, {},
+                [{ task, inputs: { ...extra, [input]: '$(node)' } }],
+            ));
+            assertAzureSelection(azureCli(repoRoot), 1, ['24'],
+                /no checked-in value|nonblank checked-in scalar|matrix variable must be a checked-in scalar/);
+        }
+    }
+});
+
+test('Azure matrix selection preserves real fallback and discards fully shadowed values', () => {
+    const cases = [
+        [{ first: { node: '24' }, second: {} }, { node: '24' }, 0, ['24'], undefined],
+        [{ first: { node: '24' }, second: { node: '' } }, { node: '24' }, 1, ['24'], /nonblank/],
+        [{ first: { node: '24' }, second: { node: null } }, { node: '24' }, 1, ['24'], /no checked-in value/],
+        [{ first: { node: '24' }, second: { node: '24' } }, { node: '18' }, 0, ['24'], undefined],
+        [{ first: { node: '24' }, second: {} }, { node: '18' }, 1, ['24', '18'], undefined],
+    ];
+    for (const [matrix, variables, status, expected, diagnostic] of cases) {
+        const repoRoot = makeTempRepo();
+        writeAzure(repoRoot, 'azure-pipelines.yml', azureMatrixPipeline(matrix, variables));
+        assertAzureSelection(azureCli(repoRoot), status, expected, diagnostic);
+    }
+});
+
+test('Azure matrix resolution retains supported compile-time variable syntax', () => {
+    const repoRoot = makeTempRepo();
+    writeAzure(repoRoot, 'azure-pipelines.yml', azureMatrixPipeline({
+        good: { node: '24' }, bad: {},
+    }, {}, azureNode('${{ variables.node }}').steps));
+    assertAzureSelection(azureCli(repoRoot), 1, ['24'], /no checked-in value/);
+});
+
+test('Azure matrix aliases stay correlated to their own variants and included templates', () => {
+    for (const viaTemplate of [false, true]) {
+        const repoRoot = makeTempRepo();
+        writeAzure(repoRoot, 'ci/node.yml', azureNode('$(selected)'));
+        const steps = viaTemplate ? [{ template: 'ci/node.yml' }] : azureNode('$(selected)').steps;
+        writeAzure(repoRoot, 'azure-pipelines.yml', azureMatrixPipeline({
+            first: { selected: '$(node)', node: '24' },
+            second: { selected: '$(node)' },
+        }, {}, steps));
+        assertAzureSelection(azureCli(repoRoot), 1, ['24'], /no checked-in value/);
+        writeAzure(repoRoot, 'azure-pipelines.yml', azureMatrixPipeline({
+            first: { selected: '$(node)', node: '24' },
+            second: { selected: '24' },
+        }, {}, steps));
+        assertAzureSelection(azureCli(repoRoot), 0, ['24']);
+    }
+});
+
+test('Azure selected matrix shapes fail while literal inputs ignore unrelated matrices', () => {
+    for (const matrix of ['$[ dependencies.generator.outputs.matrix ]', [], null, {}]) {
+        const repoRoot = makeTempRepo();
+        writeAzure(repoRoot, 'azure-pipelines.yml', azureMatrixPipeline(matrix, { node: '24' }));
+        assertAzureSelection(azureCli(repoRoot), 1, [], /matrix must be a nonempty checked-in mapping/);
+        writeAzure(repoRoot, 'azure-pipelines.yml', azureMatrixPipeline(matrix, {}, azureNode('24').steps));
+        assertAzureSelection(azureCli(repoRoot), 0, ['24']);
+    }
+    for (const bad of [null, '24', ['24']]) {
+        const repoRoot = makeTempRepo();
+        writeAzure(repoRoot, 'azure-pipelines.yml',
+            azureMatrixPipeline({ good: { node: '24' }, bad }));
+        assertAzureSelection(azureCli(repoRoot), 1, ['24'], /matrix leg must be a checked-in variable mapping/);
+    }
+});
+
+test('Azure parameter alternatives retain explicit blank defaults and values', () => {
+    for (const parameter of [
+        { name: 'node', default: '24', values: ['24', ''] },
+        { name: 'node', default: '', values: ['24'] },
+        { name: 'node', default: '24', values: ['24', '  '] },
+        { name: 'node', default: null, values: ['24'] },
+        { name: 'node', default: '24', values: ['24', null] },
+        { name: 'node', default: '24', values: ['24', { nested: '24' }] },
+        { name: 'node', default: '24', values: ['24', ['24']] },
+        { name: 'node', default: ['24'], values: ['24'] },
+    ]) {
+        const repoRoot = makeTempRepo();
+        const pipeline = parameterizedAzure('24');
+        pipeline.parameters = [parameter];
+        writeAzure(repoRoot, 'azure-pipelines.yml', pipeline);
+        assertAzureSelection(azureCli(repoRoot), 1, ['24'], /nonblank checked-in scalar|must resolve to a checked-in scalar/);
+    }
+    const repoRoot = makeTempRepo();
+    const pipeline = parameterizedAzure('24');
+    pipeline.parameters = [{ name: 'node', values: ['24'] }];
+    writeAzure(repoRoot, 'azure-pipelines.yml', pipeline);
+    assertAzureSelection(azureCli(repoRoot), 0, ['24']);
+});
+
+test('Azure selected-input empty checks preserve unrelated arguments and actual template bindings', () => {
+    const repoRoot = makeTempRepo();
+    writeAzure(repoRoot, 'azure-pipelines.yml', { extends: { template: 'ci/node.yml',
+        parameters: { node: '24', unrelated: '' } } });
+    const template = parameterizedAzure('18');
+    template.parameters[0].values = ['18', ''];
+    template.parameters.push({ name: 'unrelated', type: 'string' });
+    writeAzure(repoRoot, 'ci/node.yml', template);
+    assertAzureSelection(azureCli(repoRoot), 0, ['24']);
+    writeAzure(repoRoot, 'azure-pipelines.yml', { extends: { template: 'ci/node.yml',
+        parameters: { node: '', unrelated: '' } } });
+    assertAzureSelection(azureCli(repoRoot), 1, [], /nonblank checked-in scalar/);
+});
+
+test('Azure matrix map copying consumes the existing node work budget', () => {
+    for (const count of [400, 500]) {
+        const repoRoot = makeTempRepo();
+        const variables = Object.fromEntries(Array.from({ length: 400 }, (_, i) => ['unused' + i, 'x']));
+        const matrix = Object.fromEntries(Array.from({ length: count }, (_, i) => ['leg' + i, { node: '24' }]));
+        writeAzure(repoRoot, 'azure-pipelines.yml', azureMatrixPipeline(matrix, variables));
+        const fixed = (result) => assertAzureSelection(result, count === 400 ? 0 : 1, count === 400 ? ['24'] : [],
+            count === 400 ? undefined : /200000-node work limit/);
+        fixed(azureCli(repoRoot));
+        if (count === 500) {
+            const mutant = azureMutant(repoRoot, [[
+                'context.inventoryBudget.nodes += context.variables.size + Object.keys(entry).length;',
+                '// mutation: map copying is no longer charged',
+            ]]);
+            assert.throws(() => fixed(azureCli(repoRoot, [], mutant)), assert.AssertionError);
+        }
+    }
+});
+
+test('Azure fixed selector oracles detect isolated matrix and parameter guard mutations', () => {
+    const cases = [
+        ['matrix', [
+            ["if (context.strategy && Object.hasOwn(context.strategy, 'matrix'))", 'if (false)'],
+        ], azureMatrixPipeline({ good: { node: '24' }, bad: { node: '' } }, { node: '24' }),
+        1, ['24'], /nonblank/],
+        ['missing', [
+            ['if (values.length === 0) return fail', 'if (values.length === 0) return []; // removed diagnostic\n    // return fail'],
+        ], azureMatrixPipeline({ good: { node: '24' }, bad: {} }),
+        1, ['24'], /no checked-in value/],
+        ['override', [
+            ['variables: mergeMaps(context.variables, new Map(Object.entries(entry))),', 'variables: context.variables,'],
+        ], azureMatrixPipeline({ good: { node: '24' } }, { node: '18' }),
+        0, ['24'], undefined],
+        ['blank', [
+            ["if (typeof resolved.rawValue === 'string' && !resolved.rawValue.trim())", 'if (false)'],
+        ], { ...parameterizedAzure('24'), parameters: [{ name: 'node', default: '24', values: ['24', ''] }] },
+        1, ['24'], /nonblank/],
+        ['shape', [
+            ["return fail('Azure selected variable matrix must be a nonempty checked-in mapping.');", 'return [];'],
+        ], azureMatrixPipeline('$[ dependencies.generator.outputs.matrix ]', { node: '24' }),
+        1, [], /matrix must be a nonempty checked-in mapping/],
+        ['leg', [
+            ["fail('Azure selected matrix leg must be a checked-in variable mapping.');", '// mutation: incomplete leg ignored'],
+        ], azureMatrixPipeline({ good: { node: '24' }, bad: null }),
+        1, ['24'], /matrix leg must be a checked-in variable mapping/],
+        ['scalar', [
+            ["return fail('Azure selected matrix variable must be a checked-in scalar.');", '// mutation: structural variable allowed'],
+        ], azureMatrixPipeline({ good: { node: '24' }, bad: { node: ['24'] } }),
+        1, ['24'], /matrix variable must be a checked-in scalar/],
+        ['alternatives', [
+            ['if (values.length === 0) return fail', 'values = uniqueValues(values);\n    if (values.length === 0) return fail'],
+        ], { ...parameterizedAzure('24'), parameters: [{ name: 'node', default: '24', values: ['24', ''] }] },
+        1, ['24'], /nonblank/],
+        ['parameter-scalar', [
+            ['if (parameterMatch && Array.isArray(rawValue))', 'if (false)'],
+        ], { ...parameterizedAzure('24'), parameters: [{ name: 'node', default: '24', values: ['24', ['24']] }] },
+        1, ['24'], /parameter selector alternative must resolve to a checked-in scalar/],
+    ];
+    for (const [name, replacements, pipeline, status, expected, diagnostic] of cases) {
+        const repoRoot = makeTempRepo();
+        writeAzure(repoRoot, 'azure-pipelines.yml', pipeline);
+        const fixed = (result) => assertAzureSelection(result, status, expected, diagnostic);
+        fixed(azureCli(repoRoot));
+        assert.throws(() => fixed(azureCli(repoRoot, [], azureMutant(repoRoot, replacements))),
+            assert.AssertionError, name);
+    }
+});

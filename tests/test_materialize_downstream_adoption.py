@@ -6555,6 +6555,161 @@ def test_format_cli_error_preserves_domain_error_message() -> None:
     assert materializer.format_cli_error(error) == "safe domain message"
 
 
+def run_workflow_render_error_control(
+    read_path: str, error_kind: str, *, remove_formatter: bool = False
+) -> subprocess.CompletedProcess[str]:
+    """Exercise actual render reads and the real CLI boundary in a fresh interpreter."""
+    script = r"""
+import argparse
+import importlib.util
+import sys
+from pathlib import Path
+from unittest.mock import patch
+
+source_path = Path(sys.argv[1])
+sys.path.insert(0, str(source_path.parent))
+spec = importlib.util.spec_from_file_location("render_error_control", source_path)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+source = source_path.read_text(encoding="utf-8")
+if sys.argv[4] == "mutant":
+    anchor = 'f"Workflow contract rendering failed: {format_cli_error(error)}; "'
+    assert source.count(anchor) == 1
+    source = source.replace(anchor, 'f"Workflow contract rendering failed: {error}; "')
+exec(compile(source, str(source_path), "exec"), module.__dict__)
+root = source_path.parents[2]
+private = "PRIVATE_RENDER_FILENAME"
+errors = {
+    "permission": PermissionError(13, "Permission denied", private + "/source"),
+    "missing": FileNotFoundError(2, "No such file or directory", private + "/source"),
+    "two-names": OSError(5, "Input/output error", private + "/source", None, private + "/target"),
+    "no-strerror": OSError(None, None, private + "/source"),
+    "domain": ValueError("fixed domain diagnostic"),
+    "unexpected": RuntimeError("fixed unexpected diagnostic"),
+}
+injected_error = errors[sys.argv[3]]
+original_open = Path.open
+def injected_open(path, *args, **kwargs):
+    if path.as_posix().endswith(sys.argv[2]):
+        raise injected_error
+    return original_open(path, *args, **kwargs)
+
+def render(args):
+    try:
+        return module.render_workflow_contract(
+            root, (), {"github-actions"}, template_paths=[],
+            expected_workflows={".github/workflows/markdownlint.yml"},
+        )
+    except module.MaterializationError as error:
+        assert error.__cause__ is injected_error
+        raise
+
+module.parse_args = lambda argv: argparse.Namespace()
+module.materialize = render
+with patch.object(Path, "open", injected_open):
+    sys.exit(module.main([]))
+"""
+    return subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            "-c",
+            script,
+            str(SCRIPT_PATH),
+            read_path,
+            error_kind,
+            "mutant" if remove_formatter else "fixed",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize(
+    "read_path",
+    [
+        ".github/workflows/markdownlint.yml",
+        ".github/instructions/yaml.instructions.md",
+        "schemas/workflow-security-contract.schema.json",
+    ],
+)
+@pytest.mark.parametrize(
+    ("error_kind", "summary"),
+    [
+        ("permission", "PermissionError: Permission denied"),
+        ("missing", "FileNotFoundError: No such file or directory"),
+        ("two-names", "OSError: Input/output error"),
+        ("no-strerror", "OSError: I/O error"),
+    ],
+)
+def test_workflow_render_oserror_preserves_failure_without_filenames(
+    read_path: str, error_kind: str, summary: str
+) -> None:
+    """Workflow, example and schema read errors retain safe context and native failure."""
+    result = run_workflow_render_error_control(read_path, error_kind)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert f"ERROR: Workflow contract rendering failed: {summary};" in result.stderr
+    assert "review and update the installed materializer tool bundle" in result.stderr
+    assert "PRIVATE_RENDER_FILENAME" not in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.upstream_template_only
+def test_workflow_render_formatter_removal_breaks_fixed_privacy_oracle() -> None:
+    """Restoring only the old wrapper leaks filenames while preserving native failure."""
+    result = run_workflow_render_error_control(
+        ".github/workflows/markdownlint.yml", "two-names", remove_formatter=True
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Workflow contract rendering failed:" in result.stderr
+    assert "PRIVATE_RENDER_FILENAME/source" in result.stderr
+    assert "PRIVATE_RENDER_FILENAME/target" in result.stderr
+    assert "Traceback" not in result.stderr
+    with pytest.raises(AssertionError):
+        assert "PRIVATE_RENDER_FILENAME" not in result.stderr
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize("error_kind", ["domain", "unexpected"])
+def test_workflow_render_other_error_semantics_remain_visible(error_kind: str) -> None:
+    """Safe domain diagnostics survive, and unrelated runtime errors remain uncaught."""
+    result = run_workflow_render_error_control(".github/workflows/markdownlint.yml", error_kind)
+    assert result.returncode == 1, result.stdout + result.stderr
+    if error_kind == "domain":
+        assert "Workflow contract rendering failed: fixed domain diagnostic;" in result.stderr
+        assert "Traceback" not in result.stderr
+    else:
+        assert "RuntimeError: fixed unexpected diagnostic" in result.stderr
+        assert "Traceback" in result.stderr
+        assert "Workflow contract rendering failed:" not in result.stderr
+
+
+@pytest.mark.upstream_template_only
+@pytest.mark.parametrize("enforcement", [False, True])
+def test_workflow_render_preserves_named_optional_checks(enforcement: bool) -> None:
+    """Real successful rendering retains fixed check identities and optional omission."""
+    _, _, mappings = materializer.load_validated_manifest_context(REPO_ROOT)
+    modules = {"github-actions"}
+    if enforcement:
+        modules.update({"agent-instructions", "instruction-enforcement", "agent-codex"})
+    rendered = yaml.safe_load(materializer.render_workflow_contract(REPO_ROOT, mappings, modules))
+    workflows = rendered["workflows"]
+    assert (
+        workflows[".github/workflows/workflow-security.yml"]["jobs"]["validate"]["controls"]["name"]
+        == "Workflow Security"
+    )
+    instruction = ".github/workflows/instruction-contracts.yml"
+    if enforcement:
+        assert workflows[instruction]["jobs"]["validate"]["controls"]["name"] == (
+            "Instruction Contracts"
+        )
+    else:
+        assert instruction not in workflows
+
+
 def test_summarize_helper_failure_includes_exit_code_and_output() -> None:
     """The failure summary surfaces the exit code and the helper's findings."""
     summary = materializer.summarize_helper_failure(

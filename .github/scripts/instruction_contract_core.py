@@ -2276,6 +2276,7 @@ def markdown_indented_code_lines(
     *,
     include_indented: bool = True,
     active_definitions: set[int] | None = None,
+    content_columns: dict[int, int] | None = None,
 ) -> set[int]:
     """Locate literal blocks using container margins and paragraph context.
 
@@ -2338,6 +2339,8 @@ def markdown_indented_code_lines(
             else:
                 break
             matched += 1
+        if content_columns is not None:
+            content_columns[line_number] = offset
         content = line[offset:]
         blank = not content.strip(" ")
         if blank and empty_list is not None:
@@ -2400,6 +2403,8 @@ def markdown_indented_code_lines(
                 empty_list = len(containers)
             containers.append((kind, end - offset))
             offset = end
+        if content_columns is not None:
+            content_columns[line_number] = offset
         content = line[offset:]
         if markdown_prefix_end(line, offset) - offset >= 4:
             if include_indented:
@@ -2475,22 +2480,46 @@ def markdown_link_spans(
         if definition_lines is not None:
             definition_lines.update(active_definitions)
         return spans
-    literal_lines = markdown_indented_code_lines(text, include_indented=False)
-    spans = markdown_live_link_spans(text, fence_context, literal_lines)
+    content_columns: dict[int, int] = {}
+    literal_lines = markdown_indented_code_lines(
+        text, include_indented=False, content_columns=content_columns
+    )
+    spans = markdown_live_link_spans(
+        text, fence_context, literal_lines, content_columns=content_columns
+    )
     definition_ends = markdown_reference_definition_ends(spans)
     active_definitions = set()
     code_lines = markdown_indented_code_lines(
-        text, definition_ends, active_definitions=active_definitions
+        text,
+        definition_ends,
+        active_definitions=active_definitions,
+        content_columns=content_columns,
     )
     if reference_labels is not None:
         reference_labels.update(markdown_definition_labels(spans, active_definitions))
     if definition_lines is not None:
         definition_lines.update(active_definitions)
-    return markdown_live_link_spans(text, fence_context, code_lines)
+    return markdown_live_link_spans(
+        text, fence_context, code_lines, content_columns=content_columns
+    )
+
+
+def markdown_source_content(line: str, column: int) -> str:
+    """Remove structural columns while preserving raw content and partial tabs."""
+    offset = 0
+    consumed = 0
+    while offset < len(line) and (consumed < column or line[offset] in " \t"):
+        consumed += 4 - consumed % 4 if line[offset] == "\t" else 1
+        offset += 1
+    return " " * max(0, consumed - column) + line[offset:]
 
 
 def markdown_live_link_spans(
-    text: str, fence_context: str, code_lines: set[int]
+    text: str,
+    fence_context: str,
+    code_lines: set[int],
+    *,
+    content_columns: dict[int, int] | None = None,
 ) -> list[list[tuple[int, str]]]:
     """Partition live inline text without bridging fences, blank lines or blocks."""
     spans: list[list[tuple[int, str]]] = []
@@ -2525,7 +2554,9 @@ def markdown_live_link_spans(
                 current = []
             quote_depth = 0
         else:
-            if list_match:
+            if content_columns is not None:
+                content = markdown_source_content(line, content_columns.get(line_number, 0))
+            elif list_match:
                 content = list_match.group("rest")
             current.append((line_number, content))
             if heading or separator:

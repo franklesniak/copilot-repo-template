@@ -8,6 +8,7 @@ permissions:
   contents: read
 jobs:
   validate:
+    name: Instruction Contracts
     permissions:
       contents: read
     runs-on: ubuntu-latest

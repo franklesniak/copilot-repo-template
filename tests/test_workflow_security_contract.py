@@ -155,6 +155,58 @@ def test_each_owned_workflow_passes(path: str) -> None:
     assert policy.validate_workflow(policy.read_text(ROOT, path)) == expected
 
 
+def test_standalone_required_check_names_are_distinct() -> None:
+    """Fixed job identities remain independently selectable across owned workflows."""
+    expected = {
+        ".github/workflows/instruction-contracts.yml": "Instruction Contracts",
+        ".github/workflows/workflow-security.yml": "Workflow Security",
+    }
+    identities: dict[str, list[tuple[str, str]]] = {}
+    for path in sorted((ROOT / ".github/workflows").glob("*.yml")):
+        relative = path.relative_to(ROOT).as_posix()
+        document = policy.parse_yaml(path.read_text(encoding="utf-8"))
+        for key, job in document["jobs"].items():
+            identities.setdefault(job.get("name", key), []).append((relative, key))
+        if relative in expected:
+            assert document["jobs"]["validate"]["name"] == expected[relative]
+    for relative, name in expected.items():
+        assert identities[name] == [(relative, "validate")]
+
+
+@pytest.mark.parametrize(
+    ("relative", "name", "other_name"),
+    [
+        ("instruction-contracts.yml", "Instruction Contracts", "Workflow Security"),
+        ("workflow-security.yml", "Workflow Security", "Instruction Contracts"),
+    ],
+)
+@pytest.mark.parametrize("mutation", ["remove", "duplicate"])
+def test_standalone_check_name_drift_fails_natively(
+    tmp_path: Path, relative: str, name: str, other_name: str, mutation: str
+) -> None:
+    """Removing or colliding a name fails against the unchanged reviewed contract."""
+    copy_policy(tmp_path)
+    path = tmp_path / ".github/workflows" / relative
+    text = path.read_text(encoding="utf-8")
+    anchor = f"    name: {name}\n"
+    assert text.count(anchor) == 1
+    command = [
+        sys.executable,
+        "-B",
+        str(ROOT / ".github/scripts/validate_workflow_security.py"),
+        "--repo-root",
+        str(tmp_path),
+    ]
+    accepted = subprocess.run(command, check=False, capture_output=True, text=True, timeout=30)
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+    replacement = "" if mutation == "remove" else f"    name: {other_name}\n"
+    path.write_text(text.replace(anchor, replacement), encoding="utf-8")
+    rejected = subprocess.run(command, check=False, capture_output=True, text=True, timeout=30)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert "execution controls" in rejected.stderr
+    assert "Traceback" not in rejected.stderr
+
+
 @pytest.mark.parametrize(
     ("before", "after", "message"),
     [
@@ -391,18 +443,27 @@ def test_existing_concurrency_cancellation_change_is_rejected(tmp_path: Path) ->
 @pytest.mark.parametrize("change", ["rename", "delete", "add", "matrix", "fallback"])
 def test_job_check_identity_drift(tmp_path: Path, change: str) -> None:
     """Explicit names and fallback IDs cannot silently change an owned check identity."""
-    copy_policy(tmp_path)
+    contract = copy_policy(tmp_path)
     filename, before, after = {
         "rename": ("precommit-ci", "    name: Pre-commit\n", "    name: Renamed check\n"),
         "delete": ("precommit-ci", "    name: Pre-commit\n", ""),
-        "add": ("workflow-security", "  validate:\n", "  validate:\n    name: New check\n"),
+        "add": ("markdownlint", "  markdownlint:\n", "  markdownlint:\n    name: New check\n"),
         "matrix": ("python-ci", "    name: Test\n", "    name: Changed test\n"),
-        "fallback": ("workflow-security", "  validate:\n", "  different-id:\n"),
+        "fallback": ("markdownlint", "  markdownlint:\n", "  different-id:\n"),
     }[change]
-    path = tmp_path / f".github/workflows/{filename}.yml"
+    workflow_path = f".github/workflows/{filename}.yml"
+    path = tmp_path / workflow_path
     text = path.read_text(encoding="utf-8")
+    if change in {"add", "fallback"}:
+        assert "name" not in policy.parse_yaml(text)["jobs"]["markdownlint"]
+        assert (
+            "name" not in contract["workflows"][workflow_path]["jobs"]["markdownlint"]["controls"]
+        )
+    assert policy.validate_repository(tmp_path) == OWNED_WORKFLOW_COUNT
     assert text.count(before) == 1
-    path.write_text(text.replace(before, after), encoding="utf-8")
+    modified = text.replace(before, after)
+    policy.validate_workflow(modified)
+    path.write_text(modified, encoding="utf-8")
     with pytest.raises(policy.PolicyError, match="execution controls"):
         policy.validate_repository(tmp_path)
 

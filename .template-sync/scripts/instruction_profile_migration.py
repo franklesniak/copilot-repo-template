@@ -313,6 +313,27 @@ def validate_retained_catalog_selection(
             f"Retained instruction catalog conflicts with selected content: {path}: {anchor}. "
             "Review the selected content or supply an exact authorized declaration."
         )
+
+
+def validate_selected_claude_state(
+    staging_root: Path,
+    target_root: Path,
+    marker: dict[str, Any],
+    reports: dict[Path, core.InstructionContractReport],
+) -> None:
+    """Reject non-exceptable selected imports and the preserved target Git inventory."""
+    removed = {
+        item["path"]
+        for item in marker.get("protected_file_decisions", [])
+        if item["decision"] == "REMOVE-LOCAL"
+    }
+    selections: dict[str, Path] = {}
+
+    def selected_root(path: str) -> Path:
+        if path not in selections:
+            selections[path] = selected_content_root(path, staging_root, target_root, marker)[0]
+        return selections[path]
+
     active_imports = [
         item
         for content_root, report in reports.items()
@@ -321,7 +342,7 @@ def validate_retained_catalog_selection(
     ]
     if active_imports or reports[target_root].tracked_claude_local_memory:
         raise TemplateSyncMaterializationError(
-            "Retained instruction catalog conflicts with non-exceptable Claude instruction content. "
+            "Selected non-exceptable Claude instruction content conflicts with standalone migration. "
             "Review active imports and tracked local memory before migration."
         )
 
@@ -599,6 +620,7 @@ def _render_instruction_profile(
         }
         if retired_exceptions:
             source_decisions["retired_exceptions"] = retired_exceptions
+        validate_selected_claude_state(staging_root, target_root, marker, reports)
         if catalog_root == target_root or any(
             item["path"] == PROFILE_PATH and item["decision"] == "SKIP"
             for item in marker.get("protected_file_decisions", [])

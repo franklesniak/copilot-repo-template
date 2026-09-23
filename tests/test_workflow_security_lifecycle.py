@@ -924,13 +924,12 @@ def test_template_update_requires_review_and_preserves_adopter_workflow(
             "run: python .github/scripts/validate_workflow_security.py",
             "run: python .github/scripts/validate_workflow_security.py --strict",
         ),
-        "job-name": ("  validate:\n", "  validate:\n    name: Reviewed workflow check\n"),
+        "job-name": ("    name: Workflow Security\n", "    name: Reviewed workflow check\n"),
         "concurrency": ("jobs:\n", "concurrency: reviewed-${{ github.ref }}\n\njobs:\n"),
     }[change]
-    workflow.write_text(
-        workflow.read_text(encoding="utf-8").replace(original_control, updated_control),
-        encoding="utf-8",
-    )
+    workflow_text = workflow.read_text(encoding="utf-8")
+    assert workflow_text.count(original_control) == 1
+    workflow.write_text(workflow_text.replace(original_control, updated_control), encoding="utf-8")
     # Unreviewed source drift must not be blessed by rendering new fingerprints.
     rejected = lifecycle.run_materialize(source, target, "--decisions-file", "decisions.yml")
     assert rejected.returncode == 1, rejected.stdout + rejected.stderr

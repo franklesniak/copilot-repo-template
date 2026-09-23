@@ -69,6 +69,7 @@ workflows:
     jobs:
       validate:
         controls:
+          name: Instruction Contracts
           permissions:
             contents: read
           runs-on: ubuntu-latest
@@ -754,6 +755,7 @@ workflows:
     jobs:
       validate:
         controls:
+          name: Workflow Security
           permissions:
             contents: read
           runs-on: ubuntu-latest

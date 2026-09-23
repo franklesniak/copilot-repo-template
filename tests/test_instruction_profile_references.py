@@ -1300,7 +1300,7 @@ def test_indented_code_context_removal_and_blanket_skip_mutants(tmp_path: Path) 
         assert positive.returncode == expected_exit, positive.stdout + positive.stderr
         mutant = (
             source[:start]
-            + "def markdown_indented_code_lines(text, definition_ends=None, *, include_indented=True, active_definitions=None):\n    "
+            + "def markdown_indented_code_lines(text, definition_ends=None, *, include_indented=True, active_definitions=None, content_columns=None):\n    "
             + replacement
             + "\n\n"
             + source[stop:]
@@ -2585,5 +2585,262 @@ def test_combined_obligation_identity_scan_is_bounded_and_deterministic() -> Non
         text=True,
         check=False,
         timeout=15,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+NESTED_DEFINITION_CASES = (
+    ("[Guide]: target.md\n\n[Guide]\n", ((1, "target.md"),)),
+    ("- [Guide]: target.md\n\n[Guide]\n", ((1, "target.md"),)),
+    ("- - [Guide]: target.md\n\n[Guide]\n", ((1, "target.md"),)),
+    ("- + * [Guide]: target.md\n\n[Guide]\n", ((1, "target.md"),)),
+    ("1. 2) [Guide]: target.md\n\n[Guide]\n", ((1, "target.md"),)),
+    ("> - - [Guide]: target.md\n\n[Guide]\n", ((1, "target.md"),)),
+    ("- > [Guide]: target.md\n\n[Guide]\n", ((1, "target.md"),)),
+    ("> - > 1. [Guide]: target.md\n\n[Guide]\n", ((1, "target.md"),)),
+    ("-\t[Guide]: target.md\n\n[Guide]\n", ((1, "target.md"),)),
+    ("-\t-\t[Guide]: target.md\n\n[Guide]\n", ((1, "target.md"),)),
+    ("- outer\n\n  - [Guide]: target.md\n\n[Guide]\n", ((3, "target.md"),)),
+    ("- - outer\n\n    [Guide]: target.md\n\n[Guide]\n", ((3, "target.md"),)),
+    ("12. outer\n\n    [Guide]: target.md\n\n[Guide]\n", ((3, "target.md"),)),
+    ("- - [Guide]:\n    target.md\n\n[Guide]\n", ((1, "target.md"),)),
+    ("- - [Gui\n    de]: target.md\n\n[Gui de]\n", ((1, "target.md"),)),
+    ("- - paragraph\n    [Guide]: target.md\n\n[Guide]\n", ()),
+    ("- - paragraph\n[Guide]: target.md\n\n[Guide]\n", ()),
+    ("- -     [Guide]: target.md\n\n[Guide]\n", ()),
+    ("    - - [Guide]: target.md\n\n[Guide]\n", ()),
+    ("- - ```md\n    [Guide]: target.md\n    ```\n\n[Guide]\n", ()),
+    ("- - <div>\n    [Guide]: target.md\n    </div>\n\n[Guide]\n", ()),
+    ("`- - [Guide]: target.md`\n\n[Guide]\n", ()),
+    ("- -[Guide]: target.md\n\n[Guide]\n", ()),
+    ("\\- - [Guide]: target.md\n\n[Guide]\n", ()),
+    ("- - -\n[Guide]: target.md\n\n[Guide]\n", ((2, "target.md"),)),
+    ("- - [Guide]: target.md\n", ((1, "target.md"),)),
+    ("- - [Guide](target.md)\n", ((1, "target.md"),)),
+    ("> \t[Guide]: target.md\n\n[Guide]\n", ((1, "target.md"),)),
+    (">\t[Guide]: target.md\n\n[Guide]\n", ((1, "target.md"),)),
+    ("- - item\n\n\t[Guide]: target.md\n\n[Guide]\n", ((3, "target.md"),)),
+    ("- - [Guide]: <folder\tname>\n\n[Guide]\n", ((1, "folder\tname"),)),
+    ("- - [Guide]: target.md&#35;part\n\n[Guide]\n", ((1, "target.md&#35;part"),)),
+    (
+        "- - [Guide]: first.md\n    [GUIDE]: second.md\n\n[Guide]\n",
+        ((1, "first.md"), (2, "second.md")),
+    ),
+)
+
+
+@pytest.mark.parametrize(("body", "expected"), NESTED_DEFINITION_CASES)
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
+def test_nested_definition_containers_keep_raw_targets_and_physical_lines(
+    body: str, expected: tuple[tuple[int, str], ...], ending: str
+) -> None:
+    """Fixed CommonMark bodies distinguish real definitions from literal lookalikes."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.markdown_link_targets_from_text(body.replace("\n", ending)) == expected
+
+
+@pytest.mark.parametrize(("body", "expected"), NESTED_DEFINITION_CASES[:30])
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
+def test_deployed_nested_definition_containers_have_fixed_native_outcomes(
+    tmp_path: Path, body: str, expected: tuple[tuple[int, str], ...], ending: str
+) -> None:
+    """The no-sync CLI must reject real definitions and retain physical line reports."""
+    reference_fixture(tmp_path, "markdown-relative-link")
+    target = "docs/azure-devops-support.md"
+    text = "Agents MUST validate.\nAgents MUST preserve authority.\n\n" + body.replace(
+        "target.md", target
+    )
+    (tmp_path / "AGENTS.md").write_bytes(text.replace("\n", ending).encode("utf-8"))
+    result = run(tmp_path)
+    assert result.returncode == int(bool(expected)), result.stdout + result.stderr
+    assert "Traceback" not in result.stderr
+    if expected:
+        assert "Stale protected-guide references" in result.stdout
+        assert f"AGENTS.md:{expected[0][0] + 3}: azure-reference:" in result.stdout
+    assert not (tmp_path / ".template-sync").exists()
+
+
+@pytest.mark.parametrize(
+    ("line", "column", "expected"),
+    [
+        ("-\t-\t[Guide]: <folder\tname>", 8, "[Guide]: <folder\tname>"),
+        (">\t[Guide]: target.md", 2, "  [Guide]: target.md"),
+        ("> \t[Guide]: target.md", 2, "  [Guide]: target.md"),
+        ("    [Guide]: target.md", 4, "[Guide]: target.md"),
+        ("-", 2, ""),
+        ("- -", 4, ""),
+        ("[Guide]: <folder\tname>", 0, "[Guide]: <folder\tname>"),
+    ],
+)
+def test_nested_definition_source_columns_preserve_raw_content(
+    line: str, column: int, expected: str
+) -> None:
+    """Only structural prefix columns are consumed or expanded; raw targets stay exact."""
+    sys.path.insert(0, str(ROOT / ".github/scripts"))
+    import instruction_contract_core as core
+
+    assert core.markdown_source_content(line, column) == expected
+
+
+@pytest.mark.parametrize("mutation", ["handoff", "raw-offset"])
+def test_nested_definition_container_mutants_have_independent_native_oracles(
+    tmp_path: Path, monkeypatch: Any, mutation: str
+) -> None:
+    """Removing context or confusing structural columns with indices recreates false passes."""
+    monkeypatch.setenv("PYTHONDONTWRITEBYTECODE", "1")
+    reference_fixture(tmp_path, "markdown-relative-link")
+    prefix = "- - " if mutation == "handoff" else "-\t-\t"
+    write(
+        tmp_path,
+        "AGENTS.md",
+        "Agents MUST validate.\nAgents MUST preserve authority.\n\n"
+        + prefix
+        + "[Guide]: docs/azure-devops-support.md\n\n[Guide]\n",
+    )
+    require_reference_failure(tmp_path)
+    path = tmp_path / ".github/scripts/instruction_contract_core.py"
+    source = path.read_text(encoding="utf-8")
+    if mutation == "handoff":
+        guard = (
+            "            if content_columns is not None:\n"
+            "                content = markdown_source_content(line, content_columns.get(line_number, 0))\n"
+        )
+        replacement = guard.replace("if content_columns is not None:", "if False:")
+    else:
+        guard = '    return " " * max(0, consumed - column) + line[offset:]\n'
+        replacement = "    return line[column:]\n"
+    assert source.count(guard) == 1
+    path.write_text(source.replace(guard, replacement), encoding="utf-8", newline="\n")
+    mutant = run(tmp_path)
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    assert "Traceback" not in mutant.stderr
+    with pytest.raises(AssertionError):
+        require_reference_failure(tmp_path)
+    assert not list((path.parent / "__pycache__").glob("instruction_contract_core.*.pyc"))
+
+
+@pytest.mark.parametrize("change", ["none", "content", "path", "key", "kind", "target", "retained"])
+def test_nested_definition_exception_and_applicability_remain_exact(
+    tmp_path: Path, change: str
+) -> None:
+    """Nested definitions use the same narrow raw identity and content hash as flat links."""
+    document, _ = reference_fixture(tmp_path, "markdown-relative-link")
+    target = "docs/azure-devops-support.md&#35;setup"
+    text = (
+        "Agents MUST validate.\nAgents MUST preserve authority.\n\n"
+        f"-\t-\t[Guide]: {target}\n\n[Guide]\n"
+    )
+    write(tmp_path, "AGENTS.md", text)
+    require_reference_failure(tmp_path)
+    declaration = {
+        "path": "AGENTS.md",
+        "anchor": f"reference:azure-reference:markdown-relative-link:{target}",
+        "content_sha256": hashlib.sha256((tmp_path / "AGENTS.md").read_bytes()).hexdigest(),
+        "reason": "Exact nested definition fixture",
+        "authorization_basis": "Fixture declaration only",
+    }
+    if change == "content":
+        write(tmp_path, "AGENTS.md", text + "Changed local content.\n")
+    elif change == "path":
+        declaration["path"] = "CLAUDE.md"
+    elif change == "key":
+        declaration["anchor"] = declaration["anchor"].replace("azure-reference", "other-key")
+    elif change == "kind":
+        declaration["anchor"] = declaration["anchor"].replace(
+            "markdown-relative-link", "absolute-url"
+        )
+    elif change == "target":
+        declaration["anchor"] = declaration["anchor"].replace("&#35;", "#")
+    elif change == "retained":
+        document["modules"].append("azure-devops-platform")
+    document["exceptions"] = [] if change == "retained" else [declaration]
+    write(tmp_path, ".github/instruction-profile.yml", yaml.safe_dump(document))
+    result = run(tmp_path)
+    assert result.returncode == (0 if change in {"none", "retained"} else 1), (
+        result.stdout + result.stderr
+    )
+    assert "Traceback" not in result.stderr
+    if change == "none":
+        write(tmp_path, "AGENTS.md", text.replace("Agents MUST validate.\n", ""))
+        declaration["content_sha256"] = hashlib.sha256(
+            (tmp_path / "AGENTS.md").read_bytes()
+        ).hexdigest()
+        write(tmp_path, ".github/instruction-profile.yml", yaml.safe_dump(document))
+        unrelated = run(tmp_path)
+        assert unrelated.returncode == 1, unrelated.stdout + unrelated.stderr
+        assert "missing required phrase" in unrelated.stdout
+
+
+def test_nested_definition_migration_keeps_exact_exception_and_repeated_noop(
+    tmp_path: Path,
+) -> None:
+    """A precise existing marker waiver remains a precise standalone declaration."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    for root in (stage, target):
+        document, _ = reference_fixture(root, "markdown-relative-link")
+        write(
+            root,
+            "AGENTS.md",
+            "Agents MUST validate.\nAgents MUST preserve authority.\n\n"
+            "- - [Guide]: docs/azure-devops-support.md\n\n[Guide]\n",
+        )
+    marker = {
+        "template_sync": {
+            "included_modules": document["modules"],
+            "protected_guide_contract_waivers": [
+                {
+                    "path": "AGENTS.md",
+                    "contract_key": "azure-reference",
+                    "target_path": "docs/azure-devops-support.md",
+                    "reason": "Exact nested definition fixture",
+                    "authorization_basis": "Fixture declaration only",
+                }
+            ],
+        }
+    }
+    migrated = run_migration_schema_control(stage, target, marker_document=marker)
+    assert migrated.returncode == 0, migrated.stdout + migrated.stderr
+    path = stage / ".github/instruction-profile.yml"
+    before = path.read_bytes()
+    declarations = yaml.safe_load(before)["exceptions"]
+    assert len(declarations) == 1
+    assert declarations[0]["anchor"] == (
+        "reference:azure-reference:markdown-relative-link:docs/azure-devops-support.md"
+    )
+    assert (
+        declarations[0]["content_sha256"]
+        == hashlib.sha256((stage / "AGENTS.md").read_bytes()).hexdigest()
+    )
+    accepted = run(stage)
+    assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+    write(target, ".github/instruction-profile.yml", before.decode("utf-8"))
+    repeated = run_migration_schema_control(stage, target, marker_document=marker)
+    assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+    assert path.read_bytes() == before
+
+
+def test_nested_definition_container_scanning_remains_bounded() -> None:
+    """Deep and repeated container definitions preserve fixed inventories near the byte limit."""
+    program = (
+        "import sys; "
+        f"sys.path.insert(0, {str(ROOT / '.github/scripts')!r}); "
+        "import instruction_contract_core as c; "
+        "body='- '*450000+'[Guide]: target.md\\n\\n[Guide]\\n'; "
+        "assert len(body.encode()) < c.MAXIMUM_INPUT_BYTES; "
+        "assert c.markdown_link_targets_from_text(body)==((1,'target.md'),); "
+        "body='- - item\\n\\n    [Guide]: target.md\\n\\n'*20000; "
+        "assert len(body.encode()) < c.MAXIMUM_INPUT_BYTES; "
+        "targets=c.markdown_link_targets_from_text(body); "
+        "assert len(targets)==20000 and targets[0]==(3,'target.md') "
+        "and targets[-1]==(79999,'target.md')"
+    )
+    result = subprocess.run(
+        [sys.executable, "-B", "-c", program],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=20,
     )
     assert result.returncode == 0, result.stdout + result.stderr

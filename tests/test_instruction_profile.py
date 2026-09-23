@@ -2492,6 +2492,14 @@ def run_catalog_selection_adoption(
         "source = migration.Path(migration.__file__).read_text(encoding='utf-8')\n"
     )
     mutations = {
+        "claude-state": (
+            "        validate_selected_claude_state(staging_root, target_root, marker, reports)\n",
+            "",
+        ),
+        "claude-selection": (
+            "if item.path not in removed and selected_root(item.path) == content_root",
+            "if item.path not in removed",
+        ),
         "catalog": (
             (
                 "        catalog_root, _ = selected_content_root(\n"
@@ -3095,3 +3103,182 @@ def test_unrelated_or_inactive_removal_keeps_existing_reconciliation(
     validated = run(tmp_path)
     assert validated.returncode == 0, validated.stdout + validated.stderr
     assert not (tmp_path / ".template-sync").exists()
+
+
+def selected_claude_adoption_fixture(target: Path) -> dict[str, Any]:
+    """Install valid standalone Claude content before testing a selected local change."""
+    modules = {
+        "baseline",
+        "agent-instructions",
+        "instruction-enforcement",
+        "agent-claude",
+        "azure-devops-collaboration",
+    }
+    marker = enforcement_adoption_decisions(modules)
+    write(target, "decisions.yml", yaml.safe_dump(marker))
+    adopted = run_enforcement_adoption(target)
+    assert adopted.returncode == 0, adopted.stdout + adopted.stderr
+    validated = run(target)
+    assert validated.returncode == 0, validated.stdout + validated.stderr
+    assert not (target / ".template-sync").exists()
+    for decision in marker["template_sync"]["protected_file_decisions"]:
+        if decision["path"] == "CLAUDE.md":
+            decision["decision"] = "SKIP"
+    return marker
+
+
+@pytest.mark.parametrize("selection", ["take", "catalog-skip", "profile-skip"])
+@pytest.mark.parametrize("kind", ["import", "root-memory", "nested-memory"])
+def test_selected_claude_state_rejects_before_native_adoption(
+    tmp_path: Path, selection: str, kind: str
+) -> None:
+    """Every standalone output rejects non-exceptable selected content before writes."""
+    marker = selected_claude_adoption_fixture(tmp_path)
+    if kind == "import":
+        path = tmp_path / "CLAUDE.md"
+        write(tmp_path, "CLAUDE.md", "@private-policy.md\n\n" + path.read_text(encoding="utf-8"))
+        expected = "Active Claude imports:"
+    else:
+        memory = "sub/CLAUDE.local.md" if kind == "nested-memory" else "CLAUDE.local.md"
+        write(tmp_path, memory, "Private fixture instruction.\n")
+        for command in (
+            ["git", "init", "--quiet"],
+            ["git", "-c", "core.hooksPath=NUL", "add", "--force", "--", memory],
+        ):
+            initialized = subprocess.run(
+                command, cwd=tmp_path, capture_output=True, text=True, check=False
+            )
+            assert initialized.returncode == 0, initialized.stdout + initialized.stderr
+        expected = "Tracked Claude local memory:"
+    if selection != "take":
+        selected_path = (
+            ".github/instruction-contracts.yml"
+            if selection == "catalog-skip"
+            else ".github/instruction-profile.yml"
+        )
+        for decision in marker["template_sync"]["protected_file_decisions"]:
+            if decision["path"] == selected_path:
+                decision["decision"] = "SKIP"
+    write(tmp_path, "decisions.yml", yaml.safe_dump(marker))
+    before = snapshot_enforcement_target(tmp_path)
+    rejected = run_catalog_selection_adoption(tmp_path)
+    assert rejected.returncode == 1, rejected.stdout + rejected.stderr
+    assert "Selected non-exceptable Claude instruction content" in rejected.stderr
+    assert "Traceback" not in rejected.stderr
+    assert snapshot_enforcement_target(tmp_path) == before
+    mutant = run_catalog_selection_adoption(tmp_path, control="claude-state")
+    assert mutant.returncode == 0, mutant.stdout + mutant.stderr
+    if selection == "profile-skip":
+        assert snapshot_enforcement_target(tmp_path) == before
+    else:
+        assert snapshot_enforcement_target(tmp_path) != before
+    invalid = run(tmp_path)
+    assert invalid.returncode == 1, invalid.stdout + invalid.stderr
+    assert expected in invalid.stdout
+    assert "Missing required anchors:" not in invalid.stdout
+    assert "Stale protected-guide sections" not in invalid.stdout
+    assert not (tmp_path / ".template-sync").exists()
+    with pytest.raises(AssertionError):
+        assert mutant.returncode == 1
+
+
+@pytest.mark.parametrize("kind", ["clean", "discarded", "inline-code", "fenced-code", "untracked"])
+def test_selected_claude_state_preserves_valid_native_adoption(tmp_path: Path, kind: str) -> None:
+    """Selected clean bytes and literal/untracked examples preserve standalone no-op behavior."""
+    marker = selected_claude_adoption_fixture(tmp_path)
+    if kind == "untracked":
+        write(tmp_path, "CLAUDE.local.md", "Private untracked local instructions.\n")
+        initialized = subprocess.run(
+            ["git", "init", "--quiet"], cwd=tmp_path, capture_output=True, text=True, check=False
+        )
+        assert initialized.returncode == 0, initialized.stdout + initialized.stderr
+    elif kind != "clean":
+        prefix = {
+            "discarded": "@private-policy.md\n\n",
+            "inline-code": "`@private-policy.md`\n\n",
+            "fenced-code": "```text\n@private-policy.md\n```\n\n",
+        }[kind]
+        path = tmp_path / "CLAUDE.md"
+        write(tmp_path, "CLAUDE.md", prefix + path.read_text(encoding="utf-8"))
+        if kind == "discarded":
+            for decision in marker["template_sync"]["protected_file_decisions"]:
+                if decision["path"] == "CLAUDE.md":
+                    decision["decision"] = "TAKE"
+    write(tmp_path, "decisions.yml", yaml.safe_dump(marker))
+    if kind == "discarded":
+        before = snapshot_enforcement_target(tmp_path)
+        mutant = run_catalog_selection_adoption(tmp_path, control="claude-selection")
+        assert mutant.returncode == 1, mutant.stdout + mutant.stderr
+        assert "Selected non-exceptable Claude instruction content" in mutant.stderr
+        assert snapshot_enforcement_target(tmp_path) == before
+        with pytest.raises(AssertionError):
+            assert mutant.returncode == 0
+    adopted = run_catalog_selection_adoption(tmp_path)
+    assert adopted.returncode == 0, adopted.stdout + adopted.stderr
+    validated = run(tmp_path)
+    assert validated.returncode == 0, validated.stdout + validated.stderr
+    assert not (tmp_path / ".template-sync").exists()
+    profile_bytes = (tmp_path / ".github/instruction-profile.yml").read_bytes()
+    repeated = run_catalog_selection_adoption(tmp_path)
+    assert repeated.returncode == 0, repeated.stdout + repeated.stderr
+    assert (tmp_path / ".github/instruction-profile.yml").read_bytes() == profile_bytes
+    repeated_validation = run(tmp_path)
+    assert repeated_validation.returncode == 0, (
+        repeated_validation.stdout + repeated_validation.stderr
+    )
+
+
+@pytest.mark.parametrize("selected", [False, True])
+def test_staged_claude_import_respects_catalog_module_selection(
+    tmp_path: Path, selected: bool
+) -> None:
+    """The staged-content check reuses applicable core reports, including excluded contracts."""
+    stage, target = tmp_path / "stage", tmp_path / "target"
+    modules = ["baseline", "agent-instructions", "instruction-enforcement"]
+    if selected:
+        modules.append("agent-claude")
+    for root in (stage, target):
+        profile(root, modules)
+        write(
+            root,
+            ".github/instruction-contracts.yml",
+            yaml.safe_dump(
+                {
+                    "instruction_contracts": [
+                        {
+                            "path": "CLAUDE.md",
+                            "requires_modules": ["agent-instructions", "agent-claude"],
+                            "required_phrases": ["Retained Claude rule."],
+                        }
+                    ]
+                }
+            ),
+        )
+        write(root, "CLAUDE.md", "Retained Claude rule.\n")
+    write(stage, "CLAUDE.md", "@private-policy.md\n\nRetained Claude rule.\n")
+    marker = candidate_installation_marker(
+        {
+            "template_sync": {
+                "included_modules": modules,
+                "protected_file_decisions": [
+                    {
+                        "path": "CLAUDE.md",
+                        "decision": "TAKE",
+                        "adoption_mode": "minimal-preservation",
+                        "authorization_basis": "Fixture owner selects staged instructions",
+                        "authorized_scope": "CLAUDE.md",
+                        "reason": "Exact candidate selection",
+                    }
+                ],
+            }
+        }
+    )
+    before = (stage / ".github/instruction-profile.yml").read_bytes()
+    rendered = run_migration_schema_control(stage, target, marker_document=marker)
+    assert rendered.returncode == (1 if selected else 0), rendered.stdout + rendered.stderr
+    if selected:
+        assert "Selected non-exceptable Claude instruction content" in rendered.stderr
+        assert (stage / ".github/instruction-profile.yml").read_bytes() == before
+    else:
+        valid = run(stage)
+        assert valid.returncode == 0, valid.stdout + valid.stderr

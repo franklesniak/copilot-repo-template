@@ -559,24 +559,6 @@ function collectVariables(variables) {
     return result;
 }
 
-function collectAzureMatrixValues(strategy, key) {
-    if (!strategy || typeof strategy !== 'object' || !strategy.matrix) {
-        return [];
-    }
-
-    const values = [];
-    for (const matrixEntry of Object.values(strategy.matrix)) {
-        if (
-            matrixEntry &&
-            typeof matrixEntry === 'object' &&
-            Object.prototype.hasOwnProperty.call(matrixEntry, key)
-        ) {
-            values.push(matrixEntry[key]);
-        }
-    }
-    return uniqueValues(values);
-}
-
 function resolveAzureSelectorValue(value, context, sourcePath, problems, active = []) {
     if (context.inventoryBudget && ++context.inventoryBudget.nodes > AZURE_INVENTORY_LIMITS.nodes) {
         throw new Error('Azure inventory exceeds the 200000-node work limit.');
@@ -596,13 +578,48 @@ function resolveAzureSelectorValue(value, context, sourcePath, problems, active 
     let origin;
     if (parameterMatch) {
         const parameter = context.parameters.get(parameterMatch[1]);
-        values = parameter ? uniqueValues([parameter.defaultValue, ...parameter.values]) : [];
+        // An absent default is not an empty alternative; explicit values remain
+        // intact until the selected task validates them.
+        values = parameter ? [
+            ...(parameter.defaultValue === undefined ? [] : [parameter.defaultValue]),
+            ...parameter.values,
+        ] : [];
         origin = `parameters.${parameterMatch[1]} ${parameter && parameter.values.length ? 'default-or-values' : 'default'}`;
     } else if (variableMatch) {
         const name = variableMatch[1];
-        values = uniqueValues([
-            ...asArray(context.variables.get(name)), ...collectAzureMatrixValues(context.strategy, name),
-        ]);
+        if (context.strategy && Object.hasOwn(context.strategy, 'matrix')) {
+            const matrix = context.strategy.matrix;
+            if (!isMapping(matrix) || Object.keys(matrix).length === 0) {
+                return fail('Azure selected variable matrix must be a nonempty checked-in mapping.');
+            }
+            const resolved = [];
+            for (const [leg, entry] of Object.entries(matrix)) {
+                if (!isMapping(entry) || leg.includes('$')) {
+                    fail('Azure selected matrix leg must be a checked-in variable mapping.');
+                    continue;
+                }
+                // Charge map copying as work as well as recursive resolution.
+                if (context.inventoryBudget) {
+                    context.inventoryBudget.nodes += context.variables.size + Object.keys(entry).length;
+                    if (context.inventoryBudget.nodes > AZURE_INVENTORY_LIMITS.nodes) {
+                        throw new Error('Azure inventory exceeds the 200000-node work limit.');
+                    }
+                }
+                resolved.push(...resolveAzureSelectorValue(value, {
+                    ...context,
+                    variables: mergeMaps(context.variables, new Map(Object.entries(entry))),
+                    strategy: undefined,
+                    matrixEntry: entry,
+                }, sourcePath, problems, active));
+            }
+            return resolved;
+        }
+        const variable = context.variables.get(name);
+        if (context.matrixEntry && Object.hasOwn(context.matrixEntry, name) &&
+            variable !== null && typeof variable === 'object') {
+            return fail('Azure selected matrix variable must be a checked-in scalar.');
+        }
+        values = asArray(variable);
         origin = `variable-or-matrix.${name}`;
     } else {
         if (/\$\{|\$\(|\$\[/.test(value)) return fail(`Azure selector expression cannot be verified from checked-in YAML: ${value}`);
@@ -611,8 +628,26 @@ function resolveAzureSelectorValue(value, context, sourcePath, problems, active 
     if (values.length === 0) return fail(`Azure selector ${value.trim()} cannot be verified from checked-in YAML; no checked-in value is available.`);
     const identity = parameterMatch ? `parameter:${parameterMatch[1]}` : `variable:${variableMatch[1]}`;
     if (active.includes(identity) || active.length >= 100) return fail('Azure selector references are cyclic or exceed the 100-level nesting limit.');
-    return values.flatMap((rawValue) => resolveAzureSelectorValue(rawValue, context, sourcePath, problems, [...active, identity]))
+    return values.flatMap((rawValue) => {
+        if (parameterMatch && Array.isArray(rawValue)) {
+            return fail('Azure parameter selector alternative must resolve to a checked-in scalar.');
+        }
+        return resolveAzureSelectorValue(rawValue, context, sourcePath, problems, [...active, identity]);
+    })
         .map((resolved) => ({ ...resolved, origin }));
+}
+
+function resolveAzureNodeSelector(value, context, sourcePath, problems) {
+    return resolveAzureSelectorValue(value, context, sourcePath, problems).filter((resolved) => {
+        if (typeof resolved.rawValue === 'string' && !resolved.rawValue.trim()) {
+            problems.push({
+                path: sourcePath,
+                message: 'Azure Node selector must be a nonblank checked-in scalar.',
+            });
+            return false;
+        }
+        return true;
+    });
 }
 
 function isAzureNodeTask(step) {
@@ -641,7 +676,7 @@ function collectAzureStepSelectors(repoRoot, relativePipelinePath, steps, contex
             continue;
         }
         if (/^UseNode@1$/i.test(taskName) && Object.prototype.hasOwnProperty.call(inputs, 'version')) {
-            for (const resolved of resolveAzureSelectorValue(inputs.version, context, relativePipelinePath, problems)) {
+            for (const resolved of resolveAzureNodeSelector(inputs.version, context, relativePipelinePath, problems)) {
                 addSelector(selectors, {
                     selectorClass: 'ci-runtime',
                     sourceType: 'azure-pipelines:UseNode@1 version',
@@ -658,7 +693,7 @@ function collectAzureStepSelectors(repoRoot, relativePipelinePath, steps, contex
                 /^fromFile$/i.test(versionSource) &&
                 Object.prototype.hasOwnProperty.call(inputs, 'versionFilePath')
             ) {
-                for (const resolved of resolveAzureSelectorValue(inputs.versionFilePath, context, relativePipelinePath, problems)) {
+                for (const resolved of resolveAzureNodeSelector(inputs.versionFilePath, context, relativePipelinePath, problems)) {
                     for (const selector of readVersionFileSelector(
                         repoRoot,
                         resolved.rawValue,
@@ -670,7 +705,7 @@ function collectAzureStepSelectors(repoRoot, relativePipelinePath, steps, contex
                     }
                 }
             } else if (Object.prototype.hasOwnProperty.call(inputs, 'versionSpec')) {
-                for (const resolved of resolveAzureSelectorValue(inputs.versionSpec, context, relativePipelinePath, problems)) {
+                for (const resolved of resolveAzureNodeSelector(inputs.versionSpec, context, relativePipelinePath, problems)) {
                     addSelector(selectors, {
                         selectorClass: 'ci-runtime',
                         sourceType: 'azure-pipelines:NodeTool@0 versionSpec',

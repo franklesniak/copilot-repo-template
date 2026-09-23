@@ -2624,7 +2624,8 @@ def render_workflow_contract(
         jsonschema.SchemaError,
     ) as error:
         raise MaterializationError(
-            f"Workflow contract rendering failed: {error}; if the source format is newer, "
+            f"Workflow contract rendering failed: {format_cli_error(error)}; "
+            "if the source format is newer, "
             "review and update the installed materializer tool bundle."
         ) from error
 

@@ -8,6 +8,7 @@ permissions:
   contents: read
 jobs:
   validate:
+    name: Workflow Security
     permissions:
       contents: read
     runs-on: ubuntu-latest

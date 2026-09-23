@@ -22,6 +22,8 @@ Select `agent-instructions` and `instruction-enforcement` to retain the checker,
 
 The optional Python **project** module is never required. Baseline reuses pre-commit's Python environment; each dedicated host route installs Python, PyYAML and jsonschema. GitHub is the default host, and Azure is optional additive support. Azure YAML parsing locally does not establish service-backed pipeline or branch-policy validation.
 
+For GitHub branch protection or rulesets, select the **Instruction Contracts** job check after it has run successfully. Its job name distinguishes it from **Workflow Security**. Existing rulesets that required the previous `validate` check need an owner to select the intended named checks; updating workflow files does not update repository settings.
+
 ## Explicit modes
 
 Run `python .github/scripts/validate_instruction_profile.py` after installing its declared PyYAML and jsonschema dependencies. Missing, malformed or contradictory applicability data fails with a nonzero exit. Filesystem errors while resolving the default or explicitly supplied repository root also fail with a concise diagnostic that omits the exception's filename fields.
