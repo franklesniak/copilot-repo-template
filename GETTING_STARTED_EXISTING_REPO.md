@@ -1889,7 +1889,7 @@ If your project already uses pre-commit:
    **General hooks (recommended for all projects):**
    - `trailing-whitespace`
    - `end-of-file-fixer`
-   - `mixed-line-ending` (with `--fix=lf` when `.gitattributes` pins LF)
+   - `mixed-line-ending` (with `--fix=lf` when `.gitattributes` pins LF; exclude any path that must keep CR bytes)
    - `check-yaml`
    - `check-added-large-files`
 

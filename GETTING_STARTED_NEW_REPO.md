@@ -2384,7 +2384,7 @@ Terraform validate with tflint...............................Passed
 
 **Troubleshooting common failures:**
 
-- **Trailing whitespace / End of file / Mixed line ending:** These are auto-fixed. Re-run pre-commit and it should pass. On Windows, the line-ending fix can leave a file that `git status` lists but `git diff` shows as unchanged. Run `git add` on that file; it stages no change.
+- **Trailing whitespace / End of file / Mixed line ending:** These are auto-fixed. Re-run pre-commit and it should pass. On Windows, the line-ending fix can leave a file that `git status` lists but `git diff` shows as unchanged. Run `git add` on that file; it stages no change unless the file was committed with CRLF.
 - **JSON errors:** Check strict `.json` syntax; `.jsonc` is intentionally outside `check-json`.
 - **YAML errors:** Check for syntax errors in `.yml` files.
 - **Schema errors:** Run `pytest tests/test_schema_examples.py -v` after schema or schema-example changes, or `pre-commit run check-jsonschema --all-files` and `pre-commit run check-metaschema --all-files` to isolate hook failures.

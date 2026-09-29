@@ -31,7 +31,10 @@ repos:
       - id: end-of-file-fixer
       # .gitattributes pins LF, but a tool can still write CRLF to the
       # working tree. This hook rewrites that CRLF to LF before the commit.
-      # Exclude any path that .gitattributes pins to CRLF.
+      # It reads no .gitattributes rule: it rewrites every CR in any file
+      # that pre-commit detects as text. Exclude any path that must keep
+      # CR bytes: one pinned to eol=crlf, one marked -text or binary, a
+      # fixture that holds a lone CR, or a file committed with CRLF.
       - id: mixed-line-ending
         args: [--fix=lf]
       - id: check-yaml
