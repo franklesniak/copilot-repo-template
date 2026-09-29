@@ -8,6 +8,7 @@ import json
 import os
 import posixpath
 import re
+import shutil
 import subprocess
 import sys
 from collections import Counter
@@ -310,6 +311,22 @@ GIT_LFS_SHARED_SURFACE_TOKENS = {
         "*.dwg                         filter=lfs diff=lfs merge=lfs -text",
     ),
 }
+# The Claude session hook is mapped by the `.claude/**` pattern, so its blocks
+# are declared in that mapping's notes rather than in an exact-path mapping.
+CLAUDE_HOOK_PATH = ".claude/hooks/session-start.sh"
+CLAUDE_HOOK_MANIFEST_PATTERN = ".claude/**"
+CLAUDE_HOOK_INLINE_BLOCK_COUNTS = {
+    "baseline-only": 1,
+    "markdown-only": 1,
+    "terraform-only": 1,
+}
+CLAUDE_HOOK_TERRAFORM_TOKENS = (
+    "TERRAFORM_VERSION",
+    "terraform_version:",
+    'INSTALL_DIR="/usr/local/bin"',
+    "# Idempotency:",
+    "releases.hashicorp.com/terraform",
+)
 REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
     "markdown-reference-only": {
         "CONTRIBUTING.md": 2,
@@ -329,6 +346,7 @@ REFERENCE_ONLY_INLINE_BLOCK_COUNTS = {
         "GEMINI.md": 2,
         ".github/pull_request_template.md": 1,
         "docs/upstream-style-guides.md": 1,
+        "docs/PR_REVIEW_PROMPTS.md": 1,
     },
     "python-reference-only": {
         "OPTIONAL_CONFIGURATIONS.md": 1,
@@ -2636,6 +2654,7 @@ def test_template_sync_inline_markers_are_known_and_paired() -> None:
             *TEMPLATE_SYNC_SUPPORT_INLINE_BLOCK_COUNTS,
             *GITHUB_PLATFORM_INLINE_BLOCK_COUNTS,
             *GIT_LFS_INLINE_BLOCK_COUNTS,
+            CLAUDE_HOOK_PATH,
             *(
                 relative_path
                 for path_counts in REFERENCE_ONLY_INLINE_BLOCK_COUNTS.values()
@@ -2722,6 +2741,125 @@ def test_terraform_sync_retains_terraform_tooling_in_shared_surfaces() -> None:
         text = (REPO_ROOT / relative_path).read_text(encoding="utf-8")
         for required_token in required_tokens:
             assert required_token in text, f"{relative_path}: {required_token}"
+
+
+def _claude_hook_text_without(excluded_modules: Iterable[str]) -> str:
+    """Return the Claude hook after a simulated sync that excludes the given modules."""
+    all_modules = {module_name for module_name, _description in _module_rows_from_manifest()}
+    excluded_module_set = set(excluded_modules)
+    assert excluded_module_set <= all_modules, excluded_module_set - all_modules
+    return remove_inline_blocks_for_modules(
+        (REPO_ROOT / CLAUDE_HOOK_PATH).read_text(encoding="utf-8"),
+        all_modules - excluded_module_set,
+        relative_path=CLAUDE_HOOK_PATH,
+    )
+
+
+def _bash_syntax_errors(bash: str, script_text: str) -> str | None:
+    """Return Bash's parse diagnostics for ``script_text``, or ``None`` when it parses."""
+    # Send bytes: a Windows text-mode pipe would add carriage returns.
+    result = subprocess.run(
+        [bash, "-n"],
+        input=script_text.encode("utf-8"),
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode == 0:
+        return None
+    return result.stderr.decode("utf-8", "replace") or f"bash -n exited {result.returncode}"
+
+
+def test_claude_hook_inline_blocks_are_declared_for_template_sync() -> None:
+    """Each Claude hook block must be paired, strippable, and named in its mapping notes."""
+    mappings = _path_mapping_by_pattern()
+    governing_patterns = [
+        pattern for pattern in mappings if fnmatch.fnmatchcase(CLAUDE_HOOK_PATH, pattern)
+    ]
+    assert governing_patterns == [CLAUDE_HOOK_MANIFEST_PATTERN]
+    notes = mappings[CLAUDE_HOOK_MANIFEST_PATTERN].get("notes")
+    assert isinstance(notes, str), f"{CLAUDE_HOOK_MANIFEST_PATTERN} notes must describe blocks"
+    assert "Strip each block when its module is excluded." in notes
+
+    text = (REPO_ROOT / CLAUDE_HOOK_PATH).read_text(encoding="utf-8")
+    found_marker_names: set[str] = set()
+    for line in text.splitlines():
+        match = INLINE_BLOCK_MARKER_RE.match(line)
+        if match is not None:
+            found_marker_names.add(match.group("name"))
+    assert found_marker_names == set(CLAUDE_HOOK_INLINE_BLOCK_COUNTS)
+
+    for marker_name, expected_count in CLAUDE_HOOK_INLINE_BLOCK_COUNTS.items():
+        assert text.count(f"# template-sync: begin {marker_name}\n") == expected_count
+        assert text.count(f"# template-sync: end {marker_name}\n") == expected_count
+        remove_inline_block_family(text, marker_name, relative_path=CLAUDE_HOOK_PATH)
+        assert marker_name in notes, f"{CLAUDE_HOOK_MANIFEST_PATTERN} notes: {marker_name}"
+
+
+def test_non_terraform_sync_strips_terraform_setup_from_claude_hook() -> None:
+    """A sync without Terraform must drop the hook's Terraform setup and keep the rest."""
+    retained_text = _claude_hook_text_without(())
+    stripped_text = _claude_hook_text_without(("terraform",))
+
+    for token in CLAUDE_HOOK_TERRAFORM_TOKENS:
+        assert token in retained_text, token
+        assert token not in stripped_text, token
+    for token in ("persist_path_prepend", "ensure_pre_commit", "npm ci --ignore-scripts"):
+        assert token in stripped_text, token
+
+
+@pytest.mark.parametrize(
+    "excluded_modules",
+    [
+        pytest.param((), id="all-modules"),
+        pytest.param(("terraform",), id="without-terraform"),
+        pytest.param(("markdown", "terraform"), id="without-markdown-and-terraform"),
+        pytest.param(("baseline", "markdown"), id="without-baseline-and-markdown"),
+        pytest.param(("baseline", "markdown", "terraform"), id="without-all-hook-modules"),
+    ],
+)
+def test_claude_hook_stays_valid_bash_after_block_stripping(
+    excluded_modules: tuple[str, ...],
+) -> None:
+    """Each block combination must leave a hook that Bash can parse.
+
+    A misplaced marker can strip half of an ``if`` or a function body while
+    the token checks above still pass.
+    """
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("Bash is required to syntax-check the Claude hook")
+    assert bash is not None
+
+    errors = _bash_syntax_errors(bash, _claude_hook_text_without(excluded_modules))
+    assert errors is None, errors
+
+
+def test_claude_hook_syntax_oracle_rejects_a_misplaced_marker() -> None:
+    """The Bash parse check must fail when a marker leaves half a statement behind."""
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("Bash is required to syntax-check the Claude hook")
+    assert bash is not None
+
+    text = (REPO_ROOT / CLAUDE_HOOK_PATH).read_text(encoding="utf-8")
+    end_marker = "# template-sync: end terraform-only\n"
+    idempotency_close = "    exit 0\n  fi\nfi\n"
+    assert text.count(end_marker) == 1
+    assert text.count(idempotency_close) == 1
+    # Close the block before the idempotency check's outer `fi`, so stripping
+    # Terraform leaves that `fi` without its `if`.
+    mutant = text.replace(end_marker, "").replace(
+        idempotency_close, "    exit 0\n  fi\n" + end_marker + "fi\n"
+    )
+
+    original_stripped = remove_inline_block_family(
+        text, "terraform-only", relative_path=CLAUDE_HOOK_PATH
+    )
+    mutant_stripped = remove_inline_block_family(
+        mutant, "terraform-only", relative_path=CLAUDE_HOOK_PATH
+    )
+    assert _bash_syntax_errors(bash, original_stripped) is None
+    assert _bash_syntax_errors(bash, mutant_stripped) is not None
 
 
 def test_markdown_inline_blocks_are_declared_for_template_sync() -> None:

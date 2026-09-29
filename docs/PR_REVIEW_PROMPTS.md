@@ -4,7 +4,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-23
+- **Last Updated:** 2026-09-29
 - **Scope:** Ready-to-use prompts for responding to PR comments, code review
   feedback, branch management, and common false positives during code review.
 - **Related:** [Copilot Chat Prompts for Template Adoption](../COPILOT_CHAT_PROMPTS.md)
@@ -218,6 +218,7 @@ previous line is an ordered list, as long as the unordered list item is
 indented. If it's not markdownlint-compliant the way it currently is, fix it.
 ```
 
+<!-- template-sync: begin powershell-reference-only -->
 ## Version and Compatibility Clarifications
 
 ### PowerShell Version Support
@@ -231,3 +232,5 @@ PowerShell 7.6.x was recently released. So, the script must support
 Windows PowerShell 5.1, PowerShell 7.4.x, PowerShell 7.5.x, and PowerShell
 7.6.x. Please ensure this requirement is thoroughly clarified.
 ```
+
+<!-- template-sync: end powershell-reference-only -->

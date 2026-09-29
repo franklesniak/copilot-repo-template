@@ -1,13 +1,13 @@
 <!-- markdownlint-disable MD013 -->
 # Downstream Template Update Procedure
 
-**Version:** 1.3.20260923.0
+**Version:** 1.3.20260929.0
 
 ## Metadata
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-23
+- **Last Updated:** 2026-09-29
 - **Scope:** Defines the selective review procedure for downstream repositories that were created from, or adopted files from, this template repository. Covers manual and agent-assisted syncs from later upstream template changes, first-adoption preflight state, the first-adoption bootstrap command, the read-only first-adoption preflight/questionnaire mode, raw first-adoption state reporting, first-adoption quality-debt reports and suppressions, the adoption difficulties journal, one-shot first-adoption materialization, shell-safe first-adoption args files, package identity and collaboration-policy materialization, first-adoption structural convention assessment, first-adoption working-tree validation and doctor diagnostics, downstream local path ownership records, the human-readable view of the template sync manifest, required/recommended/deferred structural-change classification, protected-file decision records, the marker-aware retained-state validation helper command, the excluded-module cleanup report, the sync candidate table generator, post-adoption issue drafting, the generated adoption ledger review artifact, and the concise adoption summary for PR descriptions. Does not define an automated ongoing upstream sync tool.
 - **Related:** [Optional Configurations](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/OPTIONAL_CONFIGURATIONS.md), [Getting Started for New Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_NEW_REPO.md), [Getting Started for Existing Repositories](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/GETTING_STARTED_EXISTING_REPO.md), [Repository Copilot Instructions](.github/copilot-instructions.md)
 
@@ -1001,6 +1001,7 @@ The current `markdown-reference-only`, `powershell-reference-only`, `python-refe
 - `.github/instructions/json.instructions.md`, `.github/instructions/yaml.instructions.md`, `schemas/README.md`, `GETTING_STARTED_NEW_REPO.md`, and `GETTING_STARTED_EXISTING_REPO.md` for optional companion-guide links.
 - `OPTIONAL_CONFIGURATIONS.md` for optional Python guidance and YAML starter links.
 - `docs/upstream-style-guides.md` for the provenance record of each retained imported PowerShell or Terraform instruction guide.
+- `docs/PR_REVIEW_PROMPTS.md` for the PowerShell version-support prompt.
 
 The current `github-actions-reference-only` inline blocks live in:
 
@@ -1014,9 +1015,10 @@ The current `github-platform-reference-only` inline blocks live in:
 - `OPTIONAL_CONFIGURATIONS.md` for GitHub Dependabot optional configuration guidance.
 - `schemas/README.md` for GitHub Dependabot built-in schema validation guidance.
 
-The current `template-sync-support-reference-only` inline block lives in:
+The current `template-sync-support-reference-only` inline blocks live in:
 
 - `README.md` for the optional `.template-sync/` and `schemas/template-sync-*.schema.json` surface rows, which are removed when `template-sync-support` is excluded.
+- `CONTRIBUTING.md` for the Template-Sync Validation section, which is removed when `template-sync-support` is excluded.
 
 The current `github-data-ci-reference-only` inline blocks live in:
 
@@ -1041,6 +1043,7 @@ The current `markdown-only` inline blocks live in:
 
 - `.pre-commit-config.yaml` for outer and nested Markdown lint and placeholder checks.
 - `.github/workflows/precommit-ci.yml`, `.github/workflows/auto-fix-precommit.yml`, and `.azuredevops/pipelines/precommit.yml` for root Node dependency setup required by nested lint.
+- `.claude/hooks/session-start.sh` for the locked root Node dependency installation in Claude Code web sessions.
 
 The current `yaml-only` inline blocks live in:
 
@@ -1085,10 +1088,11 @@ The current `terraform-only` inline blocks live in:
 - `.github/workflows/precommit-ci.yml` for the Terraform and TFLint setup steps required only when those hooks are retained.
 - `.github/workflows/auto-fix-precommit.yml` for the Terraform and TFLint setup steps required only when those hooks are retained.
 - `.azuredevops/pipelines/precommit.yml` for the Terraform and TFLint setup steps required only when those hooks are retained.
+- `.claude/hooks/session-start.sh` for the Terraform installation in Claude Code web sessions. This block stays last in the hook because its idempotency check exits the hook early.
 
 After stripping `python-only` blocks, a downstream repository that keeps baseline but excludes `python` can run `pre-commit run --all-files` without Python project formatters or linters such as Black and Ruff. The tooling runtime and `requirements-pre-commit.txt` remain. If GitHub platform support is retained, the pip updater remains for that runner requirement; it disappears only when both baseline and Python are excluded.
 
-The baseline module owns both `.pre-commit-config.yaml` and the exact runner requirement. Aggregate and data-file pre-commit CI require baseline plus the matching host. Selecting data modules without baseline keeps their content but supplies no template-managed pre-commit configuration or data CI. A no-baseline agent profile removes the pre-commit provisioning block from the Claude hook, even if the downstream repository owns a separate local config. The hook's unrelated Terraform setup is unchanged.
+The baseline module owns both `.pre-commit-config.yaml` and the exact runner requirement. Aggregate and data-file pre-commit CI require baseline plus the matching host. Selecting data modules without baseline keeps their content but supplies no template-managed pre-commit configuration or data CI. A no-baseline agent profile removes the pre-commit provisioning block from the Claude hook, even if the downstream repository owns a separate local config. The hook's Terraform installation follows its own `terraform-only` block.
 
 After stripping `markdown-only` blocks, a downstream repository that excludes `markdown` should be able to run `pre-commit run --all-files` without installing Node.js or markdownlint.
 
@@ -1104,7 +1108,7 @@ After stripping `github-actions-only` blocks, a downstream repository that exclu
 
 After stripping `git-lfs-only` blocks, a downstream repository that excludes `git-lfs` should receive the baseline root `.gitattributes` without any `filter=lfs`, `diff=lfs`, or `merge=lfs` attributes.
 
-After stripping `terraform-only` blocks, a downstream repository that excludes `terraform` should be able to run `pre-commit run --all-files` and the retained non-Terraform workflows without installing HashiCorp Terraform or TFLint.
+After stripping `terraform-only` blocks, a downstream repository that excludes `terraform` should be able to run `pre-commit run --all-files` and the retained non-Terraform workflows without installing HashiCorp Terraform or TFLint. The Claude session hook also stops downloading Terraform.
 
 Record the resulting retain or strip decisions per affected path in the Step 7 per-file decision notes, and summarize them in the sync summary so the audit trail captures both the discovery from Step 4 and the resolution from Step 6.
 
