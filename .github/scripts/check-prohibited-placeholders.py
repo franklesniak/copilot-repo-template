@@ -1,14 +1,16 @@
 """Check Markdown docs for prohibited placeholder markers.
 
-The pre-commit hook calls this script with candidate Markdown paths. The
-checker intentionally stays dependency-free so it can run in the repo-local
-hook environment on Windows, macOS, Linux, and WSL.
+The pre-commit hook calls this script with candidate Markdown paths. A named
+path that does not exist fails the run, so a mistyped path in a hand run
+cannot pass silently. The checker intentionally stays dependency-free so it
+can run in the repo-local hook environment on Windows, macOS, Linux, and WSL.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from collections.abc import Iterable, Sequence
@@ -40,6 +42,12 @@ REMEDIATION_HINT = (
     "To suppress with explicit justification, add <!-- ALLOW-TBD: <reason> --> "
     'on the same line. See .github/instructions/docs.instructions.md "Prohibited Patterns".'
 )
+MISSING_PATH_HINT = (
+    "nothing is at this path, so there is nothing to check. "
+    "Relative paths are read from the repository root, not the current folder. "
+    "Check the path: a typo would otherwise pass silently, because a run that scans "
+    "nothing finds no placeholders."
+)
 
 
 @dataclass(frozen=True)
@@ -56,6 +64,21 @@ class Violation:
             f"{self.display_path}:{self.line_number}: prohibited placeholder "
             f"{json.dumps(self.matched_text)}; {REMEDIATION_HINT}"
         )
+
+
+@dataclass(frozen=True)
+class MissingPath:
+    """A named path with nothing at it, so the hook had nothing to scan."""
+
+    display_path: str
+
+    def format_message(self) -> str:
+        """Return the hook failure message for this missing path.
+
+        An empty argument is shown as ``""``, so the message never starts with a bare colon.
+        """
+        shown_path = self.display_path or '""'
+        return f"{shown_path}: {MISSING_PATH_HINT}"
 
 
 CONTAINER_KIND_LIST = "list"
@@ -124,11 +147,31 @@ def is_scan_target(relative_path: Path) -> bool:
     )
 
 
+def locate_path_argument(path_argument: str | Path, root: Path) -> Path:
+    """Return the location a path argument names: itself if absolute, else under ``root``."""
+    path = Path(path_argument)
+    return path if path.is_absolute() else root / path
+
+
+def is_missing_path(path_argument: str | Path, root: Path) -> bool:
+    """Return whether no filesystem entry exists at a path argument.
+
+    ``os.path.lexists`` is the filter pre-commit applies before it passes file
+    names to a hook, so a name that pre-commit passes is never missing here. A
+    symlink counts as present even when its target is gone; it keeps the skip
+    that ``resolve_candidate_path`` gives every symlink. An empty string names
+    nothing. It is checked before any ``Path`` conversion, because ``Path("")``
+    is ``Path(".")``, which would name the root folder itself.
+    """
+    if path_argument == "":
+        return True
+    return not os.path.lexists(locate_path_argument(path_argument, root))
+
+
 def resolve_candidate_path(path_argument: str | Path, root: Path) -> tuple[Path, str] | None:
     """Resolve a pre-commit path argument to a contained scan target."""
     root = root.resolve()
-    path = Path(path_argument)
-    candidate = path if path.is_absolute() else root / path
+    candidate = locate_path_argument(path_argument, root)
 
     if candidate.is_symlink() or not candidate.is_file():
         return None
@@ -354,12 +397,22 @@ def find_violations_in_text(text: str, display_path: str) -> list[Violation]:
     return violations
 
 
-def scan_files(path_arguments: Iterable[str | Path], root: Path = REPO_ROOT) -> list[Violation]:
-    """Find prohibited placeholder markers in candidate Markdown docs."""
-    violations: list[Violation] = []
+def scan_files(
+    path_arguments: Iterable[str | Path], root: Path = REPO_ROOT
+) -> list[Violation | MissingPath]:
+    """Find prohibited placeholder markers in candidate Markdown docs.
+
+    A path that exists but is not a scan target, such as a directory, a
+    symlink, a changelog, or a file outside ``docs/``, is skipped. A path that
+    does not exist is recorded as a ``MissingPath``, and the scan continues
+    with the remaining paths.
+    """
+    findings: list[Violation | MissingPath] = []
     for path_argument in path_arguments:
         candidate = resolve_candidate_path(path_argument, root)
         if candidate is None:
+            if is_missing_path(path_argument, root):
+                findings.append(MissingPath(display_path=str(path_argument)))
             continue
 
         path, display_path = candidate
@@ -368,9 +421,9 @@ def scan_files(path_arguments: Iterable[str | Path], root: Path = REPO_ROOT) -> 
         except OSError as error:
             raise FileReadError(display_path, error) from error
 
-        violations.extend(find_violations_in_text(text, display_path))
+        findings.extend(find_violations_in_text(text, display_path))
 
-    return violations
+    return findings
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -378,7 +431,14 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Check docs Markdown for prohibited placeholder markers."
     )
-    parser.add_argument("paths", nargs="*", help="Markdown files passed by pre-commit.")
+    parser.add_argument(
+        "paths",
+        nargs="*",
+        help=(
+            "Markdown files passed by pre-commit. Relative paths are read from the "
+            "repository root. A path that does not exist fails the run."
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -387,15 +447,18 @@ def main(argv: Sequence[str] | None = None, root: Path = REPO_ROOT) -> int:
     args = parse_args(argv)
 
     try:
-        violations = scan_files(args.paths, root=root)
+        findings = scan_files(args.paths, root=root)
     except FileReadError as error:
         print(error, file=sys.stderr)
         return 1
 
-    for violation in violations:
-        print(violation.format_message())
+    for finding in findings:
+        # A missing path is an input error, like an unreadable file, so it
+        # goes to stderr; placeholder matches stay on stdout.
+        output_stream = sys.stderr if isinstance(finding, MissingPath) else sys.stdout
+        print(finding.format_message(), file=output_stream)
 
-    return 1 if violations else 0
+    return 1 if findings else 0
 
 
 if __name__ == "__main__":
