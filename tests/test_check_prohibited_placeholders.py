@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import os
 import sys
 from collections.abc import Iterable
 from pathlib import Path
@@ -487,3 +488,105 @@ def test_main_reports_actionable_failure_message(
     assert "replace with a measurable value" in captured.out
     assert "<!-- ALLOW-TBD: <reason> -->" in captured.out
     assert '.github/instructions/docs.instructions.md "Prohibited Patterns"' in captured.out
+
+
+@pytest.mark.parametrize(
+    ("missing_path", "is_absolute"),
+    [
+        ("docs/spec/exmaple.md", False),
+        ("docs/spec/exmaple.md", True),
+        ("docs/sepc/example.md", False),
+        ("docs/spec/deleted.md", False),
+        ("READMEE.md", False),
+    ],
+    ids=["file-typo", "absolute-file-typo", "folder-typo", "deleted-file", "outside-docs-typo"],
+)
+def test_main_refuses_a_missing_path(
+    tmp_path: Path,
+    capsys: Any,
+    missing_path: str,
+    is_absolute: bool,
+) -> None:
+    """A named path that does not exist fails the run by name instead of passing silently."""
+    write_file(tmp_path / "docs" / "spec" / "example.md", "Measured value.\n")
+    write_file(tmp_path / "docs" / "spec" / "deleted.md", "Measured value.\n").unlink()
+    write_file(tmp_path / "README.md", "Measured value.\n")
+    # The test decides "missing" itself, not through the hook's predicate.
+    assert not os.path.lexists(tmp_path / missing_path)
+    path_argument = str(tmp_path / missing_path) if is_absolute else missing_path
+
+    result = placeholder_hook.main([path_argument], root=tmp_path)
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert captured.out == ""
+    assert captured.err.startswith(f"{path_argument}: this path does not exist")
+    assert "a typo would otherwise pass silently" in captured.err
+
+
+@pytest.mark.parametrize(
+    "is_missing_path_first", [False, True], ids=["missing-last", "missing-first"]
+)
+@pytest.mark.parametrize(
+    ("real_file_text", "expected_findings"),
+    [
+        ("Measured value.\n", []),
+        ("The value is TBD.\n", ['docs/spec/example.md:1: prohibited placeholder "TBD"']),
+    ],
+    ids=["clean-real-file", "real-file-with-placeholder"],
+)
+def test_main_refuses_a_missing_path_beside_a_real_file(
+    tmp_path: Path,
+    capsys: Any,
+    real_file_text: str,
+    expected_findings: list[str],
+    is_missing_path_first: bool,
+) -> None:
+    """A missing path fails the run beside a real file, and the real file is still scanned."""
+    write_file(tmp_path / "docs" / "spec" / "example.md", real_file_text)
+    path_arguments = ["docs/spec/example.md", "docs/spec/exmaple.md"]
+    if is_missing_path_first:
+        path_arguments.reverse()
+
+    result = placeholder_hook.main(path_arguments, root=tmp_path)
+
+    captured = capsys.readouterr()
+    assert result == 1
+    assert [line.split(";")[0] for line in captured.out.splitlines()] == expected_findings
+    assert captured.err.startswith("docs/spec/exmaple.md: this path does not exist")
+
+
+@pytest.mark.parametrize("path_argument", ["docs/spec", "README.md", "docs/CHANGELOG.md"])
+def test_main_skips_existing_paths_that_are_not_scan_targets(
+    tmp_path: Path,
+    capsys: Any,
+    path_argument: str,
+) -> None:
+    """A path that exists but is not a scan target is skipped, not refused as missing."""
+    write_file(tmp_path / "docs" / "spec" / "example.md", "Measured value.\n")
+    write_file(tmp_path / "README.md", "The value is TBD.\n")
+    write_file(tmp_path / "docs" / "CHANGELOG.md", "The value is TBD.\n")
+
+    result = placeholder_hook.main([path_argument], root=tmp_path)
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert captured.out == ""
+    assert captured.err == ""
+
+
+def test_main_skips_a_dangling_symlink(tmp_path: Path, capsys: Any) -> None:
+    """A symlink exists even when its target is gone, so it keeps the symlink skip."""
+    link = tmp_path / "docs" / "spec" / "link.md"
+    link.parent.mkdir(parents=True)
+    try:
+        link.symlink_to(tmp_path / "docs" / "spec" / "gone.md")
+    except OSError:
+        pytest.skip("this platform or account cannot create symlinks")
+
+    result = placeholder_hook.main(["docs/spec/link.md"], root=tmp_path)
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert captured.out == ""
+    assert captured.err == ""
