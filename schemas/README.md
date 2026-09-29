@@ -240,9 +240,9 @@ The upstream template's Python starter version of this pattern lives at [`templa
 
 ### Regex Dialects
 
-JSON Schema reads `pattern` in the ECMA-262 dialect, and `check-jsonschema` uses that dialect by default. The repository's Python scripts validate with python-jsonschema, which reads `pattern` in Python's `re` dialect; `check-jsonschema --regex-variant python` selects the same dialect. In Python's dialect, `$` also matches before a final line break. A whole-value pattern that must refuse a final line break in both dialects therefore ends with `$(?![\s\S])` instead of a bare `$`.
+JSON Schema reads `pattern` in the ECMA-262 dialect, and `check-jsonschema` uses that dialect by default. The repository's Python scripts validate with python-jsonschema, which reads `pattern` in Python's `re` dialect; `check-jsonschema --regex-variant python` selects the same dialect. In Python's dialect, `$` also matches before a final line break. A whole-value pattern that must refuse a final line break in both dialects therefore ends with `$(?![\s\S])` instead of a bare `$`. Python's `.` also matches a carriage return, U+2028, and U+2029, which ECMA-262's `.` refuses, so a path pattern writes `[^\n\r\u2028\u2029]`, which is exactly ECMA-262's `.`.
 
-The canonical [`tests/test_schema_examples.py`](../tests/test_schema_examples.py) validates every example in both dialects. Each `invalid/trailing-newline-*` example differs from a valid document only by a final line break in one value whose pattern ends with `$(?![\s\S])`. A second test removes that end guard from a copy of the schema and checks that Python's dialect then accepts each of those examples. A pattern that loses its end guard therefore fails the suite.
+The canonical [`tests/test_schema_examples.py`](../tests/test_schema_examples.py) validates every example in both dialects. Each `invalid/trailing-newline-*` example differs from a valid document only by a final line break in one value whose pattern ends with `$(?![\s\S])`. Each `invalid/trailing-carriage-return-*` example differs only by a final carriage return in one path whose pattern uses `[^\n\r\u2028\u2029]`. A second test removes the matching guard from a copy of the schema and checks that Python's dialect then accepts each of those examples. A pattern that loses either guard therefore fails the suite.
 
 ## Worked Example
 

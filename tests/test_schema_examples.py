@@ -13,13 +13,21 @@ and verifies that:
 Each example runs in two regex dialects. JSON Schema reads ``pattern``
 in the ECMA-262 dialect, which ``check-jsonschema`` uses by default.
 python-jsonschema, which the repository's scripts use, reads it in
-Python's ``re`` dialect, which ``--regex-variant python`` selects. In
-Python's dialect ``$`` also matches before a final line break, so a
-whole-value pattern ends with ``$(?![\s\S])``. The
-``invalid/trailing-newline-*`` examples hold one value that ends in a
-line break. A second test removes that end guard from a copy of the
-schema and checks that Python's dialect then accepts each of these
-examples, which proves that the examples detect a missing guard.
+Python's ``re`` dialect, which ``--regex-variant python`` selects. Two
+guards make a pattern read the same way in both dialects:
+
+- In Python's dialect ``$`` also matches before a final line break, so a
+  whole-value pattern ends with ``$(?![\s\S])``. The
+  ``invalid/trailing-newline-*`` examples hold one value that ends in a
+  line break.
+- In Python's dialect ``.`` also matches a carriage return, U+2028, and
+  U+2029, so a path pattern uses ``[^\n\r\u2028\u2029]``, which is
+  exactly ECMA-262's ``.``. The ``invalid/trailing-carriage-return-*``
+  examples hold one path that ends in a carriage return.
+
+A second test removes one guard from a copy of the schema and checks
+that Python's dialect then accepts each example that depends on it,
+which proves that the examples detect a missing guard.
 
 Discovery rules:
 
@@ -55,6 +63,7 @@ import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Callable
 from importlib.util import find_spec
 from pathlib import Path
 
@@ -81,7 +90,8 @@ SCHEMA_SUFFIX = ".schema.json"
 # ``default`` is ECMA-262 (the JSON Schema dialect); ``python`` is Python's ``re`` dialect.
 REGEX_VARIANTS = ("default", "python")
 END_GUARD = r"(?![\s\S])"
-FINAL_LINE_BREAK_PREFIX = "trailing-newline-"
+# Exactly ECMA-262's ``.``: any character except LF, CR, U+2028, and U+2029.
+LINE_CHARACTER_CLASS = r"[^\n\r\u2028\u2029]"
 
 
 def _is_within_root(candidate: Path, root: Path) -> bool:
@@ -342,53 +352,76 @@ def test_schema_example(
         )
 
 
-def _without_end_guard(node: object) -> object:
-    r"""Return a copy of a schema node with each ``$(?![\s\S])`` cut back to ``$``.
+def _cut_end_guard(pattern: str) -> str:
+    r"""Cut a final ``$(?![\s\S])`` back to ``$``; return other patterns unchanged."""
+    if pattern.endswith("$" + END_GUARD):
+        return pattern[: -len(END_GUARD)]
+    return pattern
+
+
+def _cut_line_character_class(pattern: str) -> str:
+    r"""Cut each ``[^\n\r\u2028\u2029]`` back to ``.``; return other patterns unchanged."""
+    return pattern.replace(LINE_CHARACTER_CLASS, ".")
+
+
+# Each guard that makes a pattern read the same way in both regex dialects: the file-name
+# prefix of the invalid examples that depend on it, and a cut that removes it from a pattern.
+DIALECT_GUARDS: dict[str, tuple[str, Callable[[str], str]]] = {
+    "end-guard": ("trailing-newline-", _cut_end_guard),
+    "line-character-class": ("trailing-carriage-return-", _cut_line_character_class),
+}
+
+
+def _rewrite_patterns(node: object, cut: Callable[[str], str]) -> object:
+    """Return a copy of a schema node with ``cut`` applied to every pattern.
 
     Args:
         node: A parsed JSON Schema value.
+        cut: A function that rewrites one regular expression.
 
     Returns:
         A copy of ``node`` in which every ``pattern`` value and every
-        ``patternProperties`` key that ends with ``$(?![\s\S])`` ends
-        with a bare ``$`` instead. Other values are unchanged.
+        ``patternProperties`` key is replaced by ``cut(pattern)``. Other
+        values are unchanged.
     """
-
-    def cut(pattern: str) -> str:
-        if pattern.endswith("$" + END_GUARD):
-            return pattern[: -len(END_GUARD)]
-        return pattern
-
     if isinstance(node, dict):
         copied: dict[str, object] = {}
         for key, value in node.items():
             if key == "pattern" and isinstance(value, str):
                 copied[key] = cut(value)
             elif key == "patternProperties" and isinstance(value, dict):
-                copied[key] = {cut(name): _without_end_guard(sub) for name, sub in value.items()}
+                copied[key] = {
+                    cut(name): _rewrite_patterns(sub, cut) for name, sub in value.items()
+                }
             else:
-                copied[key] = _without_end_guard(value)
+                copied[key] = _rewrite_patterns(value, cut)
         return copied
     if isinstance(node, list):
-        return [_without_end_guard(item) for item in node]
+        return [_rewrite_patterns(item, cut) for item in node]
     return node
 
 
-def _discover_final_line_break_cases() -> list[tuple[Path, tuple[Path, ...]]]:
-    """Group the ``invalid/trailing-newline-*`` examples by schema.
+def _discover_guard_cases() -> list[tuple[Path, str, tuple[Path, ...]]]:
+    """Group the invalid examples that depend on a dialect guard by schema and guard.
 
     Returns:
-        A list of ``(schema_path, example_paths)`` tuples, one for each
-        schema that has at least one invalid example whose file name
-        starts with ``trailing-newline-``. Discovery reuses
-        :func:`_discover_cases`, so the same symlink and containment
-        checks apply.
+        A list of ``(schema_path, guard_name, example_paths)`` tuples, one
+        for each schema and :data:`DIALECT_GUARDS` entry that has at least
+        one invalid example whose file name starts with that guard's
+        prefix. Discovery reuses :func:`_discover_cases`, so the same
+        symlink and containment checks apply.
     """
-    grouped: dict[Path, list[Path]] = {}
+    grouped: dict[tuple[Path, str], list[Path]] = {}
     for schema_path, example_path, expected_to_pass in _CASES:
-        if not expected_to_pass and example_path.name.startswith(FINAL_LINE_BREAK_PREFIX):
-            grouped.setdefault(schema_path, []).append(example_path)
-    return [(schema, tuple(examples)) for schema, examples in sorted(grouped.items())]
+        if expected_to_pass:
+            continue
+        for guard_name, (prefix, _cut) in DIALECT_GUARDS.items():
+            if example_path.name.startswith(prefix):
+                grouped.setdefault((schema_path, guard_name), []).append(example_path)
+    return [
+        (schema_path, guard_name, tuple(example_paths))
+        for (schema_path, guard_name), example_paths in sorted(grouped.items())
+    ]
 
 
 def _rejected_examples(
@@ -436,7 +469,7 @@ def _rejected_examples(
     return {Path(error["filename"]) for error in report["errors"]}
 
 
-_FINAL_LINE_BREAK_CASES = _discover_final_line_break_cases()
+_GUARD_CASES = _discover_guard_cases()
 
 
 @pytest.mark.skipif(
@@ -444,41 +477,56 @@ _FINAL_LINE_BREAK_CASES = _discover_final_line_break_cases()
     reason="check-jsonschema is not installed in this environment",
 )
 @pytest.mark.skipif(
-    not _FINAL_LINE_BREAK_CASES,
-    reason="No invalid/trailing-newline-* schema examples found under schemas/examples/",
+    not _GUARD_CASES,
+    reason="No invalid schema examples that depend on a dialect guard were found",
 )
 @pytest.mark.parametrize(
-    ("schema_path", "example_paths"),
-    _FINAL_LINE_BREAK_CASES,
-    ids=[schema.relative_to(REPO_ROOT).as_posix() for schema, _ in _FINAL_LINE_BREAK_CASES],
+    ("schema_path", "guard_name", "example_paths"),
+    _GUARD_CASES,
+    ids=[
+        f"{schema.relative_to(REPO_ROOT).as_posix()}::{guard_name}"
+        for schema, guard_name, _ in _GUARD_CASES
+    ],
 )
-def test_final_line_break_examples_depend_on_end_guard(
+def test_dialect_guard_examples_depend_on_their_guard(
     schema_path: Path,
+    guard_name: str,
     example_paths: tuple[Path, ...],
     tmp_path: Path,
 ) -> None:
-    r"""Remove the end guard and check that only Python's dialect then accepts the examples.
+    r"""Remove one dialect guard and check that only Python's dialect then accepts the examples.
 
     This is the failure-injection control for :func:`test_schema_example`.
-    A copy of the schema has each ``$(?![\s\S])`` cut back to ``$``.
-    ECMA-262 must still reject each ``trailing-newline-*`` example,
-    because its ``$`` matches only at the end of the text. Python's
-    dialect must accept each one, because its ``$`` also matches before a
-    final line break. The examples therefore detect a missing guard.
+    A copy of the schema loses one guard from every pattern:
+
+    - ``end-guard``: each ``$(?![\s\S])`` is cut back to ``$``. Python's
+      ``$`` also matches before a final line break, so Python's dialect
+      must accept each ``trailing-newline-*`` example. ECMA-262's ``$``
+      matches only at the end of the text, so ECMA-262 must still reject
+      each one.
+    - ``line-character-class``: each ``[^\n\r\u2028\u2029]`` is cut back
+      to ``.``. Python's ``.`` also matches a carriage return, so Python's
+      dialect must accept each ``trailing-carriage-return-*`` example.
+      ECMA-262's ``.`` refuses all four line terminators, so ECMA-262 must
+      still reject each one.
+
+    The examples therefore detect a missing guard.
 
     Args:
-        schema_path: A schema with ``invalid/trailing-newline-*`` examples.
+        schema_path: A schema with invalid examples that depend on the guard.
+        guard_name: A :data:`DIALECT_GUARDS` key.
         example_paths: Those examples.
         tmp_path: Pytest's per-test temporary directory.
 
     Raises:
-        AssertionError: If the schema has no end guard, if ECMA-262
+        AssertionError: If the schema has no such guard, if ECMA-262
             accepts an example without the guard, or if Python's dialect
             rejects an example without the guard.
     """
+    prefix, cut = DIALECT_GUARDS[guard_name]
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
-    unguarded = _without_end_guard(schema)
-    assert unguarded != schema, f"{schema_path} has no pattern that ends with $(?![\\s\\S])"
+    unguarded = _rewrite_patterns(schema, cut)
+    assert unguarded != schema, f"{schema_path} has no pattern with the {guard_name}"
     unguarded_path = tmp_path / schema_path.name
     unguarded_path.write_text(json.dumps(unguarded, indent=2), encoding="utf-8")
 
@@ -486,13 +534,13 @@ def test_final_line_break_examples_depend_on_end_guard(
     rejected_by_python = _rejected_examples(unguarded_path, example_paths, "python")
 
     assert rejected_by_ecma == set(example_paths), (
-        f"Without the end guard, ECMA-262 accepted "
+        f"Without the {guard_name}, ECMA-262 accepted "
         f"{sorted(str(p) for p in set(example_paths) - rejected_by_ecma)}; "
-        f"these examples do not isolate a final line break."
+        f"these examples do not isolate a difference between the dialects."
     )
     assert not rejected_by_python, (
-        f"Without the end guard, Python's dialect still rejected "
-        f"{sorted(str(p) for p in rejected_by_python)}; each "
-        f"trailing-newline-* example must differ from a valid document only "
-        f"by a final line break in one guarded value."
+        f"Without the {guard_name}, Python's dialect still rejected "
+        f"{sorted(str(p) for p in rejected_by_python)}; each {prefix}* example "
+        f"must differ from a valid document only by one character that the "
+        f"{guard_name} refuses."
     )
