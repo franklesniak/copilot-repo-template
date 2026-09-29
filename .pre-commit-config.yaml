@@ -29,6 +29,11 @@ repos:
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
+      # .gitattributes pins LF, but a tool can still write CRLF to the
+      # working tree. This hook rewrites that CRLF to LF before the commit.
+      # Exclude any path that .gitattributes pins to CRLF.
+      - id: mixed-line-ending
+        args: [--fix=lf]
       - id: check-yaml
       # check-json validates strict JSON only. The anchored pattern below
       # excludes .jsonc; downstream repos that need JSONC validation should

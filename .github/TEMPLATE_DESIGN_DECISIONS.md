@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-23
+- **Last Updated:** 2026-09-29
 - **Scope:** Durable design-decision record for this repository template, including rationale for GitHub configuration, instruction files, validation policy, template structure, maintenance conventions, and the documentation-tier inventory below.
 - **Related:** [Repository Copilot Instructions](copilot-instructions.md), [upstream Documentation Writing Style](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/instructions/docs.instructions.md)
 
@@ -839,6 +839,7 @@ This decision records the current shipped defaults. It supersedes the earlier na
 4. **Git attributes are the durable checkout-level fix.** Explicit `text eol=lf` rules override host-level checkout conversion and make `pre-commit run --all-files` behave the same on Windows as on LF-native checkouts for the pinned families.
 5. **Byte-exact fixture protection is unchanged.** Any text artifact under the existing fixture-location patterns remains pinned to LF by directory rule, independent of extension. The extension and basename rules cover linter contracts, direct-execution correctness, and CRLF-churn prevention for template-managed files.
 6. **Binary overrides still win.** The LF rules are placed before the existing binary override block so later `binary` patterns continue to declassify binary files per attribute.
+7. **A hook repairs what a tool writes after checkout.** The pins govern checkout and the index. A tool that writes a tracked file in text mode on Windows can still leave CRLF in the working tree, where local validators read it. The baseline `mixed-line-ending` hook with `--fix=lf` rewrites that CRLF to LF before the commit. The hook complements the pins; it does not replace them.
 
 **Trade-offs:**
 
@@ -846,12 +847,14 @@ This decision records the current shipped defaults. It supersedes the earlier na
 - Pro: Existing byte-exact fixture protection is preserved unchanged.
 - Pro: Shell hooks and template-managed control files remain usable and reviewable in mixed-EOL environments.
 - Con: Windows contributors now get LF working-tree bytes for a broader set of template-managed text/control files even when their global Git configuration would otherwise materialize CRLF.
+- Con: A path that `.gitattributes` pins to CRLF must be excluded from the `mixed-line-ending` hook, or the hook rewrites it to LF.
+- Con: On Windows with `core.autocrlf=true`, an unpinned text file checks out as CRLF. The first `pre-commit run --all-files` after that checkout rewrites it to LF and fails once. The index content does not change.
 
 **Alternatives considered:**
 
 - **Leave the remaining text/control files unpinned:** Rejected because the repository already observed non-semantic CRLF churn for these tracked LF files, and shell-script CRLF conversion can break direct execution.
 - **Add a blanket `* text=auto` rule:** Rejected because `text=auto` does not guarantee LF working-tree bytes on hosts with CRLF checkout conversion; explicit `eol=lf` is required for the pinned families.
-- **Use a pre-commit mixed-line-ending hook as the primary fix:** Rejected because it would catch or repair the symptom after checkout rather than distributing stable checkout behavior through `.gitattributes`.
+- **Use a pre-commit mixed-line-ending hook as the primary fix:** Rejected because it would catch or repair the symptom after checkout rather than distributing stable checkout behavior through `.gitattributes`. The hook ships as a complement instead; see rationale item 7.
 - **Relax or disable `yamllint`'s `new-lines` rule:** Rejected because the repository already standardizes YAML formatting through `yamllint`; aligning checkout behavior with the configured rule is less surprising than weakening the rule.
 
 ---

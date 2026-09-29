@@ -10,7 +10,7 @@
 #
 # Hook coverage:
 #   - General hygiene (trailing-whitespace, end-of-file-fixer,
-#     check-added-large-files)
+#     mixed-line-ending, check-added-large-files)
 #   - JSON/TOML/YAML syntax and YAML style
 #   - GitHub Actions workflow linting
 #   - JSON Schema validation
