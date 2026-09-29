@@ -10,11 +10,14 @@ and verifies that:
 - Every file under ``schemas/examples/<schema-name>/invalid/`` is
   rejected (``check-jsonschema`` exits non-zero).
 
-Each example runs in two regex dialects. JSON Schema reads ``pattern``
-in the ECMA-262 dialect, which ``check-jsonschema`` uses by default.
-python-jsonschema, which the repository's scripts use, reads it in
-Python's ``re`` dialect, which ``--regex-variant python`` selects. Two
-guards make a pattern read the same way in both dialects:
+JSON Schema reads ``pattern`` in the ECMA-262 dialect, which
+``check-jsonschema`` uses by default. python-jsonschema, which the
+template's own scripts use, reads it in Python's ``re`` dialect, which
+``--regex-variant python`` selects. The examples of the schemas in
+``PYTHON_DIALECT_SCHEMAS`` run in both dialects. Every other schema,
+such as one an adopter adds, runs in ECMA-262 only, because it can use
+ECMA-262 syntax that Python's ``re`` reads differently. Two guards make
+a pattern read the same way in both dialects:
 
 - In Python's dialect ``$`` also matches before a final line break, so a
   whole-value pattern ends with ``$(?![\s\S])``. The
@@ -27,7 +30,11 @@ guards make a pattern read the same way in both dialects:
 
 A second test removes one guard from a copy of the schema and checks
 that Python's dialect then accepts each example that depends on it,
-which proves that the examples detect a missing guard.
+which proves that the examples detect a missing guard. A third test
+fails any pattern in a Python-dialect schema that ends with a bare
+``$``, so a lost end guard fails even where no example exists. A
+fourth test fails when a template script names a schema that is not in
+``PYTHON_DIALECT_SCHEMAS``.
 
 Discovery rules:
 
@@ -52,14 +59,17 @@ part to prove that the schema actually rejects them.
 
 A starter version of this test is available at
 ``templates/python/tests/test_schema_examples.py`` for downstream
-consumers of the template; the two files share the same essential
-validation pattern.
+consumers of the template. The two files share the same discovery
+and ECMA-262 validation. The starter does not run Python's regex
+dialect or the guard tests, because an adopter's schemas can use
+ECMA-262-only syntax.
 """
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -87,11 +97,27 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SCHEMAS_DIR = REPO_ROOT / "schemas"
 EXAMPLES_DIR = SCHEMAS_DIR / "examples"
 SCHEMA_SUFFIX = ".schema.json"
-# ``default`` is ECMA-262 (the JSON Schema dialect); ``python`` is Python's ``re`` dialect.
-REGEX_VARIANTS = ("default", "python")
 END_GUARD = r"(?![\s\S])"
 # Exactly ECMA-262's ``.``: any character except LF, CR, U+2028, and U+2029.
 LINE_CHARACTER_CLASS = r"[^\n\r\u2028\u2029]"
+# The schemas that the template's own Python scripts read with python-jsonschema. Only their
+# examples also run in Python's regex dialect (``--regex-variant python``). A schema that an
+# adopter adds stays ECMA-262 only: it can use ECMA-262 syntax, such as ``\p{Lu}``, that
+# Python's ``re`` rejects or reads differently.
+PYTHON_DIALECT_SCHEMAS = frozenset(
+    {
+        "instruction-contracts.schema.json",
+        "instruction-profile.schema.json",
+        "template-placeholders.schema.json",
+        "template-sync-instruction-contracts.schema.json",
+        "template-sync-manifest.schema.json",
+        "template-sync-marker.schema.json",
+        "workflow-security-contract.schema.json",
+    }
+)
+# The template script directories, and a schema path as a script names it.
+TEMPLATE_SCRIPT_DIRS = (REPO_ROOT / ".github" / "scripts", REPO_ROOT / ".template-sync" / "scripts")
+SCRIPT_SCHEMA_REFERENCE = re.compile(r"schemas/([a-z0-9-]+\.schema\.json)")
 
 
 def _is_within_root(candidate: Path, root: Path) -> bool:
@@ -276,6 +302,11 @@ def _case_id(case: tuple[Path, Path, bool]) -> str:
 
 
 _CASES = _discover_cases()
+# Every example runs in ECMA-262 (``default``). The examples of the Python-dialect schemas also
+# run in Python's ``re`` dialect (``python``).
+_VARIANT_CASES = [(*case, "default") for case in _CASES] + [
+    (*case, "python") for case in _CASES if case[0].name in PYTHON_DIALECT_SCHEMAS
+]
 
 
 @pytest.mark.skipif(
@@ -287,11 +318,10 @@ _CASES = _discover_cases()
     reason="No schema example files found under schemas/examples/",
 )
 @pytest.mark.parametrize(
-    ("schema_path", "example_path", "expected_to_pass"),
-    _CASES,
-    ids=[_case_id(c) for c in _CASES],
+    ("schema_path", "example_path", "expected_to_pass", "regex_variant"),
+    _VARIANT_CASES,
+    ids=[f"{case[3]}-{_case_id(case[:3])}" for case in _VARIANT_CASES],
 )
-@pytest.mark.parametrize("regex_variant", REGEX_VARIANTS)
 def test_schema_example(
     schema_path: Path,
     example_path: Path,
@@ -311,7 +341,8 @@ def test_schema_example(
             lives under ``invalid/`` (must be rejected).
         regex_variant: The ``check-jsonschema`` ``--regex-variant``
             value: ``default`` for ECMA-262 or ``python`` for Python's
-            ``re`` dialect. Both dialects must give the labeled outcome.
+            ``re`` dialect. ``python`` cases exist only for the schemas
+            in ``PYTHON_DIALECT_SCHEMAS``.
 
     Raises:
         AssertionError: If a valid example is rejected, or an invalid
@@ -408,12 +439,13 @@ def _discover_guard_cases() -> list[tuple[Path, str, tuple[Path, ...]]]:
         A list of ``(schema_path, guard_name, example_paths)`` tuples, one
         for each schema and :data:`DIALECT_GUARDS` entry that has at least
         one invalid example whose file name starts with that guard's
-        prefix. Discovery reuses :func:`_discover_cases`, so the same
-        symlink and containment checks apply.
+        prefix. Only schemas in ``PYTHON_DIALECT_SCHEMAS`` count.
+        Discovery reuses :func:`_discover_cases`, so the same symlink
+        and containment checks apply.
     """
     grouped: dict[tuple[Path, str], list[Path]] = {}
     for schema_path, example_path, expected_to_pass in _CASES:
-        if expected_to_pass:
+        if expected_to_pass or schema_path.name not in PYTHON_DIALECT_SCHEMAS:
             continue
         for guard_name, (prefix, _cut) in DIALECT_GUARDS.items():
             if example_path.name.startswith(prefix):
@@ -544,3 +576,105 @@ def test_dialect_guard_examples_depend_on_their_guard(
         f"must differ from a valid document only by one character that the "
         f"{guard_name} refuses."
     )
+
+
+def _iter_patterns(node: object) -> list[str]:
+    """Return every ``pattern`` value and ``patternProperties`` key in a schema node.
+
+    Args:
+        node: A parsed JSON Schema value.
+
+    Returns:
+        The regular expressions in ``node``, in document order.
+    """
+    found: list[str] = []
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if key == "pattern" and isinstance(value, str):
+                found.append(value)
+            elif key == "patternProperties" and isinstance(value, dict):
+                found.extend(value)
+            found.extend(_iter_patterns(value))
+    elif isinstance(node, list):
+        for item in node:
+            found.extend(_iter_patterns(item))
+    return found
+
+
+def _ends_with_bare_dollar(pattern: str) -> bool:
+    """Return ``True`` when ``pattern`` ends with an unescaped ``$``.
+
+    Args:
+        pattern: A regular expression.
+
+    Returns:
+        ``True`` when the final ``$`` is an anchor, that is, when an even
+        number of backslashes precedes it.
+    """
+    if not pattern.endswith("$"):
+        return False
+    body = pattern[:-1]
+    return (len(body) - len(body.rstrip("\\"))) % 2 == 0
+
+
+@pytest.mark.parametrize(
+    ("pattern", "expected"),
+    [
+        ("^a$", True),
+        ("^a\\$", False),
+        ("^a\\\\$", True),
+        (r"^a$(?![\s\S])", False),
+        (r"[\r\n]", False),
+    ],
+)
+def test_ends_with_bare_dollar(pattern: str, expected: bool) -> None:
+    """The bare-``$`` detector separates an anchor from an escaped dollar sign."""
+    assert _ends_with_bare_dollar(pattern) is expected
+
+
+_PYTHON_DIALECT_SCHEMA_PATHS = [
+    path
+    for path in sorted(SCHEMAS_DIR.glob(f"*{SCHEMA_SUFFIX}"))
+    if path.name in PYTHON_DIALECT_SCHEMAS and _is_within_root(path, REPO_ROOT)
+]
+
+
+@pytest.mark.skipif(
+    not _PYTHON_DIALECT_SCHEMA_PATHS,
+    reason="No Python-dialect schema is present under schemas/",
+)
+@pytest.mark.parametrize(
+    "schema_path", _PYTHON_DIALECT_SCHEMA_PATHS, ids=[p.name for p in _PYTHON_DIALECT_SCHEMA_PATHS]
+)
+def test_python_dialect_schema_has_no_bare_final_dollar(schema_path: Path) -> None:
+    r"""Every whole-value pattern in a Python-dialect schema ends with ``$(?![\s\S])``.
+
+    This static check covers patterns that no example isolates, such as
+    the manifest's ``moduleName`` and ``hostName``.
+
+    Args:
+        schema_path: A schema in ``PYTHON_DIALECT_SCHEMAS``.
+
+    Raises:
+        AssertionError: If a pattern ends with a bare ``$``.
+    """
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    bare = [pattern for pattern in _iter_patterns(schema) if _ends_with_bare_dollar(pattern)]
+    assert not bare, f"{schema_path.name}: end each pattern with $(?![\\s\\S]): {bare}"
+
+
+def test_python_dialect_schemas_include_every_schema_a_script_names() -> None:
+    """Every schema that a retained template script names also runs in Python's dialect.
+
+    Raises:
+        AssertionError: If a script under ``.github/scripts/`` or
+            ``.template-sync/scripts/`` names a schema that is not in
+            ``PYTHON_DIALECT_SCHEMAS``.
+    """
+    named: set[str] = set()
+    for directory in TEMPLATE_SCRIPT_DIRS:
+        for script in sorted(_iter_safe_files(directory, REPO_ROOT)):
+            if script.suffix == ".py":
+                named.update(SCRIPT_SCHEMA_REFERENCE.findall(script.read_text(encoding="utf-8")))
+    missing = sorted(named - PYTHON_DIALECT_SCHEMAS)
+    assert not missing, f"Add these schemas to PYTHON_DIALECT_SCHEMAS: {missing}"
