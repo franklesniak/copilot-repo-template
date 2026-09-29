@@ -16,6 +16,7 @@
 # without a template. Set to `false` to require template usage—useful once you have
 # comprehensive templates covering all issue types and want structured data collection.
 # Consider setting to false once you have comprehensive templates and want structured intake.
+# A blank issue shows none of a form's notices.
 blank_issues_enabled: true
 
 contact_links:

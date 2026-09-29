@@ -1392,7 +1392,7 @@ Recommendation: Keep optional but encourage providing location via description t
 
 #### blank_issues_enabled
 
-Set to `true` for flexibility (allows any issue format), or `false` to enforce template usage. Most projects benefit from `true` initially; consider `false` once you have comprehensive templates.
+Set to `true` for flexibility (allows any issue format), or `false` to enforce template usage. Most projects benefit from `true` initially; consider `false` once you have comprehensive templates. A blank issue shows none of a form's notices.
 
 #### contact_links URL Requirement
 
