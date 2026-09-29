@@ -547,9 +547,7 @@ def test_main_refuses_a_missing_path(
     captured = capsys.readouterr()
     assert result == 1
     assert captured.out == ""
-    assert captured.err.startswith(
-        f"{shown_path}: nothing is at this path under the repository root"
-    )
+    assert captured.err.startswith(f"{shown_path}: nothing is at this path, so")
     assert "Relative paths are read from the repository root, not the current folder." in (
         captured.err
     )
@@ -585,9 +583,7 @@ def test_main_refuses_a_missing_path_beside_a_real_file(
     captured = capsys.readouterr()
     assert result == 1
     assert [line.split(";")[0] for line in captured.out.splitlines()] == expected_findings
-    assert captured.err.startswith(
-        "docs/spec/exmaple.md: nothing is at this path under the repository root"
-    )
+    assert captured.err.startswith("docs/spec/exmaple.md: nothing is at this path, so")
 
 
 @pytest.mark.parametrize("path_argument", ["docs/spec", "README.md", "docs/CHANGELOG.md"])

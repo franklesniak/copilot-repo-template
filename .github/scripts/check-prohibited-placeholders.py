@@ -43,7 +43,7 @@ REMEDIATION_HINT = (
     'on the same line. See .github/instructions/docs.instructions.md "Prohibited Patterns".'
 )
 MISSING_PATH_HINT = (
-    "nothing is at this path under the repository root, so there is nothing to check. "
+    "nothing is at this path, so there is nothing to check. "
     "Relative paths are read from the repository root, not the current folder. "
     "Check the path: a typo would otherwise pass silently, because a run that scans "
     "nothing finds no placeholders."
