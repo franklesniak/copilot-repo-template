@@ -114,7 +114,7 @@ Run the all-files form before opening a pull request.
 
 This repository uses pre-commit for git hooks. Configured hooks include:
 
-- **Formatting:** trailing whitespace and end-of-file fixes.
+- **Formatting:** trailing whitespace, end-of-file, and line-ending fixes.
 - **Markdown linting:** markdownlint and local Markdown link validation.
 - **PowerShell linting:** PSScriptAnalyzer with repository settings.
 <!-- template-sync: begin python-reference-only -->
@@ -221,7 +221,7 @@ python .template-sync/scripts/report_excluded_module_references.py
 
 Pre-commit hooks are not optional. They enforce:
 
-- Formatting and end-of-file hygiene.
+- Formatting, end-of-file, and line-ending hygiene.
 - Markdown linting and local Markdown link validation.
 - PowerShell linting.
 <!-- template-sync: begin python-reference-only -->
