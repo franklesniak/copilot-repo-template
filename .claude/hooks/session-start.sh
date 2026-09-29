@@ -2,18 +2,11 @@
 # SessionStart hook: install the tools used by the authoritative local gate in
 # Claude Code web sessions. Web-only by design; developer workstations manage
 # their own toolchain.
-#
-# Keep TERRAFORM_VERSION in sync with every `terraform_version:` input passed
-# to `hashicorp/setup-terraform@v4` in .github/workflows/. Those pins currently
-# live in precommit-ci.yml, auto-fix-precommit.yml, and terraform-ci.yml.
 set -euo pipefail
 
 if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
-
-TERRAFORM_VERSION="1.14.4"
-INSTALL_DIR="/usr/local/bin"
 
 persist_path_prepend() {
   local path_entry="$1"
@@ -148,7 +141,7 @@ ensure_pre_commit
 
 # template-sync: begin markdown-only
 # Hosted Claude environments provide Node.js and npm; install the root lockfile
-# dependencies before any Terraform idempotency exit can skip this setup.
+# dependencies before a later setup block can exit early and skip this step.
 if ! command -v node >/dev/null 2>&1 \
   || ! command -v npm >/dev/null 2>&1 \
   || ! node_version="$(node --version 2>/dev/null)" \
@@ -163,6 +156,15 @@ markdown_repository_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && p
   npm ci --ignore-scripts
 )
 # template-sync: end markdown-only
+
+# template-sync: begin terraform-only
+# Keep this block last: its idempotency check exits the hook early.
+#
+# Keep TERRAFORM_VERSION in sync with every `terraform_version:` input passed
+# to `hashicorp/setup-terraform@v4` in .github/workflows/. Those pins currently
+# live in precommit-ci.yml, auto-fix-precommit.yml, and terraform-ci.yml.
+TERRAFORM_VERSION="1.14.4"
+INSTALL_DIR="/usr/local/bin"
 
 # Persist INSTALL_DIR via CLAUDE_ENV_FILE so the terraform we install below
 # resolves first in subsequent shells, even if a different `terraform` is
@@ -250,3 +252,4 @@ echo "SHA256 verified for ${archive}"
 unzip -q "$tmpdir/${archive}" -d "$tmpdir"
 install -m 0755 "$tmpdir/terraform" "$INSTALL_DIR/terraform"
 echo "Installed $("$INSTALL_DIR/terraform" version | head -n1) to ${INSTALL_DIR}/terraform"
+# template-sync: end terraform-only

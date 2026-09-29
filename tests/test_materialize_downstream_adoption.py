@@ -2338,7 +2338,9 @@ def test_materialized_agent_without_baseline_does_not_adopt_local_precommit_conf
     assert "baseline-only" not in hook_text
     assert "ensure_pre_commit" not in hook_text
     assert "requirements-pre-commit.txt" not in hook_text
-    assert "TERRAFORM_VERSION" in hook_text
+    # Shared hook code stays; Terraform setup follows its own excluded module.
+    assert "persist_path_prepend" in hook_text
+    assert "TERRAFORM_VERSION" not in hook_text
 
 
 @pytest.mark.upstream_template_only

@@ -683,9 +683,25 @@ def test_claude_node_gate_follows_materialized_markdown_selection(
     for token in ("node --version", "node_version", "BASH_REMATCH", "npm ci --ignore-scripts"):
         assert (token in hook) is markdown
     assert "ensure_pre_commit" not in hook
+    # Terraform is not selected, so its early-exit installer is stripped too.
+    assert "TERRAFORM_VERSION" not in hook
+    assert "# Idempotency:" not in hook
     if markdown:
         assert hook.index("node --version") < hook.index("npm ci --ignore-scripts")
-        assert hook.index("npm ci --ignore-scripts") < hook.index("# Idempotency:")
+
+
+def test_claude_terraform_setup_runs_after_every_other_hook_block() -> None:
+    """The Terraform block can exit the hook early, so no other setup may follow it."""
+    text = HOOK_PATH.read_text(encoding="utf-8")
+    begin = text.index("# template-sync: begin terraform-only\n")
+    end_marker = "# template-sync: end terraform-only\n"
+    end = text.index(end_marker) + len(end_marker)
+
+    assert "exit 0" in text[begin:end]
+    assert text[end:].strip() == ""
+    for marker_name in ("baseline-only", "markdown-only"):
+        assert text.index(f"# template-sync: end {marker_name}\n") < begin
+    assert text.index("npm ci --ignore-scripts") < text.index("# Idempotency:")
 
 
 def bash_path(bash: str, path: Path) -> str:

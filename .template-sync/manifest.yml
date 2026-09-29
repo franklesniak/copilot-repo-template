@@ -363,10 +363,16 @@ template_manifest:
       requires_all:
         - agent-instructions
       notes: >-
-        Contains Markdown-safe *-reference-only inline blocks for optional
-        Azure DevOps Services guide links in reusable PR review prompts. Remove
-        each delimited reference-only block when its module is excluded while
-        preserving retained PR review prompt guidance.
+        Contains Markdown-safe *-reference-only inline blocks in reusable PR
+        review prompts: a github-actions-reference-only block for the Copilot
+        review recipe, a claude-review-command-reference-only block for the
+        local Claude review command, an azure-devops-guide-reference-only
+        OR-group block for the Azure DevOps Services guide link, and a
+        powershell-reference-only block for the PowerShell version-support
+        prompt. Remove each delimited reference-only block when its module is
+        excluded (the Claude command block when any module it names is
+        excluded, and the OR-group block only when every module it names is
+        excluded) while preserving retained PR review prompt guidance.
     - pattern: '.codex/**'
       requires_all:
         - agent-instructions
@@ -377,8 +383,9 @@ template_manifest:
         - agent-claude
       notes: >-
         The session-start hook has a baseline-only pre-commit provisioning
-        block and a markdown-only locked Node dependency installation block.
-        Strip each block when its module is excluded.
+        block, a markdown-only locked Node dependency installation block, and
+        a terraform-only Terraform installation block. Strip each block when
+        its module is excluded.
     - pattern: '.github/ISSUE_TEMPLATE/**'
       requires_all:
         - github-templates
