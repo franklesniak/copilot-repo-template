@@ -586,7 +586,9 @@ def test_main_refuses_a_missing_path_beside_a_real_file(
     assert captured.err.startswith("docs/spec/exmaple.md: nothing is at this path, so")
 
 
-@pytest.mark.parametrize("path_argument", ["docs/spec", "README.md", "docs/CHANGELOG.md"])
+@pytest.mark.parametrize(
+    "path_argument", ["docs/spec", "README.md", "docs/CHANGELOG.md", ".", "./"]
+)
 def test_main_skips_existing_paths_that_are_not_scan_targets(
     tmp_path: Path,
     capsys: Any,
