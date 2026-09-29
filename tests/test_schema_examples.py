@@ -34,7 +34,9 @@ which proves that the examples detect a missing guard. A third test
 fails any pattern in a Python-dialect schema that ends with a bare
 ``$``, so a lost end guard fails even where no example exists. A
 fourth test fails when a template script names a schema that is not in
-``PYTHON_DIALECT_SCHEMAS``.
+``PYTHON_DIALECT_SCHEMAS``. It reads only the scripts that
+``.template-sync/manifest.yml`` maps, so it never reads an adopter's
+own scripts, and it skips when no manifest is present.
 
 Discovery rules:
 
@@ -74,6 +76,7 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Callable
+from fnmatch import fnmatchcase
 from importlib.util import find_spec
 from pathlib import Path
 
@@ -115,9 +118,12 @@ PYTHON_DIALECT_SCHEMAS = frozenset(
         "workflow-security-contract.schema.json",
     }
 )
-# The template script directories, and a schema path as a script names it.
+# The template script directories, and a schema path as a script names it. The list test reads
+# only the scripts in these directories that the template-sync manifest maps: the template's
+# own scripts, never an adopter's.
 TEMPLATE_SCRIPT_DIRS = (REPO_ROOT / ".github" / "scripts", REPO_ROOT / ".template-sync" / "scripts")
 SCRIPT_SCHEMA_REFERENCE = re.compile(r"schemas/([a-z0-9-]+\.schema\.json)")
+TEMPLATE_MANIFEST = REPO_ROOT / ".template-sync" / "manifest.yml"
 
 
 def _is_within_root(candidate: Path, root: Path) -> bool:
@@ -663,18 +669,98 @@ def test_python_dialect_schema_has_no_bare_final_dollar(schema_path: Path) -> No
     assert not bare, f"{schema_path.name}: end each pattern with $(?![\\s\\S]): {bare}"
 
 
-def test_python_dialect_schemas_include_every_schema_a_script_names() -> None:
-    """Every schema that a retained template script names also runs in Python's dialect.
+def _manifest_patterns(document: object) -> list[str]:
+    """Return every path-mapping pattern in a loaded template-sync manifest.
+
+    Args:
+        document: The parsed ``.template-sync/manifest.yml``.
+
+    Returns:
+        The ``pattern`` of each ``template_manifest.path_mappings`` entry.
 
     Raises:
-        AssertionError: If a script under ``.github/scripts/`` or
+        AssertionError: If the document has no ``path_mappings`` list.
+    """
+    manifest = document.get("template_manifest") if isinstance(document, dict) else None
+    mappings = manifest.get("path_mappings") if isinstance(manifest, dict) else None
+    assert isinstance(mappings, list), "The template-sync manifest has no path_mappings list."
+    return [
+        entry["pattern"]
+        for entry in mappings
+        if isinstance(entry, dict) and isinstance(entry.get("pattern"), str)
+    ]
+
+
+def _manifest_maps(patterns: list[str], relative_path: str) -> bool:
+    """Return whether a manifest pattern covers ``relative_path``.
+
+    This mirrors ``manifest_pattern_matches_path`` in
+    ``.template-sync/scripts/template_sync_materialization_helpers.py``: a
+    pattern with ``*``, ``?``, or ``[`` matches with ``fnmatchcase``, and any
+    other pattern must equal the path.
+
+    Args:
+        patterns: Manifest path-mapping patterns.
+        relative_path: A POSIX path relative to the repository root.
+
+    Returns:
+        ``True`` when at least one pattern covers the path.
+    """
+    return any(
+        (
+            fnmatchcase(relative_path, pattern)
+            if any(wildcard in pattern for wildcard in "*?[")
+            else pattern == relative_path
+        )
+        for pattern in patterns
+    )
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "expected"),
+    [
+        (".github/scripts/validate_workflow_security.py", True),
+        (".template-sync/scripts/validate_marker.py", True),
+        (".github/scripts/check-x-not-y.py", False),
+        (".github/scripts/validate_workflow_security.py.bak", False),
+    ],
+)
+def test_manifest_maps(relative_path: str, expected: bool) -> None:
+    """The manifest matcher covers exact and glob mappings, and nothing else."""
+    patterns = [".github/scripts/validate_workflow_security.py", ".template-sync/scripts/**"]
+    assert _manifest_maps(patterns, relative_path) is expected
+
+
+@pytest.mark.skipif(
+    not (TEMPLATE_MANIFEST.is_file() and _is_within_root(TEMPLATE_MANIFEST, REPO_ROOT)),
+    reason="No .template-sync/manifest.yml, so no template script is known",
+)
+def test_python_dialect_schemas_include_every_schema_a_script_names() -> None:
+    """Every schema that a template script names also runs in Python's dialect.
+
+    Only the scripts that ``.template-sync/manifest.yml`` maps are read, so
+    an adopter's own scripts and schemas never reach this check.
+
+    Raises:
+        AssertionError: If a mapped script under ``.github/scripts/`` or
             ``.template-sync/scripts/`` names a schema that is not in
             ``PYTHON_DIALECT_SCHEMAS``.
     """
-    named: set[str] = set()
+    yaml = pytest.importorskip("yaml")
+    patterns = _manifest_patterns(yaml.safe_load(TEMPLATE_MANIFEST.read_text(encoding="utf-8")))
+    named: dict[str, set[str]] = {}
     for directory in TEMPLATE_SCRIPT_DIRS:
         for script in sorted(_iter_safe_files(directory, REPO_ROOT)):
-            if script.suffix == ".py":
-                named.update(SCRIPT_SCHEMA_REFERENCE.findall(script.read_text(encoding="utf-8")))
-    missing = sorted(named - PYTHON_DIALECT_SCHEMAS)
-    assert not missing, f"Add these schemas to PYTHON_DIALECT_SCHEMAS: {missing}"
+            relative = script.relative_to(REPO_ROOT).as_posix()
+            if script.suffix != ".py" or not _manifest_maps(patterns, relative):
+                continue
+            for name in SCRIPT_SCHEMA_REFERENCE.findall(script.read_text(encoding="utf-8")):
+                named.setdefault(name, set()).add(relative)
+    missing = {
+        name: sorted(scripts)
+        for name, scripts in sorted(named.items())
+        if name not in PYTHON_DIALECT_SCHEMAS
+    }
+    assert (
+        not missing
+    ), f"Template scripts name schemas missing from PYTHON_DIALECT_SCHEMAS: {missing}"
