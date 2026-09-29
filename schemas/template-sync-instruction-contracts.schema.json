@@ -33,7 +33,7 @@
   "$defs": {
     "moduleName": {
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$(?![\\s\\S])"
     },
     "nonEmptyString": {
       "type": "string",
@@ -41,12 +41,12 @@
     },
     "contractKey": {
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$(?![\\s\\S])"
     },
     "repositoryFilePath": {
       "type": "string",
       "minLength": 1,
-      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(/|$))(?!.*//)(?!.*/$).+$"
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(/|$))(?!.*//)(?!.*/$)[^\\n\\r\\u2028\\u2029]+$(?![\\s\\S])"
     },
     "anchorList": {
       "type": "array",

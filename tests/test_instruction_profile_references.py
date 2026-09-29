@@ -1169,8 +1169,9 @@ def test_deployed_whitespace_destination_has_exact_target_identity(
     catalog = yaml.safe_load(path.read_text(encoding="utf-8"))
     catalog["protected_guide_reference_obligations"][0]["target_path"] = expected_path
     write(tmp_path, ".github/instruction-contracts.yml", yaml.safe_dump(catalog))
-    if expected_path == "docs/azure\n-devops-support.md":
-        # The existing target_path schema rejects LF before reference matching.
+    if any(terminator in expected_path for terminator in "\n\r\u2028\u2029"):
+        # The target_path schema rejects the ECMA-262 line terminators (LF, CR,
+        # U+2028, U+2029) in both regex dialects before reference matching.
         invalid = run(tmp_path)
         assert invalid.returncode == 1, invalid.stdout + invalid.stderr
         assert "Schema validation failed" in invalid.stderr

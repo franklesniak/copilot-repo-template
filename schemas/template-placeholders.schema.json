@@ -223,16 +223,16 @@
     },
     "sourceName": {
       "type": "string",
-      "pattern": "^[A-Za-z0-9_.-]+$"
+      "pattern": "^[A-Za-z0-9_.-]+$(?![\\s\\S])"
     },
     "sourceAttribute": {
       "type": "string",
-      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$(?![\\s\\S])"
     },
     "repositoryPathPattern": {
       "type": "string",
       "minLength": 1,
-      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(/|$))(?!.*//).+$"
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(/|$))(?!.*//)[^\\n\\r\\u2028\\u2029]+$(?![\\s\\S])"
     },
     "findingKind": {
       "type": "string",

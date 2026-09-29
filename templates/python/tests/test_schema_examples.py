@@ -35,6 +35,13 @@ Intentional differences from the active test:
   projects SHOULD add ``check-jsonschema`` to their dev/test
   dependency group (see ``templates/python/pyproject.toml``) so the
   test always runs.
+- Regex dialect: the active test also runs the template's own schemas
+  in Python's regex dialect (``--regex-variant python``) and runs guard
+  tests for them, because the template's scripts read those schemas
+  with python-jsonschema. This starter asserts in ECMA-262 only, the
+  JSON Schema dialect, because an adopter's schemas can use
+  ECMA-262-only syntax, such as Unicode property escapes, that
+  Python's ``re`` rejects or reads differently.
 
 How to use:
 

@@ -321,7 +321,7 @@
   "$defs": {
     "fullLowercaseSha": {
       "type": "string",
-      "pattern": "^[0-9a-f]{40}$"
+      "pattern": "^[0-9a-f]{40}$(?![\\s\\S])"
     },
     "moduleName": {
       "type": "string",
@@ -359,7 +359,7 @@
     },
     "contractKey": {
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$",
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$(?![\\s\\S])",
       "description": "Kebab-case identifier matching a protected-guide obligation key declared in the instruction-contracts schema. Mirrors that schema's contractKey pattern so a malformed waiver key (spaces, uppercase, underscores) is rejected at validation time rather than silently failing to match any obligation."
     },
     "singleLineNonEmptyString": {
@@ -373,17 +373,17 @@
     "repositoryPath": {
       "type": "string",
       "minLength": 1,
-      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(/|$))(?!.*//).+$"
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(/|$))(?!.*//)[^\\n\\r\\u2028\\u2029]+$(?![\\s\\S])"
     },
     "localOwnershipPath": {
       "type": "string",
       "minLength": 1,
-      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(/|$))(?!.*//)(?!.*[*?\\[\\]]).+$"
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(/|$))(?!.*//)(?!.*[*?\\[\\]])[^\\n\\r\\u2028\\u2029]+$(?![\\s\\S])"
     },
     "repositoryFilePath": {
       "type": "string",
       "minLength": 1,
-      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(/|$))(?!.*//)(?!.*/$).+$"
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*(?:^|/)\\.\\.?(/|$))(?!.*//)(?!.*/$)[^\\n\\r\\u2028\\u2029]+$(?![\\s\\S])"
     },
     "protectedFileDecisionValue": {
       "type": "string",
@@ -449,7 +449,7 @@
       "type": "string",
       "format": "uri",
       "description": "Azure DevOps Services organization root URL: https://dev.azure.com/<organization> or https://<organization>.visualstudio.com, with no extra path segments, mirroring validate_azure_devops_organization_url.",
-      "pattern": "^https://(dev\\.azure\\.com(:[0-9]+)?/[^/?#@]+/?|[^/?#@:]+\\.visualstudio\\.com(:[0-9]+)?/?)$",
+      "pattern": "^https://(dev\\.azure\\.com(:[0-9]+)?/[^/?#@]+/?|[^/?#@:]+\\.visualstudio\\.com(:[0-9]+)?/?)$(?![\\s\\S])",
       "not": {
         "anyOf": [
           {
@@ -465,7 +465,7 @@
       "type": "string",
       "format": "uri",
       "description": "Azure DevOps Services project URL: https://dev.azure.com/<organization>/<project> or https://<organization>.visualstudio.com/<project>, mirroring validate_azure_devops_project_url.",
-      "pattern": "^https://(dev\\.azure\\.com(:[0-9]+)?/[^/?#@]+/[^/?#@]+/?|[^/?#@:]+\\.visualstudio\\.com(:[0-9]+)?/[^/?#@]+/?)$",
+      "pattern": "^https://(dev\\.azure\\.com(:[0-9]+)?/[^/?#@]+/[^/?#@]+/?|[^/?#@:]+\\.visualstudio\\.com(:[0-9]+)?/[^/?#@]+/?)$(?![\\s\\S])",
       "not": {
         "anyOf": [
           {
@@ -481,7 +481,7 @@
       "type": "string",
       "format": "uri",
       "description": "Azure Repos repository or clone URL: https://dev.azure.com/<organization>/<project>/_git/<repository> or https://<organization>.visualstudio.com/<project>/_git/<repository>, mirroring validate_azure_devops_repository_url.",
-      "pattern": "^https://(dev\\.azure\\.com(:[0-9]+)?/[^/?#@]+/[^/?#@]+/_git/[^/?#@]+/?|[^/?#@:]+\\.visualstudio\\.com(:[0-9]+)?/[^/?#@]+/_git/[^/?#@]+/?)$",
+      "pattern": "^https://(dev\\.azure\\.com(:[0-9]+)?/[^/?#@]+/[^/?#@]+/_git/[^/?#@]+/?|[^/?#@:]+\\.visualstudio\\.com(:[0-9]+)?/[^/?#@]+/_git/[^/?#@]+/?)$(?![\\s\\S])",
       "not": {
         "anyOf": [
           {
