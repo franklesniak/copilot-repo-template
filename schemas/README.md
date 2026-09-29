@@ -6,7 +6,7 @@
 
 - **Status:** Active
 - **Owner:** Repository Maintainers
-- **Last Updated:** 2026-09-23
+- **Last Updated:** 2026-09-29
 - **Scope:** Conventions for JSON Schemas that describe load-bearing JSON and YAML files in this repository, the baseline placeholder manifest schema, the template sync manifest, marker, instruction-contract, and first-adoption quality suppression schemas, plus a clearly removable worked example (`example-config.schema.json` with valid and invalid example data) wired into pre-commit and data CI to demonstrate the schema-validation pipeline end to end.
 - **Related:** [Repository Copilot Instructions](../.github/copilot-instructions.md), [Template Design Decisions — Schema Location at Repository Root](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-location-at-repository-root), [Template Design Decisions — Schema Validation Tiers](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-schema-validation-tiers), [Template Design Decisions — Built-in Schema Validation for Real Load-Bearing Configuration Files](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-built-in-schema-validation-for-real-load-bearing-configuration-files), [Template Design Decisions — `additionalProperties` Policy](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-additionalproperties-policy), [Template Design Decisions — Testing Beyond Linting for JSON/YAML](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/.github/TEMPLATE_DESIGN_DECISIONS.md#design-decision-testing-beyond-linting-for-jsonyaml)
 <!-- template-sync: begin json-reference-only -->
@@ -237,6 +237,12 @@ def test_invalid_example_is_rejected():
 The command resolver prefers the `check-jsonschema` console script when it is on `PATH`, falls back to `python -m check_jsonschema` when the package is importable in the pytest environment, and skips only when neither invocation is available. The same shape applies in PowerShell, Bash, or any CI step: invoke the validator on the invalid fixture and assert a non-zero exit.
 
 The upstream template's Python starter version of this pattern lives at [`templates/python/tests/test_schema_examples.py`](https://github.com/franklesniak/copilot-repo-template/blob/HEAD/templates/python/tests/test_schema_examples.py); the active, canonical version that this repository runs in CI lives at [`tests/test_schema_examples.py`](../tests/test_schema_examples.py). Both auto-discover schema/example pairs under `schemas/`, prefer the console script, and fall back to `python -m check_jsonschema` when the package is importable. The starter retains a `skipif` guard so it remains safe to copy into downstream projects that have not yet added `check-jsonschema` to their dev/test dependencies.
+
+### Regex Dialects
+
+JSON Schema reads `pattern` in the ECMA-262 dialect, and `check-jsonschema` uses that dialect by default. The repository's Python scripts validate with python-jsonschema, which reads `pattern` in Python's `re` dialect; `check-jsonschema --regex-variant python` selects the same dialect. In Python's dialect, `$` also matches before a final line break. A whole-value pattern that must refuse a final line break in both dialects therefore ends with `$(?![\s\S])` instead of a bare `$`.
+
+The canonical [`tests/test_schema_examples.py`](../tests/test_schema_examples.py) validates every example in both dialects. Each `invalid/trailing-newline-*` example differs from a valid document only by a final line break in one value whose pattern ends with `$(?![\s\S])`. A second test removes that end guard from a copy of the schema and checks that Python's dialect then accepts each of those examples. A pattern that loses its end guard therefore fails the suite.
 
 ## Worked Example
 

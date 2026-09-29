@@ -17,7 +17,7 @@
       "type": "object",
       "minProperties": 1,
       "propertyNames": {
-        "pattern": "^\\.github/workflows/[A-Za-z0-9_.-]+\\.ya?ml$"
+        "pattern": "^\\.github/workflows/[A-Za-z0-9_.-]+\\.ya?ml$(?![\\s\\S])"
       },
       "additionalProperties": {
         "$ref": "#/$defs/workflow"
@@ -28,7 +28,7 @@
       "uniqueItems": true,
       "items": {
         "type": "string",
-        "pattern": "^(?!.*\\.\\.)(?:(?!\\./)[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\\.(md|mdc)$"
+        "pattern": "^(?!.*\\.\\.)(?:(?!\\./)[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\\.(md|mdc)$(?![\\s\\S])"
       }
     }
   },
@@ -127,7 +127,7 @@
                     "env": {},
                     "run_sha256": {
                       "type": "string",
-                      "pattern": "^[0-9a-f]{64}$"
+                      "pattern": "^[0-9a-f]{64}$(?![\\s\\S])"
                     },
                     "action": {
                       "type": "string"
