@@ -26,6 +26,9 @@ body:
       value: |
         Thanks for helping improve the documentation!
 
+        **Everyone who can see this repository can read this issue and its history.**
+        Keep personal information, passwords and tokens out of text and images.
+
   - type: checkboxes
     id: pre_flight
     attributes:

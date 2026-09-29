@@ -38,6 +38,9 @@ body:
         ## Thank you for your feature suggestion!
         Please fill out the form below to help us understand and evaluate your request.
 
+        **Everyone who can see this repository can read this issue and its history.**
+        Keep personal information, passwords and tokens out of text and images.
+
   - type: checkboxes
     id: pre_flight
     attributes:

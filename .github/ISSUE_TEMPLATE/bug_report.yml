@@ -54,6 +54,9 @@ body:
         ## Thank you for reporting a bug!
         Please fill out the form below to help us investigate and resolve the issue.
 
+        **Everyone who can see this repository can read this issue and its history.**
+        Keep personal information, passwords and tokens out of text and images.
+
         **Security Notice:** If you are reporting a security vulnerability, do NOT use this form.
         Report it through the repository's
         [private vulnerability reporting form](https://github.com/OWNER/REPO/security/advisories/new)
