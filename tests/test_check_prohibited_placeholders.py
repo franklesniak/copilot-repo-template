@@ -8,7 +8,7 @@ import os
 import sys
 from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any, Protocol, cast, runtime_checkable
 
 from tests._pytest_compat import pytest
 
@@ -23,12 +23,21 @@ sys.modules[HOOK_SPEC.name] = _placeholder_hook
 HOOK_SPEC.loader.exec_module(_placeholder_hook)
 
 
+@runtime_checkable
 class ViolationLike(Protocol):
     """Attributes exposed by a placeholder-hook violation."""
 
     display_path: str
     line_number: int
     matched_text: str
+
+
+class MissingPathLike(Protocol):
+    """Attributes exposed by a placeholder-hook refusal of a missing path."""
+
+    display_path: str
+
+    def format_message(self) -> str: ...
 
 
 class PlaceholderHookModule(Protocol):
@@ -38,7 +47,7 @@ class PlaceholderHookModule(Protocol):
         self,
         path_arguments: Iterable[str | Path],
         root: Path,
-    ) -> list[ViolationLike]: ...
+    ) -> list[ViolationLike | MissingPathLike]: ...
 
     def main(self, argv: Iterable[str] | None = None, root: Path = ...) -> int: ...
 
@@ -54,8 +63,15 @@ def write_file(path: Path, content: str) -> Path:
 
 
 def scan_single_file(path: Path, root: Path) -> list[ViolationLike]:
-    """Scan one file through the public hook path."""
-    return placeholder_hook.scan_files([path], root=root)
+    """Scan one file through the public hook path and return its violations.
+
+    The test fails if a finding has no line number, such as a missing-path refusal.
+    """
+    violations: list[ViolationLike] = []
+    for finding in placeholder_hook.scan_files([path], root=root):
+        assert isinstance(finding, ViolationLike), f"expected a violation, got {finding!r}"
+        violations.append(finding)
+    return violations
 
 
 @pytest.mark.parametrize(
@@ -498,8 +514,16 @@ def test_main_reports_actionable_failure_message(
         ("docs/sepc/example.md", False),
         ("docs/spec/deleted.md", False),
         ("READMEE.md", False),
+        ("", False),
     ],
-    ids=["file-typo", "absolute-file-typo", "folder-typo", "deleted-file", "outside-docs-typo"],
+    ids=[
+        "file-typo",
+        "absolute-file-typo",
+        "folder-typo",
+        "deleted-file",
+        "outside-docs-typo",
+        "empty-argument",
+    ],
 )
 def test_main_refuses_a_missing_path(
     tmp_path: Path,
@@ -511,16 +535,24 @@ def test_main_refuses_a_missing_path(
     write_file(tmp_path / "docs" / "spec" / "example.md", "Measured value.\n")
     write_file(tmp_path / "docs" / "spec" / "deleted.md", "Measured value.\n").unlink()
     write_file(tmp_path / "README.md", "Measured value.\n")
-    # The test decides "missing" itself, not through the hook's predicate.
-    assert not os.path.lexists(tmp_path / missing_path)
+    # The test decides "missing" itself, not through the hook's predicate. An empty
+    # argument names nothing: os.path.lexists("") is False, while Path("") is the root.
+    location: Path | str = tmp_path / missing_path if missing_path else missing_path
+    assert not os.path.lexists(location)
     path_argument = str(tmp_path / missing_path) if is_absolute else missing_path
+    shown_path = '""' if path_argument == "" else path_argument
 
     result = placeholder_hook.main([path_argument], root=tmp_path)
 
     captured = capsys.readouterr()
     assert result == 1
     assert captured.out == ""
-    assert captured.err.startswith(f"{path_argument}: this path does not exist")
+    assert captured.err.startswith(
+        f"{shown_path}: nothing is at this path under the repository root"
+    )
+    assert "Relative paths are read from the repository root, not the current folder." in (
+        captured.err
+    )
     assert "a typo would otherwise pass silently" in captured.err
 
 
@@ -553,7 +585,9 @@ def test_main_refuses_a_missing_path_beside_a_real_file(
     captured = capsys.readouterr()
     assert result == 1
     assert [line.split(";")[0] for line in captured.out.splitlines()] == expected_findings
-    assert captured.err.startswith("docs/spec/exmaple.md: this path does not exist")
+    assert captured.err.startswith(
+        "docs/spec/exmaple.md: nothing is at this path under the repository root"
+    )
 
 
 @pytest.mark.parametrize("path_argument", ["docs/spec", "README.md", "docs/CHANGELOG.md"])

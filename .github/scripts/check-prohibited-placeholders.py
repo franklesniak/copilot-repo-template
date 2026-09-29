@@ -43,8 +43,10 @@ REMEDIATION_HINT = (
     'on the same line. See .github/instructions/docs.instructions.md "Prohibited Patterns".'
 )
 MISSING_PATH_HINT = (
-    "this path does not exist, so there is nothing to check. Check the path: a typo "
-    "would otherwise pass silently, because a run that scans nothing finds no placeholders."
+    "nothing is at this path under the repository root, so there is nothing to check. "
+    "Relative paths are read from the repository root, not the current folder. "
+    "Check the path: a typo would otherwise pass silently, because a run that scans "
+    "nothing finds no placeholders."
 )
 
 
@@ -71,8 +73,12 @@ class MissingPath:
     display_path: str
 
     def format_message(self) -> str:
-        """Return the hook failure message for this missing path."""
-        return f"{self.display_path}: {MISSING_PATH_HINT}"
+        """Return the hook failure message for this missing path.
+
+        An empty argument is shown as ``""``, so the message never starts with a bare colon.
+        """
+        shown_path = self.display_path or '""'
+        return f"{shown_path}: {MISSING_PATH_HINT}"
 
 
 CONTAINER_KIND_LIST = "list"
@@ -153,8 +159,12 @@ def is_missing_path(path_argument: str | Path, root: Path) -> bool:
     ``os.path.lexists`` is the filter pre-commit applies before it passes file
     names to a hook, so a name that pre-commit passes is never missing here. A
     symlink counts as present even when its target is gone; it keeps the skip
-    that ``resolve_candidate_path`` gives every symlink.
+    that ``resolve_candidate_path`` gives every symlink. An empty string names
+    nothing. It is checked before any ``Path`` conversion, because ``Path("")``
+    is ``Path(".")``, which would name the root folder itself.
     """
+    if path_argument == "":
+        return True
     return not os.path.lexists(locate_path_argument(path_argument, root))
 
 
@@ -424,7 +434,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "paths",
         nargs="*",
-        help="Markdown files passed by pre-commit. A path that does not exist fails the run.",
+        help=(
+            "Markdown files passed by pre-commit. Relative paths are read from the "
+            "repository root. A path that does not exist fails the run."
+        ),
     )
     return parser.parse_args(argv)
 
