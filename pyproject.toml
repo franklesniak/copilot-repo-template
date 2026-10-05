@@ -67,7 +67,7 @@ dev = [
     # pre-commit hook, which runs at the check-jsonschema `rev` pinned in
     # .pre-commit-config.yaml. This pin and that `rev` are updated by separate
     # Dependabot ecosystems (pip and pre-commit) and do not need to match.
-    "check-jsonschema==0.38.0",
+    "check-jsonschema==0.38.2",
 ]
 
 [tool.setuptools.packages.find]
